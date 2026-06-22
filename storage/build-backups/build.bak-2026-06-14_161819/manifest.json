@@ -1,0 +1,20 @@
+{
+  "resources/js/solastock/app.jsx": {
+    "file": "assets/app-GVVUJoh7.js",
+    "name": "app",
+    "src": "resources/js/solastock/app.jsx",
+    "isEntry": true,
+    "css": [
+      "assets/solastock-Qoo5simH.css"
+    ]
+  },
+  "resources/js/solastock/styles/solastock.css": {
+    "file": "assets/solastock-Qoo5simH.css",
+    "src": "resources/js/solastock/styles/solastock.css",
+    "isEntry": true,
+    "name": "solastock",
+    "names": [
+      "solastock.css"
+    ]
+  }
+}

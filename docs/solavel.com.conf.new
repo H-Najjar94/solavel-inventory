@@ -1,0 +1,206 @@
+<VirtualHost *:80>
+    ServerName solavel.com
+    ServerAlias www.solavel.com
+
+    # Main Solavel app (HTTP)
+    DocumentRoot /var/www/html/solavel/public
+
+    <Directory /var/www/html/solavel/public>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    RewriteEngine On
+
+    # ✅ Force non-www + HTTPS always
+    RewriteCond %{HTTP_HOST} ^www\.solavel\.com$ [NC]
+    RewriteRule ^ https://solavel.com%{REQUEST_URI} [R=301,L]
+
+    RewriteRule ^ https://solavel.com%{REQUEST_URI} [R=301,L]
+</VirtualHost>
+
+
+<VirtualHost *:443>
+    ServerName solavel.com
+    ServerAlias www.solavel.com
+
+    # ─────────────────────────────
+    # SSL
+    # ─────────────────────────────
+    SSLEngine on
+    SSLCertificateFile      /etc/ssl/certs/solavel.com.crt
+    SSLCertificateKeyFile   /etc/ssl/private/solavel.com.key
+    SSLCertificateChainFile /etc/ssl/certs/solavel.com-chain.pem
+
+    # ─────────────────────────────
+    # ✅ Redirect www → non-www on HTTPS
+    # ─────────────────────────────
+    RewriteEngine On
+    RewriteCond %{HTTP_HOST} ^www\.solavel\.com$ [NC]
+    RewriteRule ^ https://solavel.com%{REQUEST_URI} [R=301,L]
+
+    # ─────────────────────────────
+    # Main Solavel app
+    # ─────────────────────────────
+    DocumentRoot /var/www/html/solavel/public
+
+    <Directory /var/www/html/solavel/public>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+    # ─────────────────────────────
+    # /fitness
+    # ─────────────────────────────
+    RewriteCond %{REQUEST_URI} ^/fitness$
+    RewriteRule ^ /fitness/ [R=301,L]
+
+    Alias /fitness/ "/var/www/html/solavel-fitness/public/"
+    <Directory "/var/www/html/solavel-fitness/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    # ─────────────────────────────
+    # /system  → solavel-system
+    # ─────────────────────────────
+    RewriteCond %{REQUEST_URI} ^/system$
+    RewriteRule ^ /system/ [R=301,L]
+
+    Alias /system/ "/var/www/html/solavel-system/public/"
+    <Directory "/var/www/html/solavel-system/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    # ─────────────────────────────
+    # /hr — funnel paths stay on parent solavel/, app paths go to solavel-hr
+    #
+    # AliasMatch directives are evaluated in order; the FIRST match wins. The
+    # funnel surface (landing, start, plans, onboarding/*, provisioning/*) is
+    # served by parent solavel/. The trailing `Alias /hr/` catches everything
+    # else (the standalone solavel-hr app: /hr/login, /hr/dashboard, ...).
+    # ─────────────────────────────
+    AliasMatch "^/hr$"                       "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/hr/$"                      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/hr/start(/.*)?$"           "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/hr/plans(/.*)?$"           "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/hr/onboarding(/.*)?$"      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/hr/provisioning(/.*)?$"    "/var/www/html/solavel/public/index.php"
+
+    Alias /hr/ "/var/www/html/solavel-hr/public/"
+    <Directory "/var/www/html/solavel-hr/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    # ─────────────────────────────
+    # /solabill  → solabill
+    # ─────────────────────────────
+    RewriteCond %{REQUEST_URI} ^/solabill$
+    RewriteRule ^ /solabill/ [R=301,L]
+
+    Alias /solabill/ "/var/www/html/solabill/public/"
+    <Directory "/var/www/html/solabill/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    # ─────────────────────────────
+    # /finance — funnel paths stay on parent solavel/, tenant paths go to solavel-finance
+    #
+    # AliasMatch directives are evaluated in order; the FIRST match wins. The
+    # funnel surface (landing, start, plans, onboarding/*, provisioning/*) is
+    # served by parent solavel/. /finance/login is owned by the standalone
+    # finance app itself (its LoginController posts credentials to parent's
+    # JSON auth API). The trailing `Alias /finance/` catches everything else.
+    # ─────────────────────────────
+    AliasMatch "^/finance$"                       "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/finance/$"                      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/finance/start(/.*)?$"           "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/finance/plans(/.*)?$"           "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/finance/onboarding(/.*)?$"      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/finance/provisioning(/.*)?$"    "/var/www/html/solavel/public/index.php"
+
+    Alias /finance/ "/var/www/html/solavel-finance/public/"
+    <Directory "/var/www/html/solavel-finance/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    # ─────────────────────────────
+    # /projects — funnel paths stay on parent solavel/, tenant paths go to solavel-projects
+    #
+    # AliasMatch directives are evaluated in order; the FIRST match wins. The
+    # funnel surface (landing, start, plans, onboarding/*, provisioning/*) is
+    # served by parent solavel/. /projects/login is owned by the standalone
+    # projects app itself. The trailing `Alias /projects/` catches everything
+    # else (the standalone solavel-projects app: /projects/dashboard, ...).
+    # ─────────────────────────────
+    AliasMatch "^/projects$"                       "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/projects/$"                      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/projects/start(/.*)?$"           "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/projects/plans(/.*)?$"           "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/projects/onboarding(/.*)?$"      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/projects/provisioning(/.*)?$"    "/var/www/html/solavel/public/index.php"
+
+    Alias /projects/ "/var/www/html/solavel-projects/public/"
+    <Directory "/var/www/html/solavel-projects/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+    # ─────────────────────────────
+    # /inventory — funnel paths stay on parent solavel/, app paths go to
+    # solavel-inventory. AliasMatch is first-match-wins; central owns the
+    # funnel surface, the trailing Alias /inventory/ catches the app.
+    # ─────────────────────────────
+    AliasMatch "^/inventory$"                      "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/inventory/$"                     "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/inventory/plans(/.*)?$"          "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/inventory/start(/.*)?$"          "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/inventory/onboarding(/.*)?$"     "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/inventory/provisioning(/.*)?$"   "/var/www/html/solavel/public/index.php"
+    AliasMatch "^/inventory/login(/.*)?$"          "/var/www/html/solavel/public/index.php"
+
+    Alias /inventory/ "/var/www/html/solavel-inventory/public/"
+    <Directory "/var/www/html/solavel-inventory/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+
+
+    ErrorLog  ${APACHE_LOG_DIR}/solavel.com-ssl-error.log
+
+    # ─────────────────────────────
+    # /pos  → solapos
+    # ─────────────────────────────
+    RewriteCond %{REQUEST_URI} ^/pos$
+    RewriteRule ^ /pos/ [R=301,L]
+
+    Alias /pos/ "/var/www/html/solapos/public/"
+    <Directory "/var/www/html/solapos/public/">
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+    </Directory>
+    CustomLog ${APACHE_LOG_DIR}/solavel.com-ssl-access.log combined
+</VirtualHost>
