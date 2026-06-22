@@ -1,0 +1,31 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:Authorization} ^(.+)$
+    RewriteRule .* - [E=REDIRECT_HTTP_AUTHORIZATION:%1]
+
+    <IfModule mod_setenvif.c>
+        SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+    </IfModule>
+
+    Options -Indexes
+
+    RewriteRule ^public/ - [L]
+
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Subpath mount: map /solavel-inventory/<path> → public/<path>
+    # (mirrors solavel-finance's outer .htaccess). The live /inventory mount is
+    # handled by the Apache vhost Alias; this supports a direct doc-root mount too.
+    RewriteCond %{REQUEST_URI} ^/solavel-inventory/(.*)$
+    RewriteCond %{DOCUMENT_ROOT}/solavel-inventory/public/%1 -f [OR]
+    RewriteCond %{DOCUMENT_ROOT}/solavel-inventory/public/%1 -d
+    RewriteRule ^ public/%1 [L]
+
+    RewriteRule ^ index.php [L]
+</IfModule>
