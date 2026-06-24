@@ -96,9 +96,12 @@ class ItemValuationTest extends TestCase
         $this->assertSame('5.0000', $w['on_hand_qty']);
         // True FIFO value of the remaining 5 @ $8.
         $this->assertSame('40.00', $w['fifo_value']);
-        // The balance projection is weighted-average (5 × $6.50) — they diverge
-        // after partial consumption, and the endpoint surfaces both honestly.
-        $this->assertSame('32.50', $w['average_value']);
+        // balance.total_value is now maintained on the FIFO basis for a FIFO item
+        // (running ledger in−out cost), so it NO LONGER diverges from the layer
+        // value after partial consumption — both are $40.00. (Previously this
+        // surfaced a weighted-average $32.50, which drifted from FIFO truth and the
+        // integrity checker flagged as a value mismatch — the cost-layer collapse.)
+        $this->assertSame('40.00', $w['average_value']);
         // Quantity still reconciles (Σ layer qty == on-hand qty).
         $this->assertTrue($w['qty_reconciled']);
         // Headline on-hand value follows the FIFO basis for a FIFO item.
