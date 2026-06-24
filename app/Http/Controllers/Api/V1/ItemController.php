@@ -201,12 +201,14 @@ class ItemController extends ApiController
                 ];
             })->values();
 
-            // The balance carries a WEIGHTED-AVERAGE projection (average_cost ×
-            // on_hand_qty); the cost layers carry the true FIFO value. These two
-            // legitimately DIVERGE for a FIFO item after partial consumption, so
-            // we surface BOTH rather than forcing them to match. The hard
-            // invariant that MUST hold is on QUANTITY: the sum of remaining layer
-            // qty equals on-hand qty (when layers exist, i.e. FIFO).
+            // `average_value` is the balance's own total_value. For a FIFO item the
+            // balance is now valued on the FIFO basis (running ledger in−out cost),
+            // so it AGREES with the layer-derived `fifo_value` — they no longer
+            // diverge after partial consumption (the old weighted-average projection
+            // drifted and broke the integrity value-reconciliation). For an AVERAGE
+            // item, total_value is the weighted-average value. We still surface both
+            // for transparency. The hard invariant: Σ remaining layer qty == on-hand
+            // qty (when layers exist, i.e. FIFO).
             $averageValue = Decimal::money((string) $b->total_value);
             $fifoValue = Decimal::money($fifoValue);
 

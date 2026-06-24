@@ -377,13 +377,27 @@ class StockLedgerService
             }
             $layerForLedger = $consumptions->first()?->cost_layer_id ? (int) $consumptions->first()->cost_layer_id : null;
         } else {
-            // REMOVE the qty from the layer this IN created (floor at 0).
+            // REMOVE the qty from the layer this IN created. If the layer no longer
+            // holds the full received quantity, those units were already consumed
+            // downstream (sold, transferred, adjusted out) — the receipt cannot be
+            // un-received without corrupting FIFO. Reject cleanly and roll back the
+            // whole reversal (atomic) instead of flooring at 0, which silently
+            // collapsed layers and drove on-hand negative.
             $layerForLedger = $orig->cost_layer_id ? (int) $orig->cost_layer_id : null;
             if ($layerForLedger) {
                 $layer = CostLayer::query()->lockForUpdate()->find($layerForLedger);
                 if ($layer) {
                     $newRemaining = Decimal::sub((string) $layer->remaining_qty, $qty);
-                    $layer->remaining_qty = Decimal::lt($newRemaining, '0') ? '0.0000' : Decimal::qty($newRemaining);
+                    if (Decimal::lt($newRemaining, '0')) {
+                        $consumedDownstream = Decimal::qty(Decimal::sub($qty, (string) $layer->remaining_qty));
+                        throw new RuntimeException(
+                            "Cannot reverse this inbound movement: {$consumedDownstream} unit(s) of the "
+                            ."received cost layer (#{$layer->id}) were already consumed downstream "
+                            .'(sold, transferred, or adjusted out). Reverse the downstream movement(s) '
+                            .'first, or post a compensating adjustment.'
+                        );
+                    }
+                    $layer->remaining_qty = Decimal::qty($newRemaining);
                     $layer->save();
                 }
             }
@@ -483,17 +497,41 @@ class StockLedgerService
         $prevQty = (string) $balance->on_hand_qty;
         $prevAvg = (string) $balance->average_cost;
 
+        $newQty = $direction === 'in'
+            ? Decimal::qty(Decimal::add($prevQty, $qty))
+            : Decimal::qty(Decimal::sub($prevQty, $qty));
+
+        // FIFO: total_value must track the ACTUAL cost that flowed in/out at this
+        // coordinate, i.e. the running sum of ledger total_cost (in − out). Deriving
+        // it from a running weighted average instead made balance.total_value drift
+        // from the true FIFO value on every mixed-cost movement — the integrity
+        // checker flags this as a per-coordinate "value mismatch", the visible
+        // symptom of the cost-layer collapse. This matches the checker's own
+        // reconciliation (ledger net total_cost vs balance.total_value) exactly, at
+        // any coordinate granularity (bin-aware). average_cost is the blended unit
+        // value for display only.
+        if ($method === 'fifo') {
+            $prevValue = (string) $balance->total_value;
+            $signedCost = $direction === 'in' ? $totalCost : '-'.$totalCost;
+            $newValue = Decimal::money(Decimal::add($prevValue, $signedCost));
+            // Guard tiny negative dust at zero stock.
+            if (Decimal::isZero($newQty)) {
+                $newValue = '0.00';
+            }
+            $newAvg = Decimal::isZero($newQty) ? '0' : Decimal::cost(Decimal::div($newValue, $newQty));
+
+            return [$newQty, $newAvg, $newValue];
+        }
+
+        // Average costing.
         if ($direction === 'in') {
-            $newQty = Decimal::qty(Decimal::add($prevQty, $qty));
             $newAvg = $this->costing->newWeightedAverage($prevQty, $prevAvg, $qty, $unitCost);
             $newValue = Decimal::money(Decimal::mul($newQty, $newAvg));
 
             return [$newQty, $newAvg, $newValue];
         }
 
-        // out
-        $newQty = Decimal::qty(Decimal::sub($prevQty, $qty));
-        // average cost unchanged on issue; value = qty * avg (recomputed to stay consistent)
+        // out: average cost unchanged on issue; value = qty * avg.
         $newAvg = $prevAvg;
         $newValue = Decimal::money(Decimal::mul($newQty, $newAvg));
 

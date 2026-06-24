@@ -7,10 +7,12 @@ use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\StockBalance;
 use App\Services\Documents\OpeningStockService;
 use App\Services\Documents\StockTransferService;
+use App\Services\Stock\IntegrityChecker;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Tests\Support\StockTestFactory as F;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -160,5 +162,78 @@ class FifoLayerFidelityTest extends TestCase
         $this->assertSame('20.0000', StockBalance::query()->where('warehouse_id', $src->id)->value('on_hand_qty'));
         $this->assertSame('0.00', $this->layerValue($dst->id), 'destination layers cleared');
         $this->assertSame('0.0000', StockBalance::query()->where('warehouse_id', $dst->id)->value('on_hand_qty'));
+    }
+
+    /**
+     * Regression for the cost-layer COLLAPSE: reversing a movement whose received
+     * units were already consumed downstream must be REJECTED cleanly (atomic
+     * rollback), never silently floor a layer at 0 — which used to drive on-hand
+     * negative and corrupt both source and destination valuations.
+     */
+    #[Test]
+    public function reversing_an_inbound_after_its_units_were_consumed_is_rejected_and_books_stay_consistent(): void
+    {
+        $this->boot();
+        $src = F::warehouse();
+        $dst = F::warehouse();
+        $item = F::fifoItem();
+        $this->seedTwoLayers($item->id, $src->id);
+
+        $t = app(StockTransferService::class)->createDraft(
+            ['transfer_number' => 'TR-PC', 'from_warehouse_id' => $src->id, 'to_warehouse_id' => $dst->id],
+            [['item_id' => $item->id, 'quantity' => '15.0000']]
+        );
+        app(StockTransferService::class)->post($t);
+        $lineId = $t->fresh('lines')->lines->first()->id;
+        $ns = 'stock_transfer:'.$t->id.':post';
+
+        // Sell 12 from dst (consumes the 10@5 layer fully + 2@8; 3@8 remain).
+        app(StockLedgerService::class)->post([
+            new StockMovement(direction: 'out', itemId: $item->id, warehouseId: $dst->id,
+                quantity: '12.0000', sourceType: 'manual_test', sourceId: 1),
+        ], 'pc:sell');
+
+        // Reversing the per-layer IN whose layer was partly sold must throw.
+        $threw = false;
+        try {
+            app(StockLedgerService::class)->reverse($ns.':in:'.$lineId.':1', $ns.':rev-in1');
+        } catch (RuntimeException $e) {
+            $threw = true;
+            $this->assertStringContainsString('consumed downstream', $e->getMessage());
+        }
+        $this->assertTrue($threw, 'reversal of a partially-consumed inbound must be rejected');
+
+        // Integrity invariants intact: nothing corrupted, no negative on-hand.
+        $conn = config('tenancy.tenant_connection', 'tenant');
+        $result = app(IntegrityChecker::class)->check($conn, TenantTestManager::ORG_A);
+        $this->assertSame([], $result['problems'], 'books corrupted: '.implode(' | ', $result['problems']));
+    }
+
+    /**
+     * The FIFO balance valuation must stay on the FIFO basis (not weighted-average),
+     * so balance.total_value never drifts from the layer value and the integrity
+     * value-reconciliation passes after a mixed-cost partial consumption.
+     */
+    #[Test]
+    public function fifo_balance_value_tracks_layers_not_weighted_average(): void
+    {
+        $this->boot();
+        $wh = F::warehouse();
+        $item = F::fifoItem();
+        $this->seedTwoLayers($item->id, $wh->id);
+
+        // Consume 15 (10@5 + 5@8) → 5@8 = $40 remain. Weighted-avg would say $32.50.
+        app(StockLedgerService::class)->post([
+            new StockMovement(direction: 'out', itemId: $item->id, warehouseId: $wh->id,
+                quantity: '15.0000', sourceType: 'manual_test', sourceId: 1),
+        ], 'fifo-bal:out');
+
+        $balValue = (string) StockBalance::query()->where('item_id', $item->id)->value('total_value');
+        $this->assertSame('40.00', Decimal::money($balValue), 'balance value must equal true FIFO layer value');
+        $this->assertSame('40.00', $this->layerValue($wh->id));
+
+        $conn = config('tenancy.tenant_connection', 'tenant');
+        $result = app(IntegrityChecker::class)->check($conn, TenantTestManager::ORG_A);
+        $this->assertSame([], $result['problems'], 'integrity broken: '.implode(' | ', $result['problems']));
     }
 }
