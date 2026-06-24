@@ -1,5 +1,15 @@
 # Step 3 — privilege-separation execution checklist (FOR APPROVAL)
 
+> ⚠️ **PLATFORM BLOCKER (2026-06-24): this grant set is SolaStock-only.**
+> SolaProjects, SolaBooks, and SolaHR create a **per-tenant DB user**
+> (`CREATE USER` + `GRANT ALL`, and Books/HR also `DROP USER`) during
+> provisioning. The `solavel_provisioner` user below is DDL-only (no
+> `CREATE USER`/`GRANT OPTION`) and would **break new-client activation for
+> those three apps**. SolaStock does NOT create per-tenant users
+> (`ensureDatabase` = `CREATE DATABASE` only), so this checklist is safe for
+> SolaStock alone — but the platform-wide model must be decided first. Do NOT
+> flip any app yet. See `solavel/docs/DB_PRIVILEGE_SEPARATION_PROVISIONING_BLOCKER.md`.
+
 **Status: NOT EXECUTED. Prepared for review.** This is the first step that
 changes production DB users and `.env`. Do not run any command here until the
 maintenance window is scheduled and this checklist is approved.
