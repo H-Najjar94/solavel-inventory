@@ -43,6 +43,18 @@ return [
     // Unused on SolaStock (no per-tenant user) but kept for platform parity.
     'tenant_user_dml_only' => (bool) env('TENANT_USER_DML_ONLY', false),
 
+    // Option A alignment — DEFAULT OFF. When FALSE (today/prod), SolaStock's
+    // runtime tenant connection keeps the shared DB_USERNAME and TenantManager
+    // only switches the database (no behaviour change). When TRUE, TenantManager
+    // sets the runtime connection's username/password to the deterministic
+    // per-tenant user (t_XXXXXX) derived from the selected tenant DATABASE NAME —
+    // the same users Books/Projects/HR already use on the shared tenant_XXXXXX DB.
+    // Requires TENANT_DERIVE_SECRET (== the value used by the other apps). If the
+    // secret is missing or credentials cannot be derived, the request FAILS CLOSED
+    // (503) — it NEVER falls back to the shared/superuser DB user. Enabling this in
+    // production needs a separate, approved .env-secret + flag window.
+    'use_derived_db_user' => (bool) env('INVENTORY_USE_DERIVED_TENANT_DB_USER', false),
+
     // Charset/collation for tenant databases.
     'db_charset' => env('TENANT_DB_CHARSET', 'utf8mb4'),
     'db_collation' => env('TENANT_DB_COLLATION', 'utf8mb4_unicode_ci'),
