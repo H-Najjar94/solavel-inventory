@@ -32,6 +32,17 @@ return [
     // docs/runbooks/DB_PRIVILEGE_SEPARATION.md.
     'provision_connection' => env('TENANT_PROVISION_CONNECTION', 'tenant_admin'),
 
+    // Bootstrap connection — the ONLY connection allowed to create/drop tenant
+    // DB users and grant/revoke their privileges (Model A platform standard).
+    // SolaStock does not create per-tenant users, so this is UNUSED here; it
+    // exists for env/config parity across all apps. Defaults to `tenant_bootstrap`
+    // whose creds fall back to the admin account — no behaviour change.
+    'bootstrap_connection' => env('TENANT_BOOTSTRAP_CONNECTION', 'tenant_bootstrap'),
+
+    // Phase flag (Model A). FALSE (Phase A / today) vs TRUE (Phase B / DML-only).
+    // Unused on SolaStock (no per-tenant user) but kept for platform parity.
+    'tenant_user_dml_only' => (bool) env('TENANT_USER_DML_ONLY', false),
+
     // Charset/collation for tenant databases.
     'db_charset' => env('TENANT_DB_CHARSET', 'utf8mb4'),
     'db_collation' => env('TENANT_DB_COLLATION', 'utf8mb4_unicode_ci'),

@@ -130,6 +130,27 @@ return [
             'strict' => true,
         ],
 
+        // Bootstrap connection — platform-wide privilege-separation standard
+        // (Model A). The ONLY connection allowed to create/drop tenant DB users
+        // and grant/revoke their privileges. SolaStock does NOT create per-tenant
+        // users today (provisioning is CREATE DATABASE only), so this connection
+        // is UNUSED here — it exists purely for platform parity so the env/config
+        // contract is identical across all apps. Creds fall back to the admin
+        // then runtime account; no behaviour change.
+        'tenant_bootstrap' => [
+            'driver' => 'mysql',
+            'host' => env('TENANT_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('TENANT_DB_PORT', env('DB_PORT', '3306')),
+            'database' => null,
+            'username' => env('TENANT_DB_BOOTSTRAP_USER', env('TENANT_DB_ADMIN_USER', env('DB_USERNAME', 'root'))),
+            'password' => env('TENANT_DB_BOOTSTRAP_PASS', env('TENANT_DB_ADMIN_PASS', env('DB_PASSWORD', ''))),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+        ],
+
         // Elevated connection used ONLY to RUN tenant migrations during
         // provisioning (DDL: CREATE/ALTER TABLE inside an already-selected tenant
         // DB). It is a SEPARATE slot from the runtime `tenant` connection so the
