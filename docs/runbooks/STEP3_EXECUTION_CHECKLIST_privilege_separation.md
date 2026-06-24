@@ -1,14 +1,14 @@
 # Step 3 — privilege-separation execution checklist (FOR APPROVAL)
 
-> ⚠️ **PLATFORM BLOCKER (2026-06-24): this grant set is SolaStock-only.**
-> SolaProjects, SolaBooks, and SolaHR create a **per-tenant DB user**
-> (`CREATE USER` + `GRANT ALL`, and Books/HR also `DROP USER`) during
-> provisioning. The `solavel_provisioner` user below is DDL-only (no
-> `CREATE USER`/`GRANT OPTION`) and would **break new-client activation for
-> those three apps**. SolaStock does NOT create per-tenant users
-> (`ensureDatabase` = `CREATE DATABASE` only), so this checklist is safe for
-> SolaStock alone — but the platform-wide model must be decided first. Do NOT
-> flip any app yet. See `solavel/docs/DB_PRIVILEGE_SEPARATION_PROVISIONING_BLOCKER.md`.
+> ✅ **RESOLVED — Model A (3-user) standard, Phase A code landed (2026-06-24).**
+> The earlier blocker (Books/HR/Projects create per-tenant DB users, which the
+> DDL-only provisioner can't do) is fixed by the **3-user Model A**: runtime
+> (DML), provisioner (DDL, no user mgmt), and a dedicated **bootstrap** user for
+> `CREATE/DROP USER` + `GRANT/REVOKE`. Phase A code is shipped on all four apps
+> (bootstrap connection + explicit grants + audit; behaviour-neutral). This
+> checklist is now the **platform-wide** Phase-B production flip. See
+> `solavel/docs/DB_PRIVILEGE_SEPARATION_MODEL_A_PLAN.md`. **Still do NOT run any
+> window until the owner explicitly approves it.**
 
 **Status: NOT EXECUTED. Prepared for review.** This is the first step that
 changes production DB users and `.env`. Do not run any command here until the
@@ -80,8 +80,60 @@ GRANT CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE VIEW, SHOW VIEW, TRIGGER,
 FLUSH PRIVILEGES;
 ```
 
-Deliberately NOT granted to either user: `GRANT OPTION`, any `*.*`, the `mysql`
-system schema. `solavel_app` gets no `CREATE/DROP/ALTER/TRIGGER`.
+Deliberately NOT granted to `solavel_app`/`solavel_provisioner`: `CREATE USER`,
+`DROP USER`, `GRANT OPTION`, any `*.*`, the `mysql` system schema. `solavel_app`
+gets no `CREATE/DROP/ALTER/TRIGGER`; `solavel_provisioner` gets no user mgmt.
+
+---
+
+## 3.5 Exact SQL — bootstrap user `solavel_bootstrap` (user lifecycle ONLY)
+
+Required by SolaBooks/SolaHR/SolaProjects, which create a **per-tenant DB user**
+at client activation. Used ONLY for `CREATE/DROP USER` + `GRANT/REVOKE`; never by
+runtime or migrations. SolaStock does not use it (no per-tenant user). Credentials
+in the secret manager; every use is audited (`tenant.bootstrap` log channel).
+
+```sql
+CREATE USER IF NOT EXISTS 'solavel_bootstrap'@'127.0.0.1'
+  IDENTIFIED BY '<BOOTSTRAP_PASSWORD>';
+
+-- May create/drop the per-tenant users:
+GRANT CREATE USER ON *.* TO 'solavel_bootstrap'@'127.0.0.1';
+
+-- May grant/revoke the explicit tenant set to those users (GRANT OPTION confined
+-- to this one account, scoped to tenant_% only — never *.*):
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON `tenant\_%`.* TO 'solavel_bootstrap'@'127.0.0.1' WITH GRANT OPTION;
+
+FLUSH PRIVILEGES;
+```
+
+### Per-tenant derived user (Books/HR/Projects) — granted BY the bootstrap user
+
+Phase B target = **DML only** (the provisioner runs DDL). The app emits this
+automatically when `TENANT_USER_DML_ONLY=true`:
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON `tenant_<id>`.* TO '<derived_user>'@'<host>';
+```
+**No `GRANT ALL` anywhere.** During the window, re-grant existing per-tenant users
+down to this set (REVOKE the DDL subset) — additive/reversible, no schema change.
+
+---
+
+## 3.6 Per-app `.env` for Phase B (in addition to §4)
+
+Same three users platform-wide; per-app `.env` keys:
+
+| App | DB_USERNAME | TENANT_DB_ADMIN_USER | TENANT_DB_BOOTSTRAP_USER | extra |
+|---|---|---|---|---|
+| SolaStock | solavel_app | solavel_provisioner | solavel_bootstrap (unused) | — |
+| SolaProjects | solavel_app | solavel_provisioner | solavel_bootstrap | `TENANT_PROVISION_CONNECTION=tenant_admin` already default |
+| SolaBooks | solavel_app | solavel_provisioner | solavel_bootstrap | `TENANT_PROVISION_CONNECTION=tenant_admin`, `TENANT_USER_DML_ONLY=true` |
+| SolaHR | solavel_app | solavel_provisioner | solavel_bootstrap | `TENANT_PROVISION_CONNECTION=tenant_admin`, `TENANT_USER_DML_ONLY=true` |
+
+Books/HR default `provision_connection` to `tenant_dynamic` (Phase A), so their
+flip MUST set `TENANT_PROVISION_CONNECTION=tenant_admin` (provisioner runs DDL)
+and `TENANT_USER_DML_ONLY=true` (per-tenant user becomes DML-only).
 
 ---
 
@@ -235,6 +287,32 @@ Expected: every line `PASS` and `6f RESULT: PASS`, proving under the real split
 users: runtime cannot create/drop DBs, provisioner can create/migrate a scratch
 tenant (incl. triggers), and the runtime user can read/write inventory after
 provisioning. **If 6f fails → roll back (§7) immediately.**
+
+### 6g. Model A 3-user gates (Books/HR/Projects — apps with per-tenant users) — GATE
+
+The five owner-required proofs for the bootstrap model. Run per app under the
+real split users:
+
+1. **Runtime cannot `CREATE`/`ALTER`/`DROP`** — runtime connection attempts DDL on
+   a tenant DB → access denied (same as 6b, asserted per app).
+2. **Provisioner can migrate + triggers but cannot `CREATE USER`/`GRANT`** — as
+   `solavel_provisioner`, migrate a scratch tenant (succeeds, incl. triggers); then
+   `CREATE USER 't'@'127.0.0.1'` and `GRANT … WITH GRANT OPTION` → BOTH denied.
+3. **Bootstrap can create/grant/revoke/drop a tenant user but is NOT used by
+   runtime/migrate** — as `solavel_bootstrap`: `CREATE USER` + `GRANT <explicit set>`
+   + `REVOKE` + `DROP USER` on a scratch tenant user (all succeed); grep app logs to
+   confirm migrate/runtime never resolved to the bootstrap connection.
+4. **No `GRANT ALL`** — after activating a scratch client, `SHOW GRANTS` for its
+   per-tenant user shows exactly the explicit DML set (Phase B), never `ALL
+   PRIVILEGES`.
+5. **Books/HR/Projects new-client activation works under the final model** — full
+   activation of a scratch client: bootstrap creates the DML-only per-tenant user,
+   provisioner creates+migrates the DB (via `tenant_admin`), runtime reads/writes;
+   then deactivation drops the user. End-to-end PASS, then clean up the scratch
+   tenant.
+
+**If any 6g check fails → roll back (§7) immediately** (revert `.env`, restore the
+DDL grant to the per-tenant user).
 
 ---
 
