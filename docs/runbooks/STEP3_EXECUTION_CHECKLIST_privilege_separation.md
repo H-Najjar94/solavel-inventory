@@ -1,14 +1,18 @@
 # Step 3 — privilege-separation execution checklist (FOR APPROVAL)
 
-> ✅ **RESOLVED — Model A (3-user) standard, Phase A code landed (2026-06-24).**
-> The earlier blocker (Books/HR/Projects create per-tenant DB users, which the
-> DDL-only provisioner can't do) is fixed by the **3-user Model A**: runtime
-> (DML), provisioner (DDL, no user mgmt), and a dedicated **bootstrap** user for
-> `CREATE/DROP USER` + `GRANT/REVOKE`. Phase A code is shipped on all four apps
-> (bootstrap connection + explicit grants + audit; behaviour-neutral). This
-> checklist is now the **platform-wide** Phase-B production flip. See
-> `solavel/docs/DB_PRIVILEGE_SEPARATION_MODEL_A_PLAN.md`. **Still do NOT run any
-> window until the owner explicitly approves it.**
+> ⏸️ **PHASE B POSTPONED — NO production flip performed (2026-06-24, owner decision).**
+> All apps remain on the existing shared `mysql` setup (DB_USERNAME=mysql,
+> TENANT_DB_ADMIN_USER=mysql where applicable; existing passwords unchanged; no
+> `TENANT_USER_DML_ONLY`; no privilege split). SolaStock stays operationally the
+> same as Books/Projects/HR. No new MySQL users, no grant/schema/data changes.
+> **Phase A code remains** (behaviour-neutral, falls back to the current `mysql`
+> setup). This checklist stays prepared for a FUTURE window only; do NOT run any
+> step until the owner explicitly re-approves a specific app window.
+>
+> Model A background (resolved blocker): runtime (DML) + provisioner (DDL, no
+> user mgmt) + dedicated bootstrap (CREATE/DROP USER + GRANT/REVOKE). See
+> `solavel/docs/DB_PRIVILEGE_SEPARATION_MODEL_A_PLAN.md` and
+> `…_PHASE_B_EXECUTION_PLAN.md`.
 
 **Status: NOT EXECUTED. Prepared for review.** This is the first step that
 changes production DB users and `.env`. Do not run any command here until the
