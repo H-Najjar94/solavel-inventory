@@ -6,6 +6,7 @@ use App\Models\Landlord\Organization;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -16,8 +17,17 @@ use RuntimeException;
  * OrganizationContext integration so the BelongsToOrganization global scope and
  * StockLedgerService know which org is active.
  *
- * Inventory uses its OWN databases (inventory_tenant_* in prod;
- * solastock_test_tenant_* in tests) and OWN credentials.
+ * DATABASE MODEL: SolaStock shares the SAME per-client tenant databases as
+ * Books/Projects/HR — `tenant_{clientId}` (e.g. tenant_000008) — and owns ONLY
+ * its own stock_* and inventory tables there (migration marker migrated_at_inv).
+ * There are NO separate per-app tenant databases. The test namespace is the
+ * reserved tenant_99xxxx range (see Tests\TenancySafetyGuard).
+ *
+ * RUNTIME DB USER: today the runtime connection uses the shared DB_USERNAME.
+ * When `tenancy.use_derived_db_user` is TRUE (default FALSE), the runtime
+ * connection instead uses the deterministic per-tenant user (t_XXXXXX) derived
+ * from the selected tenant database name; on a derivation/secret failure it
+ * fails closed (503) and never falls back to the shared user.
  */
 class TenantManager
 {
@@ -29,7 +39,9 @@ class TenantManager
     /** Build the production tenant database name for an organization id. */
     public function resolveDatabaseName(int $organizationId): string
     {
-        $prefix = (string) config('tenancy.database_prefix', 'inventory_tenant_');
+        // Default mirrors config/tenancy.php (env TENANT_DB_PREFIX, default
+        // 'tenant_') — SolaStock shares the per-client tenant_{id} DBs.
+        $prefix = (string) config('tenancy.database_prefix', 'tenant_');
         $pad = (int) config('tenancy.database_pad', 6);
 
         return $prefix.str_pad((string) $organizationId, $pad, '0', STR_PAD_LEFT);
@@ -40,8 +52,59 @@ class TenantManager
     {
         $connection = (string) config('tenancy.tenant_connection', 'tenant');
         Config::set("database.connections.{$connection}.database", $database);
+
+        // Option A (default OFF). When enabled, use the per-tenant derived DB
+        // user for this database instead of the shared DB_USERNAME. When OFF,
+        // behaviour is unchanged (database switch only). Runs BEFORE reconnect so
+        // a fail-closed never reconnects on the shared user.
+        if (config('tenancy.use_derived_db_user', false)) {
+            $creds = $this->resolveDerivedCredentials($database); // returns array or aborts(503)
+            Config::set("database.connections.{$connection}.username", $creds['db_user']);
+            Config::set("database.connections.{$connection}.password", $creds['db_pass']);
+        }
+
         DB::purge($connection);
         DB::reconnect($connection);
+    }
+
+    /**
+     * Resolve the deterministic per-tenant DB credentials for a tenant database
+     * name (e.g. tenant_000008 -> t_000008). Fails CLOSED (503 + security alert)
+     * if the derive secret is missing or credentials cannot be derived — it never
+     * returns/falls back to the shared DB user.
+     *
+     * @return array{db_user: string, db_pass: string}
+     */
+    protected function resolveDerivedCredentials(string $database): array
+    {
+        try {
+            $creds = app(TenantCredentialDeriver::class)->deriveFromDatabaseName($database);
+        } catch (\Throwable $e) {
+            $this->failClosedOnTenantCredentials($database, $e);
+        }
+
+        if (empty($creds['db_user']) || empty($creds['db_pass'])) {
+            $this->failClosedOnTenantCredentials($database, null);
+        }
+
+        return $creds;
+    }
+
+    /**
+     * Refuse to serve a tenant request when per-tenant credentials cannot be
+     * resolved. Logs a security alert (NO secret/password/DSN/exception message —
+     * only class/code) and returns 503. Never falls back to the shared DB user.
+     */
+    protected function failClosedOnTenantCredentials(string $database, ?\Throwable $e): never
+    {
+        Log::critical('[Tenancy][SECURITY] Tenant credential resolution failed — refusing to fall back to the shared DB user.', [
+            'event'           => 'tenant_credential_resolution_failure',
+            'database'        => $database,
+            'exception_class' => $e ? get_class($e) : null,
+            'exception_code'  => $e ? $e->getCode() : null,
+        ]);
+
+        abort(503, 'This workspace is temporarily unavailable. Please try again shortly.');
     }
 
     /**
