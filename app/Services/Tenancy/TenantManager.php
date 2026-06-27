@@ -57,14 +57,152 @@ class TenantManager
         // user for this database instead of the shared DB_USERNAME. When OFF,
         // behaviour is unchanged (database switch only). Runs BEFORE reconnect so
         // a fail-closed never reconnects on the shared user.
+        $derivedCreds = null;
         if (config('tenancy.use_derived_db_user', false)) {
-            $creds = $this->resolveDerivedCredentials($database); // returns array or aborts(503)
-            Config::set("database.connections.{$connection}.username", $creds['db_user']);
-            Config::set("database.connections.{$connection}.password", $creds['db_pass']);
+            $derivedCreds = $this->resolveDerivedCredentials($database); // returns array or aborts(503)
+            Config::set("database.connections.{$connection}.username", $derivedCreds['db_user']);
+            Config::set("database.connections.{$connection}.password", $derivedCreds['db_pass']);
         }
 
         DB::purge($connection);
         DB::reconnect($connection);
+
+        // Optional, transitional previous-secret fallback (#36, mirrors the siblings).
+        // Off by default and ONLY ever considered when the per-tenant derived DB user
+        // is actually in use — when use_derived_db_user is OFF (default) the runtime
+        // connection uses the shared DB user and there is no derived password to fall
+        // back to, so $derivedCreds stays null and this is a strict no-op.
+        if ($derivedCreds !== null) {
+            $this->maybeApplyPreviousSecretFallback($connection, $database, $derivedCreds['db_user'], $derivedCreds['db_pass']);
+        }
+    }
+
+    /**
+     * Transitional connection-layer fallback to the PREVIOUS-derived password.
+     *
+     * Strictly opt-in and disabled by default. Only reached when the per-tenant
+     * derived DB user is in use (see switchToDatabase). Returns immediately (leaving
+     * the primary-derived connection exactly as configured) unless ALL of:
+     *  - tenancy.derive_previous_secret_fallback is true,
+     *  - a client id can be parsed from the tenant database name, and
+     *  - a valid previous secret is configured (deriver->hasPreviousSecret()).
+     *
+     * When active it probes the freshly configured runtime connection. On success it
+     * does nothing. ONLY when the probe fails with an authentication/access-denied
+     * error (SQLSTATE 28000 / MySQL 1045) does it retry the runtime connection ONCE
+     * with the previous-derived password. If that probe succeeds the working
+     * (previous-secret) connection is kept and SAFE metadata is logged. If it fails,
+     * or the original error was not an auth error, the PRIMARY-derived password is
+     * restored so the existing fail-closed behavior is preserved. Never logs secrets
+     * or passwords; never touches the username/db/host/port.
+     */
+    protected function maybeApplyPreviousSecretFallback(
+        string $connection,
+        string $database,
+        string $dbUser,
+        string $primaryPass
+    ): void {
+        if (! (bool) config('tenancy.derive_previous_secret_fallback', false)) {
+            return; // opt-in switch is off (default) — identical to today
+        }
+
+        // Parse the numeric client id from the tenant database name (tenant_000008 ->
+        // 8), matching TenantCredentialDeriver::deriveFromDatabaseName().
+        if (! preg_match('/^tenant_0*(\d+)$/', $database, $m)) {
+            return; // not a recognised tenant DB name — nothing to derive against
+        }
+        $clientId = (int) $m[1];
+
+        $deriver = app(TenantCredentialDeriver::class);
+        if (! $deriver->hasPreviousSecret()) {
+            return; // no usable previous secret — nothing to fall back to
+        }
+
+        // Probe the primary runtime connection. If it works, the normal path stands.
+        try {
+            $this->probeTenantConnection($connection);
+
+            return;
+        } catch (\Throwable $primaryError) {
+            // Only an authentication/access-denied failure is a rotation signal. Any
+            // other error (host down, unknown database, etc.) must NOT trigger fallback
+            // and is left to surface through the existing handling.
+            if (! $this->isAuthError($primaryError)) {
+                return;
+            }
+        }
+
+        $previousPass = $deriver->derivePreviousDbPass($clientId);
+        if ($previousPass === null || $previousPass === $primaryPass) {
+            return; // nothing distinct to try
+        }
+
+        // Retry ONCE with the previous-derived password (password only).
+        $this->applyTenantPassword($connection, $previousPass);
+
+        try {
+            $this->probeTenantConnection($connection);
+        } catch (\Throwable $previousError) {
+            // Previous secret also rejected — restore primary so fail-closed stands.
+            $this->applyTenantPassword($connection, $primaryPass);
+
+            return;
+        }
+
+        // Previous-derived password works. Keep it and log SAFE metadata only.
+        Log::warning('Tenant connection used previous-secret fallback', [
+            'client_id'      => $clientId,
+            'db_name'        => $database,
+            'db_user'        => $dbUser,
+            'fallback_used'  => true,
+            'secret_version' => $deriver->secretVersion(),
+        ]);
+    }
+
+    /**
+     * Lightweight liveness probe of the currently configured runtime tenant
+     * connection. Throws (PDOException/QueryException) on failure — including auth
+     * failures — exactly as a normal query would. Isolated so the fallback decision
+     * logic can be exercised in tests without a live server.
+     */
+    protected function probeTenantConnection(string $connection): void
+    {
+        DB::connection($connection)->select('SELECT 1');
+    }
+
+    /**
+     * Re-point the runtime tenant connection's PASSWORD only and reconnect. Used by
+     * the previous-secret fallback to swap between primary and previous derivations
+     * without touching username/db/host/port.
+     */
+    private function applyTenantPassword(string $connection, string $password): void
+    {
+        Config::set("database.connections.{$connection}.password", $password);
+        DB::purge($connection);
+        DB::reconnect($connection);
+    }
+
+    /**
+     * Whether a connection failure is an authentication/access-denied error
+     * (SQLSTATE 28000 / MySQL native 1045), as opposed to an unrelated DB error.
+     */
+    private function isAuthError(\Throwable $e): bool
+    {
+        if ((string) $e->getCode() === '28000') {
+            return true;
+        }
+
+        $previous = $e->getPrevious();
+        if ($previous !== null && (string) $previous->getCode() === '28000') {
+            return true;
+        }
+
+        $message = $e->getMessage();
+        if ($previous !== null) {
+            $message .= ' '.$previous->getMessage();
+        }
+
+        return str_contains($message, '1045') || str_contains($message, 'SQLSTATE[28000]');
     }
 
     /**
