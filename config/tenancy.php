@@ -77,6 +77,21 @@ return [
     'derive_previous_secret' => env('TENANT_DERIVE_PREVIOUS_SECRET'),
     'derive_secret_version' => env('TENANT_DERIVE_SECRET_VERSION', 'v1'),
 
+    // Connection-layer previous-secret fallback (#36, mirrors SolaBooks/SolaProjects/
+    // SolaHR) — OFF by default. ONLY meaningful when the per-tenant derived DB user is
+    // actually in use (INVENTORY_USE_DERIVED_TENANT_DB_USER=true); when the derived
+    // user is OFF (default) this is a strict no-op because the runtime connection uses
+    // the shared DB user and never a derived password. When this flag is TRUE *and* the
+    // derived user is in use *and* a valid TENANT_DERIVE_PREVIOUS_SECRET is configured,
+    // the runtime connection setup will — ONLY if the primary-derived password is
+    // rejected with an AUTH/access-denied error (SQLSTATE 28000 / MySQL 1045) — retry
+    // the connection ONCE with the PREVIOUS-derived password, log SAFE metadata (tenant
+    // db, derived user, fallback_used=true, secret version label — never the secret or
+    // derived password), and keep the working connection. Any other error, or both
+    // passwords failing, preserves the existing fail-closed behavior. Transitional aid
+    // only; performs NO rotation by itself.
+    'derive_previous_secret_fallback' => (bool) env('TENANT_DERIVE_PREVIOUS_SECRET_FALLBACK', false),
+
     // Production tenant DB name prefix. SolaStock shares the SAME per-client
     // tenant database as Finance/Projects/HR (tenant_{clientId}) and owns ONLY
     // its own stock_*/inventory tables there (marker migrated_at_inv). It NEVER
