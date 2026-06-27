@@ -65,6 +65,18 @@ return [
     // Secret used to derive per-tenant DB credentials (tenant_dynamic).
     'derive_secret' => env('TENANT_DERIVE_SECRET'),
 
+    // Optional dual-secret rotation support (#35, mirrors SolaBooks #30 /
+    // SolaProjects #33 / SolaHR #34) — OFF by default, so behavior is identical to
+    // the single-secret setup today. Both are OPTIONAL: TENANT_DERIVE_PREVIOUS_SECRET
+    // is a former secret kept temporarily during a controlled migration window
+    // (ignored unless >=32 chars and != primary; never required, never breaks the
+    // primary path); TENANT_DERIVE_SECRET_VERSION is a NON-SENSITIVE label (default
+    // v1) for safe logging/metrics, never the secret value. Setting these does NOT
+    // rotate anything — real rotation is a separate, owner-approved, gated execution.
+    // The INVENTORY_USE_DERIVED_TENANT_DB_USER flag behavior is unchanged.
+    'derive_previous_secret' => env('TENANT_DERIVE_PREVIOUS_SECRET'),
+    'derive_secret_version' => env('TENANT_DERIVE_SECRET_VERSION', 'v1'),
+
     // Production tenant DB name prefix. SolaStock shares the SAME per-client
     // tenant database as Finance/Projects/HR (tenant_{clientId}) and owns ONLY
     // its own stock_*/inventory tables there (marker migrated_at_inv). It NEVER

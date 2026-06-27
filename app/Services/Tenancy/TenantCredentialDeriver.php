@@ -21,13 +21,27 @@ use InvalidArgumentException;
 class TenantCredentialDeriver
 {
     protected string $secret;
+
+    /**
+     * Optional PREVIOUS secret for a controlled rotation/migration window.
+     * Null unless a valid, distinct previous secret is configured. Opt-in and
+     * never required — a missing/short/equal previous secret is ignored so it can
+     * never break or weaken normal primary-secret behavior.
+     */
+    protected ?string $previousSecret;
+
+    /** Non-sensitive version label (e.g. "v1"). Safe to log; never the value. */
+    protected string $secretVersion;
+
     protected string $userHost;
 
     public function __construct()
     {
         $this->secret = (string) config('tenancy.derive_secret');
         $this->userHost = (string) config('tenancy.db_user_host', '%');
+        $this->secretVersion = (string) (config('tenancy.derive_secret_version') ?: 'v1');
 
+        // Primary secret fail-closed — UNCHANGED behavior.
         if (empty($this->secret)) {
             throw new InvalidArgumentException(
                 'TENANT_DERIVE_SECRET must be set (minimum 64 characters recommended)'
@@ -39,6 +53,16 @@ class TenantCredentialDeriver
                 'TENANT_DERIVE_SECRET is too short. Use at least 64 random characters.'
             );
         }
+
+        // Optional previous secret — used ONLY for verification/fallback during a
+        // controlled rotation window. Considered usable only when it is present,
+        // long enough, and NOT equal to the primary; otherwise it is silently
+        // ignored (never thrown) so a misconfigured previous secret cannot break
+        // the normal primary-secret path. Never required.
+        $previous = (string) (config('tenancy.derive_previous_secret') ?? '');
+        $this->previousSecret = ($previous !== '' && strlen($previous) >= 32 && ! hash_equals($this->secret, $previous))
+            ? $previous
+            : null;
     }
 
     /**
@@ -82,13 +106,55 @@ class TenantCredentialDeriver
      */
     public function deriveDbPass(int $clientId): string
     {
+        // Primary derivation — output is byte-for-byte identical to before.
+        return $this->hmacPass($clientId, $this->secret);
+    }
+
+    /**
+     * HMAC-SHA256 password derivation for a given secret. Same algorithm/message
+     * ("tenant-pass:v1:{clientId}") and 40-char base64url truncation as before —
+     * extracted so the optional previous secret can reuse the exact same format.
+     */
+    private function hmacPass(int $clientId, string $secret): string
+    {
         $this->validateClientId($clientId);
 
         $message = "tenant-pass:v1:{$clientId}";
-        $hmac = hash_hmac('sha256', $message, $this->secret, true);
+        $hmac = hash_hmac('sha256', $message, $secret, true);
         $base64 = rtrim(strtr(base64_encode($hmac), '+/', '-_'), '=');
 
         return substr($base64, 0, 40);
+    }
+
+    /**
+     * Whether a usable PREVIOUS secret is configured (rotation window active).
+     * Safe to log. Does not expose the secret.
+     */
+    public function hasPreviousSecret(): bool
+    {
+        return $this->previousSecret !== null;
+    }
+
+    /**
+     * Non-sensitive secret/version label (e.g. "v1") for safe logging/metrics.
+     * Never returns the secret value.
+     */
+    public function secretVersion(): string
+    {
+        return $this->secretVersion;
+    }
+
+    /**
+     * Password derived with the PREVIOUS secret — for verification / connection
+     * fallback ONLY during a controlled rotation window. Returns null when no
+     * usable previous secret is configured. The normal path never calls this, so
+     * default single-secret behavior is unchanged.
+     */
+    public function derivePreviousDbPass(int $clientId): ?string
+    {
+        return $this->previousSecret === null
+            ? null
+            : $this->hmacPass($clientId, $this->previousSecret);
     }
 
     /**
