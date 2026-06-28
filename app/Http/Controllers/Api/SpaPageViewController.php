@@ -56,6 +56,9 @@ class SpaPageViewController extends Controller
         $requestId = (string) ($request->headers->get('X-Request-Id') ?: Str::uuid());
         $user      = $request->user();
         $eventId   = (string) Str::uuid();
+        $centralOrgId = (int) ($request->session()->get('selected_central_org_id')
+            ?: $request->session()->get('active_organization_id')
+            ?: 0);
 
         $payload = [
             'source_app'     => $source,
@@ -69,8 +72,11 @@ class SpaPageViewController extends Controller
             'message'        => 'user viewed ' . ($name ?: trim($path, '/')),
             'occurred_at'    => now()->toIso8601String(),
             'request_id'     => $requestId,
-            'organization_id' => $request->session()->get('active_organization_id')
-                ?: $request->session()->get('current_organization_id'),
+            // The central org id is seeded into the session by the inventory
+            // handoff (selected_central_org_id) — Central resolves the org name
+            // from it (and from metadata.central_org_id), exactly like the other
+            // apps. Without it the event log shows "-" for organization.
+            'organization_id' => $centralOrgId ?: null,
             'user' => [
                 'id'    => $user?->getAuthIdentifier(),
                 'email' => $user?->email,
@@ -84,7 +90,11 @@ class SpaPageViewController extends Controller
                 'ip_address'  => $request->ip(),
                 'user_agent'  => $request->userAgent(),
             ],
-            'metadata' => ['spa' => true, 'spa_route' => $name],
+            'metadata' => array_filter([
+                'spa'           => true,
+                'spa_route'     => $name,
+                'central_org_id' => $centralOrgId ?: null,
+            ], static fn ($v) => $v !== null),
         ];
 
         $body      = json_encode($payload, JSON_UNESCAPED_SLASHES);
