@@ -36,6 +36,12 @@ Route::prefix('v1/tenant')->group(function () {
 
 Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
 
+    // Client-side SPA navigation tracking: forwards one page_view per
+    // react-router move to the central event log (source_app=inventory) so
+    // every navigation is visible in admin. No permission gate.
+    Route::post('/spa-view', \App\Http\Controllers\Api\SpaPageViewController::class)
+        ->middleware('throttle:120,1')->name('api.v1.spa-view');
+
     // Bootstrap data for the SPA (permissions, settings, lookups).
     Route::get('/meta', [MetaController::class, 'index'])->name('api.v1.meta');
 

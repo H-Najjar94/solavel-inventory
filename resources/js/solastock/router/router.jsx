@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from '../layouts/AppShell.jsx';
+import { reportPageView } from '../utils/reportPageView.js';
 import DashboardPage from '../pages/DashboardPage.jsx';
 import ItemsPage from '../pages/ItemsPage.jsx';
 import ItemDetailPage from '../pages/ItemDetailPage.jsx';
@@ -141,3 +142,12 @@ export const router = createBrowserRouter(
     ],
     { basename: '/inventory' }
 );
+
+// Navigation telemetry: report one page_view to Central per completed in-app
+// navigation, so every SolaStock SPA move is visible in the admin event log.
+// De-duplicated + fire-and-forget; never blocks routing.
+router.subscribe((state) => {
+    if (state.navigation.state === 'idle') {
+        reportPageView(state.location.pathname);
+    }
+});
