@@ -5,10 +5,20 @@ use Illuminate\Validation\Rule;
 class StoreStockCountRequest extends FormRequest
 {
     public function authorize(): bool { return true; }
+
+    protected function prepareForValidation(): void
+    {
+        // count_number is SERVER-GENERATED when blank (users don't invent it).
+        if (in_array($this->input('count_number'), ['', null], true)) {
+            $this->merge(['count_number' => null]);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'count_number' => ['required','string','max:50'],
+            // Optional: generated server-side if not supplied.
+            'count_number' => ['nullable','string','max:50'],
             'count_type' => ['required', Rule::in(['cycle','full'])],
             'warehouse_id' => ['required','integer'],
             'zone_id' => ['nullable','integer'],

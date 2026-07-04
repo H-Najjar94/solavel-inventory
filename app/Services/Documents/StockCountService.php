@@ -34,6 +34,11 @@ class StockCountService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
+            // Server-issued count number when none was supplied (users don't type it).
+            $attributes['count_number'] = ! empty($attributes['count_number'])
+                ? $attributes['count_number']
+                : \App\Services\Documents\Support\DocumentNumber::next('CNT', StockCount::class, 'count_number', $orgId, $this->connection());
+
             $count = new StockCount(array_merge(['status' => 'draft'], $attributes));
             $count->organization_id = $orgId;
             $count->save();

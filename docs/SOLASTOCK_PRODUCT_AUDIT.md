@@ -75,10 +75,22 @@ Legend: ✅ good · 🟡 works but admin-grade/weak UX · 🟦 partial · 🔴 b
 ## 2. Bug list (evidence-based)
 
 **Broken create/edit (from production logs):**
-- **B1 (P1, highest):** Purchase Order create — **8 insert failures** in prod. Cause TBD (reproduce like Items/Warehouses).
-- **B2 (P1):** Opening Stock create — `entry_number doesn't have a default (1364)` ×4. Manual number + a path that drops it.
-- **B3 (P1):** Document-number class — every document create (`*_number`) is manual + `required` + DB no-default ⇒ blank/missing → fail. Affects Opening Stock, PO, GRN, Adjustment, Count, Transfer, SO.
-- **B4 (migration):** `goods_receipts` / `integration_settings` "table doesn't exist" + FK fail on some tenants (historical on 000002, still a drift risk). Verify ALL live tenants are migrated to head before those features are used.
+- **B1 (P1, highest): FIXED.** Purchase Order create now server-issues `po_number`
+  and coerces blank dates/currency (`PurchaseOrderController::store` +
+  `StorePurchaseOrderRequest`). Covered by `DocumentNumberingTest`.
+- **B2 (P1): FIXED.** Opening Stock create auto-generates `entry_number`
+  (`OpeningStockService` + `StoreOpeningStockRequest`). Covered by `DocumentNumberingTest`.
+- **B3 (P1): FIXED for all document creates.** PO, Opening Stock, **and now
+  Transfer / Adjustment / GRN** server-issue their `*_number` (nullable rule +
+  `prepareForValidation` + `DocumentNumber::next` in the create transaction); a
+  latent null-date NOT-NULL crash was fixed alongside. Covered by
+  `DocumentNumberingTest` + `DocumentNumberingCreateTest`. (Stock Count `count_number`
+  and Sales Order `order_number` create endpoints still to convert — see backlog.)
+- **B4 (migration): VERIFIED CLEAN (2026-07-04).** All five document tables
+  (`goods_receipts`, `stock_transfers`, `stock_adjustments`,
+  `inventory_purchase_orders`, `opening_stock_entries`) exist with their number
+  columns on the live inventory tenants (000002, 000008). No backfill needed.
+  `integration_settings` drift not re-checked (Integrations is P5).
 
 **Validation / payload:**
 - **B5:** Generic "save failed" on 500s (12 forms) — server errors aren't surfaced field-wise.
