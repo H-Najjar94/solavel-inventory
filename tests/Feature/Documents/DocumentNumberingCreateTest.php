@@ -3,13 +3,19 @@
 namespace Tests\Feature\Documents;
 
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
+use App\Http\Controllers\Api\V1\SalesOrderController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
+use App\Http\Controllers\Api\V1\StockCountController;
 use App\Http\Controllers\Api\V1\StockTransferController;
 use App\Http\Requests\Api\StoreGoodsReceiptRequest;
+use App\Http\Requests\Api\StoreSalesOrderRequest;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
+use App\Http\Requests\Api\StoreStockCountRequest;
 use App\Http\Requests\Api\StoreStockTransferRequest;
 use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockAdjustment;
+use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockTransfer;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
@@ -173,6 +179,85 @@ class DocumentNumberingCreateTest extends TestCase
 
         $this->assertSame('GRN-CUSTOM', $typed['data']['grn_number']);
         $this->assertNotNull(GoodsReceipt::query()->where('grn_number', 'GRN-000001')->first());
+    }
+
+    // ── Stock Count ──
+
+    private function countPayload(array $over = []): array
+    {
+        return array_merge([
+            'count_number' => '', 'count_type' => 'cycle', 'warehouse_id' => $this->whA, 'notes' => '',
+            'lines' => [['item_id' => $this->item, 'system_qty' => '10', 'counted_qty' => '9']],
+        ], $over);
+    }
+
+    #[Test]
+    public function count_create_with_blank_number_auto_generates(): void
+    {
+        $this->useTenantA();
+        $this->seedDocs();
+
+        $req = $this->resolve(StoreStockCountRequest::class, $this->countPayload());
+        $resp = app(StockCountController::class)->store($req)->getData(true);
+
+        $this->assertSame('CNT-000001', $resp['data']['count_number']);
+        $this->assertNotNull(StockCount::query()->where('count_number', 'CNT-000001')->first());
+    }
+
+    #[Test]
+    public function count_number_increments_and_typed_number_is_respected(): void
+    {
+        $this->useTenantA();
+        $this->seedDocs();
+
+        app(StockCountController::class)->store($this->resolve(StoreStockCountRequest::class, $this->countPayload()));   // CNT-000001
+        $typed = app(StockCountController::class)->store(
+            $this->resolve(StoreStockCountRequest::class, $this->countPayload(['count_number' => 'CYCLE-A']))
+        )->getData(true);
+
+        $this->assertSame('CYCLE-A', $typed['data']['count_number']);
+        $this->assertNotNull(StockCount::query()->where('count_number', 'CNT-000001')->first());
+    }
+
+    // ── Sales Order ──
+
+    private function soPayload(array $over = []): array
+    {
+        return array_merge([
+            'order_number' => '', 'order_date' => '', 'requested_ship_date' => '',
+            'warehouse_id' => $this->whA, 'customer_name' => 'Acme', 'notes' => '',
+            'lines' => [['item_id' => $this->item, 'ordered_qty' => '3.0000', 'unit_price' => '5.0000']],
+        ], $over);
+    }
+
+    #[Test]
+    public function sales_order_create_with_blank_number_and_blank_dates_auto_generates(): void
+    {
+        $this->useTenantA();
+        $this->seedDocs();
+
+        $req = $this->resolve(StoreSalesOrderRequest::class, $this->soPayload());
+        $resp = app(SalesOrderController::class)->store($req)->getData(true);
+
+        $this->assertSame('SO-000001', $resp['data']['order_number']);
+        $so = SalesOrder::query()->where('order_number', 'SO-000001')->firstOrFail();
+        $this->assertSame('draft', $so->status);
+        $this->assertNotNull($so->order_date, 'blank order_date defaulted, did not crash');
+    }
+
+    #[Test]
+    public function sales_order_number_increments_and_typed_number_is_respected(): void
+    {
+        $this->useTenantA();
+        $this->seedDocs();
+
+        app(SalesOrderController::class)->store($this->resolve(StoreSalesOrderRequest::class, $this->soPayload()));   // SO-000001
+        $typed = app(SalesOrderController::class)->store(
+            $this->resolve(StoreSalesOrderRequest::class, $this->soPayload(['order_number' => 'WEB-77']))
+        )->getData(true);
+
+        $this->assertSame('WEB-77', $typed['data']['order_number']);
+        $this->assertNotNull(SalesOrder::query()->where('order_number', 'SO-000001')->first());
     }
 
     #[Test]

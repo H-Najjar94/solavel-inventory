@@ -33,9 +33,17 @@ class SalesOrderService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($attributes, $lines, $orgId) {
+            // Server-issued order number when none was supplied (users don't type it).
+            $attributes['order_number'] = ! empty($attributes['order_number'])
+                ? $attributes['order_number']
+                : \App\Services\Documents\Support\DocumentNumber::next('SO', SalesOrder::class, 'order_number', $orgId, $this->conn());
+
+            // Default a missing/blank date (order_date is a NOT NULL column). Done here
+            // rather than only in array_merge so a null in $attributes can't win.
+            $attributes['order_date'] = $attributes['order_date'] ?? now()->toDateString();
+
             $so = new SalesOrder(array_merge([
                 'status' => 'draft', 'source_app' => 'manual',
-                'order_date' => $attributes['order_date'] ?? now()->toDateString(),
             ], $attributes));
             $so->organization_id = $orgId;
             $so->save();

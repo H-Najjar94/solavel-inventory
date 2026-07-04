@@ -4,10 +4,30 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreSalesOrderRequest extends FormRequest
 {
     public function authorize(): bool { return true; }
+
+    protected function prepareForValidation(): void
+    {
+        // order_number is SERVER-GENERATED when blank (users don't invent it).
+        // Blank dates → null so 'nullable|date' passes and order_date can default.
+        $patch = [];
+        if (in_array($this->input('order_number'), ['', null], true)) {
+            $patch['order_number'] = null;
+        }
+        foreach (['order_date', 'requested_ship_date'] as $f) {
+            if ($this->input($f) === '') {
+                $patch[$f] = null;
+            }
+        }
+        if ($patch !== []) {
+            $this->merge($patch);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'order_number' => ['required','string','max:50'],
+            // Optional: generated server-side if not supplied.
+            'order_number' => ['nullable','string','max:50'],
             'customer_name' => ['nullable','string','max:255'],
             'customer_external_id' => ['nullable','string','max:100'],
             'order_date' => ['nullable','date'],
