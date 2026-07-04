@@ -30,7 +30,10 @@ class GoodsReceiptController extends ApiController
 
     public function show(GoodsReceipt $goods_receipt): JsonResponse
     {
-        $goods_receipt->load('lines');
+        // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
+        $goods_receipt->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $goods_receipt->setAttribute('warehouse_name', $goods_receipt->warehouse?->name);
+        $goods_receipt->setAttribute('supplier_name', $goods_receipt->supplier?->name);
         $ledger = StockLedger::query()->where('source_type', GoodsReceipt::class)->where('source_id', $goods_receipt->id)->get();
         $po = $goods_receipt->purchase_order_id
             ? PurchaseOrder::query()->find($goods_receipt->purchase_order_id, ['id', 'po_number', 'status'])

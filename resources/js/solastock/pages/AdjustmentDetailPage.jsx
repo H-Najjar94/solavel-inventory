@@ -38,7 +38,7 @@ export default function AdjustmentDetailPage() {
             </header>
 
             <div className="panel"><dl className="kv">
-                <dt>Date</dt><dd>{adj.adjustment_date}</dd><dt>Warehouse</dt><dd>#{adj.warehouse_id}</dd>
+                <dt>Date</dt><dd>{adj.adjustment_date}</dd><dt>Warehouse</dt><dd>{adj.warehouse_name ?? `#${adj.warehouse_id}`}</dd>
                 <dt>Reason</dt><dd>{adj.reason_code ?? '—'}</dd>
                 <dt>Increase value</dt><dd>{adj.total_increase_value}</dd><dt>Decrease value</dt><dd>{adj.total_decrease_value}</dd>
             </dl></div>
@@ -47,7 +47,7 @@ export default function AdjustmentDetailPage() {
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Type</th><th>Item</th><th>Bin</th><th>Qty</th><th>Unit cost</th></tr></thead>
-                <tbody>{(adj.lines ?? []).map((l) => <tr key={l.id}><td>{l.direction}</td><td>#{l.item_id}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.quantity}</td><td>{l.unit_cost}</td></tr>)}</tbody>
+                <tbody>{(adj.lines ?? []).map((l) => <tr key={l.id}><td>{l.direction}</td><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.quantity}</td><td>{l.unit_cost}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="Posted/reversed events are recorded in inventory_audit_logs." /></div>}

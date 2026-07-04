@@ -4,8 +4,9 @@ namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
 use App\Tenancy\Concerns\LocksWhenPosted;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
- use Illuminate\Database\Eloquent\Model;
 
 class StockCount extends Model
 {
@@ -22,5 +23,11 @@ class StockCount extends Model
     public function lines()
     {
         return $this->hasMany(StockCountLine::class, 'stock_count_id');
+    }
+
+    /** Header warehouse — surface a name, not a raw id. */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 }

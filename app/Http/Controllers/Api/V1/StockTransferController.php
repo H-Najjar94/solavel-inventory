@@ -29,7 +29,10 @@ class StockTransferController extends ApiController
 
     public function show(StockTransfer $stock_transfer): JsonResponse
     {
-        $stock_transfer->load('lines');
+        // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
+        $stock_transfer->load(['lines.item:id,name,sku', 'fromWarehouse:id,name,code', 'toWarehouse:id,name,code']);
+        $stock_transfer->setAttribute('from_warehouse_name', $stock_transfer->fromWarehouse?->name);
+        $stock_transfer->setAttribute('to_warehouse_name', $stock_transfer->toWarehouse?->name);
         $ledger = StockLedger::query()->where('source_type', StockTransfer::class)->where('source_id', $stock_transfer->id)->get();
         return $this->success(['transfer' => $stock_transfer, 'ledger' => $ledger]);
     }

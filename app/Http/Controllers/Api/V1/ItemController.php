@@ -146,7 +146,7 @@ class ItemController extends ApiController
     public function movements(Request $request, Item $item): JsonResponse
     {
         $perPage = min((int) $request->query('per_page', 50), 200);
-        $query = StockLedger::query()->with('warehouse:id,name,code')
+        $query = StockLedger::query()->with(['warehouse:id,name,code', 'item:id,name,sku'])
             ->where('item_id', $item->id)
             ->orderBy('moved_at')->orderBy('id');
 

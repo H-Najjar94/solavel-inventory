@@ -47,8 +47,8 @@ export default function PurchaseOrderDetailPage() {
             </header>
 
             <div className="panel"><dl className="kv">
-                <dt>Supplier</dt><dd>{po.supplier_id ? `#${po.supplier_id}` : '—'}</dd>
-                <dt>Warehouse</dt><dd>#{po.warehouse_id}</dd>
+                <dt>Supplier</dt><dd>{po.supplier_name ?? (po.supplier_id ? `#${po.supplier_id}` : '—')}</dd>
+                <dt>Warehouse</dt><dd>{po.warehouse_name ?? `#${po.warehouse_id}`}</dd>
                 <dt>Order date</dt><dd>{po.order_date}</dd>
                 <dt>Expected</dt><dd>{po.expected_date ?? '—'}</dd>
                 <dt>Total</dt><dd>{po.total}</dd>
@@ -58,7 +58,7 @@ export default function PurchaseOrderDetailPage() {
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Unit cost</th></tr></thead>
-                <tbody>{lines.map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.ordered_qty}</td><td>{l.received_qty}</td><td>{l.remaining_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
+                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item_name ?? `#${l.item_id}`}{l.item_sku && <span className="muted"> · {l.item_sku}</span>}</td><td>{l.ordered_qty}</td><td>{l.received_qty}</td><td>{l.remaining_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
             </table></div>}
 
             {tab === 'grns' && <div className="panel">{grns.length === 0 ? <EmptyState title="No GRNs yet" hint={canReceive ? 'Create a GRN to receive stock.' : ''} /> : (

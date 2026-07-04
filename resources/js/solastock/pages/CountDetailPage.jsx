@@ -39,7 +39,7 @@ export default function CountDetailPage() {
 
             <div className="panel"><dl className="kv">
                 <dt>Type</dt><dd>{c.count_type}</dd>
-                <dt>Warehouse</dt><dd>#{c.warehouse_id}</dd>
+                <dt>Warehouse</dt><dd>{c.warehouse_name ?? `#${c.warehouse_id}`}</dd>
                 <dt>Generated adjustment</dt><dd>{adjustment ? <Link to={`/adjustments/${adjustment.id}`}>{adjustment.adjustment_number}</Link> : '—'}</dd>
                 <dt>Notes</dt><dd>{c.notes ?? '—'}</dd>
             </dl></div>
@@ -48,7 +48,7 @@ export default function CountDetailPage() {
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Bin</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead>
-                <tbody>{(c.lines ?? []).map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.system_qty}</td><td>{l.counted_qty ?? '—'}</td><td>{l.variance_qty}</td></tr>)}</tbody>
+                <tbody>{(c.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.system_qty}</td><td>{l.counted_qty ?? '—'}</td><td>{l.variance_qty}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="Count post events are recorded in inventory_audit_logs." /></div>}

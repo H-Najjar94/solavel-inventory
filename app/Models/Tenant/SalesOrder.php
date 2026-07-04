@@ -3,8 +3,9 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesOrder extends Model
 {
@@ -20,5 +21,12 @@ class SalesOrder extends Model
     public function lines()
     {
         return $this->hasMany(SalesOrderLine::class, 'sales_order_id');
+    }
+
+    /** Header warehouse — surface a name, not a raw id. (Customer is the
+        denormalized customer_name string; no customer table exists.) */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 }
