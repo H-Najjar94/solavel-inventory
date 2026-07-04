@@ -60,9 +60,19 @@ class StockAdjustmentService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
+            // Server-issued adjustment number when none was supplied (users don't type it).
+            // An explicit number (e.g. the 'COUNT-…' ref from a stock-count variance
+            // adjustment) is always respected.
+            $attributes['adjustment_number'] = ! empty($attributes['adjustment_number'])
+                ? $attributes['adjustment_number']
+                : \App\Services\Documents\Support\DocumentNumber::next('ADJ', StockAdjustment::class, 'adjustment_number', $orgId, $this->connection());
+
+            // Default a missing/blank date (adjustment_date is a NOT NULL column). Done
+            // here rather than only in array_merge so a null in $attributes can't win.
+            $attributes['adjustment_date'] = $attributes['adjustment_date'] ?? now()->toDateString();
+
             $adj = new StockAdjustment(array_merge([
                 'status' => 'draft',
-                'adjustment_date' => $attributes['adjustment_date'] ?? now()->toDateString(),
             ], $attributes));
             $adj->organization_id = $orgId;
             $adj->save();

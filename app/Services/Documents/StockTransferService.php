@@ -44,9 +44,17 @@ class StockTransferService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
+            // Server-issued transfer number when none was supplied (users don't type it).
+            $attributes['transfer_number'] = ! empty($attributes['transfer_number'])
+                ? $attributes['transfer_number']
+                : \App\Services\Documents\Support\DocumentNumber::next('TRF', StockTransfer::class, 'transfer_number', $orgId, $this->connection());
+
+            // Default a missing/blank date (transfer_date is a NOT NULL column). Done
+            // here rather than only in array_merge so a null in $attributes can't win.
+            $attributes['transfer_date'] = $attributes['transfer_date'] ?? now()->toDateString();
+
             $t = new StockTransfer(array_merge([
                 'status' => 'draft',
-                'transfer_date' => $attributes['transfer_date'] ?? now()->toDateString(),
             ], $attributes));
             $t->organization_id = $orgId;
 

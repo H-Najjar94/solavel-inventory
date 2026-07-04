@@ -53,9 +53,17 @@ class GoodsReceiptService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
+            // Server-issued GRN number when none was supplied (users don't type it).
+            $attributes['grn_number'] = ! empty($attributes['grn_number'])
+                ? $attributes['grn_number']
+                : \App\Services\Documents\Support\DocumentNumber::next('GRN', GoodsReceipt::class, 'grn_number', $orgId, $this->connection());
+
+            // Default a missing/blank date (receipt_date is a NOT NULL column). Done
+            // here rather than only in array_merge so a null in $attributes can't win.
+            $attributes['receipt_date'] = $attributes['receipt_date'] ?? now()->toDateString();
+
             $grn = new GoodsReceipt(array_merge([
                 'status' => 'draft',
-                'receipt_date' => $attributes['receipt_date'] ?? now()->toDateString(),
             ], $attributes));
             $grn->organization_id = $orgId;
             $grn->save();
