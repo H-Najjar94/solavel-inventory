@@ -49,3 +49,23 @@ php artisan config:clear
 php artisan cache:clear
 php artisan test
 ```
+
+## Per-tenant derived DB users MUST be OFF in tests
+
+Production `.env` sets `INVENTORY_USE_DERIVED_TENANT_DB_USER=true`, so at runtime
+`TenantManager::switchToDatabase()` overrides the tenant connection's username with
+a per-tenant derived user (e.g. `tenant_990010` → `t_990010`). Those derived users
+exist only for real provisioned tenants — **not** for the reserved test DBs.
+
+If `.env.testing` is missing, the suite falls back to production `.env`, derivation
+turns on, and every DB-touching test fails with:
+
+```
+SQLSTATE[HY000] [1045] Access denied for user 't_990010'@'localhost'
+```
+
+`.env.testing` therefore MUST set `INVENTORY_USE_DERIVED_TENANT_DB_USER=false` and
+use the shared `mysql` account credentials. This is the single cause of the
+historical "90 access-denied errors" — a test-env config gap, not a product bug.
+`.env.testing` is gitignored (it holds the real `mysql` password); recreate it from
+`.env.testing.example` and set the derived-user flag to `false`.
