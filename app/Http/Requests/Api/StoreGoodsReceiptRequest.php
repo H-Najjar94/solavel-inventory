@@ -4,10 +4,28 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreGoodsReceiptRequest extends FormRequest
 {
     public function authorize(): bool { return true; }
+
+    protected function prepareForValidation(): void
+    {
+        // grn_number is SERVER-GENERATED when blank (users don't invent it).
+        // Blank date → null so 'nullable|date' passes and receipt_date can default.
+        $patch = [];
+        if (in_array($this->input('grn_number'), ['', null], true)) {
+            $patch['grn_number'] = null;
+        }
+        if ($this->input('receipt_date') === '') {
+            $patch['receipt_date'] = null;
+        }
+        if ($patch !== []) {
+            $this->merge($patch);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'grn_number' => ['required','string','max:50'],
+            // Optional: generated server-side if not supplied.
+            'grn_number' => ['nullable','string','max:50'],
             'purchase_order_id' => ['nullable','integer'],
             'supplier_id' => ['nullable','integer'],
             'warehouse_id' => ['required','integer'],
