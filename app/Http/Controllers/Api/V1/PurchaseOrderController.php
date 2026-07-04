@@ -39,13 +39,19 @@ class PurchaseOrderController extends ApiController
 
     public function show(PurchaseOrder $purchase_order): JsonResponse
     {
-        $purchase_order->load('lines');
+        // Eager-load names (org-scoped by each model's global scope) so the detail
+        // page shows names, not raw #ids.
+        $purchase_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $purchase_order->setAttribute('warehouse_name', $purchase_order->warehouse?->name);
+        $purchase_order->setAttribute('supplier_name', $purchase_order->supplier?->name);
 
         // Remaining per line = ordered − received (received_qty maintained by GRN posting).
         $lines = $purchase_order->lines->map(function ($l) {
             $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->received_qty));
 
             return array_merge($l->toArray(), [
+                'item_name' => $l->item?->name,
+                'item_sku' => $l->item?->sku,
                 'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
             ]);
         });

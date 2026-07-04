@@ -38,8 +38,8 @@ export default function TransferDetailPage() {
 
             <div className="panel"><dl className="kv">
                 <dt>Date</dt><dd>{t.transfer_date}</dd>
-                <dt>From warehouse</dt><dd>#{t.from_warehouse_id}</dd>
-                <dt>To warehouse</dt><dd>#{t.to_warehouse_id}</dd>
+                <dt>From warehouse</dt><dd>{t.from_warehouse_name ?? `#${t.from_warehouse_id}`}</dd>
+                <dt>To warehouse</dt><dd>{t.to_warehouse_name ?? `#${t.to_warehouse_id}`}</dd>
                 <dt>Notes</dt><dd>{t.notes ?? '—'}</dd>
             </dl></div>
 
@@ -47,7 +47,7 @@ export default function TransferDetailPage() {
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Source bin</th><th>Dest bin</th><th>Quantity</th></tr></thead>
-                <tbody>{(t.lines ?? []).map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.from_bin_id ? `#${l.from_bin_id}` : '—'}</td><td>{l.to_bin_id ? `#${l.to_bin_id}` : '—'}</td><td>{l.quantity}</td></tr>)}</tbody>
+                <tbody>{(t.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.from_bin_id ? `#${l.from_bin_id}` : '—'}</td><td>{l.to_bin_id ? `#${l.to_bin_id}` : '—'}</td><td>{l.quantity}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="Transfer post events are recorded in inventory_audit_logs." /></div>}

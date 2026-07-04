@@ -21,7 +21,7 @@ class StockLedgerController extends ApiController
         $perPage = min((int) $request->query('per_page', 50), 200);
 
         $query = StockLedger::query()
-            ->with('warehouse:id,name,code')
+            ->with(['warehouse:id,name,code', 'item:id,name,sku'])
             ->when($request->filled('item_id'), fn ($q) => $q->where('item_id', (int) $request->query('item_id')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('direction'), fn ($q) => $q->where('direction', $request->query('direction')))
@@ -110,6 +110,8 @@ class StockLedgerController extends ApiController
             'costing_method' => $row->costing_method,
             'cost_layer_id' => $row->cost_layer_id,
             'item_id' => $row->item_id,
+            'item_name' => $row->item?->name,
+            'item_sku' => $row->item?->sku,
             'warehouse_id' => $row->warehouse_id,
             'warehouse_name' => $row->warehouse?->name,
             'warehouse_code' => $row->warehouse?->code,

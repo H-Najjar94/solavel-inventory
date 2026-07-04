@@ -81,7 +81,7 @@ export default function SalesOrderDetailPage() {
                 <dt>Customer</dt><dd>{so.customer_name ?? '—'}</dd>
                 <dt>Order date</dt><dd>{so.order_date}</dd>
                 <dt>Requested ship date</dt><dd>{so.requested_ship_date ?? '—'}</dd>
-                <dt>Warehouse</dt><dd>#{so.warehouse_id}</dd>
+                <dt>Warehouse</dt><dd>{so.warehouse_name ?? `#${so.warehouse_id}`}</dd>
                 <dt>Reservation</dt><dd><ReservationStatusBadge reserved={sum('reserved_qty')} ordered={sum('ordered_qty')} /></dd>
                 <dt>Progress</dt><dd><PickPackShipTimeline picked={sum('picked_qty')} packed={sum('packed_qty')} shipped={sum('shipped_qty')} ordered={sum('ordered_qty')} /></dd>
                 <dt>Notes</dt><dd>{so.notes ?? '—'}</dd>
@@ -90,7 +90,7 @@ export default function SalesOrderDetailPage() {
             <Tabs tabs={[{ key: 'lines', label: 'Lines' }]} active={tab} onChange={setTab} />
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Ordered</th><th>Reserved</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Unit price</th></tr></thead>
-                <tbody>{lines.map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.ordered_qty}</td><td>{l.reserved_qty}</td><td>{l.picked_qty}</td><td>{l.packed_qty}</td><td>{l.shipped_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
+                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.ordered_qty}</td><td>{l.reserved_qty}</td><td>{l.picked_qty}</td><td>{l.packed_qty}</td><td>{l.shipped_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
             </table></div>}
 
             <div className="doc-actions">

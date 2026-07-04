@@ -30,7 +30,12 @@ class SalesOrderController extends ApiController
 
     public function show(SalesOrder $sales_order): JsonResponse
     {
-        return $this->success(['sales_order' => $sales_order->load('lines')]);
+        // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
+        // customer_name is already a denormalized string on the header (no customer table).
+        $sales_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
+        $sales_order->setAttribute('warehouse_name', $sales_order->warehouse?->name);
+
+        return $this->success(['sales_order' => $sales_order]);
     }
 
     public function store(StoreSalesOrderRequest $request): JsonResponse

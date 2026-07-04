@@ -39,7 +39,8 @@ export default function GoodsReceiptDetailPage() {
 
             <div className="panel"><dl className="kv">
                 <dt>Received date</dt><dd>{grn.receipt_date}</dd>
-                <dt>Warehouse</dt><dd>#{grn.warehouse_id}</dd>
+                <dt>Warehouse</dt><dd>{grn.warehouse_name ?? `#${grn.warehouse_id}`}</dd>
+                <dt>Supplier</dt><dd>{grn.supplier_name ?? (grn.supplier_id ? `#${grn.supplier_id}` : '—')}</dd>
                 <dt>Source PO</dt><dd>{po ? <Link to={`/purchase-orders/${po.id}`}>{po.po_number}</Link> : '—'}</dd>
                 <dt>Notes</dt><dd>{grn.notes ?? '—'}</dd>
             </dl></div>
@@ -48,7 +49,7 @@ export default function GoodsReceiptDetailPage() {
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Received</th><th>Accepted</th><th>Bin</th><th>Unit cost</th></tr></thead>
-                <tbody>{(grn.lines ?? []).map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.received_qty}</td><td>{l.accepted_qty}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.unit_cost}</td></tr>)}</tbody>
+                <tbody>{(grn.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.received_qty}</td><td>{l.accepted_qty}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.unit_cost}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="GRN create/post events are recorded in inventory_audit_logs." /></div>}

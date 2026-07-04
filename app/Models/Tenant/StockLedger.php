@@ -40,6 +40,12 @@ class StockLedger extends Model
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
+    /** The item this movement is for — used to surface names, not raw IDs. */
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'item_id');
+    }
+
     /**
      * The FIFO cost layers this (outbound) movement drew down. Empty for inbound
      * or average-costed movements. Read-only — for valuation/movement visibility.

@@ -18,6 +18,9 @@ class StockBalanceController extends ApiController
         $perPage = min((int) $request->query('per_page', 25), 100);
 
         $query = StockBalance::query()
+            // Resolve item + warehouse NAMES (org-scoped by their global scope) so the
+            // grid shows names, not raw #ids. Eager-loaded => no N+1 across the page.
+            ->with(['item:id,name,sku', 'warehouse:id,name,code'])
             ->when($request->filled('item_id'), fn ($q) => $q->where('item_id', (int) $request->query('item_id')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('lot_id'), fn ($q) => $q->where('lot_id', (int) $request->query('lot_id')))
@@ -32,8 +35,12 @@ class StockBalanceController extends ApiController
             return [
                 'id' => $b->id,
                 'item_id' => $b->item_id,
+                'item_name' => $b->item?->name,
+                'item_sku' => $b->item?->sku,
                 'variant_id' => $b->variant_id,
                 'warehouse_id' => $b->warehouse_id,
+                'warehouse_name' => $b->warehouse?->name,
+                'warehouse_code' => $b->warehouse?->code,
                 'lot_id' => $b->lot_id,
                 'bin_id' => $b->bin_id,
                 'on_hand_qty' => $b->on_hand_qty,

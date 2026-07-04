@@ -29,7 +29,9 @@ class StockCountController extends ApiController
 
     public function show(StockCount $stock_count): JsonResponse
     {
-        $stock_count->load('lines');
+        // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
+        $stock_count->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
+        $stock_count->setAttribute('warehouse_name', $stock_count->warehouse?->name);
 
         // Generated adjustment + its ledger (variance posting goes through one adj).
         $adjustment = $stock_count->adjustment_id
