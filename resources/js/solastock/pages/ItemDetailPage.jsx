@@ -10,6 +10,73 @@ import ItemImages from '../components/ItemImages.jsx';
 const num = (v) => Number(v ?? 0);
 const money = (v) => num(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qty = (v) => num(v).toLocaleString(undefined, { maximumFractionDigits: 4 });
+const sourceText = (obj) => obj?.source_display || obj?.source_label || 'Source document unavailable';
+const sourceLink = (obj) => obj?.source_route || null;
+const layerValue = (remainingQty, unitCost) => money(num(remainingQty) * num(unitCost));
+
+function SourceRef({ obj }) {
+    const text = sourceText(obj);
+    const to = sourceLink(obj);
+    return to ? <Link to={to}>{text}</Link> : <span>{text}</span>;
+}
+
+function LayerMetric({ label, value, tone }) {
+    return (
+        <div className={`fifo-metric ${tone ? `fifo-metric--${tone}` : ''}`}>
+            <div className="fifo-metric__label">{label}</div>
+            <div className="fifo-metric__value">{value}</div>
+        </div>
+    );
+}
+
+function RemainingLayerCard({ layer, index }) {
+    const consumedQty = layer.consumed_qty ?? Math.max(0, num(layer.original_qty) - num(layer.remaining_qty));
+    return (
+        <div className="fifo-layer-card">
+            <div className="fifo-layer-card__head">
+                <Badge tone="info">FIFO layer {index + 1}</Badge>
+                <Badge tone="ok">Remaining layer</Badge>
+                <span className="fifo-layer-card__date">Received {layer.received_at ?? 'date unavailable'}</span>
+            </div>
+            <div className="fifo-layer-card__source">
+                <span>Source document</span>
+                <strong><SourceRef obj={layer} /></strong>
+            </div>
+            <div className="fifo-layer-grid">
+                <LayerMetric label="Original quantity" value={qty(layer.original_qty)} />
+                <LayerMetric label="Consumed quantity" value={qty(consumedQty)} tone={num(consumedQty) > 0 ? 'warn' : undefined} />
+                <LayerMetric label="Remaining quantity" value={qty(layer.remaining_qty)} tone="ok" />
+                <LayerMetric label="Unit cost" value={money(layer.unit_cost)} />
+                <LayerMetric label="Remaining value" value={layer.layer_value ?? layerValue(layer.remaining_qty, layer.unit_cost)} tone="ok" />
+                <LayerMetric label="Warehouse" value={layer.warehouse_name || layer.warehouse_code || 'Warehouse unavailable'} />
+            </div>
+        </div>
+    );
+}
+
+function ConsumedLayerCard({ layer, index }) {
+    const source = layer.source_layer ?? {};
+    return (
+        <div className="fifo-layer-card fifo-layer-card--consumed">
+            <div className="fifo-layer-card__head">
+                <Badge tone="warn">Consumed layer {index + 1}</Badge>
+                <span className="fifo-layer-card__date">Received {source.received_at ?? 'date unavailable'}</span>
+            </div>
+            <div className="fifo-layer-card__source">
+                <span>Source document</span>
+                <strong><SourceRef obj={source} /></strong>
+            </div>
+            <div className="fifo-layer-grid">
+                <LayerMetric label="Consumed quantity" value={qty(layer.qty)} tone="warn" />
+                <LayerMetric label="Unit cost" value={money(layer.unit_cost)} />
+                <LayerMetric label="Consumed value" value={money(layer.total_value)} tone="warn" />
+                <LayerMetric label="Layer remaining after this" value={source.remaining_qty != null ? qty(source.remaining_qty) : '—'} />
+                <LayerMetric label="Layer original quantity" value={source.original_qty != null ? qty(source.original_qty) : '—'} />
+                <LayerMetric label="Consumed at" value={layer.consumed_at ?? '—'} />
+            </div>
+        </div>
+    );
+}
 
 // Read-only valuation drawer (FIFO layer stack + FIFO-vs-average + reconciliation).
 function ValuationDrawer({ itemId, open, onClose }) {
@@ -30,7 +97,7 @@ function ValuationDrawer({ itemId, open, onClose }) {
                 <>
                     <div className="drawer-note">
                         {isFifo
-                            ? <>This item is valued <strong>FIFO</strong> — each batch keeps its own cost and the <strong>oldest stock is counted as sold first</strong>.</>
+                            ? <>This item is valued <strong>FIFO</strong>. Each inbound batch keeps its own unit cost, and stock issues consume the <strong>oldest remaining layer first</strong>.</>
                             : <>This item is valued at <strong>weighted average</strong> cost.</>}
                     </div>
                     {hasStock && (
@@ -55,19 +122,12 @@ function ValuationDrawer({ itemId, open, onClose }) {
                             </div>
                             {isFifo && (w.layers?.length > 0 ? (
                                 <>
-                                    <div className="section-label">Cost layers — oldest first</div>
-                                    <div className="layer-list">
-                                        {w.layers.map((l) => (
-                                            <div className="layer-row" key={l.id}>
-                                                <div className="layer-row-main">{qty(l.remaining_qty)} left × {money(l.unit_cost)}</div>
-                                                <div className="layer-row-val">{money(l.layer_value)}</div>
-                                                <div className="layer-row-meta">received {l.received_at ?? '—'}{l.lot_id ? ` · lot #${l.lot_id}` : ''}</div>
-                                                <div className="layer-row-ref">{l.source_ledger_id ? `from movement #${l.source_ledger_id}` : ''}</div>
-                                            </div>
-                                        ))}
+                                    <div className="section-label">Remaining FIFO layers — oldest first</div>
+                                    <div className="fifo-layer-stack">
+                                        {w.layers.map((l, i) => <RemainingLayerCard layer={l} index={i} key={l.id} />)}
                                     </div>
                                 </>
-                            ) : <div className="layer-row-meta">No remaining cost layers in this warehouse.</div>)}
+                            ) : <div className="layer-row-meta">No remaining FIFO layers in this warehouse.</div>)}
                             <div className="recon-line">
                                 {w.qty_reconciled ? <>✓ Cost layers add up to the on-hand quantity.</> : <>⚠ Cost layers don’t add up to on-hand here — worth a look.</>}
                             </div>
@@ -102,24 +162,17 @@ function MovementDrawer({ movement, open, onClose }) {
             </dl>
             {isOut && (
                 <div style={{ marginTop: 18 }}>
-                    <div className="section-label">Which stock this used</div>
-                    <div className="drawer-note">An outbound FIFO movement draws from the <strong>oldest cost layers first</strong>.</div>
+                    <div className="section-label">FIFO consumption</div>
+                    <div className="drawer-note">This outbound movement used the oldest available inbound layers first. The cards below show exactly which layer quantities were consumed and the cost carried into this movement.</div>
                     {isLoading && <Skeleton rows={2} />}
                     {isError && <div className="drawer-error">Couldn’t load consumed layers.<div><button className="btn btn--sm" onClick={() => refetch()}>Try again</button></div></div>}
                     {consumed && !isError && consumed.consumed_layer_count === 0 && <div className="layer-row-meta">Average-costed — no specific layers consumed.</div>}
                     {consumed && !isError && consumed.consumed_layer_count > 0 && (
                         <>
-                            <div className="layer-list">
-                                {consumed.layers.map((l, i) => (
-                                    <div className="layer-row" key={i}>
-                                        <div className="layer-row-main">{qty(l.qty)} × {money(l.unit_cost)}</div>
-                                        <div className="layer-row-val">{money(l.total_value)}</div>
-                                        <div className="layer-row-meta">layer #{l.cost_layer_id}{l.source_layer?.received_at ? ` · received ${l.source_layer.received_at}` : ''}</div>
-                                        <div className="layer-row-ref">{l.consumed_at ?? ''}</div>
-                                    </div>
-                                ))}
+                            <div className="fifo-layer-stack">
+                                {consumed.layers.map((l, i) => <ConsumedLayerCard layer={l} index={i} key={`${l.cost_layer_id}-${i}`} />)}
                             </div>
-                            <div className="wh-card-foot"><span className="wh-stat-label">Total cost of stock used</span>
+                            <div className="wh-card-foot fifo-total-line"><span className="wh-stat-label">Total cost of stock used</span>
                                 <strong style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>{money(consumed.consumed_total_value)}</strong></div>
                         </>
                     )}
@@ -134,13 +187,14 @@ function MovementsTable({ rows, onRow }) {
     if (!rows.length) return <EmptyState title="No movements yet" hint="Stock receipts, issues, transfers and adjustments will appear here." />;
     return (
         <table className="data-table">
-            <thead><tr><th>Date</th><th>Dir</th><th>Qty</th><th>Unit cost</th><th>Running qty</th><th>Warehouse</th><th>Source</th></tr></thead>
+            <thead><tr><th>Date</th><th>Dir</th><th>Qty</th><th>Unit cost</th><th>Running qty</th><th>Warehouse</th><th>Source</th><th></th></tr></thead>
             <tbody>{rows.map((m) => (
                 <tr key={m.id} className="clickable-row" onClick={() => onRow(m)} title="View movement detail">
                     <td>{m.moved_at}</td><td><Badge tone={m.direction === 'out' ? 'warn' : 'ok'}>{m.direction}</Badge></td>
                     <td>{qty(m.quantity)}</td><td>{m.unit_cost ? money(m.unit_cost) : '—'}</td>
                     <td>{m.balance_qty_after ? qty(m.balance_qty_after) : '—'}</td><td>{m.warehouse_name ?? `#${m.warehouse_id}`}</td>
                     <td>{m.source_display ?? m.source_label ?? '—'}</td>
+                    <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); onRow(m); }}>View</button></td>
                 </tr>
             ))}</tbody>
         </table>

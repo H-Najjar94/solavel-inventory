@@ -175,20 +175,27 @@ class ItemController extends ApiController
             ->orderBy('warehouse_id')->orderBy('received_at')->orderBy('id')
             ->get();
         $layersByWarehouse = $layers->groupBy('warehouse_id');
+        $sourceLedgerRows = SourceDocumentPresenter::decorateRows(
+            StockLedger::query()
+                ->whereIn('cost_layer_id', $layers->pluck('id')->all())
+                ->where('direction', 'in')
+                ->get()
+        )->keyBy('cost_layer_id');
 
         // Resolve warehouse names/codes once so the UI shows names, not raw IDs.
         $warehouseMeta = \App\Models\Tenant\Warehouse::query()
             ->whereIn('id', $balances->pluck('warehouse_id')->all())
             ->get(['id', 'name', 'code'])->keyBy('id');
 
-        $warehouses = $balances->map(function ($b) use ($layersByWarehouse, $warehouseMeta) {
+        $warehouses = $balances->map(function ($b) use ($layersByWarehouse, $warehouseMeta, $sourceLedgerRows) {
             $whLayers = $layersByWarehouse->get($b->warehouse_id, collect());
             $whMeta = $warehouseMeta->get($b->warehouse_id);
 
             $fifoValue = '0';
-            $layerOut = $whLayers->map(function ($l) use (&$fifoValue) {
+            $layerOut = $whLayers->map(function ($l) use (&$fifoValue, $sourceLedgerRows, $whMeta) {
                 $lineValue = Decimal::mul((string) $l->remaining_qty, (string) $l->unit_cost);
                 $fifoValue = Decimal::add($fifoValue, $lineValue);
+                $source = $sourceLedgerRows->get($l->id);
 
                 return [
                     'id' => $l->id,
@@ -196,9 +203,17 @@ class ItemController extends ApiController
                     'unit_cost' => (string) $l->unit_cost,
                     'original_qty' => (string) $l->original_qty,
                     'remaining_qty' => (string) $l->remaining_qty,
+                    'consumed_qty' => Decimal::qty(Decimal::sub((string) $l->original_qty, (string) $l->remaining_qty)),
                     'lot_id' => $l->lot_id,
                     'layer_value' => Decimal::money($lineValue),
-                    'source_ledger_id' => $l->source_ledger_id,
+                    'source_ledger_id' => $source?->id ?? $l->source_ledger_id,
+                    'source_display' => $source?->source_display,
+                    'source_label' => $source?->source_label,
+                    'source_number' => $source?->source_number,
+                    'source_route' => $source?->source_route,
+                    'source_missing' => (bool) ($source?->source_missing ?? false),
+                    'warehouse_name' => $whMeta?->name,
+                    'warehouse_code' => $whMeta?->code,
                 ];
             })->values();
 
