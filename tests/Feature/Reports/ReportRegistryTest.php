@@ -87,6 +87,8 @@ class ReportRegistryTest extends TestCase
             'to_warehouse_id',
             'picker_user_id',
             'bin_id',
+            'shipment_id',
+            'sales_return_id',
         ];
 
         $source = file_get_contents(app_path('Services/Reports/InventoryReportService.php'));

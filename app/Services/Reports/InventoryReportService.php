@@ -485,14 +485,16 @@ class InventoryReportService
             ->join('items as i', 'i.id', '=', 's.item_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 's.warehouse_id')
             ->leftJoin('lots as l', 'l.id', '=', 's.lot_id')
+            ->leftJoin('shipments as sh', 'sh.id', '=', 's.shipment_id')
+            ->leftJoin('sales_returns as sr', 'sr.id', '=', 's.sales_return_id')
             ->when($f->itemId, fn ($x) => $x->where('s.item_id', $f->itemId))
             ->when($f->status, fn ($x) => $x->where('s.status', $f->status))
             ->selectRaw('s.id serial_id, s.serial, i.sku, i.name item, s.status, w.name warehouse, l.lot_code,
-                s.source_type, s.source_id, s.shipment_id, s.sales_return_id, s.warranty_until')
+                s.source_type, s.source_id, s.shipment_id, sh.shipment_number, s.sales_return_id, sr.return_number sales_return, s.warranty_until')
             ->orderByDesc('s.id')->limit($f->limit)->get();
 
         return [
-            'columns' => ['serial', 'sku', 'item', 'status', 'warehouse', 'lot_code', 'shipment_id', 'sales_return_id', 'warranty_until'],
+            'columns' => ['serial', 'sku', 'item', 'status', 'warehouse', 'lot_code', 'shipment_number', 'sales_return', 'warranty_until'],
             'rows' => $rows,
             'summary' => ['serials' => $rows->count()],
             'drilldown' => ['key' => 'serial_id', 'path' => '/traceability/serials'],
