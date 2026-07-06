@@ -333,12 +333,16 @@ function SetupHero({ tenant }) {
     // Two distinct setup stages, distinct copy:
     //  - needs_activation        → SolaStock isn't enabled for this org yet
     //                              ("Activate SolaStock").
-    //  - tenant_missing/unmigrated/unreachable → SolaStock IS enabled (e.g. the
-    //                              user just finished the central onboarding
-    //                              wizard); this is the final one-time workspace
-    //                              initialization, NOT another activation
-    //                              ("Finish setup" / "Initialize your workspace").
+    //  - tenant_unmigrated       → SolaStock is enabled and the shared tenant DB
+    //                              exists; an admin may initialize tables.
+    //  - tenant_missing/schema_failed/unreachable → not ready for inline use.
+    //                              These states require an owner-approved
+    //                              provisioning/schema action outside the user
+    //                              workflow.
     const needsActivation = tenant.state === 'needs_activation';
+    const canInitialize = tenant.state === 'tenant_unmigrated' && tenant.can_provision;
+    const readinessBlocked = ['tenant_missing', 'tenant_unreachable', 'schema_failed'].includes(tenant.state);
+    const isAdminBlocked = readinessBlocked && tenant.can_access;
 
     const features = [
         ['fa-boxes-stacked', 'Items & warehouses', 'Catalog, multi-warehouse, zones & bins'],
@@ -393,12 +397,20 @@ function SetupHero({ tenant }) {
                 <h1 className="setup-hero__title">
                     {needsActivation
                         ? `Activate SolaStock for ${tenant.organization_name || 'your organization'}`
-                        : `Finish setting up SolaStock for ${tenant.organization_name || 'your organization'}`}
+                        : readinessBlocked
+                            ? `Inventory is not ready for ${tenant.organization_name || 'this workspace'}`
+                            : `Finish setting up SolaStock for ${tenant.organization_name || 'your organization'}`}
                 </h1>
                 <p className="setup-hero__sub">
                     {needsActivation
                         ? 'Your organization is connected. Set up SolaStock to start managing stock, purchasing, fulfillment and traceability — choose your organization and plan in a quick guided setup.'
-                        : 'SolaStock is enabled for your organization. This last step initializes your workspace — it creates your inventory tables so you can start managing stock. One click and you’re in.'}
+                        : readinessBlocked
+                            ? (isAdminBlocked
+                                ? (tenant.state === 'schema_failed'
+                                    ? 'SolaStock is enabled, but the schema audit found missing tables, columns, or indexes. Review the schema audit and complete an owner-approved repair before users enter this workspace.'
+                                    : 'SolaStock is enabled, but the tenant database is not ready. Complete owner-approved provisioning or database repair before users enter this workspace.')
+                                : 'SolaStock is temporarily unavailable for this workspace. Please contact an administrator.')
+                            : 'SolaStock is enabled for your organization. This last step initializes your inventory tables so you can start managing stock.'}
                 </p>
 
                 <div className="setup-hero__features">
@@ -416,16 +428,24 @@ function SetupHero({ tenant }) {
                 <div className="setup-hero__cta">
                     {/* needs_activation → guided onboarding wizard (never enable
                         inline). Already-enabled-but-unprovisioned → inline init. */}
-                    <button
-                        type="button"
-                        className="btn btn--primary btn--lg"
-                        onClick={needsActivation ? startOnboarding : activate}
-                        disabled={needsActivation ? false : busy}
-                    >
-                        {needsActivation
-                            ? 'Set up SolaStock'
-                            : (busy ? 'Initializing…' : 'Finish setup')}
-                    </button>
+                    {readinessBlocked ? (
+                        <div className="setup-error" role="status" style={{ color: '#6f4a00', fontSize: 13, maxWidth: 560 }}>
+                            <i className="fa-solid fa-shield-halved" /> {isAdminBlocked
+                                ? 'Next step: run the read-only schema audit from Settings, then provision or repair only after owner approval.'
+                                : 'An administrator must finish SolaStock readiness before this workspace can be used.'}
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            className="btn btn--primary btn--lg"
+                            onClick={needsActivation ? startOnboarding : activate}
+                            disabled={needsActivation ? false : (busy || !canInitialize)}
+                        >
+                            {needsActivation
+                                ? 'Set up SolaStock'
+                                : (busy ? 'Initializing…' : 'Finish setup')}
+                        </button>
+                    )}
 
                     {error && (
                         <div className="setup-error" role="alert" style={{ color: '#e05151', fontSize: 13, maxWidth: 480 }}>

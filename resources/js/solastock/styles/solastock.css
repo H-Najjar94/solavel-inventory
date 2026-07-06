@@ -1298,3 +1298,73 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .wh-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .wh-thumb--primary { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
 .wh-gallery-empty { max-width: 480px; }
+
+/* ---------- Authenticated RTL harness ---------- */
+html[dir="rtl"] body,
+html[dir="rtl"] .app {
+  direction: rtl;
+}
+html[dir="rtl"] .sidebar {
+  border-right: 0;
+  border-left: 1px solid var(--sidebar-line);
+}
+html[dir="rtl"] .side-brand,
+html[dir="rtl"] .nav-item,
+html[dir="rtl"] .side-link,
+html[dir="rtl"] .side-user,
+html[dir="rtl"] .topbar,
+html[dir="rtl"] .topbar-left,
+html[dir="rtl"] .topbar-right,
+html[dir="rtl"] .btn,
+html[dir="rtl"] .inline-form,
+html[dir="rtl"] .form-actions {
+  direction: rtl;
+}
+html[dir="rtl"] .nav-item,
+html[dir="rtl"] .side-link,
+html[dir="rtl"] .side-collapse {
+  text-align: right;
+}
+html[dir="rtl"] .nav-item.active::before {
+  left: auto;
+  right: -14px;
+  border-radius: 3px 0 0 3px;
+}
+html[dir="rtl"] .nav-badge {
+  margin-left: 0;
+  margin-right: auto;
+}
+html[dir="rtl"] table.tbl th,
+html[dir="rtl"] table.tbl td,
+html[dir="rtl"] .data-table th,
+html[dir="rtl"] .data-table td {
+  text-align: right;
+}
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  direction: rtl;
+}
+html[dir="rtl"] .toast-dock {
+  right: auto;
+  left: 20px;
+}
+html[dir="rtl"] .shelf-drawer {
+  right: auto;
+  left: 0;
+  border-left: 0;
+  border-right: 1px solid var(--line);
+  transform: translateX(-102%);
+}
+html[dir="rtl"] .shelf-drawer.show {
+  transform: none;
+}
+
+@media (max-width: 860px) {
+  html[dir="rtl"] .sidebar {
+    transform: translateX(100%);
+  }
+  html[dir="rtl"] .sidebar.mobile-open {
+    transform: none;
+  }
+}

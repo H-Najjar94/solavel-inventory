@@ -53,6 +53,9 @@ class ResolveInventoryTenant
             case 'needs_activation':
                 return $this->stop('needs_activation', 'SolaStock is not enabled for this organization yet.', 409, $s);
 
+            case 'schema_failed':
+                return $this->stop('schema_failed', 'Inventory is not ready for this workspace. A SolaStock schema audit failed.', 409, $s);
+
             case 'tenant_missing':
             case 'tenant_unmigrated':
             case 'tenant_unreachable':

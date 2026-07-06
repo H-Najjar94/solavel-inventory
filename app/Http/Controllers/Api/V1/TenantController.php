@@ -49,7 +49,7 @@ class TenantController extends ApiController
         return match ($state) {
             'live_ready' => ['Live tenant', 'real'],
             'demo_preview' => [config('inventory.demo_tenant.label', 'Demo tenant'), 'demo'],
-            'needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'demo_setup_required' => ['Setup required', 'setup'],
+            'needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'schema_failed', 'demo_setup_required' => ['Setup required', 'setup'],
             'no_organization' => ['No organization', 'no_organization'],
             'no_access' => ['No access', 'no_access'],
             'sample_preview' => ['Sample preview', 'sample'],
@@ -66,6 +66,7 @@ class TenantController extends ApiController
             'tenant_missing' => 'This organization has no SolaStock data yet. An administrator can provision it from the setup screen.',
             'tenant_unmigrated' => 'SolaStock tables are not installed for this organization yet. Run the setup to migrate them.',
             'tenant_unreachable' => 'Cannot reach the database from the app. Check DB access.',
+            'schema_failed' => 'Inventory is not ready for this workspace. A SolaStock schema audit found missing tables, columns, or indexes. Ask an administrator to review the schema audit before enabling use.',
             default => null,
         };
     }
@@ -95,7 +96,8 @@ class TenantController extends ApiController
             'can_access' => $s['can_access'],
             'can_provision' => $s['can_provision'],
             'state_message' => $this->stateMessage($s['state']),
-            'needs_setup' => in_array($s['state'], ['needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'demo_setup_required'], true),
+            'schema_audit' => $s['schema_audit'] ?? null,
+            'needs_setup' => in_array($s['state'], ['needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'schema_failed', 'demo_setup_required'], true),
             // Demo descriptor (secondary preview option).
             'demo_available' => $readiness['available'],
             'demo_reason' => $readiness['reason'],
@@ -254,7 +256,7 @@ class TenantController extends ApiController
         if ($s['state'] === 'needs_activation') {
             return $this->error('not_enabled', 'SolaStock must be set up through onboarding before it can be initialized.', 409);
         }
-        if (! in_array($s['state'], ['tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'live_ready'], true) || ! $s['organization_id']) {
+        if (! in_array($s['state'], ['tenant_unmigrated', 'live_ready'], true) || ! $s['organization_id']) {
             return $this->error('not_provisionable', 'No live organization to initialize.', 409);
         }
         if (! $s['can_provision'] && $s['state'] !== 'live_ready') {
@@ -288,7 +290,7 @@ class TenantController extends ApiController
     public function schemaAudit(Request $request, TenantSchemaAuditService $auditor, InventoryPermissionService $permissions): JsonResponse
     {
         $s = $this->live->state($request);
-        if (! in_array($s['state'], ['live_ready', 'tenant_unmigrated'], true) || ! $s['organization_id'] || ! $s['database']) {
+        if (! in_array($s['state'], ['live_ready', 'tenant_missing', 'tenant_unmigrated', 'schema_failed'], true) || ! $s['organization_id'] || ! $s['database']) {
             return $this->error('not_auditable', 'No live SolaStock tenant database is available to audit.', 409, [
                 'state' => $s['state'],
                 'database' => $s['database'],
@@ -299,8 +301,7 @@ class TenantController extends ApiController
         }
 
         try {
-            $this->tenants->useTenant((int) $s['organization_id'], (string) $s['database']);
-            $audit = $auditor->audit();
+            $audit = $auditor->auditDatabase((string) $s['database'], 'mysql');
         } catch (\Throwable $e) {
             return $this->success([
                 'ok' => false,
