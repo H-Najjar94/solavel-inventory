@@ -4,6 +4,11 @@ namespace Tests\Feature\Tenancy;
 
 use App\Services\Tenancy\LiveTenantResolver;
 use App\Services\Tenancy\SecureTenantProvisioner;
+use App\Services\Tenancy\TenantManager;
+use App\Services\Tenancy\TenantSchemaAuditService;
+use App\Services\Tenancy\TenantResolver;
+use App\Services\Access\InventoryPermissionService;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
@@ -144,6 +149,42 @@ class LiveTenantResolverTest extends TestCase
         // The ONLY data_state that enables sample fallback is 'sample'.
         $sampleStates = array_keys(array_filter($map, fn ($ds) => $ds === 'sample'));
         $this->assertSame(['sample_preview'], $sampleStates, 'only sample_preview may enable sample fallback');
+    }
+
+    #[Test]
+    public function schema_audit_requires_settings_admin_permission_before_touching_tenant(): void
+    {
+        $live = \Mockery::mock(LiveTenantResolver::class);
+        $live->shouldReceive('state')->once()->andReturn([
+            'state' => 'live_ready',
+            'mode' => 'live',
+            'organization_id' => 660066,
+            'database' => 'tenant_660066',
+            'can_access' => true,
+        ]);
+
+        $tenants = \Mockery::mock(TenantManager::class);
+        $tenants->shouldNotReceive('useTenant');
+        $auditor = \Mockery::mock(TenantSchemaAuditService::class);
+        $auditor->shouldNotReceive('audit');
+
+        $permissions = new class(app(OrganizationContext::class)) extends InventoryPermissionService {
+            public function can(?object $user, string $permission): bool
+            {
+                return false;
+            }
+        };
+
+        $ctrl = new \App\Http\Controllers\Api\V1\TenantController(
+            app(TenantResolver::class),
+            $live,
+            $tenants,
+        );
+
+        $res = $ctrl->schemaAudit($this->request(['client_id' => 660066, 'selected_central_org_id' => 660066]), $auditor, $permissions);
+
+        $this->assertSame(403, $res->getStatusCode());
+        $this->assertSame('forbidden', $res->getData(true)['error']['code']);
     }
 
     #[Test]

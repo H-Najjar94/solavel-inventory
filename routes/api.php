@@ -353,7 +353,7 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
 
     // ── Settings ──
     Route::get('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'show'])
-        ->middleware('perm:inventory.view_items')->name('api.v1.settings.show');
+        ->middleware('perm:inventory.manage_settings')->name('api.v1.settings.show');
     Route::middleware('perm:inventory.manage_settings')->group(function () {
         Route::put('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateSettings']);
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);

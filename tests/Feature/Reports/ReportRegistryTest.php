@@ -71,4 +71,33 @@ class ReportRegistryTest extends TestCase
         $mw = Route::getRoutes()->getByName('api.v1.reports.export')->gatherMiddleware();
         $this->assertContains('perm:inventory.export_reports', $mw);
     }
+
+    #[Test]
+    public function report_columns_do_not_expose_user_facing_raw_ids(): void
+    {
+        $forbiddenColumns = [
+            'warehouse_id',
+            'source_type',
+            'source_id',
+            'supplier_id',
+            'preferred_supplier_id',
+            'purchase_order_id',
+            'adjustment_id',
+            'from_warehouse_id',
+            'to_warehouse_id',
+            'picker_user_id',
+            'bin_id',
+        ];
+
+        $source = file_get_contents(app_path('Services/Reports/InventoryReportService.php'));
+        preg_match_all("/'columns'\\s*=>\\s*\\[([^\\]]*)\\]/", $source, $matches);
+
+        $this->assertNotEmpty($matches[1], 'report service should declare visible columns');
+        foreach ($matches[1] as $columnsSource) {
+            foreach ($forbiddenColumns as $column) {
+                $this->assertStringNotContainsString("'{$column}'", $columnsSource, "report columns expose {$column}");
+                $this->assertStringNotContainsString('"'.$column.'"', $columnsSource, "report columns expose {$column}");
+            }
+        }
+    }
 }

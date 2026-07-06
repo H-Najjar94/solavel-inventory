@@ -22,11 +22,19 @@ const REPORTS = [
     ['receiving', 'Receiving Report', 'GRNs'],
     ['transfer', 'Transfer Report', 'Transfers'],
     ['count-variance', 'Count Variance', 'Count variances'],
+    ['fulfillment-status', 'Fulfillment Status', 'Sales order fulfillment progress'],
+    ['pick-list', 'Pick List Report', 'Picking workload'],
+    ['shipment', 'Shipment Report', 'Shipment throughput'],
+    ['reservation', 'Reservation Report', 'Active stock reservations'],
+    ['lot-trace', 'Lot Trace Report', 'Lot origins and movement impact'],
+    ['serial-lifecycle', 'Serial Lifecycle', 'Serial status and ownership trail'],
+    ['expiry-risk', 'Expiry Risk', 'Lots expiring inside the selected window'],
+    ['recall-impact', 'Recall Impact', 'Recall case stock impact'],
 ];
 
 const LAST_KEY = 'solastock_last_report';
 const needsItem = new Set(['item-ledger']);
-const hasDate = new Set(['stock-movement', 'adjustment', 'receiving', 'transfer']);
+const hasDate = new Set(['stock-movement', 'adjustment', 'receiving', 'transfer', 'fulfillment-status', 'shipment']);
 
 export default function ReportsPage() {
     const can = useCan();

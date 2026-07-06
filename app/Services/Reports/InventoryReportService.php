@@ -2,6 +2,7 @@
 
 namespace App\Services\Reports;
 
+use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
@@ -122,20 +123,23 @@ class InventoryReportService
     {
         $rows = $this->scoped('stock_ledger as l')
             ->leftJoin('items as i', 'i.id', '=', 'l.item_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
             ->leftJoin('lots as lo', 'lo.id', '=', 'l.lot_id')
             ->leftJoin('serial_numbers as sn', 'sn.id', '=', 'l.serial_id')
             ->when($f->itemId, fn ($x) => $x->where('l.item_id', $f->itemId))
             ->when($f->warehouseId, fn ($x) => $x->where('l.warehouse_id', $f->warehouseId))
             ->when($f->from, fn ($x) => $x->whereDate('l.moved_at', '>=', $f->from))
             ->when($f->to, fn ($x) => $x->whereDate('l.moved_at', '<=', $f->to))
-            ->selectRaw('l.id, l.moved_at, i.sku, i.name item, l.warehouse_id, lo.lot_code, sn.serial, l.expiry_date, l.source_type, l.source_id, l.direction,
+            ->selectRaw('l.id, l.moved_at, i.sku, i.name item, w.name warehouse, lo.lot_code, sn.serial, l.expiry_date, l.source_type, l.source_id, l.direction,
                 (CASE WHEN l.direction="in" THEN l.quantity ELSE 0 END) qty_in,
                 (CASE WHEN l.direction="out" THEN l.quantity ELSE 0 END) qty_out,
                 l.unit_cost, l.total_cost, l.balance_qty_after')
             ->orderBy('l.moved_at')->orderBy('l.id')->limit($f->limit)->get();
+        SourceDocumentPresenter::decorateRows($rows);
+        $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
 
         return [
-            'columns' => ['moved_at', 'sku', 'item', 'warehouse_id', 'lot_code', 'serial', 'expiry_date', 'source_type', 'source_id', 'qty_in', 'qty_out', 'unit_cost', 'total_cost', 'balance_qty_after'],
+            'columns' => ['moved_at', 'sku', 'item', 'warehouse', 'lot_code', 'serial', 'expiry_date', 'source_document', 'qty_in', 'qty_out', 'unit_cost', 'total_cost', 'balance_qty_after'],
             'rows' => $rows,
             'summary' => ['rows' => $rows->count(), 'qty_in' => (string) $rows->sum(fn ($r) => (float) $r->qty_in), 'qty_out' => (string) $rows->sum(fn ($r) => (float) $r->qty_out)],
         ];
@@ -148,13 +152,17 @@ class InventoryReportService
             return ['columns' => [], 'rows' => [], 'summary' => ['note' => 'Select an item to view its ledger.']];
         }
         $rows = $this->scoped('stock_ledger as l')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
+            ->leftJoin('warehouse_bins as bin', 'bin.id', '=', 'l.bin_id')
             ->where('l.item_id', $f->itemId)
             ->when($f->warehouseId, fn ($x) => $x->where('l.warehouse_id', $f->warehouseId))
-            ->selectRaw('l.moved_at, l.warehouse_id, l.bin_id, l.source_type, l.source_id, l.direction, l.quantity, l.unit_cost, l.balance_qty_after, l.balance_value_after')
+            ->selectRaw('l.moved_at, w.name warehouse, bin.code bin, l.source_type, l.source_id, l.direction, l.quantity, l.unit_cost, l.balance_qty_after, l.balance_value_after')
             ->orderBy('l.moved_at')->orderBy('l.id')->limit($f->limit)->get();
+        SourceDocumentPresenter::decorateRows($rows);
+        $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
 
         return [
-            'columns' => ['moved_at', 'warehouse_id', 'bin_id', 'source_type', 'source_id', 'direction', 'quantity', 'unit_cost', 'balance_qty_after', 'balance_value_after'],
+            'columns' => ['moved_at', 'warehouse', 'bin', 'source_document', 'direction', 'quantity', 'unit_cost', 'balance_qty_after', 'balance_value_after'],
             'rows' => $rows,
             'summary' => ['movements' => $rows->count()],
         ];
@@ -169,7 +177,7 @@ class InventoryReportService
             ->leftJoin('warehouse_bins as bin', 'bin.id', '=', 'b.bin_id')
             ->when($f->warehouseId, fn ($x) => $x->where('b.warehouse_id', $f->warehouseId))
             ->when($f->binId, fn ($x) => $x->where('b.bin_id', $f->binId))
-            ->selectRaw('w.name warehouse, bin.code bin, i.sku, i.name item, b.on_hand_qty, b.reserved_qty, b.available_qty, b.total_value, bin.capacity')
+            ->selectRaw('w.name warehouse, bin.code bin, i.sku, i.name item, b.on_hand_qty, b.reserved_qty, (b.on_hand_qty - b.reserved_qty) available_qty, b.total_value, bin.capacity')
             ->orderBy('w.name')->limit($f->limit)->get();
 
         return [
@@ -185,16 +193,17 @@ class InventoryReportService
         $rows = $this->scoped('stock_balances as b')
             ->join('items as i', 'i.id', '=', 'b.item_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
+            ->leftJoin('inventory_suppliers as s', 's.id', '=', 'i.preferred_supplier_id')
             ->whereNotNull('i.reorder_point')
             ->whereRaw('(b.on_hand_qty - b.reserved_qty) <= i.reorder_point')
             ->where('b.on_hand_qty', '>', 0)
             ->when($f->warehouseId, fn ($x) => $x->where('b.warehouse_id', $f->warehouseId))
             ->selectRaw('i.id item_id, i.sku, i.name item, w.name warehouse, b.on_hand_qty, i.reorder_point,
-                (i.reorder_point - (b.on_hand_qty - b.reserved_qty)) shortage_qty, i.preferred_supplier_id')
+                (i.reorder_point - (b.on_hand_qty - b.reserved_qty)) shortage_qty, s.name preferred_supplier')
             ->orderByDesc('shortage_qty')->get();
 
         return [
-            'columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'reorder_point', 'shortage_qty', 'preferred_supplier_id'],
+            'columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'reorder_point', 'shortage_qty', 'preferred_supplier'],
             'rows' => $rows,
             'summary' => ['items' => $rows->count()],
         ];
@@ -206,12 +215,13 @@ class InventoryReportService
         $rows = $this->scoped('stock_balances as b')
             ->join('items as i', 'i.id', '=', 'b.item_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
+            ->leftJoin('inventory_suppliers as s', 's.id', '=', 'i.preferred_supplier_id')
             ->whereRaw('(b.on_hand_qty - b.reserved_qty) <= 0')
             ->when($f->warehouseId, fn ($x) => $x->where('b.warehouse_id', $f->warehouseId))
-            ->selectRaw('i.sku, i.name item, w.name warehouse, b.on_hand_qty, b.reserved_qty, i.preferred_supplier_id')
+            ->selectRaw('i.sku, i.name item, w.name warehouse, b.on_hand_qty, b.reserved_qty, s.name preferred_supplier')
             ->get();
 
-        return ['columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'reserved_qty', 'preferred_supplier_id'], 'rows' => $rows, 'summary' => ['items' => $rows->count()]];
+        return ['columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'reserved_qty', 'preferred_supplier'], 'rows' => $rows, 'summary' => ['items' => $rows->count()]];
     }
 
     // ── 7. Dead Stock ──
@@ -220,10 +230,11 @@ class InventoryReportService
         $cutoff = now()->subDays($f->days)->toDateTimeString();
         $moved = $this->scoped('stock_ledger')->where('direction', 'out')->where('moved_at', '>=', $cutoff)->distinct()->pluck('item_id');
         $rows = $this->scoped('stock_balances as b')->join('items as i', 'i.id', '=', 'b.item_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->where('b.on_hand_qty', '>', 0)->whereNotIn('b.item_id', $moved)
-            ->selectRaw('i.sku, i.name item, b.warehouse_id, b.on_hand_qty, b.total_value')->get();
+            ->selectRaw('i.sku, i.name item, w.name warehouse, b.on_hand_qty, b.total_value')->get();
 
-        return ['columns' => ['sku', 'item', 'warehouse_id', 'on_hand_qty', 'total_value'], 'rows' => $rows, 'summary' => ['items' => $rows->count(), 'window_days' => $f->days, 'value' => (string) $rows->sum(fn ($r) => (float) $r->total_value)]];
+        return ['columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'total_value'], 'rows' => $rows, 'summary' => ['items' => $rows->count(), 'window_days' => $f->days, 'value' => (string) $rows->sum(fn ($r) => (float) $r->total_value)]];
     }
 
     // ── 8. Fast Moving ──
@@ -242,13 +253,14 @@ class InventoryReportService
     private function reportStockAging(ReportFilters $f): array
     {
         $rows = $this->scoped('cost_layers as cl')->join('items as i', 'i.id', '=', 'cl.item_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'cl.warehouse_id')
             ->where('cl.remaining_qty', '>', 0)
             ->when($f->itemId, fn ($x) => $x->where('cl.item_id', $f->itemId))
             ->when($f->warehouseId, fn ($x) => $x->where('cl.warehouse_id', $f->warehouseId))
-            ->selectRaw('i.sku, i.name item, cl.warehouse_id, cl.received_at, cl.remaining_qty, cl.unit_cost, DATEDIFF(NOW(), cl.received_at) age_days')
+            ->selectRaw('i.sku, i.name item, w.name warehouse, cl.received_at, cl.remaining_qty, cl.unit_cost, DATEDIFF(NOW(), cl.received_at) age_days')
             ->orderByDesc('age_days')->limit($f->limit)->get();
 
-        return ['columns' => ['sku', 'item', 'warehouse_id', 'received_at', 'remaining_qty', 'unit_cost', 'age_days'], 'rows' => $rows, 'summary' => ['layers' => $rows->count()]];
+        return ['columns' => ['sku', 'item', 'warehouse', 'received_at', 'remaining_qty', 'unit_cost', 'age_days'], 'rows' => $rows, 'summary' => ['layers' => $rows->count()]];
     }
 
     // ── 10. Lot / Expiry ──
@@ -267,26 +279,28 @@ class InventoryReportService
     private function reportSerial(ReportFilters $f): array
     {
         $rows = $this->scoped('serial_numbers as s')->join('items as i', 'i.id', '=', 's.item_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 's.warehouse_id')
             ->when($f->itemId, fn ($x) => $x->where('s.item_id', $f->itemId))
             ->when($f->status, fn ($x) => $x->where('s.status', $f->status))
-            ->selectRaw('i.sku, i.name item, s.serial, s.status, s.warehouse_id')
+            ->selectRaw('i.sku, i.name item, s.serial, s.status, w.name warehouse')
             ->orderByDesc('s.id')->limit($f->limit)->get();
 
-        return ['columns' => ['sku', 'item', 'serial', 'status', 'warehouse_id'], 'rows' => $rows, 'summary' => ['serials' => $rows->count()]];
+        return ['columns' => ['sku', 'item', 'serial', 'status', 'warehouse'], 'rows' => $rows, 'summary' => ['serials' => $rows->count()]];
     }
 
     // ── 12. Adjustment ──
     private function reportAdjustment(ReportFilters $f): array
     {
         $rows = $this->scoped('stock_adjustments as a')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'a.warehouse_id')
             ->when($f->warehouseId, fn ($x) => $x->where('a.warehouse_id', $f->warehouseId))
             ->when($f->status, fn ($x) => $x->where('a.status', $f->status))
             ->when($f->from, fn ($x) => $x->whereDate('a.adjustment_date', '>=', $f->from))
             ->when($f->to, fn ($x) => $x->whereDate('a.adjustment_date', '<=', $f->to))
-            ->selectRaw('a.id, a.adjustment_number, a.adjustment_date, a.warehouse_id, a.reason_code, a.status, a.total_increase_value, a.total_decrease_value')
+            ->selectRaw('a.id, a.adjustment_number, a.adjustment_date, w.name warehouse, a.reason_code, a.status, a.total_increase_value, a.total_decrease_value')
             ->orderByDesc('a.id')->limit($f->limit)->get();
 
-        return ['columns' => ['adjustment_number', 'adjustment_date', 'warehouse_id', 'reason_code', 'status', 'total_increase_value', 'total_decrease_value'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
+        return ['columns' => ['adjustment_number', 'adjustment_date', 'warehouse', 'reason_code', 'status', 'total_increase_value', 'total_decrease_value'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
     }
 
     // ── 13. Receiving ──
@@ -294,28 +308,32 @@ class InventoryReportService
     {
         $rows = $this->scoped('goods_receipts as g')
             ->leftJoin('inventory_suppliers as s', 's.id', '=', 'g.supplier_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'g.warehouse_id')
+            ->leftJoin('inventory_purchase_orders as po', 'po.id', '=', 'g.purchase_order_id')
             ->when($f->warehouseId, fn ($x) => $x->where('g.warehouse_id', $f->warehouseId))
             ->when($f->supplierId, fn ($x) => $x->where('g.supplier_id', $f->supplierId))
             ->when($f->status, fn ($x) => $x->where('g.status', $f->status))
             ->when($f->from, fn ($x) => $x->whereDate('g.receipt_date', '>=', $f->from))
             ->when($f->to, fn ($x) => $x->whereDate('g.receipt_date', '<=', $f->to))
-            ->selectRaw('g.id, g.grn_number, g.receipt_date, s.name supplier, g.warehouse_id, g.purchase_order_id, g.status')
+            ->selectRaw('g.id, g.grn_number, g.receipt_date, s.name supplier, w.name warehouse, po.po_number purchase_order, g.status')
             ->orderByDesc('g.id')->limit($f->limit)->get();
 
-        return ['columns' => ['grn_number', 'receipt_date', 'supplier', 'warehouse_id', 'purchase_order_id', 'status'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
+        return ['columns' => ['grn_number', 'receipt_date', 'supplier', 'warehouse', 'purchase_order', 'status'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
     }
 
     // ── 14. Transfer ──
     private function reportTransfer(ReportFilters $f): array
     {
         $rows = $this->scoped('stock_transfers as t')
+            ->leftJoin('warehouses as fw', 'fw.id', '=', 't.from_warehouse_id')
+            ->leftJoin('warehouses as tw', 'tw.id', '=', 't.to_warehouse_id')
             ->when($f->status, fn ($x) => $x->where('t.status', $f->status))
             ->when($f->from, fn ($x) => $x->whereDate('t.transfer_date', '>=', $f->from))
             ->when($f->to, fn ($x) => $x->whereDate('t.transfer_date', '<=', $f->to))
-            ->selectRaw('t.id, t.transfer_number, t.transfer_date, t.from_warehouse_id, t.to_warehouse_id, t.status')
+            ->selectRaw('t.id, t.transfer_number, t.transfer_date, fw.name from_warehouse, tw.name to_warehouse, t.status')
             ->orderByDesc('t.id')->limit($f->limit)->get();
 
-        return ['columns' => ['transfer_number', 'transfer_date', 'from_warehouse_id', 'to_warehouse_id', 'status'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
+        return ['columns' => ['transfer_number', 'transfer_date', 'from_warehouse', 'to_warehouse', 'status'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
     }
 
     // ── 15. Count Variance ──
@@ -324,15 +342,18 @@ class InventoryReportService
         $rows = $this->scoped('stock_count_lines as cl')
             ->join('stock_counts as c', 'c.id', '=', 'cl.stock_count_id')
             ->join('items as i', 'i.id', '=', 'cl.item_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'c.warehouse_id')
+            ->leftJoin('warehouse_bins as bin', 'bin.id', '=', 'cl.bin_id')
+            ->leftJoin('stock_adjustments as a', 'a.id', '=', 'c.adjustment_id')
             ->where('cl.variance_qty', '!=', 0)
             ->when($f->warehouseId, fn ($x) => $x->where('c.warehouse_id', $f->warehouseId))
             ->when($f->status, fn ($x) => $x->where('c.status', $f->status))
-            ->selectRaw('c.count_number, c.status, c.posted_at, c.adjustment_id, i.sku, i.name item, c.warehouse_id, cl.bin_id,
+            ->selectRaw('c.count_number, c.status, c.posted_at, a.adjustment_number adjustment, i.sku, i.name item, w.name warehouse, bin.code bin,
                 cl.system_qty expected_qty, cl.counted_qty, cl.variance_qty')
             ->orderByDesc('c.id')->limit($f->limit)->get();
 
         return [
-            'columns' => ['count_number', 'sku', 'item', 'warehouse_id', 'bin_id', 'expected_qty', 'counted_qty', 'variance_qty', 'status', 'adjustment_id', 'posted_at'],
+            'columns' => ['count_number', 'sku', 'item', 'warehouse', 'bin', 'expected_qty', 'counted_qty', 'variance_qty', 'status', 'adjustment', 'posted_at'],
             'rows' => $rows,
             'summary' => ['variance_lines' => $rows->count()],
         ];
@@ -375,13 +396,13 @@ class InventoryReportService
             ->leftJoin('pick_list_lines as pl', 'pl.pick_list_id', '=', 'p.id')
             ->when($f->warehouseId, fn ($x) => $x->where('p.warehouse_id', $f->warehouseId))
             ->when($f->status, fn ($x) => $x->where('p.status', $f->status))
-            ->groupBy('p.id', 'p.pick_number', 'so.order_number', 'w.name', 'p.status', 'p.picker_user_id')
-            ->selectRaw('p.id, p.pick_number, so.order_number sales_order, w.name warehouse, p.status, p.picker_user_id,
-                COUNT(pl.id) lines, COALESCE(SUM(pl.reserved_qty),0) reserved_qty, COALESCE(SUM(pl.picked_qty),0) picked_qty')
+            ->groupBy('p.id', 'p.pick_number', 'so.order_number', 'w.name', 'p.status')
+            ->selectRaw('p.id, p.pick_number, so.order_number sales_order, w.name warehouse, p.status,
+                COUNT(pl.id) line_count, COALESCE(SUM(pl.reserved_qty),0) reserved_qty, COALESCE(SUM(pl.picked_qty),0) picked_qty')
             ->orderByDesc('p.id')->limit($f->limit)->get();
 
         return [
-            'columns' => ['pick_number', 'sales_order', 'warehouse', 'status', 'picker_user_id', 'lines', 'reserved_qty', 'picked_qty'],
+            'columns' => ['pick_number', 'sales_order', 'warehouse', 'status', 'line_count', 'reserved_qty', 'picked_qty'],
             'rows' => $rows,
             'summary' => ['pick_lists' => $rows->count(), 'open' => $rows->whereNotIn('status', ['picked', 'cancelled'])->count()],
         ];
@@ -400,12 +421,12 @@ class InventoryReportService
             ->when($f->to, fn ($x) => $x->whereDate('s.ship_date', '<=', $f->to))
             ->groupBy('s.id', 's.shipment_number', 's.ship_date', 'so.order_number', 'w.name', 's.carrier', 's.tracking_number', 's.status')
             ->selectRaw('s.id, s.shipment_number, s.ship_date, so.order_number sales_order, w.name warehouse,
-                s.carrier, s.tracking_number, s.status, COUNT(sl.id) lines, COALESCE(SUM(sl.quantity),0) shipped_qty,
+                s.carrier, s.tracking_number, s.status, COUNT(sl.id) line_count, COALESCE(SUM(sl.quantity),0) shipped_qty,
                 COUNT(DISTINCT sl.lot_id) lots, COUNT(DISTINCT sl.serial_id) serials')
             ->orderByDesc('s.id')->limit($f->limit)->get();
 
         return [
-            'columns' => ['shipment_number', 'ship_date', 'sales_order', 'warehouse', 'carrier', 'tracking_number', 'status', 'lines', 'shipped_qty', 'lots', 'serials'],
+            'columns' => ['shipment_number', 'ship_date', 'sales_order', 'warehouse', 'carrier', 'tracking_number', 'status', 'line_count', 'shipped_qty', 'lots', 'serials'],
             'rows' => $rows,
             'summary' => ['shipments' => $rows->count(), 'posted' => $rows->where('status', 'posted')->count()],
         ];
@@ -422,9 +443,11 @@ class InventoryReportService
             ->when($f->warehouseId, fn ($x) => $x->where('r.warehouse_id', $f->warehouseId))
             ->selectRaw('i.sku, i.name item, w.name warehouse, r.qty reserved_qty, r.source_type, r.source_id, r.status')
             ->orderByDesc('r.id')->limit($f->limit)->get();
+        SourceDocumentPresenter::decorateRows($rows);
+        $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
 
         return [
-            'columns' => ['sku', 'item', 'warehouse', 'reserved_qty', 'source_type', 'source_id', 'status'],
+            'columns' => ['sku', 'item', 'warehouse', 'reserved_qty', 'source_document', 'status'],
             'rows' => $rows,
             'summary' => ['active_reservations' => $rows->count(), 'reserved_qty' => (string) $rows->sum(fn ($r) => (float) $r->reserved_qty)],
         ];
@@ -444,9 +467,11 @@ class InventoryReportService
                 l.source_type, l.source_id, COALESCE(b.on_hand,0) on_hand_qty, COALESCE(b.reserved,0) reserved_qty,
                 COALESCE(sh.shipped,0) shipped_qty')
             ->orderByDesc('l.id')->limit($f->limit)->get();
+        SourceDocumentPresenter::decorateRows($rows);
+        $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
 
         return [
-            'columns' => ['lot_code', 'sku', 'item', 'status', 'expiry_date', 'supplier', 'on_hand_qty', 'reserved_qty', 'shipped_qty', 'source_type', 'source_id'],
+            'columns' => ['lot_code', 'sku', 'item', 'status', 'expiry_date', 'supplier', 'on_hand_qty', 'reserved_qty', 'shipped_qty', 'source_document'],
             'rows' => $rows,
             'summary' => ['lots' => $rows->count(), 'on_hand' => (string) $rows->sum(fn ($r) => (float) $r->on_hand_qty)],
             'drilldown' => ['key' => 'lot_id', 'path' => '/traceability/lots'],

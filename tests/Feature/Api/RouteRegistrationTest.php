@@ -72,4 +72,11 @@ class RouteRegistrationTest extends TestCase
             );
         }
     }
+
+    #[Test]
+    public function settings_read_route_requires_settings_permission(): void
+    {
+        $mw = Route::getRoutes()->getByName('api.v1.settings.show')->gatherMiddleware();
+        $this->assertContains('perm:inventory.manage_settings', $mw);
+    }
 }
