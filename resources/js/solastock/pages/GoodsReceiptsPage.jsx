@@ -20,7 +20,7 @@ export default function GoodsReceiptsPage() {
             <p className="muted">Posting a GRN receives stock IN through GoodsReceiptService → the canonical ledger, and rolls up the PO.</p>
             {rows.length === 0 ? <EmptyState title="No goods receipts" hint="Create one, or receive from an approved PO." /> : (
                 <table className="data-table"><thead><tr><th>GRN #</th><th>PO</th><th>WH</th><th>Date</th><th>Status</th></tr></thead>
-                <tbody>{rows.map((g) => (<tr key={g.id}><td><Link to={`/goods-receipts/${g.id}`}>{g.grn_number}</Link></td><td>{g.purchase_order_id ? `#${g.purchase_order_id}` : '—'}</td><td>#{g.warehouse_id}</td><td>{g.receipt_date}</td><td><DocumentStatusBadge status={g.status} /></td></tr>))}</tbody></table>
+                <tbody>{rows.map((g) => (<tr key={g.id}><td><Link to={`/goods-receipts/${g.id}`}>{g.grn_number}</Link></td><td>{g.purchase_order_number ?? (g.purchase_order_id ? `#${g.purchase_order_id}` : '—')}</td><td>{g.warehouse_name ?? `#${g.warehouse_id}`}</td><td>{g.receipt_date}</td><td><DocumentStatusBadge status={g.status} /></td></tr>))}</tbody></table>
             )}
         </section>
     );

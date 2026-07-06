@@ -21,11 +21,19 @@ class GoodsReceiptController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = GoodsReceipt::query()
+            ->with(['warehouse:id,name,code', 'supplier:id,name,code', 'purchaseOrder:id,po_number'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('purchase_order_id'), fn ($q) => $q->where('purchase_order_id', (int) $request->query('purchase_order_id')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (GoodsReceipt $grn) {
+            $grn->setAttribute('warehouse_name', $grn->warehouse?->name);
+            $grn->setAttribute('warehouse_code', $grn->warehouse?->code);
+            $grn->setAttribute('supplier_name', $grn->supplier?->name);
+            $grn->setAttribute('supplier_code', $grn->supplier?->code);
+            $grn->setAttribute('purchase_order_number', $grn->purchaseOrder?->po_number);
+            return $grn;
+        }));
     }
 
     public function show(GoodsReceipt $goods_receipt): JsonResponse

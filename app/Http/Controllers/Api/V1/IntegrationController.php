@@ -9,6 +9,7 @@ use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
 use App\Services\Integration\IntegrationEvents;
 use App\Services\Integration\IntegrationStatusService;
+use App\Services\Documents\SourceDocumentPresenter;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -126,7 +127,10 @@ class IntegrationController extends ApiController
             ->when($request->filled('to'), fn ($q) => $q->whereDate('occurred_at', '<=', $request->query('to')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        $page = $query->paginate($perPage)->withQueryString();
+        $page->setCollection(SourceDocumentPresenter::decorateRows($page->getCollection(), 'aggregate_type', 'aggregate_id'));
+
+        return $this->paginated($page);
     }
 
     public function event(int $event): JsonResponse

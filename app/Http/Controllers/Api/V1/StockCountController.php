@@ -21,10 +21,16 @@ class StockCountController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = StockCount::query()
+            ->with(['warehouse:id,name,code', 'adjustment:id,adjustment_number'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockCount $count) {
+            $count->setAttribute('warehouse_name', $count->warehouse?->name);
+            $count->setAttribute('warehouse_code', $count->warehouse?->code);
+            $count->setAttribute('adjustment_number', $count->adjustment?->adjustment_number);
+            return $count;
+        }));
     }
 
     public function show(StockCount $stock_count): JsonResponse

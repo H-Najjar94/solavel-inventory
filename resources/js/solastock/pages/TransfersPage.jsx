@@ -20,7 +20,7 @@ export default function TransfersPage() {
             <p className="muted">Posting moves stock OUT of source and IN to destination via StockTransferService → the canonical ledger.</p>
             {rows.length === 0 ? <EmptyState title="No transfers" hint="Move stock between warehouses." /> : (
                 <table className="data-table"><thead><tr><th>Transfer #</th><th>From</th><th>To</th><th>Date</th><th>Status</th></tr></thead>
-                <tbody>{rows.map((t) => (<tr key={t.id}><td><Link to={`/transfers/${t.id}`}>{t.transfer_number}</Link></td><td>#{t.from_warehouse_id}</td><td>#{t.to_warehouse_id}</td><td>{t.transfer_date}</td><td><DocumentStatusBadge status={t.status} /></td></tr>))}</tbody></table>
+                <tbody>{rows.map((t) => (<tr key={t.id}><td><Link to={`/transfers/${t.id}`}>{t.transfer_number}</Link></td><td>{t.from_warehouse_name ?? `#${t.from_warehouse_id}`}</td><td>{t.to_warehouse_name ?? `#${t.to_warehouse_id}`}</td><td>{t.transfer_date}</td><td><DocumentStatusBadge status={t.status} /></td></tr>))}</tbody></table>
             )}
         </section>
     );

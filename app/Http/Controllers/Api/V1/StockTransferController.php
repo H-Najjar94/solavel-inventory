@@ -22,9 +22,16 @@ class StockTransferController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = StockTransfer::query()
+            ->with(['fromWarehouse:id,name,code', 'toWarehouse:id,name,code'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->orderByDesc('id');
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockTransfer $transfer) {
+            $transfer->setAttribute('from_warehouse_name', $transfer->fromWarehouse?->name);
+            $transfer->setAttribute('from_warehouse_code', $transfer->fromWarehouse?->code);
+            $transfer->setAttribute('to_warehouse_name', $transfer->toWarehouse?->name);
+            $transfer->setAttribute('to_warehouse_code', $transfer->toWarehouse?->code);
+            return $transfer;
+        }));
     }
 
     public function show(StockTransfer $stock_transfer): JsonResponse

@@ -107,12 +107,12 @@ export default function WarehouseDetailPage() {
 
             {tab === 'stock' && <div className="panel">{stock.length === 0 ? <EmptyState title="No stock" /> : (
                 <table className="data-table"><thead><tr><th>Item</th><th>On hand</th><th>Available</th><th>Value</th></tr></thead>
-                <tbody>{stock.map((s) => <tr key={s.id}><td>#{s.item_id}</td><td>{s.on_hand_qty}</td><td>{s.available_qty}</td><td>{s.total_value}</td></tr>)}</tbody></table>
+                <tbody>{stock.map((s) => <tr key={s.id}><td>{s.item_name ?? `#${s.item_id}`}{s.item_sku && <span className="muted"> · {s.item_sku}</span>}</td><td>{s.on_hand_qty}</td><td>{s.available_qty}</td><td>{s.total_value}</td></tr>)}</tbody></table>
             )}</div>}
 
             {tab === 'movements' && <div className="panel">{recent.length === 0 ? <EmptyState title="No recent movements" /> : (
                 <table className="data-table"><thead><tr><th>Date</th><th>Item</th><th>Dir</th><th>Qty</th></tr></thead>
-                <tbody>{recent.map((m) => <tr key={m.id}><td>{m.moved_at}</td><td>#{m.item_id}</td><td>{m.direction}</td><td>{m.quantity}</td></tr>)}</tbody></table>
+                <tbody>{recent.map((m) => <tr key={m.id}><td>{m.moved_at}</td><td>{m.item_name ?? `#${m.item_id}`}{m.item_sku && <span className="muted"> · {m.item_sku}</span>}</td><td>{m.direction}</td><td>{m.quantity}</td></tr>)}</tbody></table>
             )}</div>}
 
             {tab === 'media' && <div className="panel"><WarehouseImages warehouseId={w.id} canManage={gate.allowed} /></div>}

@@ -22,7 +22,7 @@ export default function OpeningStockPage() {
             <p className="muted">Posting/reversal delegate to OpeningStockService → the canonical stock ledger. Posted entries are immutable.</p>
             {rows.length === 0 ? <EmptyState title="No opening-stock entries" hint="Create one to set starting quantities." /> : (
                 <table className="data-table"><thead><tr><th>Number</th><th>Date</th><th>WH</th><th>Status</th><th>Value</th></tr></thead>
-                <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}>{e.entry_number}</Link></td><td>{e.opening_date}</td><td>#{e.warehouse_id}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table>
+                <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}>{e.entry_number}</Link></td><td>{e.opening_date}</td><td>{e.warehouse_name ?? `#${e.warehouse_id}`}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table>
             )}
         </section>
     );

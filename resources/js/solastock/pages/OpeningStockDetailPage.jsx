@@ -42,7 +42,7 @@ export default function OpeningStockDetailPage() {
 
             <div className="panel"><dl className="kv">
                 <dt>Opening date</dt><dd>{entry.opening_date}</dd>
-                <dt>Warehouse</dt><dd>#{entry.warehouse_id}</dd>
+                <dt>Warehouse</dt><dd>{entry.warehouse_name ?? `#${entry.warehouse_id}`}</dd>
                 <dt>Total value</dt><dd>{entry.total_value}</dd>
                 <dt>Notes</dt><dd>{entry.notes ?? '—'}</dd>
             </dl></div>
@@ -52,7 +52,7 @@ export default function OpeningStockDetailPage() {
             {tab === 'lines' && (
                 <div className="panel"><table className="data-table">
                     <thead><tr><th>Item</th><th>Bin</th><th>Qty</th><th>Unit cost</th><th>Total</th></tr></thead>
-                    <tbody>{(entry.lines ?? []).map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.quantity}</td><td>{l.unit_cost}</td><td>{l.total_cost}</td></tr>)}</tbody>
+                    <tbody>{(entry.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.quantity}</td><td>{l.unit_cost}</td><td>{l.total_cost}</td></tr>)}</tbody>
                 </table></div>
             )}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}

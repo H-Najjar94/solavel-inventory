@@ -22,7 +22,7 @@ export default function AdjustmentsPage() {
             <p className="muted">Increase/decrease lines; posting/reversal delegate to StockAdjustmentService → the canonical ledger.</p>
             {rows.length === 0 ? <EmptyState title="No adjustments" hint="Create one to correct stock." /> : (
                 <table className="data-table"><thead><tr><th>Number</th><th>Date</th><th>WH</th><th>Reason</th><th>Status</th><th>+ Value</th><th>− Value</th></tr></thead>
-                <tbody>{rows.map((a) => (<tr key={a.id}><td><Link to={`/adjustments/${a.id}`}>{a.adjustment_number}</Link></td><td>{a.adjustment_date}</td><td>#{a.warehouse_id}</td><td>{a.reason_code ?? '—'}</td><td><DocumentStatusBadge status={a.status} /></td><td>{a.total_increase_value}</td><td>{a.total_decrease_value}</td></tr>))}</tbody></table>
+                <tbody>{rows.map((a) => (<tr key={a.id}><td><Link to={`/adjustments/${a.id}`}>{a.adjustment_number}</Link></td><td>{a.adjustment_date}</td><td>{a.warehouse_name ?? `#${a.warehouse_id}`}</td><td>{a.reason_code ?? '—'}</td><td><DocumentStatusBadge status={a.status} /></td><td>{a.total_increase_value}</td><td>{a.total_decrease_value}</td></tr>))}</tbody></table>
             )}
         </section>
     );

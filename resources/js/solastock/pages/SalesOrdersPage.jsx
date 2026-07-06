@@ -20,7 +20,7 @@ export default function SalesOrdersPage() {
             <p className="muted">Fulfillment documents only — SolaStock reserves and ships stock. Invoices &amp; accounting stay in SolaBooks.</p>
             {rows.length === 0 ? <EmptyState title="No sales orders" hint="Create a sales order to reserve, pick, pack and ship stock." /> : (
                 <table className="data-table"><thead><tr><th>Order #</th><th>Customer</th><th>Date</th><th>Warehouse</th><th>Status</th></tr></thead>
-                <tbody>{rows.map((s) => (<tr key={s.id}><td><Link to={`/sales-orders/${s.id}`}>{s.order_number}</Link></td><td>{s.customer_name ?? '—'}</td><td>{s.order_date}</td><td>#{s.warehouse_id}</td><td><DocumentStatusBadge status={s.status} /></td></tr>))}</tbody></table>
+                <tbody>{rows.map((s) => (<tr key={s.id}><td><Link to={`/sales-orders/${s.id}`}>{s.order_number}</Link></td><td>{s.customer_name ?? '—'}</td><td>{s.order_date}</td><td>{s.warehouse_name ?? `#${s.warehouse_id}`}</td><td><DocumentStatusBadge status={s.status} /></td></tr>))}</tbody></table>
             )}
         </section>
     );

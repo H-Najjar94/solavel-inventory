@@ -23,16 +23,22 @@ class OpeningStockController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = OpeningStockEntry::query()
+            ->with(['warehouse:id,name,code'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (OpeningStockEntry $entry) {
+            $entry->setAttribute('warehouse_name', $entry->warehouse?->name);
+            $entry->setAttribute('warehouse_code', $entry->warehouse?->code);
+            return $entry;
+        }));
     }
 
     public function show(OpeningStockEntry $entry): JsonResponse
     {
-        $entry->load('lines');
+        $entry->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
+        $entry->setAttribute('warehouse_name', $entry->warehouse?->name);
         $ledger = StockLedger::query()
             ->where('source_type', OpeningStockEntry::class)
             ->where('source_id', $entry->id)->get();

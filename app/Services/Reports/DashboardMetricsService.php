@@ -2,6 +2,9 @@
 
 namespace App\Services\Reports;
 
+use App\Http\Controllers\Api\V1\StockLedgerController;
+use App\Models\Tenant\StockLedger;
+use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
@@ -94,9 +97,21 @@ class DashboardMetricsService
                 ->where('l.direction', 'out')->where('l.moved_at', '>=', now()->subDays(30)->toDateTimeString())
                 ->selectRaw('i.sku, i.name, SUM(l.quantity) qty')->groupBy('i.sku', 'i.name')
                 ->orderByDesc('qty')->limit(5)->get(),
-            'recent_movements' => $this->scoped('stock_ledger')->orderByDesc('id')->limit(10)
-                ->get(['id', 'item_id', 'warehouse_id', 'direction', 'quantity', 'unit_cost', 'moved_at', 'source_type', 'source_id']),
+            'recent_movements' => $this->recentMovements(),
             'generated_at' => now()->toDateTimeString(),
         ];
+    }
+
+    private function recentMovements()
+    {
+        $rows = StockLedger::query()
+            ->with(['warehouse:id,name,code', 'item:id,name,sku'])
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+
+        return SourceDocumentPresenter::decorateRows($rows)
+            ->map(fn (StockLedger $row) => StockLedgerController::movementRow($row))
+            ->values();
     }
 }

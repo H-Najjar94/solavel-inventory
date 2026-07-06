@@ -31,7 +31,7 @@ export function DocumentStatusBadge({ status }) {
     return <span className={`badge ${cls}`}>{label}</span>;
 }
 
-export function SourceDocumentLink({ sourceType, sourceId }) {
+export function SourceDocumentLink({ sourceType, sourceId, sourceDisplay, sourceRoute }) {
     const name = (sourceType ?? '').split('\\').pop();
     const map = {
         OpeningStockEntry: '/opening-stock', StockAdjustment: '/adjustments',
@@ -39,8 +39,9 @@ export function SourceDocumentLink({ sourceType, sourceId }) {
         SalesOrder: '/sales-orders', Shipment: '/shipments', SalesReturn: '/sales-returns',
     };
     const base = map[name];
-    const label = `${name} #${sourceId}`;
-    return base ? <Link to={`${base}/${sourceId}`}>{label}</Link> : <span>{label}</span>;
+    const label = sourceDisplay || `${name} #${sourceId}`;
+    const route = sourceRoute || (base ? `${base}/${sourceId}` : null);
+    return route ? <Link to={route}>{label}</Link> : <span>{label}</span>;
 }
 
 // ── Sales fulfillment UI ──
@@ -176,7 +177,7 @@ export function LedgerPreview({ rows }) {
         <table className="data-table">
             <thead><tr><th>Date</th><th>Item</th><th>WH</th><th>Dir</th><th>Qty</th><th>Unit cost</th><th>Total</th><th>Running qty</th></tr></thead>
             <tbody>{rows.map((r) => (
-                <tr key={r.id}><td>{r.moved_at}</td><td>#{r.item_id}</td><td>#{r.warehouse_id}</td>
+                <tr key={r.id}><td>{r.moved_at}</td><td>{r.item_name ?? `#${r.item_id}`}</td><td>{r.warehouse_name ?? `#${r.warehouse_id}`}</td>
                     <td>{r.direction}</td><td>{r.quantity}</td><td>{r.unit_cost}</td><td>{r.total_cost}</td><td>{r.balance_qty_after}</td></tr>
             ))}</tbody>
         </table>
