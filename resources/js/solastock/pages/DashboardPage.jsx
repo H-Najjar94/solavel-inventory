@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
+import { useCan } from '../stores/meta.jsx';
 
 // Real, zeroed dashboard for a live tenant with no data yet. NEVER mock/sample —
 // the dashboard only ever shows this org's actual numbers.
@@ -71,10 +72,12 @@ function OpsGroup({ title, icon, children }) {
 
 export default function DashboardPage() {
     const qc = useQueryClient();
+    const can = useCan();
+    const canViewIntegration = can('inventory.integration.view');
     // Real data only. No mock/sample fallback — an empty workspace shows real zeros.
     const { data, isFetching } = useApiQuery(['dashboard'], api.dashboard, { fallback: EMPTY_DASHBOARD });
     const d = data ?? EMPTY_DASHBOARD;
-    const integ = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
+    const integ = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null, enabled: canViewIntegration });
     const si = integ.data;
 
     // Only surface alerts that actually need attention.
@@ -152,7 +155,7 @@ export default function DashboardPage() {
             </div>
 
             {/* SolaBooks sync */}
-            {si && (
+            {canViewIntegration && si && (
                 <Link to="/settings/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
                     <h2 style={{ fontSize: 14 }}>
                         <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginRight: 6 }} />
