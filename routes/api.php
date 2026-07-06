@@ -27,6 +27,7 @@ Route::prefix('v1/tenant')->group(function () {
     // First-run provisioning of SolaStock tables for the live org (admin-only;
     // does its own auth + permission + forbidden-DB checks internally).
     Route::post('/provision', [\App\Http\Controllers\Api\V1\TenantController::class, 'provision'])->name('api.v1.tenant.provision');
+    Route::get('/schema-audit', [\App\Http\Controllers\Api\V1\TenantController::class, 'schemaAudit'])->name('api.v1.tenant.schema-audit');
     // Org switcher — list the user's orgs + switch the active org/client. NOT
     // tenant-gated (switching happens before the tenant is resolved); each does
     // its own central membership check.

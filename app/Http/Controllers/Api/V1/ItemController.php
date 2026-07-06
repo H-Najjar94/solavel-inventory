@@ -11,6 +11,7 @@ use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBarcode;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
+use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
@@ -152,10 +153,10 @@ class ItemController extends ApiController
 
         // Same read-only shape as the ledger index: running balance + warehouse
         // NAME (not a bare id) + movement cost.
-        return $this->paginated(
-            $query->paginate($perPage)->withQueryString()
-                ->through(fn ($row) => StockLedgerController::movementRow($row))
-        );
+        $page = $query->paginate($perPage)->withQueryString();
+        $page->setCollection(SourceDocumentPresenter::decorateRows($page->getCollection()));
+
+        return $this->paginated($page->through(fn ($row) => StockLedgerController::movementRow($row)));
     }
 
     /**

@@ -36,4 +36,9 @@ class GoodsReceipt extends Model
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
     }
+
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class, 'purchase_order_id');
+    }
 }

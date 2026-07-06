@@ -30,11 +30,18 @@ class PurchaseOrderController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = PurchaseOrder::query()
+            ->with(['warehouse:id,name,code', 'supplier:id,name,code'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('supplier_id'), fn ($q) => $q->where('supplier_id', (int) $request->query('supplier_id')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (PurchaseOrder $po) {
+            $po->setAttribute('warehouse_name', $po->warehouse?->name);
+            $po->setAttribute('warehouse_code', $po->warehouse?->code);
+            $po->setAttribute('supplier_name', $po->supplier?->name);
+            $po->setAttribute('supplier_code', $po->supplier?->code);
+            return $po;
+        }));
     }
 
     public function show(PurchaseOrder $purchase_order): JsonResponse

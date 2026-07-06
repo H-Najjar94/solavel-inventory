@@ -25,11 +25,16 @@ class StockAdjustmentController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = StockAdjustment::query()
+            ->with(['warehouse:id,name,code'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockAdjustment $adjustment) {
+            $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
+            $adjustment->setAttribute('warehouse_code', $adjustment->warehouse?->code);
+            return $adjustment;
+        }));
     }
 
     public function show(StockAdjustment $adjustment): JsonResponse

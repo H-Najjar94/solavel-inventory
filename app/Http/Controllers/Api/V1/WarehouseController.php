@@ -10,6 +10,7 @@ use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseBin;
 use App\Models\Tenant\WarehouseZone;
+use App\Services\Documents\SourceDocumentPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -39,10 +40,18 @@ class WarehouseController extends ApiController
     {
         $zones = WarehouseZone::query()->where('warehouse_id', $warehouse->id)->get();
         $bins = WarehouseBin::query()->where('warehouse_id', $warehouse->id)->get();
-        $balances = StockBalance::query()->where('warehouse_id', $warehouse->id)->get();
+        $balances = StockBalance::query()->with(['item:id,name,sku'])->where('warehouse_id', $warehouse->id)->get()
+            ->map(function (StockBalance $balance) {
+                $balance->setAttribute('item_name', $balance->item?->name);
+                $balance->setAttribute('item_sku', $balance->item?->sku);
+                return $balance;
+            });
         $lowStock = $balances->filter(fn ($b) => (float) $b->available_qty <= 0)->count();
-        $recent = StockLedger::query()->where('warehouse_id', $warehouse->id)
+        $recent = StockLedger::query()->with(['item:id,name,sku', 'warehouse:id,name,code'])->where('warehouse_id', $warehouse->id)
             ->orderByDesc('id')->limit(20)->get();
+        $recent = SourceDocumentPresenter::decorateRows($recent)
+            ->map(fn (StockLedger $row) => StockLedgerController::movementRow($row))
+            ->values();
 
         // Private, org-scoped serve URLs (never public file URLs).
         $images = $warehouse->images()->orderByDesc('is_primary')->orderBy('sort')->orderBy('id')->get()

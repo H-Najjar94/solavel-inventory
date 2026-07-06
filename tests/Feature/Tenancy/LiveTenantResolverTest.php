@@ -102,7 +102,7 @@ class LiveTenantResolverTest extends TestCase
     public function tenant_and_provision_routes_are_registered(): void
     {
         $names = collect(Route::getRoutes()->getRoutes())->map(fn ($r) => $r->getName())->filter()->all();
-        foreach (['api.v1.tenant.status', 'api.v1.tenant.select-demo', 'api.v1.tenant.clear', 'api.v1.tenant.provision'] as $n) {
+        foreach (['api.v1.tenant.status', 'api.v1.tenant.select-demo', 'api.v1.tenant.clear', 'api.v1.tenant.provision', 'api.v1.tenant.schema-audit'] as $n) {
             $this->assertContains($n, $names, "missing route {$n}");
         }
         // Tenant routes must NOT be tenant-gated (that's how status/selection work).
@@ -121,6 +121,7 @@ class LiveTenantResolverTest extends TestCase
         $ctrl = new \App\Http\Controllers\Api\V1\TenantController(
             app(\App\Services\Tenancy\TenantResolver::class),
             app(LiveTenantResolver::class),
+            app(\App\Services\Tenancy\TenantManager::class),
         );
         $m = new \ReflectionMethod($ctrl, 'badgeFor');
         $m->setAccessible(true);

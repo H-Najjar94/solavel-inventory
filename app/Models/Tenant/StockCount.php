@@ -30,4 +30,9 @@ class StockCount extends Model
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
+
+    public function adjustment(): BelongsTo
+    {
+        return $this->belongsTo(StockAdjustment::class, 'adjustment_id');
+    }
 }

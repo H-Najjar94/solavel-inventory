@@ -49,7 +49,7 @@ export default function IntegrationEventsPage() {
                         <tbody>{rows.map((e) => (
                             <tr key={e.id}>
                                 <td>{e.occurred_at}</td><td>{e.event_type}</td>
-                                <td><SourceDocumentLink sourceType={e.aggregate_type} sourceId={e.aggregate_id} /></td>
+                                <td><SourceDocumentLink sourceType={e.aggregate_type} sourceId={e.aggregate_id} sourceDisplay={e.source_display} sourceRoute={e.source_route} /></td>
                                 <td><DocumentStatusBadge status={e.status} /></td>
                                 <td>{e.mapping_status === 'incomplete' ? <span className="badge badge--warn">incomplete</span> : <span className="badge badge--live">complete</span>}</td>
                                 <td><button className="btn btn--sm" onClick={() => setSelected(e)}>View</button></td>
@@ -65,7 +65,7 @@ export default function IntegrationEventsPage() {
                         <div className="page-head"><h3 style={{ margin: 0 }}>{selected.event_type}</h3><DocumentStatusBadge status={selected.status} /></div>
                         <dl className="kv">
                             <dt>Event UUID</dt><dd style={{ fontFamily: 'monospace', fontSize: 12 }}>{selected.event_uuid}</dd>
-                            <dt>Document</dt><dd>{selected.aggregate_type} #{selected.aggregate_id} {selected.aggregate_number ? `(${selected.aggregate_number})` : ''}</dd>
+                            <dt>Document</dt><dd>{selected.source_display ?? selected.aggregate_number ?? `${selected.aggregate_type} #${selected.aggregate_id}`}</dd>
                             <dt>Mapping</dt><dd>{selected.mapping_status}</dd>
                             <dt>Attempts</dt><dd>{selected.attempts}</dd>
                             <dt>Last error</dt><dd>{selected.last_error ?? '—'}</dd>

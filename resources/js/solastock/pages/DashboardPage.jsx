@@ -179,7 +179,7 @@ export default function DashboardPage() {
                     {(d.recent_movements ?? []).length === 0 ? <EmptyState title="No recent movements" /> : (
                         <ul className="activity-list">
                             {d.recent_movements.map((m) => (
-                                <li key={m.id}>{m.direction === 'in' ? '▲' : '▼'} item #{m.item_id} · {m.quantity} @ {m.unit_cost} <span className="muted">{m.moved_at}</span></li>
+                                <li key={m.id}>{m.direction === 'in' ? '▲' : '▼'} {m.item_name ?? `#${m.item_id}`} · {m.quantity} @ {m.unit_cost} <span className="muted">{m.source_display ? `· ${m.source_display} ` : ''}{m.moved_at}</span></li>
                             ))}
                         </ul>
                     )}

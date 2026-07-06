@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Services\Tenancy\LiveTenantResolver;
+use App\Services\Tenancy\TenantManager;
 use App\Services\Tenancy\TenantResolver;
+use App\Services\Tenancy\TenantSchemaAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +23,7 @@ class TenantController extends ApiController
     public function __construct(
         private TenantResolver $resolver,
         private LiveTenantResolver $live,
+        private TenantManager $tenants,
     ) {}
 
     /** Human-readable explanation for an unavailable demo, by reason code. */
@@ -279,6 +282,35 @@ class TenantController extends ApiController
         }
 
         return $this->success(array_merge(['provisioned' => true], $result));
+    }
+
+    public function schemaAudit(Request $request, TenantSchemaAuditService $auditor): JsonResponse
+    {
+        $s = $this->live->state($request);
+        if (! in_array($s['state'], ['live_ready', 'tenant_unmigrated'], true) || ! $s['organization_id'] || ! $s['database']) {
+            return $this->error('not_auditable', 'No live SolaStock tenant database is available to audit.', 409, [
+                'state' => $s['state'],
+                'database' => $s['database'],
+            ]);
+        }
+        if (! $s['can_access']) {
+            return $this->error('forbidden', 'You are not allowed to audit this SolaStock workspace.', 403);
+        }
+
+        try {
+            $this->tenants->useTenant((int) $s['organization_id'], (string) $s['database']);
+            $audit = $auditor->audit();
+        } catch (\Throwable $e) {
+            return $this->success([
+                'ok' => false,
+                'status' => 'fail',
+                'database' => $s['database'],
+                'error' => 'schema_audit_failed',
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->success($audit);
     }
 
     private function adminProvisionCommand(string $db, int $orgId): string

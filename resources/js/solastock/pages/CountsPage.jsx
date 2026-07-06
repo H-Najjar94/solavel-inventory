@@ -20,7 +20,7 @@ export default function CountsPage() {
             <p className="muted">Posting variances creates a single StockAdjustment → ledger. Cycle & full counts supported.</p>
             {rows.length === 0 ? <EmptyState title="No counts" hint="Count physical stock and post variances." /> : (
                 <table className="data-table"><thead><tr><th>Count #</th><th>Type</th><th>WH</th><th>Status</th><th>Adjustment</th></tr></thead>
-                <tbody>{rows.map((c) => (<tr key={c.id}><td><Link to={`/counts/${c.id}`}>{c.count_number}</Link></td><td>{c.count_type}</td><td>#{c.warehouse_id}</td><td><DocumentStatusBadge status={c.status} /></td><td>{c.adjustment_id ? `#${c.adjustment_id}` : '—'}</td></tr>))}</tbody></table>
+                <tbody>{rows.map((c) => (<tr key={c.id}><td><Link to={`/counts/${c.id}`}>{c.count_number}</Link></td><td>{c.count_type}</td><td>{c.warehouse_name ?? `#${c.warehouse_id}`}</td><td><DocumentStatusBadge status={c.status} /></td><td>{c.adjustment_number ?? (c.adjustment_id ? `#${c.adjustment_id}` : '—')}</td></tr>))}</tbody></table>
             )}
         </section>
     );

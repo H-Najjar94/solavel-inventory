@@ -20,7 +20,7 @@ export default function PurchaseOrdersPage() {
             <p className="muted">Purchase orders do not move stock — receive against them via Goods Receipts.</p>
             {rows.length === 0 ? <EmptyState title="No purchase orders" hint="Create one to order from a supplier." /> : (
                 <table className="data-table"><thead><tr><th>PO #</th><th>Supplier</th><th>WH</th><th>Order date</th><th>Expected</th><th>Status</th><th>Total</th></tr></thead>
-                <tbody>{rows.map((p) => (<tr key={p.id}><td><Link to={`/purchase-orders/${p.id}`}>{p.po_number}</Link></td><td>{p.supplier_id ? `#${p.supplier_id}` : '—'}</td><td>#{p.warehouse_id}</td><td>{p.order_date}</td><td>{p.expected_date ?? '—'}</td><td><DocumentStatusBadge status={p.status} /></td><td>{p.total}</td></tr>))}</tbody></table>
+                <tbody>{rows.map((p) => (<tr key={p.id}><td><Link to={`/purchase-orders/${p.id}`}>{p.po_number}</Link></td><td>{p.supplier_name ?? (p.supplier_id ? `#${p.supplier_id}` : '—')}</td><td>{p.warehouse_name ?? `#${p.warehouse_id}`}</td><td>{p.order_date}</td><td>{p.expected_date ?? '—'}</td><td><DocumentStatusBadge status={p.status} /></td><td>{p.total}</td></tr>))}</tbody></table>
             )}
         </section>
     );

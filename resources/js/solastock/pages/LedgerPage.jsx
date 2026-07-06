@@ -2,6 +2,7 @@ import React from 'react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { mockLedger } from '../services/mockData.js';
+import { SourceDocumentLink } from '../components/document.jsx';
 
 export default function LedgerPage() {
     const { data, isMock } = useApiQuery(['ledger'], () => api.ledger({ per_page: 100 }), { fallback: mockLedger });
@@ -16,7 +17,7 @@ export default function LedgerPage() {
                 <td>{r.item_name ?? `#${r.item_id}`}{r.item_sku && <span className="muted"> · {r.item_sku}</span>}</td>
                 <td>{r.warehouse_name ?? `#${r.warehouse_id}`}</td>
                 <td>{r.direction}</td><td>{r.quantity}</td><td>{r.unit_cost}</td><td>{r.total_cost}</td><td>{r.balance_qty_after}</td>
-                <td>{(r.source_label ?? r.source_type?.split('\\').pop())} #{r.source_id}</td></tr>))}</tbody></table>
+                <td><SourceDocumentLink sourceType={r.source_type} sourceId={r.source_id} sourceDisplay={r.source_display} sourceRoute={r.source_route} /></td></tr>))}</tbody></table>
         </section>
     );
 }

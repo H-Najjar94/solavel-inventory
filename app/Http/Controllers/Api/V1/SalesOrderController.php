@@ -18,6 +18,7 @@ class SalesOrderController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = SalesOrder::query()
+            ->with(['warehouse:id,name,code'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w
@@ -25,7 +26,11 @@ class SalesOrderController extends ApiController
                 ->orWhere('customer_name', 'like', '%'.$request->query('q').'%')))
             ->orderByDesc('id');
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (SalesOrder $order) {
+            $order->setAttribute('warehouse_name', $order->warehouse?->name);
+            $order->setAttribute('warehouse_code', $order->warehouse?->code);
+            return $order;
+        }));
     }
 
     public function show(SalesOrder $sales_order): JsonResponse

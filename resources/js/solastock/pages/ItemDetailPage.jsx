@@ -98,7 +98,7 @@ function MovementDrawer({ movement, open, onClose }) {
                 <dt>Total cost</dt><dd>{movement.total_cost ? money(movement.total_cost) : '—'}</dd>
                 <dt>On hand after</dt><dd>{movement.balance_qty_after ? qty(movement.balance_qty_after) : '—'}</dd>
                 <dt>Value after</dt><dd>{movement.balance_value_after ? money(movement.balance_value_after) : '—'}</dd>
-                <dt>Source</dt><dd>{movement.source_label ?? '—'}{movement.source_id ? ` #${movement.source_id}` : ''}</dd>
+                <dt>Source</dt><dd>{movement.source_display ?? movement.source_label ?? '—'}</dd>
             </dl>
             {isOut && (
                 <div style={{ marginTop: 18 }}>
@@ -140,7 +140,7 @@ function MovementsTable({ rows, onRow }) {
                     <td>{m.moved_at}</td><td><Badge tone={m.direction === 'out' ? 'warn' : 'ok'}>{m.direction}</Badge></td>
                     <td>{qty(m.quantity)}</td><td>{m.unit_cost ? money(m.unit_cost) : '—'}</td>
                     <td>{m.balance_qty_after ? qty(m.balance_qty_after) : '—'}</td><td>{m.warehouse_name ?? `#${m.warehouse_id}`}</td>
-                    <td>{m.source_label ?? '—'}{m.source_id ? ` #${m.source_id}` : ''}</td>
+                    <td>{m.source_display ?? m.source_label ?? '—'}</td>
                 </tr>
             ))}</tbody>
         </table>

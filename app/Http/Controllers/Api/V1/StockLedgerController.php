@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\CostLayer;
 use App\Models\Tenant\StockLedger;
+use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,9 +32,10 @@ class StockLedgerController extends ApiController
             // Ledger is chronological: oldest→newest gives a meaningful running balance.
             ->orderBy('moved_at')->orderBy('id');
 
-        return $this->paginated(
-            $query->paginate($perPage)->withQueryString()->through(fn ($row) => self::movementRow($row))
-        );
+        $page = $query->paginate($perPage)->withQueryString();
+        $page->setCollection(SourceDocumentPresenter::decorateRows($page->getCollection()));
+
+        return $this->paginated($page->through(fn ($row) => self::movementRow($row)));
     }
 
     /**
@@ -118,7 +120,11 @@ class StockLedgerController extends ApiController
             'lot_id' => $row->lot_id,
             'serial_id' => $row->serial_id,
             'source_type' => $row->source_type,
-            'source_label' => $row->source_type ? class_basename((string) $row->source_type) : null,
+            'source_label' => $row->source_label ?? ($row->source_type ? class_basename((string) $row->source_type) : null),
+            'source_number' => $row->source_number ?? null,
+            'source_display' => $row->source_display ?? null,
+            'source_route' => $row->source_route ?? null,
+            'source_missing' => (bool) ($row->source_missing ?? false),
             'source_id' => $row->source_id,
             'source_line_id' => $row->source_line_id,
         ];
