@@ -71,11 +71,11 @@ class PurchaseOrderController extends ApiController
     public function store(StorePurchaseOrderRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['po_number']);
         $orgId = $this->context->idOrFail();
         $po = DB::connection($this->conn())->transaction(function () use ($data, $orgId) {
-            // Server-issued PO number when none was supplied (users don't type it).
-            $poNumber = ! empty($data['po_number']) ? $data['po_number']
-                : \App\Services\Documents\Support\DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
+            // Server-issued PO number. Ignore client-submitted numbers on create.
+            $poNumber = \App\Services\Documents\Support\DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
 
             $po = PurchaseOrder::create(collect($data)->except('lines')
                 // Drop a null currency_code so the column's DB default (SAR) applies

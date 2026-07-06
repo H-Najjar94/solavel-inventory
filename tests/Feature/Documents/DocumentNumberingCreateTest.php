@@ -26,8 +26,8 @@ use Tests\Traits\TenantAware;
  * P1 correctness — the three document creates that still required a MANUAL number
  * (Transfer, Adjustment, GRN). Mirrors the fixed PO/Opening-Stock pattern: a blank
  * number is server-generated (nullable rule + prepareForValidation blanking +
- * DocumentNumber::next inside the create transaction), a typed number is respected,
- * and numbers increment per org. Before this fix a blank number 422'd (required) or
+ * DocumentNumber::next inside the create transaction), client-submitted numbers
+ * are ignored on create, and numbers increment per org. Before this fix a blank number 422'd (required) or
  * — if it slipped past validation — hit the NOT-NULL column (1364).
  */
 class DocumentNumberingCreateTest extends TestCase
@@ -83,7 +83,7 @@ class DocumentNumberingCreateTest extends TestCase
     }
 
     #[Test]
-    public function transfer_numbers_increment_and_a_typed_number_is_respected(): void
+    public function transfer_numbers_increment_and_client_number_is_ignored_on_create(): void
     {
         $this->useTenantA();
         $this->seedDocs();
@@ -94,7 +94,8 @@ class DocumentNumberingCreateTest extends TestCase
             $this->resolve(StoreStockTransferRequest::class, $this->transferPayload(['transfer_number' => 'MY-TRF-9']))
         )->getData(true);
 
-        $this->assertSame('MY-TRF-9', $typed['data']['transfer_number']);
+        $this->assertSame('TRF-000003', $typed['data']['transfer_number']);
+        $this->assertNull(StockTransfer::query()->where('transfer_number', 'MY-TRF-9')->first());
         $this->assertNotNull(StockTransfer::query()->where('transfer_number', 'TRF-000002')->first());
     }
 
@@ -125,7 +126,7 @@ class DocumentNumberingCreateTest extends TestCase
     }
 
     #[Test]
-    public function adjustment_number_increments_and_typed_number_is_respected(): void
+    public function adjustment_number_increments_and_client_number_is_ignored_on_create(): void
     {
         $this->useTenantA();
         $this->seedDocs();
@@ -135,8 +136,8 @@ class DocumentNumberingCreateTest extends TestCase
             $this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload(['adjustment_number' => 'COUNT-42']))
         )->getData(true);
 
-        // An explicit ref (e.g. the COUNT- number a stock-count variance passes in) is kept.
-        $this->assertSame('COUNT-42', $typed['data']['adjustment_number']);
+        $this->assertSame('ADJ-000002', $typed['data']['adjustment_number']);
+        $this->assertNull(StockAdjustment::query()->where('adjustment_number', 'COUNT-42')->first());
         $this->assertNotNull(StockAdjustment::query()->where('adjustment_number', 'ADJ-000001')->first());
     }
 
@@ -167,7 +168,7 @@ class DocumentNumberingCreateTest extends TestCase
     }
 
     #[Test]
-    public function grn_number_increments_and_typed_number_is_respected(): void
+    public function grn_number_increments_and_client_number_is_ignored_on_create(): void
     {
         $this->useTenantA();
         $this->seedDocs();
@@ -177,7 +178,8 @@ class DocumentNumberingCreateTest extends TestCase
             $this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload(['grn_number' => 'GRN-CUSTOM']))
         )->getData(true);
 
-        $this->assertSame('GRN-CUSTOM', $typed['data']['grn_number']);
+        $this->assertSame('GRN-000002', $typed['data']['grn_number']);
+        $this->assertNull(GoodsReceipt::query()->where('grn_number', 'GRN-CUSTOM')->first());
         $this->assertNotNull(GoodsReceipt::query()->where('grn_number', 'GRN-000001')->first());
     }
 
@@ -205,7 +207,7 @@ class DocumentNumberingCreateTest extends TestCase
     }
 
     #[Test]
-    public function count_number_increments_and_typed_number_is_respected(): void
+    public function count_number_increments_and_client_number_is_ignored_on_create(): void
     {
         $this->useTenantA();
         $this->seedDocs();
@@ -215,7 +217,8 @@ class DocumentNumberingCreateTest extends TestCase
             $this->resolve(StoreStockCountRequest::class, $this->countPayload(['count_number' => 'CYCLE-A']))
         )->getData(true);
 
-        $this->assertSame('CYCLE-A', $typed['data']['count_number']);
+        $this->assertSame('CNT-000002', $typed['data']['count_number']);
+        $this->assertNull(StockCount::query()->where('count_number', 'CYCLE-A')->first());
         $this->assertNotNull(StockCount::query()->where('count_number', 'CNT-000001')->first());
     }
 
@@ -246,7 +249,7 @@ class DocumentNumberingCreateTest extends TestCase
     }
 
     #[Test]
-    public function sales_order_number_increments_and_typed_number_is_respected(): void
+    public function sales_order_number_increments_and_client_number_is_ignored_on_create(): void
     {
         $this->useTenantA();
         $this->seedDocs();
@@ -256,7 +259,8 @@ class DocumentNumberingCreateTest extends TestCase
             $this->resolve(StoreSalesOrderRequest::class, $this->soPayload(['order_number' => 'WEB-77']))
         )->getData(true);
 
-        $this->assertSame('WEB-77', $typed['data']['order_number']);
+        $this->assertSame('SO-000002', $typed['data']['order_number']);
+        $this->assertNull(SalesOrder::query()->where('order_number', 'WEB-77')->first());
         $this->assertNotNull(SalesOrder::query()->where('order_number', 'SO-000001')->first());
     }
 

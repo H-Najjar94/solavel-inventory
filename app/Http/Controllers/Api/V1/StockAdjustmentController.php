@@ -47,6 +47,7 @@ class StockAdjustmentController extends ApiController
     public function store(StoreStockAdjustmentRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['adjustment_number']);
         $adj = $this->service->createDraft(
             collect($data)->except('lines')->toArray(),
             $data['lines']

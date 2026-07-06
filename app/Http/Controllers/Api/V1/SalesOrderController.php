@@ -41,6 +41,7 @@ class SalesOrderController extends ApiController
     public function store(StoreSalesOrderRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['order_number']);
         $so = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
         return $this->success($so, 201);

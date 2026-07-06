@@ -78,6 +78,7 @@ class GoodsReceiptController extends ApiController
     public function store(StoreGoodsReceiptRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['grn_number']);
         $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
         return $this->success($grn, 201);
