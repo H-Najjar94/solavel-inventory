@@ -57,12 +57,19 @@ class StockLedgerController extends ApiController
             ->whereIn('id', $consumptions->pluck('cost_layer_id')->all())
             ->get()
             ->keyBy('id');
+        $sourceLedgerRows = SourceDocumentPresenter::decorateRows(
+            StockLedger::query()
+                ->whereIn('cost_layer_id', $layers->keys()->all())
+                ->where('direction', 'in')
+                ->get()
+        )->keyBy('cost_layer_id');
 
         $totalValue = '0';
-        $rows = $consumptions->map(function ($c) use ($layers, &$totalValue) {
+        $rows = $consumptions->map(function ($c) use ($layers, $sourceLedgerRows, &$totalValue) {
             $value = Decimal::money(Decimal::mul((string) $c->qty, (string) $c->unit_cost));
             $totalValue = Decimal::add($totalValue, $value);
             $layer = $layers->get($c->cost_layer_id);
+            $source = $layer ? $sourceLedgerRows->get($layer->id) : null;
 
             return [
                 'cost_layer_id' => $c->cost_layer_id,
@@ -74,7 +81,12 @@ class StockLedgerController extends ApiController
                     'received_at' => optional($layer->received_at)->toDateString(),
                     'original_qty' => (string) $layer->original_qty,
                     'remaining_qty' => (string) $layer->remaining_qty,
-                    'source_ledger_id' => $layer->source_ledger_id,
+                    'source_ledger_id' => $source?->id ?? $layer->source_ledger_id,
+                    'source_display' => $source?->source_display,
+                    'source_label' => $source?->source_label,
+                    'source_number' => $source?->source_number,
+                    'source_route' => $source?->source_route,
+                    'source_missing' => (bool) ($source?->source_missing ?? false),
                     'lot_id' => $layer->lot_id,
                 ] : null,
                 'consumed_at' => optional($c->created_at)->toDateTimeString(),
@@ -86,6 +98,11 @@ class StockLedgerController extends ApiController
             'direction' => $ledger->direction,
             'item_id' => $ledger->item_id,
             'warehouse_id' => $ledger->warehouse_id,
+            'warehouse_name' => $ledger->warehouse?->name,
+            'warehouse_code' => $ledger->warehouse?->code,
+            'source_display' => $ledger->source_display ?? null,
+            'source_label' => $ledger->source_label ?? ($ledger->source_type ? class_basename((string) $ledger->source_type) : null),
+            'source_number' => $ledger->source_number ?? null,
             'costing_method' => $ledger->costing_method,
             'consumed_layer_count' => $rows->count(),
             'consumed_total_value' => Decimal::money($totalValue),

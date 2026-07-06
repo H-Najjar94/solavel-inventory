@@ -82,6 +82,9 @@ class MovementConsumedLayersTest extends TestCase
         // Source-layer reference + dates are present.
         $this->assertNotNull($layers[0]['source_layer']);
         $this->assertArrayHasKey('received_at', $layers[0]['source_layer']);
+        $this->assertSame('Opening stock CL-1', $layers[0]['source_layer']['source_display']);
+        $this->assertSame('Opening stock', $layers[0]['source_layer']['source_label']);
+        $this->assertArrayHasKey('source_route', $layers[0]['source_layer']);
         $this->assertNotNull($layers[0]['consumed_at']);
     }
 
