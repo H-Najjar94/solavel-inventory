@@ -26,6 +26,7 @@ export default function GoodsReceiptFormPage() {
 
     // Prefill from PO
     const poDraft = useApiQuery(['grn-from-po', poId], () => api.grnDraftFromPo(poId), { fallback: null, enabled: fromPo });
+    const sourcePo = useApiQuery(['po', poId], () => api.purchaseOrder(poId), { fallback: null, enabled: fromPo });
     useEffect(() => {
         if (fromPo && poDraft.data) {
             const po = poDraft.data.purchase_order;
@@ -88,6 +89,11 @@ export default function GoodsReceiptFormPage() {
 
     if ((fromPo && poDraft.isLoading) || (isEdit && existing.isLoading)) return <section className="page"><Skeleton /></section>;
 
+    const sourcePoNumber = poDraft.data?.purchase_order?.po_number
+        ?? sourcePo.data?.purchase_order?.po_number
+        ?? null;
+    const sourcePoLabel = sourcePoNumber ?? (header.purchase_order_id ? 'Selected purchase order' : null);
+
     const columns = [
         { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
         ...(fromPo ? [
@@ -123,7 +129,7 @@ export default function GoodsReceiptFormPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Goods Receipts', to: '/goods-receipts' }, { label: fromPo ? `From PO #${poId}` : (isEdit ? 'Edit draft' : 'New') }]} />
+            <Breadcrumbs items={[{ label: 'Goods Receipts', to: '/goods-receipts' }, { label: fromPo ? `From ${sourcePoLabel ?? 'purchase order'}` : (isEdit ? 'Edit draft' : 'New') }]} />
             <header className="page-head"><h1>{isEdit ? 'Edit goods receipt' : 'New goods receipt'}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
@@ -131,7 +137,7 @@ export default function GoodsReceiptFormPage() {
                 <Field label="GRN number" required error={errors.grn_number}><input className="input" value={header.grn_number} onChange={(e) => setHeader({ ...header, grn_number: e.target.value })} /></Field>
                 <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} disabled={fromPo} /></Field>
                 <Field label="Received date" error={errors.receipt_date}><input className="input" type="date" value={header.receipt_date} onChange={(e) => setHeader({ ...header, receipt_date: e.target.value })} /></Field>
-                <Field label="Source PO">{header.purchase_order_id ? `#${header.purchase_order_id}` : <span className="muted">none (ad-hoc receipt)</span>}</Field>
+                <Field label="Source PO">{sourcePoLabel ?? <span className="muted">none (ad-hoc receipt)</span>}</Field>
                 <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
 
