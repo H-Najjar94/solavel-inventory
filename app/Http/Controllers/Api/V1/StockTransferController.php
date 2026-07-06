@@ -40,6 +40,7 @@ class StockTransferController extends ApiController
     public function store(StoreStockTransferRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['transfer_number']);
         try { $t = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']); }
         catch (RuntimeException $e) { return $this->error('transfer_create_failed', $e->getMessage(), 422); }
         return $this->success($t, 201);

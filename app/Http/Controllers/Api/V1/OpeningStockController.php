@@ -43,6 +43,7 @@ class OpeningStockController extends ApiController
     public function store(StoreOpeningStockRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['entry_number']);
         $entry = $this->service->createDraft(
             collect($data)->except('lines')->toArray(),
             $data['lines']

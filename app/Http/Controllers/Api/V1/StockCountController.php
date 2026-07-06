@@ -87,6 +87,7 @@ class StockCountController extends ApiController
     public function store(StoreStockCountRequest $request): JsonResponse
     {
         $data = $request->validated();
+        unset($data['count_number']);
         $count = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
         return $this->success($count, 201);

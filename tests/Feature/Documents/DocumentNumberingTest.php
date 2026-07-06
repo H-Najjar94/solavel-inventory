@@ -75,7 +75,7 @@ class DocumentNumberingTest extends TestCase
     }
 
     #[Test]
-    public function po_numbers_increment_per_org_and_a_typed_number_is_respected(): void
+    public function po_numbers_increment_per_org_and_client_number_is_ignored_on_create(): void
     {
         $this->useTenantA();
         $this->seedDocs();
@@ -83,7 +83,8 @@ class DocumentNumberingTest extends TestCase
         $this->createPo($this->poPayload());                 // PO-000002
         $typed = $this->createPo($this->poPayload(['po_number' => 'CUSTOM-1']));
 
-        $this->assertSame('CUSTOM-1', $typed['data']['po_number']);
+        $this->assertSame('PO-000003', $typed['data']['po_number']);
+        $this->assertNull(PurchaseOrder::query()->where('po_number', 'CUSTOM-1')->first());
         $this->assertNotNull(PurchaseOrder::query()->where('po_number', 'PO-000002')->first());
     }
 
