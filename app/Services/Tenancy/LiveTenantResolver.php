@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
  *   no_access            — org present but user lacks any inventory permission
  *   tenant_missing       — shared tenant DB does not exist
  *   tenant_unmigrated    — DB exists but SolaStock tables not migrated yet
+ *   schema_failed        — DB exists, but required SolaStock schema audit failed
  *   needs_inventory_tenant — alias surfaced to the UI when setup is required
  *   live_ready           — real org + migrated SolaStock tables → real data
  *   demo_preview         — operator-selected safe demo tenant
@@ -32,6 +33,7 @@ class LiveTenantResolver
         private TenantResolver $demoResolver,
         private TenantManager $tenants,
         private InventoryPermissionService $permissions,
+        private TenantSchemaAuditService $schemaAudit,
     ) {}
 
     /** Client id (central organization/client) from the SSO-seeded session. */
@@ -322,14 +324,19 @@ class LiveTenantResolver
             }
 
             $probe = $this->probeTenant($db);
-            if ($probe === 'unreachable') {
+            if ($probe['state'] === 'unreachable') {
                 return $this->result('tenant_unreachable', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'db_unreachable', $clientId);
             }
-            if ($probe === 'missing') {
+            if ($probe['state'] === 'missing') {
                 return $this->result('tenant_missing', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'tenant_missing', $clientId);
             }
-            if ($probe === 'unmigrated') {
+            if ($probe['state'] === 'unmigrated') {
                 return $this->result('tenant_unmigrated', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'migrations_missing', $clientId);
+            }
+            if ($probe['state'] === 'schema_failed') {
+                return $this->result('schema_failed', 'live', 'Schema audit failed', $orgId, $db, $authenticated, $canAccess, 'schema_audit_failed', $clientId, [
+                    'schema_audit' => $probe['audit'] ?? null,
+                ]);
             }
 
             // Ready: real org + migrated SolaStock tables.
@@ -381,18 +388,18 @@ class LiveTenantResolver
         );
     }
 
-    /** @return 'ready'|'missing'|'unmigrated'|'unreachable' */
-    private function probeTenant(string $db): string
+    /** @return array{state:'ready'|'missing'|'unmigrated'|'unreachable'|'schema_failed', audit?:array} */
+    private function probeTenant(string $db): array
     {
         try {
             $exists = collect(DB::connection('mysql')->select(
                 'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [$db]
             ))->isNotEmpty();
         } catch (\Throwable $e) {
-            return 'unreachable';
+            return ['state' => 'unreachable'];
         }
         if (! $exists) {
-            return 'missing';
+            return ['state' => 'missing'];
         }
         try {
             $tables = DB::connection('mysql')->select(
@@ -400,15 +407,23 @@ class LiveTenantResolver
                 [$db, 'stock_ledger']
             );
 
-            return count($tables) > 0 ? 'ready' : 'unmigrated';
+            if (count($tables) === 0) {
+                return ['state' => 'unmigrated'];
+            }
+
+            $audit = $this->schemaAudit->auditDatabase($db, 'mysql');
+
+            return ($audit['ok'] ?? false)
+                ? ['state' => 'ready', 'audit' => $audit]
+                : ['state' => 'schema_failed', 'audit' => $audit];
         } catch (\Throwable $e) {
-            return 'unmigrated';
+            return ['state' => 'unmigrated'];
         }
     }
 
-    private function result(string $state, string $mode, string $badge, ?int $orgId, ?string $db, bool $auth, bool $canAccess, ?string $reason = null, ?int $clientId = null): array
+    private function result(string $state, string $mode, string $badge, ?int $orgId, ?string $db, bool $auth, bool $canAccess, ?string $reason = null, ?int $clientId = null, array $extra = []): array
     {
-        return [
+        return array_merge([
             'state' => $state,
             'mode' => $mode,
             'badge' => $badge,
@@ -419,9 +434,9 @@ class LiveTenantResolver
             'can_access' => $canAccess,
             // An authorized user may activate/provision when the app isn't enabled
             // yet or the tenant tables aren't installed.
-            'can_provision' => $canAccess && in_array($state, ['needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable'], true)
+            'can_provision' => $canAccess && in_array($state, ['needs_activation', 'tenant_unmigrated'], true)
                 && $this->permissions->can(Auth::user(), 'inventory.manage_settings'),
             'reason' => $reason,
-        ];
+        ], $extra);
     }
 }

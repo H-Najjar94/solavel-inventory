@@ -1,5 +1,18 @@
 <!DOCTYPE html>
-<html lang="{{ app()->getLocale() }}" dir="ltr">
+@php
+    $requestedLocale = request()->query('locale');
+    $allowedLocales = ['en', 'ar'];
+    if (in_array($requestedLocale, $allowedLocales, true)) {
+        session(['solastock_locale' => $requestedLocale]);
+    }
+    $locale = session('solastock_locale', app()->getLocale());
+    if (! in_array($locale, $allowedLocales, true)) {
+        $locale = 'en';
+    }
+    app()->setLocale($locale);
+    $dir = $locale === 'ar' ? 'rtl' : 'ltr';
+@endphp
+<html lang="{{ $locale }}" dir="{{ $dir }}">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -20,6 +33,7 @@
             var t = localStorage.getItem("solastock_theme");
             if (!t) t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
             document.documentElement.setAttribute("data-theme", t);
+            window.SOLASTOCK_LOCALE = @json(['locale' => $locale, 'dir' => $dir]);
         })();
     </script>
 

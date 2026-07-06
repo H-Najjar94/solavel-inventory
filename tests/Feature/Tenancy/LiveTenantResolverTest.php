@@ -53,7 +53,7 @@ class LiveTenantResolverTest extends TestCase
         $this->assertSame('live', $s['mode']);
         // DB is unreachable in the test process → a precise setup/unreachable state,
         // NEVER a silent sample fallback for a real org.
-        $this->assertContains($s['state'], ['live_ready', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable']);
+        $this->assertContains($s['state'], ['live_ready', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'schema_failed']);
         $this->assertNotSame('sample_preview', $s['state']);
     }
 
@@ -137,6 +137,7 @@ class LiveTenantResolverTest extends TestCase
             'tenant_missing' => 'setup',
             'tenant_unmigrated' => 'setup',
             'tenant_unreachable' => 'setup',
+            'schema_failed' => 'setup',
             'no_organization' => 'no_organization',
             'no_access' => 'no_access',
             'sample_preview' => 'sample',
@@ -167,6 +168,7 @@ class LiveTenantResolverTest extends TestCase
         $tenants->shouldNotReceive('useTenant');
         $auditor = \Mockery::mock(TenantSchemaAuditService::class);
         $auditor->shouldNotReceive('audit');
+        $auditor->shouldNotReceive('auditDatabase');
 
         $permissions = new class(app(OrganizationContext::class)) extends InventoryPermissionService {
             public function can(?object $user, string $permission): bool
@@ -185,6 +187,82 @@ class LiveTenantResolverTest extends TestCase
 
         $this->assertSame(403, $res->getStatusCode());
         $this->assertSame('forbidden', $res->getData(true)['error']['code']);
+    }
+
+    #[Test]
+    public function schema_audit_reports_missing_database_read_only_without_switching_tenant(): void
+    {
+        $live = \Mockery::mock(LiveTenantResolver::class);
+        $live->shouldReceive('state')->once()->andReturn([
+            'state' => 'tenant_missing',
+            'mode' => 'live',
+            'organization_id' => 660066,
+            'database' => 'tenant_660066',
+            'can_access' => true,
+        ]);
+
+        $tenants = \Mockery::mock(TenantManager::class);
+        $tenants->shouldNotReceive('useTenant');
+        $auditor = \Mockery::mock(TenantSchemaAuditService::class);
+        $auditor->shouldReceive('auditDatabase')->once()->with('tenant_660066', 'mysql')->andReturn([
+            'ok' => false,
+            'status' => 'fail',
+            'database' => 'tenant_660066',
+            'missing_database' => true,
+            'missing_tables' => [],
+            'missing_columns' => [],
+            'missing_indexes' => [],
+            'warnings' => ['Tenant database does not exist.'],
+        ]);
+
+        $permissions = new class(app(OrganizationContext::class)) extends InventoryPermissionService {
+            public function can(?object $user, string $permission): bool
+            {
+                return $permission === 'inventory.manage_settings';
+            }
+        };
+
+        $ctrl = new \App\Http\Controllers\Api\V1\TenantController(
+            app(TenantResolver::class),
+            $live,
+            $tenants,
+        );
+
+        $res = $ctrl->schemaAudit($this->request(['client_id' => 660066, 'selected_central_org_id' => 660066]), $auditor, $permissions);
+        $payload = $res->getData(true);
+
+        $this->assertSame(200, $res->getStatusCode());
+        $this->assertFalse($payload['data']['ok']);
+        $this->assertTrue($payload['data']['missing_database']);
+    }
+
+    #[Test]
+    public function app_provisioning_refuses_missing_database_tenants(): void
+    {
+        $live = \Mockery::mock(LiveTenantResolver::class);
+        $live->shouldReceive('state')->once()->andReturn([
+            'state' => 'tenant_missing',
+            'mode' => 'live',
+            'organization_id' => 660066,
+            'client_id' => 660066,
+            'database' => 'tenant_660066',
+            'can_access' => true,
+            'can_provision' => false,
+        ]);
+
+        $provisioner = \Mockery::mock(SecureTenantProvisioner::class);
+        $provisioner->shouldNotReceive('provisionInventory');
+
+        $ctrl = new \App\Http\Controllers\Api\V1\TenantController(
+            app(TenantResolver::class),
+            $live,
+            app(TenantManager::class),
+        );
+
+        $res = $ctrl->provision($this->request(['client_id' => 660066, 'selected_central_org_id' => 660066]), $provisioner);
+
+        $this->assertSame(409, $res->getStatusCode());
+        $this->assertSame('not_provisionable', $res->getData(true)['error']['code']);
     }
 
     #[Test]

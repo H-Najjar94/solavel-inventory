@@ -50,6 +50,88 @@ class TenantSchemaAuditService
         ];
     }
 
+    public function auditDatabase(string $database, ?string $connection = null, ?array $requirements = null): array
+    {
+        $connection ??= 'mysql';
+        $requirements ??= self::requirements();
+
+        $base = [
+            'ok' => false,
+            'status' => 'fail',
+            'connection' => $connection,
+            'database' => $database,
+            'checked_tables' => array_keys($requirements),
+            'missing_database' => false,
+            'missing_tables' => [],
+            'missing_columns' => [],
+            'missing_indexes' => [],
+            'warnings' => [],
+        ];
+
+        try {
+            $exists = collect(DB::connection($connection)->select(
+                'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ? LIMIT 1',
+                [$database]
+            ))->isNotEmpty();
+        } catch (\Throwable $e) {
+            return array_merge($base, [
+                'error' => 'schema_audit_unreachable',
+                'message' => $e->getMessage(),
+                'warnings' => ['Could not read information_schema for schema audit.'],
+            ]);
+        }
+
+        if (! $exists) {
+            return array_merge($base, [
+                'missing_database' => true,
+                'warnings' => ['Tenant database does not exist.'],
+            ]);
+        }
+
+        $tables = array_keys($requirements);
+        $placeholders = implode(',', array_fill(0, count($tables), '?'));
+        $params = array_merge([$database], $tables);
+
+        $existingTables = collect(DB::connection($connection)->select(
+            "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ({$placeholders})",
+            $params
+        ))->pluck('TABLE_NAME')->map(fn ($name) => (string) $name)->all();
+
+        $existingSet = array_flip($existingTables);
+        $missingTables = [];
+        $missingColumns = [];
+        $missingIndexes = [];
+
+        foreach ($requirements as $table => $checks) {
+            if (! isset($existingSet[$table])) {
+                $missingTables[] = $table;
+                continue;
+            }
+
+            foreach (($checks['columns'] ?? []) as $column) {
+                if (! $this->columnExistsInDatabase($connection, $database, $table, $column)) {
+                    $missingColumns[] = "{$table}.{$column}";
+                }
+            }
+
+            foreach (($checks['indexes'] ?? []) as $index) {
+                if (! $this->indexExistsInDatabase($connection, $database, $table, $index)) {
+                    $missingIndexes[] = "{$table}.{$index}";
+                }
+            }
+        }
+
+        $failures = array_merge($missingTables, $missingColumns, $missingIndexes);
+
+        return array_merge($base, [
+            'ok' => $failures === [],
+            'status' => $failures === [] ? 'pass' : 'fail',
+            'missing_tables' => $missingTables,
+            'missing_columns' => $missingColumns,
+            'missing_indexes' => $missingIndexes,
+        ]);
+    }
+
     public static function requirements(): array
     {
         return [
@@ -81,6 +163,22 @@ class TenantSchemaAuditService
     private function indexExists(string $connection, string $table, string $index): bool
     {
         $database = DB::connection($connection)->getDatabaseName();
+
+        return $this->indexExistsInDatabase($connection, $database, $table, $index);
+    }
+
+    private function columnExistsInDatabase(string $connection, string $database, string $table, string $column): bool
+    {
+        $rows = DB::connection($connection)->select(
+            'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+            [$database, $table, $column]
+        );
+
+        return $rows !== [];
+    }
+
+    private function indexExistsInDatabase(string $connection, string $database, string $table, string $index): bool
+    {
         $rows = DB::connection($connection)->select(
             'SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
             [$database, $table, $index]
