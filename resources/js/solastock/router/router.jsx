@@ -2,6 +2,8 @@ import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from '../layouts/AppShell.jsx';
 import { reportPageView } from '../utils/reportPageView.js';
+import { EmptyState, Skeleton } from '../components/ui.jsx';
+import { useCan, useMeta } from '../stores/meta.jsx';
 import DashboardPage from '../pages/DashboardPage.jsx';
 import ItemsPage from '../pages/ItemsPage.jsx';
 import ItemDetailPage from '../pages/ItemDetailPage.jsx';
@@ -61,6 +63,29 @@ import NotFoundPage from '../pages/NotFoundPage.jsx';
 // (https://solavel.com/inventory/onboarding). Apache routes that path away from
 // this SPA, so the former in-app OnboardingPage is intentionally not wired up.
 
+function RequirePermission({ permission, children }) {
+    const meta = useMeta();
+    const can = useCan();
+
+    if (meta.isPlaceholderData) {
+        return <section className="page"><Skeleton rows={4} /></section>;
+    }
+
+    if (!can(permission)) {
+        return (
+            <section className="page">
+                <EmptyState title="Access denied" hint="This page requires additional SolaStock permissions." />
+            </section>
+        );
+    }
+
+    return children;
+}
+
+function protectedElement(element, permission) {
+    return <RequirePermission permission={permission}>{element}</RequirePermission>;
+}
+
 // The SPA is mounted by Blade at /inventory/dashboard; client routes live under
 // the /inventory basename so deep links resolve under the Apache mount.
 export const router = createBrowserRouter(
@@ -72,47 +97,47 @@ export const router = createBrowserRouter(
                 { index: true, element: <Navigate to="/dashboard" replace /> },
                 { path: 'dashboard', element: <DashboardPage /> },
                 { path: 'items', element: <ItemsPage /> },
-                { path: 'items/new', element: <ItemFormPage /> },
+                { path: 'items/new', element: protectedElement(<ItemFormPage />, 'inventory.manage_items') },
                 { path: 'items/:id', element: <ItemDetailPage /> },
-                { path: 'items/:id/edit', element: <ItemFormPage /> },
+                { path: 'items/:id/edit', element: protectedElement(<ItemFormPage />, 'inventory.manage_items') },
                 { path: 'warehouses', element: <WarehousesPage /> },
-                { path: 'warehouses/new', element: <WarehouseFormPage /> },
+                { path: 'warehouses/new', element: protectedElement(<WarehouseFormPage />, 'inventory.manage_warehouses') },
                 { path: 'warehouses/:id', element: <WarehouseDetailPage /> },
-                { path: 'warehouses/:id/edit', element: <WarehouseFormPage /> },
+                { path: 'warehouses/:id/edit', element: protectedElement(<WarehouseFormPage />, 'inventory.manage_warehouses') },
                 { path: 'suppliers', element: <SuppliersPage /> },
-                { path: 'suppliers/new', element: <SupplierFormPage /> },
+                { path: 'suppliers/new', element: protectedElement(<SupplierFormPage />, 'inventory.manage_items') },
                 { path: 'suppliers/:id', element: <SupplierDetailPage /> },
-                { path: 'suppliers/:id/edit', element: <SupplierFormPage /> },
+                { path: 'suppliers/:id/edit', element: protectedElement(<SupplierFormPage />, 'inventory.manage_items') },
                 { path: 'balances', element: <BalancesPage /> },
                 { path: 'opening-stock', element: <OpeningStockPage /> },
-                { path: 'opening-stock/new', element: <OpeningStockFormPage /> },
+                { path: 'opening-stock/new', element: protectedElement(<OpeningStockFormPage />, 'inventory.manage_opening_stock') },
                 { path: 'opening-stock/:id', element: <OpeningStockDetailPage /> },
-                { path: 'opening-stock/:id/edit', element: <OpeningStockFormPage /> },
+                { path: 'opening-stock/:id/edit', element: protectedElement(<OpeningStockFormPage />, 'inventory.manage_opening_stock') },
                 { path: 'adjustments', element: <AdjustmentsPage /> },
-                { path: 'adjustments/new', element: <AdjustmentFormPage /> },
+                { path: 'adjustments/new', element: protectedElement(<AdjustmentFormPage />, 'inventory.manage_adjustments') },
                 { path: 'adjustments/:id', element: <AdjustmentDetailPage /> },
-                { path: 'adjustments/:id/edit', element: <AdjustmentFormPage /> },
+                { path: 'adjustments/:id/edit', element: protectedElement(<AdjustmentFormPage />, 'inventory.manage_adjustments') },
                 { path: 'transfers', element: <TransfersPage /> },
-                { path: 'transfers/new', element: <TransferFormPage /> },
+                { path: 'transfers/new', element: protectedElement(<TransferFormPage />, 'inventory.manage_adjustments') },
                 { path: 'transfers/:id', element: <TransferDetailPage /> },
-                { path: 'transfers/:id/edit', element: <TransferFormPage /> },
+                { path: 'transfers/:id/edit', element: protectedElement(<TransferFormPage />, 'inventory.manage_adjustments') },
                 { path: 'counts', element: <CountsPage /> },
-                { path: 'counts/new', element: <CountFormPage /> },
+                { path: 'counts/new', element: protectedElement(<CountFormPage />, 'inventory.manage_adjustments') },
                 { path: 'counts/:id', element: <CountDetailPage /> },
-                { path: 'counts/:id/edit', element: <CountFormPage /> },
+                { path: 'counts/:id/edit', element: protectedElement(<CountFormPage />, 'inventory.manage_adjustments') },
                 { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
-                { path: 'purchase-orders/new', element: <PurchaseOrderFormPage /> },
+                { path: 'purchase-orders/new', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_adjustments') },
                 { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
-                { path: 'purchase-orders/:id/edit', element: <PurchaseOrderFormPage /> },
+                { path: 'purchase-orders/:id/edit', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_adjustments') },
                 { path: 'goods-receipts', element: <GoodsReceiptsPage /> },
-                { path: 'goods-receipts/new', element: <GoodsReceiptFormPage /> },
-                { path: 'goods-receipts/from-po/:poId', element: <GoodsReceiptFormPage /> },
+                { path: 'goods-receipts/new', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.manage_adjustments') },
+                { path: 'goods-receipts/from-po/:poId', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.manage_adjustments') },
                 { path: 'goods-receipts/:id', element: <GoodsReceiptDetailPage /> },
-                { path: 'goods-receipts/:id/edit', element: <GoodsReceiptFormPage /> },
+                { path: 'goods-receipts/:id/edit', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.manage_adjustments') },
                 { path: 'sales-orders', element: <SalesOrdersPage /> },
-                { path: 'sales-orders/new', element: <SalesOrderFormPage /> },
+                { path: 'sales-orders/new', element: protectedElement(<SalesOrderFormPage />, 'inventory.manage_sales_orders') },
                 { path: 'sales-orders/:id', element: <SalesOrderDetailPage /> },
-                { path: 'sales-orders/:id/edit', element: <SalesOrderFormPage /> },
+                { path: 'sales-orders/:id/edit', element: protectedElement(<SalesOrderFormPage />, 'inventory.manage_sales_orders') },
                 { path: 'pick-lists', element: <PickListsPage /> },
                 { path: 'pick-lists/:id', element: <PickListDetailPage /> },
                 { path: 'packs', element: <PacksPage /> },
@@ -120,21 +145,21 @@ export const router = createBrowserRouter(
                 { path: 'shipments', element: <ShipmentsPage /> },
                 { path: 'shipments/:id', element: <ShipmentDetailPage /> },
                 { path: 'sales-returns', element: <SalesReturnsPage /> },
-                { path: 'sales-returns/new', element: <SalesReturnFormPage /> },
+                { path: 'sales-returns/new', element: protectedElement(<SalesReturnFormPage />, 'inventory.manage_returns') },
                 { path: 'sales-returns/:id', element: <SalesReturnDetailPage /> },
-                { path: 'sales-returns/:id/edit', element: <SalesReturnFormPage /> },
+                { path: 'sales-returns/:id/edit', element: protectedElement(<SalesReturnFormPage />, 'inventory.manage_returns') },
                 { path: 'traceability', element: <TraceabilityPage /> },
                 { path: 'traceability/lots', element: <LotsPage /> },
                 { path: 'traceability/lots/:id', element: <LotDetailPage /> },
                 { path: 'traceability/serials', element: <SerialsPage /> },
                 { path: 'traceability/serials/:id', element: <SerialDetailPage /> },
                 { path: 'recalls', element: <RecallsPage /> },
-                { path: 'recalls/new', element: <RecallFormPage /> },
+                { path: 'recalls/new', element: protectedElement(<RecallFormPage />, 'inventory.manage_recalls') },
                 { path: 'recalls/:id', element: <RecallDetailPage /> },
                 { path: 'reports', element: <ReportsPage /> },
-                { path: 'settings', element: <SettingsPage /> },
-                { path: 'settings/solabooks', element: <IntegrationSettingsPage /> },
-                { path: 'integrations/solabooks/events', element: <IntegrationEventsPage /> },
+                { path: 'settings', element: protectedElement(<SettingsPage />, 'inventory.manage_settings') },
+                { path: 'settings/solabooks', element: protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view') },
+                { path: 'integrations/solabooks/events', element: protectedElement(<IntegrationEventsPage />, 'inventory.integration.view') },
                 { path: 'ledger', element: <LedgerPage /> },
                 { path: '*', element: <NotFoundPage /> },
             ],

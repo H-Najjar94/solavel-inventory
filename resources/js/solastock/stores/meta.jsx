@@ -7,28 +7,22 @@ import { api } from '../services/api.js';
 const MetaContext = createContext(null);
 
 const FALLBACK_META = {
-    permissions: [
-        'inventory.view_dashboard', 'inventory.view_items', 'inventory.manage_items',
-        'inventory.view_warehouses', 'inventory.manage_warehouses', 'inventory.view_stock',
-        'inventory.manage_opening_stock', 'inventory.manage_adjustments',
-        'inventory.view_ledger', 'inventory.view_reports', 'inventory.manage_settings',
-    ],
+    permissions: [],
     settings: null,
     lookups: { categories: [], brands: [], units: [] },
     primary_color: '#e09921',
 };
 
 export function MetaProvider({ children }) {
-    // Non-blocking: render the shell immediately using the permissive fallback,
-    // then hydrate real permissions/lookups when /meta resolves. Avoids a
-    // full-screen loading gate on first paint.
-    const { data, isMock } = useApiQuery(['meta'], api.meta, {
+    // Non-blocking: render the shell immediately, but expose no permissions
+    // until /meta resolves. Direct routes must fail closed for restricted users.
+    const { data, isMock, isPlaceholderData } = useApiQuery(['meta'], api.meta, {
         fallback: FALLBACK_META,
         placeholderData: FALLBACK_META,
     });
 
     return (
-        <MetaContext.Provider value={{ ...(data ?? FALLBACK_META), isMock }}>
+        <MetaContext.Provider value={{ ...(data ?? FALLBACK_META), isMock, isPlaceholderData }}>
             {children}
         </MetaContext.Provider>
     );

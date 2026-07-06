@@ -7,6 +7,7 @@ use App\Services\Tenancy\LiveTenantResolver;
 use App\Services\Tenancy\TenantManager;
 use App\Services\Tenancy\TenantResolver;
 use App\Services\Tenancy\TenantSchemaAuditService;
+use App\Services\Access\InventoryPermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -284,7 +285,7 @@ class TenantController extends ApiController
         return $this->success(array_merge(['provisioned' => true], $result));
     }
 
-    public function schemaAudit(Request $request, TenantSchemaAuditService $auditor): JsonResponse
+    public function schemaAudit(Request $request, TenantSchemaAuditService $auditor, InventoryPermissionService $permissions): JsonResponse
     {
         $s = $this->live->state($request);
         if (! in_array($s['state'], ['live_ready', 'tenant_unmigrated'], true) || ! $s['organization_id'] || ! $s['database']) {
@@ -293,7 +294,7 @@ class TenantController extends ApiController
                 'database' => $s['database'],
             ]);
         }
-        if (! $s['can_access']) {
+        if (! $s['can_access'] || ! $permissions->can(Auth::user(), 'inventory.manage_settings')) {
             return $this->error('forbidden', 'You are not allowed to audit this SolaStock workspace.', 403);
         }
 

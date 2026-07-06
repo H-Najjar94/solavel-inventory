@@ -106,4 +106,18 @@ class ReportOrgIsolationTest extends TestCase
         $m = app(DashboardMetricsService::class)->metrics();
         $this->assertSame(0, $m['total_skus'], 'No org context must expose no data (fail closed)');
     }
+
+    #[Test]
+    public function operational_reports_execute_with_current_schema(): void
+    {
+        $this->useTenantA();
+        app(OrganizationContext::class)->set(self::ORG_A);
+
+        $reports = app(InventoryReportService::class);
+        foreach (['warehouse-stock', 'pick-list', 'shipment'] as $key) {
+            $result = $reports->run($key, new ReportFilters(limit: 5));
+            $this->assertNotEmpty($result['columns'], "{$key} should declare visible columns");
+            $this->assertIsIterable($result['rows'], "{$key} should return iterable rows");
+        }
+    }
 }
