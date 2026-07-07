@@ -35,6 +35,11 @@ Route::prefix('v1/tenant')->group(function () {
     Route::post('/select-org', [\App\Http\Controllers\Api\V1\TenantController::class, 'selectOrganization'])->name('api.v1.tenant.select-org');
 });
 
+Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
+    Route::post('sync/events', \App\Http\Controllers\Api\Tenancy\SyncEventsController::class)
+        ->name('api.tenancy.sync.events');
+});
+
 Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
 
     // Client-side SPA navigation tracking: forwards one page_view per

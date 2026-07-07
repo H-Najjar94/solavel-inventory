@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\Access\InventoryPermissionService;
+use App\Services\Entitlements\InventoryCommercialEntitlementService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,7 +15,10 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureInventoryPermission
 {
-    public function __construct(private InventoryPermissionService $permissions) {}
+    public function __construct(
+        private InventoryPermissionService $permissions,
+        private InventoryCommercialEntitlementService $entitlements,
+    ) {}
 
     public function handle(Request $request, Closure $next, string $permission): Response
     {
@@ -27,6 +31,26 @@ class EnsureInventoryPermission
             }
 
             abort(403, "Missing permission: {$permission}");
+        }
+
+        $commercial = $this->entitlements->checkPermission($permission);
+        if (! $commercial['allowed']) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'commercial_entitlement_required',
+                        'message' => 'This SolaStock feature is not available for the current plan or entitlement state.',
+                        'reason_code' => $commercial['reason_code'],
+                        'access_mode' => $commercial['access_mode'],
+                        'tier' => $commercial['tier'],
+                        'feature' => $commercial['feature'],
+                        'snapshot' => $commercial['snapshot'],
+                    ],
+                ], $commercial['status']);
+            }
+
+            abort($commercial['status'], 'This SolaStock feature is not available for the current plan or entitlement state.');
         }
 
         return $next($request);

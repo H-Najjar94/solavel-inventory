@@ -21,7 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 class BounceToParentForSso
 {
     /** Path fragments (under the /inventory mount) that must never bounce. */
-    private const SKIP = ['api/v1/tenant', 'sso', 'up', 'health'];
+    private const SKIP = ['api/v1/tenant', 'api/tenancy/sync', 'sso', 'up', 'health'];
 
     /** One-shot cookie that prevents an SSO bounce loop (TTL minutes). */
     private const TRIED_COOKIE = 'inv_sso_tried';
