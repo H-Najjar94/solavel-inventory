@@ -34,6 +34,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'perm' => \App\Http\Middleware\EnsureInventoryPermission::class,
             'inv.tenant' => \App\Http\Middleware\ResolveInventoryTenant::class,
+            'sync.signature' => \App\Http\Middleware\VerifySolavelSyncSignature::class,
+        ]);
+
+        // Central sync posts are authenticated by the HMAC signature middleware,
+        // not by the browser session CSRF token used by the same-origin SPA API.
+        $middleware->validateCsrfTokens(except: [
+            'api/tenancy/sync/events',
         ]);
 
         // SSO, the Solavel way: consume a handoff token minted by the central app

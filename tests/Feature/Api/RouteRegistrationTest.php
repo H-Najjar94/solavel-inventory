@@ -31,6 +31,7 @@ class RouteRegistrationTest extends TestCase
             'api.v1.packs.index', 'api.v1.packs.store', 'api.v1.packs.packed',
             'api.v1.shipments.index', 'api.v1.shipments.store', 'api.v1.shipments.post', 'api.v1.shipments.from-so',
             'api.v1.sales-returns.index', 'api.v1.sales-returns.store', 'api.v1.sales-returns.post',
+            'api.tenancy.sync.events',
         ] as $name) {
             $this->assertContains($name, $names, "Missing route: {$name}");
         }
