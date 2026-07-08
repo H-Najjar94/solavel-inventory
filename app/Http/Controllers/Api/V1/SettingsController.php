@@ -101,6 +101,36 @@ class SettingsController extends ApiController
         return $this->success(ItemBrand::create($data)->fresh(), 201);
     }
 
+    public function storeAdjustmentReasonCode(Request $request): JsonResponse
+    {
+        $orgId = $this->context->idOrFail();
+        $data = $request->validate([
+            'code' => ['required', 'string', 'max:50'],
+            'label' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $code = strtolower(trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '_', $data['code']), '_'));
+        if ($code === '') {
+            return $this->error('invalid_reason_code', 'Reason code must contain at least one letter or number.', 422);
+        }
+
+        $settings = InventorySetting::query()->firstOrCreate(['organization_id' => $orgId]);
+        $codes = collect($settings->adjustment_reason_codes ?? [])
+            ->reject(fn ($row) => ($row['code'] ?? null) === $code)
+            ->values()
+            ->all();
+
+        $codes[] = [
+            'code' => $code,
+            'label' => $data['label'] ?: str_replace('_', ' ', ucfirst($code)),
+            'active' => true,
+        ];
+
+        $settings->forceFill(['adjustment_reason_codes' => $codes])->save();
+
+        return $this->success($settings->fresh(), 201);
+    }
+
     public function storeUnitConversion(Request $request): JsonResponse
     {
         $data = $request->validate([

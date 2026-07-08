@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Models\Tenant\InventorySetting;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreStockAdjustmentRequest extends FormRequest
 {
@@ -53,5 +55,31 @@ class StoreStockAdjustmentRequest extends FormRequest
             'lines.*.account_ref' => ['nullable', 'string', 'max:100'],
             'lines.*.notes' => ['nullable', 'string'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $codes = collect(InventorySetting::query()->first()?->adjustment_reason_codes ?? [])
+                ->filter(fn ($code) => ($code['active'] ?? true) !== false)
+                ->pluck('code')
+                ->filter()
+                ->values();
+
+            if ($codes->isEmpty()) {
+                return;
+            }
+
+            $reason = $this->input('reason_code');
+            if (! is_string($reason) || $reason === '') {
+                $validator->errors()->add('reason_code', 'Select an adjustment reason.');
+
+                return;
+            }
+
+            if (! $codes->contains($reason)) {
+                $validator->errors()->add('reason_code', 'The selected adjustment reason is not configured.');
+            }
+        });
     }
 }

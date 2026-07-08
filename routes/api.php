@@ -372,6 +372,7 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);
         Route::post('/settings/unit-conversions', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnitConversion']);
         Route::post('/settings/warehouse-reorder-rules', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeWarehouseReorderRule']);
+        Route::post('/settings/adjustment-reason-codes', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeAdjustmentReasonCode']);
         Route::post('/settings/categories', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCategory']);
         Route::post('/settings/brands', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeBrand']);
     });
