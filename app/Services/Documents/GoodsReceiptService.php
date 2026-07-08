@@ -4,6 +4,7 @@ namespace App\Services\Documents;
 
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -26,6 +27,7 @@ class GoodsReceiptService
         private \App\Services\Integration\IntegrationOutboxService $outbox,
         private \App\Services\Traceability\LotService $lots,
         private \App\Services\Traceability\SerialService $serials,
+        private UnitConversionResolver $conversions,
     ) {}
 
     protected function lotService(): \App\Services\Traceability\LotService
@@ -114,6 +116,13 @@ class GoodsReceiptService
         $out = [];
         foreach ($lines as $line) {
             $cap = $this->resolveCapture($line, $orgId, GoodsReceipt::class, $grnId);
+            if ($cap['serial_ids'] === []) {
+                $originalAccepted = $line['accepted_qty'] ?? null;
+                $line = $this->conversions->normalizeLine($line, 'received_qty');
+                if ($originalAccepted !== null && ! empty($line['entered_unit_id'])) {
+                    $line['accepted_qty'] = Decimal::qty(Decimal::mul((string) $originalAccepted, (string) $line['unit_conversion_factor']));
+                }
+            }
 
             $base = [
                 'organization_id' => $orgId,
@@ -121,7 +130,10 @@ class GoodsReceiptService
                 'item_id' => $line['item_id'],
                 'variant_id' => $line['variant_id'] ?? null,
                 'rejected_qty' => Decimal::qty((string) ($line['rejected_qty'] ?? '0')),
-                'unit_cost' => Decimal::cost((string) ($line['unit_cost'] ?? '0')),
+                'unit_cost' => $this->baseUnitCost((string) ($line['unit_cost'] ?? '0'), $line['unit_conversion_factor'] ?? null),
+                'entered_qty' => $line['entered_qty'] ?? null,
+                'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
                 'lot_id' => $cap['lot_id'],
                 'bin_id' => $line['bin_id'] ?? null,
                 'expiry_date' => $cap['expiry_date'],
@@ -253,5 +265,14 @@ class GoodsReceiptService
         $anyReceived = $po->lines->contains(fn ($l) => Decimal::gt((string) $l->received_qty, '0'));
         $po->status = $allReceived ? 'received' : ($anyReceived ? 'partially_received' : $po->status);
         $po->save();
+    }
+
+    private function baseUnitCost(string $enteredUnitCost, ?string $factor): string
+    {
+        if ($factor && Decimal::gt($factor, '0')) {
+            return Decimal::cost(Decimal::div($enteredUnitCost, $factor));
+        }
+
+        return Decimal::cost($enteredUnitCost);
     }
 }

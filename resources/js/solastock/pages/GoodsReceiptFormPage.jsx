@@ -7,10 +7,11 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
-import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
+import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, TraceabilityRequiredBadge } from '../components/traceability.jsx';
 
-const emptyLine = () => ({ item_id: null, received_qty: '', accepted_qty: '', unit_cost: '', bin_id: null, purchase_order_line_id: null, ordered_qty: null, remaining_qty: null, lot_code: '', expiry_date: '', serials: [] });
+const emptyLine = () => ({ item_id: null, received_qty: '', accepted_qty: '', entered_unit_id: null, unit_cost: '', bin_id: null, purchase_order_line_id: null, ordered_qty: null, remaining_qty: null, lot_code: '', expiry_date: '', serials: [] });
+const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function GoodsReceiptFormPage() {
     const { id, poId } = useParams();
@@ -34,7 +35,10 @@ export default function GoodsReceiptFormPage() {
             setLines((poDraft.data.lines ?? []).map((l) => ({
                 item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
                 ordered_qty: l.ordered_qty, remaining_qty: l.remaining_qty,
-                received_qty: l.received_qty, accepted_qty: l.received_qty, unit_cost: l.unit_cost, bin_id: null,
+                received_qty: l.entered_qty ?? l.received_qty,
+                accepted_qty: l.entered_qty ?? l.received_qty,
+                entered_unit_id: l.entered_unit_id ?? null,
+                unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), bin_id: null,
             })));
         }
     }, [fromPo, poDraft.data]);
@@ -46,7 +50,7 @@ export default function GoodsReceiptFormPage() {
             const g = existing.data.grn;
             if (g.status !== 'draft') { toast.push('Only draft GRNs can be edited.', 'error'); nav(`/goods-receipts/${id}`); return; }
             setHeader({ grn_number: g.grn_number, purchase_order_id: g.purchase_order_id, supplier_id: g.supplier_id, warehouse_id: g.warehouse_id, receipt_date: g.receipt_date, notes: g.notes ?? '' });
-            setLines((g.lines ?? []).map((l) => ({ item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id, received_qty: l.received_qty, accepted_qty: l.accepted_qty, unit_cost: l.unit_cost, bin_id: l.bin_id, ordered_qty: null, remaining_qty: null })));
+            setLines((g.lines ?? []).map((l) => ({ item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id, received_qty: l.entered_qty ?? l.received_qty, accepted_qty: l.entered_qty ?? l.accepted_qty, entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), bin_id: l.bin_id, ordered_qty: null, remaining_qty: null })));
         }
     }, [isEdit, existing.data]);
 
@@ -69,6 +73,8 @@ export default function GoodsReceiptFormPage() {
                     return {
                         item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
                         received_qty: l.received_qty, accepted_qty: l.accepted_qty || l.received_qty,
+                        entered_qty: l.received_qty,
+                        entered_unit_id: l.entered_unit_id || undefined,
                         unit_cost: l.unit_cost, bin_id: l.bin_id,
                         lot_code: l.lot_code || undefined,
                         expiry_date: l.expiry_date || undefined,
@@ -107,6 +113,7 @@ export default function GoodsReceiptFormPage() {
                 ? <span className="muted" title="Quantity is the serial count">{(l.serials ?? []).length}</span>
                 : <QuantityInput value={l.received_qty} onChange={(v) => setLine(i, { received_qty: v, accepted_qty: v })} />;
         } },
+        { key: 'unit', label: 'Unit', width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'trace', label: 'Lot / Serial / Expiry', render: (l, i) => {
             const t = trackingOf(l.item_id);
             if (!t.tracking_type || t.tracking_type === 'none') return <span className="muted">—</span>;

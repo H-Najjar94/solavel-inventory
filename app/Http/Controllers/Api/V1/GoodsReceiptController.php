@@ -39,7 +39,7 @@ class GoodsReceiptController extends ApiController
     public function show(GoodsReceipt $goods_receipt): JsonResponse
     {
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
-        $goods_receipt->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $goods_receipt->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code']);
         $goods_receipt->setAttribute('warehouse_name', $goods_receipt->warehouse?->name);
         $goods_receipt->setAttribute('supplier_name', $goods_receipt->supplier?->name);
         $ledger = StockLedger::query()->where('source_type', GoodsReceipt::class)->where('source_id', $goods_receipt->id)->get();
@@ -85,9 +85,13 @@ class GoodsReceiptController extends ApiController
 
     public function store(StoreGoodsReceiptRequest $request): JsonResponse
     {
-        $data = $request->validated();
-        unset($data['grn_number']);
-        $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
+        try {
+            $data = $request->validated();
+            unset($data['grn_number']);
+            $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
+        } catch (RuntimeException $e) {
+            return $this->error('grn_create_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($grn, 201);
     }

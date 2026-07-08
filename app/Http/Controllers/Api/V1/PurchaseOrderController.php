@@ -7,11 +7,13 @@ use App\Http\Requests\Api\StorePurchaseOrderRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\PurchaseOrder;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Purchase Orders. POs never move stock (GRN does). Thin controller; totals are
@@ -19,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  */
 class PurchaseOrderController extends ApiController
 {
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(private OrganizationContext $context, private UnitConversionResolver $conversions) {}
 
     private function conn(): string
     {
@@ -48,7 +50,7 @@ class PurchaseOrderController extends ApiController
     {
         // Eager-load names (org-scoped by each model's global scope) so the detail
         // page shows names, not raw #ids.
-        $purchase_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $purchase_order->load(['lines.item:id,name,sku,base_unit_id', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code']);
         $purchase_order->setAttribute('warehouse_name', $purchase_order->warehouse?->name);
         $purchase_order->setAttribute('supplier_name', $purchase_order->supplier?->name);
 
@@ -80,24 +82,28 @@ class PurchaseOrderController extends ApiController
         $data = $request->validated();
         unset($data['po_number']);
         $orgId = $this->context->idOrFail();
-        $po = DB::connection($this->conn())->transaction(function () use ($data, $orgId) {
-            // Server-issued PO number. Ignore client-submitted numbers on create.
-            $poNumber = \App\Services\Documents\Support\DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
+        try {
+            $po = DB::connection($this->conn())->transaction(function () use ($data, $orgId) {
+                // Server-issued PO number. Ignore client-submitted numbers on create.
+                $poNumber = \App\Services\Documents\Support\DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
 
-            $po = PurchaseOrder::create(collect($data)->except('lines')
-                // Drop a null currency_code so the column's DB default (SAR) applies
-                // — it's a NOT NULL column; sending null would fail the insert.
-                ->reject(fn ($v, $k) => $k === 'currency_code' && $v === null)
-                ->merge([
-                    'po_number' => $poNumber,
-                    'status' => 'draft',
-                    'order_date' => $data['order_date'] ?? now()->toDateString(),
-                ])->toArray());
-            $this->syncLines($po, $data['lines']);
-            $this->audit('purchase_order.created', $po);
+                $po = PurchaseOrder::create(collect($data)->except('lines')
+                    // Drop a null currency_code so the column's DB default (SAR) applies
+                    // — it's a NOT NULL column; sending null would fail the insert.
+                    ->reject(fn ($v, $k) => $k === 'currency_code' && $v === null)
+                    ->merge([
+                        'po_number' => $poNumber,
+                        'status' => 'draft',
+                        'order_date' => $data['order_date'] ?? now()->toDateString(),
+                    ])->toArray());
+                $this->syncLines($po, $data['lines']);
+                $this->audit('purchase_order.created', $po);
 
-            return $po->fresh('lines');
-        });
+                return $po->fresh('lines');
+            });
+        } catch (RuntimeException $e) {
+            return $this->error('po_create_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($po, 201);
     }
@@ -108,14 +114,18 @@ class PurchaseOrderController extends ApiController
             return $this->error('po_not_draft', 'Only a draft PO can be edited.', 422);
         }
         $data = $request->validated();
-        $po = DB::connection($this->conn())->transaction(function () use ($data, $purchase_order) {
-            $purchase_order->update(collect($data)->except('lines')->toArray());
-            $purchase_order->lines()->delete();
-            $this->syncLines($purchase_order, $data['lines']);
-            $this->audit('purchase_order.updated', $purchase_order);
+        try {
+            $po = DB::connection($this->conn())->transaction(function () use ($data, $purchase_order) {
+                $purchase_order->update(collect($data)->except('lines')->toArray());
+                $purchase_order->lines()->delete();
+                $this->syncLines($purchase_order, $data['lines']);
+                $this->audit('purchase_order.updated', $purchase_order);
 
-            return $purchase_order->fresh('lines');
-        });
+                return $purchase_order->fresh('lines');
+            });
+        } catch (RuntimeException $e) {
+            return $this->error('po_update_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($po);
     }
@@ -148,13 +158,18 @@ class PurchaseOrderController extends ApiController
         $orgId = $this->context->idOrFail();
         $subtotal = '0';
         foreach ($lines as $line) {
-            $subtotal = Decimal::add($subtotal, Decimal::mul((string) $line['ordered_qty'], (string) ($line['unit_price'] ?? '0')));
+            $line = $this->conversions->normalizeLine($line, 'ordered_qty');
+            $unitPrice = $this->baseUnitCost((string) ($line['unit_price'] ?? '0'), $line['unit_conversion_factor'] ?? null);
+            $subtotal = Decimal::add($subtotal, Decimal::mul((string) $line['ordered_qty'], $unitPrice));
             $po->lines()->create([
                 'organization_id' => $orgId,
                 'item_id' => $line['item_id'],
                 'variant_id' => $line['variant_id'] ?? null,
                 'ordered_qty' => Decimal::qty((string) $line['ordered_qty']),
-                'unit_price' => Decimal::cost((string) ($line['unit_price'] ?? '0')),
+                'entered_qty' => $line['entered_qty'] ?? null,
+                'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
+                'unit_price' => $unitPrice,
                 'tax_code' => $line['tax_code'] ?? null,
                 'expected_date' => $line['expected_date'] ?? null,
                 'notes' => $line['notes'] ?? null,
@@ -163,6 +178,15 @@ class PurchaseOrderController extends ApiController
         $po->subtotal = Decimal::money($subtotal);
         $po->total = Decimal::money($subtotal); // tax/discount placeholder
         $po->save();
+    }
+
+    private function baseUnitCost(string $enteredUnitCost, ?string $factor): string
+    {
+        if ($factor && Decimal::gt($factor, '0')) {
+            return Decimal::cost(Decimal::div($enteredUnitCost, $factor));
+        }
+
+        return Decimal::cost($enteredUnitCost);
     }
 
     private function audit(string $action, PurchaseOrder $po): void

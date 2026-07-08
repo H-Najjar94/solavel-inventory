@@ -80,6 +80,20 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.primary');
     Route::delete('/items/{item}/barcodes/{barcode}', [ItemController::class, 'destroyBarcode'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.destroy');
+    Route::get('/items/{item}/labels', [ItemController::class, 'labelSheet'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.items.labels');
+    Route::post('/items/{item}/variants', [ItemController::class, 'storeVariant'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.variants.store');
+    Route::put('/items/{item}/variants/{variant}', [ItemController::class, 'updateVariant'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.variants.update');
+    Route::delete('/items/{item}/variants/{variant}', [ItemController::class, 'destroyVariant'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.variants.destroy');
+    Route::post('/items/{item}/supplier-prices', [ItemController::class, 'storeSupplierPrice'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.store');
+    Route::put('/items/{item}/supplier-prices/{price}', [ItemController::class, 'updateSupplierPrice'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.update');
+    Route::delete('/items/{item}/supplier-prices/{price}', [ItemController::class, 'destroySupplierPrice'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.destroy');
 
     // Item images — PRIVATE storage, served only via authenticated org-scoped
     // routes. View/serve = view_items (viewers included); mutate = manage_items.
@@ -93,6 +107,14 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_items')->name('api.v1.item-images.primary');
     Route::delete('/item-images/{image}', [\App\Http\Controllers\Api\V1\ItemImageController::class, 'destroy'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.item-images.destroy');
+    Route::get('/items/{item}/attachments', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'index'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.items.attachments.index');
+    Route::post('/items/{item}/attachments', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'store'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.attachments.store');
+    Route::get('/item-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'show'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.item-attachments.show');
+    Route::delete('/item-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'destroy'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-attachments.destroy');
 
     // Warehouses (+ nested zones/bins)
     Route::get('/warehouses', [WarehouseController::class, 'index'])
@@ -124,6 +146,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_stock')->name('api.v1.opening.show');
     Route::post('/opening-stock', [OpeningStockController::class, 'store'])
         ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.store');
+    Route::post('/opening-stock/import', [OpeningStockController::class, 'importCsv'])
+        ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.import');
     Route::put('/opening-stock/{entry}', [OpeningStockController::class, 'update'])
         ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.update');
     Route::post('/opening-stock/{entry}/post', [OpeningStockController::class, 'post'])

@@ -37,6 +37,8 @@ class StoreGoodsReceiptRequest extends FormRequest
             'lines.*.variant_id' => ['nullable','integer'],
             'lines.*.received_qty' => ['required','numeric','gt:0'],
             'lines.*.accepted_qty' => ['nullable','numeric','min:0'],
+            'lines.*.entered_qty' => ['nullable','numeric','gt:0'],
+            'lines.*.entered_unit_id' => ['nullable','integer'],
             'lines.*.rejected_qty' => ['nullable','numeric','min:0'],
             'lines.*.unit_cost' => ['nullable','numeric','min:0'],
             'lines.*.lot_id' => ['nullable','integer'],

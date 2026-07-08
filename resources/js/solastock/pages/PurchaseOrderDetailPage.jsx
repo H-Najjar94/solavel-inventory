@@ -58,7 +58,7 @@ export default function PurchaseOrderDetailPage() {
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Unit cost</th></tr></thead>
-                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item_name ?? `#${l.item_id}`}{l.item_sku && <span className="muted"> · {l.item_sku}</span>}</td><td>{l.ordered_qty}</td><td>{l.received_qty}</td><td>{l.remaining_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
+                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item_name ?? `#${l.item_id}`}{l.item_sku && <span className="muted"> · {l.item_sku}</span>}</td><td>{l.ordered_qty}{l.entered_unit ? <span className="muted"> ({l.entered_qty} {l.entered_unit.code})</span> : null}</td><td>{l.received_qty}</td><td>{l.remaining_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
             </table></div>}
 
             {tab === 'grns' && <div className="panel">{grns.length === 0 ? <EmptyState title="No GRNs yet" hint={canReceive ? 'Create a GRN to receive stock.' : ''} /> : (
