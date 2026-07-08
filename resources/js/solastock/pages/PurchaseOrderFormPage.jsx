@@ -7,9 +7,10 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
-import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
+import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 
-const emptyLine = () => ({ item_id: null, ordered_qty: '', unit_price: '', notes: '' });
+const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', notes: '' });
+const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function PurchaseOrderFormPage() {
     const { id } = useParams();
@@ -28,7 +29,13 @@ export default function PurchaseOrderFormPage() {
             const po = existing.data.purchase_order;
             if (po.status !== 'draft') { toast.push('Only draft POs can be edited.', 'error'); nav(`/purchase-orders/${id}`); return; }
             setHeader({ po_number: po.po_number, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id, order_date: po.order_date, expected_date: po.expected_date ?? '', notes: po.notes ?? '' });
-            setLines((existing.data.lines ?? po.lines ?? []).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, unit_price: l.unit_price, notes: l.notes ?? '' })));
+            setLines((existing.data.lines ?? po.lines ?? []).map((l) => ({
+                item_id: l.item_id,
+                ordered_qty: l.entered_qty ?? l.ordered_qty,
+                entered_unit_id: l.entered_unit_id ?? null,
+                unit_price: enteredCost(l.unit_price, l.unit_conversion_factor),
+                notes: l.notes ?? '',
+            })));
         }
     }, [isEdit, existing.data]);
 
@@ -39,7 +46,15 @@ export default function PurchaseOrderFormPage() {
         if (!gate.allowed) return;
         setSaving(true); setErrors({});
         try {
-            const payload = { ...header, expected_date: header.expected_date || null, lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0) };
+            const payload = {
+                ...header,
+                expected_date: header.expected_date || null,
+                lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0).map((l) => ({
+                    ...l,
+                    entered_qty: l.ordered_qty,
+                    entered_unit_id: l.entered_unit_id || undefined,
+                })),
+            };
             if (payload.lines.length === 0) { toast.push('Add at least one line.', 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updatePurchaseOrder(id, payload) : await api.createPurchaseOrder(payload);
             toast.push(isEdit ? 'PO updated.' : 'PO created.', 'success');
@@ -54,6 +69,7 @@ export default function PurchaseOrderFormPage() {
     const columns = [
         { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'qty', label: 'Quantity', width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
+        { key: 'unit', label: 'Unit', width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: 'Unit cost', width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
         { key: 'line_total', label: 'Line total', width: 110, render: (l) => <span>{(Number(l.ordered_qty || 0) * Number(l.unit_price || 0)).toFixed(2)}</span> },
     ];

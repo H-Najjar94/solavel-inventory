@@ -106,6 +106,21 @@ export const api = {
     },
     setItemImagePrimary: (imageId) => request(`/item-images/${imageId}/primary`, { method: 'POST' }),
     deleteItemImage: (imageId) => request(`/item-images/${imageId}`, { method: 'DELETE' }),
+    itemAttachments: (id) => request(`/items/${id}/attachments`),
+    uploadItemAttachment: (id, file, name = '') => {
+        const fd = new FormData();
+        fd.append('attachment', file);
+        if (name) fd.append('name', name);
+        return requestForm(`/items/${id}/attachments`, fd);
+    },
+    deleteItemAttachment: (attachmentId) => request(`/item-attachments/${attachmentId}`, { method: 'DELETE' }),
+    createItemVariant: (itemId, body) => request(`/items/${itemId}/variants`, { method: 'POST', body }),
+    updateItemVariant: (itemId, variantId, body) => request(`/items/${itemId}/variants/${variantId}`, { method: 'PUT', body }),
+    deleteItemVariant: (itemId, variantId) => request(`/items/${itemId}/variants/${variantId}`, { method: 'DELETE' }),
+    createSupplierPrice: (itemId, body) => request(`/items/${itemId}/supplier-prices`, { method: 'POST', body }),
+    updateSupplierPrice: (itemId, priceId, body) => request(`/items/${itemId}/supplier-prices/${priceId}`, { method: 'PUT', body }),
+    deleteSupplierPrice: (itemId, priceId) => request(`/items/${itemId}/supplier-prices/${priceId}`, { method: 'DELETE' }),
+    itemLabelSheet: (itemId) => request(`/items/${itemId}/labels`),
 
     warehouses: (params) => request('/warehouses', { params }),
     warehouse: (id) => request(`/warehouses/${id}`),
@@ -126,6 +141,14 @@ export const api = {
     updateOpeningStock: (id, body) => request(`/opening-stock/${id}`, { method: 'PUT', body }),
     postOpeningStock: (id) => request(`/opening-stock/${id}/post`, { method: 'POST' }),
     reverseOpeningStock: (id) => request(`/opening-stock/${id}/reverse`, { method: 'POST' }),
+    importOpeningStock: (file, body = {}) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        Object.entries(body).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') fd.append(k, v);
+        });
+        return requestForm('/opening-stock/import', fd);
+    },
 
     adjustments: (params) => request('/adjustments', { params }),
     adjustment: (id) => request(`/adjustments/${id}`),

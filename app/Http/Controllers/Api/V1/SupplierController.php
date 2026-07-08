@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\Supplier;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,6 +26,8 @@ class SupplierController extends ApiController
 
     public function show(Supplier $supplier): JsonResponse
     {
+        $supplier->setAttribute('metrics', $this->metrics($supplier));
+
         return $this->success($supplier);
     }
 
@@ -79,5 +83,35 @@ class SupplierController extends ApiController
         $data['contact'] = $contact;
 
         return $data;
+    }
+
+    private function metrics(Supplier $supplier): array
+    {
+        $conn = config('tenancy.tenant_connection', 'tenant');
+        $po = DB::connection($conn)->table('inventory_purchase_orders')
+            ->where('organization_id', $supplier->organization_id)
+            ->where('supplier_id', $supplier->id);
+        $grns = DB::connection($conn)->table('goods_receipts as g')
+            ->leftJoin('inventory_purchase_orders as p', 'p.id', '=', 'g.purchase_order_id')
+            ->where('g.organization_id', $supplier->organization_id)
+            ->where('g.supplier_id', $supplier->id)
+            ->where('g.status', 'posted')
+            ->select('g.receipt_date', 'p.order_date', 'p.expected_date')
+            ->get();
+
+        $leadDays = $grns
+            ->filter(fn ($r) => $r->order_date && $r->receipt_date)
+            ->map(fn ($r) => CarbonImmutable::parse($r->order_date)->diffInDays(CarbonImmutable::parse($r->receipt_date), false));
+        $expected = $grns->filter(fn ($r) => $r->expected_date && $r->receipt_date);
+        $onTime = $expected->filter(fn ($r) => (string) $r->receipt_date <= (string) $r->expected_date)->count();
+
+        return [
+            'purchase_orders' => (clone $po)->count(),
+            'open_purchase_orders' => (clone $po)->whereIn('status', ['draft', 'approved', 'partially_received'])->count(),
+            'received_purchase_orders' => (clone $po)->where('status', 'received')->count(),
+            'posted_receipts' => $grns->count(),
+            'average_lead_days' => $leadDays->isEmpty() ? null : round($leadDays->avg(), 1),
+            'on_time_rate' => $expected->isEmpty() ? null : round(($onTime / max(1, $expected->count())) * 100, 1),
+        ];
     }
 }

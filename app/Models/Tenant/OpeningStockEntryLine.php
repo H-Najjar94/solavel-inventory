@@ -18,6 +18,8 @@ class OpeningStockEntryLine extends Model
         'quantity' => 'decimal:4',
         'unit_cost' => 'decimal:4',
         'total_cost' => 'decimal:2',
+        'entered_qty' => 'decimal:4',
+        'unit_conversion_factor' => 'decimal:8',
     ];
 
     public function entry(): BelongsTo
@@ -28,5 +30,10 @@ class OpeningStockEntryLine extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class, 'item_id');
+    }
+
+    public function enteredUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'entered_unit_id');
     }
 }

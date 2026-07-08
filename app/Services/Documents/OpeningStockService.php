@@ -3,6 +3,7 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\OpeningStockEntry;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -30,6 +31,7 @@ class OpeningStockService
         private \App\Services\Integration\IntegrationOutboxService $outbox,
         private \App\Services\Traceability\LotService $lots,
         private \App\Services\Traceability\SerialService $serials,
+        private UnitConversionResolver $conversions,
     ) {}
 
     protected function lotService(): \App\Services\Traceability\LotService
@@ -118,7 +120,10 @@ class OpeningStockService
         $totalValue = '0';
         foreach ($lines as $line) {
             $cap = $this->resolveCapture($line, $orgId, OpeningStockEntry::class, (int) $entry->id);
-            $unitCost = Decimal::cost((string) ($line['unit_cost'] ?? '0'));
+            if ($cap['serial_ids'] === []) {
+                $line = $this->conversions->normalizeLine($line, 'quantity');
+            }
+            $unitCost = $this->baseUnitCost((string) ($line['unit_cost'] ?? '0'), $line['unit_conversion_factor'] ?? null);
 
             // Serial capture → one qty-1 line per serial.
             if ($cap['serial_ids'] !== []) {
@@ -132,6 +137,9 @@ class OpeningStockService
                         'serial_id' => $sid,
                         'bin_id' => $line['bin_id'] ?? null,
                         'quantity' => '1.0000',
+                        'entered_qty' => $line['entered_qty'] ?? null,
+                        'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                        'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
                         'unit_cost' => $unitCost,
                         'total_cost' => Decimal::money($unitCost),
                         'notes' => $line['notes'] ?? null,
@@ -155,6 +163,9 @@ class OpeningStockService
                 'serial_id' => $line['serial_id'] ?? null,
                 'bin_id' => $line['bin_id'] ?? null,
                 'quantity' => $qty,
+                'entered_qty' => $line['entered_qty'] ?? null,
+                'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
                 'unit_cost' => $unitCost,
                 'total_cost' => $lineTotal,
                 'notes' => $line['notes'] ?? null,
@@ -162,6 +173,15 @@ class OpeningStockService
         }
 
         return Decimal::money($totalValue);
+    }
+
+    private function baseUnitCost(string $enteredUnitCost, ?string $factor): string
+    {
+        if ($factor && Decimal::gt($factor, '0')) {
+            return Decimal::cost(Decimal::div($enteredUnitCost, $factor));
+        }
+
+        return Decimal::cost($enteredUnitCost);
     }
 
     /**

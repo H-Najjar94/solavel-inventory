@@ -3,14 +3,27 @@
 namespace Tests\Feature\Stock;
 
 use App\Http\Controllers\Api\V1\ItemController;
+use App\Http\Controllers\Api\V1\ItemAttachmentController;
+use App\Http\Controllers\Api\V1\GoodsReceiptController;
+use App\Http\Controllers\Api\V1\OpeningStockController;
+use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Requests\Api\StoreGoodsReceiptRequest;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Http\Requests\Api\StoreItemRequest;
+use App\Http\Requests\Api\StoreOpeningStockRequest;
+use App\Http\Requests\Api\StorePurchaseOrderRequest;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
+use App\Models\Tenant\ItemAttachment;
 use App\Models\Tenant\ItemBarcode;
 use App\Models\Tenant\ItemBrand;
 use App\Models\Tenant\ItemCategory;
+use App\Models\Tenant\ItemVariant;
+use App\Models\Tenant\StockBalance;
+use App\Models\Tenant\StockLedger;
+use App\Models\Tenant\Supplier;
+use App\Models\Tenant\SupplierPriceList;
 use App\Models\Tenant\Unit;
 use App\Models\Tenant\UnitConversion;
 use App\Models\Tenant\WarehouseReorderRule;
@@ -20,6 +33,8 @@ use App\Services\Documents\OpeningStockService;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportFilters;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
@@ -50,6 +65,15 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         return Item::query()->findOrFail($response['data']['id']);
     }
 
+    private function formRequest(string $class, string $method, string $uri, array $payload): mixed
+    {
+        $request = $class::create($uri, $method, $payload);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        $request->validateResolved();
+
+        return $request;
+    }
+
     #[Test]
     public function item_physical_and_planning_fields_are_validated_and_saved(): void
     {
@@ -71,6 +95,9 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $this->assertSame('5.0000', (string) $item->min_stock);
         $this->assertSame('20.0000', (string) $item->max_stock);
         $this->assertSame('2.0000', (string) $item->safety_stock);
+
+        $shown = app(ItemController::class)->show($item)->getData(true)['data'];
+        $this->assertSame('Small carton', $shown['package_recommendation']['label']);
     }
 
     #[Test]
@@ -270,6 +297,127 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $this->assertSame($added['id'], $lookup['id']);
         $this->assertSame('Scanner item', $lookup['item']['name']);
         $this->assertSame(2, ItemBarcode::query()->where('item_id', $item->id)->count());
+    }
+
+    #[Test]
+    public function item_variants_supplier_prices_attachments_and_labels_are_managed(): void
+    {
+        $this->useTenantA();
+        Storage::fake('local');
+
+        $supplier = Supplier::query()->create(['code' => 'SUP-CAT', 'name' => 'Catalog Supplier']);
+        $item = $this->createItem(['sku' => 'VAR-PARENT', 'name' => 'Variant Parent']);
+        $controller = app(ItemController::class);
+
+        $variant = $controller->storeVariant(Request::create("/items/{$item->id}/variants", 'POST', [
+            'sku' => 'VAR-PARENT-RED',
+            'variant_attributes' => ['Color' => 'Red'],
+            'barcode_primary' => 'VAR-RED-001',
+            'purchase_price' => '8',
+            'sales_price' => '12',
+        ]), $item)->getData(true)['data'];
+
+        $price = $controller->storeSupplierPrice(Request::create("/items/{$item->id}/supplier-prices", 'POST', [
+            'supplier_id' => $supplier->id,
+            'supplier_sku' => 'SUP-RED',
+            'unit_cost' => '7.5000',
+            'minimum_qty' => '6',
+            'currency_code' => 'SAR',
+        ]), $item)->getData(true)['data'];
+
+        $upload = Request::create("/items/{$item->id}/attachments", 'POST', [], [], [
+            'attachment' => UploadedFile::fake()->create('spec.pdf', 12, 'application/pdf'),
+        ]);
+        $attachment = app(ItemAttachmentController::class)->store($upload, $item)->getData(true)['data'];
+        $labels = $controller->labelSheet($item)->getData(true)['data']['labels'];
+
+        $this->assertSame('VAR-PARENT-RED', $variant['sku']);
+        $this->assertTrue(ItemVariant::query()->where('sku', 'VAR-PARENT-RED')->exists());
+        $this->assertSame($supplier->id, $price['supplier_id']);
+        $this->assertTrue(SupplierPriceList::query()->where('item_id', $item->id)->where('supplier_id', $supplier->id)->exists());
+        $this->assertSame('spec.pdf', $attachment['name']);
+        $this->assertTrue(ItemAttachment::query()->where('item_id', $item->id)->where('name', 'spec.pdf')->exists());
+        $this->assertSame('VAR-RED-001', $labels[0]['barcode']);
+    }
+
+    #[Test]
+    public function unit_conversions_are_used_by_purchase_receipt_and_opening_stock_documents(): void
+    {
+        $this->useTenantA();
+
+        $each = Unit::query()->create(['code' => 'EA-UC', 'name' => 'Each UC', 'kind' => 'count']);
+        $case = Unit::query()->create(['code' => 'CASE-UC', 'name' => 'Case UC', 'kind' => 'count']);
+        UnitConversion::query()->create([
+            'from_unit_id' => $case->id,
+            'to_unit_id' => $each->id,
+            'factor' => '12',
+        ]);
+        $supplier = Supplier::query()->create(['code' => 'SUP-UC', 'name' => 'Unit Supplier']);
+        $warehouse = F::warehouse(['code' => 'UC']);
+        $item = $this->createItem(['sku' => 'UNIT-CONV', 'base_unit_id' => $each->id, 'costing_method' => 'average']);
+
+        $poRequest = $this->formRequest(StorePurchaseOrderRequest::class, 'POST', '/purchase-orders', [
+            'po_number' => '',
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'order_date' => now()->toDateString(),
+            'lines' => [[
+                'item_id' => $item->id,
+                'ordered_qty' => '2',
+                'entered_qty' => '2',
+                'entered_unit_id' => $case->id,
+                'unit_price' => '120',
+            ]],
+        ]);
+        $po = app(PurchaseOrderController::class)->store($poRequest)->getData(true)['data'];
+        $poLine = \App\Models\Tenant\PurchaseOrderLine::query()->where('purchase_order_id', $po['id'])->firstOrFail();
+        $this->assertSame('24.0000', (string) $poLine->ordered_qty);
+        $this->assertSame('2.0000', (string) $poLine->entered_qty);
+        $this->assertSame('10.0000', (string) $poLine->unit_price);
+
+        app(PurchaseOrderController::class)->approve(\App\Models\Tenant\PurchaseOrder::query()->findOrFail($po['id']));
+        $grnRequest = $this->formRequest(StoreGoodsReceiptRequest::class, 'POST', '/goods-receipts', [
+            'grn_number' => '',
+            'purchase_order_id' => $po['id'],
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'receipt_date' => now()->toDateString(),
+            'lines' => [[
+                'purchase_order_line_id' => $poLine->id,
+                'item_id' => $item->id,
+                'received_qty' => '2',
+                'accepted_qty' => '2',
+                'entered_qty' => '2',
+                'entered_unit_id' => $case->id,
+                'unit_cost' => '120',
+            ]],
+        ]);
+        $grn = app(GoodsReceiptController::class)->store($grnRequest)->getData(true)['data'];
+        app(GoodsReceiptController::class)->post(\App\Models\Tenant\GoodsReceipt::query()->findOrFail($grn['id']));
+
+        $balance = StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->firstOrFail();
+        $ledger = StockLedger::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->latest('id')->firstOrFail();
+        $this->assertSame('24.0000', (string) $balance->on_hand_qty);
+        $this->assertSame('10.0000', (string) $ledger->unit_cost);
+
+        $openingRequest = $this->formRequest(StoreOpeningStockRequest::class, 'POST', '/opening-stock', [
+            'entry_number' => '',
+            'warehouse_id' => $warehouse->id,
+            'opening_date' => now()->toDateString(),
+            'lines' => [[
+                'item_id' => $item->id,
+                'quantity' => '1',
+                'entered_qty' => '1',
+                'entered_unit_id' => $case->id,
+                'unit_cost' => '60',
+            ]],
+        ]);
+        $entry = app(OpeningStockController::class)->store($openingRequest)->getData(true)['data'];
+        app(OpeningStockController::class)->post(\App\Models\Tenant\OpeningStockEntry::query()->findOrFail($entry['id']));
+
+        $balance->refresh();
+        $this->assertSame('36.0000', (string) $balance->on_hand_qty);
+        $this->assertTrue(StockLedger::query()->where('source_type', \App\Models\Tenant\OpeningStockEntry::class)->where('source_id', $entry['id'])->where('quantity', '12.0000')->exists());
     }
 
     #[Test]

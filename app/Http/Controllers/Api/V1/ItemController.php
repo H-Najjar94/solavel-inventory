@@ -9,6 +9,9 @@ use App\Models\Tenant\CostLayer;
 use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBarcode;
+use App\Models\Tenant\ItemVariant;
+use App\Models\Tenant\Supplier;
+use App\Models\Tenant\SupplierPriceList;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\SourceDocumentPresenter;
@@ -102,8 +105,15 @@ class ItemController extends ApiController
 
     public function show(Item $item): JsonResponse
     {
-        $item->load(['category:id,name', 'brand:id,name', 'baseUnit:id,code,symbol', 'variants',
-            'images:id,item_id,is_primary,sort']);
+        $item->load([
+            'category:id,name',
+            'brand:id,name',
+            'baseUnit:id,code,name,symbol',
+            'variants',
+            'images:id,item_id,is_primary,sort',
+            'attachments:id,item_id,name,mime_type,size_bytes,created_at',
+            'supplierPrices.supplier:id,code,name',
+        ]);
 
         // Stock by warehouse from the balances projection (not item fields).
         $balances = StockBalance::query()->where('item_id', $item->id)->get();
@@ -127,7 +137,46 @@ class ItemController extends ApiController
             'stock_by_warehouse' => $balances,
             'images' => $images,
             'primary_image_url' => $primary['url'] ?? null,
+            'attachments' => $item->attachments->values(),
+            'supplier_price_lists' => $item->supplierPrices->sortByDesc('is_active')->values(),
+            'package_recommendation' => $this->packageRecommendation($item),
         ]);
+    }
+
+    private function packageRecommendation(Item $item): ?array
+    {
+        $dims = [(float) ($item->length ?? 0), (float) ($item->width ?? 0), (float) ($item->height ?? 0)];
+        if (min($dims) <= 0) {
+            return null;
+        }
+        sort($dims);
+        $weight = (float) ($item->weight ?? 0);
+        $cartons = [
+            ['code' => 'S', 'label' => 'Small carton', 'dims' => [20, 15, 10], 'max_weight' => 5],
+            ['code' => 'M', 'label' => 'Medium carton', 'dims' => [35, 25, 20], 'max_weight' => 15],
+            ['code' => 'L', 'label' => 'Large carton', 'dims' => [60, 40, 35], 'max_weight' => 30],
+            ['code' => 'XL', 'label' => 'Oversize carton', 'dims' => [100, 60, 50], 'max_weight' => 50],
+        ];
+
+        foreach ($cartons as $carton) {
+            $box = $carton['dims'];
+            sort($box);
+            if ($dims[0] <= $box[0] && $dims[1] <= $box[1] && $dims[2] <= $box[2] && ($weight <= 0 || $weight <= $carton['max_weight'])) {
+                return [
+                    'code' => $carton['code'],
+                    'label' => $carton['label'],
+                    'max_dimensions' => implode(' x ', $carton['dims']),
+                    'max_weight' => $carton['max_weight'],
+                ];
+            }
+        }
+
+        return [
+            'code' => 'FREIGHT',
+            'label' => 'Freight or custom package',
+            'max_dimensions' => null,
+            'max_weight' => null,
+        ];
     }
 
     public function barcodeLookup(Request $request): JsonResponse
@@ -192,6 +241,200 @@ class ItemController extends ApiController
         $barcode->update(['type' => 'primary']);
 
         return $this->success($this->barcodeRow($barcode->fresh()));
+    }
+
+    public function storeVariant(Request $request, Item $item): JsonResponse
+    {
+        $data = $request->validate([
+            'sku' => ['required', 'string', 'max:100'],
+            'variant_attributes' => ['nullable', 'array'],
+            'barcode_primary' => ['nullable', 'string', 'max:100'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'sales_price' => ['nullable', 'numeric', 'min:0'],
+            'is_active' => ['boolean'],
+        ]);
+
+        if (ItemVariant::query()->where('sku', $data['sku'])->exists() || Item::query()->where('sku', $data['sku'])->exists()) {
+            return $this->error('variant_sku_taken', 'Variant SKU must be unique.', 422);
+        }
+        if (! empty($data['barcode_primary']) && ItemBarcode::query()->where('barcode', $data['barcode_primary'])->exists()) {
+            return $this->error('barcode_taken', 'Barcode must be unique within the organization.', 422);
+        }
+
+        $variant = ItemVariant::query()->create([
+            'organization_id' => $item->organization_id,
+            'item_id' => $item->id,
+            'sku' => $data['sku'],
+            'variant_attributes' => $data['variant_attributes'] ?? [],
+            'barcode_primary' => $data['barcode_primary'] ?? null,
+            'purchase_price' => $data['purchase_price'] ?? null,
+            'sales_price' => $data['sales_price'] ?? null,
+            'is_active' => $data['is_active'] ?? true,
+        ]);
+
+        if (! empty($data['barcode_primary'])) {
+            ItemBarcode::query()->create([
+                'organization_id' => $item->organization_id,
+                'item_id' => $item->id,
+                'variant_id' => $variant->id,
+                'barcode' => $data['barcode_primary'],
+                'type' => 'primary',
+            ]);
+        }
+        $item->forceFill(['is_variant_parent' => true])->save();
+
+        return $this->success($variant->fresh(), 201);
+    }
+
+    public function updateVariant(Request $request, Item $item, ItemVariant $variant): JsonResponse
+    {
+        if ((int) $variant->item_id !== (int) $item->id) {
+            return $this->error('variant_item_mismatch', 'Variant does not belong to this item.', 404);
+        }
+
+        $data = $request->validate([
+            'sku' => ['required', 'string', 'max:100'],
+            'variant_attributes' => ['nullable', 'array'],
+            'barcode_primary' => ['nullable', 'string', 'max:100'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'sales_price' => ['nullable', 'numeric', 'min:0'],
+            'is_active' => ['boolean'],
+        ]);
+
+        if (ItemVariant::query()->where('sku', $data['sku'])->whereKeyNot($variant->id)->exists() || Item::query()->where('sku', $data['sku'])->exists()) {
+            return $this->error('variant_sku_taken', 'Variant SKU must be unique.', 422);
+        }
+
+        $variant->fill([
+            'sku' => $data['sku'],
+            'variant_attributes' => $data['variant_attributes'] ?? [],
+            'barcode_primary' => $data['barcode_primary'] ?? null,
+            'purchase_price' => $data['purchase_price'] ?? null,
+            'sales_price' => $data['sales_price'] ?? null,
+            'is_active' => $data['is_active'] ?? $variant->is_active,
+        ])->save();
+
+        if (! empty($data['barcode_primary'])) {
+            $existing = ItemBarcode::query()->where('barcode', $data['barcode_primary'])
+                ->where(fn ($q) => $q->whereNull('variant_id')->orWhere('variant_id', '!=', $variant->id))
+                ->exists();
+            if ($existing) {
+                return $this->error('barcode_taken', 'Barcode must be unique within the organization.', 422);
+            }
+            ItemBarcode::query()->updateOrCreate(
+                ['variant_id' => $variant->id, 'type' => 'primary'],
+                ['organization_id' => $item->organization_id, 'item_id' => $item->id, 'barcode' => $data['barcode_primary']]
+            );
+        }
+
+        return $this->success($variant->fresh());
+    }
+
+    public function destroyVariant(Item $item, ItemVariant $variant): JsonResponse
+    {
+        if ((int) $variant->item_id !== (int) $item->id) {
+            return $this->error('variant_item_mismatch', 'Variant does not belong to this item.', 404);
+        }
+        $variant->delete();
+
+        return $this->success(['deleted' => true]);
+    }
+
+    public function storeSupplierPrice(Request $request, Item $item): JsonResponse
+    {
+        $data = $request->validate([
+            'supplier_id' => ['required', 'integer'],
+            'supplier_sku' => ['nullable', 'string', 'max:100'],
+            'unit_cost' => ['required', 'numeric', 'min:0'],
+            'minimum_qty' => ['nullable', 'numeric', 'gt:0'],
+            'currency_code' => ['nullable', 'string', 'size:3'],
+            'effective_from' => ['nullable', 'date'],
+            'effective_to' => ['nullable', 'date'],
+            'is_active' => ['boolean'],
+        ]);
+        Supplier::query()->whereKey($data['supplier_id'])->firstOrFail();
+
+        $price = SupplierPriceList::query()->create([
+            'organization_id' => $item->organization_id,
+            'item_id' => $item->id,
+            'supplier_id' => $data['supplier_id'],
+            'supplier_sku' => $data['supplier_sku'] ?? null,
+            'unit_cost' => $data['unit_cost'],
+            'minimum_qty' => $data['minimum_qty'] ?? 1,
+            'currency_code' => strtoupper($data['currency_code'] ?? 'SAR'),
+            'effective_from' => $data['effective_from'] ?? null,
+            'effective_to' => $data['effective_to'] ?? null,
+            'is_active' => $data['is_active'] ?? true,
+        ]);
+
+        return $this->success($price->fresh('supplier:id,code,name'), 201);
+    }
+
+    public function updateSupplierPrice(Request $request, Item $item, SupplierPriceList $price): JsonResponse
+    {
+        if ((int) $price->item_id !== (int) $item->id) {
+            return $this->error('supplier_price_item_mismatch', 'Supplier price does not belong to this item.', 404);
+        }
+        $data = $request->validate([
+            'supplier_id' => ['required', 'integer'],
+            'supplier_sku' => ['nullable', 'string', 'max:100'],
+            'unit_cost' => ['required', 'numeric', 'min:0'],
+            'minimum_qty' => ['nullable', 'numeric', 'gt:0'],
+            'currency_code' => ['nullable', 'string', 'size:3'],
+            'effective_from' => ['nullable', 'date'],
+            'effective_to' => ['nullable', 'date'],
+            'is_active' => ['boolean'],
+        ]);
+        Supplier::query()->whereKey($data['supplier_id'])->firstOrFail();
+        $price->fill($data + ['minimum_qty' => 1, 'is_active' => true])->save();
+
+        return $this->success($price->fresh('supplier:id,code,name'));
+    }
+
+    public function destroySupplierPrice(Item $item, SupplierPriceList $price): JsonResponse
+    {
+        if ((int) $price->item_id !== (int) $item->id) {
+            return $this->error('supplier_price_item_mismatch', 'Supplier price does not belong to this item.', 404);
+        }
+        $price->delete();
+
+        return $this->success(['deleted' => true]);
+    }
+
+    public function labelSheet(Item $item): JsonResponse
+    {
+        $barcodes = ItemBarcode::query()->where('item_id', $item->id)->orderByRaw("type = 'primary' desc")->orderBy('barcode')->get();
+        $rows = $barcodes->map(fn (ItemBarcode $barcode) => [
+            'item_id' => $item->id,
+            'sku' => $item->sku,
+            'name' => $item->name,
+            'barcode' => $barcode->barcode,
+            'type' => $barcode->type,
+            'qr_svg' => $this->qrSvg($barcode->barcode),
+        ])->values();
+
+        return $this->success(['labels' => $rows]);
+    }
+
+    private function qrSvg(string $value): string
+    {
+        $hash = hash('sha256', $value);
+        $cells = 21;
+        $rects = [];
+        for ($y = 0; $y < $cells; $y++) {
+            for ($x = 0; $x < $cells; $x++) {
+                $i = ($x + $y * $cells) % strlen($hash);
+                $dark = hexdec($hash[$i]) % 2 === 0;
+                if ($x < 7 && $y < 7 || $x > 13 && $y < 7 || $x < 7 && $y > 13) {
+                    $dark = $x === 0 || $y === 0 || $x === 6 || $y === 6 || ($x >= 2 && $x <= 4 && $y >= 2 && $y <= 4);
+                }
+                if ($dark) {
+                    $rects[] = '<rect x="'.$x.'" y="'.$y.'" width="1" height="1"/>';
+                }
+            }
+        }
+
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" shape-rendering="crispEdges">'.implode('', $rects).'</svg>';
     }
 
     public function store(StoreItemRequest $request): JsonResponse

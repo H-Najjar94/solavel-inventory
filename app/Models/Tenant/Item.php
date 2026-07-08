@@ -60,6 +60,16 @@ class Item extends Model
         return $this->hasMany(ItemImage::class, 'item_id');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ItemAttachment::class, 'item_id');
+    }
+
+    public function supplierPrices(): HasMany
+    {
+        return $this->hasMany(SupplierPriceList::class, 'item_id');
+    }
+
     /** The primary image, if any (for list/detail thumbnails). */
     public function primaryImage(): \Illuminate\Database\Eloquent\Relations\HasOne
     {

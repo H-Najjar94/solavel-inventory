@@ -40,6 +40,8 @@ class StorePurchaseOrderRequest extends FormRequest
             'lines.*.item_id' => ['required','integer'],
             'lines.*.variant_id' => ['nullable','integer'],
             'lines.*.ordered_qty' => ['required','numeric','gt:0'],
+            'lines.*.entered_qty' => ['nullable','numeric','gt:0'],
+            'lines.*.entered_unit_id' => ['nullable','integer'],
             'lines.*.unit_price' => ['nullable','numeric','min:0'],
             'lines.*.tax_code' => ['nullable','string','max:50'],
             'lines.*.expected_date' => ['nullable','date'],
