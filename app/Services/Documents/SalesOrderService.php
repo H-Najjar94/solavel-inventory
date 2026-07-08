@@ -3,6 +3,8 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\SalesOrder;
+use App\Models\Tenant\Customer;
+use App\Models\Tenant\Item;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockReservationService;
 use App\Services\Stock\Support\Decimal;
@@ -42,6 +44,7 @@ class SalesOrderService
             // Default a missing/blank date (order_date is a NOT NULL column). Done here
             // rather than only in array_merge so a null in $attributes can't win.
             $attributes['order_date'] = $attributes['order_date'] ?? now()->toDateString();
+            $attributes = $this->applyCustomerName($attributes);
 
             $so = new SalesOrder(array_merge([
                 'status' => 'draft', 'source_app' => 'manual',
@@ -49,8 +52,9 @@ class SalesOrderService
             $so->organization_id = $orgId;
             $so->save();
             $this->syncLines($so, $lines, $orgId);
+            $this->refreshTotals($so);
 
-            return $so->fresh('lines');
+            return $so->fresh(['lines', 'customer']);
         });
     }
 
@@ -63,12 +67,14 @@ class SalesOrderService
             if ($so->status !== 'draft') {
                 throw new RuntimeException("Only a draft sales order can be edited (status '{$so->status}').");
             }
-            $so->fill(collect($attributes)->only(['order_number', 'customer_name', 'customer_external_id', 'order_date', 'requested_ship_date', 'warehouse_id', 'notes'])->toArray());
+            $attributes = $this->applyCustomerName($attributes);
+            $so->fill(collect($attributes)->only(['order_number', 'customer_id', 'customer_name', 'customer_external_id', 'order_date', 'requested_ship_date', 'warehouse_id', 'notes'])->toArray());
             $so->save();
             $so->lines()->delete();
             $this->syncLines($so, $lines, $orgId);
+            $this->refreshTotals($so);
 
-            return $so->fresh('lines');
+            return $so->fresh(['lines', 'customer']);
         });
     }
 
@@ -173,17 +179,67 @@ class SalesOrderService
 
     private function syncLines(SalesOrder $so, array $lines, int $orgId): void
     {
+        $items = Item::query()->whereIn('id', collect($lines)->pluck('item_id')->filter()->unique())->get(['id', 'sales_price', 'tax_code'])->keyBy('id');
         foreach ($lines as $line) {
+            $item = $items[$line['item_id']] ?? null;
+            $qty = Decimal::qty((string) $line['ordered_qty']);
+            $unitPrice = Decimal::cost((string) ($line['unit_price'] ?? $item?->sales_price ?? '0'));
+            $gross = Decimal::mul($qty, $unitPrice);
+            $discountRate = Decimal::cost((string) ($line['discount_rate'] ?? '0'));
+            $discountAmount = Decimal::money(Decimal::div(Decimal::mul($gross, $discountRate), '100'));
+            $taxBase = Decimal::sub($gross, $discountAmount);
+            $taxRate = Decimal::cost((string) ($line['tax_rate'] ?? '0'));
+            $taxAmount = Decimal::money(Decimal::div(Decimal::mul($taxBase, $taxRate), '100'));
+            $lineTotal = Decimal::money(Decimal::add($taxBase, $taxAmount));
             $so->lines()->create([
                 'organization_id' => $orgId,
                 'item_id' => $line['item_id'],
                 'variant_id' => $line['variant_id'] ?? null,
                 'warehouse_id' => $line['warehouse_id'] ?? $so->warehouse_id,
                 'bin_id' => $line['bin_id'] ?? null,
-                'ordered_qty' => Decimal::qty((string) $line['ordered_qty']),
-                'unit_price' => Decimal::cost((string) ($line['unit_price'] ?? '0')),
+                'ordered_qty' => $qty,
+                'unit_price' => $unitPrice,
+                'discount_rate' => $discountRate,
+                'discount_amount' => $discountAmount,
+                'tax_code' => $line['tax_code'] ?? $item?->tax_code,
+                'tax_rate' => $taxRate,
+                'tax_amount' => $taxAmount,
+                'line_total' => $lineTotal,
                 'status' => 'open',
             ]);
         }
+    }
+
+    private function refreshTotals(SalesOrder $so): void
+    {
+        $so->loadMissing('lines');
+        $gross = '0';
+        $discount = '0';
+        $tax = '0';
+        $total = '0';
+        foreach ($so->lines as $line) {
+            $gross = Decimal::add($gross, Decimal::mul((string) $line->ordered_qty, (string) $line->unit_price));
+            $discount = Decimal::add($discount, (string) ($line->discount_amount ?? '0'));
+            $tax = Decimal::add($tax, (string) ($line->tax_amount ?? '0'));
+            $total = Decimal::add($total, (string) ($line->line_total ?? '0'));
+        }
+        $so->subtotal = Decimal::money($gross);
+        $so->discount_total = Decimal::money($discount);
+        $so->tax_total = Decimal::money($tax);
+        $so->total = Decimal::money($total);
+        $so->save();
+    }
+
+    private function applyCustomerName(array $attributes): array
+    {
+        if (! empty($attributes['customer_id'])) {
+            $customer = Customer::query()->find((int) $attributes['customer_id']);
+            if ($customer) {
+                $attributes['customer_name'] = $attributes['customer_name'] ?? $customer->name;
+                $attributes['customer_external_id'] = $attributes['customer_external_id'] ?? $customer->code;
+            }
+        }
+
+        return $attributes;
     }
 }

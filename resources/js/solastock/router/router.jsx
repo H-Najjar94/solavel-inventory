@@ -37,6 +37,9 @@ import CountDetailPage from '../pages/CountDetailPage.jsx';
 import SalesOrdersPage from '../pages/SalesOrdersPage.jsx';
 import SalesOrderFormPage from '../pages/SalesOrderFormPage.jsx';
 import SalesOrderDetailPage from '../pages/SalesOrderDetailPage.jsx';
+import CustomersPage from '../pages/CustomersPage.jsx';
+import CustomerFormPage from '../pages/CustomerFormPage.jsx';
+import CustomerDetailPage from '../pages/CustomerDetailPage.jsx';
 import PickListsPage from '../pages/PickListsPage.jsx';
 import PickListDetailPage from '../pages/PickListDetailPage.jsx';
 import PacksPage from '../pages/PacksPage.jsx';
@@ -138,6 +141,10 @@ export const router = createBrowserRouter(
                 { path: 'sales-orders/new', element: protectedElement(<SalesOrderFormPage />, 'inventory.manage_sales_orders') },
                 { path: 'sales-orders/:id', element: <SalesOrderDetailPage /> },
                 { path: 'sales-orders/:id/edit', element: protectedElement(<SalesOrderFormPage />, 'inventory.manage_sales_orders') },
+                { path: 'customers', element: <CustomersPage /> },
+                { path: 'customers/new', element: protectedElement(<CustomerFormPage />, 'inventory.manage_sales_orders') },
+                { path: 'customers/:id', element: <CustomerDetailPage /> },
+                { path: 'customers/:id/edit', element: protectedElement(<CustomerFormPage />, 'inventory.manage_sales_orders') },
                 { path: 'pick-lists', element: <PickListsPage /> },
                 { path: 'pick-lists/:id', element: <PickListDetailPage /> },
                 { path: 'packs', element: <PacksPage /> },

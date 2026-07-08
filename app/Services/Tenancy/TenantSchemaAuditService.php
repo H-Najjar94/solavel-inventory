@@ -140,6 +140,7 @@ class TenantSchemaAuditService
             'item_variants' => ['columns' => ['organization_id', 'item_id', 'sku', 'variant_attributes', 'is_active']],
             'item_attachments' => ['columns' => ['organization_id', 'item_id', 'name', 'path', 'size_bytes']],
             'supplier_price_lists' => ['columns' => ['organization_id', 'item_id', 'supplier_id', 'unit_cost', 'minimum_qty']],
+            'inventory_customers' => ['columns' => ['organization_id', 'code', 'name', 'is_active']],
             'warehouses' => ['columns' => ['organization_id', 'code', 'name', 'is_active']],
             'stock_balances' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'on_hand_qty', 'reserved_qty', 'average_cost', 'total_value'], 'indexes' => ['balances_coord_uniq']],
             'stock_ledger' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'direction', 'quantity', 'unit_cost', 'source_type', 'source_id', 'idempotency_key'], 'indexes' => ['ledger_source_idx']],
@@ -159,9 +160,11 @@ class TenantSchemaAuditService
             'stock_adjustment_lines' => ['columns' => ['organization_id', 'stock_adjustment_id', 'item_id', 'direction', 'quantity']],
             'stock_counts' => ['columns' => ['organization_id', 'count_number', 'warehouse_id', 'status', 'adjustment_id', 'blind_count', 'scheduled_for', 'abc_class', 'snapshot_at']],
             'stock_count_lines' => ['columns' => ['organization_id', 'stock_count_id', 'item_id', 'system_qty', 'snapshot_qty', 'counted_qty']],
-            'inventory_sales_orders' => ['columns' => ['organization_id', 'order_number', 'warehouse_id', 'customer_name', 'status']],
-            'sales_order_lines' => ['columns' => ['organization_id', 'sales_order_id', 'item_id', 'ordered_qty', 'reserved_qty']],
+            'inventory_sales_orders' => ['columns' => ['organization_id', 'order_number', 'warehouse_id', 'customer_name', 'customer_id', 'status', 'subtotal', 'discount_total', 'tax_total', 'total']],
+            'sales_order_lines' => ['columns' => ['organization_id', 'sales_order_id', 'item_id', 'ordered_qty', 'reserved_qty', 'discount_rate', 'tax_rate', 'line_total']],
             'reservations' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'qty', 'priority', 'source_type', 'source_id', 'status', 'expires_at', 'expired_at']],
+            'sales_returns' => ['columns' => ['organization_id', 'return_number', 'warehouse_id', 'status', 'customer_id', 'authorized_at', 'inspected_at']],
+            'sales_return_lines' => ['columns' => ['organization_id', 'sales_return_id', 'item_id', 'returned_qty', 'condition', 'inspection_status', 'disposition']],
         ];
     }
 

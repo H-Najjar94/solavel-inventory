@@ -9,6 +9,7 @@ class StoreSalesReturnRequest extends FormRequest
         return [
             'return_number' => ['required','string','max:50'],
             'shipment_id' => ['nullable','integer'],
+            'customer_id' => ['nullable','integer'],
             'customer_name' => ['nullable','string','max:255'],
             'return_date' => ['nullable','date'],
             'warehouse_id' => ['required','integer'],
@@ -22,6 +23,8 @@ class StoreSalesReturnRequest extends FormRequest
             'lines.*.returned_qty' => ['required','numeric','gt:0'],
             'lines.*.unit_cost' => ['nullable','numeric','min:0'],
             'lines.*.condition' => ['nullable','in:resellable,damaged,quarantine,retired'],
+            'lines.*.inspection_status' => ['nullable','in:pending,accepted,rejected,quarantine,damaged,retired'],
+            'lines.*.disposition' => ['nullable','in:restock,quarantine,damage,retire,no_restock'],
             'lines.*.lot_id' => ['nullable','integer'],
             'lines.*.lot_code' => ['nullable','string','max:100'],
             'lines.*.serial_id' => ['nullable','integer'],

@@ -381,15 +381,16 @@ class InventoryReportService
             ->when($f->status, fn ($x) => $x->where('so.status', $f->status))
             ->when($f->from, fn ($x) => $x->whereDate('so.order_date', '>=', $f->from))
             ->when($f->to, fn ($x) => $x->whereDate('so.order_date', '<=', $f->to))
-            ->groupBy('so.id', 'so.order_number', 'so.order_date', 'so.customer_name', 'w.name', 'so.status')
-            ->selectRaw('so.id, so.order_number, so.order_date, so.customer_name, w.name warehouse, so.status,
+            ->leftJoin('inventory_customers as c', 'c.id', '=', 'so.customer_id')
+            ->groupBy('so.id', 'so.order_number', 'so.order_date', 'so.customer_name', 'c.name', 'w.name', 'so.status', 'so.subtotal', 'so.discount_total', 'so.tax_total', 'so.total')
+            ->selectRaw('so.id, so.order_number, so.order_date, COALESCE(c.name, so.customer_name) customer_name, w.name warehouse, so.status,
                 COALESCE(SUM(l.ordered_qty),0) ordered_qty, COALESCE(SUM(l.reserved_qty),0) reserved_qty,
                 COALESCE(SUM(l.picked_qty),0) picked_qty, COALESCE(SUM(l.packed_qty),0) packed_qty,
-                COALESCE(SUM(l.shipped_qty),0) shipped_qty')
+                COALESCE(SUM(l.shipped_qty),0) shipped_qty, so.subtotal, so.discount_total, so.tax_total, so.total')
             ->orderByDesc('so.id')->limit($f->limit)->get();
 
         return [
-            'columns' => ['order_number', 'order_date', 'customer_name', 'warehouse', 'status', 'ordered_qty', 'reserved_qty', 'picked_qty', 'packed_qty', 'shipped_qty'],
+            'columns' => ['order_number', 'order_date', 'customer_name', 'warehouse', 'status', 'ordered_qty', 'reserved_qty', 'picked_qty', 'packed_qty', 'shipped_qty', 'subtotal', 'discount_total', 'tax_total', 'total'],
             'rows' => $rows,
             'summary' => [
                 'orders' => $rows->count(),

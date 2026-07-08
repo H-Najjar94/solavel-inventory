@@ -3,6 +3,7 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\Customer;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
@@ -56,7 +57,7 @@ class SalesReturnService
         return DB::connection($this->conn())->transaction(function () use ($attributes, $lines, $orgId) {
             $r = new SalesReturn(array_merge([
                 'status' => 'draft', 'return_date' => $attributes['return_date'] ?? now()->toDateString(),
-            ], $attributes));
+            ], $this->applyCustomerName($attributes)));
             $r->organization_id = $orgId;
             $r->save();
             $this->syncLines($r, $lines, $orgId);
@@ -74,7 +75,8 @@ class SalesReturnService
             if ($r->status !== 'draft') {
                 throw new RuntimeException("Only a draft sales return can be edited (status '{$r->status}').");
             }
-            $r->fill(collect($attributes)->only(['return_number', 'shipment_id', 'customer_name', 'return_date', 'warehouse_id', 'reason', 'notes'])->toArray());
+            $attributes = $this->applyCustomerName($attributes);
+            $r->fill(collect($attributes)->only(['return_number', 'shipment_id', 'customer_id', 'customer_name', 'return_date', 'warehouse_id', 'reason', 'notes'])->toArray());
             $r->save();
             $r->lines()->delete();
             $this->syncLines($r, $lines, $orgId);
@@ -90,7 +92,7 @@ class SalesReturnService
             if ($r->status === 'posted') {
                 return $r; // idempotent
             }
-            if ($r->status !== 'draft') {
+            if (! in_array($r->status, ['draft', 'authorized', 'inspected'], true)) {
                 throw new RuntimeException("Sales return {$r->id} cannot be posted from status '{$r->status}'.");
             }
 
@@ -152,6 +154,59 @@ class SalesReturnService
         });
     }
 
+    public function authorizeReturn(SalesReturn $r): SalesReturn
+    {
+        return DB::connection($this->conn())->transaction(function () use ($r) {
+            $r = SalesReturn::query()->lockForUpdate()->findOrFail($r->id);
+            if ($r->status === 'authorized') {
+                return $r;
+            }
+            if ($r->status !== 'draft') {
+                throw new RuntimeException("Only a draft return can be authorized (status '{$r->status}').");
+            }
+            $r->status = 'authorized';
+            $r->authorized_at = now();
+            $r->authorized_by = auth()->id();
+            $r->save();
+
+            return $r->fresh('lines');
+        });
+    }
+
+    public function inspect(SalesReturn $r, ?string $notes = null): SalesReturn
+    {
+        return DB::connection($this->conn())->transaction(function () use ($r, $notes) {
+            $r = SalesReturn::query()->lockForUpdate()->with('lines')->findOrFail($r->id);
+            if (! in_array($r->status, ['authorized', 'inspected'], true)) {
+                throw new RuntimeException("Return must be authorized before inspection (status '{$r->status}').");
+            }
+            foreach ($r->lines as $line) {
+                $line->inspection_status = match ($line->condition) {
+                    'resellable' => 'accepted',
+                    'quarantine' => 'quarantine',
+                    'damaged' => 'damaged',
+                    'retired' => 'retired',
+                    default => 'accepted',
+                };
+                $line->disposition = match ($line->condition) {
+                    'resellable' => 'restock',
+                    'quarantine' => 'quarantine',
+                    'damaged' => 'damage',
+                    'retired' => 'retire',
+                    default => 'restock',
+                };
+                $line->save();
+            }
+            $r->status = 'inspected';
+            $r->inspected_at = now();
+            $r->inspected_by = auth()->id();
+            $r->inspection_notes = $notes;
+            $r->save();
+
+            return $r->fresh('lines');
+        });
+    }
+
     private function syncLines(SalesReturn $r, array $lines, int $orgId): void
     {
         foreach ($lines as $line) {
@@ -164,9 +219,29 @@ class SalesReturnService
                 'returned_qty' => Decimal::qty((string) $line['returned_qty']),
                 'unit_cost' => Decimal::cost((string) ($line['unit_cost'] ?? '0')),
                 'condition' => $line['condition'] ?? 'resellable',
+                'inspection_status' => $line['inspection_status'] ?? 'pending',
+                'disposition' => $line['disposition'] ?? match ($line['condition'] ?? 'resellable') {
+                    'resellable' => 'restock',
+                    'quarantine' => 'quarantine',
+                    'damaged' => 'damage',
+                    'retired' => 'retire',
+                    default => 'restock',
+                },
                 'lot_id' => $line['lot_id'] ?? null,
                 'serial_id' => $line['serial_id'] ?? null,
             ]);
         }
+    }
+
+    private function applyCustomerName(array $attributes): array
+    {
+        if (! empty($attributes['customer_id'])) {
+            $customer = Customer::query()->find((int) $attributes['customer_id']);
+            if ($customer) {
+                $attributes['customer_name'] = $attributes['customer_name'] ?? $customer->name;
+            }
+        }
+
+        return $attributes;
     }
 }
