@@ -4,6 +4,7 @@ namespace Tests\Feature\Stock;
 
 use App\Http\Controllers\Api\V1\ItemController;
 use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Http\Requests\Api\StoreItemRequest;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
@@ -18,6 +19,7 @@ use App\Services\Documents\OpeningStockService;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportFilters;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
 use Tests\TestCase;
@@ -118,6 +120,39 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $this->assertSame('fifo', $settings->default_costing_method);
         $this->assertTrue((bool) $settings->allow_negative_stock);
         $this->assertSame('fefo', $settings->picking_policy);
+    }
+
+    #[Test]
+    public function adjustment_reason_codes_are_configured_and_validated(): void
+    {
+        $this->useTenantA();
+
+        app(SettingsController::class)->storeAdjustmentReasonCode(Request::create('/settings/adjustment-reason-codes', 'POST', [
+            'code' => 'Cycle Count',
+            'label' => 'Cycle count variance',
+        ]));
+
+        $settings = InventorySetting::query()->firstOrFail();
+        $this->assertSame('cycle_count', $settings->adjustment_reason_codes[0]['code']);
+        $this->assertSame('Cycle count variance', $settings->adjustment_reason_codes[0]['label']);
+
+        $warehouse = F::warehouse(['code' => 'RSN']);
+        $item = F::averageItem(['sku' => 'RSN-ITEM']);
+        $request = StoreStockAdjustmentRequest::create('/adjustments', 'POST', [
+            'adjustment_number' => '',
+            'warehouse_id' => $warehouse->id,
+            'reason_code' => 'unapproved',
+            'lines' => [[
+                'item_id' => $item->id,
+                'direction' => 'increase',
+                'quantity' => '1',
+                'unit_cost' => '1',
+            ]],
+        ]);
+        $request->setContainer(app())->setRedirector(app('redirect'));
+
+        $this->expectException(ValidationException::class);
+        $request->validateResolved();
     }
 
     #[Test]

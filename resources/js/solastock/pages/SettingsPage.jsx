@@ -17,6 +17,7 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [conversion, setConversion] = useState({ from_unit_id: '', to_unit_id: '', factor: '' });
     const [category, setCategory] = useState({ name: '', parent_id: '' });
+    const [reasonCode, setReasonCode] = useState({ code: '', label: '' });
     const [reorderRule, setReorderRule] = useState({
         item_id: '',
         warehouse_id: '',
@@ -88,6 +89,17 @@ export default function SettingsPage() {
             setReorderRule({ item_id: '', warehouse_id: '', reorder_point: '', reorder_qty: '', min_stock: '', max_stock: '', safety_stock: '' });
             await qc.invalidateQueries({ queryKey: ['settings'] });
             toast.push('Warehouse reorder rule saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function addReasonCode(e) {
+        e.preventDefault();
+        try {
+            await api.createAdjustmentReasonCode(reasonCode);
+            setReasonCode({ code: '', label: '' });
+            await qc.invalidateQueries({ queryKey: ['settings'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push('Adjustment reason code saved.', 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -175,6 +187,18 @@ export default function SettingsPage() {
                 </form>
                 {(s.warehouse_reorder_rules ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Item</th><th>Warehouse</th><th>Point</th><th>Qty</th><th>Min / Max</th><th>Safety</th></tr></thead><tbody>
                     {s.warehouse_reorder_rules.map((rule) => <tr key={rule.id}><td>{rule.item ? `${rule.item.sku} · ${rule.item.name}` : `#${rule.item_id}`}</td><td>{rule.warehouse ? `${rule.warehouse.code} · ${rule.warehouse.name}` : `#${rule.warehouse_id}`}</td><td>{rule.reorder_point ?? '—'}</td><td>{rule.reorder_qty ?? '—'}</td><td>{rule.min_stock ?? '—'} / {rule.max_stock ?? '—'}</td><td>{rule.safety_stock ?? '—'}</td></tr>)}
+                </tbody></table>}
+            </div>
+
+            <div className="panel">
+                <h2>Adjustment Reasons</h2>
+                <form className="fg2" onSubmit={addReasonCode}>
+                    <Field label="Code"><input className="input" value={reasonCode.code} onChange={(e) => setReasonCode({ ...reasonCode, code: e.target.value })} placeholder="damage" required /></Field>
+                    <Field label="Label"><input className="input" value={reasonCode.label} onChange={(e) => setReasonCode({ ...reasonCode, label: e.target.value })} placeholder="Damaged stock" /></Field>
+                    <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">Save reason</button></div>
+                </form>
+                {(s.settings?.adjustment_reason_codes ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Code</th><th>Label</th><th>Status</th></tr></thead><tbody>
+                    {(s.settings.adjustment_reason_codes ?? []).map((code) => <tr key={code.code}><td>{code.code}</td><td>{code.label ?? code.code}</td><td>{code.active === false ? 'Inactive' : 'Active'}</td></tr>)}
                 </tbody></table>}
             </div>
 
