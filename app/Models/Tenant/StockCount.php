@@ -18,7 +18,14 @@ class StockCount extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['count_date'=>'date','posted_at'=>'datetime','reversed_at'=>'datetime'];
+    protected $casts = [
+        'count_date' => 'date',
+        'scheduled_for' => 'date',
+        'blind_count' => 'boolean',
+        'snapshot_at' => 'datetime',
+        'posted_at' => 'datetime',
+        'reversed_at' => 'datetime',
+    ];
 
     public function lines()
     {

@@ -39,7 +39,11 @@ export default function CountDetailPage() {
 
             <div className="panel"><dl className="kv">
                 <dt>Type</dt><dd>{c.count_type}</dd>
+                <dt>Mode</dt><dd>{c.blind_count ? 'Blind count' : 'Visible expected quantities'}</dd>
                 <dt>Warehouse</dt><dd>{c.warehouse_name ?? `#${c.warehouse_id}`}</dd>
+                <dt>Scheduled</dt><dd>{c.scheduled_for ?? '—'}{c.recurrence ? ` · ${c.recurrence}` : ''}</dd>
+                <dt>ABC class</dt><dd>{c.abc_class ?? '—'}</dd>
+                <dt>Snapshot</dt><dd>{c.snapshot_at ?? '—'}</dd>
                 <dt>Generated adjustment</dt><dd>{adjustment ? <Link to={`/adjustments/${adjustment.id}`}>{adjustment.adjustment_number}</Link> : '—'}</dd>
                 <dt>Notes</dt><dd>{c.notes ?? '—'}</dd>
             </dl></div>
@@ -47,8 +51,8 @@ export default function CountDetailPage() {
             <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'ledger', label: 'Ledger result' }, { key: 'audit', label: 'Audit' }]} active={tab} onChange={setTab} />
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Bin</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead>
-                <tbody>{(c.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.system_qty}</td><td>{l.counted_qty ?? '—'}</td><td>{l.variance_qty}</td></tr>)}</tbody>
+                <thead><tr><th>Item</th><th>Bin</th><th>Snapshot</th><th>Posting expected</th><th>Counted</th><th>Variance</th></tr></thead>
+                <tbody>{(c.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{c.blind_count && c.status !== 'posted' ? 'Hidden' : (l.snapshot_qty ?? '—')}</td><td>{c.blind_count && c.status !== 'posted' ? 'Hidden' : l.system_qty}</td><td>{l.counted_qty ?? '—'}</td><td>{c.blind_count && c.status !== 'posted' ? '—' : l.variance_qty}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="Count post events are recorded in inventory_audit_logs." /></div>}

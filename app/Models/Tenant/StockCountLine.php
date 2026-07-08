@@ -14,7 +14,7 @@ class StockCountLine extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['system_qty'=>'decimal:4','counted_qty'=>'decimal:4','variance_qty'=>'decimal:4'];
+    protected $casts = ['system_qty'=>'decimal:4','snapshot_qty'=>'decimal:4','counted_qty'=>'decimal:4','variance_qty'=>'decimal:4'];
 
     /** The item this line is for — used to surface names, not raw IDs. */
     public function item(): BelongsTo

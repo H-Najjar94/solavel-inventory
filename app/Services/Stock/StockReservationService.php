@@ -4,9 +4,11 @@ namespace App\Services\Stock;
 
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Reservation;
+use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockBalance;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -32,22 +34,108 @@ class StockReservationService
      * Reserve qty for an item at a warehouse against a source document.
      * Throws if it would exceed available and negative stock is disabled.
      */
-    public function reserve(int $itemId, int $warehouseId, string $qty, string $sourceType, int $sourceId, ?int $binId = null, ?int $lotId = null): Reservation
+    public function reserve(
+        int $itemId,
+        int $warehouseId,
+        string $qty,
+        string $sourceType,
+        int $sourceId,
+        ?int $binId = null,
+        ?int $lotId = null,
+        ?Carbon $expiresAt = null,
+        int $priority = 100
+    ): Reservation {
+        $reservation = $this->reserveInternal($itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, false);
+        if (! $reservation) {
+            throw new RuntimeException('Reservation could not be created.');
+        }
+
+        return $reservation;
+    }
+
+    public function reserveAvailable(
+        int $itemId,
+        int $warehouseId,
+        string $qty,
+        string $sourceType,
+        int $sourceId,
+        ?int $binId = null,
+        ?int $lotId = null,
+        ?Carbon $expiresAt = null,
+        int $priority = 100
+    ): ?Reservation {
+        return $this->reserveInternal($itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, true);
+    }
+
+    /**
+     * Release overdue reservations and reconcile their balance projections.
+     * Existing status values are preserved by marking expired rows as released
+     * with expired_at set, avoiding a destructive enum change.
+     */
+    public function expireOverdue(?string $sourceType = null, ?int $sourceId = null, ?int $itemId = null, ?int $warehouseId = null): int
+    {
+        $orgId = $this->context->idOrFail();
+
+        return DB::connection($this->conn())->transaction(function () use ($orgId, $sourceType, $sourceId, $itemId, $warehouseId) {
+            $now = now();
+            $query = Reservation::query()
+                ->where('organization_id', $orgId)
+                ->where('status', 'active')
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', $now)
+                ->when($sourceType !== null, fn ($q) => $q->where('source_type', $sourceType))
+                ->when($sourceId !== null, fn ($q) => $q->where('source_id', $sourceId))
+                ->when($itemId !== null, fn ($q) => $q->where('item_id', $itemId))
+                ->when($warehouseId !== null, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                ->lockForUpdate();
+
+            $count = 0;
+            $sources = [];
+            foreach ($query->get() as $res) {
+                $balance = $this->lockBalance($orgId, (int) $res->item_id, (int) $res->warehouse_id, $res->bin_id ? (int) $res->bin_id : null, $res->lot_id ? (int) $res->lot_id : null);
+                $newReserved = Decimal::sub((string) $balance->reserved_qty, (string) $res->qty);
+                $balance->reserved_qty = Decimal::lt($newReserved, '0') ? '0.0000' : Decimal::qty($newReserved);
+                $balance->save();
+
+                $res->status = 'released';
+                $res->expired_at = $now;
+                $res->released_at = $now;
+                $res->save();
+                $sources[$res->source_type.':'.$res->source_id] = [$res->source_type, (int) $res->source_id];
+                $count++;
+            }
+
+            foreach ($sources as [$type, $id]) {
+                $this->syncSourceProjection($type, $id);
+            }
+
+            return $count;
+        });
+    }
+
+    private function reserveInternal(
+        int $itemId,
+        int $warehouseId,
+        string $qty,
+        string $sourceType,
+        int $sourceId,
+        ?int $binId,
+        ?int $lotId,
+        ?Carbon $expiresAt,
+        int $priority,
+        bool $partial
+    ): ?Reservation
     {
         $orgId = $this->context->idOrFail();
         $qty = Decimal::qty($qty);
         if (! Decimal::gt($qty, '0')) {
             throw new RuntimeException('Reservation quantity must be greater than zero.');
         }
+        $priority = max(1, min(999, $priority));
+        $this->expireOverdue(null, null, $itemId, $warehouseId);
 
-        return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId) {
+        return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, $partial) {
             $balance = $this->lockBalance($orgId, $itemId, $warehouseId, $binId, $lotId);
-
-            $available = Decimal::sub((string) $balance->on_hand_qty, (string) $balance->reserved_qty);
-            $allowNegative = (bool) (InventorySetting::query()->first()->allow_negative_stock ?? false);
-            if (! $allowNegative && Decimal::gt($qty, $available)) {
-                throw new RuntimeException("Cannot reserve {$qty}: only {$available} available for item #{$itemId} at warehouse #{$warehouseId}.");
-            }
 
             // Idempotent active reservation per source+coordinate.
             $existing = Reservation::query()
@@ -55,12 +143,27 @@ class StockReservationService
                 ->where('source_type', $sourceType)->where('source_id', $sourceId)
                 ->where('status', 'active')
                 ->when($binId !== null, fn ($q) => $q->where('bin_id', $binId), fn ($q) => $q->whereNull('bin_id'))
+                ->when($lotId !== null, fn ($q) => $q->where('lot_id', $lotId), fn ($q) => $q->whereNull('lot_id'))
                 ->first();
+
+            $available = Decimal::sub((string) $balance->on_hand_qty, (string) $balance->reserved_qty);
+            $effectiveAvailable = $existing
+                ? Decimal::add($available, (string) $existing->qty)
+                : $available;
+            $allowNegative = (bool) (InventorySetting::query()->first()->allow_negative_stock ?? false);
+            if (! $allowNegative && Decimal::gt($qty, $effectiveAvailable)) {
+                if (! $partial || ! Decimal::gt($effectiveAvailable, '0')) {
+                    throw new RuntimeException("Cannot reserve {$qty}: only {$effectiveAvailable} available for item #{$itemId} at warehouse #{$warehouseId}.");
+                }
+                $qty = Decimal::qty($effectiveAvailable);
+            }
 
             if ($existing) {
                 // adjust delta into reserved_qty
                 $delta = Decimal::sub($qty, (string) $existing->qty);
                 $existing->qty = $qty;
+                $existing->expires_at = $expiresAt;
+                $existing->priority = $priority;
                 $existing->save();
                 $balance->reserved_qty = Decimal::qty(Decimal::add((string) $balance->reserved_qty, $delta));
                 $balance->save();
@@ -75,9 +178,11 @@ class StockReservationService
                 'bin_id' => $binId,
                 'lot_id' => $lotId,
                 'qty' => $qty,
+                'priority' => $priority,
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
                 'status' => 'active',
+                'expires_at' => $expiresAt,
             ]);
 
             $balance->reserved_qty = Decimal::qty(Decimal::add((string) $balance->reserved_qty, $qty));
@@ -106,9 +211,12 @@ class StockReservationService
                 $balance->save();
 
                 $res->status = 'released';
+                $res->released_at = now();
                 $res->save();
                 $count++;
             }
+
+            $this->syncSourceProjection($sourceType, $sourceId);
 
             return $count;
         });
@@ -131,12 +239,60 @@ class StockReservationService
                 $balance->reserved_qty = Decimal::lt($newReserved, '0') ? '0.0000' : Decimal::qty($newReserved);
                 $balance->save();
                 $res->status = 'consumed';
+                $res->released_at = now();
                 $res->save();
                 $count++;
             }
 
+            $this->syncSourceProjection($sourceType, $sourceId);
+
             return $count;
         });
+    }
+
+    private function syncSourceProjection(string $sourceType, int $sourceId): void
+    {
+        if ($sourceType !== 'sales_order') {
+            return;
+        }
+
+        $so = SalesOrder::query()->with('lines')->find($sourceId);
+        if (! $so) {
+            return;
+        }
+
+        $activeReservations = Reservation::query()
+            ->where('source_type', 'sales_order')
+            ->where('source_id', $sourceId)
+            ->where('status', 'active')
+            ->get()
+            ->groupBy(fn (Reservation $r) => implode(':', [
+                $r->item_id,
+                $r->warehouse_id,
+                $r->bin_id ?: '',
+                $r->lot_id ?: '',
+            ]));
+
+        $allReserved = true;
+        $anyReserved = false;
+        foreach ($so->lines as $line) {
+            $key = implode(':', [
+                $line->item_id,
+                $line->warehouse_id ?? $so->warehouse_id,
+                $line->bin_id ?: '',
+                '',
+            ]);
+            $reserved = Decimal::qty((string) (($activeReservations[$key] ?? collect())->sum(fn ($r) => (float) $r->qty)));
+            $line->reserved_qty = $reserved;
+            $line->save();
+            $anyReserved = $anyReserved || Decimal::gt($reserved, '0');
+            $allReserved = $allReserved && Decimal::gte($reserved, (string) $line->ordered_qty);
+        }
+
+        if (! in_array($so->status, ['shipped', 'cancelled', 'draft'], true)) {
+            $so->status = $allReserved ? 'reserved' : ($anyReserved ? 'partially_reserved' : 'confirmed');
+            $so->save();
+        }
     }
 
     private function lockBalance(int $orgId, int $itemId, int $warehouseId, ?int $binId, ?int $lotId): StockBalance

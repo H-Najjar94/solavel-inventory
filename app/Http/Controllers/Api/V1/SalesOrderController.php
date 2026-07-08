@@ -35,9 +35,10 @@ class SalesOrderController extends ApiController
 
     public function show(SalesOrder $sales_order): JsonResponse
     {
+        $sales_order = $this->service->expireOverdueReservations($sales_order);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         // customer_name is already a denormalized string on the header (no customer table).
-        $sales_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
+        $sales_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code']);
         $sales_order->setAttribute('warehouse_name', $sales_order->warehouse?->name);
 
         return $this->success(['sales_order' => $sales_order]);
@@ -72,9 +73,14 @@ class SalesOrderController extends ApiController
         return $this->success($so);
     }
 
-    public function reserve(SalesOrder $sales_order): JsonResponse
+    public function reserve(Request $request, SalesOrder $sales_order): JsonResponse
     {
-        try { $so = $this->service->reserve($sales_order); }
+        $data = $request->validate([
+            'expires_at' => ['nullable', 'date'],
+            'priority' => ['nullable', 'integer', 'min:1', 'max:999'],
+        ]);
+
+        try { $so = $this->service->reserve($sales_order, $data); }
         catch (RuntimeException $e) { return $this->error('reservation_failed', $e->getMessage(), 422); }
 
         return $this->success($so);

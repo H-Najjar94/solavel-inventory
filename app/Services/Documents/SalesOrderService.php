@@ -7,6 +7,7 @@ use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockReservationService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -87,34 +88,58 @@ class SalesOrderService
     }
 
     /** Reserve stock for every line (idempotent). Updates SO + line status. */
-    public function reserve(SalesOrder $so): SalesOrder
+    public function reserve(SalesOrder $so, array $options = []): SalesOrder
     {
-        return DB::connection($this->conn())->transaction(function () use ($so) {
+        return DB::connection($this->conn())->transaction(function () use ($so, $options) {
             $so = SalesOrder::query()->lockForUpdate()->with('lines')->findOrFail($so->id);
             if (! in_array($so->status, ['confirmed', 'partially_reserved', 'reserved'], true)) {
                 throw new RuntimeException("Sales order must be confirmed before reserving (status '{$so->status}').");
             }
 
+            $priority = max(1, min(999, (int) ($options['priority'] ?? 100)));
+            $expiresAt = ! empty($options['expires_at']) ? Carbon::parse($options['expires_at']) : null;
             $allReserved = true;
-            foreach ($so->lines as $line) {
-                $res = $this->reservations->reserve(
+            $anyReserved = false;
+            foreach ($so->lines->sortBy([
+                ['reserved_qty', 'asc'],
+                ['id', 'asc'],
+            ]) as $line) {
+                if (! Decimal::gt((string) $line->ordered_qty, (string) $line->reserved_qty)) {
+                    $anyReserved = true;
+                    continue;
+                }
+
+                $res = $this->reservations->reserveAvailable(
                     (int) $line->item_id, (int) ($line->warehouse_id ?? $so->warehouse_id),
                     (string) $line->ordered_qty, 'sales_order', (int) $so->id,
-                    $line->bin_id ? (int) $line->bin_id : null
+                    $line->bin_id ? (int) $line->bin_id : null,
+                    null,
+                    $expiresAt,
+                    $priority
                 );
-                $line->reserved_qty = $res->qty;
+                $line->reserved_qty = $res ? $res->qty : $line->reserved_qty;
                 $line->save();
                 if (Decimal::lt((string) $line->reserved_qty, (string) $line->ordered_qty)) {
                     $allReserved = false;
                 }
+                if (Decimal::gt((string) $line->reserved_qty, '0')) {
+                    $anyReserved = true;
+                }
             }
 
-            $so->status = $allReserved ? 'reserved' : 'partially_reserved';
+            $so->status = $allReserved ? 'reserved' : ($anyReserved ? 'partially_reserved' : 'confirmed');
             $so->save();
             $this->outbox->record('stock_reserved', $so, 'sales_order', $so->order_number, (string) $so->order_date);
 
-            return $so->fresh('lines');
+            return $so->fresh(['lines', 'reservations']);
         });
+    }
+
+    public function expireOverdueReservations(SalesOrder $so): SalesOrder
+    {
+        $this->reservations->expireOverdue('sales_order', (int) $so->id);
+
+        return $so->fresh(['lines', 'reservations']);
     }
 
     public function releaseReservation(SalesOrder $so): SalesOrder

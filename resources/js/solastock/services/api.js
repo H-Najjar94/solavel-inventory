@@ -204,7 +204,7 @@ export const api = {
     createSalesOrder: (body) => request('/sales-orders', { method: 'POST', body }),
     updateSalesOrder: (id, body) => request(`/sales-orders/${id}`, { method: 'PUT', body }),
     confirmSalesOrder: (id) => request(`/sales-orders/${id}/confirm`, { method: 'POST' }),
-    reserveSalesOrder: (id) => request(`/sales-orders/${id}/reserve`, { method: 'POST' }),
+    reserveSalesOrder: (id, body = {}) => request(`/sales-orders/${id}/reserve`, { method: 'POST', body }),
     releaseSalesOrderReservation: (id) => request(`/sales-orders/${id}/release-reservation`, { method: 'POST' }),
     cancelSalesOrder: (id) => request(`/sales-orders/${id}/cancel`, { method: 'POST' }),
 

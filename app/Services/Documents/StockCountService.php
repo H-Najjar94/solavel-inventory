@@ -38,6 +38,11 @@ class StockCountService
             $attributes['count_number'] = ! empty($attributes['count_number'])
                 ? $attributes['count_number']
                 : \App\Services\Documents\Support\DocumentNumber::next('CNT', StockCount::class, 'count_number', $orgId, $this->connection());
+            $freezeSnapshot = (bool) ($attributes['freeze_snapshot'] ?? false);
+            unset($attributes['freeze_snapshot']);
+            if ($freezeSnapshot) {
+                $attributes['snapshot_at'] = now();
+            }
 
             $count = new StockCount(array_merge(['status' => 'draft'], $attributes));
             $count->organization_id = $orgId;
@@ -56,6 +61,7 @@ class StockCountService
                     'serial_id' => $line['serial_id'] ?? null,
                     'bin_id' => $line['bin_id'] ?? null,
                     'system_qty' => $system,
+                    'snapshot_qty' => $freezeSnapshot ? $system : null,
                     'counted_qty' => $counted,
                     'variance_qty' => Decimal::qty($variance),
                 ]);
@@ -76,7 +82,14 @@ class StockCountService
                 throw new RuntimeException("Only a draft count can be edited (status '{$count->status}').");
             }
 
-            $count->fill(collect($attributes)->only(['count_number', 'count_type', 'warehouse_id', 'zone_id', 'notes'])->toArray());
+            $freezeSnapshot = (bool) ($attributes['freeze_snapshot'] ?? false);
+            unset($attributes['freeze_snapshot']);
+            $fillable = collect($attributes)->only([
+                'count_number', 'count_type', 'warehouse_id', 'zone_id', 'blind_count',
+                'scheduled_for', 'recurrence', 'abc_class', 'notes',
+            ])->toArray();
+            $fillable['snapshot_at'] = $freezeSnapshot ? ($count->snapshot_at ?? now()) : null;
+            $count->fill($fillable);
             $count->lines()->delete();
             foreach ($lines as $line) {
                 $system = Decimal::qty((string) ($line['system_qty'] ?? '0'));
@@ -90,6 +103,7 @@ class StockCountService
                     'serial_id' => $line['serial_id'] ?? null,
                     'bin_id' => $line['bin_id'] ?? null,
                     'system_qty' => $system,
+                    'snapshot_qty' => $freezeSnapshot ? $system : null,
                     'counted_qty' => $counted,
                     'variance_qty' => Decimal::qty($variance),
                 ]);
@@ -136,7 +150,11 @@ class StockCountService
                 $variance = Decimal::sub((string) $line->counted_qty, $liveOnHand);
 
                 // Persist the authoritative system_qty + variance back onto the line
-                // for the audit trail (overwrites the stale draft-time values).
+                // for the audit trail. snapshot_qty preserves the frozen count
+                // start quantity when the user enabled snapshot mode.
+                if ($line->snapshot_qty === null && $count->snapshot_at !== null) {
+                    $line->snapshot_qty = $line->system_qty;
+                }
                 $line->system_qty = Decimal::qty($liveOnHand);
                 $line->variance_qty = Decimal::qty($variance);
                 $line->save();
@@ -176,8 +194,47 @@ class StockCountService
             $count->markSystemTransition()->save();
 
             $this->outbox->record('stock_count.posted', $count, 'stock_count', $count->count_number, (string) now()->toDateString());
+            $this->createNextRecurringCount($count);
 
             return $count;
         });
+    }
+
+    private function createNextRecurringCount(StockCount $count): void
+    {
+        if (! in_array($count->recurrence, ['weekly', 'monthly', 'quarterly'], true) || ! $count->scheduled_for) {
+            return;
+        }
+
+        $nextDate = match ($count->recurrence) {
+            'weekly' => $count->scheduled_for->copy()->addWeek(),
+            'monthly' => $count->scheduled_for->copy()->addMonthNoOverflow(),
+            'quarterly' => $count->scheduled_for->copy()->addMonthsNoOverflow(3),
+        };
+
+        if (StockCount::query()
+            ->where('warehouse_id', $count->warehouse_id)
+            ->where('count_type', $count->count_type)
+            ->whereDate('scheduled_for', $nextDate->toDateString())
+            ->where('recurrence', $count->recurrence)
+            ->when($count->abc_class, fn ($q) => $q->where('abc_class', $count->abc_class), fn ($q) => $q->whereNull('abc_class'))
+            ->exists()) {
+            return;
+        }
+
+        $next = new StockCount([
+            'count_number' => \App\Services\Documents\Support\DocumentNumber::next('CNT', StockCount::class, 'count_number', (int) $count->organization_id, $this->connection()),
+            'count_type' => $count->count_type,
+            'blind_count' => (bool) $count->blind_count,
+            'warehouse_id' => $count->warehouse_id,
+            'zone_id' => $count->zone_id,
+            'scheduled_for' => $nextDate->toDateString(),
+            'recurrence' => $count->recurrence,
+            'abc_class' => $count->abc_class,
+            'status' => 'draft',
+            'notes' => trim("Recurring {$count->recurrence} count generated from {$count->count_number}."),
+        ]);
+        $next->organization_id = $count->organization_id;
+        $next->save();
     }
 }

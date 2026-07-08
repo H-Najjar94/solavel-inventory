@@ -17,6 +17,7 @@ export default function SalesOrderDetailPage() {
     const canShip = useCanCreate('inventory.manage_shipments');
     const [tab, setTab] = useState('lines');
     const [busy, setBusy] = useState(false);
+    const [reservationOptions, setReservationOptions] = useState({ expires_at: '', priority: '100' });
 
     const { data, isLoading, isMock } = useApiQuery(['sales-order', id], () => api.salesOrder(id), { fallback: null });
     const so = data?.sales_order;
@@ -25,6 +26,7 @@ export default function SalesOrderDetailPage() {
     if (!so) return <section className="page"><Breadcrumbs items={[{ label: 'Sales Orders', to: '/sales-orders' }, { label: 'Not found' }]} /><EmptyState title="Unavailable" hint="Select a tenant to load real data." /></section>;
 
     const lines = so.lines ?? [];
+    const reservations = so.reservations ?? [];
     const sum = (k) => lines.reduce((a, l) => a + Number(l[k] ?? 0), 0);
 
     async function act(fn, msg) {
@@ -87,15 +89,32 @@ export default function SalesOrderDetailPage() {
                 <dt>Notes</dt><dd>{so.notes ?? '—'}</dd>
             </dl></div>
 
-            <Tabs tabs={[{ key: 'lines', label: 'Lines' }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'reservations', label: 'Reservations' }]} active={tab} onChange={setTab} />
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Ordered</th><th>Reserved</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Unit price</th></tr></thead>
                 <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.ordered_qty}</td><td>{l.reserved_qty}</td><td>{l.picked_qty}</td><td>{l.packed_qty}</td><td>{l.shipped_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
             </table></div>}
+            {tab === 'reservations' && <div className="panel">
+                <div className="form-grid">
+                    <label className="field"><span>Expires at</span><input className="input" type="datetime-local" value={reservationOptions.expires_at} onChange={(e) => setReservationOptions({ ...reservationOptions, expires_at: e.target.value })} /></label>
+                    <label className="field"><span>Priority</span><input className="input" type="number" min="1" max="999" value={reservationOptions.priority} onChange={(e) => setReservationOptions({ ...reservationOptions, priority: e.target.value })} /></label>
+                </div>
+                {reservations.length === 0 ? <EmptyState title="No reservations" hint="Confirmed orders can reserve available stock." /> : (
+                    <table className="data-table">
+                        <thead><tr><th>Item</th><th>Warehouse</th><th>Qty</th><th>Priority</th><th>Expires</th><th>Status</th></tr></thead>
+                        <tbody>{reservations.map((r) => <tr key={r.id}>
+                            <td>{r.item?.name ?? `#${r.item_id}`}{r.item?.sku && <span className="muted"> · {r.item.sku}</span>}</td>
+                            <td>{r.warehouse?.name ?? `#${r.warehouse_id}`}</td>
+                            <td>{r.qty}</td><td>{r.priority ?? 100}</td><td>{r.expires_at ?? '—'}</td>
+                            <td>{r.expired_at ? 'expired' : r.status}</td>
+                        </tr>)}</tbody>
+                    </table>
+                )}
+            </div>}
 
             <div className="doc-actions">
                 {isDraft && <button className="btn btn--primary" disabled={!canSO.allowed || busy} onClick={() => act(() => api.confirmSalesOrder(id), 'Sales order confirmed.')}>Confirm</button>}
-                {isConfirmed && <button className="btn btn--primary" disabled={!canRes.allowed || busy} onClick={() => act(() => api.reserveSalesOrder(id), 'Stock reserved.')}>Reserve stock</button>}
+                {isConfirmed && <button className="btn btn--primary" disabled={!canRes.allowed || busy} onClick={() => act(() => api.reserveSalesOrder(id, reservationOptions), 'Stock reserved.')}>Reserve stock</button>}
                 {isReserved && <button className="btn" disabled={!canRes.allowed || busy} onClick={() => act(() => api.releaseSalesOrderReservation(id), 'Reservation released.')}>Release reservation</button>}
                 {isReserved && <button className="btn" disabled={!canPick.allowed || busy} onClick={createPickList}>Create pick list</button>}
                 {canShipNow && <button className="btn btn--primary" disabled={!canShip.allowed || busy} onClick={createShipment}>Create shipment</button>}
