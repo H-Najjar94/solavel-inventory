@@ -157,10 +157,11 @@ class TenantSchemaAuditService
             'stock_transfer_lines' => ['columns' => ['organization_id', 'stock_transfer_id', 'item_id', 'quantity']],
             'stock_adjustments' => ['columns' => ['organization_id', 'adjustment_number', 'warehouse_id', 'status']],
             'stock_adjustment_lines' => ['columns' => ['organization_id', 'stock_adjustment_id', 'item_id', 'direction', 'quantity']],
-            'stock_counts' => ['columns' => ['organization_id', 'count_number', 'warehouse_id', 'status', 'adjustment_id']],
-            'stock_count_lines' => ['columns' => ['organization_id', 'stock_count_id', 'item_id', 'system_qty', 'counted_qty']],
+            'stock_counts' => ['columns' => ['organization_id', 'count_number', 'warehouse_id', 'status', 'adjustment_id', 'blind_count', 'scheduled_for', 'abc_class', 'snapshot_at']],
+            'stock_count_lines' => ['columns' => ['organization_id', 'stock_count_id', 'item_id', 'system_qty', 'snapshot_qty', 'counted_qty']],
             'inventory_sales_orders' => ['columns' => ['organization_id', 'order_number', 'warehouse_id', 'customer_name', 'status']],
             'sales_order_lines' => ['columns' => ['organization_id', 'sales_order_id', 'item_id', 'ordered_qty', 'reserved_qty']],
+            'reservations' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'qty', 'priority', 'source_type', 'source_id', 'status', 'expires_at', 'expired_at']],
         ];
     }
 

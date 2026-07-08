@@ -5,6 +5,7 @@ namespace App\Models\Tenant;
 use App\Tenancy\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesOrder extends Model
@@ -28,5 +29,13 @@ class SalesOrder extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(Reservation::class, 'source_id')
+            ->where('source_type', 'sales_order')
+            ->orderBy('priority')
+            ->orderBy('expires_at');
     }
 }

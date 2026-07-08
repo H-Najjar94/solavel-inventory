@@ -451,15 +451,16 @@ class InventoryReportService
             ->join('items as i', 'i.id', '=', 'r.item_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'r.warehouse_id')
             ->where('r.status', 'active')
+            ->where(fn ($q) => $q->whereNull('r.expires_at')->orWhere('r.expires_at', '>', now()))
             ->when($f->itemId, fn ($x) => $x->where('r.item_id', $f->itemId))
             ->when($f->warehouseId, fn ($x) => $x->where('r.warehouse_id', $f->warehouseId))
-            ->selectRaw('i.sku, i.name item, w.name warehouse, r.qty reserved_qty, r.source_type, r.source_id, r.status')
-            ->orderByDesc('r.id')->limit($f->limit)->get();
+            ->selectRaw('i.sku, i.name item, w.name warehouse, r.qty reserved_qty, r.priority, r.expires_at, r.source_type, r.source_id, r.status')
+            ->orderBy('r.priority')->orderBy('r.expires_at')->orderByDesc('r.id')->limit($f->limit)->get();
         SourceDocumentPresenter::decorateRows($rows);
         $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
 
         return [
-            'columns' => ['sku', 'item', 'warehouse', 'reserved_qty', 'source_document', 'status'],
+            'columns' => ['sku', 'item', 'warehouse', 'reserved_qty', 'priority', 'expires_at', 'source_document', 'status'],
             'rows' => $rows,
             'summary' => ['active_reservations' => $rows->count(), 'reserved_qty' => (string) $rows->sum(fn ($r) => (float) $r->reserved_qty)],
         ];
