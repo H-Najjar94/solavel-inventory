@@ -28,4 +28,9 @@ class StockAdjustmentLine extends Model
     {
         return $this->belongsTo(Item::class, 'item_id');
     }
+
+    public function bin(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseBin::class, 'bin_id');
+    }
 }

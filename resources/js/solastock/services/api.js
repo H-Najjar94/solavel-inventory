@@ -260,12 +260,14 @@ export const api = {
     saveIntegrationItemMapping: (itemId, body) => request(`/integration/solabooks/mappings/items/${itemId}`, { method: 'PUT', body }),
     integrationEvents: (params) => request('/integration/solabooks/events', { params }),
     integrationEvent: (id) => request(`/integration/solabooks/events/${id}`),
-    retryIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/retry-placeholder`, { method: 'POST' }),
-    ignoreIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/ignore-placeholder`, { method: 'POST' }),
+    retryIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/retry`, { method: 'POST' }),
+    ignoreIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/ignore`, { method: 'POST' }),
 
     // Quick-create master data
     createCategory: (name, parentId = null) => request('/settings/categories', { method: 'POST', body: { name, parent_id: parentId } }),
+    updateCategory: (id, body) => request(`/settings/categories/${id}`, { method: 'PUT', body }),
     createBrand: (name) => request('/settings/brands', { method: 'POST', body: { name } }),
+    updateBrand: (id, body) => request(`/settings/brands/${id}`, { method: 'PUT', body }),
     createUnit: (name) => request('/settings/units', { method: 'POST', body: { name, code: name.slice(0, 8).toUpperCase() } }),
     createUnitConversion: (body) => request('/settings/unit-conversions', { method: 'POST', body }),
     createWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules', { method: 'POST', body }),

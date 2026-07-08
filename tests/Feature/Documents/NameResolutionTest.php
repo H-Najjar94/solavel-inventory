@@ -17,11 +17,14 @@ use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Http\Requests\Api\StoreStockCountRequest;
 use App\Http\Requests\Api\StoreStockTransferRequest;
 use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\Supplier;
 use App\Models\Tenant\StockTransfer;
+use App\Models\Tenant\WarehouseBin;
+use App\Models\Tenant\WarehouseZone;
 use App\Services\Documents\OpeningStockService;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
@@ -102,44 +105,50 @@ class NameResolutionTest extends TestCase
         $wh = F::warehouse(['name' => 'Readable Main']);
         $to = F::warehouse(['name' => 'Readable Reserve']);
         $item = F::item();
-        $supplier = Supplier::query()->create(['code' => 'SUP-READ', 'name' => 'Readable Supplier']);
+        $suffix = (string) now()->format('Hisv');
+        $supplier = Supplier::query()->create(['code' => 'SUP-READ-'.$suffix, 'name' => 'Readable Supplier']);
+        InventorySetting::query()->updateOrCreate(
+            ['organization_id' => 990010],
+            ['adjustment_reason_codes' => [['code' => 'name_read', 'label' => 'Name resolution']]]
+        );
 
-        app(PurchaseOrderController::class)->store($this->resolve(StorePurchaseOrderRequest::class, [
+        $poId = app(PurchaseOrderController::class)->store($this->resolve(StorePurchaseOrderRequest::class, [
             'supplier_id' => $supplier->id,
             'warehouse_id' => $wh->id,
             'lines' => [['item_id' => $item->id, 'ordered_qty' => '3', 'unit_price' => '4']],
-        ]));
-        app(GoodsReceiptController::class)->store($this->resolve(StoreGoodsReceiptRequest::class, [
+        ]))->getData(true)['data']['id'];
+        $grnId = app(GoodsReceiptController::class)->store($this->resolve(StoreGoodsReceiptRequest::class, [
             'supplier_id' => $supplier->id,
             'warehouse_id' => $wh->id,
             'lines' => [['item_id' => $item->id, 'received_qty' => '3', 'unit_cost' => '4']],
-        ]));
-        app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, [
+        ]))->getData(true)['data']['id'];
+        $transferId = app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, [
             'from_warehouse_id' => $wh->id,
             'to_warehouse_id' => $to->id,
             'lines' => [['item_id' => $item->id, 'quantity' => '1']],
-        ]));
-        app(StockAdjustmentController::class)->store($this->resolve(StoreStockAdjustmentRequest::class, [
+        ]))->getData(true)['data']['id'];
+        $adjustmentId = app(StockAdjustmentController::class)->store($this->resolve(StoreStockAdjustmentRequest::class, [
             'warehouse_id' => $wh->id,
+            'reason_code' => 'name_read',
             'lines' => [['item_id' => $item->id, 'direction' => 'increase', 'quantity' => '2', 'unit_cost' => '1']],
-        ]));
-        app(StockCountController::class)->store($this->resolve(StoreStockCountRequest::class, [
+        ]))->getData(true)['data']['id'];
+        $countId = app(StockCountController::class)->store($this->resolve(StoreStockCountRequest::class, [
             'count_type' => 'cycle',
             'warehouse_id' => $wh->id,
             'lines' => [['item_id' => $item->id, 'system_qty' => '3', 'counted_qty' => '3']],
-        ]));
-        app(SalesOrderController::class)->store($this->resolve(StoreSalesOrderRequest::class, [
+        ]))->getData(true)['data']['id'];
+        $salesId = app(SalesOrderController::class)->store($this->resolve(StoreSalesOrderRequest::class, [
             'warehouse_id' => $wh->id,
             'customer_name' => 'Readable Customer',
             'lines' => [['item_id' => $item->id, 'ordered_qty' => '1', 'unit_price' => '5']],
-        ]));
+        ]))->getData(true)['data']['id'];
 
-        $po = app(PurchaseOrderController::class)->index(Request::create('/', 'GET'))->getData(true)['data'][0];
-        $grn = app(GoodsReceiptController::class)->index(Request::create('/', 'GET'))->getData(true)['data'][0];
-        $transfer = app(StockTransferController::class)->index(Request::create('/', 'GET'))->getData(true)['data'][0];
-        $adjustment = app(StockAdjustmentController::class)->index(Request::create('/', 'GET'))->getData(true)['data'][0];
-        $count = app(StockCountController::class)->index(Request::create('/', 'GET'))->getData(true)['data'][0];
-        $sales = app(SalesOrderController::class)->index(Request::create('/', 'GET'))->getData(true)['data'][0];
+        $po = collect(app(PurchaseOrderController::class)->index(Request::create('/', 'GET'))->getData(true)['data'])->firstWhere('id', $poId);
+        $grn = collect(app(GoodsReceiptController::class)->index(Request::create('/', 'GET'))->getData(true)['data'])->firstWhere('id', $grnId);
+        $transfer = collect(app(StockTransferController::class)->index(Request::create('/', 'GET'))->getData(true)['data'])->firstWhere('id', $transferId);
+        $adjustment = collect(app(StockAdjustmentController::class)->index(Request::create('/', 'GET'))->getData(true)['data'])->firstWhere('id', $adjustmentId);
+        $count = collect(app(StockCountController::class)->index(Request::create('/', 'GET'))->getData(true)['data'])->firstWhere('id', $countId);
+        $sales = collect(app(SalesOrderController::class)->index(Request::create('/', 'GET'))->getData(true)['data'])->firstWhere('id', $salesId);
 
         $this->assertSame('Readable Supplier', $po['supplier_name']);
         $this->assertSame('Readable Main', $po['warehouse_name']);
@@ -215,16 +224,39 @@ class NameResolutionTest extends TestCase
         $this->useTenantA();
         $wh = F::warehouse();
         $item = F::item();
+        InventorySetting::query()->updateOrCreate(
+            ['organization_id' => 990010],
+            ['adjustment_reason_codes' => [['code' => 'name_read', 'label' => 'Name resolution']]]
+        );
+        $zone = WarehouseZone::query()->create([
+            'warehouse_id' => $wh->id,
+            'code' => 'ADJ-ZONE-'.now()->format('Hisv'),
+            'name' => 'Adjustment Zone',
+            'is_active' => true,
+        ]);
+        $bin = WarehouseBin::query()->create([
+            'warehouse_id' => $wh->id,
+            'zone_id' => $zone->id,
+            'code' => 'ADJ-BIN-'.now()->format('Hisv'),
+            'bin_type' => 'storage',
+            'is_active' => true,
+        ]);
         $req = $this->resolve(StoreStockAdjustmentRequest::class, [
             'warehouse_id' => $wh->id,
-            'lines' => [['item_id' => $item->id, 'direction' => 'increase', 'quantity' => '2', 'unit_cost' => '1']],
+            'reason_code' => 'name_read',
+            'lines' => [['item_id' => $item->id, 'bin_id' => $bin->id, 'direction' => 'increase', 'quantity' => '2', 'unit_cost' => '1']],
         ]);
         $id = app(StockAdjustmentController::class)->store($req)->getData(true)['data']['id'];
+        app(StockAdjustmentController::class)->post(Request::create('/', 'POST'), StockAdjustment::query()->findOrFail($id));
 
         $detail = app(StockAdjustmentController::class)->show(StockAdjustment::query()->findOrFail($id))->getData(true)['data'];
 
         $this->assertSame($wh->name, $detail['adjustment']['warehouse_name']);
         $this->assertSame($item->name, $detail['adjustment']['lines'][0]['item']['name']);
+        $this->assertSame($bin->code, $detail['adjustment']['lines'][0]['bin_code']);
+        $this->assertSame($item->name, $detail['ledger'][0]['item_name']);
+        $this->assertSame($item->sku, $detail['ledger'][0]['item_sku']);
+        $this->assertSame($wh->name, $detail['ledger'][0]['warehouse_name']);
     }
 
     #[Test]

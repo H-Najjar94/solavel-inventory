@@ -9,6 +9,7 @@ use App\Http\Requests\Api\StoreItemRequest;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBarcode;
+use App\Models\Tenant\ItemBrand;
 use App\Models\Tenant\ItemCategory;
 use App\Models\Tenant\Unit;
 use App\Models\Tenant\UnitConversion;
@@ -106,6 +107,40 @@ class CatalogSettingsAndBinControlsTest extends TestCase
     }
 
     #[Test]
+    public function category_and_brand_can_be_edited_and_assigned_to_items(): void
+    {
+        $this->useTenantA();
+
+        $settings = app(SettingsController::class);
+        $parent = $settings->storeCategory(Request::create('/settings/categories', 'POST', ['name' => 'Hardware']))->getData(true)['data'];
+        $child = $settings->storeCategory(Request::create('/settings/categories', 'POST', [
+            'name' => 'Fasteners',
+            'parent_id' => $parent['id'],
+        ]))->getData(true)['data'];
+        $renamed = $settings->updateCategory(Request::create("/settings/categories/{$child['id']}", 'PUT', [
+            'name' => 'Stainless Fasteners',
+            'parent_id' => null,
+            'is_active' => true,
+        ]), $child['id'])->getData(true)['data'];
+
+        $brand = $settings->storeBrand(Request::create('/settings/brands', 'POST', ['name' => 'Acme']))->getData(true)['data'];
+        $brand = $settings->updateBrand(Request::create("/settings/brands/{$brand['id']}", 'PUT', [
+            'name' => 'Acme Industrial',
+            'is_active' => true,
+        ]), $brand['id'])->getData(true)['data'];
+
+        $item = $this->createItem([
+            'sku' => 'CAT-BRAND',
+            'category_id' => $renamed['id'],
+            'brand_id' => $brand['id'],
+        ])->fresh();
+
+        $this->assertSame('Stainless Fasteners', ItemCategory::query()->findOrFail($item->category_id)->name);
+        $this->assertNull(ItemCategory::query()->findOrFail($item->category_id)->parent_id);
+        $this->assertSame('Acme Industrial', ItemBrand::query()->findOrFail($item->brand_id)->name);
+    }
+
+    #[Test]
     public function inventory_policy_settings_are_saved_for_negative_stock_and_costing(): void
     {
         $this->useTenantA();
@@ -133,8 +168,9 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         ]));
 
         $settings = InventorySetting::query()->firstOrFail();
-        $this->assertSame('cycle_count', $settings->adjustment_reason_codes[0]['code']);
-        $this->assertSame('Cycle count variance', $settings->adjustment_reason_codes[0]['label']);
+        $reason = collect($settings->adjustment_reason_codes)->firstWhere('code', 'cycle_count');
+        $this->assertNotNull($reason);
+        $this->assertSame('Cycle count variance', $reason['label']);
 
         $warehouse = F::warehouse(['code' => 'RSN']);
         $item = F::averageItem(['sku' => 'RSN-ITEM']);

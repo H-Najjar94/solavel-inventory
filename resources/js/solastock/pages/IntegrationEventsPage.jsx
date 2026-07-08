@@ -75,7 +75,7 @@ export default function IntegrationEventsPage() {
                         <div className="modal-actions">
                             {gate.allowed && (selected.status === 'pending' || selected.status === 'failed') &&
                                 <button className="btn" onClick={() => act(api.ignoreIntegrationEvent, selected.id, 'Event ignored.')}>Ignore</button>}
-                            {gate.allowed && <button className="btn" title="Delivery worker not implemented yet"
+                            {gate.allowed && <button className="btn" title="Deliver this event to SolaBooks"
                                 onClick={() => act(api.retryIntegrationEvent, selected.id, 'Retry attempted.')}>Retry</button>}
                             <button className="btn btn--primary" onClick={() => setSelected(null)}>Close</button>
                         </div>

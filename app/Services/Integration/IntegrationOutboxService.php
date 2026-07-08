@@ -9,10 +9,10 @@ use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Str;
 
 /**
- * Records SolaBooks integration events into the local outbox. NEVER sends
- * externally (a future worker drains the outbox) and NEVER blocks stock posting.
- * Called from inside document-posting transactions so the event is durable iff
- * the post commits. Idempotent: re-posting a document does not duplicate events.
+ * Records SolaBooks integration events into the local outbox. It NEVER sends
+ * externally inside stock transactions and NEVER blocks stock posting. Delivery
+ * happens later through the retry/worker path, over the SolaBooks API only.
+ * Idempotent: re-posting a document does not duplicate events.
  */
 class IntegrationOutboxService
 {

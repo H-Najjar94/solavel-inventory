@@ -17,6 +17,9 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [conversion, setConversion] = useState({ from_unit_id: '', to_unit_id: '', factor: '' });
     const [category, setCategory] = useState({ name: '', parent_id: '' });
+    const [brand, setBrand] = useState({ name: '' });
+    const [editingCategory, setEditingCategory] = useState(null);
+    const [editingBrand, setEditingBrand] = useState(null);
     const [reasonCode, setReasonCode] = useState({ code: '', label: '' });
     const [reorderRule, setReorderRule] = useState({
         item_id: '',
@@ -75,6 +78,48 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push('Category saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function saveCategoryEdit(e) {
+        e.preventDefault();
+        if (!editingCategory) return;
+        try {
+            await api.updateCategory(editingCategory.id, {
+                name: editingCategory.name,
+                parent_id: editingCategory.parent_id ? Number(editingCategory.parent_id) : null,
+                is_active: editingCategory.is_active !== false,
+            });
+            setEditingCategory(null);
+            await qc.invalidateQueries({ queryKey: ['settings'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push('Category updated.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function addBrand(e) {
+        e.preventDefault();
+        try {
+            await api.createBrand(brand.name);
+            setBrand({ name: '' });
+            await qc.invalidateQueries({ queryKey: ['settings'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push('Brand saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function saveBrandEdit(e) {
+        e.preventDefault();
+        if (!editingBrand) return;
+        try {
+            await api.updateBrand(editingBrand.id, {
+                name: editingBrand.name,
+                is_active: editingBrand.is_active !== false,
+            });
+            setEditingBrand(null);
+            await qc.invalidateQueries({ queryKey: ['settings'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push('Brand updated.', 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -145,6 +190,10 @@ export default function SettingsPage() {
                         </Field>
                         <button className="btn btn--primary">Add category</button>
                     </div></form>
+                    <form className="card" onSubmit={addBrand}><div className="card-head"><h3>Brand</h3></div><div className="card-body">
+                        <Field label="Name"><input className="input" value={brand.name} onChange={(e) => setBrand({ name: e.target.value })} required /></Field>
+                        <button className="btn btn--primary">Add brand</button>
+                    </div></form>
                     <form className="card" onSubmit={addConversion}><div className="card-head"><h3>Unit conversion</h3></div><div className="card-body">
                         <Field label="From unit"><select className="input" value={conversion.from_unit_id} onChange={(e) => setConversion({ ...conversion, from_unit_id: e.target.value })} required>
                             <option value="">Select</option>{(s.units ?? []).map((u) => <option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
@@ -156,6 +205,31 @@ export default function SettingsPage() {
                         <button className="btn btn--primary">Save conversion</button>
                     </div></form>
                 </div>
+                {(s.categories ?? []).length > 0 && <form onSubmit={saveCategoryEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Category</th><th>Parent</th><th>Level</th><th>Status</th><th></th></tr></thead><tbody>
+                    {(s.categories ?? []).map((c) => {
+                        const editing = editingCategory?.id === c.id;
+                        return <tr key={c.id}>
+                            <td>{editing ? <input className="input" value={editingCategory.name} onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })} /> : c.name}</td>
+                            <td>{editing ? <select className="input" value={editingCategory.parent_id ?? ''} onChange={(e) => setEditingCategory({ ...editingCategory, parent_id: e.target.value })}>
+                                <option value="">Top level</option>
+                                {(s.categories ?? []).filter((p) => p.id !== c.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select> : ((s.categories ?? []).find((p) => p.id === c.parent_id)?.name ?? 'Top level')}</td>
+                            <td>{c.level ?? 0}</td>
+                            <td>{editing ? <label className="check-inline"><input type="checkbox" checked={editingCategory.is_active !== false} onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })} /> Active</label> : (c.is_active === false ? 'Inactive' : 'Active')}</td>
+                            <td>{editing ? <><button className="btn btn--primary btn--sm">Save</button> <button type="button" className="btn btn--sm" onClick={() => setEditingCategory(null)}>Cancel</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingCategory({ id: c.id, name: c.name, parent_id: c.parent_id ?? '', is_active: c.is_active !== false })}>Edit</button>}</td>
+                        </tr>;
+                    })}
+                </tbody></table></form>}
+                {(s.brands ?? []).length > 0 && <form onSubmit={saveBrandEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Brand</th><th>Status</th><th></th></tr></thead><tbody>
+                    {(s.brands ?? []).map((b) => {
+                        const editing = editingBrand?.id === b.id;
+                        return <tr key={b.id}>
+                            <td>{editing ? <input className="input" value={editingBrand.name} onChange={(e) => setEditingBrand({ ...editingBrand, name: e.target.value })} /> : b.name}</td>
+                            <td>{editing ? <label className="check-inline"><input type="checkbox" checked={editingBrand.is_active !== false} onChange={(e) => setEditingBrand({ ...editingBrand, is_active: e.target.checked })} /> Active</label> : (b.is_active === false ? 'Inactive' : 'Active')}</td>
+                            <td>{editing ? <><button className="btn btn--primary btn--sm">Save</button> <button type="button" className="btn btn--sm" onClick={() => setEditingBrand(null)}>Cancel</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingBrand({ id: b.id, name: b.name, is_active: b.is_active !== false })}>Edit</button>}</td>
+                        </tr>;
+                    })}
+                </tbody></table></form>}
                 {(s.unit_conversions ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>From</th><th>To</th><th>Factor</th><th>Item</th></tr></thead><tbody>
                     {s.unit_conversions.map((c) => <tr key={c.id}><td>{c.from_unit?.code ?? c.from_unit_id}</td><td>{c.to_unit?.code ?? c.to_unit_id}</td><td>{c.factor}</td><td>{c.item?.sku ?? 'Global'}</td></tr>)}
                 </tbody></table>}
