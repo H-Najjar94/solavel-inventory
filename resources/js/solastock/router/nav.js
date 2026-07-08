@@ -12,6 +12,7 @@ export const NAV = [
     { key: 'adjustments', label: 'Adjustments', path: '/adjustments', icon: 'fa-solid fa-sliders', perm: 'inventory.view_stock', group: 'Operations' },
     { key: 'transfers', label: 'Transfers', path: '/transfers', icon: 'fa-solid fa-right-left', perm: 'inventory.view_stock', group: 'Operations' },
     { key: 'counts', label: 'Stock Counts', path: '/counts', icon: 'fa-solid fa-list-check', perm: 'inventory.view_stock', group: 'Operations' },
+    { key: 'scanner', label: 'Scanner', path: '/scanner', icon: 'fa-solid fa-barcode', perm: 'inventory.view_stock', group: 'Operations' },
     { key: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: 'fa-solid fa-truck-field', perm: 'inventory.view_items', group: 'Purchasing' },
     { key: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: 'fa-solid fa-file-invoice', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'goods-receipts', label: 'Goods Receipts', path: '/goods-receipts', icon: 'fa-solid fa-dolly', perm: 'inventory.view_stock', group: 'Purchasing' },

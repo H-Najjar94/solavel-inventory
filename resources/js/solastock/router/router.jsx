@@ -34,6 +34,7 @@ import TransferDetailPage from '../pages/TransferDetailPage.jsx';
 import CountsPage from '../pages/CountsPage.jsx';
 import CountFormPage from '../pages/CountFormPage.jsx';
 import CountDetailPage from '../pages/CountDetailPage.jsx';
+import ScannerPage from '../pages/ScannerPage.jsx';
 import SalesOrdersPage from '../pages/SalesOrdersPage.jsx';
 import SalesOrderFormPage from '../pages/SalesOrderFormPage.jsx';
 import SalesOrderDetailPage from '../pages/SalesOrderDetailPage.jsx';
@@ -128,6 +129,7 @@ export const router = createBrowserRouter(
                 { path: 'counts/new', element: protectedElement(<CountFormPage />, 'inventory.manage_adjustments') },
                 { path: 'counts/:id', element: <CountDetailPage /> },
                 { path: 'counts/:id/edit', element: protectedElement(<CountFormPage />, 'inventory.manage_adjustments') },
+                { path: 'scanner', element: <ScannerPage /> },
                 { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
                 { path: 'purchase-orders/new', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_adjustments') },
                 { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },

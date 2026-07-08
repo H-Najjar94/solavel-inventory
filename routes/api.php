@@ -64,6 +64,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_items')->name('api.v1.items.index');
     Route::get('/items/barcode/lookup', [ItemController::class, 'barcodeLookup'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.barcode.lookup');
+    Route::get('/scanner/lookup', [\App\Http\Controllers\Api\V1\ScannerController::class, 'lookup'])
+        ->middleware('perm:inventory.view_stock')->name('api.v1.scanner.lookup');
     Route::get('/items/{item}', [ItemController::class, 'show'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.show');
     Route::post('/items', [ItemController::class, 'store'])
@@ -125,6 +127,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouses.store');
     Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update'])
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouses.update');
+    Route::get('/warehouses/{warehouse}/labels', [\App\Http\Controllers\Api\V1\WarehouseStructureController::class, 'labelSheet'])
+        ->middleware('perm:inventory.view_warehouses')->name('api.v1.warehouses.labels');
 
     // Warehouse images — PRIVATE storage, authenticated org-scoped serve route.
     // View/serve = view_warehouses (viewers incl.); mutate = manage_warehouses.
@@ -315,6 +319,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.index');
     Route::get('/shipments/{shipment}', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'show'])
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.show');
+    Route::get('/shipments/{shipment}/rates', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'rates'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.rates');
+    Route::get('/shipments/{shipment}/tracking', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'tracking'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.tracking');
     Route::get('/sales-orders/{sales_order}/shipment-draft', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'fromSalesOrder'])
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.from-so');
     Route::post('/shipments', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'store'])
@@ -323,6 +331,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_shipments')->name('api.v1.shipments.update');
     Route::post('/shipments/{shipment}/post', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'post'])
         ->middleware('perm:inventory.manage_shipments')->name('api.v1.shipments.post');
+    Route::post('/shipments/{shipment}/label', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'label'])
+        ->middleware('perm:inventory.manage_shipments')->name('api.v1.shipments.label');
 
     // ── Sales Fulfillment: Returns (post = stock IN via StockLedgerService) ──
     Route::get('/sales-returns', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'index'])

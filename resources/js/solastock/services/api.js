@@ -134,6 +134,7 @@ export const api = {
     },
     setWarehouseImagePrimary: (imageId) => request(`/warehouse-images/${imageId}/primary`, { method: 'POST' }),
     deleteWarehouseImage: (imageId) => request(`/warehouse-images/${imageId}`, { method: 'DELETE' }),
+    warehouseLabels: (id) => request(`/warehouses/${id}/labels`),
 
     openingStock: (params) => request('/opening-stock', { params }),
     openingStockEntry: (id) => request(`/opening-stock/${id}`),
@@ -233,6 +234,9 @@ export const api = {
     createShipment: (body) => request('/shipments', { method: 'POST', body }),
     updateShipment: (id, body) => request(`/shipments/${id}`, { method: 'PUT', body }),
     postShipment: (id) => request(`/shipments/${id}/post`, { method: 'POST' }),
+    shipmentRates: (id) => request(`/shipments/${id}/rates`),
+    shipmentLabel: (id, body = {}) => request(`/shipments/${id}/label`, { method: 'POST', body }),
+    shipmentTracking: (id) => request(`/shipments/${id}/tracking`),
 
     salesReturns: (params) => request('/sales-returns', { params }),
     salesReturn: (id) => request(`/sales-returns/${id}`),
@@ -308,6 +312,7 @@ export const api = {
     calculateWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules/calculate', { method: 'POST', body }),
     createAdjustmentReasonCode: (body) => request('/settings/adjustment-reason-codes', { method: 'POST', body }),
     barcodeLookup: (barcode) => request('/items/barcode/lookup', { params: { barcode } }),
+    scannerLookup: (code) => request('/scanner/lookup', { params: { code } }),
     createItemBarcode: (itemId, body) => request(`/items/${itemId}/barcodes`, { method: 'POST', body }),
     makeItemBarcodePrimary: (itemId, barcodeId) => request(`/items/${itemId}/barcodes/${barcodeId}/primary`, { method: 'POST' }),
     deleteItemBarcode: (itemId, barcodeId) => request(`/items/${itemId}/barcodes/${barcodeId}`, { method: 'DELETE' }),
