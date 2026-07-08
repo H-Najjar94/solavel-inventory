@@ -58,6 +58,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.layout.get');
     Route::put('/dashboard/layout', [DashboardController::class, 'saveLayout'])
         ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.layout.save');
+    Route::get('/dashboard/alerts', [DashboardController::class, 'alerts'])
+        ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.alerts');
+    Route::post('/dashboard/alerts/{alert}/acknowledge', [DashboardController::class, 'acknowledgeAlert'])
+        ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.alerts.acknowledge');
 
     // Items
     Route::get('/items', [ItemController::class, 'index'])
@@ -70,6 +74,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_items')->name('api.v1.items.show');
     Route::post('/items', [ItemController::class, 'store'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.store');
+    Route::post('/items/bulk-update', [ItemController::class, 'bulkUpdate'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.bulk-update');
     Route::put('/items/{item}', [ItemController::class, 'update'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.update');
     Route::get('/items/{item}/movements', [ItemController::class, 'movements'])
@@ -176,6 +182,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     // Stock Ledger (read-only)
     Route::get('/ledger', [StockLedgerController::class, 'index'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.ledger.index');
+    Route::get('/audit-logs', [\App\Http\Controllers\Api\V1\InventoryAuditController::class, 'index'])
+        ->middleware('perm:inventory.view_ledger')->name('api.v1.audit-logs.index');
     // Which FIFO cost layers a single outbound movement consumed (read-only).
     Route::get('/movements/{ledger}/consumed-layers', [StockLedgerController::class, 'consumedLayers'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.movements.consumed-layers');
@@ -411,6 +419,14 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     // ── Reports (read-only, registry-driven) ──
     Route::get('/reports', [\App\Http\Controllers\Api\V1\ReportController::class, 'index'])
         ->middleware('perm:inventory.view_reports')->name('api.v1.reports.index');
+    Route::get('/reports/schedules', [\App\Http\Controllers\Api\V1\ReportController::class, 'schedules'])
+        ->middleware('perm:inventory.view_reports')->name('api.v1.reports.schedules.index');
+    Route::post('/reports/schedules', [\App\Http\Controllers\Api\V1\ReportController::class, 'storeSchedule'])
+        ->middleware('perm:inventory.export_reports')->name('api.v1.reports.schedules.store');
+    Route::put('/reports/schedules/{schedule}', [\App\Http\Controllers\Api\V1\ReportController::class, 'updateSchedule'])
+        ->middleware('perm:inventory.export_reports')->name('api.v1.reports.schedules.update');
+    Route::post('/reports/schedules/{schedule}/run', [\App\Http\Controllers\Api\V1\ReportController::class, 'runSchedule'])
+        ->middleware('perm:inventory.export_reports')->name('api.v1.reports.schedules.run');
     Route::get('/reports/{report}/export', [\App\Http\Controllers\Api\V1\ReportController::class, 'exportReport'])
         ->middleware('perm:inventory.export_reports')->name('api.v1.reports.export');
     Route::get('/reports/{report}', [\App\Http\Controllers\Api\V1\ReportController::class, 'show'])
@@ -427,10 +443,16 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
             ->name('api.v1.settings.reorder.calculate');
         Route::post('/settings/warehouse-reorder-rules', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeWarehouseReorderRule']);
         Route::post('/settings/adjustment-reason-codes', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeAdjustmentReasonCode']);
+        Route::post('/settings/currency-rates', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCurrencyRate']);
         Route::post('/settings/categories', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCategory']);
         Route::put('/settings/categories/{category}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateCategory']);
         Route::post('/settings/brands', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeBrand']);
         Route::put('/settings/brands/{brand}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateBrand']);
+        Route::get('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'index']);
+        Route::post('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'store']);
+        Route::put('/settings/custom-roles/{role}', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'update']);
+        Route::post('/settings/custom-role-assignments', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'assign']);
+        Route::delete('/settings/custom-role-assignments/{userId}', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'unassign']);
     });
 
     // ── SolaBooks integration (mappings + local outbox + authenticated delivery) ──

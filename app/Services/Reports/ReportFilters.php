@@ -19,6 +19,8 @@ final class ReportFilters
         public readonly ?string $status = null,
         public readonly ?string $from = null,
         public readonly ?string $to = null,
+        public readonly ?string $asAt = null,
+        public readonly ?string $currency = null,
         public readonly int $days = 90,
         public readonly int $limit = 1000,
     ) {}
@@ -34,8 +36,28 @@ final class ReportFilters
             status: $r->query('status') ?: null,
             from: $r->query('from') ?: null,
             to: $r->query('to') ?: null,
+            asAt: $r->query('as_at') ?: null,
+            currency: $r->query('currency') ? strtoupper((string) $r->query('currency')) : null,
             days: (int) $r->query('days', 90),
             limit: min((int) $r->query('limit', 1000), 5000),
+        );
+    }
+
+    public static function fromArray(array $filters): self
+    {
+        return new self(
+            itemId: isset($filters['item_id']) && $filters['item_id'] !== '' ? (int) $filters['item_id'] : null,
+            warehouseId: isset($filters['warehouse_id']) && $filters['warehouse_id'] !== '' ? (int) $filters['warehouse_id'] : null,
+            binId: isset($filters['bin_id']) && $filters['bin_id'] !== '' ? (int) $filters['bin_id'] : null,
+            categoryId: isset($filters['category_id']) && $filters['category_id'] !== '' ? (int) $filters['category_id'] : null,
+            supplierId: isset($filters['supplier_id']) && $filters['supplier_id'] !== '' ? (int) $filters['supplier_id'] : null,
+            status: $filters['status'] ?? null,
+            from: $filters['from'] ?? null,
+            to: $filters['to'] ?? null,
+            asAt: $filters['as_at'] ?? null,
+            currency: isset($filters['currency']) ? strtoupper((string) $filters['currency']) : null,
+            days: (int) ($filters['days'] ?? 90),
+            limit: min((int) ($filters['limit'] ?? 1000), 5000),
         );
     }
 
@@ -44,7 +66,7 @@ final class ReportFilters
         return array_filter([
             'item_id' => $this->itemId, 'warehouse_id' => $this->warehouseId, 'bin_id' => $this->binId,
             'category_id' => $this->categoryId, 'supplier_id' => $this->supplierId, 'status' => $this->status,
-            'from' => $this->from, 'to' => $this->to, 'days' => $this->days,
+            'from' => $this->from, 'to' => $this->to, 'as_at' => $this->asAt, 'currency' => $this->currency, 'days' => $this->days,
         ], fn ($v) => $v !== null);
     }
 }

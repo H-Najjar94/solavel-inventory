@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\Tenant\InventoryCurrencyRate;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBrand;
@@ -47,6 +48,11 @@ class SettingsController extends ApiController
             'warehouse_reorder_rules' => WarehouseReorderRule::query()
                 ->with(['item:id,sku,name', 'warehouse:id,code,name'])
                 ->orderByDesc('id')
+                ->limit(250)
+                ->get(),
+            'currency_rates' => InventoryCurrencyRate::query()
+                ->orderBy('currency_code')
+                ->orderByDesc('effective_date')
                 ->limit(250)
                 ->get(),
         ]);
@@ -185,6 +191,25 @@ class SettingsController extends ApiController
         $settings->forceFill(['adjustment_reason_codes' => $codes])->save();
 
         return $this->success($settings->fresh(), 201);
+    }
+
+    public function storeCurrencyRate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'currency_code' => ['required', 'string', 'size:3'],
+            'rate_to_base' => ['required', 'numeric', 'gt:0'],
+            'effective_date' => ['required', 'date'],
+        ]);
+
+        $rate = InventoryCurrencyRate::query()->updateOrCreate(
+            [
+                'currency_code' => strtoupper($data['currency_code']),
+                'effective_date' => $data['effective_date'],
+            ],
+            ['rate_to_base' => $data['rate_to_base']],
+        );
+
+        return $this->success($rate->fresh(), 201);
     }
 
     public function storeUnitConversion(Request $request): JsonResponse

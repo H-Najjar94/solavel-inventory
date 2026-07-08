@@ -19,6 +19,7 @@ use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ItemController extends ApiController
 {
@@ -466,6 +467,54 @@ class ItemController extends ApiController
         $this->audit('item.updated', $item, $before);
 
         return $this->success($item->fresh());
+    }
+
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'item_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'item_ids.*' => ['required', 'integer', Rule::exists('items', 'id')],
+            'is_active' => ['nullable', 'boolean'],
+            'category_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')],
+            'brand_id' => ['nullable', 'integer', Rule::exists('item_brands', 'id')],
+            'enable_reorder_alert' => ['nullable', 'boolean'],
+            'reorder_point' => ['nullable', 'numeric', 'min:0'],
+            'reorder_qty' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $fields = collect($data)->only([
+            'is_active',
+            'category_id',
+            'brand_id',
+            'enable_reorder_alert',
+            'reorder_point',
+            'reorder_qty',
+        ])->filter(fn ($v) => $v !== null)->all();
+
+        if ($fields === []) {
+            return $this->error('bulk_update_empty', 'Select at least one bulk update field.', 422);
+        }
+
+        $items = Item::query()->whereIn('id', $data['item_ids'])->get();
+        $updated = 0;
+        foreach ($items as $item) {
+            $before = $item->only(array_keys($fields));
+            $item->fill($fields)->save();
+            $updated++;
+            InventoryAuditLog::create([
+                'organization_id' => app(OrganizationContext::class)->id(),
+                'actor_user_id' => auth()->id(),
+                'action' => 'item.bulk_updated',
+                'entity_type' => 'item',
+                'entity_id' => $item->id,
+                'before' => $before,
+                'after' => $item->only(array_keys($fields)),
+                'document_ref' => $item->sku,
+                'created_at' => now(),
+            ]);
+        }
+
+        return $this->success(['updated' => $updated]);
     }
 
     public function movements(Request $request, Item $item): JsonResponse

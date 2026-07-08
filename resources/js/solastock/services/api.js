@@ -90,11 +90,14 @@ export const api = {
     dashboard: () => request('/dashboard'),
     getDashboardLayout: () => request('/dashboard/layout'),
     saveDashboardLayout: (layout) => request('/dashboard/layout', { method: 'PUT', body: { layout } }),
+    dashboardAlerts: () => request('/dashboard/alerts'),
+    acknowledgeDashboardAlert: (id) => request(`/dashboard/alerts/${id}/acknowledge`, { method: 'POST' }),
 
     items: (params) => request('/items', { params }),
     item: (id) => request(`/items/${id}`),
     createItem: (body) => request('/items', { method: 'POST', body }),
     updateItem: (id, body) => request(`/items/${id}`, { method: 'PUT', body }),
+    bulkUpdateItems: (body) => request('/items/bulk-update', { method: 'POST', body }),
     itemMovements: (id, params) => request(`/items/${id}/movements`, { params }),
     itemValuation: (id) => request(`/items/${id}/valuation`),
     movementConsumedLayers: (ledgerId) => request(`/movements/${ledgerId}/consumed-layers`),
@@ -159,6 +162,7 @@ export const api = {
     reverseAdjustment: (id) => request(`/adjustments/${id}/reverse`, { method: 'POST' }),
 
     ledger: (params) => request('/ledger', { params }),
+    auditLogs: (params) => request('/audit-logs', { params }),
     balances: (params) => request('/balances', { params }),
 
     // Suppliers
@@ -279,6 +283,10 @@ export const api = {
     // Reports
     reportsList: () => request('/reports'),
     report: (name, params) => request(`/reports/${name}`, { params }),
+    reportSchedules: () => request('/reports/schedules'),
+    createReportSchedule: (body) => request('/reports/schedules', { method: 'POST', body }),
+    updateReportSchedule: (id, body) => request(`/reports/schedules/${id}`, { method: 'PUT', body }),
+    runReportSchedule: (id) => request(`/reports/schedules/${id}/run`, { method: 'POST' }),
     // CSV export is a browser download (not JSON) — build the URL with filters.
     reportExportUrl: (name, params = {}, format = 'csv') => {
         const url = new URL(`${BASE}/reports/${name}/export`, window.location.origin);
@@ -311,6 +319,12 @@ export const api = {
     createWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules', { method: 'POST', body }),
     calculateWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules/calculate', { method: 'POST', body }),
     createAdjustmentReasonCode: (body) => request('/settings/adjustment-reason-codes', { method: 'POST', body }),
+    createCurrencyRate: (body) => request('/settings/currency-rates', { method: 'POST', body }),
+    customRoles: () => request('/settings/custom-roles'),
+    createCustomRole: (body) => request('/settings/custom-roles', { method: 'POST', body }),
+    updateCustomRole: (id, body) => request(`/settings/custom-roles/${id}`, { method: 'PUT', body }),
+    assignCustomRole: (body) => request('/settings/custom-role-assignments', { method: 'POST', body }),
+    unassignCustomRole: (userId) => request(`/settings/custom-role-assignments/${userId}`, { method: 'DELETE' }),
     barcodeLookup: (barcode) => request('/items/barcode/lookup', { params: { barcode } }),
     scannerLookup: (code) => request('/scanner/lookup', { params: { code } }),
     createItemBarcode: (itemId, body) => request(`/items/${itemId}/barcodes`, { method: 'POST', body }),

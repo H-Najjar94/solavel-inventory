@@ -3,7 +3,10 @@
 namespace App\Services\Access;
 
 use App\Tenancy\OrganizationContext;
+use App\Models\Tenant\InventoryCustomRole;
+use App\Models\Tenant\InventoryUserRoleAssignment;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Resolves whether the current user has an inventory permission for the active
@@ -76,6 +79,11 @@ class InventoryPermissionService
             return $this->roleCache[$orgId][$userId];
         }
 
+        $customRole = $this->customRole($userId);
+        if ($customRole !== null) {
+            return $this->roleCache[$orgId][$userId] = $customRole;
+        }
+
         // The operator demo sandbox (never enabled in production) is fully
         // navigable so the demo data is usable — it has no central membership.
         if ($this->isDemoOrg($orgId) && (bool) config('inventory.demo_tenant.enabled', false)) {
@@ -137,6 +145,36 @@ class InventoryPermissionService
         $roles = (array) config('inventory_permissions.roles', []);
         $set = $roles[$role] ?? [];
 
+        if ($set === []) {
+            try {
+                $custom = InventoryCustomRole::query()
+                    ->where('key', $role)
+                    ->where('is_active', true)
+                    ->first();
+                $set = $custom?->permissions ?? [];
+            } catch (\Throwable) {
+                $set = [];
+            }
+        }
+
         return $set === '*' ? ['*'] : (array) $set;
+    }
+
+    private function customRole(int $userId): ?string
+    {
+        try {
+            if (! Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_role_assignments')) {
+                return null;
+            }
+
+            $assignment = InventoryUserRoleAssignment::query()
+                ->with('role:id,key,is_active')
+                ->where('user_id', $userId)
+                ->first();
+
+            return $assignment?->role?->is_active ? $assignment->role->key : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

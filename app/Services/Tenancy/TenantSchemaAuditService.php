@@ -167,6 +167,11 @@ class TenantSchemaAuditService
             'shipment_lines' => ['columns' => ['organization_id', 'shipment_id', 'item_id', 'quantity', 'lot_id', 'serial_id']],
             'sales_returns' => ['columns' => ['organization_id', 'return_number', 'warehouse_id', 'status', 'customer_id', 'authorized_at', 'inspected_at']],
             'sales_return_lines' => ['columns' => ['organization_id', 'sales_return_id', 'item_id', 'returned_qty', 'condition', 'inspection_status', 'disposition']],
+            'inventory_alerts' => ['columns' => ['organization_id', 'alert_key', 'type', 'severity', 'title', 'status', 'channels'], 'indexes' => ['inventory_alerts_org_key_uniq']],
+            'inventory_scheduled_reports' => ['columns' => ['organization_id', 'report_key', 'name', 'filters', 'recipients', 'frequency', 'format', 'next_run_at', 'last_run_at', 'last_status']],
+            'inventory_currency_rates' => ['columns' => ['organization_id', 'currency_code', 'rate_to_base', 'effective_date'], 'indexes' => ['inventory_currency_rates_org_ccy_date_uniq']],
+            'inventory_custom_roles' => ['columns' => ['organization_id', 'key', 'name', 'permissions', 'is_active'], 'indexes' => ['inventory_custom_roles_org_key_uniq']],
+            'inventory_user_role_assignments' => ['columns' => ['organization_id', 'user_id', 'role_id', 'assigned_by'], 'indexes' => ['inventory_role_assignments_org_user_uniq']],
         ];
     }
 
