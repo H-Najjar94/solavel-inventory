@@ -22,8 +22,8 @@ export default function SalesReturnDetailPage() {
     if (isLoading) return <section className="page"><Skeleton /></section>;
     if (!r) return <section className="page"><Breadcrumbs items={[{ label: 'Sales Returns', to: '/sales-returns' }, { label: 'Not found' }]} /><EmptyState title="Unavailable" hint="Select a tenant to load real data." /></section>;
 
-    async function post() {
-        try { await api.postSalesReturn(id); toast.push('Return posted — resellable stock brought back in.', 'success'); qc.invalidateQueries({ queryKey: ['sales-return', id] }); }
+    async function action(fn, msg) {
+        try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['sales-return', id] }); qc.invalidateQueries({ queryKey: ['sales-returns'] }); }
         catch (e) { toast.push(e.message, 'error'); }
     }
 
@@ -38,21 +38,25 @@ export default function SalesReturnDetailPage() {
                 <dt>Return date</dt><dd>{r.return_date}</dd>
                 <dt>Warehouse</dt><dd>#{r.warehouse_id}</dd>
                 <dt>Source shipment</dt><dd>{r.shipment_id ? <Link to={`/shipments/${r.shipment_id}`}>#{r.shipment_id}</Link> : '—'}</dd>
+                <dt>Authorized</dt><dd>{r.authorized_at ?? '—'}</dd>
+                <dt>Inspected</dt><dd>{r.inspected_at ?? '—'}</dd>
                 <dt>Reason</dt><dd>{r.reason ?? '—'}</dd>
             </dl></div>
 
             <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'ledger', label: 'Ledger result' }]} active={tab} onChange={setTab} />
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Returned</th><th>Condition</th><th>Unit cost</th></tr></thead>
-                <tbody>{(r.lines ?? []).map((l) => <tr key={l.id}><td>#{l.item_id}</td><td>{l.returned_qty}</td><td>{l.condition}</td><td>{l.unit_cost}</td></tr>)}</tbody>
+                <thead><tr><th>Item</th><th>Returned</th><th>Condition</th><th>Inspection</th><th>Disposition</th><th>Unit cost</th></tr></thead>
+                <tbody>{(r.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.returned_qty}</td><td>{l.condition}</td><td>{l.inspection_status ?? 'pending'}</td><td>{l.disposition ?? '—'}</td><td>{l.unit_cost}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
 
             <div className="doc-actions">
-                {r.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmPost(true)}>Post return</button>}
+                {r.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.authorizeSalesReturn(id), 'RMA authorized.')}>Authorize RMA</button>}
+                {r.status === 'authorized' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.inspectSalesReturn(id), 'Return inspected.')}>Mark inspected</button>}
+                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmPost(true)}>Post return</button>}
             </div>
             <ConfirmPostModal open={confirmPost} name="sales return"
-                onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={() => { setConfirmPost(false); action(() => api.postSalesReturn(id), 'Return posted — eligible stock brought back in.'); }} onCancel={() => setConfirmPost(false)} />
         </section>
     );
 }

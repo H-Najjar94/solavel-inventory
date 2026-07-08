@@ -194,16 +194,32 @@ class RecallService
     /** Shipment documents that issued the affected lot/serial (customer placeholder). */
     private function shippedDocuments(int $itemId, ?int $lotId, ?int $serialId): array
     {
-        return StockLedger::query()->where('item_id', $itemId)->where('direction', 'out')
+        $rows = StockLedger::query()->where('item_id', $itemId)->where('direction', 'out')
             ->where('source_type', 'like', '%Shipment')
             ->when($lotId, fn ($q) => $q->where('lot_id', $lotId))
             ->when($serialId, fn ($q) => $q->where('serial_id', $serialId))
-            ->get(['source_type', 'source_id', 'quantity', 'moved_at'])
+            ->get(['source_type', 'source_id', 'quantity', 'moved_at']);
+
+        $shipmentIds = $rows->pluck('source_id')->unique()->values();
+        $shipments = DB::connection($this->conn())->table('shipments as s')
+            ->leftJoin('inventory_sales_orders as so', 'so.id', '=', 's.sales_order_id')
+            ->leftJoin('inventory_customers as c', 'c.id', '=', 'so.customer_id')
+            ->where('s.organization_id', (int) $this->context->id())
+            ->whereIn('s.id', $shipmentIds)
+            ->selectRaw('s.id, s.shipment_number, so.id sales_order_id, so.order_number, COALESCE(c.name, so.customer_name) customer_name, c.code customer_code')
+            ->get()
+            ->keyBy('id');
+
+        return $rows
             ->map(fn ($r) => [
                 'shipment_id' => $r->source_id,
+                'shipment_number' => $shipments[$r->source_id]->shipment_number ?? null,
+                'sales_order_id' => $shipments[$r->source_id]->sales_order_id ?? null,
+                'sales_order_number' => $shipments[$r->source_id]->order_number ?? null,
                 'qty' => $r->quantity,
                 'at' => $r->moved_at,
-                'customer' => null, // placeholder — wired when SO/customer link lands
+                'customer' => $shipments[$r->source_id]->customer_name ?? null,
+                'customer_code' => $shipments[$r->source_id]->customer_code ?? null,
             ])->all();
     }
 

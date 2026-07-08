@@ -162,7 +162,14 @@ export const api = {
 
     // Suppliers
     suppliers: (params) => request('/suppliers', { params }),
+    supplier: (id) => request(`/suppliers/${id}`),
     createSupplier: (body) => request('/suppliers', { method: 'POST', body }),
+    createSupplierFull: (body) => request('/suppliers', { method: 'POST', body }),
+    updateSupplier: (id, body) => request(`/suppliers/${id}`, { method: 'PUT', body }),
+    customers: (params) => request('/customers', { params }),
+    customer: (id) => request(`/customers/${id}`),
+    createCustomer: (body) => request('/customers', { method: 'POST', body }),
+    updateCustomer: (id, body) => request(`/customers/${id}`, { method: 'PUT', body }),
 
     // Purchase Orders
     purchaseOrders: (params) => request('/purchase-orders', { params }),
@@ -232,6 +239,8 @@ export const api = {
     createSalesReturn: (body) => request('/sales-returns', { method: 'POST', body }),
     updateSalesReturn: (id, body) => request(`/sales-returns/${id}`, { method: 'PUT', body }),
     postSalesReturn: (id) => request(`/sales-returns/${id}/post`, { method: 'POST' }),
+    authorizeSalesReturn: (id) => request(`/sales-returns/${id}/authorize`, { method: 'POST' }),
+    inspectSalesReturn: (id, body = {}) => request(`/sales-returns/${id}/inspect`, { method: 'POST', body }),
 
     // Traceability — lots
     lots: (params) => request('/lots', { params }),
@@ -303,11 +312,7 @@ export const api = {
     makeItemBarcodePrimary: (itemId, barcodeId) => request(`/items/${itemId}/barcodes/${barcodeId}/primary`, { method: 'POST' }),
     deleteItemBarcode: (itemId, barcodeId) => request(`/items/${itemId}/barcodes/${barcodeId}`, { method: 'DELETE' }),
 
-    // Supplier detail/update + quick-create
-    supplier: (id) => request(`/suppliers/${id}`),
-    createSupplierFull: (body) => request('/suppliers', { method: 'POST', body }),
-    updateSupplier: (id, body) => request(`/suppliers/${id}`, { method: 'PUT', body }),
-    createSupplier: (name) => request('/suppliers', { method: 'POST', body: { name, code: name.slice(0, 10).toUpperCase().replace(/\s+/g, '-') } }),
+    createSupplierQuick: (name) => request('/suppliers', { method: 'POST', body: { name, code: name.slice(0, 10).toUpperCase().replace(/\s+/g, '-') } }),
 
     // Warehouse structure
     createZone: (warehouseId, body) => request(`/warehouses/${warehouseId}/zones`, { method: 'POST', body }),

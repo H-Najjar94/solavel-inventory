@@ -18,7 +18,7 @@ class SalesOrderController extends ApiController
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = SalesOrder::query()
-            ->with(['warehouse:id,name,code'])
+            ->with(['warehouse:id,name,code', 'customer:id,code,name'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w
@@ -29,6 +29,7 @@ class SalesOrderController extends ApiController
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (SalesOrder $order) {
             $order->setAttribute('warehouse_name', $order->warehouse?->name);
             $order->setAttribute('warehouse_code', $order->warehouse?->code);
+            $order->setAttribute('customer_name', $order->customer?->name ?? $order->customer_name);
             return $order;
         }));
     }
@@ -38,8 +39,9 @@ class SalesOrderController extends ApiController
         $sales_order = $this->service->expireOverdueReservations($sales_order);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         // customer_name is already a denormalized string on the header (no customer table).
-        $sales_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code']);
+        $sales_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'customer:id,code,name,contact', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code']);
         $sales_order->setAttribute('warehouse_name', $sales_order->warehouse?->name);
+        $sales_order->setAttribute('customer_name', $sales_order->customer?->name ?? $sales_order->customer_name);
 
         return $this->success(['sales_order' => $sales_order]);
     }

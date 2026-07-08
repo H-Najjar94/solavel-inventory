@@ -17,10 +17,20 @@ class SalesReturn extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['return_date'=>'date','posted_at'=>'datetime'];
+    protected $casts = [
+        'return_date' => 'date',
+        'authorized_at' => 'datetime',
+        'inspected_at' => 'datetime',
+        'posted_at' => 'datetime',
+    ];
 
     public function lines()
     {
         return $this->hasMany(SalesReturnLine::class, 'sales_return_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 }

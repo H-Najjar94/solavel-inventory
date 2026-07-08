@@ -81,6 +81,10 @@ export default function SalesOrderDetailPage() {
 
             <div className="panel"><dl className="kv">
                 <dt>Customer</dt><dd>{so.customer_name ?? '—'}</dd>
+                <dt>Subtotal</dt><dd>{so.subtotal ?? '0.00'}</dd>
+                <dt>Discount</dt><dd>{so.discount_total ?? '0.00'}</dd>
+                <dt>Tax</dt><dd>{so.tax_total ?? '0.00'}</dd>
+                <dt>Total</dt><dd>{so.total ?? '0.00'}</dd>
                 <dt>Order date</dt><dd>{so.order_date}</dd>
                 <dt>Requested ship date</dt><dd>{so.requested_ship_date ?? '—'}</dd>
                 <dt>Warehouse</dt><dd>{so.warehouse_name ?? `#${so.warehouse_id}`}</dd>
@@ -91,8 +95,8 @@ export default function SalesOrderDetailPage() {
 
             <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'reservations', label: 'Reservations' }]} active={tab} onChange={setTab} />
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Ordered</th><th>Reserved</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Unit price</th></tr></thead>
-                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.ordered_qty}</td><td>{l.reserved_qty}</td><td>{l.picked_qty}</td><td>{l.packed_qty}</td><td>{l.shipped_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
+                <thead><tr><th>Item</th><th>Ordered</th><th>Reserved</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Unit price</th><th>Discount</th><th>Tax</th><th>Total</th></tr></thead>
+                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.ordered_qty}</td><td>{l.reserved_qty}</td><td>{l.picked_qty}</td><td>{l.packed_qty}</td><td>{l.shipped_qty}</td><td>{l.unit_price}</td><td>{l.discount_amount ?? '0.00'}</td><td>{l.tax_amount ?? '0.00'}</td><td>{l.line_total ?? '0.00'}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'reservations' && <div className="panel">
                 <div className="form-grid">

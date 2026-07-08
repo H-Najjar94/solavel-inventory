@@ -190,6 +190,16 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     Route::put('/suppliers/{supplier}', [\App\Http\Controllers\Api\V1\SupplierController::class, 'update'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.suppliers.update');
 
+    // ── Customers / partners ──
+    Route::get('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'index'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.customers.index');
+    Route::get('/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'show'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.customers.show');
+    Route::post('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'store'])
+        ->middleware('perm:inventory.manage_sales_orders')->name('api.v1.customers.store');
+    Route::put('/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'update'])
+        ->middleware('perm:inventory.manage_sales_orders')->name('api.v1.customers.update');
+
     // ── Warehouse structure: zones & bins ──
     Route::middleware('perm:inventory.manage_warehouses')->group(function () {
         Route::post('/warehouses/{warehouse}/zones', [\App\Http\Controllers\Api\V1\WarehouseStructureController::class, 'storeZone'])->name('api.v1.zones.store');
@@ -325,6 +335,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.update');
     Route::post('/sales-returns/{sales_return}/post', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'post'])
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.post');
+    Route::post('/sales-returns/{sales_return}/authorize', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'authorizeReturn'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.authorize');
+    Route::post('/sales-returns/{sales_return}/inspect', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'inspect'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.inspect');
 
     // ── Traceability: Lots ──
     Route::get('/lots', [\App\Http\Controllers\Api\V1\TraceabilityController::class, 'lots'])

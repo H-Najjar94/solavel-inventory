@@ -29,8 +29,8 @@ export default function RecallDetailPage() {
 
     function exportCsv() {
         const rows = impact?.lines ?? [];
-        const head = ['item_id', 'lot_id', 'serial_id', 'on_hand', 'reserved', 'shipped', 'warehouses'];
-        const csv = [head.join(',')].concat(rows.map((l) => [l.item_id, l.lot_id ?? '', l.serial_id ?? '', l.on_hand, l.reserved, l.shipped, `"${(l.warehouses ?? []).join(' ')}"`].join(','))).join('\n');
+        const head = ['item_id', 'lot_id', 'serial_id', 'on_hand', 'reserved', 'shipped', 'warehouses', 'customers'];
+        const csv = [head.join(',')].concat(rows.map((l) => [l.item_id, l.lot_id ?? '', l.serial_id ?? '', l.on_hand, l.reserved, l.shipped, `"${(l.warehouses ?? []).join(' ')}"`, `"${(l.shipped_documents ?? []).map((d) => d.customer).filter(Boolean).join(' | ')}"`].join(','))).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob); a.download = `${recall.recall_number}-impact.csv`; a.click();
@@ -56,11 +56,11 @@ export default function RecallDetailPage() {
                 <div className="page-head" style={{ marginTop: 0 }}><h3 style={{ margin: 0 }}>Affected stock</h3>
                     <button className="btn btn--sm" style={{ marginLeft: 'auto' }} onClick={exportCsv}>Export CSV</button></div>
                 <table className="data-table">
-                    <thead><tr><th>Lot</th><th>Serial</th><th>On hand</th><th>Reserved</th><th>Shipped</th><th>Warehouses</th><th>Shipped docs</th></tr></thead>
+                    <thead><tr><th>Lot</th><th>Serial</th><th>On hand</th><th>Reserved</th><th>Shipped</th><th>Warehouses</th><th>Shipped docs</th><th>Customers</th></tr></thead>
                     <tbody>{(impact?.lines ?? []).map((l) => (
                         <tr key={l.recall_line_id}><td>{l.lot_id ? `#${l.lot_id}` : '—'}</td><td>{l.serial_id ? `#${l.serial_id}` : '—'}</td>
                             <td>{l.on_hand}</td><td>{l.reserved}</td><td>{l.shipped}</td><td>{(l.warehouses ?? []).map((w) => `#${w}`).join(', ') || '—'}</td>
-                            <td>{(l.shipped_documents ?? []).length} shipment(s)</td></tr>
+                            <td>{(l.shipped_documents ?? []).length} shipment(s)</td><td>{(l.shipped_documents ?? []).map((d) => d.customer).filter(Boolean).join(', ') || '—'}</td></tr>
                     ))}</tbody>
                 </table>
             </div>}
