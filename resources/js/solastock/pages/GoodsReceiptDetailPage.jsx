@@ -48,8 +48,8 @@ export default function GoodsReceiptDetailPage() {
             <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'ledger', label: 'Ledger result' }, { key: 'audit', label: 'Audit' }]} active={tab} onChange={setTab} />
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Received</th><th>Accepted</th><th>Bin</th><th>Unit cost</th></tr></thead>
-                <tbody>{(grn.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.received_qty}{l.entered_unit ? <span className="muted"> ({l.entered_qty} {l.entered_unit.code})</span> : null}</td><td>{l.accepted_qty}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.unit_cost}</td></tr>)}</tbody>
+                <thead><tr><th>Item</th><th>Received</th><th>Accepted</th><th>Rejected</th><th>Disposition</th><th>Bin</th><th>Unit cost</th></tr></thead>
+                <tbody>{(grn.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.received_qty}{l.entered_unit ? <span className="muted"> ({l.entered_qty} {l.entered_unit.code})</span> : null}</td><td>{l.accepted_qty}</td><td>{l.rejected_qty ?? '0.0000'}</td><td>{l.disposition ?? l.inspection_status ?? 'restock'}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.unit_cost}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="GRN create/post events are recorded in inventory_audit_logs." /></div>}

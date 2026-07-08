@@ -55,30 +55,42 @@ class GoodsReceiptController extends ApiController
      * line with remaining qty (ordered − received) and the PO unit cost. Read-only;
      * the client edits then POSTs to store.
      */
-    public function fromPo(PurchaseOrder $purchase_order): JsonResponse
+    public function fromPo(Request $request, PurchaseOrder $purchase_order): JsonResponse
     {
         if (! in_array($purchase_order->status, ['approved', 'partially_received'], true)) {
             return $this->error('po_not_receivable', 'Only an approved/partially-received PO can be received.', 422);
         }
         $purchase_order->load('lines');
 
-        $lines = $purchase_order->lines->map(function ($l) {
+        $blind = $request->boolean('blind');
+        $lines = $purchase_order->lines->map(function ($l) use ($blind) {
             $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->received_qty));
+            if (! Decimal::gt($remaining, '0')) {
+                return null;
+            }
 
-            return [
+            $line = [
                 'purchase_order_line_id' => $l->id,
                 'item_id' => $l->item_id,
                 'variant_id' => $l->variant_id,
-                'ordered_qty' => $l->ordered_qty,
-                'already_received_qty' => $l->received_qty,
-                'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
-                'received_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
+                'received_qty' => $blind ? '' : (Decimal::lt($remaining, '0') ? '0.0000' : $remaining),
                 'unit_cost' => $l->unit_price,
             ];
-        })->filter(fn ($l) => Decimal::gt((string) $l['remaining_qty'], '0'))->values();
+
+            if (! $blind) {
+                $line += [
+                    'ordered_qty' => $l->ordered_qty,
+                    'already_received_qty' => $l->received_qty,
+                    'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
+                ];
+            }
+
+            return $line;
+        })->filter()->values();
 
         return $this->success([
             'purchase_order' => $purchase_order->only(['id', 'po_number', 'supplier_id', 'warehouse_id']),
+            'blind' => $blind,
             'lines' => $lines,
         ]);
     }

@@ -25,4 +25,19 @@ class StockBalance extends Model
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
+
+    public function bin(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseBin::class, 'bin_id');
+    }
+
+    public function lot(): BelongsTo
+    {
+        return $this->belongsTo(Lot::class, 'lot_id');
+    }
+
+    public function serial(): BelongsTo
+    {
+        return $this->belongsTo(SerialNumber::class, 'serial_id');
+    }
 }

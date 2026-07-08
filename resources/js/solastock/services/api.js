@@ -171,7 +171,7 @@ export const api = {
     updatePurchaseOrder: (id, body) => request(`/purchase-orders/${id}`, { method: 'PUT', body }),
     approvePurchaseOrder: (id) => request(`/purchase-orders/${id}/approve`, { method: 'POST' }),
     cancelPurchaseOrder: (id) => request(`/purchase-orders/${id}/cancel`, { method: 'POST' }),
-    grnDraftFromPo: (poId) => request(`/purchase-orders/${poId}/grn-draft`),
+    grnDraftFromPo: (poId, params = {}) => request(`/purchase-orders/${poId}/grn-draft`, { params }),
 
     // Goods Receipts
     goodsReceipts: (params) => request('/goods-receipts', { params }),
@@ -186,6 +186,8 @@ export const api = {
     createTransfer: (body) => request('/transfers', { method: 'POST', body }),
     updateTransfer: (id, body) => request(`/transfers/${id}`, { method: 'PUT', body }),
     postTransfer: (id) => request(`/transfers/${id}/post`, { method: 'POST' }),
+    shipTransfer: (id) => request(`/transfers/${id}/ship`, { method: 'POST' }),
+    receiveTransfer: (id) => request(`/transfers/${id}/receive`, { method: 'POST' }),
     transferAvailable: (itemId, warehouseId) => request('/transfers-available', { params: { item_id: itemId, warehouse_id: warehouseId } }),
 
     // Counts

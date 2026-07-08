@@ -18,7 +18,13 @@ class GoodsReceipt extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['receipt_date'=>'date','posted_at'=>'datetime','reversed_at'=>'datetime'];
+    protected $casts = [
+        'receipt_date' => 'date',
+        'blind_receiving' => 'boolean',
+        'posted_at' => 'datetime',
+        'inspected_at' => 'datetime',
+        'reversed_at' => 'datetime',
+    ];
 
     public function lines()
     {

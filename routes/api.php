@@ -239,6 +239,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.update');
     Route::post('/transfers/{stock_transfer}/post', [\App\Http\Controllers\Api\V1\StockTransferController::class, 'post'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.post');
+    Route::post('/transfers/{stock_transfer}/ship', [\App\Http\Controllers\Api\V1\StockTransferController::class, 'ship'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.ship');
+    Route::post('/transfers/{stock_transfer}/receive', [\App\Http\Controllers\Api\V1\StockTransferController::class, 'receive'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.receive');
 
     // ── Stock Counts (variance → adjustment via service) ──
     Route::get('/counts', [\App\Http\Controllers\Api\V1\StockCountController::class, 'index'])
