@@ -93,6 +93,10 @@ class InventoryReportService
     // ── 1. Inventory Valuation ──
     private function reportInventoryValuation(ReportFilters $f): array
     {
+        if ($f->asAt) {
+            return $this->reportInventoryValuationAsAt($f);
+        }
+
         $q = $this->scoped('stock_balances as b')
             ->join('items as i', 'i.id', '=', 'b.item_id')
             ->leftJoin('item_categories as c', 'c.id', '=', 'i.category_id')
@@ -105,17 +109,97 @@ class InventoryReportService
                 (CASE WHEN (b.on_hand_qty - b.reserved_qty) <= 0 THEN "out" WHEN (b.on_hand_qty - b.reserved_qty) <= 5 THEN "low" ELSE "ok" END) stock_status')
             ->orderByDesc('b.total_value');
         $rows = $q->get();
+        $currency = $this->currencyContext($f);
+        $rows = $rows->map(fn ($row) => $this->withConvertedValue($row, $currency))->values();
 
         return [
-            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'stock_status'],
+            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
             'rows' => $rows,
             'summary' => [
                 'total_value' => (string) $rows->sum(fn ($r) => (float) $r->total_value),
+                'value_currency' => $currency['currency'],
+                'converted_total_value' => Decimal::money((string) $rows->sum(fn ($r) => (float) ($r->converted_total_value ?? $r->total_value))),
+                'as_at' => null,
                 'total_lines' => $rows->count(),
                 'low' => $rows->where('stock_status', 'low')->count(),
                 'out' => $rows->where('stock_status', 'out')->count(),
             ],
         ];
+    }
+
+    private function reportInventoryValuationAsAt(ReportFilters $f): array
+    {
+        $asAt = $f->asAt.' 23:59:59';
+        $rows = $this->scoped('stock_ledger as l')
+            ->join('items as i', 'i.id', '=', 'l.item_id')
+            ->leftJoin('item_categories as c', 'c.id', '=', 'i.category_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
+            ->leftJoin('lots as lo', 'lo.id', '=', 'l.lot_id')
+            ->when($f->itemId, fn ($x) => $x->where('l.item_id', $f->itemId))
+            ->when($f->warehouseId, fn ($x) => $x->where('l.warehouse_id', $f->warehouseId))
+            ->when($f->categoryId, fn ($x) => $x->where('i.category_id', $f->categoryId))
+            ->where('l.moved_at', '<=', $asAt)
+            ->selectRaw('i.sku, i.name item, c.name category, w.name warehouse, lo.lot_code, lo.expiry_date,
+                SUM(CASE WHEN l.direction = "in" THEN l.quantity ELSE -l.quantity END) on_hand_qty,
+                CASE WHEN SUM(CASE WHEN l.direction = "in" THEN l.quantity ELSE -l.quantity END) = 0 THEN 0
+                    ELSE SUM(CASE WHEN l.direction = "in" THEN l.total_cost ELSE -l.total_cost END) / SUM(CASE WHEN l.direction = "in" THEN l.quantity ELSE -l.quantity END) END average_cost,
+                SUM(CASE WHEN l.direction = "in" THEN l.total_cost ELSE -l.total_cost END) total_value,
+                "as_at" stock_status')
+            ->groupBy('i.sku', 'i.name', 'c.name', 'w.name', 'lo.lot_code', 'lo.expiry_date')
+            ->havingRaw('ABS(on_hand_qty) > 0.00001')
+            ->orderByDesc('total_value')
+            ->get();
+
+        $currency = $this->currencyContext($f);
+        $rows = $rows->map(fn ($row) => $this->withConvertedValue($row, $currency))->values();
+
+        return [
+            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
+            'rows' => $rows,
+            'summary' => [
+                'total_value' => Decimal::money((string) $rows->sum(fn ($r) => (float) $r->total_value)),
+                'value_currency' => $currency['currency'],
+                'converted_total_value' => Decimal::money((string) $rows->sum(fn ($r) => (float) ($r->converted_total_value ?? $r->total_value))),
+                'as_at' => $f->asAt,
+                'total_lines' => $rows->count(),
+            ],
+        ];
+    }
+
+    private function currencyContext(ReportFilters $f): array
+    {
+        $base = $this->baseCurrency();
+        $currency = $f->currency ?: $base;
+        $rate = 1.0;
+        if ($currency !== $base) {
+            $rate = (float) ($this->scoped('inventory_currency_rates')
+                ->where('currency_code', $currency)
+                ->when($f->asAt, fn ($q) => $q->whereDate('effective_date', '<=', $f->asAt))
+                ->orderByDesc('effective_date')
+                ->value('rate_to_base') ?: 0);
+        }
+
+        return ['base' => $base, 'currency' => $currency, 'rate_to_base' => $rate > 0 ? $rate : 1.0];
+    }
+
+    private function withConvertedValue(object $row, array $currency): object
+    {
+        $row->value_currency = $currency['currency'];
+        $row->converted_total_value = Decimal::money((string) ((float) ($row->total_value ?? 0) / (float) $currency['rate_to_base']));
+
+        return $row;
+    }
+
+    private function baseCurrency(): string
+    {
+        try {
+            return (string) (DB::connection(config('tenancy.central_connection', 'mysql'))
+                ->table('organizations')
+                ->where('id', $this->orgId())
+                ->value('base_currency') ?: 'SAR');
+        } catch (\Throwable) {
+            return 'SAR';
+        }
     }
 
     // ── 2. Stock Movement ──

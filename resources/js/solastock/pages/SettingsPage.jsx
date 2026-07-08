@@ -8,6 +8,7 @@ import { Field, fieldErrors } from '../components/ui.jsx';
 export default function SettingsPage() {
     const { data, isMock } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
     const integration = useApiQuery(['integration'], api.integrationStatus, { fallback: { connected: false, planned_events: [], account_mappings: {} } });
+    const rolesQuery = useApiQuery(['custom-roles'], api.customRoles, { fallback: { permissions: [], roles: [], assignments: [], builtin_roles: [] } });
     const qc = useQueryClient();
     const toast = useToast();
     const s = data ?? {};
@@ -23,6 +24,9 @@ export default function SettingsPage() {
     const [editingCategory, setEditingCategory] = useState(null);
     const [editingBrand, setEditingBrand] = useState(null);
     const [reasonCode, setReasonCode] = useState({ code: '', label: '' });
+    const [currencyRate, setCurrencyRate] = useState({ currency_code: '', rate_to_base: '', effective_date: new Date().toISOString().slice(0, 10) });
+    const [customRole, setCustomRole] = useState({ name: '', key: '', permissions: [] });
+    const [roleAssignment, setRoleAssignment] = useState({ user_id: '', role_id: '' });
     const [reorderRule, setReorderRule] = useState({
         item_id: '',
         warehouse_id: '',
@@ -188,6 +192,55 @@ export default function SettingsPage() {
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
+    async function addCurrencyRate(e) {
+        e.preventDefault();
+        try {
+            await api.createCurrencyRate({ ...currencyRate, currency_code: currencyRate.currency_code.toUpperCase() });
+            setCurrencyRate({ currency_code: '', rate_to_base: '', effective_date: new Date().toISOString().slice(0, 10) });
+            await qc.invalidateQueries({ queryKey: ['settings'] });
+            toast.push('Currency rate saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function addCustomRole(e) {
+        e.preventDefault();
+        try {
+            await api.createCustomRole({ ...customRole, is_active: true });
+            setCustomRole({ name: '', key: '', permissions: [] });
+            await qc.invalidateQueries({ queryKey: ['custom-roles'] });
+            toast.push('Custom role saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    function togglePermission(key) {
+        setCustomRole((role) => ({
+            ...role,
+            permissions: role.permissions.includes(key)
+                ? role.permissions.filter((p) => p !== key)
+                : [...role.permissions, key],
+        }));
+    }
+
+    async function assignRole(e) {
+        e.preventDefault();
+        try {
+            await api.assignCustomRole({ user_id: Number(roleAssignment.user_id), role_id: Number(roleAssignment.role_id) });
+            setRoleAssignment({ user_id: '', role_id: '' });
+            await qc.invalidateQueries({ queryKey: ['custom-roles'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push('Role assigned.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function unassignRole(userId) {
+        try {
+            await api.unassignCustomRole(userId);
+            await qc.invalidateQueries({ queryKey: ['custom-roles'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push('Role assignment removed.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
     return (
         <section className="page">
             <header className="page-head"><h1>Settings</h1>{isMock && <span className="badge badge--warn">sample data</span>}</header>
@@ -322,6 +375,46 @@ export default function SettingsPage() {
                 </form>
                 {(s.settings?.adjustment_reason_codes ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Code</th><th>Label</th><th>Status</th></tr></thead><tbody>
                     {(s.settings.adjustment_reason_codes ?? []).map((code) => <tr key={code.code}><td>{code.code}</td><td>{code.label ?? code.code}</td><td>{code.active === false ? 'Inactive' : 'Active'}</td></tr>)}
+                </tbody></table>}
+            </div>
+
+            <div className="panel">
+                <h2>Currency Rates</h2>
+                <form className="fg2" onSubmit={addCurrencyRate}>
+                    <Field label="Currency"><input className="input" value={currencyRate.currency_code} onChange={(e) => setCurrencyRate({ ...currencyRate, currency_code: e.target.value.toUpperCase().slice(0, 3) })} placeholder="USD" required /></Field>
+                    <Field label="Rate to base"><input className="input" type="number" step="0.00000001" min="0" value={currencyRate.rate_to_base} onChange={(e) => setCurrencyRate({ ...currencyRate, rate_to_base: e.target.value })} required /></Field>
+                    <Field label="Effective date"><input className="input" type="date" value={currencyRate.effective_date} onChange={(e) => setCurrencyRate({ ...currencyRate, effective_date: e.target.value })} required /></Field>
+                    <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">Save rate</button></div>
+                </form>
+                {(s.currency_rates ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Currency</th><th>Rate to base</th><th>Effective</th></tr></thead><tbody>
+                    {(s.currency_rates ?? []).map((r) => <tr key={r.id}><td>{r.currency_code}</td><td>{r.rate_to_base}</td><td>{r.effective_date}</td></tr>)}
+                </tbody></table>}
+            </div>
+
+            <div className="panel">
+                <h2>Custom Roles</h2>
+                <form onSubmit={addCustomRole}>
+                    <div className="fg2">
+                        <Field label="Role name"><input className="input" value={customRole.name} onChange={(e) => setCustomRole({ ...customRole, name: e.target.value })} required /></Field>
+                        <Field label="Role key"><input className="input" value={customRole.key} onChange={(e) => setCustomRole({ ...customRole, key: e.target.value })} placeholder="warehouse_supervisor" /></Field>
+                    </div>
+                    <div className="overview-grid" style={{ marginTop: 10 }}>
+                        {(rolesQuery.data?.permissions ?? []).map((p) => <label key={p.key} className="card" style={{ padding: 12 }}>
+                            <input type="checkbox" checked={customRole.permissions.includes(p.key)} onChange={() => togglePermission(p.key)} /> <strong>{p.key}</strong><br /><span className="muted">{p.label}</span>
+                        </label>)}
+                    </div>
+                    <button className="btn btn--primary" disabled={customRole.permissions.length === 0}>Save role</button>
+                </form>
+                {(rolesQuery.data?.roles ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Role</th><th>Key</th><th>Permissions</th><th>Assignments</th><th>Status</th></tr></thead><tbody>
+                    {(rolesQuery.data?.roles ?? []).map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.key}</td><td>{(r.permissions ?? []).length}</td><td>{r.assignments_count ?? 0}</td><td>{r.is_active ? 'Active' : 'Inactive'}</td></tr>)}
+                </tbody></table>}
+                <form className="fg2" onSubmit={assignRole} style={{ marginTop: 12 }}>
+                    <Field label="Central user ID"><input className="input" type="number" min="1" value={roleAssignment.user_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, user_id: e.target.value })} required /></Field>
+                    <Field label="Role"><select className="input" value={roleAssignment.role_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, role_id: e.target.value })} required><option value="">Select role</option>{(rolesQuery.data?.roles ?? []).filter((r) => r.is_active).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></Field>
+                    <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">Assign role</button></div>
+                </form>
+                {(rolesQuery.data?.assignments ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>User ID</th><th>Role</th><th></th></tr></thead><tbody>
+                    {(rolesQuery.data?.assignments ?? []).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><button className="btn btn--sm btn--danger" onClick={() => unassignRole(a.user_id)}>Remove</button></td></tr>)}
                 </tbody></table>}
             </div>
 
