@@ -13,6 +13,7 @@ use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseBin;
 use App\Models\Tenant\WarehouseReorderRule;
 use App\Models\Tenant\WarehouseZone;
+use App\Services\Replenishment\SafetyStockCalculator;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ use Illuminate\Validation\Rule;
  */
 class SettingsController extends ApiController
 {
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(private OrganizationContext $context, private SafetyStockCalculator $safetyStock) {}
 
     public function show(): JsonResponse
     {
@@ -241,5 +242,27 @@ class SettingsController extends ApiController
         );
 
         return $this->success($rule->fresh(['item:id,sku,name', 'warehouse:id,code,name']), 201);
+    }
+
+    public function calculateWarehouseReorderRule(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'item_id' => ['required', 'integer'],
+            'warehouse_id' => ['required', 'integer'],
+            'lookback_days' => ['nullable', 'integer', 'min:7', 'max:365'],
+            'lead_time_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'service_factor' => ['nullable', 'numeric', 'min:0', 'max:3'],
+        ]);
+
+        Item::query()->whereKey($data['item_id'])->where('item_type', 'inventory')->firstOrFail();
+        Warehouse::query()->whereKey($data['warehouse_id'])->firstOrFail();
+
+        return $this->success($this->safetyStock->calculate(
+            (int) $data['item_id'],
+            (int) $data['warehouse_id'],
+            (int) ($data['lookback_days'] ?? 30),
+            (int) ($data['lead_time_days'] ?? 14),
+            (float) ($data['service_factor'] ?? 1.65),
+        ));
     }
 }

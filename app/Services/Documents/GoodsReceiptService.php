@@ -5,6 +5,7 @@ namespace App\Services\Documents;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
 use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -28,6 +29,7 @@ class GoodsReceiptService
         private \App\Services\Traceability\LotService $lots,
         private \App\Services\Traceability\SerialService $serials,
         private UnitConversionResolver $conversions,
+        private PurchaseOrderBackorderService $backorders,
     ) {}
 
     protected function lotService(): \App\Services\Traceability\LotService
@@ -285,6 +287,7 @@ class GoodsReceiptService
         $anyReceived = $po->lines->contains(fn ($l) => Decimal::gt((string) $l->received_qty, '0'));
         $po->status = $allReceived ? 'received' : ($anyReceived ? 'partially_received' : $po->status);
         $po->save();
+        $this->backorders->refresh($po->fresh('lines'));
     }
 
     private function baseUnitCost(string $enteredUnitCost, ?string $factor): string

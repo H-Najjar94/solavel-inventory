@@ -7,6 +7,8 @@ use App\Http\Requests\Api\StorePurchaseOrderRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\PurchaseOrder;
+use App\Models\Tenant\PurchaseOrderBackorder;
+use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -21,7 +23,11 @@ use RuntimeException;
  */
 class PurchaseOrderController extends ApiController
 {
-    public function __construct(private OrganizationContext $context, private UnitConversionResolver $conversions) {}
+    public function __construct(
+        private OrganizationContext $context,
+        private UnitConversionResolver $conversions,
+        private PurchaseOrderBackorderService $backorders,
+    ) {}
 
     private function conn(): string
     {
@@ -42,6 +48,10 @@ class PurchaseOrderController extends ApiController
             $po->setAttribute('warehouse_code', $po->warehouse?->code);
             $po->setAttribute('supplier_name', $po->supplier?->name);
             $po->setAttribute('supplier_code', $po->supplier?->code);
+            $po->setAttribute('open_backorder_qty', PurchaseOrderBackorder::query()
+                ->where('purchase_order_id', $po->id)
+                ->where('status', 'open')
+                ->sum('backorder_qty'));
             return $po;
         }));
     }
@@ -50,18 +60,22 @@ class PurchaseOrderController extends ApiController
     {
         // Eager-load names (org-scoped by each model's global scope) so the detail
         // page shows names, not raw #ids.
-        $purchase_order->load(['lines.item:id,name,sku,base_unit_id', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $purchase_order->load(['lines.item:id,name,sku,base_unit_id', 'lines.enteredUnit:id,code,name,symbol', 'backorders', 'warehouse:id,name,code', 'supplier:id,name,code']);
         $purchase_order->setAttribute('warehouse_name', $purchase_order->warehouse?->name);
         $purchase_order->setAttribute('supplier_name', $purchase_order->supplier?->name);
+        $backordersByLine = $purchase_order->backorders->keyBy('purchase_order_line_id');
 
         // Remaining per line = ordered − received (received_qty maintained by GRN posting).
-        $lines = $purchase_order->lines->map(function ($l) {
+        $lines = $purchase_order->lines->map(function ($l) use ($backordersByLine) {
             $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->received_qty));
+            $backorder = $backordersByLine->get($l->id);
 
             return array_merge($l->toArray(), [
                 'item_name' => $l->item?->name,
                 'item_sku' => $l->item?->sku,
                 'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
+                'backorder_qty' => $backorder && $backorder->status === 'open' ? (string) $backorder->backorder_qty : '0.0000',
+                'backorder_status' => $backorder?->status,
             ]);
         });
 
@@ -73,6 +87,8 @@ class PurchaseOrderController extends ApiController
             'purchase_order' => $purchase_order,
             'lines' => $lines,
             'linked_grns' => $grns,
+            'backorders' => $purchase_order->backorders->values(),
+            'open_backorder_qty' => Decimal::qty((string) $purchase_order->backorders->where('status', 'open')->sum(fn ($b) => (float) $b->backorder_qty)),
             'has_remaining' => $lines->contains(fn ($l) => Decimal::gt((string) $l['remaining_qty'], '0')),
         ]);
     }
@@ -97,6 +113,7 @@ class PurchaseOrderController extends ApiController
                         'order_date' => $data['order_date'] ?? now()->toDateString(),
                     ])->toArray());
                 $this->syncLines($po, $data['lines']);
+                $this->backorders->refresh($po->fresh('lines'));
                 $this->audit('purchase_order.created', $po);
 
                 return $po->fresh('lines');
@@ -119,6 +136,7 @@ class PurchaseOrderController extends ApiController
                 $purchase_order->update(collect($data)->except('lines')->toArray());
                 $purchase_order->lines()->delete();
                 $this->syncLines($purchase_order, $data['lines']);
+                $this->backorders->refresh($purchase_order->fresh('lines'));
                 $this->audit('purchase_order.updated', $purchase_order);
 
                 return $purchase_order->fresh('lines');
@@ -136,6 +154,7 @@ class PurchaseOrderController extends ApiController
             return $this->error('po_not_draft', 'Only a draft PO can be approved.', 422);
         }
         $purchase_order->update(['status' => 'approved']);
+        $this->backorders->refresh($purchase_order->fresh('lines'));
         $this->audit('purchase_order.approved', $purchase_order);
 
         return $this->success($purchase_order->fresh());
@@ -147,6 +166,7 @@ class PurchaseOrderController extends ApiController
             return $this->error('po_not_cancellable', "A {$purchase_order->status} PO cannot be cancelled.", 422);
         }
         $purchase_order->update(['status' => 'cancelled']);
+        $this->backorders->refresh($purchase_order->fresh('lines'));
         $this->audit('purchase_order.cancelled', $purchase_order);
 
         return $this->success($purchase_order->fresh());

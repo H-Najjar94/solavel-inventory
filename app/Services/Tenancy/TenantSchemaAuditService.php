@@ -148,6 +148,7 @@ class TenantSchemaAuditService
             'inventory_suppliers' => ['columns' => ['organization_id', 'code', 'name', 'is_active']],
             'inventory_purchase_orders' => ['columns' => ['organization_id', 'po_number', 'supplier_id', 'warehouse_id', 'status'], 'indexes' => ['inv_po_org_sup_status_idx']],
             'purchase_order_lines' => ['columns' => ['organization_id', 'purchase_order_id', 'item_id', 'ordered_qty', 'received_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor']],
+            'purchase_order_backorders' => ['columns' => ['organization_id', 'purchase_order_id', 'purchase_order_line_id', 'item_id', 'warehouse_id', 'backorder_qty', 'status'], 'indexes' => ['po_backorders_org_line_uniq']],
             'goods_receipts' => ['columns' => ['organization_id', 'grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'status', 'blind_receiving', 'inspection_status']],
             'goods_receipt_lines' => ['columns' => ['organization_id', 'goods_receipt_id', 'item_id', 'received_qty', 'accepted_qty', 'rejected_qty', 'inspection_status', 'disposition', 'quarantine_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor']],
             'opening_stock_entries' => ['columns' => ['organization_id', 'entry_number', 'warehouse_id', 'status', 'total_value']],

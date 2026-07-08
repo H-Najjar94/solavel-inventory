@@ -399,6 +399,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         Route::put('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateSettings']);
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);
         Route::post('/settings/unit-conversions', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnitConversion']);
+        Route::post('/settings/warehouse-reorder-rules/calculate', [\App\Http\Controllers\Api\V1\SettingsController::class, 'calculateWarehouseReorderRule'])
+            ->name('api.v1.settings.reorder.calculate');
         Route::post('/settings/warehouse-reorder-rules', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeWarehouseReorderRule']);
         Route::post('/settings/adjustment-reason-codes', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeAdjustmentReasonCode']);
         Route::post('/settings/categories', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCategory']);

@@ -296,6 +296,7 @@ export const api = {
     createUnit: (name) => request('/settings/units', { method: 'POST', body: { name, code: name.slice(0, 8).toUpperCase() } }),
     createUnitConversion: (body) => request('/settings/unit-conversions', { method: 'POST', body }),
     createWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules', { method: 'POST', body }),
+    calculateWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules/calculate', { method: 'POST', body }),
     createAdjustmentReasonCode: (body) => request('/settings/adjustment-reason-codes', { method: 'POST', body }),
     barcodeLookup: (barcode) => request('/items/barcode/lookup', { params: { barcode } }),
     createItemBarcode: (itemId, body) => request(`/items/${itemId}/barcodes`, { method: 'POST', body }),

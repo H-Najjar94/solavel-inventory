@@ -15,6 +15,8 @@ export default function SettingsPage() {
     const [policy, setPolicy] = useState({ default_costing_method: 'average', allow_negative_stock: false, picking_policy: 'manual' });
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const [calculatingSafety, setCalculatingSafety] = useState(false);
+    const [safetyResult, setSafetyResult] = useState(null);
     const [conversion, setConversion] = useState({ from_unit_id: '', to_unit_id: '', factor: '' });
     const [category, setCategory] = useState({ name: '', parent_id: '' });
     const [brand, setBrand] = useState({ name: '' });
@@ -29,6 +31,9 @@ export default function SettingsPage() {
         min_stock: '',
         max_stock: '',
         safety_stock: '',
+        lookback_days: '30',
+        lead_time_days: '14',
+        service_factor: '1.65',
     });
 
     useEffect(() => {
@@ -127,14 +132,49 @@ export default function SettingsPage() {
         e.preventDefault();
         try {
             await api.createWarehouseReorderRule({
-                ...reorderRule,
+                reorder_point: reorderRule.reorder_point,
+                reorder_qty: reorderRule.reorder_qty,
+                min_stock: reorderRule.min_stock,
+                max_stock: reorderRule.max_stock,
+                safety_stock: reorderRule.safety_stock,
                 item_id: Number(reorderRule.item_id),
                 warehouse_id: Number(reorderRule.warehouse_id),
             });
-            setReorderRule({ item_id: '', warehouse_id: '', reorder_point: '', reorder_qty: '', min_stock: '', max_stock: '', safety_stock: '' });
+            setReorderRule({ item_id: '', warehouse_id: '', reorder_point: '', reorder_qty: '', min_stock: '', max_stock: '', safety_stock: '', lookback_days: '30', lead_time_days: '14', service_factor: '1.65' });
+            setSafetyResult(null);
             await qc.invalidateQueries({ queryKey: ['settings'] });
             toast.push('Warehouse reorder rule saved.', 'success');
         } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function calculateSafetyStock() {
+        if (!reorderRule.item_id || !reorderRule.warehouse_id) {
+            toast.push('Select an item and warehouse first.', 'error');
+            return;
+        }
+        setCalculatingSafety(true);
+        try {
+            const response = await api.calculateWarehouseReorderRule({
+                item_id: Number(reorderRule.item_id),
+                warehouse_id: Number(reorderRule.warehouse_id),
+                lookback_days: Number(reorderRule.lookback_days || 30),
+                lead_time_days: Number(reorderRule.lead_time_days || 14),
+                service_factor: Number(reorderRule.service_factor || 1.65),
+            });
+            const result = response.data;
+            setSafetyResult(result);
+            setReorderRule({
+                ...reorderRule,
+                safety_stock: result.calculated_safety_stock,
+                reorder_point: result.calculated_reorder_point,
+                reorder_qty: result.suggested_reorder_qty,
+            });
+            toast.push('Safety stock calculated.', 'success');
+        } catch (err) {
+            toast.push(err.message, 'error');
+        } finally {
+            setCalculatingSafety(false);
+        }
     }
 
     async function addReasonCode(e) {
@@ -256,9 +296,18 @@ export default function SettingsPage() {
                         <Field label="Minimum stock"><input className="input" type="number" step="0.0001" min="0" value={reorderRule.min_stock} onChange={(e) => setReorderRule({ ...reorderRule, min_stock: e.target.value })} /></Field>
                         <Field label="Maximum stock"><input className="input" type="number" step="0.0001" min="0" value={reorderRule.max_stock} onChange={(e) => setReorderRule({ ...reorderRule, max_stock: e.target.value })} /></Field>
                         <Field label="Safety stock"><input className="input" type="number" step="0.0001" min="0" value={reorderRule.safety_stock} onChange={(e) => setReorderRule({ ...reorderRule, safety_stock: e.target.value })} /></Field>
+                        <Field label="Demand lookback"><input className="input" type="number" step="1" min="7" max="365" value={reorderRule.lookback_days} onChange={(e) => setReorderRule({ ...reorderRule, lookback_days: e.target.value })} /></Field>
+                        <Field label="Lead time days"><input className="input" type="number" step="1" min="1" max="365" value={reorderRule.lead_time_days} onChange={(e) => setReorderRule({ ...reorderRule, lead_time_days: e.target.value })} /></Field>
+                        <Field label="Service factor"><input className="input" type="number" step="0.01" min="0" max="3" value={reorderRule.service_factor} onChange={(e) => setReorderRule({ ...reorderRule, service_factor: e.target.value })} /></Field>
                     </div>
-                    <button className="btn btn--primary">Save reorder rule</button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn" disabled={calculatingSafety} onClick={calculateSafetyStock}>{calculatingSafety ? 'Calculating...' : 'Calculate safety stock'}</button>
+                        <button className="btn btn--primary">Save reorder rule</button>
+                    </div>
                 </form>
+                {safetyResult && <div className="banner banner--info" style={{ marginTop: 12 }}>
+                    Demand {safetyResult.total_demand} over {safetyResult.lookback_days} days · average {safetyResult.average_daily_demand}/day · lead-time demand {safetyResult.lead_time_demand} · available {safetyResult.available_qty}.
+                </div>}
                 {(s.warehouse_reorder_rules ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Item</th><th>Warehouse</th><th>Point</th><th>Qty</th><th>Min / Max</th><th>Safety</th></tr></thead><tbody>
                     {s.warehouse_reorder_rules.map((rule) => <tr key={rule.id}><td>{rule.item ? `${rule.item.sku} · ${rule.item.name}` : `#${rule.item_id}`}</td><td>{rule.warehouse ? `${rule.warehouse.code} · ${rule.warehouse.name}` : `#${rule.warehouse_id}`}</td><td>{rule.reorder_point ?? '—'}</td><td>{rule.reorder_qty ?? '—'}</td><td>{rule.min_stock ?? '—'} / {rule.max_stock ?? '—'}</td><td>{rule.safety_stock ?? '—'}</td></tr>)}
                 </tbody></table>}
