@@ -45,15 +45,16 @@ class ReportController extends ApiController
         }
 
         $format = strtolower((string) $request->query('format', 'csv'));
-        if (in_array($format, ['xlsx', 'pdf'], true)) {
-            return $this->error('export_format_coming_soon', strtoupper($format).' export is coming soon. Use CSV for now.', 501);
-        }
-        if ($format !== 'csv') {
+        if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
             return $this->error('unknown_format', "Unknown export format: {$format}", 422);
         }
 
         $result = $this->reports->run($report, ReportFilters::fromRequest($request));
 
-        return $this->export->csv($result);
+        return match ($format) {
+            'xlsx' => $this->export->xlsx($result),
+            'pdf' => $this->export->pdf($result),
+            default => $this->export->csv($result),
+        };
     }
 }

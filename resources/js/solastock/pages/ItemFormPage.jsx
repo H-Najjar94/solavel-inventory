@@ -12,7 +12,8 @@ const EMPTY = {
     name: '', sku: '', barcode: '', item_type: 'inventory', description: '',
     category_id: null, brand_id: null, base_unit_id: null, preferred_supplier_id: null,
     purchase_price: '', sales_price: '', costing_method: 'average',
-    reorder_point: '', reorder_qty: '', is_active: true,
+    reorder_point: '', reorder_qty: '', min_stock: '', max_stock: '', safety_stock: '',
+    weight: '', length: '', width: '', height: '', is_active: true,
     track_lot: false, track_serial: false, track_expiry: false, notes: '',
     // opening stock (create-only convenience; posted after the item is created)
     opening_warehouse_id: null, opening_qty: '', opening_cost: '',
@@ -203,6 +204,15 @@ export default function ItemFormPage() {
                             <Field label="Reorder quantity" error={errors.reorder_qty}>
                                 <input className="input" type="number" step="0.0001" value={form.reorder_qty ?? ''} onChange={(e) => set('reorder_qty', e.target.value)} placeholder="Suggested top-up" />
                             </Field>
+                            <Field label="Minimum stock" error={errors.min_stock}>
+                                <input className="input" type="number" step="0.0001" value={form.min_stock ?? ''} onChange={(e) => set('min_stock', e.target.value)} placeholder="Optional" />
+                            </Field>
+                            <Field label="Maximum stock" error={errors.max_stock}>
+                                <input className="input" type="number" step="0.0001" value={form.max_stock ?? ''} onChange={(e) => set('max_stock', e.target.value)} placeholder="Optional" />
+                            </Field>
+                            <Field label="Safety stock" error={errors.safety_stock}>
+                                <input className="input" type="number" step="0.0001" value={form.safety_stock ?? ''} onChange={(e) => set('safety_stock', e.target.value)} placeholder="Buffer qty" />
+                            </Field>
                             <Field label="Tracking">
                                 <div className="check-row">
                                     <label><input type="checkbox" disabled={isService} checked={form.track_lot} onChange={(e) => set('track_lot', e.target.checked)} /> Lot</label>
@@ -233,6 +243,23 @@ export default function ItemFormPage() {
                                 </Field>
                             </div>
                         )}
+                    </Section>
+
+                    <Section title="Physical attributes" sub="Used for shipping, bin planning and carton decisions.">
+                        <div className="fg2">
+                            <Field label="Weight" error={errors.weight}>
+                                <input className="input" type="number" step="0.0001" value={form.weight ?? ''} onChange={(e) => set('weight', e.target.value)} placeholder="Optional" />
+                            </Field>
+                            <Field label="Length" error={errors.length}>
+                                <input className="input" type="number" step="0.0001" value={form.length ?? ''} onChange={(e) => set('length', e.target.value)} placeholder="Optional" />
+                            </Field>
+                            <Field label="Width" error={errors.width}>
+                                <input className="input" type="number" step="0.0001" value={form.width ?? ''} onChange={(e) => set('width', e.target.value)} placeholder="Optional" />
+                            </Field>
+                            <Field label="Height" error={errors.height}>
+                                <input className="input" type="number" step="0.0001" value={form.height ?? ''} onChange={(e) => set('height', e.target.value)} placeholder="Optional" />
+                            </Field>
+                        </div>
                     </Section>
 
                     <Section title="Pricing" sub="Default purchase and sales prices.">

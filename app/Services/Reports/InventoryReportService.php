@@ -193,17 +193,29 @@ class InventoryReportService
         $rows = $this->scoped('stock_balances as b')
             ->join('items as i', 'i.id', '=', 'b.item_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
+            ->leftJoin('warehouse_reorder_rules as rr', function ($join) {
+                $join->on('rr.item_id', '=', 'b.item_id')
+                    ->on('rr.warehouse_id', '=', 'b.warehouse_id')
+                    ->on('rr.organization_id', '=', 'b.organization_id');
+            })
             ->leftJoin('inventory_suppliers as s', 's.id', '=', 'i.preferred_supplier_id')
-            ->whereNotNull('i.reorder_point')
-            ->whereRaw('(b.on_hand_qty - b.reserved_qty) <= i.reorder_point')
+            ->whereRaw('COALESCE(rr.reorder_point, i.reorder_point) IS NOT NULL')
+            ->whereRaw('(b.on_hand_qty - b.reserved_qty) <= COALESCE(rr.reorder_point, i.reorder_point)')
             ->where('b.on_hand_qty', '>', 0)
             ->when($f->warehouseId, fn ($x) => $x->where('b.warehouse_id', $f->warehouseId))
-            ->selectRaw('i.id item_id, i.sku, i.name item, w.name warehouse, b.on_hand_qty, i.reorder_point,
-                (i.reorder_point - (b.on_hand_qty - b.reserved_qty)) shortage_qty, s.name preferred_supplier')
+            ->selectRaw('i.id item_id, i.sku, i.name item, w.name warehouse, b.on_hand_qty, b.reserved_qty,
+                (b.on_hand_qty - b.reserved_qty) available_qty,
+                COALESCE(rr.reorder_point, i.reorder_point) reorder_point,
+                COALESCE(rr.reorder_qty, i.reorder_qty) reorder_qty,
+                COALESCE(rr.min_stock, i.min_stock) min_stock,
+                COALESCE(rr.max_stock, i.max_stock) max_stock,
+                COALESCE(rr.safety_stock, i.safety_stock) safety_stock,
+                (COALESCE(rr.reorder_point, i.reorder_point) - (b.on_hand_qty - b.reserved_qty)) shortage_qty,
+                s.name preferred_supplier')
             ->orderByDesc('shortage_qty')->get();
 
         return [
-            'columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'reorder_point', 'shortage_qty', 'preferred_supplier'],
+            'columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'reserved_qty', 'available_qty', 'reorder_point', 'reorder_qty', 'min_stock', 'max_stock', 'safety_stock', 'shortage_qty', 'preferred_supplier'],
             'rows' => $rows,
             'summary' => ['items' => $rows->count()],
         ];

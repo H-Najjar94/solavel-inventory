@@ -27,6 +27,22 @@ class ItemController extends ApiController
         return $data;
     }
 
+    private function barcodeRow(ItemBarcode $barcode): array
+    {
+        return [
+            'id' => $barcode->id,
+            'item_id' => $barcode->item_id,
+            'variant_id' => $barcode->variant_id,
+            'barcode' => $barcode->barcode,
+            'type' => $barcode->type,
+            'item' => $barcode->relationLoaded('item') && $barcode->item ? [
+                'id' => $barcode->item->id,
+                'sku' => $barcode->item->sku,
+                'name' => $barcode->item->name,
+            ] : null,
+        ];
+    }
+
     private function audit(string $action, Item $item, ?array $before = null): void
     {
         InventoryAuditLog::create([
@@ -101,16 +117,81 @@ class ItemController extends ApiController
         $primary = collect($images)->firstWhere('is_primary', true);
         $item->unsetRelation('images');
 
-        $primaryBarcode = ItemBarcode::query()->where('item_id', $item->id)
-            ->orderByRaw("type = 'primary' desc")->value('barcode');
+        $barcodes = ItemBarcode::query()->where('item_id', $item->id)->orderByRaw("type = 'primary' desc")->orderBy('barcode')->get();
+        $primaryBarcode = $barcodes->first()?->barcode;
 
         return $this->success([
             'item' => $item,
             'primary_barcode' => $primaryBarcode,
+            'barcodes' => $barcodes->map(fn (ItemBarcode $b) => $this->barcodeRow($b))->values(),
             'stock_by_warehouse' => $balances,
             'images' => $images,
             'primary_image_url' => $primary['url'] ?? null,
         ]);
+    }
+
+    public function barcodeLookup(Request $request): JsonResponse
+    {
+        $code = trim((string) $request->query('barcode', ''));
+        if ($code === '') {
+            return $this->error('barcode_required', 'Barcode is required.', 422);
+        }
+
+        $barcode = ItemBarcode::query()->with('item:id,sku,name,item_type,tracking_type,is_active')
+            ->where('barcode', $code)->first();
+
+        if (! $barcode) {
+            return $this->error('barcode_not_found', 'No item matches that barcode.', 404);
+        }
+
+        return $this->success($this->barcodeRow($barcode));
+    }
+
+    public function storeBarcode(Request $request, Item $item): JsonResponse
+    {
+        $data = $request->validate([
+            'barcode' => ['required', 'string', 'max:100'],
+            'type' => ['nullable', 'string', 'max:50'],
+            'variant_id' => ['nullable', 'integer'],
+        ]);
+
+        $exists = ItemBarcode::query()->where('barcode', $data['barcode'])->exists();
+        if ($exists) {
+            return $this->error('barcode_taken', 'Barcode must be unique within the organization.', 422);
+        }
+
+        $barcode = ItemBarcode::query()->create([
+            'organization_id' => $item->organization_id,
+            'item_id' => $item->id,
+            'variant_id' => $data['variant_id'] ?? null,
+            'barcode' => $data['barcode'],
+            'type' => $data['type'] ?? 'internal',
+        ]);
+
+        return $this->success($this->barcodeRow($barcode), 201);
+    }
+
+    public function destroyBarcode(Item $item, ItemBarcode $barcode): JsonResponse
+    {
+        if ((int) $barcode->item_id !== (int) $item->id) {
+            return $this->error('barcode_item_mismatch', 'Barcode does not belong to this item.', 404);
+        }
+
+        $barcode->delete();
+
+        return $this->success(['deleted' => true]);
+    }
+
+    public function primaryBarcode(Item $item, ItemBarcode $barcode): JsonResponse
+    {
+        if ((int) $barcode->item_id !== (int) $item->id) {
+            return $this->error('barcode_item_mismatch', 'Barcode does not belong to this item.', 404);
+        }
+
+        ItemBarcode::query()->where('item_id', $item->id)->where('type', 'primary')->update(['type' => 'internal']);
+        $barcode->update(['type' => 'primary']);
+
+        return $this->success($this->barcodeRow($barcode->fresh()));
     }
 
     public function store(StoreItemRequest $request): JsonResponse

@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
+import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
 import ItemImages from '../components/ItemImages.jsx';
 
@@ -229,9 +231,14 @@ function WarehouseCards({ cards, onValuation }) {
 export default function ItemDetailPage() {
     const { id } = useParams();
     const gate = useCanCreate('inventory.manage_items');
+    const qc = useQueryClient();
+    const toast = useToast();
     const [tab, setTab] = useState('overview');
     const [valuationOpen, setValuationOpen] = useState(false);
     const [activeMovement, setActiveMovement] = useState(null);
+    const [newBarcode, setNewBarcode] = useState({ barcode: '', type: 'internal' });
+    const [scanCode, setScanCode] = useState('');
+    const [scanResult, setScanResult] = useState(null);
 
     const { data, isLoading } = useApiQuery(['item', id], () => api.item(id), { fallback: null });
     const item = data?.item;
@@ -267,9 +274,45 @@ export default function ItemDetailPage() {
         { key: 'overview', label: 'Overview' },
         { key: 'inventory', label: 'Inventory' },
         { key: 'movements', label: 'Movements' },
+        { key: 'barcodes', label: 'Barcodes' },
         { key: 'media', label: 'Media' },
         { key: 'details', label: 'Details' },
     ];
+
+    async function addBarcode(e) {
+        e.preventDefault();
+        if (!newBarcode.barcode.trim()) return;
+        try {
+            await api.createItemBarcode(item.id, newBarcode);
+            setNewBarcode({ barcode: '', type: 'internal' });
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+            toast.push('Barcode added.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function lookupBarcode(e) {
+        e.preventDefault();
+        setScanResult(null);
+        if (!scanCode.trim()) return;
+        try {
+            const res = await api.barcodeLookup(scanCode.trim());
+            setScanResult(res.data);
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function makePrimary(barcodeId) {
+        try {
+            await api.makeItemBarcodePrimary(item.id, barcodeId);
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function removeBarcode(barcodeId) {
+        try {
+            await api.deleteItemBarcode(item.id, barcodeId);
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
 
     return (
         <section className="page">
@@ -344,6 +387,36 @@ export default function ItemDetailPage() {
                 <div className="panel">{movements.isLoading ? <Skeleton rows={4} /> : <MovementsTable rows={movementRows} onRow={setActiveMovement} />}</div>
             )}
 
+            {tab === 'barcodes' && (
+                <div className="overview-grid">
+                    <div className="card"><div className="card-head"><h3>Item barcodes</h3></div><div className="card-body">
+                        {(data.barcodes ?? []).length === 0 ? <EmptyState title="No barcodes" hint="Add EAN, UPC, internal or QR codes for scanner lookup." />
+                            : <table className="data-table"><thead><tr><th>Code</th><th>Type</th><th></th></tr></thead><tbody>
+                                {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
+                                    {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>Make primary</button>}
+                                    {gate.allowed && <button className="btn btn--sm" onClick={() => removeBarcode(b.id)}>Delete</button>}
+                                </td></tr>)}
+                            </tbody></table>}
+                        {gate.allowed && <form className="fg2" onSubmit={addBarcode} style={{ marginTop: 12 }}>
+                            <input className="input" placeholder="Scan or type barcode" value={newBarcode.barcode} onChange={(e) => setNewBarcode({ ...newBarcode, barcode: e.target.value })} />
+                            <select className="input" value={newBarcode.type} onChange={(e) => setNewBarcode({ ...newBarcode, type: e.target.value })}>
+                                <option value="internal">Internal</option><option value="EAN">EAN</option><option value="UPC">UPC</option><option value="QR">QR</option>
+                            </select>
+                            <button className="btn btn--primary">Add barcode</button>
+                        </form>}
+                    </div></div>
+                    <div className="card"><div className="card-head"><h3>Scan lookup</h3></div><div className="card-body">
+                        <form className="quick-create" onSubmit={lookupBarcode}>
+                            <input className="input" autoFocus placeholder="Scan barcode and press Enter" value={scanCode} onChange={(e) => setScanCode(e.target.value)} />
+                            <button className="btn btn--primary">Lookup</button>
+                        </form>
+                        {scanResult && <div className="banner" style={{ marginTop: 12 }}>
+                            Found <Link to={`/items/${scanResult.item_id}`}>{scanResult.item?.name ?? `item #${scanResult.item_id}`}</Link> · {scanResult.item?.sku ?? 'No SKU'}
+                        </div>}
+                    </div></div>
+                </div>
+            )}
+
             {/* ── Media ── */}
             {tab === 'media' && <div className="panel"><ItemImages itemId={item.id} canManage={gate.allowed} /></div>}
 
@@ -355,11 +428,15 @@ export default function ItemDetailPage() {
                         <dt>Description</dt><dd>{item.description || '—'}</dd>
                         <dt>Notes</dt><dd>{item.notes || '—'}</dd>
                         <dt>Unit</dt><dd>{item.base_unit?.code ?? '—'}</dd>
+                        <dt>Weight</dt><dd>{item.weight ? qty(item.weight) : '—'}</dd>
+                        <dt>Dimensions</dt><dd>{[item.length, item.width, item.height].filter(Boolean).length ? `${qty(item.length)} × ${qty(item.width)} × ${qty(item.height)}` : '—'}</dd>
                     </dl></div></div>
                     <div className="card"><div className="card-head"><h3>Commercial</h3></div><div className="card-body"><dl className="kv">
                         <dt>Preferred supplier</dt><dd>{item.preferred_supplier_id ? `#${item.preferred_supplier_id}` : '—'}</dd>
                         <dt>Primary barcode</dt><dd>{data.primary_barcode ?? '—'}</dd>
                         <dt>Reorder qty</dt><dd>{item.reorder_qty ? qty(item.reorder_qty) : '—'}</dd>
+                        <dt>Min / max</dt><dd>{item.min_stock || item.max_stock ? `${item.min_stock ? qty(item.min_stock) : '—'} / ${item.max_stock ? qty(item.max_stock) : '—'}` : '—'}</dd>
+                        <dt>Safety stock</dt><dd>{item.safety_stock ? qty(item.safety_stock) : '—'}</dd>
                         <dt>Tax code</dt><dd>{item.tax_code ?? '—'}</dd>
                     </dl></div></div>
                     <div className="card"><div className="card-head"><h3>Variants</h3></div><div className="card-body">

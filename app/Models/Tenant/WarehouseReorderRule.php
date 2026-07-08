@@ -6,16 +6,20 @@ use App\Tenancy\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class UnitConversion extends Model
+class WarehouseReorderRule extends Model
 {
     use BelongsToOrganization;
 
-    protected $table = 'unit_conversions';
+    protected $table = 'warehouse_reorder_rules';
 
     protected $guarded = ['id'];
 
     protected $casts = [
-        'factor' => 'decimal:8',
+        'reorder_point' => 'decimal:4',
+        'reorder_qty' => 'decimal:4',
+        'min_stock' => 'decimal:4',
+        'max_stock' => 'decimal:4',
+        'safety_stock' => 'decimal:4',
     ];
 
     public function item(): BelongsTo
@@ -23,13 +27,8 @@ class UnitConversion extends Model
         return $this->belongsTo(Item::class, 'item_id');
     }
 
-    public function fromUnit(): BelongsTo
+    public function warehouse(): BelongsTo
     {
-        return $this->belongsTo(Unit::class, 'from_unit_id');
-    }
-
-    public function toUnit(): BelongsTo
-    {
-        return $this->belongsTo(Unit::class, 'to_unit_id');
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 }

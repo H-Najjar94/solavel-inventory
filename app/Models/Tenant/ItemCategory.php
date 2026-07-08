@@ -3,8 +3,10 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
- use Illuminate\Database\Eloquent\Model;
 
 class ItemCategory extends Model
 {
@@ -14,4 +16,14 @@ class ItemCategory extends Model
     protected $table = 'item_categories';
 
     protected $guarded = ['id'];
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id')->orderBy('name');
+    }
 }

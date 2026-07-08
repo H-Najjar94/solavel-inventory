@@ -13,5 +13,12 @@ class IntegrationOutboxEvent extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['payload'=>'array','occurred_at'=>'datetime','next_attempt_at'=>'datetime','sent_at'=>'datetime'];
+    protected $casts = [
+        'payload' => 'array',
+        'external_response' => 'array',
+        'occurred_at' => 'datetime',
+        'next_attempt_at' => 'datetime',
+        'sent_at' => 'datetime',
+        'dead_lettered_at' => 'datetime',
+    ];
 }

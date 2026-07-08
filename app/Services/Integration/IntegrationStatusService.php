@@ -59,7 +59,8 @@ class IntegrationStatusService
             'mapping_incomplete_events' => $incompleteMapping,
             'mapping_completeness_pct' => $mappingCompleteness,
             'last_event_generated_at' => IntegrationOutboxEvent::query()->max('occurred_at'),
-            'connection_implemented' => false, // real SSO/app-linking not wired yet
+            'connection_implemented' => true,
+            'delivery_configured' => config('services.solabooks.api_key') && config('services.solabooks.client_id') && config('services.solabooks.organization_id'),
         ];
     }
 }
