@@ -21,11 +21,10 @@ class SolaBooksDeliveryTest extends TestCase
     {
         $this->useTenantA();
 
-        IntegrationSetting::query()->create([
-            'organization_id' => TenantTestManager::ORG_A,
-            'integration' => 'solabooks',
-            'mode' => 'active',
-        ]);
+        IntegrationSetting::query()->updateOrCreate(
+            ['organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks'],
+            ['mode' => 'active']
+        );
 
         foreach ([
             'inventory_asset' => 101,
@@ -35,30 +34,34 @@ class SolaBooksDeliveryTest extends TestCase
             'adjustment_loss' => 405,
             'opening_offset' => 505,
         ] as $type => $accountId) {
-            IntegrationAccountMapping::query()->create([
-                'organization_id' => TenantTestManager::ORG_A,
-                'integration' => 'solabooks',
-                'mapping_type' => $type,
-                'solabooks_account_id' => (string) $accountId,
-                'status' => 'mapped',
-            ]);
+            IntegrationAccountMapping::query()->updateOrCreate(
+                [
+                    'organization_id' => TenantTestManager::ORG_A,
+                    'integration' => 'solabooks',
+                    'mapping_type' => $type,
+                ],
+                ['solabooks_account_id' => (string) $accountId, 'status' => 'mapped']
+            );
         }
     }
 
     private function event(array $overrides = []): IntegrationOutboxEvent
     {
+        $aggregateId = $overrides['aggregate_id'] ?? random_int(100000, 999999);
+        $aggregateNumber = $overrides['aggregate_number'] ?? 'GRN-'.$aggregateId;
+
         return IntegrationOutboxEvent::query()->create(array_merge([
             'organization_id' => TenantTestManager::ORG_A,
             'event_uuid' => 'evt-'.uniqid(),
             'integration' => 'solabooks',
             'event_type' => 'grn.posted',
             'aggregate_type' => 'GoodsReceipt',
-            'aggregate_id' => 10,
-            'aggregate_number' => 'GRN-10',
+            'aggregate_id' => $aggregateId,
+            'aggregate_number' => $aggregateNumber,
             'occurred_at' => now(),
             'payload' => [
                 'document_date' => now()->toDateString(),
-                'document_number' => 'GRN-10',
+                'document_number' => $aggregateNumber,
                 'total_inventory_value_change' => '25.00',
                 'suggested_debit_account_mapping' => 'inventory_asset',
                 'suggested_credit_account_mapping' => 'grni',
@@ -67,7 +70,7 @@ class SolaBooksDeliveryTest extends TestCase
             'status' => 'pending',
             'mapping_status' => 'complete',
             'attempts' => 0,
-            'idempotency_key' => 'solabooks:grn.posted:GoodsReceipt:10',
+            'idempotency_key' => 'solabooks:grn.posted:GoodsReceipt:'.$aggregateId,
         ], $overrides));
     }
 
@@ -88,19 +91,20 @@ class SolaBooksDeliveryTest extends TestCase
             'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 987, 'reference' => 'ok']], 201),
         ]);
 
-        $event = app(SolaBooksOutboxDeliveryService::class)->deliver($this->event());
+        $input = $this->event();
+        $event = app(SolaBooksOutboxDeliveryService::class)->deliver($input);
 
         $this->assertSame('sent', $event->status);
         $this->assertSame('987', $event->external_document_id);
         $this->assertNotNull($event->sent_at);
 
-        Http::assertSent(function ($request) {
+        Http::assertSent(function ($request) use ($input) {
             $body = $request->data();
 
             return $request->hasHeader('X-API-Key', 'key')
                 && $request->hasHeader('X-Client-Id', '7')
                 && $request->hasHeader('X-Organization-Id', '14')
-                && $request->hasHeader('Idempotency-Key', 'solabooks:grn.posted:GoodsReceipt:10')
+                && $request->hasHeader('Idempotency-Key', $input->idempotency_key)
                 && $body['lines'][0]['account_id'] === 101
                 && $body['lines'][0]['debit'] === '25.00'
                 && $body['lines'][1]['account_id'] === 202

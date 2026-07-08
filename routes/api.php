@@ -374,10 +374,12 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         Route::post('/settings/warehouse-reorder-rules', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeWarehouseReorderRule']);
         Route::post('/settings/adjustment-reason-codes', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeAdjustmentReasonCode']);
         Route::post('/settings/categories', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCategory']);
+        Route::put('/settings/categories/{category}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateCategory']);
         Route::post('/settings/brands', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeBrand']);
+        Route::put('/settings/brands/{brand}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateBrand']);
     });
 
-    // ── SolaBooks integration (foundation: mappings + outbox; no real posting) ──
+    // ── SolaBooks integration (mappings + local outbox + authenticated delivery) ──
     Route::prefix('integration/solabooks')->group(function () {
         Route::get('/status', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'status'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.status');
@@ -396,9 +398,13 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.index');
         Route::get('/events/{event}', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'event'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.show');
-        Route::post('/events/{event}/retry-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'retryPlaceholder'])
+        Route::post('/events/{event}/retry', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'retry'])
             ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.retry');
-        Route::post('/events/{event}/ignore-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'ignorePlaceholder'])
+        Route::post('/events/{event}/retry-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'retryPlaceholder'])
+            ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.retry.legacy');
+        Route::post('/events/{event}/ignore', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'ignore'])
             ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.ignore');
+        Route::post('/events/{event}/ignore-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'ignorePlaceholder'])
+            ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.ignore.legacy');
     });
 });

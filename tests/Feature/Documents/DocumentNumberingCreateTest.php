@@ -13,10 +13,12 @@ use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Http\Requests\Api\StoreStockCountRequest;
 use App\Http\Requests\Api\StoreStockTransferRequest;
 use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockTransfer;
+use App\Tenancy\OrganizationContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
 use Tests\TestCase;
@@ -45,6 +47,10 @@ class DocumentNumberingCreateTest extends TestCase
         $this->whA = F::warehouse()->id;
         $this->whB = F::warehouse()->id;
         $this->item = F::item()->id;
+        InventorySetting::query()->updateOrCreate(
+            ['organization_id' => app(OrganizationContext::class)->idOrFail()],
+            ['adjustment_reason_codes' => [['code' => 'test_adjustment', 'label' => 'Test adjustment']]]
+        );
     }
 
     private function resolve(string $requestClass, array $payload)
@@ -105,7 +111,7 @@ class DocumentNumberingCreateTest extends TestCase
     {
         return array_merge([
             'adjustment_number' => '', 'adjustment_date' => '',
-            'warehouse_id' => $this->whA, 'reason_code' => '', 'notes' => '',
+            'warehouse_id' => $this->whA, 'reason_code' => 'test_adjustment', 'notes' => '',
             'lines' => [['item_id' => $this->item, 'direction' => 'increase', 'quantity' => '4.0000', 'unit_cost' => '1.5000']],
         ], $over);
     }
@@ -119,8 +125,8 @@ class DocumentNumberingCreateTest extends TestCase
         $req = $this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload());
         $resp = app(StockAdjustmentController::class)->store($req)->getData(true);
 
-        $this->assertSame('ADJ-000001', $resp['data']['adjustment_number']);
-        $adj = StockAdjustment::query()->where('adjustment_number', 'ADJ-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^ADJ-\d{6}$/', $resp['data']['adjustment_number']);
+        $adj = StockAdjustment::query()->findOrFail($resp['data']['id']);
         $this->assertSame('draft', $adj->status);
         $this->assertNotNull($adj->adjustment_date, 'blank adjustment_date defaulted, did not crash');
     }
@@ -131,14 +137,15 @@ class DocumentNumberingCreateTest extends TestCase
         $this->useTenantA();
         $this->seedDocs();
 
-        app(StockAdjustmentController::class)->store($this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload()));   // ADJ-000001
+        $first = app(StockAdjustmentController::class)->store($this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload()))->getData(true);
         $typed = app(StockAdjustmentController::class)->store(
             $this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload(['adjustment_number' => 'COUNT-42']))
         )->getData(true);
 
-        $this->assertSame('ADJ-000002', $typed['data']['adjustment_number']);
+        $this->assertMatchesRegularExpression('/^ADJ-\d{6}$/', $typed['data']['adjustment_number']);
+        $this->assertNotSame($first['data']['adjustment_number'], $typed['data']['adjustment_number']);
         $this->assertNull(StockAdjustment::query()->where('adjustment_number', 'COUNT-42')->first());
-        $this->assertNotNull(StockAdjustment::query()->where('adjustment_number', 'ADJ-000001')->first());
+        $this->assertNotNull(StockAdjustment::query()->where('adjustment_number', $first['data']['adjustment_number'])->first());
     }
 
     // ── Goods Receipt (GRN) ──

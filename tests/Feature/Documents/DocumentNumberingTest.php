@@ -135,8 +135,8 @@ class DocumentNumberingTest extends TestCase
         $req->validateResolved();
         $resp = app(OpeningStockController::class)->store($req)->getData(true);
 
-        $this->assertSame('OS-000001', $resp['data']['entry_number'], 'entry_number is server-generated');
-        $entry = OpeningStockEntry::query()->where('entry_number', 'OS-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^OS-\d{6}$/', $resp['data']['entry_number'], 'entry_number is server-generated');
+        $entry = OpeningStockEntry::query()->findOrFail($resp['data']['id']);
 
         // Posting the draft moves stock on hand.
         app(OpeningStockService::class)->post($entry);

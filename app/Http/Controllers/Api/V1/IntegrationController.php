@@ -140,7 +140,7 @@ class IntegrationController extends ApiController
         return $this->success(IntegrationOutboxEvent::query()->findOrFail($event));
     }
 
-    public function retryPlaceholder(int $event): JsonResponse
+    public function retry(int $event): JsonResponse
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
 
@@ -153,8 +153,13 @@ class IntegrationController extends ApiController
         }
     }
 
+    public function retryPlaceholder(int $event): JsonResponse
+    {
+        return $this->retry($event);
+    }
+
     /** Mark an event ignored (local-only state change; no external call). */
-    public function ignorePlaceholder(int $event): JsonResponse
+    public function ignore(int $event): JsonResponse
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
         if (in_array($event->status, ['pending', 'failed'], true)) {
@@ -164,5 +169,10 @@ class IntegrationController extends ApiController
         }
 
         return $this->error('cannot_ignore', "An event with status '{$event->status}' cannot be ignored.", 422);
+    }
+
+    public function ignorePlaceholder(int $event): JsonResponse
+    {
+        return $this->ignore($event);
     }
 }

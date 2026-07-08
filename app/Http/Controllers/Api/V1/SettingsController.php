@@ -94,11 +94,66 @@ class SettingsController extends ApiController
         return $this->success(ItemCategory::create($data)->fresh(), 201);
     }
 
+    public function updateCategory(Request $request, int $category): JsonResponse
+    {
+        $category = ItemCategory::query()->findOrFail($category);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:191'],
+            'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')],
+            'is_active' => ['boolean'],
+        ]);
+
+        $parent = ! empty($data['parent_id']) ? ItemCategory::query()->findOrFail($data['parent_id']) : null;
+        if ($parent && (int) $parent->id === (int) $category->id) {
+            return $this->error('invalid_category_parent', 'A category cannot be its own parent.', 422);
+        }
+        for ($node = $parent; $node; $node = $node->parent) {
+            if ((int) $node->id === (int) $category->id) {
+                return $this->error('invalid_category_parent', 'A category cannot be moved under one of its children.', 422);
+            }
+        }
+
+        $category->fill([
+            'name' => $data['name'],
+            'parent_id' => $parent?->id,
+            'level' => $parent ? ((int) $parent->level + 1) : 0,
+            'is_active' => $data['is_active'] ?? $category->is_active,
+        ])->save();
+        $this->refreshCategoryChildLevels($category);
+
+        return $this->success($category->fresh(['children:id,parent_id,name,level,is_active']));
+    }
+
     public function storeBrand(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:191']]);
 
         return $this->success(ItemBrand::create($data)->fresh(), 201);
+    }
+
+    public function updateBrand(Request $request, int $brand): JsonResponse
+    {
+        $brand = ItemBrand::query()->findOrFail($brand);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:191'],
+            'is_active' => ['boolean'],
+        ]);
+
+        $brand->fill([
+            'name' => $data['name'],
+            'is_active' => $data['is_active'] ?? $brand->is_active,
+        ])->save();
+
+        return $this->success($brand->fresh());
+    }
+
+    private function refreshCategoryChildLevels(ItemCategory $category): void
+    {
+        $children = ItemCategory::query()->where('parent_id', $category->id)->get();
+        foreach ($children as $child) {
+            $child->forceFill(['level' => ((int) $category->level + 1)])->save();
+            $this->refreshCategoryChildLevels($child);
+        }
     }
 
     public function storeAdjustmentReasonCode(Request $request): JsonResponse
