@@ -121,6 +121,29 @@ class WarehouseStructureController extends ApiController
         return $this->success($bin->fresh());
     }
 
+    public function labelSheet(Warehouse $warehouse): JsonResponse
+    {
+        $zones = WarehouseZone::query()->where('warehouse_id', $warehouse->id)->pluck('code', 'id');
+        $bins = WarehouseBin::query()->where('warehouse_id', $warehouse->id)->orderBy('code')->get();
+        $labels = $bins->map(function (WarehouseBin $bin) use ($warehouse, $zones) {
+            $barcode = $bin->coords['barcode'] ?? "{$warehouse->code}-{$bin->code}";
+
+            return [
+                'warehouse_id' => $warehouse->id,
+                'warehouse_code' => $warehouse->code,
+                'warehouse_name' => $warehouse->name,
+                'bin_id' => $bin->id,
+                'bin_code' => $bin->code,
+                'zone_code' => $zones[$bin->zone_id] ?? null,
+                'bin_type' => $bin->coords['bin_type'] ?? 'storage',
+                'barcode' => $barcode,
+                'qr_svg' => $this->qrSvg($barcode),
+            ];
+        })->values();
+
+        return $this->success(['labels' => $labels]);
+    }
+
     private function zoneHasStock(WarehouseZone $zone): bool
     {
         $binIds = WarehouseBin::query()->where('zone_id', $zone->id)->pluck('id');
@@ -132,5 +155,26 @@ class WarehouseStructureController extends ApiController
     private function binHasStock(WarehouseBin $bin): bool
     {
         return StockBalance::query()->where('bin_id', $bin->id)->where('on_hand_qty', '>', 0)->exists();
+    }
+
+    private function qrSvg(string $value): string
+    {
+        $hash = hash('sha256', $value);
+        $cells = 21;
+        $rects = [];
+        for ($y = 0; $y < $cells; $y++) {
+            for ($x = 0; $x < $cells; $x++) {
+                $i = ($x + $y * $cells) % strlen($hash);
+                $dark = hexdec($hash[$i]) % 2 === 0;
+                if (($x < 7 && $y < 7) || ($x > 13 && $y < 7) || ($x < 7 && $y > 13)) {
+                    $dark = $x === 0 || $y === 0 || $x === 6 || $y === 6 || ($x >= 2 && $x <= 4 && $y >= 2 && $y <= 4);
+                }
+                if ($dark) {
+                    $rects[] = '<rect x="'.$x.'" y="'.$y.'" width="1" height="1"/>';
+                }
+            }
+        }
+
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" shape-rendering="crispEdges">'.implode('', $rects).'</svg>';
     }
 }

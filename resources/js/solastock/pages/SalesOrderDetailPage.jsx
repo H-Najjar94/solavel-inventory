@@ -54,7 +54,11 @@ export default function SalesOrderDetailPage() {
             if (draftLines.length === 0) { toast.push('Nothing left to ship on this order.', 'error'); setBusy(false); return; }
             const res = await api.createShipment({
                 shipment_number: `SHIP-${so.order_number}`, sales_order_id: so.id,
-                warehouse_id: so.warehouse_id, lines: draftLines,
+                warehouse_id: so.warehouse_id, carrier: 'SolaShip', carrier_service: 'standard',
+                ship_to: { name: so.customer_name ?? '', address: '', city: '', country: '' },
+                package_weight: draftLines.reduce((sum, l) => sum + Number(l.quantity || 0), 0),
+                warranty_months: 12,
+                lines: draftLines,
             });
             toast.push('Draft shipment created — review then post to ship.', 'success');
             nav(`/shipments/${res?.data?.id}`);

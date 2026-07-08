@@ -163,6 +163,8 @@ class TenantSchemaAuditService
             'inventory_sales_orders' => ['columns' => ['organization_id', 'order_number', 'warehouse_id', 'customer_name', 'customer_id', 'status', 'subtotal', 'discount_total', 'tax_total', 'total']],
             'sales_order_lines' => ['columns' => ['organization_id', 'sales_order_id', 'item_id', 'ordered_qty', 'reserved_qty', 'discount_rate', 'tax_rate', 'line_total']],
             'reservations' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'qty', 'priority', 'source_type', 'source_id', 'status', 'expires_at', 'expired_at']],
+            'shipments' => ['columns' => ['organization_id', 'shipment_number', 'sales_order_id', 'warehouse_id', 'carrier', 'carrier_service', 'tracking_number', 'label_status', 'label_payload', 'tracking_status', 'tracking_events', 'warranty_months']],
+            'shipment_lines' => ['columns' => ['organization_id', 'shipment_id', 'item_id', 'quantity', 'lot_id', 'serial_id']],
             'sales_returns' => ['columns' => ['organization_id', 'return_number', 'warehouse_id', 'status', 'customer_id', 'authorized_at', 'inspected_at']],
             'sales_return_lines' => ['columns' => ['organization_id', 'sales_return_id', 'item_id', 'returned_qty', 'condition', 'inspection_status', 'disposition']],
         ];
