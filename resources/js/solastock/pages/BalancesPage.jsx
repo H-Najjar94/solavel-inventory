@@ -9,12 +9,13 @@ export default function BalancesPage() {
     return (
         <section className="page">
             <header className="page-head"><h1>Current Stock</h1>{isMock && <span className="badge badge--warn">sample data</span>}</header>
-            <table className="data-table"><thead><tr><th>Item</th><th>Warehouse</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Avg cost</th><th>Value</th></tr></thead>
-            <tbody>{rows.length === 0 ? <tr><td colSpan="7" className="muted">No stock balances.</td></tr> :
+            <table className="data-table"><thead><tr><th>Item</th><th>Warehouse</th><th>Bin</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Sellable</th><th>Status</th><th>Avg cost</th><th>Value</th></tr></thead>
+            <tbody>{rows.length === 0 ? <tr><td colSpan="10" className="muted">No stock balances.</td></tr> :
               rows.map((b) => (<tr key={b.id}>
                 <td>{b.item_name ?? `#${b.item_id}`}{b.item_sku && <span className="muted"> · {b.item_sku}</span>}</td>
                 <td>{b.warehouse_name ?? `#${b.warehouse_id}`}</td>
-                <td>{b.on_hand_qty}</td><td>{b.reserved_qty}</td><td>{b.available_qty}</td><td>{b.average_cost}</td><td>{b.total_value}</td></tr>))}</tbody></table>
+                <td>{b.bin_code ?? (b.bin_id ? `#${b.bin_id}` : '—')}</td>
+                <td>{b.on_hand_qty}</td><td>{b.reserved_qty}</td><td>{b.available_qty}</td><td>{b.sellable_available_qty ?? b.available_qty}</td><td>{b.availability_status ?? 'available'}</td><td>{b.average_cost}</td><td>{b.total_value}</td></tr>))}</tbody></table>
         </section>
     );
 }

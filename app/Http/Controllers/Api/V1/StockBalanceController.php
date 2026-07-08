@@ -20,7 +20,7 @@ class StockBalanceController extends ApiController
         $query = StockBalance::query()
             // Resolve item + warehouse NAMES (org-scoped by their global scope) so the
             // grid shows names, not raw #ids. Eager-loaded => no N+1 across the page.
-            ->with(['item:id,name,sku', 'warehouse:id,name,code'])
+            ->with(['item:id,name,sku', 'warehouse:id,name,code', 'bin:id,code,coords', 'lot:id,status,expiry_date', 'serial:id,status'])
             ->when($request->filled('item_id'), fn ($q) => $q->where('item_id', (int) $request->query('item_id')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('lot_id'), fn ($q) => $q->where('lot_id', (int) $request->query('lot_id')))
@@ -30,8 +30,15 @@ class StockBalanceController extends ApiController
 
         $paginator = $query->paginate($perPage)->withQueryString();
 
-        // available_qty is a generated column; expose it explicitly.
+        // available_qty is the canonical projection. sellable_available_qty excludes
+        // quarantined/damaged coordinates without mutating the stock balance.
         $paginator->getCollection()->transform(function (StockBalance $b) {
+            $binType = $b->bin?->coords['bin_type'] ?? null;
+            $traceStatus = $b->lot?->effectiveStatus() ?? $b->serial?->lifecycleStatus();
+            $isQuarantined = in_array($binType, ['quarantine', 'damaged'], true)
+                || in_array($traceStatus, ['quarantined', 'recalled', 'damaged', 'retired'], true);
+            $available = (float) $b->on_hand_qty - (float) $b->reserved_qty;
+
             return [
                 'id' => $b->id,
                 'item_id' => $b->item_id,
@@ -43,9 +50,14 @@ class StockBalanceController extends ApiController
                 'warehouse_code' => $b->warehouse?->code,
                 'lot_id' => $b->lot_id,
                 'bin_id' => $b->bin_id,
+                'bin_code' => $b->bin?->code,
+                'bin_type' => $binType,
                 'on_hand_qty' => $b->on_hand_qty,
                 'reserved_qty' => $b->reserved_qty,
                 'available_qty' => $b->available_qty,
+                'quarantine_qty' => $isQuarantined ? $b->on_hand_qty : '0.0000',
+                'sellable_available_qty' => $isQuarantined ? '0.0000' : number_format(max(0, $available), 4, '.', ''),
+                'availability_status' => $isQuarantined ? 'quarantined' : 'available',
                 'average_cost' => $b->average_cost,
                 'total_value' => $b->total_value,
                 'last_movement_at' => $b->last_movement_at,

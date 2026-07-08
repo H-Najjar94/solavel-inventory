@@ -22,11 +22,12 @@ export default function GoodsReceiptFormPage() {
 
     const [header, setHeader] = useState({ grn_number: '', purchase_order_id: poId ? Number(poId) : null, supplier_id: null, warehouse_id: null, receipt_date: new Date().toISOString().slice(0, 10), notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
+    const [blindReceiving, setBlindReceiving] = useState(false);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
     // Prefill from PO
-    const poDraft = useApiQuery(['grn-from-po', poId], () => api.grnDraftFromPo(poId), { fallback: null, enabled: fromPo });
+    const poDraft = useApiQuery(['grn-from-po', poId, blindReceiving], () => api.grnDraftFromPo(poId, { blind: blindReceiving ? 1 : 0 }), { fallback: null, enabled: fromPo });
     const sourcePo = useApiQuery(['po', poId], () => api.purchaseOrder(poId), { fallback: null, enabled: fromPo });
     useEffect(() => {
         if (fromPo && poDraft.data) {
@@ -34,7 +35,7 @@ export default function GoodsReceiptFormPage() {
             setHeader((h) => ({ ...h, purchase_order_id: po.id, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id }));
             setLines((poDraft.data.lines ?? []).map((l) => ({
                 item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
-                ordered_qty: l.ordered_qty, remaining_qty: l.remaining_qty,
+                ordered_qty: l.ordered_qty ?? null, remaining_qty: l.remaining_qty ?? null,
                 received_qty: l.entered_qty ?? l.received_qty,
                 accepted_qty: l.entered_qty ?? l.received_qty,
                 entered_unit_id: l.entered_unit_id ?? null,
@@ -50,7 +51,14 @@ export default function GoodsReceiptFormPage() {
             const g = existing.data.grn;
             if (g.status !== 'draft') { toast.push('Only draft GRNs can be edited.', 'error'); nav(`/goods-receipts/${id}`); return; }
             setHeader({ grn_number: g.grn_number, purchase_order_id: g.purchase_order_id, supplier_id: g.supplier_id, warehouse_id: g.warehouse_id, receipt_date: g.receipt_date, notes: g.notes ?? '' });
-            setLines((g.lines ?? []).map((l) => ({ item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id, received_qty: l.entered_qty ?? l.received_qty, accepted_qty: l.entered_qty ?? l.accepted_qty, entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), bin_id: l.bin_id, ordered_qty: null, remaining_qty: null })));
+            setBlindReceiving(!!g.blind_receiving);
+            setLines((g.lines ?? []).map((l) => ({
+                item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
+                received_qty: l.entered_qty ?? l.received_qty, accepted_qty: l.entered_qty ?? l.accepted_qty,
+                rejected_qty: l.rejected_qty ?? '', disposition: l.disposition ?? 'restock',
+                entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor),
+                bin_id: l.bin_id, ordered_qty: null, remaining_qty: null,
+            })));
         }
     }, [isEdit, existing.data]);
 
@@ -67,12 +75,17 @@ export default function GoodsReceiptFormPage() {
         try {
             const payload = {
                 ...header,
+                blind_receiving: blindReceiving,
                 lines: lines.filter((l) => l.item_id && (Number(l.received_qty) > 0 || (l.serials ?? []).length > 0)).map((l) => {
                     const t = trackingOf(l.item_id);
                     const tracksSerial = t.tracking_type === 'serial' || t.tracking_type === 'lot_serial';
                     return {
                         item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
                         received_qty: l.received_qty, accepted_qty: l.accepted_qty || l.received_qty,
+                        rejected_qty: l.rejected_qty || '0',
+                        inspection_status: l.disposition === 'quarantine' ? 'quarantine' : (Number(l.rejected_qty || 0) > 0 ? 'rejected' : 'accepted'),
+                        disposition: l.disposition || 'restock',
+                        quarantine_qty: l.disposition === 'quarantine' ? (l.accepted_qty || l.received_qty) : '0',
                         entered_qty: l.received_qty,
                         entered_unit_id: l.entered_unit_id || undefined,
                         unit_cost: l.unit_cost, bin_id: l.bin_id,
@@ -102,7 +115,7 @@ export default function GoodsReceiptFormPage() {
 
     const columns = [
         { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
-        ...(fromPo ? [
+        ...(fromPo && !blindReceiving ? [
             { key: 'ord', label: 'Ordered', width: 90, render: (l) => <span>{l.ordered_qty}</span> },
             { key: 'rem', label: 'Remaining', width: 90, render: (l) => <span>{l.remaining_qty}</span> },
         ] : []),
@@ -113,6 +126,13 @@ export default function GoodsReceiptFormPage() {
                 ? <span className="muted" title="Quantity is the serial count">{(l.serials ?? []).length}</span>
                 : <QuantityInput value={l.received_qty} onChange={(v) => setLine(i, { received_qty: v, accepted_qty: v })} />;
         } },
+        { key: 'accepted', label: 'Accepted', width: 110, render: (l, i) => <QuantityInput value={l.accepted_qty} onChange={(v) => setLine(i, { accepted_qty: v })} /> },
+        { key: 'rejected', label: 'Rejected', width: 110, render: (l, i) => <QuantityInput value={l.rejected_qty ?? ''} onChange={(v) => setLine(i, { rejected_qty: v })} /> },
+        { key: 'disposition', label: 'Disposition', width: 140, render: (l, i) => <select className="input" value={l.disposition ?? 'restock'} onChange={(e) => setLine(i, { disposition: e.target.value })}>
+            <option value="restock">Restock</option>
+            <option value="quarantine">Quarantine</option>
+            <option value="reject">Reject</option>
+        </select> },
         { key: 'unit', label: 'Unit', width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'trace', label: 'Lot / Serial / Expiry', render: (l, i) => {
             const t = trackingOf(l.item_id);
@@ -147,6 +167,10 @@ export default function GoodsReceiptFormPage() {
                 <Field label="Source PO">{sourcePoLabel ?? <span className="muted">none (ad-hoc receipt)</span>}</Field>
                 <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
+            {fromPo && <label className="checkline">
+                <input type="checkbox" checked={blindReceiving} onChange={(e) => setBlindReceiving(e.target.checked)} />
+                Blind receiving
+            </label>}
 
             <div className="panel">
                 <h2>Lines</h2>

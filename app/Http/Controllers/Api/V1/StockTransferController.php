@@ -73,14 +73,43 @@ class StockTransferController extends ApiController
         return $this->success($t->fresh('lines'));
     }
 
+    public function ship(Request $request, StockTransfer $stock_transfer): JsonResponse
+    {
+        try { $t = $this->service->ship($stock_transfer, $this->resolveTraceOverrides($request)); }
+        catch (RuntimeException $e) { return $this->error('transfer_ship_failed', $e->getMessage(), 422); }
+
+        return $this->success($t->fresh('lines'));
+    }
+
+    public function receive(StockTransfer $stock_transfer): JsonResponse
+    {
+        try { $t = $this->service->receive($stock_transfer); }
+        catch (RuntimeException $e) { return $this->error('transfer_receive_failed', $e->getMessage(), 422); }
+
+        return $this->success($t->fresh('lines'));
+    }
+
     /** Available qty for an item at a warehouse (from the balances projection). */
     public function available(Request $request): JsonResponse
     {
         $request->validate(['item_id' => ['required', 'integer'], 'warehouse_id' => ['required', 'integer']]);
         $avail = StockBalance::query()
+            ->leftJoin('warehouse_bins as bin', 'stock_balances.bin_id', '=', 'bin.id')
+            ->leftJoin('lots as lot', 'stock_balances.lot_id', '=', 'lot.id')
             ->where('item_id', (int) $request->query('item_id'))
             ->where('warehouse_id', (int) $request->query('warehouse_id'))
-            ->sum('on_hand_qty');
+            ->where(function ($q) {
+                $q->whereNull('bin.id')
+                    ->orWhereNotIn('bin.coords->bin_type', ['quarantine', 'damaged']);
+            })
+            ->where(function ($q) {
+                $q->whereNull('lot.id')
+                    ->orWhereNotIn('lot.status', ['quarantined', 'recalled'])
+                    ->where(function ($expiry) {
+                        $expiry->whereNull('lot.expiry_date')->orWhere('lot.expiry_date', '>=', now()->toDateString());
+                    });
+            })
+            ->sum(\Illuminate\Support\Facades\DB::raw('stock_balances.on_hand_qty - stock_balances.reserved_qty'));
 
         return $this->success(['available_qty' => (string) $avail]);
     }

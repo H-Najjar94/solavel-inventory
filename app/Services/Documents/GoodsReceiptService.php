@@ -89,7 +89,7 @@ class GoodsReceiptService
                 throw new RuntimeException("Only a draft GRN can be edited (status '{$grn->status}').");
             }
 
-            $grn->fill(collect($attributes)->only(['grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'receipt_date', 'notes'])->toArray());
+            $grn->fill(collect($attributes)->only(['grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'receipt_date', 'blind_receiving', 'notes'])->toArray());
             $grn->lines()->delete();
 
             foreach ($this->expandAndCaptureLines($lines, (int) $grn->id, $orgId) as $line) {
@@ -118,9 +118,13 @@ class GoodsReceiptService
             $cap = $this->resolveCapture($line, $orgId, GoodsReceipt::class, $grnId);
             if ($cap['serial_ids'] === []) {
                 $originalAccepted = $line['accepted_qty'] ?? null;
+                $originalQuarantine = $line['quarantine_qty'] ?? null;
                 $line = $this->conversions->normalizeLine($line, 'received_qty');
                 if ($originalAccepted !== null && ! empty($line['entered_unit_id'])) {
                     $line['accepted_qty'] = Decimal::qty(Decimal::mul((string) $originalAccepted, (string) $line['unit_conversion_factor']));
+                }
+                if ($originalQuarantine !== null && ! empty($line['entered_unit_id'])) {
+                    $line['quarantine_qty'] = Decimal::qty(Decimal::mul((string) $originalQuarantine, (string) $line['unit_conversion_factor']));
                 }
             }
 
@@ -130,6 +134,9 @@ class GoodsReceiptService
                 'item_id' => $line['item_id'],
                 'variant_id' => $line['variant_id'] ?? null,
                 'rejected_qty' => Decimal::qty((string) ($line['rejected_qty'] ?? '0')),
+                'inspection_status' => $line['inspection_status'] ?? (($line['disposition'] ?? null) === 'quarantine' ? 'quarantine' : 'accepted'),
+                'disposition' => $line['disposition'] ?? 'restock',
+                'quarantine_qty' => Decimal::qty((string) ($line['quarantine_qty'] ?? (($line['disposition'] ?? null) === 'quarantine' ? ($line['accepted_qty'] ?? $line['received_qty']) : '0'))),
                 'unit_cost' => $this->baseUnitCost((string) ($line['unit_cost'] ?? '0'), $line['unit_conversion_factor'] ?? null),
                 'entered_qty' => $line['entered_qty'] ?? null,
                 'entered_unit_id' => $line['entered_unit_id'] ?? null,
@@ -143,13 +150,21 @@ class GoodsReceiptService
             // Serial capture: one qty-1 line per serial.
             if ($cap['serial_ids'] !== []) {
                 foreach ($cap['serial_ids'] as $sid) {
-                    $out[] = $base + ['received_qty' => '1.0000', 'accepted_qty' => '1.0000', 'serial_id' => $sid];
+                    $serialBase = $base;
+                    if (($serialBase['disposition'] ?? null) === 'quarantine') {
+                        $serialBase['quarantine_qty'] = '1.0000';
+                    }
+                    $out[] = $serialBase + ['received_qty' => '1.0000', 'accepted_qty' => '1.0000', 'serial_id' => $sid];
                 }
 
                 continue;
             }
 
             $accepted = Decimal::qty((string) ($line['accepted_qty'] ?? $line['received_qty']));
+            if (Decimal::gt((string) $base['quarantine_qty'], $accepted)) {
+                throw new RuntimeException('Quarantine quantity cannot exceed accepted quantity.');
+            }
+
             $out[] = $base + [
                 'received_qty' => Decimal::qty((string) $line['received_qty']),
                 'accepted_qty' => $accepted,
@@ -225,11 +240,16 @@ class GoodsReceiptService
                 'document_ref' => $grn->grn_number,
             ]);
 
+            $this->applyInspectionDisposition($grn);
+
             $this->applyToPurchaseOrder($grn);
 
             $grn->status = 'posted';
+            $grn->inspection_status = $this->receiptInspectionStatus($grn);
             $grn->posted_at = now();
             $grn->posted_by = auth()->id();
+            $grn->inspected_at = now();
+            $grn->inspected_by = auth()->id();
             $grn->posted_guard_key = $this->postNamespace($grn);
             $grn->markSystemTransition()->save();
 
@@ -274,5 +294,34 @@ class GoodsReceiptService
         }
 
         return Decimal::cost($enteredUnitCost);
+    }
+
+    private function applyInspectionDisposition(GoodsReceipt $grn): void
+    {
+        foreach ($grn->lines as $line) {
+            if ($line->disposition !== 'quarantine' && $line->inspection_status !== 'quarantine') {
+                continue;
+            }
+
+            if ($line->lot_id) {
+                $this->lots->setStatus(\App\Models\Tenant\Lot::query()->findOrFail($line->lot_id), 'quarantined');
+            }
+            if ($line->serial_id) {
+                $this->serials->setStatus(\App\Models\Tenant\SerialNumber::query()->findOrFail($line->serial_id), 'quarantined');
+            }
+        }
+    }
+
+    private function receiptInspectionStatus(GoodsReceipt $grn): string
+    {
+        $statuses = $grn->lines->pluck('inspection_status')->filter()->unique()->values();
+        if ($statuses->contains('quarantine')) {
+            return 'quarantine';
+        }
+        if ($statuses->contains('rejected')) {
+            return 'rejected';
+        }
+
+        return 'accepted';
     }
 }
