@@ -63,7 +63,7 @@ export default function ReportsPage() {
     const summary = report?.summary ?? {};
 
     const canExport = can('inventory.export_reports') && tenant.hasTenant;
-    const exportHref = api.reportExportUrl(active, params);
+    const exportHref = (format) => api.reportExportUrl(active, params, format);
 
     function cell(row, c) {
         const v = (row[c] ?? '');
@@ -94,9 +94,15 @@ export default function ReportsPage() {
                 <div className="report-filter-actions">
                     <button className="btn btn--primary" onClick={() => setApplied((n) => n + 1)}>Run report</button>
                     <button className="btn" onClick={() => { setFilters({ warehouse_id: null, item_id: null, from: '', to: '' }); setApplied((n) => n + 1); }}>Clear</button>
-                    <a className="btn" href={canExport ? exportHref : undefined}
+                    <a className="btn" href={canExport ? exportHref('csv') : undefined}
                         style={{ pointerEvents: canExport ? 'auto' : 'none', opacity: canExport ? 1 : 0.5 }}
                         title={canExport ? 'Download CSV' : (tenant.hasTenant ? 'You lack export permission' : 'Select a tenant to export')}>Export CSV</a>
+                    <a className="btn" href={canExport ? exportHref('xlsx') : undefined}
+                        style={{ pointerEvents: canExport ? 'auto' : 'none', opacity: canExport ? 1 : 0.5 }}
+                        title={canExport ? 'Download Excel' : (tenant.hasTenant ? 'You lack export permission' : 'Select a tenant to export')}>Export XLS</a>
+                    <a className="btn" href={canExport ? exportHref('pdf') : undefined}
+                        style={{ pointerEvents: canExport ? 'auto' : 'none', opacity: canExport ? 1 : 0.5 }}
+                        title={canExport ? 'Print or save PDF' : (tenant.hasTenant ? 'You lack export permission' : 'Select a tenant to export')}>Print PDF</a>
                 </div>
             </div>
 

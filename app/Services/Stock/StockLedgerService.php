@@ -12,6 +12,7 @@ use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Warehouse;
+use App\Models\Tenant\WarehouseBin;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Carbon;
@@ -269,6 +270,7 @@ class StockLedgerService
 
         // ── update balance (same transaction) ──
         [$newOnHand, $newAvg, $newValue] = $this->projectBalance($balance, $m->direction, $qty, $unitCost, $totalCost, $method);
+        $this->enforceBinCapacity($orgId, $m, $balance, $newOnHand);
         $balance->on_hand_qty = $newOnHand;
         $balance->average_cost = $newAvg;
         $balance->total_value = $newValue;
@@ -321,6 +323,39 @@ class StockLedgerService
         }
 
         return $ledger;
+    }
+
+    private function enforceBinCapacity(int $orgId, StockMovement $movement, StockBalance $balance, string $newCoordinateOnHand): void
+    {
+        if ($movement->binId === null || $movement->direction !== 'in') {
+            return;
+        }
+
+        $bin = WarehouseBin::query()->where('organization_id', $orgId)->lockForUpdate()->find($movement->binId);
+        if (! $bin) {
+            throw new RuntimeException('Selected bin was not found in this organization.');
+        }
+        if ((int) $bin->warehouse_id !== $movement->warehouseId) {
+            throw new RuntimeException('Selected bin does not belong to the movement warehouse.');
+        }
+        if (! $bin->is_active) {
+            throw new RuntimeException('Selected bin is inactive.');
+        }
+        if ($bin->capacity === null) {
+            return;
+        }
+
+        $otherOnHand = StockBalance::query()
+            ->where('organization_id', $orgId)
+            ->where('warehouse_id', $movement->warehouseId)
+            ->where('bin_id', $movement->binId)
+            ->where('id', '!=', $balance->id)
+            ->sum('on_hand_qty');
+
+        $projectedBinQty = Decimal::qty(Decimal::add((string) $otherOnHand, $newCoordinateOnHand));
+        if (Decimal::gt($projectedBinQty, (string) $bin->capacity)) {
+            throw new RuntimeException("Bin {$bin->code} capacity exceeded: capacity {$bin->capacity}, projected {$projectedBinQty}.");
+        }
     }
 
     /**

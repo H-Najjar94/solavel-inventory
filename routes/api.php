@@ -62,6 +62,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     // Items
     Route::get('/items', [ItemController::class, 'index'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.index');
+    Route::get('/items/barcode/lookup', [ItemController::class, 'barcodeLookup'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.items.barcode.lookup');
     Route::get('/items/{item}', [ItemController::class, 'show'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.show');
     Route::post('/items', [ItemController::class, 'store'])
@@ -72,6 +74,12 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_ledger')->name('api.v1.items.movements');
     Route::get('/items/{item}/valuation', [ItemController::class, 'valuation'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.items.valuation');
+    Route::post('/items/{item}/barcodes', [ItemController::class, 'storeBarcode'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.store');
+    Route::post('/items/{item}/barcodes/{barcode}/primary', [ItemController::class, 'primaryBarcode'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.primary');
+    Route::delete('/items/{item}/barcodes/{barcode}', [ItemController::class, 'destroyBarcode'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.destroy');
 
     // Item images — PRIVATE storage, served only via authenticated org-scoped
     // routes. View/serve = view_items (viewers included); mutate = manage_items.
@@ -362,6 +370,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     Route::middleware('perm:inventory.manage_settings')->group(function () {
         Route::put('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateSettings']);
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);
+        Route::post('/settings/unit-conversions', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnitConversion']);
+        Route::post('/settings/warehouse-reorder-rules', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeWarehouseReorderRule']);
         Route::post('/settings/categories', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCategory']);
         Route::post('/settings/brands', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeBrand']);
     });

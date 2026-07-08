@@ -242,9 +242,9 @@ export const api = {
     reportsList: () => request('/reports'),
     report: (name, params) => request(`/reports/${name}`, { params }),
     // CSV export is a browser download (not JSON) — build the URL with filters.
-    reportExportUrl: (name, params = {}) => {
+    reportExportUrl: (name, params = {}, format = 'csv') => {
         const url = new URL(`${BASE}/reports/${name}/export`, window.location.origin);
-        url.searchParams.set('format', 'csv');
+        url.searchParams.set('format', format);
         Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v); });
         return url.toString();
     },
@@ -264,9 +264,15 @@ export const api = {
     ignoreIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/ignore-placeholder`, { method: 'POST' }),
 
     // Quick-create master data
-    createCategory: (name) => request('/settings/categories', { method: 'POST', body: { name } }),
+    createCategory: (name, parentId = null) => request('/settings/categories', { method: 'POST', body: { name, parent_id: parentId } }),
     createBrand: (name) => request('/settings/brands', { method: 'POST', body: { name } }),
     createUnit: (name) => request('/settings/units', { method: 'POST', body: { name, code: name.slice(0, 8).toUpperCase() } }),
+    createUnitConversion: (body) => request('/settings/unit-conversions', { method: 'POST', body }),
+    createWarehouseReorderRule: (body) => request('/settings/warehouse-reorder-rules', { method: 'POST', body }),
+    barcodeLookup: (barcode) => request('/items/barcode/lookup', { params: { barcode } }),
+    createItemBarcode: (itemId, body) => request(`/items/${itemId}/barcodes`, { method: 'POST', body }),
+    makeItemBarcodePrimary: (itemId, barcodeId) => request(`/items/${itemId}/barcodes/${barcodeId}/primary`, { method: 'POST' }),
+    deleteItemBarcode: (itemId, barcodeId) => request(`/items/${itemId}/barcodes/${barcodeId}`, { method: 'DELETE' }),
 
     // Supplier detail/update + quick-create
     supplier: (id) => request(`/suppliers/${id}`),
