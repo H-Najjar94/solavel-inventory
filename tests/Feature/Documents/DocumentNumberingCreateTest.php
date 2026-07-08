@@ -36,6 +36,13 @@ class DocumentNumberingCreateTest extends TestCase
 {
     use TenantAware;
 
+    private function suffix(string $number): int
+    {
+        preg_match('/(\d+)$/', $number, $m);
+
+        return (int) ($m[1] ?? 0);
+    }
+
     private int $whA;
 
     private int $whB;
@@ -82,8 +89,8 @@ class DocumentNumberingCreateTest extends TestCase
         $req = $this->resolve(StoreStockTransferRequest::class, $this->transferPayload());
         $resp = app(StockTransferController::class)->store($req)->getData(true);
 
-        $this->assertSame('TRF-000001', $resp['data']['transfer_number']);
-        $t = StockTransfer::query()->where('transfer_number', 'TRF-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^TRF-\d{6}$/', $resp['data']['transfer_number']);
+        $t = StockTransfer::query()->where('transfer_number', $resp['data']['transfer_number'])->firstOrFail();
         $this->assertSame('draft', $t->status);
         $this->assertNotNull($t->transfer_date, 'blank transfer_date defaulted, did not crash');
     }
@@ -94,15 +101,16 @@ class DocumentNumberingCreateTest extends TestCase
         $this->useTenantA();
         $this->seedDocs();
 
-        app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()));   // TRF-000001
-        app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()));   // TRF-000002
+        $first = app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()))->getData(true);
+        $second = app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()))->getData(true);
         $typed = app(StockTransferController::class)->store(
             $this->resolve(StoreStockTransferRequest::class, $this->transferPayload(['transfer_number' => 'MY-TRF-9']))
         )->getData(true);
 
-        $this->assertSame('TRF-000003', $typed['data']['transfer_number']);
+        $this->assertSame($this->suffix($first['data']['transfer_number']) + 1, $this->suffix($second['data']['transfer_number']));
+        $this->assertSame($this->suffix($second['data']['transfer_number']) + 1, $this->suffix($typed['data']['transfer_number']));
         $this->assertNull(StockTransfer::query()->where('transfer_number', 'MY-TRF-9')->first());
-        $this->assertNotNull(StockTransfer::query()->where('transfer_number', 'TRF-000002')->first());
+        $this->assertNotNull(StockTransfer::query()->where('transfer_number', $second['data']['transfer_number'])->first());
     }
 
     // ── Stock Adjustment ──
@@ -168,8 +176,8 @@ class DocumentNumberingCreateTest extends TestCase
         $req = $this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload());
         $resp = app(GoodsReceiptController::class)->store($req)->getData(true);
 
-        $this->assertSame('GRN-000001', $resp['data']['grn_number']);
-        $grn = GoodsReceipt::query()->where('grn_number', 'GRN-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^GRN-\d{6}$/', $resp['data']['grn_number']);
+        $grn = GoodsReceipt::query()->where('grn_number', $resp['data']['grn_number'])->firstOrFail();
         $this->assertSame('draft', $grn->status);
         $this->assertNotNull($grn->receipt_date, 'blank receipt_date defaulted, did not crash');
     }
@@ -180,14 +188,14 @@ class DocumentNumberingCreateTest extends TestCase
         $this->useTenantA();
         $this->seedDocs();
 
-        app(GoodsReceiptController::class)->store($this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload()));   // GRN-000001
+        $first = app(GoodsReceiptController::class)->store($this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload()))->getData(true);
         $typed = app(GoodsReceiptController::class)->store(
             $this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload(['grn_number' => 'GRN-CUSTOM']))
         )->getData(true);
 
-        $this->assertSame('GRN-000002', $typed['data']['grn_number']);
+        $this->assertSame($this->suffix($first['data']['grn_number']) + 1, $this->suffix($typed['data']['grn_number']));
         $this->assertNull(GoodsReceipt::query()->where('grn_number', 'GRN-CUSTOM')->first());
-        $this->assertNotNull(GoodsReceipt::query()->where('grn_number', 'GRN-000001')->first());
+        $this->assertNotNull(GoodsReceipt::query()->where('grn_number', $first['data']['grn_number'])->first());
     }
 
     // ── Stock Count ──

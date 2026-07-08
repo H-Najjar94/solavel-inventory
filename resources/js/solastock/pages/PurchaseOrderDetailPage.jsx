@@ -21,6 +21,7 @@ export default function PurchaseOrderDetailPage() {
     const lines = data?.lines ?? [];
     const grns = data?.linked_grns ?? [];
     const hasRemaining = data?.has_remaining;
+    const openBackorderQty = data?.open_backorder_qty ?? '0.0000';
 
     if (isLoading) return <section className="page"><Skeleton /></section>;
     if (!po) return <section className="page"><Breadcrumbs items={[{ label: 'Purchase Orders', to: '/purchase-orders' }, { label: 'Not found' }]} /><EmptyState title="Unavailable" hint="Select a tenant to load real data." /></section>;
@@ -51,15 +52,21 @@ export default function PurchaseOrderDetailPage() {
                 <dt>Warehouse</dt><dd>{po.warehouse_name ?? `#${po.warehouse_id}`}</dd>
                 <dt>Order date</dt><dd>{po.order_date}</dd>
                 <dt>Expected</dt><dd>{po.expected_date ?? '—'}</dd>
+                <dt>Open backorder</dt><dd>{Number(openBackorderQty) > 0 ? openBackorderQty : '—'}</dd>
                 <dt>Total</dt><dd>{po.total}</dd>
             </dl></div>
 
-            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'grns', label: `Linked GRNs (${grns.length})` }, { key: 'audit', label: 'Audit' }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'backorders', label: 'Backorders' }, { key: 'grns', label: `Linked GRNs (${grns.length})` }, { key: 'audit', label: 'Audit' }]} active={tab} onChange={setTab} />
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Unit cost</th></tr></thead>
-                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item_name ?? `#${l.item_id}`}{l.item_sku && <span className="muted"> · {l.item_sku}</span>}</td><td>{l.ordered_qty}{l.entered_unit ? <span className="muted"> ({l.entered_qty} {l.entered_unit.code})</span> : null}</td><td>{l.received_qty}</td><td>{l.remaining_qty}</td><td>{l.unit_price}</td></tr>)}</tbody>
+                <thead><tr><th>Item</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Backorder</th><th>Unit cost</th></tr></thead>
+                <tbody>{lines.map((l) => <tr key={l.id}><td>{l.item_name ?? `#${l.item_id}`}{l.item_sku && <span className="muted"> · {l.item_sku}</span>}</td><td>{l.ordered_qty}{l.entered_unit ? <span className="muted"> ({l.entered_qty} {l.entered_unit.code})</span> : null}</td><td>{l.received_qty}</td><td>{l.remaining_qty}</td><td>{Number(l.backorder_qty ?? 0) > 0 ? l.backorder_qty : '—'}</td><td>{l.unit_price}</td></tr>)}</tbody>
             </table></div>}
+
+            {tab === 'backorders' && <div className="panel">{Number(openBackorderQty) <= 0 ? <EmptyState title="No open backorders" hint="All approved quantities have been received or the PO is not yet approved." /> : (
+                <table className="data-table"><thead><tr><th>Item</th><th>Open qty</th><th>Expected</th><th>Status</th></tr></thead>
+                <tbody>{lines.filter((l) => Number(l.backorder_qty ?? 0) > 0).map((l) => <tr key={l.id}><td>{l.item_name ?? `#${l.item_id}`}{l.item_sku && <span className="muted"> · {l.item_sku}</span>}</td><td>{l.backorder_qty}</td><td>{l.expected_date ?? po.expected_date ?? '—'}</td><td>{l.backorder_status ?? 'open'}</td></tr>)}</tbody></table>
+            )}</div>}
 
             {tab === 'grns' && <div className="panel">{grns.length === 0 ? <EmptyState title="No GRNs yet" hint={canReceive ? 'Create a GRN to receive stock.' : ''} /> : (
                 <table className="data-table"><thead><tr><th>GRN</th><th>Date</th><th>Status</th></tr></thead>
