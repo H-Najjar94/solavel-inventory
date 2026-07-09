@@ -22,6 +22,7 @@ return [
         'inventory.view_ledger' => 'View the stock ledger',
         'inventory.view_reports' => 'View inventory reports',
         'inventory.export_reports' => 'Export inventory reports',
+        'inventory.view_settings' => 'View inventory settings',
         'inventory.manage_settings' => 'Manage inventory settings',
         'inventory.integration.view' => 'View SolaBooks integration status & events',
         'inventory.integration.manage' => 'Manage integration mappings & settings',
@@ -54,6 +55,7 @@ return [
             'inventory.view_warehouses', 'inventory.manage_warehouses', 'inventory.view_stock',
             'inventory.manage_opening_stock', 'inventory.manage_adjustments',
             'inventory.view_ledger', 'inventory.view_reports', 'inventory.export_reports',
+            'inventory.view_settings',
             'inventory.integration.view',
             'inventory.view_sales', 'inventory.manage_sales_orders', 'inventory.manage_reservations',
             'inventory.manage_picking', 'inventory.manage_packing',
@@ -64,7 +66,7 @@ return [
         'inventory_viewer' => [
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.view_warehouses',
             'inventory.view_stock', 'inventory.view_ledger', 'inventory.view_reports',
-            'inventory.view_sales', 'inventory.view_traceability',
+            'inventory.view_settings', 'inventory.view_sales', 'inventory.view_traceability',
         ],
     ],
 ];
