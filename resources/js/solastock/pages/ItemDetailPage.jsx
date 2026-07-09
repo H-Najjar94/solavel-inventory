@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
+import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
 import ItemImages from '../components/ItemImages.jsx';
+import ItemAttachments from '../components/ItemAttachments.jsx';
+import { MoneyInput, SupplierPicker } from '../components/pickers.jsx';
 
 // ── helpers ──
 const num = (v) => Number(v ?? 0);
@@ -229,9 +233,17 @@ function WarehouseCards({ cards, onValuation }) {
 export default function ItemDetailPage() {
     const { id } = useParams();
     const gate = useCanCreate('inventory.manage_items');
+    const qc = useQueryClient();
+    const toast = useToast();
     const [tab, setTab] = useState('overview');
     const [valuationOpen, setValuationOpen] = useState(false);
     const [activeMovement, setActiveMovement] = useState(null);
+    const [newBarcode, setNewBarcode] = useState({ barcode: '', type: 'internal' });
+    const [scanCode, setScanCode] = useState('');
+    const [scanResult, setScanResult] = useState(null);
+    const [variantForm, setVariantForm] = useState({ sku: '', option: '', value: '', barcode_primary: '', purchase_price: '', sales_price: '' });
+    const [priceForm, setPriceForm] = useState({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: 'SAR' });
+    const [labels, setLabels] = useState(null);
 
     const { data, isLoading } = useApiQuery(['item', id], () => api.item(id), { fallback: null });
     const item = data?.item;
@@ -267,9 +279,99 @@ export default function ItemDetailPage() {
         { key: 'overview', label: 'Overview' },
         { key: 'inventory', label: 'Inventory' },
         { key: 'movements', label: 'Movements' },
+        { key: 'barcodes', label: 'Barcodes' },
         { key: 'media', label: 'Media' },
         { key: 'details', label: 'Details' },
     ];
+
+    async function addBarcode(e) {
+        e.preventDefault();
+        if (!newBarcode.barcode.trim()) return;
+        try {
+            await api.createItemBarcode(item.id, newBarcode);
+            setNewBarcode({ barcode: '', type: 'internal' });
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+            toast.push('Barcode added.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function lookupBarcode(e) {
+        e.preventDefault();
+        setScanResult(null);
+        if (!scanCode.trim()) return;
+        try {
+            const res = await api.barcodeLookup(scanCode.trim());
+            setScanResult(res.data);
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function makePrimary(barcodeId) {
+        try {
+            await api.makeItemBarcodePrimary(item.id, barcodeId);
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function removeBarcode(barcodeId) {
+        try {
+            await api.deleteItemBarcode(item.id, barcodeId);
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function addVariant(e) {
+        e.preventDefault();
+        if (!variantForm.sku.trim()) return;
+        const attrs = variantForm.option.trim() ? { [variantForm.option.trim()]: variantForm.value.trim() } : {};
+        try {
+            await api.createItemVariant(item.id, {
+                sku: variantForm.sku.trim(),
+                variant_attributes: attrs,
+                barcode_primary: variantForm.barcode_primary || undefined,
+                purchase_price: variantForm.purchase_price || undefined,
+                sales_price: variantForm.sales_price || undefined,
+                is_active: true,
+            });
+            setVariantForm({ sku: '', option: '', value: '', barcode_primary: '', purchase_price: '', sales_price: '' });
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+            toast.push('Variant added.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function deleteVariant(variantId) {
+        try {
+            await api.deleteItemVariant(item.id, variantId);
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+            toast.push('Variant removed.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function addSupplierPrice(e) {
+        e.preventDefault();
+        if (!priceForm.supplier_id || !priceForm.unit_cost) return;
+        try {
+            await api.createSupplierPrice(item.id, priceForm);
+            setPriceForm({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: 'SAR' });
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+            toast.push('Supplier price saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function deleteSupplierPrice(priceId) {
+        try {
+            await api.deleteSupplierPrice(item.id, priceId);
+            await qc.invalidateQueries({ queryKey: ['item', id] });
+            toast.push('Supplier price removed.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function loadLabels() {
+        try {
+            const res = await api.itemLabelSheet(item.id);
+            setLabels(res.data ?? res);
+            setTimeout(() => window.print(), 150);
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
 
     return (
         <section className="page">
@@ -344,8 +446,41 @@ export default function ItemDetailPage() {
                 <div className="panel">{movements.isLoading ? <Skeleton rows={4} /> : <MovementsTable rows={movementRows} onRow={setActiveMovement} />}</div>
             )}
 
+            {tab === 'barcodes' && (
+                <div className="overview-grid">
+                    <div className="card"><div className="card-head"><h3>Item barcodes</h3></div><div className="card-body">
+                        {(data.barcodes ?? []).length === 0 ? <EmptyState title="No barcodes" hint="Add EAN, UPC, internal or QR codes for scanner lookup." />
+                            : <table className="data-table"><thead><tr><th>Code</th><th>Type</th><th></th></tr></thead><tbody>
+                                {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
+                                    {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>Make primary</button>}
+                                    {gate.allowed && <button className="btn btn--sm" onClick={() => removeBarcode(b.id)}>Delete</button>}
+                                </td></tr>)}
+                            </tbody></table>}
+                        {gate.allowed && <form className="fg2" onSubmit={addBarcode} style={{ marginTop: 12 }}>
+                            <input className="input" placeholder="Scan or type barcode" value={newBarcode.barcode} onChange={(e) => setNewBarcode({ ...newBarcode, barcode: e.target.value })} />
+                            <select className="input" value={newBarcode.type} onChange={(e) => setNewBarcode({ ...newBarcode, type: e.target.value })}>
+                                <option value="internal">Internal</option><option value="EAN">EAN</option><option value="UPC">UPC</option><option value="QR">QR</option>
+                            </select>
+                            <button className="btn btn--primary">Add barcode</button>
+                        </form>}
+                    </div></div>
+                    <div className="card"><div className="card-head"><h3>Scan lookup</h3></div><div className="card-body">
+                        <form className="quick-create" onSubmit={lookupBarcode}>
+                            <input className="input" autoFocus placeholder="Scan barcode and press Enter" value={scanCode} onChange={(e) => setScanCode(e.target.value)} />
+                            <button className="btn btn--primary">Lookup</button>
+                        </form>
+                        {scanResult && <div className="banner" style={{ marginTop: 12 }}>
+                            Found <Link to={`/items/${scanResult.item_id}`}>{scanResult.item?.name ?? `item #${scanResult.item_id}`}</Link> · {scanResult.item?.sku ?? 'No SKU'}
+                        </div>}
+                    </div></div>
+                </div>
+            )}
+
             {/* ── Media ── */}
-            {tab === 'media' && <div className="panel"><ItemImages itemId={item.id} canManage={gate.allowed} /></div>}
+            {tab === 'media' && <div className="overview-grid">
+                <div className="card"><div className="card-head"><h3>Images</h3></div><div className="card-body"><ItemImages itemId={item.id} canManage={gate.allowed} /></div></div>
+                <div className="card"><div className="card-body"><ItemAttachments itemId={item.id} canManage={gate.allowed} /></div></div>
+            </div>}
 
             {/* ── Details ── */}
             {tab === 'details' && (
@@ -355,16 +490,47 @@ export default function ItemDetailPage() {
                         <dt>Description</dt><dd>{item.description || '—'}</dd>
                         <dt>Notes</dt><dd>{item.notes || '—'}</dd>
                         <dt>Unit</dt><dd>{item.base_unit?.code ?? '—'}</dd>
+                        <dt>Weight</dt><dd>{item.weight ? qty(item.weight) : '—'}</dd>
+                        <dt>Dimensions</dt><dd>{[item.length, item.width, item.height].filter(Boolean).length ? `${qty(item.length)} × ${qty(item.width)} × ${qty(item.height)}` : '—'}</dd>
+                        <dt>Package</dt><dd>{data.package_recommendation ? `${data.package_recommendation.label}${data.package_recommendation.max_dimensions ? ` · ${data.package_recommendation.max_dimensions}` : ''}` : '—'}</dd>
                     </dl></div></div>
                     <div className="card"><div className="card-head"><h3>Commercial</h3></div><div className="card-body"><dl className="kv">
                         <dt>Preferred supplier</dt><dd>{item.preferred_supplier_id ? `#${item.preferred_supplier_id}` : '—'}</dd>
                         <dt>Primary barcode</dt><dd>{data.primary_barcode ?? '—'}</dd>
                         <dt>Reorder qty</dt><dd>{item.reorder_qty ? qty(item.reorder_qty) : '—'}</dd>
+                        <dt>Min / max</dt><dd>{item.min_stock || item.max_stock ? `${item.min_stock ? qty(item.min_stock) : '—'} / ${item.max_stock ? qty(item.max_stock) : '—'}` : '—'}</dd>
+                        <dt>Safety stock</dt><dd>{item.safety_stock ? qty(item.safety_stock) : '—'}</dd>
                         <dt>Tax code</dt><dd>{item.tax_code ?? '—'}</dd>
-                    </dl></div></div>
+                    </dl>
+                        {(data.supplier_price_lists ?? []).length === 0 ? <EmptyState title="No supplier prices" hint="Add supplier-specific costs for buying decisions." />
+                            : <table className="data-table"><thead><tr><th>Supplier</th><th>SKU</th><th>Cost</th><th>Min qty</th><th></th></tr></thead><tbody>
+                                {data.supplier_price_lists.map((p) => <tr key={p.id}><td>{p.supplier?.name ?? `#${p.supplier_id}`}</td><td>{p.supplier_sku ?? '—'}</td><td>{p.unit_cost} {p.currency_code ?? ''}</td><td>{p.minimum_qty}</td><td>{gate.allowed && <button className="btn btn--sm btn--danger" onClick={() => deleteSupplierPrice(p.id)}>Delete</button>}</td></tr>)}
+                            </tbody></table>}
+                        {gate.allowed && <form className="fg2" onSubmit={addSupplierPrice} style={{ marginTop: 12 }}>
+                            <SupplierPicker value={priceForm.supplier_id} onChange={(v) => setPriceForm({ ...priceForm, supplier_id: v })} />
+                            <input className="input" placeholder="Supplier SKU" value={priceForm.supplier_sku} onChange={(e) => setPriceForm({ ...priceForm, supplier_sku: e.target.value })} />
+                            <MoneyInput value={priceForm.unit_cost} onChange={(v) => setPriceForm({ ...priceForm, unit_cost: v })} />
+                            <input className="input" type="number" step="0.0001" min="0" value={priceForm.minimum_qty} onChange={(e) => setPriceForm({ ...priceForm, minimum_qty: e.target.value })} />
+                            <button className="btn btn--primary">Add supplier price</button>
+                        </form>}
+                    </div></div>
                     <div className="card"><div className="card-head"><h3>Variants</h3></div><div className="card-body">
                         {(item.variants?.length ?? 0) === 0 ? <EmptyState title="No variants" hint="This item has no variants." />
-                            : <ul className="plain-list">{item.variants.map((v) => <li key={v.id}>{v.name ?? v.sku ?? `Variant #${v.id}`}</li>)}</ul>}
+                            : <table className="data-table"><thead><tr><th>SKU</th><th>Attributes</th><th>Barcode</th><th>Status</th><th></th></tr></thead><tbody>
+                                {item.variants.map((v) => <tr key={v.id}><td>{v.sku}</td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td>{v.barcode_primary ?? '—'}</td><td>{v.is_active ? 'Active' : 'Inactive'}</td><td>{gate.allowed && <button className="btn btn--sm btn--danger" onClick={() => deleteVariant(v.id)}>Delete</button>}</td></tr>)}
+                            </tbody></table>}
+                        {gate.allowed && <form className="fg2" onSubmit={addVariant} style={{ marginTop: 12 }}>
+                            <input className="input" placeholder="Variant SKU" value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required />
+                            <input className="input" placeholder="Option (e.g. Size)" value={variantForm.option} onChange={(e) => setVariantForm({ ...variantForm, option: e.target.value })} />
+                            <input className="input" placeholder="Value (e.g. Large)" value={variantForm.value} onChange={(e) => setVariantForm({ ...variantForm, value: e.target.value })} />
+                            <input className="input" placeholder="Variant barcode" value={variantForm.barcode_primary} onChange={(e) => setVariantForm({ ...variantForm, barcode_primary: e.target.value })} />
+                            <button className="btn btn--primary">Add variant</button>
+                        </form>}
+                    </div></div>
+                    <div className="card"><div className="card-head"><h3>Labels</h3><span className="spacer" /><button className="btn btn--sm" onClick={loadLabels}>Print labels</button></div><div className="card-body">
+                        {!labels ? <EmptyState title="No label preview" hint="Generate item and barcode labels for printing." /> : <div className="label-sheet">
+                            {(labels.labels ?? []).map((l) => <div className="label-card" key={l.barcode}><strong>{l.name}</strong><span>{l.sku}</span><code>{l.barcode}</code><span className="muted">{l.type}</span></div>)}
+                        </div>}
                     </div></div>
                     <div className="card"><div className="card-head"><h3>Audit</h3></div><div className="card-body"><dl className="kv">
                         <dt>Created</dt><dd>{item.created_at ?? '—'}</dd>

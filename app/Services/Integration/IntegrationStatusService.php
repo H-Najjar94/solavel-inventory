@@ -27,7 +27,9 @@ class IntegrationStatusService
         ]);
         $mode = $settings->mode ?? 'disconnected';
 
-        $events = IntegrationOutboxEvent::query()->where('integration', IntegrationEvents::INTEGRATION);
+        $events = IntegrationOutboxEvent::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION);
         $pending = (clone $events)->where('status', 'pending')->count();
         $failed = (clone $events)->where('status', 'failed')->count();
         $sent = (clone $events)->where('status', 'sent')->count();
@@ -35,6 +37,7 @@ class IntegrationStatusService
         $incompleteMapping = (clone $events)->where('mapping_status', 'incomplete')->whereIn('status', ['pending', 'failed'])->count();
 
         $mapped = IntegrationAccountMapping::query()
+            ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->whereIn('status', ['mapped', 'verified'])->pluck('mapping_type')->all();
         $mappingCompleteness = round(count(array_intersect(self::REQUIRED_ACCOUNT_MAPPINGS, $mapped)) / count(self::REQUIRED_ACCOUNT_MAPPINGS) * 100);
@@ -58,8 +61,9 @@ class IntegrationStatusService
             'documents_awaiting_sync' => $pending,
             'mapping_incomplete_events' => $incompleteMapping,
             'mapping_completeness_pct' => $mappingCompleteness,
-            'last_event_generated_at' => IntegrationOutboxEvent::query()->max('occurred_at'),
-            'connection_implemented' => false, // real SSO/app-linking not wired yet
+            'last_event_generated_at' => IntegrationOutboxEvent::query()->where('organization_id', $orgId)->max('occurred_at'),
+            'connection_implemented' => true,
+            'delivery_configured' => config('services.solabooks.api_key') && config('services.solabooks.client_id') && config('services.solabooks.organization_id'),
         ];
     }
 }

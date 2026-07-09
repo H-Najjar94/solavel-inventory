@@ -40,11 +40,24 @@ class StockAdjustmentController extends ApiController
     public function show(StockAdjustment $adjustment): JsonResponse
     {
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
-        $adjustment->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
+        $adjustment->load(['lines.item:id,name,sku', 'lines.bin:id,code', 'warehouse:id,name,code']);
         $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
         $ledger = StockLedger::query()
+            ->with(['item:id,name,sku', 'warehouse:id,name,code'])
             ->where('source_type', StockAdjustment::class)
-            ->where('source_id', $adjustment->id)->get();
+            ->where('source_id', $adjustment->id)
+            ->get()
+            ->map(function (StockLedger $row) {
+                $row->setAttribute('item_name', $row->item?->name);
+                $row->setAttribute('item_sku', $row->item?->sku);
+                $row->setAttribute('warehouse_name', $row->warehouse?->name);
+                $row->setAttribute('warehouse_code', $row->warehouse?->code);
+                return $row;
+            });
+
+        $adjustment->lines->each(function ($line) {
+            $line->setAttribute('bin_code', $line->bin?->code);
+        });
 
         return $this->success(['adjustment' => $adjustment, 'ledger' => $ledger]);
     }

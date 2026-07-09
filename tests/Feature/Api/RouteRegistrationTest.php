@@ -80,4 +80,12 @@ class RouteRegistrationTest extends TestCase
         $mw = Route::getRoutes()->getByName('api.v1.settings.show')->gatherMiddleware();
         $this->assertContains('perm:inventory.manage_settings', $mw);
     }
+
+    #[Test]
+    public function reorder_calculation_route_requires_settings_permission(): void
+    {
+        $route = Route::getRoutes()->getByName('api.v1.settings.reorder.calculate');
+        $this->assertNotNull($route);
+        $this->assertContains('perm:inventory.manage_settings', $route->gatherMiddleware());
+    }
 }

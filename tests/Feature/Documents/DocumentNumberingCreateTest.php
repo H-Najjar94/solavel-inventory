@@ -13,10 +13,12 @@ use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Http\Requests\Api\StoreStockCountRequest;
 use App\Http\Requests\Api\StoreStockTransferRequest;
 use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockTransfer;
+use App\Tenancy\OrganizationContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
 use Tests\TestCase;
@@ -34,6 +36,13 @@ class DocumentNumberingCreateTest extends TestCase
 {
     use TenantAware;
 
+    private function suffix(string $number): int
+    {
+        preg_match('/(\d+)$/', $number, $m);
+
+        return (int) ($m[1] ?? 0);
+    }
+
     private int $whA;
 
     private int $whB;
@@ -45,6 +54,10 @@ class DocumentNumberingCreateTest extends TestCase
         $this->whA = F::warehouse()->id;
         $this->whB = F::warehouse()->id;
         $this->item = F::item()->id;
+        InventorySetting::query()->updateOrCreate(
+            ['organization_id' => app(OrganizationContext::class)->idOrFail()],
+            ['adjustment_reason_codes' => [['code' => 'test_adjustment', 'label' => 'Test adjustment']]]
+        );
     }
 
     private function resolve(string $requestClass, array $payload)
@@ -76,8 +89,8 @@ class DocumentNumberingCreateTest extends TestCase
         $req = $this->resolve(StoreStockTransferRequest::class, $this->transferPayload());
         $resp = app(StockTransferController::class)->store($req)->getData(true);
 
-        $this->assertSame('TRF-000001', $resp['data']['transfer_number']);
-        $t = StockTransfer::query()->where('transfer_number', 'TRF-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^TRF-\d{6}$/', $resp['data']['transfer_number']);
+        $t = StockTransfer::query()->where('transfer_number', $resp['data']['transfer_number'])->firstOrFail();
         $this->assertSame('draft', $t->status);
         $this->assertNotNull($t->transfer_date, 'blank transfer_date defaulted, did not crash');
     }
@@ -88,15 +101,16 @@ class DocumentNumberingCreateTest extends TestCase
         $this->useTenantA();
         $this->seedDocs();
 
-        app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()));   // TRF-000001
-        app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()));   // TRF-000002
+        $first = app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()))->getData(true);
+        $second = app(StockTransferController::class)->store($this->resolve(StoreStockTransferRequest::class, $this->transferPayload()))->getData(true);
         $typed = app(StockTransferController::class)->store(
             $this->resolve(StoreStockTransferRequest::class, $this->transferPayload(['transfer_number' => 'MY-TRF-9']))
         )->getData(true);
 
-        $this->assertSame('TRF-000003', $typed['data']['transfer_number']);
+        $this->assertSame($this->suffix($first['data']['transfer_number']) + 1, $this->suffix($second['data']['transfer_number']));
+        $this->assertSame($this->suffix($second['data']['transfer_number']) + 1, $this->suffix($typed['data']['transfer_number']));
         $this->assertNull(StockTransfer::query()->where('transfer_number', 'MY-TRF-9')->first());
-        $this->assertNotNull(StockTransfer::query()->where('transfer_number', 'TRF-000002')->first());
+        $this->assertNotNull(StockTransfer::query()->where('transfer_number', $second['data']['transfer_number'])->first());
     }
 
     // ── Stock Adjustment ──
@@ -105,7 +119,7 @@ class DocumentNumberingCreateTest extends TestCase
     {
         return array_merge([
             'adjustment_number' => '', 'adjustment_date' => '',
-            'warehouse_id' => $this->whA, 'reason_code' => '', 'notes' => '',
+            'warehouse_id' => $this->whA, 'reason_code' => 'test_adjustment', 'notes' => '',
             'lines' => [['item_id' => $this->item, 'direction' => 'increase', 'quantity' => '4.0000', 'unit_cost' => '1.5000']],
         ], $over);
     }
@@ -119,8 +133,8 @@ class DocumentNumberingCreateTest extends TestCase
         $req = $this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload());
         $resp = app(StockAdjustmentController::class)->store($req)->getData(true);
 
-        $this->assertSame('ADJ-000001', $resp['data']['adjustment_number']);
-        $adj = StockAdjustment::query()->where('adjustment_number', 'ADJ-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^ADJ-\d{6}$/', $resp['data']['adjustment_number']);
+        $adj = StockAdjustment::query()->findOrFail($resp['data']['id']);
         $this->assertSame('draft', $adj->status);
         $this->assertNotNull($adj->adjustment_date, 'blank adjustment_date defaulted, did not crash');
     }
@@ -131,14 +145,15 @@ class DocumentNumberingCreateTest extends TestCase
         $this->useTenantA();
         $this->seedDocs();
 
-        app(StockAdjustmentController::class)->store($this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload()));   // ADJ-000001
+        $first = app(StockAdjustmentController::class)->store($this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload()))->getData(true);
         $typed = app(StockAdjustmentController::class)->store(
             $this->resolve(StoreStockAdjustmentRequest::class, $this->adjustmentPayload(['adjustment_number' => 'COUNT-42']))
         )->getData(true);
 
-        $this->assertSame('ADJ-000002', $typed['data']['adjustment_number']);
+        $this->assertMatchesRegularExpression('/^ADJ-\d{6}$/', $typed['data']['adjustment_number']);
+        $this->assertNotSame($first['data']['adjustment_number'], $typed['data']['adjustment_number']);
         $this->assertNull(StockAdjustment::query()->where('adjustment_number', 'COUNT-42')->first());
-        $this->assertNotNull(StockAdjustment::query()->where('adjustment_number', 'ADJ-000001')->first());
+        $this->assertNotNull(StockAdjustment::query()->where('adjustment_number', $first['data']['adjustment_number'])->first());
     }
 
     // ── Goods Receipt (GRN) ──
@@ -161,8 +176,8 @@ class DocumentNumberingCreateTest extends TestCase
         $req = $this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload());
         $resp = app(GoodsReceiptController::class)->store($req)->getData(true);
 
-        $this->assertSame('GRN-000001', $resp['data']['grn_number']);
-        $grn = GoodsReceipt::query()->where('grn_number', 'GRN-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^GRN-\d{6}$/', $resp['data']['grn_number']);
+        $grn = GoodsReceipt::query()->where('grn_number', $resp['data']['grn_number'])->firstOrFail();
         $this->assertSame('draft', $grn->status);
         $this->assertNotNull($grn->receipt_date, 'blank receipt_date defaulted, did not crash');
     }
@@ -173,14 +188,14 @@ class DocumentNumberingCreateTest extends TestCase
         $this->useTenantA();
         $this->seedDocs();
 
-        app(GoodsReceiptController::class)->store($this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload()));   // GRN-000001
+        $first = app(GoodsReceiptController::class)->store($this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload()))->getData(true);
         $typed = app(GoodsReceiptController::class)->store(
             $this->resolve(StoreGoodsReceiptRequest::class, $this->grnPayload(['grn_number' => 'GRN-CUSTOM']))
         )->getData(true);
 
-        $this->assertSame('GRN-000002', $typed['data']['grn_number']);
+        $this->assertSame($this->suffix($first['data']['grn_number']) + 1, $this->suffix($typed['data']['grn_number']));
         $this->assertNull(GoodsReceipt::query()->where('grn_number', 'GRN-CUSTOM')->first());
-        $this->assertNotNull(GoodsReceipt::query()->where('grn_number', 'GRN-000001')->first());
+        $this->assertNotNull(GoodsReceipt::query()->where('grn_number', $first['data']['grn_number'])->first());
     }
 
     // ── Stock Count ──

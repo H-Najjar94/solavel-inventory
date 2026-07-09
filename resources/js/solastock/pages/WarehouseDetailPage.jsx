@@ -17,6 +17,7 @@ export default function WarehouseDetailPage() {
     const [tab, setTab] = useState('overview');
     const [zoneForm, setZoneForm] = useState({ code: '', name: '' });
     const [binForm, setBinForm] = useState({ zone_id: '', code: '', bin_type: 'storage', capacity: '' });
+    const [labels, setLabels] = useState(null);
 
     const { data, isLoading, isMock } = useApiQuery(['warehouse', id], () => api.warehouse(id), { fallback: null });
     const w = data?.warehouse;
@@ -36,6 +37,10 @@ export default function WarehouseDetailPage() {
     async function addBin(e) {
         e.preventDefault();
         try { await api.createBin(id, binForm); toast.push('Bin created.', 'success'); setBinForm({ zone_id: '', code: '', bin_type: 'storage', capacity: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
+        catch (err) { toast.push(err.message, 'error'); }
+    }
+    async function loadLabels() {
+        try { const res = await api.warehouseLabels(id); setLabels(res.data); toast.push('Bin labels generated.', 'success'); }
         catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -99,10 +104,19 @@ export default function WarehouseDetailPage() {
                     <input className="input" type="number" placeholder="Capacity" value={binForm.capacity} onChange={(e) => setBinForm({ ...binForm, capacity: e.target.value })} />
                     <button className="btn btn--primary btn--sm">Add bin</button>
                 </form>}
+                <div className="toolbar"><button className="btn btn--sm" onClick={loadLabels}>Print bin labels</button></div>
                 {bins.length === 0 ? <EmptyState title="No bins" /> : (
                     <table className="data-table"><thead><tr><th>Code</th><th>Zone</th><th>Type</th><th>Capacity</th><th>Status</th></tr></thead>
                     <tbody>{bins.map((b) => <tr key={b.id}><td>{b.code}</td><td>#{b.zone_id}</td><td>{b.coords?.bin_type ?? 'storage'}</td><td>{b.capacity ?? '—'}</td><td>{b.is_active ? 'Active' : 'Inactive'}</td></tr>)}</tbody></table>
                 )}
+                {labels && <div className="label-sheet">
+                    {(labels.labels ?? []).map((l) => <div className="label-card" key={l.bin_id}>
+                        <strong>{l.warehouse_code} / {l.bin_code}</strong>
+                        <span>{l.zone_code ?? 'Zone'} · {l.bin_type}</span>
+                        <code>{l.barcode}</code>
+                        <span className="qr-preview" dangerouslySetInnerHTML={{ __html: l.qr_svg }} />
+                    </div>)}
+                </div>}
             </div>}
 
             {tab === 'stock' && <div className="panel">{stock.length === 0 ? <EmptyState title="No stock" /> : (

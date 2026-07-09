@@ -5,6 +5,7 @@ namespace App\Models\Tenant;
 use App\Tenancy\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesOrder extends Model
@@ -16,7 +17,14 @@ class SalesOrder extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['order_date'=>'date','requested_ship_date'=>'date'];
+    protected $casts = [
+        'order_date' => 'date',
+        'requested_ship_date' => 'date',
+        'subtotal' => 'decimal:2',
+        'discount_total' => 'decimal:2',
+        'tax_total' => 'decimal:2',
+        'total' => 'decimal:2',
+    ];
 
     public function lines()
     {
@@ -28,5 +36,18 @@ class SalesOrder extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(Reservation::class, 'source_id')
+            ->where('source_type', 'sales_order')
+            ->orderBy('priority')
+            ->orderBy('expires_at');
     }
 }

@@ -25,6 +25,7 @@ export default function AdjustmentFormPage() {
     const [saving, setSaving] = useState(false);
 
     const existing = useApiQuery(['adjustment', id], () => api.adjustment(id), { fallback: null, enabled: isEdit });
+    const meta = useApiQuery(['meta'], api.meta, { fallback: { settings: {} } });
     useEffect(() => {
         if (isEdit && existing.data?.adjustment) {
             const a = existing.data.adjustment;
@@ -36,6 +37,7 @@ export default function AdjustmentFormPage() {
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
     const tracking = useItemTracking();
+    const reasonCodes = (meta.data?.settings?.adjustment_reason_codes ?? []).filter((code) => code.active !== false);
 
     async function save(post = false) {
         if (!gate.allowed) return;
@@ -129,7 +131,16 @@ export default function AdjustmentFormPage() {
                 <Field label="Document number" required error={errors.adjustment_number}><input className="input" value={header.adjustment_number} onChange={(e) => setHeader({ ...header, adjustment_number: e.target.value })} /></Field>
                 <Field label="Date" error={errors.adjustment_date}><input className="input" type="date" value={header.adjustment_date} onChange={(e) => setHeader({ ...header, adjustment_date: e.target.value })} /></Field>
                 <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
-                <Field label="Reason code"><input className="input" value={header.reason_code} onChange={(e) => setHeader({ ...header, reason_code: e.target.value })} placeholder="e.g. damage, found, cycle_count" /></Field>
+                <Field label="Reason code" error={errors.reason_code}>
+                    {reasonCodes.length > 0 ? (
+                        <select className="input" value={header.reason_code} onChange={(e) => setHeader({ ...header, reason_code: e.target.value })} required>
+                            <option value="">Select reason</option>
+                            {reasonCodes.map((code) => <option key={code.code} value={code.code}>{code.label ?? code.code}</option>)}
+                        </select>
+                    ) : (
+                        <input className="input" value={header.reason_code} onChange={(e) => setHeader({ ...header, reason_code: e.target.value })} placeholder="e.g. damage, found, cycle_count" />
+                    )}
+                </Field>
                 <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
 

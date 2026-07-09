@@ -26,6 +26,14 @@ export default function TransferDetailPage() {
         try { await api.postTransfer(id); toast.push('Transfer posted.', 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); }
         catch (e) { toast.push(e.message, 'error'); }
     }
+    async function ship() {
+        try { await api.shipTransfer(id); toast.push('Transfer shipped.', 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); }
+        catch (e) { toast.push(e.message, 'error'); }
+    }
+    async function receive() {
+        try { await api.receiveTransfer(id); toast.push('Transfer received.', 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); }
+        catch (e) { toast.push(e.message, 'error'); }
+    }
 
     return (
         <section className="page">
@@ -40,6 +48,8 @@ export default function TransferDetailPage() {
                 <dt>Date</dt><dd>{t.transfer_date}</dd>
                 <dt>From warehouse</dt><dd>{t.from_warehouse_name ?? `#${t.from_warehouse_id}`}</dd>
                 <dt>To warehouse</dt><dd>{t.to_warehouse_name ?? `#${t.to_warehouse_id}`}</dd>
+                <dt>Shipped</dt><dd>{t.shipped_at ?? '—'}</dd>
+                <dt>Received</dt><dd>{t.received_at ?? '—'}</dd>
                 <dt>Notes</dt><dd>{t.notes ?? '—'}</dd>
             </dl></div>
 
@@ -52,6 +62,10 @@ export default function TransferDetailPage() {
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="Transfer post events are recorded in inventory_audit_logs." /></div>}
 
+            <div className="doc-actions">
+                {t.status === 'draft' && <button className="btn" disabled={!gate.allowed} onClick={ship}>Ship to in-transit</button>}
+                {t.status === 'in_transit' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={receive}>Receive transfer</button>}
+            </div>
             <DocumentActions status={t.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} postLabel="Post transfer" />
             <ConfirmPostModal open={confirmPost} name="transfer"
                 onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />

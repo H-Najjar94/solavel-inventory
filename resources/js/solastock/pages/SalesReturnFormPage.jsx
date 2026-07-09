@@ -7,7 +7,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
-import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
+import { ItemPicker, WarehousePicker, BinPicker, CustomerPicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
 
 const emptyLine = () => ({ item_id: null, returned_qty: '', unit_cost: '', condition: 'resellable', bin_id: null });
 
@@ -19,7 +19,7 @@ export default function SalesReturnFormPage() {
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.manage_returns');
 
-    const [header, setHeader] = useState({ return_number: '', shipment_id: shipmentId ? Number(shipmentId) : null, customer_name: '', warehouse_id: null, return_date: new Date().toISOString().slice(0, 10), reason: '', notes: '' });
+    const [header, setHeader] = useState({ return_number: '', shipment_id: shipmentId ? Number(shipmentId) : null, customer_id: null, customer_name: '', warehouse_id: null, return_date: new Date().toISOString().slice(0, 10), reason: '', notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
@@ -40,7 +40,7 @@ export default function SalesReturnFormPage() {
         if (isEdit && existing.data?.sales_return) {
             const r = existing.data.sales_return;
             if (r.status !== 'draft') { toast.push('Only draft returns can be edited.', 'error'); nav(`/sales-returns/${id}`); return; }
-            setHeader({ return_number: r.return_number, shipment_id: r.shipment_id, customer_name: r.customer_name ?? '', warehouse_id: r.warehouse_id, return_date: r.return_date?.slice(0, 10), reason: r.reason ?? '', notes: r.notes ?? '' });
+            setHeader({ return_number: r.return_number, shipment_id: r.shipment_id, customer_id: r.customer_id ?? null, customer_name: r.customer_name ?? '', warehouse_id: r.warehouse_id, return_date: r.return_date?.slice(0, 10), reason: r.reason ?? '', notes: r.notes ?? '' });
             setLines((r.lines ?? []).map((l) => ({ item_id: l.item_id, returned_qty: l.returned_qty, unit_cost: l.unit_cost, condition: l.condition, bin_id: l.bin_id, lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, is_manual: !r.shipment_id })));
         }
     }, [isEdit, existing.data]);
@@ -73,9 +73,9 @@ export default function SalesReturnFormPage() {
         { key: 'cond', label: 'Condition', width: 140, render: (l, i) => (
             <select className="input" value={l.condition} onChange={(e) => setLine(i, { condition: e.target.value })}>
                 <option value="resellable">Resellable</option>
-                <option value="quarantine">Quarantine</option>
-                <option value="damaged">Damaged (no restock)</option>
-                <option value="retired">Retired (no restock)</option>
+                        <option value="quarantine">Quarantine</option>
+                        <option value="damaged">Damaged (no restock)</option>
+                        <option value="retired">Retired (no restock)</option>
             </select>) },
         { key: 'bin', label: 'Bin', render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
         { key: 'cost', label: 'Unit cost', width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
@@ -89,7 +89,8 @@ export default function SalesReturnFormPage() {
 
             <div className="form-grid">
                 <Field label="Return number" required error={errors.return_number}><input className="input" value={header.return_number} onChange={(e) => setHeader({ ...header, return_number: e.target.value })} /></Field>
-                <Field label="Customer name" error={errors.customer_name}><input className="input" value={header.customer_name} onChange={(e) => setHeader({ ...header, customer_name: e.target.value })} /></Field>
+                <Field label="Customer" error={errors.customer_id}><CustomerPicker value={header.customer_id} onChange={(v) => setHeader({ ...header, customer_id: v })} /></Field>
+                <Field label="Customer name" error={errors.customer_name}><input className="input" value={header.customer_name} onChange={(e) => setHeader({ ...header, customer_name: e.target.value })} placeholder="Optional override" /></Field>
                 <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
                 <Field label="Return date" error={errors.return_date}><input className="input" type="date" value={header.return_date} onChange={(e) => setHeader({ ...header, return_date: e.target.value })} /></Field>
                 <Field label="Source shipment">{header.shipment_id ? `#${header.shipment_id}` : <span className="muted">none</span>}</Field>

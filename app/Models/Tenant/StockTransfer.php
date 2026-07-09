@@ -18,7 +18,13 @@ class StockTransfer extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['transfer_date'=>'date','posted_at'=>'datetime','reversed_at'=>'datetime'];
+    protected $casts = [
+        'transfer_date' => 'date',
+        'posted_at' => 'datetime',
+        'shipped_at' => 'datetime',
+        'received_at' => 'datetime',
+        'reversed_at' => 'datetime',
+    ];
 
     public function lines()
     {

@@ -39,7 +39,7 @@ trait ValidatesItem
 
         $patch = [];
         // Nullable columns: blank → null (the DB accepts null / treats as unset).
-        foreach (['reorder_point', 'reorder_qty'] as $f) {
+        foreach (['reorder_point', 'reorder_qty', 'weight', 'length', 'width', 'height', 'min_stock', 'max_stock', 'safety_stock'] as $f) {
             if ($isBlank($f)) {
                 $patch[$f] = null;
             }
@@ -158,6 +158,13 @@ trait ValidatesItem
             'costing_method' => ['nullable', \Illuminate\Validation\Rule::in(['average', 'fifo', 'standard'])],
             'reorder_point' => ['nullable', 'numeric', 'min:0'],
             'reorder_qty' => ['nullable', 'numeric', 'min:0'],
+            'weight' => ['nullable', 'numeric', 'min:0'],
+            'length' => ['nullable', 'numeric', 'min:0'],
+            'width' => ['nullable', 'numeric', 'min:0'],
+            'height' => ['nullable', 'numeric', 'min:0'],
+            'min_stock' => ['nullable', 'numeric', 'min:0'],
+            'max_stock' => ['nullable', 'numeric', 'min:0'],
+            'safety_stock' => ['nullable', 'numeric', 'min:0'],
             'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'sales_price' => ['nullable', 'numeric', 'min:0'],
             'tax_code' => ['nullable', 'string', 'max:50'],

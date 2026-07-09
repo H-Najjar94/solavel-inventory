@@ -8,6 +8,7 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
 use App\Services\Integration\IntegrationEvents;
+use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Services\Integration\IntegrationStatusService;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Tenancy\OrganizationContext;
@@ -15,15 +16,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * SolaBooks integration API — FOUNDATION ONLY. No real connection, no posting, no
- * journal entries. Manages local mappings + reads the outbox. Retry/ignore are
- * honest placeholders (no worker yet).
+ * SolaBooks integration API. Posting stays outbox-only inside inventory
+ * transactions; retries deliver over SolaBooks' external API and never write
+ * directly into Finance tables.
  */
 class IntegrationController extends ApiController
 {
     public function __construct(
         private OrganizationContext $context,
         private IntegrationStatusService $statusService,
+        private SolaBooksOutboxDeliveryService $delivery,
     ) {}
 
     public function status(): JsonResponse
@@ -138,18 +140,26 @@ class IntegrationController extends ApiController
         return $this->success(IntegrationOutboxEvent::query()->findOrFail($event));
     }
 
-    /** Placeholder — honest "not implemented". No worker drains the outbox yet. */
-    public function retryPlaceholder(int $event): JsonResponse
+    public function retry(int $event): JsonResponse
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
 
-        return $this->error('not_implemented', 'Event delivery is not implemented yet. Events are recorded locally; a future worker will send them to SolaBooks.', 501, [
-            'event_uuid' => $event->event_uuid,
-        ]);
+        try {
+            return $this->success($this->delivery->deliver($event, manual: true)->fresh());
+        } catch (\Throwable $e) {
+            return $this->error('delivery_failed', $e->getMessage(), 422, [
+                'event_uuid' => $event->event_uuid,
+            ]);
+        }
+    }
+
+    public function retryPlaceholder(int $event): JsonResponse
+    {
+        return $this->retry($event);
     }
 
     /** Mark an event ignored (local-only state change; no external call). */
-    public function ignorePlaceholder(int $event): JsonResponse
+    public function ignore(int $event): JsonResponse
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
         if (in_array($event->status, ['pending', 'failed'], true)) {
@@ -159,5 +169,10 @@ class IntegrationController extends ApiController
         }
 
         return $this->error('cannot_ignore', "An event with status '{$event->status}' cannot be ignored.", 422);
+    }
+
+    public function ignorePlaceholder(int $event): JsonResponse
+    {
+        return $this->ignore($event);
     }
 }

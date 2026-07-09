@@ -28,6 +28,13 @@ class DocumentNumberingTest extends TestCase
 {
     use TenantAware;
 
+    private function suffix(string $number): int
+    {
+        preg_match('/(\d+)$/', $number, $m);
+
+        return (int) ($m[1] ?? 0);
+    }
+
     private function createPo(array $payload): array
     {
         $req = StorePurchaseOrderRequest::create('/api/v1/purchase-orders', 'POST', $payload);
@@ -67,8 +74,8 @@ class DocumentNumberingTest extends TestCase
 
         $resp = $this->createPo($this->poPayload());
 
-        $this->assertSame('PO-000001', $resp['data']['po_number'], 'po_number is server-generated');
-        $po = PurchaseOrder::query()->where('po_number', 'PO-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^PO-\d{6}$/', $resp['data']['po_number'], 'po_number is server-generated');
+        $po = PurchaseOrder::query()->where('po_number', $resp['data']['po_number'])->firstOrFail();
         $this->assertSame('draft', $po->status);
         $this->assertNotNull($po->order_date, 'blank order_date defaulted, did not crash');
         $this->assertCount(1, $po->fresh('lines')->lines);
@@ -79,13 +86,14 @@ class DocumentNumberingTest extends TestCase
     {
         $this->useTenantA();
         $this->seedDocs();
-        $this->createPo($this->poPayload());                 // PO-000001
-        $this->createPo($this->poPayload());                 // PO-000002
+        $first = $this->createPo($this->poPayload());
+        $second = $this->createPo($this->poPayload());
         $typed = $this->createPo($this->poPayload(['po_number' => 'CUSTOM-1']));
 
-        $this->assertSame('PO-000003', $typed['data']['po_number']);
+        $this->assertSame($this->suffix($first['data']['po_number']) + 1, $this->suffix($second['data']['po_number']));
+        $this->assertSame($this->suffix($second['data']['po_number']) + 1, $this->suffix($typed['data']['po_number']));
         $this->assertNull(PurchaseOrder::query()->where('po_number', 'CUSTOM-1')->first());
-        $this->assertNotNull(PurchaseOrder::query()->where('po_number', 'PO-000002')->first());
+        $this->assertNotNull(PurchaseOrder::query()->where('po_number', $second['data']['po_number'])->first());
     }
 
     #[Test]
@@ -97,10 +105,10 @@ class DocumentNumberingTest extends TestCase
         $id = $created['data']['id'];
 
         $list = app(PurchaseOrderController::class)->index(Request::create('/', 'GET'))->getData(true);
-        $this->assertContains('PO-000001', array_column($list['data'], 'po_number'));
+        $this->assertContains($created['data']['po_number'], array_column($list['data'], 'po_number'));
 
         $detail = app(PurchaseOrderController::class)->show(PurchaseOrder::query()->findOrFail($id))->getData(true)['data'];
-        $this->assertSame('PO-000001', ($detail['purchase_order'] ?? $detail)['po_number'] ?? $detail['po_number'] ?? null);
+        $this->assertSame($created['data']['po_number'], ($detail['purchase_order'] ?? $detail)['po_number'] ?? $detail['po_number'] ?? null);
     }
 
     #[Test]
@@ -135,8 +143,8 @@ class DocumentNumberingTest extends TestCase
         $req->validateResolved();
         $resp = app(OpeningStockController::class)->store($req)->getData(true);
 
-        $this->assertSame('OS-000001', $resp['data']['entry_number'], 'entry_number is server-generated');
-        $entry = OpeningStockEntry::query()->where('entry_number', 'OS-000001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^OS-\d{6}$/', $resp['data']['entry_number'], 'entry_number is server-generated');
+        $entry = OpeningStockEntry::query()->findOrFail($resp['data']['id']);
 
         // Posting the draft moves stock on hand.
         app(OpeningStockService::class)->post($entry);

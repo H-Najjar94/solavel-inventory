@@ -9,7 +9,7 @@ import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx'
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput } from '../components/pickers.jsx';
 
-const emptyLine = () => ({ item_id: null, bin_id: null, system_qty: '0', counted_qty: '' });
+const emptyLine = () => ({ item_id: null, bin_id: null, system_qty: '0', snapshot_qty: null, counted_qty: '' });
 
 export default function CountFormPage() {
     const { id } = useParams();
@@ -17,7 +17,10 @@ export default function CountFormPage() {
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.manage_adjustments');
 
-    const [header, setHeader] = useState({ count_number: '', count_type: 'cycle', warehouse_id: null, zone_id: null, notes: '' });
+    const [header, setHeader] = useState({
+        count_number: '', count_type: 'cycle', blind_count: false, warehouse_id: null, zone_id: null,
+        scheduled_for: '', recurrence: 'once', abc_class: '', freeze_snapshot: true, notes: '',
+    });
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
@@ -28,8 +31,19 @@ export default function CountFormPage() {
         if (isEdit && existing.data?.count) {
             const c = existing.data.count;
             if (c.status !== 'draft') { toast.push('Only draft counts can be edited.', 'error'); nav(`/counts/${id}`); return; }
-            setHeader({ count_number: c.count_number, count_type: c.count_type, warehouse_id: c.warehouse_id, zone_id: c.zone_id, notes: c.notes ?? '' });
-            setLines((c.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, system_qty: l.system_qty, counted_qty: l.counted_qty ?? '' })));
+            setHeader({
+                count_number: c.count_number,
+                count_type: c.count_type,
+                blind_count: !!c.blind_count,
+                warehouse_id: c.warehouse_id,
+                zone_id: c.zone_id,
+                scheduled_for: c.scheduled_for ?? '',
+                recurrence: c.recurrence ?? 'once',
+                abc_class: c.abc_class ?? '',
+                freeze_snapshot: !!c.snapshot_at,
+                notes: c.notes ?? '',
+            });
+            setLines((c.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, system_qty: l.system_qty, snapshot_qty: l.snapshot_qty ?? null, counted_qty: l.counted_qty ?? '' })));
         }
     }, [isEdit, existing.data]);
 
@@ -43,7 +57,7 @@ export default function CountFormPage() {
             const res = await api.countPrefill(header.warehouse_id);
             const rows = res?.data?.lines ?? [];
             if (rows.length === 0) { toast.push('No stock found for this scope.', 'info'); }
-            setLines(rows.length ? rows.map((r) => ({ item_id: r.item_id, bin_id: r.bin_id, lot_id: r.lot_id ?? null, lot_code: r.lot_code ?? null, expiry_date: r.expiry_date ?? null, system_qty: r.system_qty, counted_qty: '', expected_serials: r.expected_serials ?? [] })) : [emptyLine()]);
+            setLines(rows.length ? rows.map((r) => ({ item_id: r.item_id, bin_id: r.bin_id, lot_id: r.lot_id ?? null, lot_code: r.lot_code ?? null, expiry_date: r.expiry_date ?? null, system_qty: r.system_qty, snapshot_qty: r.system_qty, counted_qty: '', expected_serials: r.expected_serials ?? [] })) : [emptyLine()]);
         } catch (e) { toast.push(e.message, 'error'); }
         finally { setPrefilling(false); }
     }
@@ -72,8 +86,8 @@ export default function CountFormPage() {
             ? <span title={l.expiry_date ? `exp ${l.expiry_date}` : ''}>{l.lot_code}{l.expiry_date ? ` · ${l.expiry_date}` : ''}</span>
             : <span className="muted">—</span> },
         { key: 'bin', label: 'Bin', render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'exp', label: 'Expected', width: 100, render: (l) => (
-            <span>{l.system_qty}{(l.expected_serials ?? []).length > 0 && <span className="muted" title={(l.expected_serials).map((s) => s.serial).join(', ')}> · {(l.expected_serials).length} serial(s)</span>}</span>
+        { key: 'exp', label: header.blind_count ? 'Expected' : 'Expected / snapshot', width: 130, render: (l) => (
+            <span>{header.blind_count ? 'Hidden' : (l.snapshot_qty ?? l.system_qty)}{!header.blind_count && (l.expected_serials ?? []).length > 0 && <span className="muted" title={(l.expected_serials).map((s) => s.serial).join(', ')}> · {(l.expected_serials).length} serial(s)</span>}</span>
         ) },
         { key: 'cnt', label: 'Counted', width: 110, render: (l, i) => <QuantityInput value={l.counted_qty} onChange={(v) => setLine(i, { counted_qty: v })} /> },
         { key: 'var', label: 'Variance', width: 100, render: (l) => { const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}>{v === null ? '—' : v}</span>; } },
@@ -86,14 +100,30 @@ export default function CountFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label="Count number" required error={errors.count_number}><input className="input" value={header.count_number} onChange={(e) => setHeader({ ...header, count_number: e.target.value })} /></Field>
+                <Field label="Count number" error={errors.count_number}><input className="input" placeholder="Auto" value={header.count_number} onChange={(e) => setHeader({ ...header, count_number: e.target.value })} /></Field>
                 <Field label="Type" error={errors.count_type}>
                     <select className="input" value={header.count_type} onChange={(e) => setHeader({ ...header, count_type: e.target.value })}>
                         <option value="cycle">Cycle count</option><option value="full">Full stocktake</option>
                     </select>
                 </Field>
                 <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
+                <Field label="Scheduled for" error={errors.scheduled_for}><input className="input" type="date" value={header.scheduled_for} onChange={(e) => setHeader({ ...header, scheduled_for: e.target.value })} /></Field>
+                <Field label="Cadence" error={errors.recurrence}>
+                    <select className="input" value={header.recurrence} onChange={(e) => setHeader({ ...header, recurrence: e.target.value })}>
+                        <option value="once">Once</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option>
+                    </select>
+                </Field>
+                <Field label="ABC class" error={errors.abc_class}>
+                    <select className="input" value={header.abc_class} onChange={(e) => setHeader({ ...header, abc_class: e.target.value })}>
+                        <option value="">Not classified</option><option value="A">A - high value</option><option value="B">B - standard</option><option value="C">C - low velocity</option>
+                    </select>
+                </Field>
                 <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
+            </div>
+
+            <div className="panel">
+                <label className="check-row"><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> Blind count</label>
+                <label className="check-row"><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> Freeze expected snapshot</label>
             </div>
 
             <div className="panel">

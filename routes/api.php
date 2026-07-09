@@ -58,20 +58,50 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.layout.get');
     Route::put('/dashboard/layout', [DashboardController::class, 'saveLayout'])
         ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.layout.save');
+    Route::get('/dashboard/alerts', [DashboardController::class, 'alerts'])
+        ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.alerts');
+    Route::post('/dashboard/alerts/{alert}/acknowledge', [DashboardController::class, 'acknowledgeAlert'])
+        ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.alerts.acknowledge');
 
     // Items
     Route::get('/items', [ItemController::class, 'index'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.index');
+    Route::get('/items/barcode/lookup', [ItemController::class, 'barcodeLookup'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.items.barcode.lookup');
+    Route::get('/scanner/lookup', [\App\Http\Controllers\Api\V1\ScannerController::class, 'lookup'])
+        ->middleware('perm:inventory.view_stock')->name('api.v1.scanner.lookup');
     Route::get('/items/{item}', [ItemController::class, 'show'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.show');
     Route::post('/items', [ItemController::class, 'store'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.store');
+    Route::post('/items/bulk-update', [ItemController::class, 'bulkUpdate'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.bulk-update');
     Route::put('/items/{item}', [ItemController::class, 'update'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.update');
     Route::get('/items/{item}/movements', [ItemController::class, 'movements'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.items.movements');
     Route::get('/items/{item}/valuation', [ItemController::class, 'valuation'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.items.valuation');
+    Route::post('/items/{item}/barcodes', [ItemController::class, 'storeBarcode'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.store');
+    Route::post('/items/{item}/barcodes/{barcode}/primary', [ItemController::class, 'primaryBarcode'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.primary');
+    Route::delete('/items/{item}/barcodes/{barcode}', [ItemController::class, 'destroyBarcode'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.barcodes.destroy');
+    Route::get('/items/{item}/labels', [ItemController::class, 'labelSheet'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.items.labels');
+    Route::post('/items/{item}/variants', [ItemController::class, 'storeVariant'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.variants.store');
+    Route::put('/items/{item}/variants/{variant}', [ItemController::class, 'updateVariant'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.variants.update');
+    Route::delete('/items/{item}/variants/{variant}', [ItemController::class, 'destroyVariant'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.variants.destroy');
+    Route::post('/items/{item}/supplier-prices', [ItemController::class, 'storeSupplierPrice'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.store');
+    Route::put('/items/{item}/supplier-prices/{price}', [ItemController::class, 'updateSupplierPrice'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.update');
+    Route::delete('/items/{item}/supplier-prices/{price}', [ItemController::class, 'destroySupplierPrice'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.destroy');
 
     // Item images — PRIVATE storage, served only via authenticated org-scoped
     // routes. View/serve = view_items (viewers included); mutate = manage_items.
@@ -85,6 +115,14 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_items')->name('api.v1.item-images.primary');
     Route::delete('/item-images/{image}', [\App\Http\Controllers\Api\V1\ItemImageController::class, 'destroy'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.item-images.destroy');
+    Route::get('/items/{item}/attachments', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'index'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.items.attachments.index');
+    Route::post('/items/{item}/attachments', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'store'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.attachments.store');
+    Route::get('/item-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'show'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.item-attachments.show');
+    Route::delete('/item-attachments/{attachment}', [\App\Http\Controllers\Api\V1\ItemAttachmentController::class, 'destroy'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-attachments.destroy');
 
     // Warehouses (+ nested zones/bins)
     Route::get('/warehouses', [WarehouseController::class, 'index'])
@@ -95,6 +133,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouses.store');
     Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update'])
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouses.update');
+    Route::get('/warehouses/{warehouse}/labels', [\App\Http\Controllers\Api\V1\WarehouseStructureController::class, 'labelSheet'])
+        ->middleware('perm:inventory.view_warehouses')->name('api.v1.warehouses.labels');
 
     // Warehouse images — PRIVATE storage, authenticated org-scoped serve route.
     // View/serve = view_warehouses (viewers incl.); mutate = manage_warehouses.
@@ -116,6 +156,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_stock')->name('api.v1.opening.show');
     Route::post('/opening-stock', [OpeningStockController::class, 'store'])
         ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.store');
+    Route::post('/opening-stock/import', [OpeningStockController::class, 'importCsv'])
+        ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.import');
     Route::put('/opening-stock/{entry}', [OpeningStockController::class, 'update'])
         ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.update');
     Route::post('/opening-stock/{entry}/post', [OpeningStockController::class, 'post'])
@@ -140,6 +182,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     // Stock Ledger (read-only)
     Route::get('/ledger', [StockLedgerController::class, 'index'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.ledger.index');
+    Route::get('/audit-logs', [\App\Http\Controllers\Api\V1\InventoryAuditController::class, 'index'])
+        ->middleware('perm:inventory.view_ledger')->name('api.v1.audit-logs.index');
     // Which FIFO cost layers a single outbound movement consumed (read-only).
     Route::get('/movements/{ledger}/consumed-layers', [StockLedgerController::class, 'consumedLayers'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.movements.consumed-layers');
@@ -157,6 +201,16 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_items')->name('api.v1.suppliers.store');
     Route::put('/suppliers/{supplier}', [\App\Http\Controllers\Api\V1\SupplierController::class, 'update'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.suppliers.update');
+
+    // ── Customers / partners ──
+    Route::get('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'index'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.customers.index');
+    Route::get('/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'show'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.customers.show');
+    Route::post('/customers', [\App\Http\Controllers\Api\V1\CustomerController::class, 'store'])
+        ->middleware('perm:inventory.manage_sales_orders')->name('api.v1.customers.store');
+    Route::put('/customers/{customer}', [\App\Http\Controllers\Api\V1\CustomerController::class, 'update'])
+        ->middleware('perm:inventory.manage_sales_orders')->name('api.v1.customers.update');
 
     // ── Warehouse structure: zones & bins ──
     Route::middleware('perm:inventory.manage_warehouses')->group(function () {
@@ -207,6 +261,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.update');
     Route::post('/transfers/{stock_transfer}/post', [\App\Http\Controllers\Api\V1\StockTransferController::class, 'post'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.post');
+    Route::post('/transfers/{stock_transfer}/ship', [\App\Http\Controllers\Api\V1\StockTransferController::class, 'ship'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.ship');
+    Route::post('/transfers/{stock_transfer}/receive', [\App\Http\Controllers\Api\V1\StockTransferController::class, 'receive'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.receive');
 
     // ── Stock Counts (variance → adjustment via service) ──
     Route::get('/counts', [\App\Http\Controllers\Api\V1\StockCountController::class, 'index'])
@@ -269,6 +327,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.index');
     Route::get('/shipments/{shipment}', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'show'])
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.show');
+    Route::get('/shipments/{shipment}/rates', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'rates'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.rates');
+    Route::get('/shipments/{shipment}/tracking', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'tracking'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.tracking');
     Route::get('/sales-orders/{sales_order}/shipment-draft', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'fromSalesOrder'])
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.from-so');
     Route::post('/shipments', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'store'])
@@ -277,6 +339,8 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_shipments')->name('api.v1.shipments.update');
     Route::post('/shipments/{shipment}/post', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'post'])
         ->middleware('perm:inventory.manage_shipments')->name('api.v1.shipments.post');
+    Route::post('/shipments/{shipment}/label', [\App\Http\Controllers\Api\V1\ShipmentController::class, 'label'])
+        ->middleware('perm:inventory.manage_shipments')->name('api.v1.shipments.label');
 
     // ── Sales Fulfillment: Returns (post = stock IN via StockLedgerService) ──
     Route::get('/sales-returns', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'index'])
@@ -289,6 +353,10 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.update');
     Route::post('/sales-returns/{sales_return}/post', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'post'])
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.post');
+    Route::post('/sales-returns/{sales_return}/authorize', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'authorizeReturn'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.authorize');
+    Route::post('/sales-returns/{sales_return}/inspect', [\App\Http\Controllers\Api\V1\SalesReturnController::class, 'inspect'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.inspect');
 
     // ── Traceability: Lots ──
     Route::get('/lots', [\App\Http\Controllers\Api\V1\TraceabilityController::class, 'lots'])
@@ -351,6 +419,14 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     // ── Reports (read-only, registry-driven) ──
     Route::get('/reports', [\App\Http\Controllers\Api\V1\ReportController::class, 'index'])
         ->middleware('perm:inventory.view_reports')->name('api.v1.reports.index');
+    Route::get('/reports/schedules', [\App\Http\Controllers\Api\V1\ReportController::class, 'schedules'])
+        ->middleware('perm:inventory.view_reports')->name('api.v1.reports.schedules.index');
+    Route::post('/reports/schedules', [\App\Http\Controllers\Api\V1\ReportController::class, 'storeSchedule'])
+        ->middleware('perm:inventory.export_reports')->name('api.v1.reports.schedules.store');
+    Route::put('/reports/schedules/{schedule}', [\App\Http\Controllers\Api\V1\ReportController::class, 'updateSchedule'])
+        ->middleware('perm:inventory.export_reports')->name('api.v1.reports.schedules.update');
+    Route::post('/reports/schedules/{schedule}/run', [\App\Http\Controllers\Api\V1\ReportController::class, 'runSchedule'])
+        ->middleware('perm:inventory.export_reports')->name('api.v1.reports.schedules.run');
     Route::get('/reports/{report}/export', [\App\Http\Controllers\Api\V1\ReportController::class, 'exportReport'])
         ->middleware('perm:inventory.export_reports')->name('api.v1.reports.export');
     Route::get('/reports/{report}', [\App\Http\Controllers\Api\V1\ReportController::class, 'show'])
@@ -362,11 +438,24 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
     Route::middleware('perm:inventory.manage_settings')->group(function () {
         Route::put('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateSettings']);
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);
+        Route::post('/settings/unit-conversions', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnitConversion']);
+        Route::post('/settings/warehouse-reorder-rules/calculate', [\App\Http\Controllers\Api\V1\SettingsController::class, 'calculateWarehouseReorderRule'])
+            ->name('api.v1.settings.reorder.calculate');
+        Route::post('/settings/warehouse-reorder-rules', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeWarehouseReorderRule']);
+        Route::post('/settings/adjustment-reason-codes', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeAdjustmentReasonCode']);
+        Route::post('/settings/currency-rates', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCurrencyRate']);
         Route::post('/settings/categories', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeCategory']);
+        Route::put('/settings/categories/{category}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateCategory']);
         Route::post('/settings/brands', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeBrand']);
+        Route::put('/settings/brands/{brand}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateBrand']);
+        Route::get('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'index']);
+        Route::post('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'store']);
+        Route::put('/settings/custom-roles/{role}', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'update']);
+        Route::post('/settings/custom-role-assignments', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'assign']);
+        Route::delete('/settings/custom-role-assignments/{userId}', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'unassign']);
     });
 
-    // ── SolaBooks integration (foundation: mappings + outbox; no real posting) ──
+    // ── SolaBooks integration (mappings + local outbox + authenticated delivery) ──
     Route::prefix('integration/solabooks')->group(function () {
         Route::get('/status', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'status'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.status');
@@ -385,9 +474,13 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.index');
         Route::get('/events/{event}', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'event'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.show');
-        Route::post('/events/{event}/retry-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'retryPlaceholder'])
+        Route::post('/events/{event}/retry', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'retry'])
             ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.retry');
-        Route::post('/events/{event}/ignore-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'ignorePlaceholder'])
+        Route::post('/events/{event}/retry-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'retryPlaceholder'])
+            ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.retry.legacy');
+        Route::post('/events/{event}/ignore', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'ignore'])
             ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.ignore');
+        Route::post('/events/{event}/ignore-placeholder', [\App\Http\Controllers\Api\V1\IntegrationController::class, 'ignorePlaceholder'])
+            ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.ignore.legacy');
     });
 });
