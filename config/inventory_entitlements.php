@@ -26,6 +26,7 @@ return [
         'inventory.view_reports',
         'inventory.view_sales',
         'inventory.view_traceability',
+        'inventory.integration.view',
     ],
 
     'permission_features' => [
