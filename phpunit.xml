@@ -26,17 +26,17 @@
         <!-- SolaStock tenancy tests run against MySQL (db-per-tenant), NEVER sqlite.
              FIXED reserved databases (Finance/Projects-style; never created/
              dropped here):
-               * central  'mysql'  → tenant_990012
+               * central  'mysql'  → tenant_990004
                * tenant   'tenant' → tenant_990010 (tenant A; isolation tests
-                                       switch to tenant_990011 = tenant B)
+                                       switch to tenant_990003 = tenant B)
                * tenant_990001 = Finance, tenant_990002 = Projects — never used.
              Central and tenant are DISTINCT databases. Credentials come from
              .env.testing (Finance-compatible 'mysql' auth_socket user). The
-             safety guard allows ONLY tenant_990010/11/12 before any DB action. -->
+             safety guard allows ONLY tenant_990010/990003/990004 before any DB action. -->
         <env name="DB_CONNECTION" value="tenant"/>
         <env name="CENTRAL_CONNECTION" value="mysql"/>
         <env name="TENANT_CONNECTION" value="tenant"/>
-        <env name="DB_DATABASE" value="tenant_990012"/>
+        <env name="DB_DATABASE" value="tenant_990004"/>
         <env name="TENANT_DB_DATABASE" value="tenant_990010"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
