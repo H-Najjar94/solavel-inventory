@@ -434,7 +434,9 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
 
     // ── Settings ──
     Route::get('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'show'])
-        ->middleware('perm:inventory.manage_settings')->name('api.v1.settings.show');
+        ->middleware('perm:inventory.view_settings')->name('api.v1.settings.show');
+    Route::get('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'index'])
+        ->middleware('perm:inventory.view_settings')->name('api.v1.settings.custom-roles.index');
     Route::middleware('perm:inventory.manage_settings')->group(function () {
         Route::put('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateSettings']);
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);
@@ -448,7 +450,6 @@ Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
         Route::put('/settings/categories/{category}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateCategory']);
         Route::post('/settings/brands', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeBrand']);
         Route::put('/settings/brands/{brand}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateBrand']);
-        Route::get('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'index']);
         Route::post('/settings/custom-roles', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'store']);
         Route::put('/settings/custom-roles/{role}', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'update']);
         Route::post('/settings/custom-role-assignments', [\App\Http\Controllers\Api\V1\CustomRoleController::class, 'assign']);
