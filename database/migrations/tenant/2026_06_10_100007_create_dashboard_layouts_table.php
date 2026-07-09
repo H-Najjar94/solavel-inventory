@@ -17,7 +17,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('dashboard_layouts', function (Blueprint $table) {
+        Schema::hasTable('dashboard_layouts') or Schema::create('dashboard_layouts', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('user_id');

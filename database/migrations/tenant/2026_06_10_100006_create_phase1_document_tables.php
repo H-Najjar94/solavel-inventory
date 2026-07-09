@@ -22,7 +22,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('opening_stock_entries', function (Blueprint $table) {
+        Schema::hasTable('opening_stock_entries') or Schema::create('opening_stock_entries', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('entry_number');
@@ -47,7 +47,7 @@ return new class extends Migration
             $table->foreign('warehouse_id')->references('id')->on('warehouses');
         });
 
-        Schema::create('opening_stock_entry_lines', function (Blueprint $table) {
+        Schema::hasTable('opening_stock_entry_lines') or Schema::create('opening_stock_entry_lines', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('opening_stock_entry_id');
@@ -67,7 +67,7 @@ return new class extends Migration
             $table->foreign('item_id')->references('id')->on('items');
         });
 
-        Schema::create('stock_adjustments', function (Blueprint $table) {
+        Schema::hasTable('stock_adjustments') or Schema::create('stock_adjustments', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('adjustment_number');
@@ -94,7 +94,7 @@ return new class extends Migration
             $table->foreign('warehouse_id')->references('id')->on('warehouses');
         });
 
-        Schema::create('stock_adjustment_lines', function (Blueprint $table) {
+        Schema::hasTable('stock_adjustment_lines') or Schema::create('stock_adjustment_lines', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('stock_adjustment_id');

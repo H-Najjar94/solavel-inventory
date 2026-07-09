@@ -18,6 +18,10 @@ return new class extends Migration
 
     public function up(): void
     {
+        if (Schema::hasTable('inventory_settings')) {
+            return;
+        }
+
         Schema::create('inventory_settings', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();

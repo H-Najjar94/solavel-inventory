@@ -16,7 +16,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('warehouses', function (Blueprint $table) {
+        Schema::hasTable('warehouses') or Schema::create('warehouses', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('code');
@@ -32,7 +32,7 @@ return new class extends Migration
             $table->index(['organization_id', 'is_active']);
         });
 
-        Schema::create('warehouse_zones', function (Blueprint $table) {
+        Schema::hasTable('warehouse_zones') or Schema::create('warehouse_zones', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('warehouse_id');
@@ -48,7 +48,7 @@ return new class extends Migration
             $table->foreign('warehouse_id')->references('id')->on('warehouses')->cascadeOnDelete();
         });
 
-        Schema::create('warehouse_bins', function (Blueprint $table) {
+        Schema::hasTable('warehouse_bins') or Schema::create('warehouse_bins', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('warehouse_id'); // denormalized for fast filter
