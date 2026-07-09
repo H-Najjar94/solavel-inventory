@@ -554,11 +554,22 @@ class InventoryReportService
     // ── 20. Lot Trace ──
     private function reportLotTrace(ReportFilters $f): array
     {
+        $balanceSubquery = $this->db()->table('stock_balances')
+            ->where('organization_id', $this->orgId())
+            ->selectRaw('lot_id, SUM(on_hand_qty) on_hand, SUM(reserved_qty) reserved')
+            ->groupBy('lot_id');
+        $shipmentSubquery = $this->db()->table('stock_ledger')
+            ->where('organization_id', $this->orgId())
+            ->where('direction', 'out')
+            ->where('source_type', 'like', '%Shipment')
+            ->selectRaw('lot_id, SUM(quantity) shipped')
+            ->groupBy('lot_id');
+
         $rows = $this->scoped('lots as l')
             ->join('items as i', 'i.id', '=', 'l.item_id')
             ->leftJoin('inventory_suppliers as s', 's.id', '=', 'l.supplier_id')
-            ->leftJoin(DB::raw('(SELECT lot_id, SUM(on_hand_qty) on_hand, SUM(reserved_qty) reserved FROM stock_balances GROUP BY lot_id) b'), 'b.lot_id', '=', 'l.id')
-            ->leftJoin(DB::raw("(SELECT lot_id, SUM(quantity) shipped FROM stock_ledger WHERE direction='out' AND source_type LIKE '%Shipment' GROUP BY lot_id) sh"), 'sh.lot_id', '=', 'l.id')
+            ->leftJoinSub($balanceSubquery, 'b', 'b.lot_id', '=', 'l.id')
+            ->leftJoinSub($shipmentSubquery, 'sh', 'sh.lot_id', '=', 'l.id')
             ->when($f->itemId, fn ($x) => $x->where('l.item_id', $f->itemId))
             ->when($f->status, fn ($x) => $x->where('l.status', $f->status))
             ->selectRaw('l.id lot_id, l.lot_code, i.sku, i.name item, l.status, l.expiry_date, s.name supplier,
@@ -603,9 +614,14 @@ class InventoryReportService
     private function reportExpiryRisk(ReportFilters $f): array
     {
         $cutoff = now()->addDays($f->days)->toDateString();
+        $balanceSubquery = $this->db()->table('stock_balances')
+            ->where('organization_id', $this->orgId())
+            ->selectRaw('lot_id, SUM(on_hand_qty) on_hand')
+            ->groupBy('lot_id');
+
         $rows = $this->scoped('lots as l')
             ->join('items as i', 'i.id', '=', 'l.item_id')
-            ->leftJoin(DB::raw('(SELECT lot_id, SUM(on_hand_qty) on_hand FROM stock_balances GROUP BY lot_id) b'), 'b.lot_id', '=', 'l.id')
+            ->leftJoinSub($balanceSubquery, 'b', 'b.lot_id', '=', 'l.id')
             ->whereNotNull('l.expiry_date')->where('l.status', '!=', 'consumed')
             ->whereDate('l.expiry_date', '<=', $cutoff)
             ->when($f->itemId, fn ($x) => $x->where('l.item_id', $f->itemId))

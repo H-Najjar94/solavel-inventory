@@ -90,12 +90,14 @@ class SettingsController extends ApiController
 
     public function storeCategory(Request $request): JsonResponse
     {
+        $orgId = $this->context->idOrFail();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:191'],
-            'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')],
+            'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')->where('organization_id', $orgId)],
         ]);
 
-        $parent = ! empty($data['parent_id']) ? ItemCategory::query()->find($data['parent_id']) : null;
+        $parent = ! empty($data['parent_id']) ? ItemCategory::query()->findOrFail($data['parent_id']) : null;
+        $data['parent_id'] = $parent?->id;
         $data['level'] = $parent ? ((int) $parent->level + 1) : 0;
 
         return $this->success(ItemCategory::create($data)->fresh(), 201);
@@ -104,9 +106,10 @@ class SettingsController extends ApiController
     public function updateCategory(Request $request, int $category): JsonResponse
     {
         $category = ItemCategory::query()->findOrFail($category);
+        $orgId = $this->context->idOrFail();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:191'],
-            'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')],
+            'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')->where('organization_id', $orgId)],
             'is_active' => ['boolean'],
         ]);
 

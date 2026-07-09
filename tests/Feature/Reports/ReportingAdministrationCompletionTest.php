@@ -13,14 +13,20 @@ use App\Models\Tenant\InventoryAlert;
 use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\InventoryCurrencyRate;
 use App\Models\Tenant\InventoryScheduledReport;
+use App\Models\Tenant\ItemBrand;
+use App\Models\Tenant\ItemCategory;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\WarehouseReorderRule;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Documents\OpeningStockService;
+use App\Services\Reports\ScheduledReportRunner;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportExportService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
 use Tests\TestCase;
@@ -86,6 +92,10 @@ class ReportingAdministrationCompletionTest extends TestCase
         $controller->acknowledgeAlert($this->request('/dashboard/alerts/'.$alert->id.'/acknowledge', 'POST'), $alert);
         $this->assertSame('acknowledged', $alert->fresh()->status);
         $this->assertSame(7001, $alert->fresh()->acknowledged_by);
+
+        $this->postOpening($item->id, $warehouse->id, '10', '4');
+        $controller->index($this->request('/dashboard'), app(\App\Services\Reports\DashboardMetricsService::class));
+        $this->assertSame('resolved', $alert->fresh()->status);
     }
 
     #[Test]
@@ -159,6 +169,14 @@ class ReportingAdministrationCompletionTest extends TestCase
         $run = $controller->runSchedule(InventoryScheduledReport::query()->findOrFail($schedule['id']))->getData(true)['data'];
         $this->assertSame('delivered', $run['schedule']['last_status']);
         $this->assertSame(1, InventoryScheduledReport::query()->count());
+
+        $due = InventoryScheduledReport::query()->findOrFail($schedule['id']);
+        $due->forceFill(['next_run_at' => now()->subMinute(), 'last_status' => null])->save();
+        $summary = app(ScheduledReportRunner::class)->runDue();
+        $this->assertSame(1, $summary['ran']);
+        $this->assertSame(0, $summary['failed']);
+        $this->assertSame('delivered', $due->fresh()->last_status);
+        $this->assertArrayHasKey('inventory:reports:run-due', Artisan::all());
     }
 
     #[Test]
@@ -191,6 +209,72 @@ class ReportingAdministrationCompletionTest extends TestCase
         $payload = $controller->index($permissions)->getData(true)['data'];
         $this->assertCount(1, $payload['roles']);
         $this->assertCount(1, $payload['assignments']);
+    }
+
+    #[Test]
+    public function bulk_item_category_brand_and_custom_role_inputs_are_org_scoped(): void
+    {
+        $this->useTenantA();
+        $item = F::averageItem(['sku' => 'SCOPE-BULK']);
+        $category = ItemCategory::query()->create(['name' => 'Scoped category']);
+        $brand = ItemBrand::query()->create(['name' => 'Scoped brand']);
+
+        $otherCategoryId = DB::connection(config('tenancy.tenant_connection', 'tenant'))->table('item_categories')->insertGetId([
+            'organization_id' => 999999,
+            'name' => 'Other org category',
+            'level' => 0,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBrandId = DB::connection(config('tenancy.tenant_connection', 'tenant'))->table('item_brands')->insertGetId([
+            'organization_id' => 999999,
+            'name' => 'Other org brand',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherRoleId = DB::connection(config('tenancy.tenant_connection', 'tenant'))->table('inventory_custom_roles')->insertGetId([
+            'organization_id' => 999999,
+            'key' => 'other_org_role',
+            'name' => 'Other org role',
+            'permissions' => json_encode(['inventory.view_dashboard']),
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $bulk = app(ItemController::class)->bulkUpdate($this->request('/items/bulk-update', 'POST', [
+            'item_ids' => [$item->id],
+            'category_id' => $category->id,
+            'brand_id' => $brand->id,
+        ]))->getData(true)['data'];
+        $this->assertSame(1, $bulk['updated']);
+
+        try {
+            app(ItemController::class)->bulkUpdate($this->request('/items/bulk-update', 'POST', [
+                'item_ids' => [$item->id],
+                'category_id' => $otherCategoryId,
+                'brand_id' => $otherBrandId,
+            ]));
+            $this->fail('Cross-organization bulk category/brand update was accepted.');
+        } catch (ValidationException) {
+            $this->assertSame($category->id, $item->fresh()->category_id);
+            $this->assertSame($brand->id, $item->fresh()->brand_id);
+        }
+
+        try {
+            app(CustomRoleController::class)->assign($this->request('/settings/custom-role-assignments', 'POST', [
+                'user_id' => 7777,
+                'role_id' => $otherRoleId,
+            ]));
+        } catch (ValidationException) {
+            $this->assertDatabaseMissing('inventory_user_role_assignments', ['role_id' => $otherRoleId], config('tenancy.tenant_connection', 'tenant'));
+
+            return;
+        }
+
+        $this->fail('Cross-organization role assignment was accepted.');
     }
 
     #[Test]

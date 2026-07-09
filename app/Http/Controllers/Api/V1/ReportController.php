@@ -7,9 +7,9 @@ use App\Models\Tenant\InventoryScheduledReport;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportExportService;
 use App\Services\Reports\ReportFilters;
+use App\Services\Reports\ScheduledReportRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,6 +23,7 @@ class ReportController extends ApiController
     public function __construct(
         private InventoryReportService $reports,
         private ReportExportService $export,
+        private ScheduledReportRunner $scheduledReports,
     ) {}
 
     /** List available reports (for the selector cards). */
@@ -84,39 +85,7 @@ class ReportController extends ApiController
 
     public function runSchedule(InventoryScheduledReport $schedule): JsonResponse
     {
-        $result = $this->reports->run($schedule->report_key, ReportFilters::fromArray((array) $schedule->filters));
-        $recipients = array_values(array_filter((array) $schedule->recipients));
-        $status = 'generated';
-        $error = null;
-
-        if ($recipients !== []) {
-            try {
-                $subject = 'SolaStock scheduled report: '.$result['title'];
-                $body = $result['title']."\nRows: ".count($result['rows'] ?? [])."\nSummary: ".json_encode($result['summary'] ?? []);
-                foreach ($recipients as $recipient) {
-                    Mail::raw($body, fn ($message) => $message->to($recipient)->subject($subject));
-                }
-                $status = 'delivered';
-            } catch (\Throwable $e) {
-                $status = 'failed';
-                $error = $e->getMessage();
-            }
-        }
-
-        $schedule->forceFill([
-            'last_run_at' => now(),
-            'last_delivered_at' => $status === 'delivered' ? now() : null,
-            'last_status' => $status,
-            'last_error' => $error,
-            'last_payload' => [
-                'title' => $result['title'],
-                'summary' => $result['summary'] ?? [],
-                'row_count' => count($result['rows'] ?? []),
-            ],
-            'next_run_at' => $this->nextRunAt($schedule->frequency),
-        ])->save();
-
-        return $this->success(['schedule' => $schedule->fresh(), 'result' => $result]);
+        return $this->success($this->scheduledReports->run($schedule));
     }
 
     private function validatedSchedule(Request $request): array
@@ -133,18 +102,9 @@ class ReportController extends ApiController
             'is_active' => ['boolean'],
         ]);
 
-        $data['next_run_at'] = $data['next_run_at'] ?? $this->nextRunAt($data['frequency']);
+        $data['next_run_at'] = $data['next_run_at'] ?? $this->scheduledReports->nextRunAt($data['frequency']);
         $data['is_active'] = $data['is_active'] ?? true;
 
         return $data;
-    }
-
-    private function nextRunAt(string $frequency): \Carbon\CarbonInterface
-    {
-        return match ($frequency) {
-            'daily' => now()->addDay(),
-            'monthly' => now()->addMonth(),
-            default => now()->addWeek(),
-        };
     }
 }

@@ -6,6 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    public function getConnection(): ?string
+    {
+        return config('tenancy.tenant_connection', 'tenant');
+    }
+
     public function up(): void
     {
         Schema::table('shipments', function (Blueprint $table) {

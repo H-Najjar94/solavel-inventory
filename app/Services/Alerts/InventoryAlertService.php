@@ -17,6 +17,7 @@ class InventoryAlertService
         $orgId = $this->context->idOrFail();
         $now = now();
         $openKeys = [];
+        $generatedTypes = ['low_stock', 'out_of_stock', 'expiring_lot', 'expired_lot'];
 
         $lowRows = DB::connection(config('tenancy.tenant_connection', 'tenant'))
             ->table('stock_balances as b')
@@ -102,12 +103,11 @@ class InventoryAlertService
             );
         }
 
-        if ($openKeys !== []) {
-            InventoryAlert::query()
-                ->whereNotIn('alert_key', $openKeys)
-                ->where('status', 'open')
-                ->update(['status' => 'resolved']);
-        }
+        InventoryAlert::query()
+            ->whereIn('type', $generatedTypes)
+            ->when($openKeys !== [], fn ($query) => $query->whereNotIn('alert_key', $openKeys))
+            ->whereIn('status', ['open', 'acknowledged'])
+            ->update(['status' => 'resolved']);
 
         return InventoryAlert::query()
             ->whereIn('status', ['open', 'acknowledged'])
