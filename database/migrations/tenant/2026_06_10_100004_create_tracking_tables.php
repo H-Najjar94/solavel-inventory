@@ -16,7 +16,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('lots', function (Blueprint $table) {
+        Schema::hasTable('lots') or Schema::create('lots', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -34,7 +34,7 @@ return new class extends Migration
             $table->foreign('variant_id')->references('id')->on('item_variants')->nullOnDelete();
         });
 
-        Schema::create('serial_numbers', function (Blueprint $table) {
+        Schema::hasTable('serial_numbers') or Schema::create('serial_numbers', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
