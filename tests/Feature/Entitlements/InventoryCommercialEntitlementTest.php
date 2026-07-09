@@ -83,6 +83,11 @@ class InventoryCommercialEntitlementTest extends TestCase
     #[Test]
     public function beyond_maximum_stale_enters_restricted_safe_mode(): void
     {
+        config()->set('inventory_entitlements.restricted_safe_permissions', array_values(array_unique([
+            ...config('inventory_entitlements.restricted_safe_permissions', []),
+            'inventory.integration.view',
+        ])));
+
         $service = $this->service([
             'effective_tier' => 'premium',
             'access_mode' => 'full',
@@ -95,12 +100,18 @@ class InventoryCommercialEntitlementTest extends TestCase
         ]);
 
         $read = $service->checkPermission('inventory.view_stock');
+        $integrationStatus = $service->checkPermission('inventory.integration.view');
         $write = $service->checkPermission('inventory.manage_shipments');
+        $integrationRetry = $service->checkPermission('inventory.integration.retry');
 
-        $this->assertTrue($read['allowed']);
+        $this->assertTrue($read['allowed'], 'read-only stock view remains safe in restricted mode');
         $this->assertSame('restricted_safe_mode', $read['access_mode']);
-        $this->assertFalse($write['allowed']);
+        $this->assertTrue($integrationStatus['allowed'], 'read-only SolaBooks status remains safe in restricted mode');
+        $this->assertSame('restricted_safe_mode', $integrationStatus['access_mode']);
+        $this->assertFalse($write['allowed'], 'stock mutation remains blocked in restricted mode');
         $this->assertSame('entitlement_verification_stale', $write['reason_code']);
+        $this->assertFalse($integrationRetry['allowed'], 'SolaBooks delivery retry remains blocked in restricted mode');
+        $this->assertSame('entitlement_verification_stale', $integrationRetry['reason_code']);
     }
 
     #[Test]
