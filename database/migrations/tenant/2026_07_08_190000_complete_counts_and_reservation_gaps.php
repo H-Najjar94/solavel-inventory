@@ -6,6 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    public function getConnection(): ?string
+    {
+        return config('tenancy.tenant_connection', 'tenant');
+    }
+
     public function up(): void
     {
         if (Schema::hasTable('stock_counts')) {

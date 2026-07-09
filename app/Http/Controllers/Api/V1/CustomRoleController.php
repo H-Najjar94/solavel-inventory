@@ -61,9 +61,12 @@ class CustomRoleController extends ApiController
 
     public function assign(Request $request): JsonResponse
     {
+        $orgId = app(\App\Tenancy\OrganizationContext::class)->idOrFail();
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'min:1'],
-            'role_id' => ['required', 'integer', Rule::exists('inventory_custom_roles', 'id')->where('is_active', true)],
+            'role_id' => ['required', 'integer', Rule::exists('inventory_custom_roles', 'id')
+                ->where('organization_id', $orgId)
+                ->where('is_active', true)],
         ]);
 
         $assignment = InventoryUserRoleAssignment::query()->updateOrCreate(

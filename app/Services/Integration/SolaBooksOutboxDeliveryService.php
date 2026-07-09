@@ -92,10 +92,10 @@ class SolaBooksOutboxDeliveryService
         $result = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
         foreach ($events as $event) {
             try {
-                $before = $event->status;
                 $after = $this->deliver($event)->fresh();
-                $after->status === 'sent' ? $result['sent']++ : $result['skipped']++;
-                if ($before === $after->status && $after->status !== 'sent') {
+                if ($after->status === 'sent') {
+                    $result['sent']++;
+                } else {
                     $result['skipped']++;
                 }
             } catch (\Throwable) {

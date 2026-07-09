@@ -471,12 +471,13 @@ class ItemController extends ApiController
 
     public function bulkUpdate(Request $request): JsonResponse
     {
+        $orgId = app(OrganizationContext::class)->idOrFail();
         $data = $request->validate([
             'item_ids' => ['required', 'array', 'min:1', 'max:500'],
-            'item_ids.*' => ['required', 'integer', Rule::exists('items', 'id')],
+            'item_ids.*' => ['required', 'integer', Rule::exists('items', 'id')->where('organization_id', $orgId)],
             'is_active' => ['nullable', 'boolean'],
-            'category_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')],
-            'brand_id' => ['nullable', 'integer', Rule::exists('item_brands', 'id')],
+            'category_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')->where('organization_id', $orgId)],
+            'brand_id' => ['nullable', 'integer', Rule::exists('item_brands', 'id')->where('organization_id', $orgId)],
             'enable_reorder_alert' => ['nullable', 'boolean'],
             'reorder_point' => ['nullable', 'numeric', 'min:0'],
             'reorder_qty' => ['nullable', 'numeric', 'min:0'],
