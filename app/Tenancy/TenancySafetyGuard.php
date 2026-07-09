@@ -16,15 +16,15 @@ class TenancySafetyGuard
     /**
      * FIXED reserved test databases for SolaStock (Finance-style model — these
      * are pre-provisioned and NEVER created/dropped by the test suite):
-     *   tenant_990002 = SolaStock tenant A
+     *   tenant_990010 = SolaStock tenant A
      *   tenant_990003 = SolaStock tenant B
      *   tenant_990004 = SolaStock central/landlord test database
      * tenant_990001 belongs to Finance and is explicitly forbidden here.
      */
     public const ALLOWED_TEST_DATABASES = [
         'tenant_990010', // SolaStock tenant A
-        'tenant_990011', // SolaStock tenant B
-        'tenant_990012', // SolaStock central / landlord
+        'tenant_990003', // SolaStock tenant B
+        'tenant_990004', // SolaStock central / landlord
     ];
 
     /**

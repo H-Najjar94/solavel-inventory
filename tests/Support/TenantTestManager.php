@@ -50,12 +50,12 @@ class TenantTestManager
 
     public function tenantBDatabase(): string
     {
-        return (string) env('SOLASTOCK_TEST_TENANT_B', 'tenant_990011');
+        return (string) env('SOLASTOCK_TEST_TENANT_B', 'tenant_990003');
     }
 
     public function centralDatabase(): string
     {
-        return (string) env('SOLASTOCK_TEST_CENTRAL', 'tenant_990012');
+        return (string) env('SOLASTOCK_TEST_CENTRAL', 'tenant_990004');
     }
 
     /** Map an org id to its fixed reserved database name. */
