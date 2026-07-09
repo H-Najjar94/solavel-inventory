@@ -34,6 +34,16 @@ class StockTransferService
         return 'stock_transfer:'.$t->id.':post';
     }
 
+    private function shipNamespace(StockTransfer $t): string
+    {
+        return 'stock_transfer:'.$t->id.':ship';
+    }
+
+    private function receiveNamespace(StockTransfer $t): string
+    {
+        return 'stock_transfer:'.$t->id.':receive';
+    }
+
     private function reverseNamespace(StockTransfer $t): string
     {
         return 'stock_transfer:'.$t->id.':reverse';
@@ -215,5 +225,146 @@ class StockTransferService
 
             return $t;
         });
+    }
+
+    public function ship(StockTransfer $t, array $overrides = []): StockTransfer
+    {
+        $allowExpired = (bool) ($overrides['allow_expired_lot'] ?? false);
+        $allowQuarantined = (bool) ($overrides['allow_quarantined_lot'] ?? false);
+
+        return DB::connection($this->connection())->transaction(function () use ($t, $allowExpired, $allowQuarantined) {
+            $t = StockTransfer::query()->lockForUpdate()->findOrFail($t->id);
+            if ($t->status === 'in_transit' || $t->status === 'received') {
+                return $t;
+            }
+            if ($t->status !== 'draft') {
+                throw new RuntimeException("Transfer {$t->id} cannot be shipped from status '{$t->status}'.");
+            }
+
+            $t->loadMissing('lines');
+            foreach ($t->lines as $line) {
+                $this->ledger->post([
+                    new StockMovement(
+                        direction: 'out',
+                        itemId: (int) $line->item_id,
+                        warehouseId: (int) $t->from_warehouse_id,
+                        quantity: (string) $line->quantity,
+                        sourceType: StockTransfer::class,
+                        sourceId: (int) $t->id,
+                        sourceLineId: (int) $line->id,
+                        variantId: $line->variant_id ? (int) $line->variant_id : null,
+                        binId: $line->from_bin_id ? (int) $line->from_bin_id : null,
+                        lotId: $line->lot_id ? (int) $line->lot_id : null,
+                        serialId: $line->serial_id ? (int) $line->serial_id : null,
+                        movedAt: $t->transfer_date?->toDateTimeString() ?? now()->toDateTimeString(),
+                        allowExpiredLot: $allowExpired,
+                        allowQuarantinedLot: $allowQuarantined,
+                    ),
+                ], $this->shipNamespace($t).':out:'.$line->id, [
+                    'action' => 'stock_transfer.ship',
+                    'entity_type' => 'stock_transfer',
+                    'entity_id' => $t->id,
+                    'document_ref' => $t->transfer_number,
+                ]);
+            }
+
+            $t->status = 'in_transit';
+            $t->shipped_at = now();
+            $t->shipped_by = auth()->id();
+            $t->markSystemTransition()->save();
+
+            return $t;
+        });
+    }
+
+    public function receive(StockTransfer $t): StockTransfer
+    {
+        return DB::connection($this->connection())->transaction(function () use ($t) {
+            $t = StockTransfer::query()->lockForUpdate()->findOrFail($t->id);
+            if ($t->status === 'received') {
+                return $t;
+            }
+            if ($t->status !== 'in_transit') {
+                throw new RuntimeException("Transfer {$t->id} cannot be received from status '{$t->status}'.");
+            }
+
+            $t->loadMissing('lines');
+            foreach ($t->lines as $line) {
+                $outRows = \App\Models\Tenant\StockLedger::query()
+                    ->where('source_type', StockTransfer::class)
+                    ->where('source_id', $t->id)
+                    ->where('source_line_id', $line->id)
+                    ->where('direction', 'out')
+                    ->where('idempotency_key', 'like', $this->shipNamespace($t).':out:'.$line->id.'#%')
+                    ->orderBy('id')
+                    ->get();
+                if ($outRows->isEmpty()) {
+                    throw new RuntimeException("Transfer line {$line->id} has no shipped stock to receive.");
+                }
+
+                foreach ($outRows as $outIndex => $outRow) {
+                    $consumed = \App\Models\Tenant\CostLayerConsumption::query()
+                        ->where('ledger_id', $outRow->id)
+                        ->orderBy('id')
+                        ->get();
+
+                    if ($consumed->isNotEmpty()) {
+                        foreach ($consumed as $i => $c) {
+                            $this->ledger->post([$this->inMovement($t, $line, (string) $c->qty, (string) $c->unit_cost)],
+                                $this->receiveNamespace($t).':in:'.$line->id.':'.$outIndex.':'.$i,
+                                $this->receiveAudit($t));
+                        }
+                    } else {
+                        $this->ledger->post([$this->inMovement($t, $line, (string) $outRow->quantity, (string) $outRow->unit_cost)],
+                            $this->receiveNamespace($t).':in:'.$line->id.':'.$outIndex,
+                            $this->receiveAudit($t));
+                    }
+                }
+
+                $line->received_qty = $line->quantity;
+                $line->save();
+            }
+
+            $t->status = 'received';
+            $t->received_at = now();
+            $t->received_by = auth()->id();
+            $t->posted_at = $t->received_at;
+            $t->posted_by = $t->received_by;
+            $t->posted_guard_key = $this->receiveNamespace($t);
+            $t->markSystemTransition()->save();
+
+            $this->outbox->record('transfer.posted', $t, 'stock_transfer', $t->transfer_number, (string) $t->transfer_date);
+
+            return $t;
+        });
+    }
+
+    private function inMovement(StockTransfer $t, \App\Models\Tenant\StockTransferLine $line, string $qty, string $unitCost): StockMovement
+    {
+        return new StockMovement(
+            direction: 'in',
+            itemId: (int) $line->item_id,
+            warehouseId: (int) $t->to_warehouse_id,
+            quantity: $qty,
+            sourceType: StockTransfer::class,
+            sourceId: (int) $t->id,
+            sourceLineId: (int) $line->id,
+            variantId: $line->variant_id ? (int) $line->variant_id : null,
+            binId: $line->to_bin_id ? (int) $line->to_bin_id : null,
+            lotId: $line->lot_id ? (int) $line->lot_id : null,
+            serialId: $line->serial_id ? (int) $line->serial_id : null,
+            unitCost: $unitCost,
+            movedAt: $t->transfer_date?->toDateTimeString() ?? now()->toDateTimeString(),
+        );
+    }
+
+    private function receiveAudit(StockTransfer $t): array
+    {
+        return [
+            'action' => 'stock_transfer.receive',
+            'entity_type' => 'stock_transfer',
+            'entity_id' => $t->id,
+            'document_ref' => $t->transfer_number,
+        ];
     }
 }

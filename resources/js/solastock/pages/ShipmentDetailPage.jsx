@@ -23,15 +23,33 @@ export default function ShipmentDetailPage() {
     const [picks, setPicks] = useState({}); // lineId -> {lot_id, serial_ids}
     const [overrides, setOverrides] = useState({ allow_expired_lot: false, allow_quarantined_lot: false });
     const [savingPicks, setSavingPicks] = useState(false);
+    const [shipMeta, setShipMeta] = useState({});
+    const [label, setLabel] = useState(null);
 
     const { data, isLoading, isMock } = useApiQuery(['shipment', id], () => api.shipment(id), { fallback: null });
     const s = data?.shipment;
     const ledger = data?.ledger ?? [];
     const tracking = useItemTracking();
+    const { data: ratesData } = useApiQuery(['shipment-rates', id], () => api.shipmentRates(id), { fallback: null, enabled: !!id });
+    const { data: trackingData } = useApiQuery(['shipment-tracking', id], () => api.shipmentTracking(id), { fallback: null, enabled: !!id });
+    const rates = ratesData?.rates ?? [];
+    const carrierTracking = trackingData?.tracking ?? null;
 
     useEffect(() => {
         if (s?.lines) {
             setPicks(Object.fromEntries(s.lines.map((l) => [l.id, { lot_id: l.lot_id ?? null, serial_ids: l.serial_id ? [l.serial_id] : [] }])));
+            setShipMeta({
+                carrier: s.carrier ?? 'SolaShip',
+                carrier_service: s.carrier_service ?? 'standard',
+                tracking_number: s.tracking_number ?? '',
+                package_weight: s.package_weight ?? '',
+                package_length: s.package_length ?? '',
+                package_width: s.package_width ?? '',
+                package_height: s.package_height ?? '',
+                warranty_months: s.warranty_months ?? 12,
+                ship_to: s.ship_to ?? { name: '', address: '', city: '', country: '' },
+            });
+            setLabel(s.label_payload ? { label: s.label_payload } : null);
         }
     }, [s]);
 
@@ -54,7 +72,15 @@ export default function ShipmentDetailPage() {
         try {
             const payload = {
                 shipment_number: s.shipment_number, sales_order_id: s.sales_order_id, warehouse_id: s.warehouse_id,
-                ship_date: s.ship_date, carrier: s.carrier, tracking_number: s.tracking_number,
+                ship_date: s.ship_date,
+                carrier: shipMeta.carrier, carrier_service: shipMeta.carrier_service,
+                tracking_number: shipMeta.tracking_number,
+                ship_to: shipMeta.ship_to,
+                package_weight: shipMeta.package_weight || undefined,
+                package_length: shipMeta.package_length || undefined,
+                package_width: shipMeta.package_width || undefined,
+                package_height: shipMeta.package_height || undefined,
+                warranty_months: shipMeta.warranty_months || undefined,
                 lines: lines.map((l) => {
                     const p = picks[l.id] ?? {};
                     const serial = tracking.tracksSerial(l.item_id) && (p.serial_ids ?? []).length > 0;
@@ -73,6 +99,33 @@ export default function ShipmentDetailPage() {
         finally { setSavingPicks(false); }
     }
 
+    async function saveShipping() {
+        try {
+            await api.updateShipment(id, {
+                shipment_number: s.shipment_number, sales_order_id: s.sales_order_id, warehouse_id: s.warehouse_id,
+                ship_date: s.ship_date,
+                ...shipMeta,
+                lines: lines.map((l) => ({
+                    sales_order_line_id: l.sales_order_line_id, item_id: l.item_id, warehouse_id: l.warehouse_id, bin_id: l.bin_id,
+                    quantity: l.quantity, lot_id: l.lot_id || undefined, serial_id: l.serial_id || undefined,
+                })),
+            });
+            toast.push('Shipping details saved.', 'success');
+            qc.invalidateQueries({ queryKey: ['shipment', id] });
+            qc.invalidateQueries({ queryKey: ['shipment-rates', id] });
+        } catch (e) { toast.push(e.message, 'error'); }
+    }
+
+    async function generateLabel(serviceCode = null) {
+        try {
+            const res = await api.shipmentLabel(id, { service_code: serviceCode || shipMeta.carrier_service });
+            setLabel(res.data);
+            toast.push('Shipping label generated.', 'success');
+            qc.invalidateQueries({ queryKey: ['shipment', id] });
+            qc.invalidateQueries({ queryKey: ['shipment-tracking', id] });
+        } catch (e) { toast.push(e.message, 'error'); }
+    }
+
     async function post() {
         try { await api.postShipment(id, overrides); toast.push('Shipment posted — stock shipped OUT.', 'success'); qc.invalidateQueries({ queryKey: ['shipment', id] }); }
         catch (e) { toast.push(e.message, 'error'); }
@@ -89,11 +142,12 @@ export default function ShipmentDetailPage() {
                 <dt>Sales order</dt><dd><Link to={`/sales-orders/${s.sales_order_id}`}>#{s.sales_order_id}</Link></dd>
                 <dt>Ship date</dt><dd>{s.ship_date}</dd>
                 <dt>Warehouse</dt><dd>#{s.warehouse_id}</dd>
-                <dt>Carrier</dt><dd>{s.carrier ?? '—'}</dd>
+                <dt>Carrier</dt><dd>{s.carrier ?? '—'} {s.carrier_service && <span className="muted">· {s.carrier_service}</span>}</dd>
                 <dt>Tracking #</dt><dd>{s.tracking_number ?? '—'}</dd>
+                <dt>Label</dt><dd>{s.label_number ?? '—'} {s.label_status && <span className="badge badge--demo">{s.label_status}</span>}</dd>
             </dl></div>
 
-            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'ledger', label: 'Ledger result' }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'shipping', label: 'Carrier' }, { key: 'tracking', label: 'Tracking' }, { key: 'ledger', label: 'Ledger result' }]} active={tab} onChange={setTab} />
             {tab === 'lines' && <div className="panel"><table className="data-table">
                 <thead><tr><th>Item</th><th>Ship qty</th><th>Lot / Serial</th><th>Selected</th></tr></thead>
                 <tbody>{lines.map((l) => {
@@ -124,6 +178,47 @@ export default function ShipmentDetailPage() {
                 })}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
+            {tab === 'shipping' && <div className="panel">
+                <div className="fg4">
+                    <label className="field"><span className="field-label">Carrier</span><input className="input" value={shipMeta.carrier ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, carrier: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Service</span><select className="input" value={shipMeta.carrier_service ?? 'standard'} onChange={(e) => setShipMeta({ ...shipMeta, carrier_service: e.target.value })} disabled={!isDraft}>
+                        <option value="standard">Standard ground</option><option value="express">Express</option><option value="freight">Freight</option>
+                    </select></label>
+                    <label className="field"><span className="field-label">Tracking #</span><input className="input" value={shipMeta.tracking_number ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, tracking_number: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Warranty months</span><input className="input" type="number" min="0" max="120" value={shipMeta.warranty_months ?? 12} onChange={(e) => setShipMeta({ ...shipMeta, warranty_months: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Weight</span><input className="input" type="number" step="0.0001" value={shipMeta.package_weight ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_weight: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Length</span><input className="input" type="number" step="0.0001" value={shipMeta.package_length ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_length: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Width</span><input className="input" type="number" step="0.0001" value={shipMeta.package_width ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_width: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Height</span><input className="input" type="number" step="0.0001" value={shipMeta.package_height ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_height: e.target.value })} disabled={!isDraft} /></label>
+                </div>
+                <div className="fg2">
+                    <label className="field"><span className="field-label">Ship to</span><input className="input" value={shipMeta.ship_to?.name ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, ship_to: { ...(shipMeta.ship_to ?? {}), name: e.target.value } })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">Address</span><input className="input" value={shipMeta.ship_to?.address ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, ship_to: { ...(shipMeta.ship_to ?? {}), address: e.target.value } })} disabled={!isDraft} /></label>
+                </div>
+                {isDraft && <button className="btn" disabled={!gate.allowed} onClick={saveShipping}>Save shipping details</button>}
+                <h3>Rates</h3>
+                <div className="report-grid">
+                    {rates.map((r) => <div className="widget-card" key={r.service_code}>
+                        <div className="widget-card-label">{r.service_name}</div>
+                        <div className="widget-card-value">{r.amount} {r.currency}</div>
+                        <div className="muted">{r.estimated_days} days</div>
+                        <button className="btn btn--sm" disabled={!gate.allowed} onClick={() => generateLabel(r.service_code)}>Use rate & label</button>
+                    </div>)}
+                </div>
+                {(label?.label || s.label_payload) && <div className="label-card shipping-label">
+                    <strong>{(label?.label ?? s.label_payload).carrier} {(label?.label ?? s.label_payload).service_name}</strong>
+                    <span>{s.shipment_number}</span>
+                    <code>{(label?.label ?? s.label_payload).tracking_number}</code>
+                    <span className="qr-preview" dangerouslySetInnerHTML={{ __html: (label?.label ?? s.label_payload).qr_svg }} />
+                </div>}
+            </div>}
+            {tab === 'tracking' && <div className="panel">
+                {!carrierTracking ? <EmptyState title="No tracking yet" hint="Generate a label to create tracking." /> : <>
+                    <dl className="kv"><dt>Carrier</dt><dd>{carrierTracking.carrier}</dd><dt>Tracking #</dt><dd>{carrierTracking.tracking_number}</dd><dt>Status</dt><dd>{carrierTracking.status}</dd></dl>
+                    <table className="data-table"><thead><tr><th>Time</th><th>Status</th><th>Event</th></tr></thead>
+                    <tbody>{(carrierTracking.events ?? []).map((e, i) => <tr key={i}><td>{e.occurred_at}</td><td>{e.status}</td><td>{e.message}</td></tr>)}</tbody></table>
+                </>}
+            </div>}
 
             {isDraft && (
                 <div className="panel">

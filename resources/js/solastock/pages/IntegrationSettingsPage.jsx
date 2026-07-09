@@ -26,7 +26,7 @@ export default function IntegrationSettingsPage() {
             <header className="page-head">
                 <h1>SolaBooks Integration</h1>
                 {s && <HealthBadge health={s.health} />}
-                <span className="badge badge--warn">foundation — no posting yet</span>
+                <span className="badge badge--live">outbox delivery</span>
             </header>
 
             <Tabs tabs={[{ key: 'status', label: 'Status' }, { key: 'accounts', label: 'Account mappings' }, { key: 'items', label: 'Item mappings' }]} active={tab} onChange={setTab} />
@@ -48,11 +48,11 @@ export default function IntegrationSettingsPage() {
                             <dt>Connection implemented</dt><dd>{s.connection_implemented ? 'Yes' : 'No (placeholder)'}</dd>
                         </dl>
                         <div className="doc-actions">
-                            <button className="btn" disabled title="Real connection is not implemented yet">Reconnect</button>
-                            <button className="btn" disabled title="Real connection is not implemented yet">Disable</button>
+                            <button className="btn" disabled title="Production credentials require owner approval">Reconnect</button>
+                            <button className="btn" disabled title="Production credentials require owner approval">Disable</button>
                             <Link className="btn btn--primary" to="/integrations/solabooks/events">View events</Link>
                         </div>
-                        <p className="muted">Events are recorded locally in the outbox when inventory documents post. A future worker will deliver them to SolaBooks; no accounting is posted from SolaStock.</p>
+                        <p className="muted">Events are recorded locally when inventory documents post, then delivered to SolaBooks with authenticated, idempotent retry. SolaStock never writes directly to finance tables.</p>
                     </div>
                 </>
             ))}

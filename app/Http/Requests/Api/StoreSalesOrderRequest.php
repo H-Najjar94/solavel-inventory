@@ -28,6 +28,7 @@ class StoreSalesOrderRequest extends FormRequest
         return [
             // Optional: generated server-side if not supplied.
             'order_number' => ['nullable','string','max:50'],
+            'customer_id' => ['nullable','integer'],
             'customer_name' => ['nullable','string','max:255'],
             'customer_external_id' => ['nullable','string','max:100'],
             'order_date' => ['nullable','date'],
@@ -41,6 +42,9 @@ class StoreSalesOrderRequest extends FormRequest
             'lines.*.bin_id' => ['nullable','integer'],
             'lines.*.ordered_qty' => ['required','numeric','gt:0'],
             'lines.*.unit_price' => ['nullable','numeric','min:0'],
+            'lines.*.discount_rate' => ['nullable','numeric','min:0','max:100'],
+            'lines.*.tax_code' => ['nullable','string','max:50'],
+            'lines.*.tax_rate' => ['nullable','numeric','min:0','max:100'],
         ];
     }
 }

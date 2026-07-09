@@ -4,6 +4,7 @@ namespace App\Services\Documents;
 
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\Shipment;
+use App\Models\Tenant\SerialNumber;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
@@ -83,7 +84,12 @@ class ShipmentService
             if ($s->status !== 'draft') {
                 throw new RuntimeException("Only a draft shipment can be edited (status '{$s->status}').");
             }
-            $s->fill(collect($attributes)->only(['shipment_number', 'sales_order_id', 'pack_id', 'ship_date', 'warehouse_id', 'carrier', 'tracking_number', 'notes'])->toArray());
+            $s->fill(collect($attributes)->only([
+                'shipment_number', 'sales_order_id', 'pack_id', 'ship_date', 'warehouse_id',
+                'carrier', 'carrier_service', 'tracking_number', 'ship_to',
+                'package_weight', 'package_length', 'package_width', 'package_height',
+                'warranty_months', 'notes',
+            ])->toArray());
             $s->save();
             $s->lines()->delete();
             $this->syncLines($s, $lines, $orgId);
@@ -147,18 +153,54 @@ class ShipmentService
                 'entity_id' => $s->id, 'document_ref' => $s->shipment_number,
             ]);
 
+            $this->registerSerialOwnership($s);
             $this->rollUpSalesOrder($s);
 
             $s->status = 'posted';
             $s->posted_at = now();
             $s->posted_by = auth()->id();
             $s->posted_guard_key = $this->postNamespace($s);
+            if ($s->tracking_number) {
+                $events = $s->tracking_events ?: [];
+                $events[] = [
+                    'status' => 'in_transit',
+                    'message' => 'Shipment handed to carrier',
+                    'occurred_at' => now()->toDateTimeString(),
+                ];
+                $s->tracking_status = 'in_transit';
+                $s->tracking_events = $events;
+            }
             $s->markSystemTransition()->save();
 
             $this->outbox->record('shipment.posted', $s, 'shipment', $s->shipment_number, (string) $s->ship_date);
 
             return $s->fresh('lines');
         });
+    }
+
+    private function registerSerialOwnership(Shipment $s): void
+    {
+        $s->loadMissing('lines');
+        $order = $s->sales_order_id ? SalesOrder::query()->with('customer')->find($s->sales_order_id) : null;
+        $owner = $order?->customer?->name ?? $order?->customer_name;
+        $months = (int) ($s->getAttribute('warranty_months') ?? 12);
+        $warrantyUntil = $months > 0
+            ? ($s->ship_date ? $s->ship_date->copy()->addMonths($months)->toDateString() : now()->addMonths($months)->toDateString())
+            : null;
+
+        foreach ($s->lines as $line) {
+            if (! $line->serial_id) {
+                continue;
+            }
+            $serial = SerialNumber::query()->lockForUpdate()->find($line->serial_id);
+            if (! $serial) {
+                continue;
+            }
+            $serial->shipment_id = $s->id;
+            $serial->owner_ref = $owner;
+            $serial->warranty_until = $warrantyUntil;
+            $serial->save();
+        }
     }
 
     private function rollUpSalesOrder(Shipment $s): void

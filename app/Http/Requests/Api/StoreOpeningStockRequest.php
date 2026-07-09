@@ -48,6 +48,8 @@ class StoreOpeningStockRequest extends FormRequest
             'lines.*.bin_id' => ['nullable', 'integer'],
             // Quantity is optional when serials are captured (count = qty).
             'lines.*.quantity' => ['required_without:lines.*.serials', 'nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_qty' => ['nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_unit_id' => ['nullable', 'integer'],
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.notes' => ['nullable', 'string'],
         ];

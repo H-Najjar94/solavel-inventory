@@ -44,6 +44,20 @@ export function SupplierPicker({ value, onChange, disabled }) {
         placeholder="Supplier…" getLabel={(s) => `${s.code} · ${s.name}`} />;
 }
 
+export function CustomerPicker({ value, onChange, disabled }) {
+    const { data } = useApiQuery(['customers-picker'], () => api.customers({ per_page: 200, is_active: true }), { fallback: [] });
+    const list = Array.isArray(data) ? data : (data?.data ?? []);
+    return <Select value={value} onChange={onChange} options={list} disabled={disabled}
+        placeholder="Customer…" getLabel={(c) => `${c.code} · ${c.name}`} />;
+}
+
+export function UnitPicker({ value, onChange, disabled, placeholder = 'Base unit' }) {
+    const { data } = useApiQuery(['meta'], api.meta, { fallback: { lookups: { units: [] } } });
+    const units = data?.lookups?.units ?? [];
+    return <Select value={value} onChange={onChange} options={units} disabled={disabled}
+        placeholder={placeholder} getLabel={(u) => `${u.code} · ${u.name}`} />;
+}
+
 export function QuantityInput({ value, onChange, disabled }) {
     return <input className="input input--num" type="number" step="0.0001" min="0" disabled={disabled}
         value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;

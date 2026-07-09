@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'solabooks' => [
+        'api_base_url' => env('SOLABOOKS_API_BASE_URL', rtrim((string) env('SOLABOOKS_BASE_URL', ''), '/').'/api/v1'),
+        'journal_entries_url' => env('SOLABOOKS_JOURNAL_ENTRIES_URL'),
+        'api_key' => env('SOLABOOKS_API_KEY'),
+        'client_id' => env('SOLABOOKS_CLIENT_ID'),
+        'organization_id' => env('SOLABOOKS_ORGANIZATION_ID'),
+        'timeout' => env('SOLABOOKS_API_TIMEOUT', 10),
+    ],
+
 ];

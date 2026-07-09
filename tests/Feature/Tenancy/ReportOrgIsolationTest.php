@@ -45,14 +45,28 @@ class ReportOrgIsolationTest extends TestCase
     {
         $this->useTenantA(); // tenant_990010 + context = ORG_A
         $opening = app(OpeningStockService::class);
+        $metrics = app(DashboardMetricsService::class);
+        $reports = app(InventoryReportService::class);
+        $suffix = (string) now()->format('Hisv');
+        $aSkus = ['A-1-'.$suffix, 'A-2-'.$suffix];
+        $bSkus = ['B-1-'.$suffix, 'B-2-'.$suffix, 'B-3-'.$suffix];
+
+        $beforeA = null;
+        $beforeB = null;
+        $this->asOrg(self::ORG_A, function () use ($metrics, &$beforeA) {
+            $beforeA = $metrics->metrics();
+        });
+        $this->asOrg(self::ORG_B, function () use ($metrics, &$beforeB) {
+            $beforeB = $metrics->metrics();
+        });
 
         // Org A: 2 items, opening stock worth 100.00 (10×5 + 10×5).
-        $this->asOrg(self::ORG_A, function () use ($opening) {
+        $this->asOrg(self::ORG_A, function () use ($opening, $aSkus, $suffix) {
             $wh = F::warehouse();
-            $a1 = F::item(['sku' => 'A-1']);
-            $a2 = F::item(['sku' => 'A-2']);
+            $a1 = F::item(['sku' => $aSkus[0]]);
+            $a2 = F::item(['sku' => $aSkus[1]]);
             $opening->post($opening->createDraft(
-                ['entry_number' => 'OSA-1', 'warehouse_id' => $wh->id],
+                ['entry_number' => 'OSA-'.$suffix, 'warehouse_id' => $wh->id],
                 [
                     ['item_id' => $a1->id, 'quantity' => '10.0000', 'unit_cost' => '5.0000'],
                     ['item_id' => $a2->id, 'quantity' => '10.0000', 'unit_cost' => '5.0000'],
@@ -61,13 +75,13 @@ class ReportOrgIsolationTest extends TestCase
         });
 
         // Org B (SAME DB): 3 items, opening stock worth 900.00 (100×3 + ...).
-        $this->asOrg(self::ORG_B, function () use ($opening) {
+        $this->asOrg(self::ORG_B, function () use ($opening, $bSkus, $suffix) {
             $wh = F::warehouse();
-            $b1 = F::item(['sku' => 'B-1']);
-            $b2 = F::item(['sku' => 'B-2']);
-            $b3 = F::item(['sku' => 'B-3']);
+            $b1 = F::item(['sku' => $bSkus[0]]);
+            $b2 = F::item(['sku' => $bSkus[1]]);
+            $b3 = F::item(['sku' => $bSkus[2]]);
             $opening->post($opening->createDraft(
-                ['entry_number' => 'OSB-1', 'warehouse_id' => $wh->id],
+                ['entry_number' => 'OSB-'.$suffix, 'warehouse_id' => $wh->id],
                 [
                     ['item_id' => $b1->id, 'quantity' => '100.0000', 'unit_cost' => '3.0000'],
                     ['item_id' => $b2->id, 'quantity' => '100.0000', 'unit_cost' => '3.0000'],
@@ -76,23 +90,32 @@ class ReportOrgIsolationTest extends TestCase
             ));
         });
 
-        $metrics = app(DashboardMetricsService::class);
-        $reports = app(InventoryReportService::class);
-
         // ── Org A sees ONLY its data — never the combined 5 items / mixed value ──
-        $this->asOrg(self::ORG_A, function () use ($metrics, $reports) {
+        $this->asOrg(self::ORG_A, function () use ($metrics, $reports, $beforeA, $aSkus, $bSkus) {
             $m = $metrics->metrics();
-            $this->assertSame(2, $m['total_skus'], 'Org A dashboard counts only Org A items');
-            $this->assertSame('100.00', $m['inventory_value'], 'Org A value excludes Org B stock');
-            $this->assertEqualsCanonicalizing(['A-1', 'A-2'], $this->valuation($reports), 'Org A report shows only Org A SKUs');
+            $this->assertSame((int) $beforeA['total_skus'] + 2, $m['total_skus'], 'Org A dashboard counts only Org A item delta');
+            $this->assertSame(number_format((float) $beforeA['inventory_value'] + 100, 2, '.', ''), $m['inventory_value'], 'Org A value excludes Org B stock');
+            $skus = $this->valuation($reports);
+            foreach ($aSkus as $sku) {
+                $this->assertContains($sku, $skus, 'Org A report shows its new SKUs');
+            }
+            foreach ($bSkus as $sku) {
+                $this->assertNotContains($sku, $skus, 'Org A report excludes Org B SKUs');
+            }
         });
 
         // ── Org B sees ONLY its data ──
-        $this->asOrg(self::ORG_B, function () use ($metrics, $reports) {
+        $this->asOrg(self::ORG_B, function () use ($metrics, $reports, $beforeB, $aSkus, $bSkus) {
             $m = $metrics->metrics();
-            $this->assertSame(3, $m['total_skus'], 'Org B dashboard counts only Org B items');
-            $this->assertSame('900.00', $m['inventory_value'], 'Org B value excludes Org A stock');
-            $this->assertEqualsCanonicalizing(['B-1', 'B-2', 'B-3'], $this->valuation($reports), 'Org B report shows only Org B SKUs');
+            $this->assertSame((int) $beforeB['total_skus'] + 3, $m['total_skus'], 'Org B dashboard counts only Org B item delta');
+            $this->assertSame(number_format((float) $beforeB['inventory_value'] + 900, 2, '.', ''), $m['inventory_value'], 'Org B value excludes Org A stock');
+            $skus = $this->valuation($reports);
+            foreach ($bSkus as $sku) {
+                $this->assertContains($sku, $skus, 'Org B report shows its new SKUs');
+            }
+            foreach ($aSkus as $sku) {
+                $this->assertNotContains($sku, $skus, 'Org B report excludes Org A SKUs');
+            }
         });
     }
 

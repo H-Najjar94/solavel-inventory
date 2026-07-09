@@ -1002,6 +1002,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .serial-selector { display:flex; flex-direction:column; gap:6px; }
 .serial-selector__list { display:flex; flex-wrap:wrap; gap:8px; max-height:160px; overflow:auto; }
 .serial-selector__opt { font-size:13px; display:flex; gap:4px; align-items:center; }
+.scan-workbench { display:grid; grid-template-columns: minmax(0, 1fr) auto; gap:10px; align-items:center; }
+.label-sheet { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-top:14px; }
+.label-card { border:1px dashed var(--line-soft,#d8d1c7); background:var(--surface,#fff); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:6px; min-height:132px; }
+.label-card code { white-space:normal; word-break:break-word; }
+.qr-preview svg { width:58px; height:58px; fill:var(--text,#1f2430); display:block; }
+.shipping-label { max-width:260px; margin-top:14px; }
+.fg4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px 16px; margin-bottom:14px; }
+@media (max-width: 900px) { .fg4 { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width: 560px) { .fg4, .scan-workbench { grid-template-columns:1fr; } }
 
 .filter-bar { display:flex; gap:8px; margin-bottom:12px; }
 .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }

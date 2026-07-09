@@ -7,6 +7,7 @@ use App\Http\Requests\Api\StoreShipmentRequest;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\Shipment;
 use App\Services\Documents\ShipmentService;
+use App\Services\Shipping\CarrierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -15,7 +16,7 @@ class ShipmentController extends ApiController
 {
     use \App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 
-    public function __construct(private ShipmentService $service) {}
+    public function __construct(private ShipmentService $service, private CarrierService $carriers) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -35,6 +36,25 @@ class ShipmentController extends ApiController
             ->where('source_type', Shipment::class)->where('source_id', $shipment->id)->get();
 
         return $this->success(['shipment' => $shipment, 'ledger' => $ledger]);
+    }
+
+    public function rates(Shipment $shipment): JsonResponse
+    {
+        return $this->success(['rates' => $this->carriers->rates($shipment)]);
+    }
+
+    public function label(Request $request, Shipment $shipment): JsonResponse
+    {
+        $data = $request->validate([
+            'service_code' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        return $this->success(['label' => $this->carriers->generateLabel($shipment, $data['service_code'] ?? null)]);
+    }
+
+    public function tracking(Shipment $shipment): JsonResponse
+    {
+        return $this->success(['tracking' => $this->carriers->tracking($shipment)]);
     }
 
     /** Build a draft shipment payload from a sales order's outstanding lines. */

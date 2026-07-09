@@ -39,7 +39,7 @@ class GoodsReceiptController extends ApiController
     public function show(GoodsReceipt $goods_receipt): JsonResponse
     {
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
-        $goods_receipt->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $goods_receipt->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code']);
         $goods_receipt->setAttribute('warehouse_name', $goods_receipt->warehouse?->name);
         $goods_receipt->setAttribute('supplier_name', $goods_receipt->supplier?->name);
         $ledger = StockLedger::query()->where('source_type', GoodsReceipt::class)->where('source_id', $goods_receipt->id)->get();
@@ -55,39 +55,55 @@ class GoodsReceiptController extends ApiController
      * line with remaining qty (ordered − received) and the PO unit cost. Read-only;
      * the client edits then POSTs to store.
      */
-    public function fromPo(PurchaseOrder $purchase_order): JsonResponse
+    public function fromPo(Request $request, PurchaseOrder $purchase_order): JsonResponse
     {
         if (! in_array($purchase_order->status, ['approved', 'partially_received'], true)) {
             return $this->error('po_not_receivable', 'Only an approved/partially-received PO can be received.', 422);
         }
         $purchase_order->load('lines');
 
-        $lines = $purchase_order->lines->map(function ($l) {
+        $blind = $request->boolean('blind');
+        $lines = $purchase_order->lines->map(function ($l) use ($blind) {
             $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->received_qty));
+            if (! Decimal::gt($remaining, '0')) {
+                return null;
+            }
 
-            return [
+            $line = [
                 'purchase_order_line_id' => $l->id,
                 'item_id' => $l->item_id,
                 'variant_id' => $l->variant_id,
-                'ordered_qty' => $l->ordered_qty,
-                'already_received_qty' => $l->received_qty,
-                'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
-                'received_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
+                'received_qty' => $blind ? '' : (Decimal::lt($remaining, '0') ? '0.0000' : $remaining),
                 'unit_cost' => $l->unit_price,
             ];
-        })->filter(fn ($l) => Decimal::gt((string) $l['remaining_qty'], '0'))->values();
+
+            if (! $blind) {
+                $line += [
+                    'ordered_qty' => $l->ordered_qty,
+                    'already_received_qty' => $l->received_qty,
+                    'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
+                ];
+            }
+
+            return $line;
+        })->filter()->values();
 
         return $this->success([
             'purchase_order' => $purchase_order->only(['id', 'po_number', 'supplier_id', 'warehouse_id']),
+            'blind' => $blind,
             'lines' => $lines,
         ]);
     }
 
     public function store(StoreGoodsReceiptRequest $request): JsonResponse
     {
-        $data = $request->validated();
-        unset($data['grn_number']);
-        $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
+        try {
+            $data = $request->validated();
+            unset($data['grn_number']);
+            $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
+        } catch (RuntimeException $e) {
+            return $this->error('grn_create_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($grn, 201);
     }

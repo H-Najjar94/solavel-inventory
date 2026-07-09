@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
 import { useCan } from '../stores/meta.jsx';
+import { useToast } from '../stores/toast.jsx';
 
 // Real, zeroed dashboard for a live tenant with no data yet. NEVER mock/sample —
 // the dashboard only ever shows this org's actual numbers.
@@ -21,6 +22,13 @@ const num = (v) => n(v).toLocaleString();
 const money = (v) => `$${n(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 const TONE = { good: '#2f7a4f', warn: '#c97f12', danger: '#d64545', default: 'var(--ink,#222)' };
+const DEFAULT_LAYOUT = [
+    { key: 'kpis', label: 'KPIs', visible: true },
+    { key: 'alerts', label: 'Exception alerts', visible: true },
+    { key: 'operations', label: 'Operations', visible: true },
+    { key: 'integration', label: 'SolaBooks sync', visible: true },
+    { key: 'activity', label: 'Activity', visible: true },
+];
 
 // ── Primary KPI (big, prominent) ─────────────────────────────────────
 function Kpi({ label, value, to, tone = 'default', sub, icon }) {
@@ -72,13 +80,29 @@ function OpsGroup({ title, icon, children }) {
 
 export default function DashboardPage() {
     const qc = useQueryClient();
+    const toast = useToast();
     const can = useCan();
     const canViewIntegration = can('inventory.integration.view');
     // Real data only. No mock/sample fallback — an empty workspace shows real zeros.
     const { data, isFetching } = useApiQuery(['dashboard'], api.dashboard, { fallback: EMPTY_DASHBOARD });
+    const layoutQuery = useApiQuery(['dashboard-layout'], api.getDashboardLayout, { fallback: { layout: null } });
     const d = data ?? EMPTY_DASHBOARD;
     const integ = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null, enabled: canViewIntegration });
     const si = integ.data;
+    const [customizing, setCustomizing] = useState(false);
+    const [layout, setLayout] = useState(DEFAULT_LAYOUT);
+
+    useEffect(() => {
+        const saved = layoutQuery.data?.layout;
+        if (Array.isArray(saved) && saved.length > 0) {
+            const byKey = new Map(DEFAULT_LAYOUT.map((w) => [w.key, w]));
+            const merged = saved
+                .filter((w) => byKey.has(w.key))
+                .map((w) => ({ ...byKey.get(w.key), ...w }));
+            const missing = DEFAULT_LAYOUT.filter((w) => !merged.some((m) => m.key === w.key));
+            setLayout([...merged, ...missing]);
+        }
+    }, [layoutQuery.data]);
 
     // Only surface alerts that actually need attention.
     const alerts = [
@@ -91,48 +115,79 @@ export default function DashboardPage() {
         n(d.expiring_lots_30d) > 0 && { label: `${num(d.expiring_lots_30d)} expiring in 30d`, to: '/traceability/lots?expiring=1', tone: 'warn', icon: 'fa-hourglass-half' },
         n(d.quarantined_lots) > 0 && { label: `${num(d.quarantined_lots)} quarantined lot(s)`, to: '/traceability/lots?status=quarantined', tone: 'warn', icon: 'fa-ban' },
     ].filter(Boolean);
+    const serverAlerts = d.alerts ?? [];
 
-    return (
-        <section className="page">
-            <Breadcrumbs items={[{ label: 'Dashboard' }]} />
-            <header className="page-head">
-                <h1>Dashboard</h1>
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {d.generated_at && <span className="muted">Updated {d.generated_at}</span>}
-                    <button className="btn btn--sm" disabled={isFetching} onClick={() => qc.invalidateQueries({ queryKey: ['dashboard'] })}>
-                        {isFetching ? 'Refreshing…' : 'Refresh'}
-                    </button>
-                </div>
-            </header>
+    function updateLayout(key, patch) {
+        setLayout((rows) => rows.map((row) => row.key === key ? { ...row, ...patch } : row));
+    }
 
-            {/* Primary KPIs */}
+    function moveLayout(key, delta) {
+        setLayout((rows) => {
+            const next = [...rows];
+            const i = next.findIndex((row) => row.key === key);
+            const j = i + delta;
+            if (i < 0 || j < 0 || j >= next.length) return rows;
+            [next[i], next[j]] = [next[j], next[i]];
+            return next;
+        });
+    }
+
+    async function saveLayout() {
+        try {
+            await api.saveDashboardLayout(layout);
+            await qc.invalidateQueries({ queryKey: ['dashboard-layout'] });
+            setCustomizing(false);
+            toast.push('Dashboard layout saved.', 'success');
+        } catch (e) {
+            toast.push(e.message || 'Could not save layout.', 'error');
+        }
+    }
+
+    async function ackAlert(id) {
+        try {
+            await api.acknowledgeDashboardAlert(id);
+            await qc.invalidateQueries({ queryKey: ['dashboard'] });
+            toast.push('Alert acknowledged.', 'success');
+        } catch (e) {
+            toast.push(e.message || 'Could not acknowledge alert.', 'error');
+        }
+    }
+
+    const sections = {
+        kpis: (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, marginTop: 4 }}>
                 <Kpi label="Inventory Value" value={money(d.inventory_value)} to="/reports" tone="good" icon="fa-coins" sub="on-hand at cost" />
                 <Kpi label="Active SKUs" value={num(d.active_items)} to="/items" icon="fa-tags" sub={`${num(d.total_skus)} total`} />
                 <Kpi label="Low Stock" value={num(d.low_stock)} to="/reports" tone={n(d.low_stock) > 0 ? 'warn' : 'default'} icon="fa-triangle-exclamation" sub="below reorder point" />
                 <Kpi label="Out of Stock" value={num(d.out_of_stock)} to="/reports" tone={n(d.out_of_stock) > 0 ? 'danger' : 'default'} icon="fa-circle-xmark" sub="needs restocking" />
             </div>
-
-            {/* Needs attention */}
-            {alerts.length > 0 && (
-                <div className="panel" style={{ marginTop: 16 }}>
-                    <h2 style={{ fontSize: 14, marginBottom: 10 }}><i className="fa-solid fa-bell" style={{ color: '#e09921', marginRight: 6 }} /> Needs attention</h2>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {alerts.map((a) => (
-                            <Link key={a.label} to={a.to} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px',
-                                borderRadius: 999, textDecoration: 'none', fontSize: 13, fontWeight: 600, color: TONE[a.tone],
-                                background: a.tone === 'danger' ? 'rgba(214,69,69,0.08)' : 'rgba(201,127,18,0.10)',
-                                border: `1px solid ${a.tone === 'danger' ? 'rgba(214,69,69,0.25)' : 'rgba(201,127,18,0.28)'}`,
-                            }}>
-                                <i className={`fa-solid ${a.icon}`} aria-hidden="true" /> {a.label}
-                            </Link>
-                        ))}
-                    </div>
+        ),
+        alerts: (alerts.length > 0 || serverAlerts.length > 0) && (
+            <div className="panel" style={{ marginTop: 16 }}>
+                <h2 style={{ fontSize: 14, marginBottom: 10 }}><i className="fa-solid fa-bell" style={{ color: '#e09921', marginRight: 6 }} /> Needs attention</h2>
+                {serverAlerts.length > 0 && <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
+                    {serverAlerts.map((a) => (
+                        <div key={a.id} className="banner banner--warn" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span><strong>{a.title}</strong> · {a.message}</span>
+                            {a.status === 'open' && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>Acknowledge</button>}
+                        </div>
+                    ))}
+                </div>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {alerts.map((a) => (
+                        <Link key={a.label} to={a.to} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px',
+                            borderRadius: 999, textDecoration: 'none', fontSize: 13, fontWeight: 600, color: TONE[a.tone],
+                            background: a.tone === 'danger' ? 'rgba(214,69,69,0.08)' : 'rgba(201,127,18,0.10)',
+                            border: `1px solid ${a.tone === 'danger' ? 'rgba(214,69,69,0.25)' : 'rgba(201,127,18,0.28)'}`,
+                        }}>
+                            <i className={`fa-solid ${a.icon}`} aria-hidden="true" /> {a.label}
+                        </Link>
+                    ))}
                 </div>
-            )}
-
-            {/* Operations, grouped */}
+            </div>
+        ),
+        operations: (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14, marginTop: 16 }}>
                 <OpsGroup title="Purchasing" icon="fa-truck-fast">
                     <OpStat label="Pending POs" value={d.pending_pos} to="/purchase-orders" alert />
@@ -153,22 +208,20 @@ export default function DashboardPage() {
                     <OpStat label="Warehouses" value={d.warehouses} to="/warehouses" />
                 </OpsGroup>
             </div>
-
-            {/* SolaBooks sync */}
-            {canViewIntegration && si && (
-                <Link to="/settings/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
-                    <h2 style={{ fontSize: 14 }}>
-                        <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginRight: 6 }} />
-                        SolaBooks sync <span className={`badge ${si.health === 'healthy' ? 'badge--live' : si.health === 'disconnected' ? 'badge--muted' : 'badge--warn'}`}>{si.health}</span>
-                    </h2>
-                    <p className="muted" style={{ margin: 0 }}>
-                        Pending: {si.events?.pending ?? 0} · Failed: {si.events?.failed ?? 0} ·
-                        Mapping {si.mapping_completeness_pct ?? 0}% · Awaiting sync: {si.documents_awaiting_sync ?? 0}
-                    </p>
-                </Link>
-            )}
-
-            {/* Activity */}
+        ),
+        integration: canViewIntegration && si && (
+            <Link to="/settings/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
+                <h2 style={{ fontSize: 14 }}>
+                    <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginRight: 6 }} />
+                    SolaBooks sync <span className={`badge ${si.health === 'healthy' ? 'badge--live' : si.health === 'disconnected' ? 'badge--muted' : 'badge--warn'}`}>{si.health}</span>
+                </h2>
+                <p className="muted" style={{ margin: 0 }}>
+                    Pending: {si.events?.pending ?? 0} · Failed: {si.events?.failed ?? 0} ·
+                    Mapping {si.mapping_completeness_pct ?? 0}% · Awaiting sync: {si.documents_awaiting_sync ?? 0}
+                </p>
+            </Link>
+        ),
+        activity: (
             <div className="dash-cols" style={{ marginTop: 16 }}>
                 <div className="panel">
                     <h2 style={{ fontSize: 14 }}><i className="fa-solid fa-arrow-trend-up" style={{ color: '#e09921', marginRight: 6 }} /> Top moving items <span className="muted">(30d)</span></h2>
@@ -188,6 +241,36 @@ export default function DashboardPage() {
                     )}
                 </div>
             </div>
+        ),
+    };
+
+    return (
+        <section className="page">
+            <Breadcrumbs items={[{ label: 'Dashboard' }]} />
+            <header className="page-head">
+                <h1>Dashboard</h1>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {d.generated_at && <span className="muted">Updated {d.generated_at}</span>}
+                    <button className="btn btn--sm" disabled={isFetching} onClick={() => qc.invalidateQueries({ queryKey: ['dashboard'] })}>
+                        {isFetching ? 'Refreshing…' : 'Refresh'}
+                    </button>
+                    <button className="btn btn--sm" onClick={() => setCustomizing((v) => !v)}>Customize</button>
+                </div>
+            </header>
+
+            {customizing && <div className="panel" style={{ marginBottom: 16 }}>
+                <h2>Dashboard layout</h2>
+                <table className="data-table"><thead><tr><th>Visible</th><th>Section</th><th>Order</th></tr></thead><tbody>
+                    {layout.map((row) => <tr key={row.key}>
+                        <td><input type="checkbox" checked={row.visible !== false} onChange={(e) => updateLayout(row.key, { visible: e.target.checked })} /></td>
+                        <td>{row.label}</td>
+                        <td><button className="btn btn--sm" onClick={() => moveLayout(row.key, -1)}>Up</button> <button className="btn btn--sm" onClick={() => moveLayout(row.key, 1)}>Down</button></td>
+                    </tr>)}
+                </tbody></table>
+                <button className="btn btn--primary" onClick={saveLayout}>Save layout</button>
+            </div>}
+
+            {layout.filter((row) => row.visible !== false).map((row) => <React.Fragment key={row.key}>{sections[row.key]}</React.Fragment>)}
         </section>
     );
 }

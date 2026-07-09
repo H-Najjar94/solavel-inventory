@@ -57,6 +57,37 @@ class ReportRegistryTest extends TestCase
     }
 
     #[Test]
+    public function xls_and_printable_pdf_exports_are_available(): void
+    {
+        $report = [
+            'key' => 'inventory-valuation',
+            'title' => 'Inventory Valuation',
+            'columns' => ['sku', 'name', 'total_value'],
+            'summary' => ['total_value' => '10.00'],
+            'rows' => [
+                ['sku' => 'A-1', 'name' => 'Item A', 'total_value' => '10.00'],
+            ],
+        ];
+
+        $export = app(ReportExportService::class);
+        $xls = $export->xlsx($report);
+        $pdf = $export->pdf($report);
+
+        ob_start();
+        $xls->sendContent();
+        $xlsBody = ob_get_clean();
+        ob_start();
+        $pdf->sendContent();
+        $pdfBody = ob_get_clean();
+
+        $this->assertStringContainsString('application/vnd.ms-excel', $xls->headers->get('Content-Type'));
+        $this->assertStringContainsString('<Workbook', $xlsBody);
+        $this->assertStringContainsString('text/html', $pdf->headers->get('Content-Type'));
+        $this->assertStringContainsString('Inventory Valuation', $pdfBody);
+        $this->assertStringContainsString('window.print', $pdfBody);
+    }
+
+    #[Test]
     public function report_and_dashboard_routes_are_registered(): void
     {
         $names = collect(Route::getRoutes()->getRoutes())->map(fn ($r) => $r->getName())->filter()->all();

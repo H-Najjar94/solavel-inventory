@@ -5,6 +5,7 @@ namespace App\Models\Tenant;
 use App\Tenancy\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseOrder extends Model
@@ -21,6 +22,11 @@ class PurchaseOrder extends Model
     public function lines()
     {
         return $this->hasMany(PurchaseOrderLine::class, 'purchase_order_id');
+    }
+
+    public function backorders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderBackorder::class, 'purchase_order_id');
     }
 
     /** Header warehouse — surface a name, not a raw id. */

@@ -24,6 +24,13 @@ class Item extends Model
         'tracks_expiry' => 'boolean',
         'reorder_point' => 'decimal:4',
         'reorder_qty' => 'decimal:4',
+        'weight' => 'decimal:4',
+        'length' => 'decimal:4',
+        'width' => 'decimal:4',
+        'height' => 'decimal:4',
+        'min_stock' => 'decimal:4',
+        'max_stock' => 'decimal:4',
+        'safety_stock' => 'decimal:4',
         'purchase_price' => 'decimal:4',
         'sales_price' => 'decimal:4',
     ];
@@ -51,6 +58,16 @@ class Item extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ItemImage::class, 'item_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ItemAttachment::class, 'item_id');
+    }
+
+    public function supplierPrices(): HasMany
+    {
+        return $this->hasMany(SupplierPriceList::class, 'item_id');
     }
 
     /** The primary image, if any (for list/detail thumbnails). */

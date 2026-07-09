@@ -75,7 +75,9 @@ class DashboardMetricsService
             'warehouses' => $this->scoped('warehouses')->where('is_active', true)->count(),
             // ── Sales fulfillment KPIs ──
             'pending_sales_orders' => $this->scoped('inventory_sales_orders')->whereIn('status', ['draft', 'confirmed', 'partially_reserved', 'reserved'])->count(),
-            'reserved_stock_qty' => (string) ($this->scoped('reservations')->where('status', 'active')->sum('qty') ?? 0),
+            'reserved_stock_qty' => (string) ($this->scoped('reservations')->where('status', 'active')
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->sum('qty') ?? 0),
             'awaiting_pick' => $this->scoped('inventory_sales_orders')->whereIn('status', ['reserved', 'partially_reserved'])->count(),
             'awaiting_pack' => $this->scoped('inventory_sales_orders')->whereIn('status', ['picked', 'partially_picked'])->count(),
             'awaiting_ship' => $this->scoped('inventory_sales_orders')->whereIn('status', ['packed', 'packing'])->count(),

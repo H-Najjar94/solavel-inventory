@@ -7,11 +7,12 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
-import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
+import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, TraceabilityRequiredBadge } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
 
-const emptyLine = () => ({ item_id: null, bin_id: null, quantity: '', unit_cost: '', lot_code: '', expiry_date: '', serials: [], notes: '' });
+const emptyLine = () => ({ item_id: null, bin_id: null, quantity: '', entered_unit_id: null, unit_cost: '', lot_code: '', expiry_date: '', serials: [], notes: '' });
+const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function OpeningStockFormPage() {
     const { id } = useParams();
@@ -30,7 +31,7 @@ export default function OpeningStockFormPage() {
             const e = existing.data.entry;
             if (e.status !== 'draft') { toast.push('Posted documents are read-only.', 'error'); nav(`/opening-stock/${id}`); return; }
             setHeader({ entry_number: e.entry_number, opening_date: e.opening_date, warehouse_id: e.warehouse_id, notes: e.notes ?? '' });
-            setLines((e.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, quantity: l.quantity, unit_cost: l.unit_cost, lot_code: '', notes: l.notes ?? '' })));
+            setLines((e.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, quantity: l.entered_qty ?? l.quantity, entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), lot_code: '', notes: l.notes ?? '' })));
         }
     }, [isEdit, existing.data]);
 
@@ -51,6 +52,8 @@ export default function OpeningStockFormPage() {
                         return {
                             item_id: l.item_id, bin_id: l.bin_id,
                             quantity: sl ? String(l.serials.length) : l.quantity,
+                            entered_qty: sl ? undefined : l.quantity,
+                            entered_unit_id: sl ? undefined : (l.entered_unit_id || undefined),
                             unit_cost: l.unit_cost,
                             lot_code: l.lot_code || undefined,
                             expiry_date: l.expiry_date || undefined,
@@ -78,6 +81,9 @@ export default function OpeningStockFormPage() {
         { key: 'qty', label: 'Quantity', width: 120, render: (l, i) => tracking.tracksSerial(l.item_id)
             ? <span className="muted" title="Quantity = serial count">{(l.serials ?? []).length}</span>
             : <QuantityInput value={l.quantity} onChange={(v) => setLine(i, { quantity: v })} /> },
+        { key: 'unit', label: 'Unit', width: 150, render: (l, i) => tracking.tracksSerial(l.item_id)
+            ? <span className="muted">Each serial</span>
+            : <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'trace', label: 'Lot / Serial / Expiry', render: (l, i) => {
             const t = tracking.trackingOf(l.item_id);
             if (!t.tracking_type || t.tracking_type === 'none') return <span className="muted">—</span>;
