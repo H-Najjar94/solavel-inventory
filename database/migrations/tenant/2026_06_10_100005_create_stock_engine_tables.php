@@ -29,7 +29,7 @@ return new class extends Migration
     {
         $connection = $this->getConnection();
 
-        Schema::create('stock_ledger', function (Blueprint $table) {
+        Schema::hasTable('stock_ledger') or Schema::create('stock_ledger', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -72,7 +72,7 @@ return new class extends Migration
             $table->index('serial_id');
         });
 
-        Schema::create('stock_balances', function (Blueprint $table) {
+        Schema::hasTable('stock_balances') or Schema::create('stock_balances', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -101,7 +101,7 @@ return new class extends Migration
             $table->index(['organization_id', 'item_id'], 'balances_org_item_idx');
         });
 
-        Schema::create('cost_layers', function (Blueprint $table) {
+        Schema::hasTable('cost_layers') or Schema::create('cost_layers', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -120,7 +120,7 @@ return new class extends Migration
             $table->index(['organization_id', 'item_id', 'warehouse_id'], 'layers_org_item_wh_idx');
         });
 
-        Schema::create('reservations', function (Blueprint $table) {
+        Schema::hasTable('reservations') or Schema::create('reservations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -140,7 +140,7 @@ return new class extends Migration
             $table->index(['source_type', 'source_id'], 'reservations_source_idx');
         });
 
-        Schema::create('inventory_audit_logs', function (Blueprint $table) {
+        Schema::hasTable('inventory_audit_logs') or Schema::create('inventory_audit_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('actor_user_id')->nullable();

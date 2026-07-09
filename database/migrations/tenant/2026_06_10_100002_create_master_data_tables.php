@@ -18,7 +18,7 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('units', function (Blueprint $table) {
+        Schema::hasTable('units') or Schema::create('units', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('code');
@@ -32,7 +32,7 @@ return new class extends Migration
             $table->unique(['organization_id', 'code']);
         });
 
-        Schema::create('unit_conversions', function (Blueprint $table) {
+        Schema::hasTable('unit_conversions') or Schema::create('unit_conversions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id')->nullable(); // null = global conversion
@@ -45,7 +45,7 @@ return new class extends Migration
             $table->index(['organization_id', 'item_id']);
         });
 
-        Schema::create('item_categories', function (Blueprint $table) {
+        Schema::hasTable('item_categories') or Schema::create('item_categories', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('parent_id')->nullable();
@@ -59,7 +59,7 @@ return new class extends Migration
             $table->unique(['organization_id', 'parent_id', 'name'], 'item_categories_org_parent_name_uniq');
         });
 
-        Schema::create('item_brands', function (Blueprint $table) {
+        Schema::hasTable('item_brands') or Schema::create('item_brands', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('name');
@@ -70,7 +70,7 @@ return new class extends Migration
             $table->unique(['organization_id', 'name']);
         });
 
-        Schema::create('items', function (Blueprint $table) {
+        Schema::hasTable('items') or Schema::create('items', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->string('sku');
@@ -109,7 +109,7 @@ return new class extends Migration
             $table->foreign('base_unit_id')->references('id')->on('units')->nullOnDelete();
         });
 
-        Schema::create('item_variants', function (Blueprint $table) {
+        Schema::hasTable('item_variants') or Schema::create('item_variants', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -127,7 +127,7 @@ return new class extends Migration
             $table->foreign('item_id')->references('id')->on('items')->cascadeOnDelete();
         });
 
-        Schema::create('item_barcodes', function (Blueprint $table) {
+        Schema::hasTable('item_barcodes') or Schema::create('item_barcodes', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
@@ -142,7 +142,7 @@ return new class extends Migration
             $table->foreign('variant_id')->references('id')->on('item_variants')->nullOnDelete();
         });
 
-        Schema::create('item_images', function (Blueprint $table) {
+        Schema::hasTable('item_images') or Schema::create('item_images', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('organization_id')->index();
             $table->unsignedBigInteger('item_id');
