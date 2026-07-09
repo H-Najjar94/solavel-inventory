@@ -24,6 +24,7 @@ return [
         'inventory.view_stock',
         'inventory.view_ledger',
         'inventory.view_reports',
+        'inventory.view_settings',
         'inventory.view_sales',
         'inventory.view_traceability',
         'inventory.integration.view',
@@ -32,6 +33,7 @@ return [
     'permission_features' => [
         'inventory.view_reports' => 'inventory.reports',
         'inventory.export_reports' => 'inventory.report_exports',
+        'inventory.view_settings' => 'inventory.advanced_settings',
         'inventory.manage_settings' => 'inventory.advanced_settings',
         'inventory.integration.view' => 'inventory.solabooks_integration',
         'inventory.integration.manage' => 'inventory.solabooks_integration',
