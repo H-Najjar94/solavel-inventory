@@ -62,12 +62,16 @@ class SyncEventsController extends ApiController
             $version = substr(sha1(json_encode($projects, JSON_UNESCAPED_SLASHES) ?: ''), 0, 16);
         }
 
-        $syncedAt = now('UTC');
+        // App-local time (Asia/Amman), matching finance/hr/projects. Writing
+        // these in UTC left SolaStock's snapshot rows a constant 3h behind its
+        // siblings for the same push, so cross-app freshness checks read them
+        // as permanently stale.
+        $syncedAt = now();
         if (! empty($payload['computed_at'])) {
             try {
-                $syncedAt = Carbon::parse((string) $payload['computed_at'])->utc();
+                $syncedAt = Carbon::parse((string) $payload['computed_at'])->setTimezone(config('app.timezone'));
             } catch (\Throwable) {
-                $syncedAt = now('UTC');
+                $syncedAt = now();
             }
         }
 
