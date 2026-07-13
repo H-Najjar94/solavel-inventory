@@ -1,6 +1,9 @@
 <?php
 
 return [
+    // Production provisioning is exclusively owned by Central's external
+    // canonical orchestrator; the Inventory runtime validates existing schema.
+    'external_orchestrator_only' => (bool) env('TENANT_EXTERNAL_ORCHESTRATOR_ONLY', false),
     /*
     |--------------------------------------------------------------------------
     | SolaStock Tenancy (database-per-tenant) — mirrors solavel-finance
