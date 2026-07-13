@@ -5,6 +5,7 @@ namespace App\Services\Tenancy;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -53,6 +54,15 @@ class SecureTenantProvisioner
         }
         if ($this->isForbidden($db)) {
             throw new RuntimeException("Refusing to provision forbidden database '{$db}'.");
+        }
+
+        if ((bool) config('tenancy.external_orchestrator_only', false)) {
+            if (DB::connection('tenant')->getDatabaseName() !== $db
+                || ! Schema::connection('tenant')->hasTable('stock_ledger')) {
+                throw new RuntimeException('Tenant is not ready; run the external canonical orchestrator.');
+            }
+
+            return ['database' => $db, 'created' => false, 'migrated' => false, 'connection' => 'tenant'];
         }
 
         // 1. Create the shared DB if missing (elevated connection). This is
