@@ -15,5 +15,6 @@ class ExternalTenantOrchestratorPolicyTest extends TestCase
 
         $this->assertStringContainsString('TENANT_EXTERNAL_ORCHESTRATOR_ONLY', file_get_contents($root.'/config/tenancy.php'));
         $this->assertLessThan(strpos($source, 'ensureDatabase($db)'), strpos($source, "config('tenancy.external_orchestrator_only'"));
+        $this->assertStringNotContainsString("env('TENANT_DB_ADMIN_USER', env('DB_USERNAME'", file_get_contents($root.'/config/database.php'));
     }
 }
