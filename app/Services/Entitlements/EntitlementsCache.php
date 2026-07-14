@@ -18,21 +18,39 @@ class EntitlementsCache
     public const REVISION_KEY = '_revision';
 
     /* ---------------------------------------------------------------------
-     * Verification states. The gate MUST distinguish these — collapsing them
-     * into one boolean is what locked a paid Premium customer out of a feature
-     * they owned when a push failed and was never retried.
+     * DELIVERY-HEALTH states. THESE DO NOT GATE ACCESS.
+     *
+     * They describe OUR pipeline — "how long since central last reached us?" —
+     * and they exist to drive alerts, dashboards, retries and self-healing pulls.
+     * They must never be read as a statement about the customer's subscription.
+     *
+     * Paid access is bounded by exactly one thing, the authoritative paid-through
+     * date `access_until`. See EntitlementAccessDecision, which does not consult
+     * age anywhere. If you find yourself about to deny a customer because one of
+     * the constants below is set, stop: that is the bug this model was written to
+     * remove. A snapshot pushed five weeks ago still knows precisely when the
+     * customer has paid through.
+     *
+     * (STATE_MISSING is the one exception, and it is not an age signal: it means
+     * no snapshot has EVER arrived, so we know nothing and fail closed on paid
+     * features. That is absence of information, not staleness of information.)
      * ------------------------------------------------------------------- */
 
-    /** Never received a verified snapshot. Fail CLOSED — we know nothing. */
+    /** Never received a snapshot at all. Fail CLOSED — we know nothing. */
     public const STATE_MISSING = 'missing';
 
-    /** Snapshot is fresh and authoritative. */
+    /** Snapshot is fresh. */
     public const STATE_VERIFIED = 'verified';
 
-    /** Refresh is overdue. Last-known-good is served; the infra failure is alerted. */
+    /** Refresh is overdue — WARN. Access is unaffected. */
     public const STATE_GRACE = 'grace';
 
-    /** Grace exhausted. Restrict, and say WHY — this is an infra failure, not a plan limit. */
+    /**
+     * Refresh is badly overdue — page someone. Access is STILL unaffected.
+     *
+     * Historically this restricted the tenant to "safe mode". It no longer does,
+     * and the name is kept only so existing dashboards/log queries keep matching.
+     */
     public const STATE_GRACE_EXPIRED = 'grace_expired';
 
     public function storeProjectSnapshot(
@@ -413,9 +431,8 @@ class EntitlementsCache
         $state = $verification['state'];
 
         // `valid_until` is central's advisory TTL (pushed_at + 4h). It marks the
-        // snapshot unverified, but on its own it must NEVER restrict a paid
-        // customer — that was the lockout. Restriction happens only when GRACE is
-        // exhausted.
+        // snapshot stale for REPORTING. It restricts nobody — nor does any other
+        // freshness signal below.
         $stale = $validUntil ? $validUntil->lte(EntitlementClock::now()) : false;
         if ($stale && $state === self::STATE_VERIFIED) {
             $state = self::STATE_GRACE;
@@ -445,8 +462,9 @@ class EntitlementsCache
             'age_minutes' => $verification['age_minutes'],
             'verification_state' => $state,
             'stale' => $stale,
-            // TRUE only when grace is exhausted. This is the ONLY freshness condition
-            // under which a snapshot may restrict a feature the customer owns.
+            // DIAGNOSTIC ONLY. This used to be the flag the gate denied on; it is
+            // now read by nothing that makes an access decision. Retained so admin
+            // views and log queries that already surface it keep working.
             'beyond_max_stale' => $state === self::STATE_GRACE_EXPIRED,
             'freshness' => match ($state) {
                 self::STATE_GRACE_EXPIRED => 'entitlement_verification_stale',

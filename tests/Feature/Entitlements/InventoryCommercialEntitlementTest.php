@@ -80,15 +80,25 @@ class InventoryCommercialEntitlementTest extends TestCase
         $this->assertSame('snapshot_stale', $decision['reason_code']);
     }
 
+    /**
+     * REWRITTEN — this test used to be `beyond_maximum_stale_enters_restricted_safe_mode`
+     * and asserted the exact opposite of what it asserts now.
+     *
+     * It encoded the OLD contract: once a snapshot aged past 24h + 72h of grace,
+     * SolaStock dropped the tenant into "restricted safe mode" and denied every
+     * write with `entitlement_verification_stale`.
+     *
+     * That contract was wrong. `beyond_max_stale` says our PUSH PIPELINE has been
+     * broken for four days; it says nothing whatsoever about whether the customer
+     * has paid. A paying Premium tenant was being downgraded because of OUR outage.
+     *
+     * The new contract: snapshot age alerts us and restricts NOBODY. Paid access is
+     * bounded only by `access_until`. This test now pins that down — the same
+     * ancient snapshot, and every permission it granted before is still granted.
+     */
     #[Test]
-    public function beyond_maximum_stale_enters_restricted_safe_mode(): void
+    public function beyond_maximum_stale_restricts_nothing(): void
     {
-        config()->set('inventory_entitlements.restricted_safe_permissions', array_values(array_unique([
-            ...config('inventory_entitlements.restricted_safe_permissions', []),
-            'inventory.integration.view',
-            'inventory.view_settings',
-        ])));
-
         $service = $this->service([
             'effective_tier' => 'premium',
             'access_mode' => 'full',
@@ -96,29 +106,39 @@ class InventoryCommercialEntitlementTest extends TestCase
             'allowed_features' => ['inventory.sales_fulfillment'],
             '_snapshot' => [
                 'stale' => true,
+                // Four days without a successful push. Under the old model this
+                // single flag denied every write below.
                 'beyond_max_stale' => true,
+                'verification_state' => EntitlementsCache::STATE_GRACE_EXPIRED,
             ],
         ]);
 
-        $read = $service->checkPermission('inventory.view_stock');
-        $integrationStatus = $service->checkPermission('inventory.integration.view');
-        $settingsView = $service->checkPermission('inventory.view_settings');
-        $write = $service->checkPermission('inventory.manage_shipments');
-        $integrationRetry = $service->checkPermission('inventory.integration.retry');
-        $settingsWrite = $service->checkPermission('inventory.manage_settings');
+        $permissions = [
+            'inventory.view_stock',            // free
+            'inventory.integration.view',      // gated: solabooks_integration
+            'inventory.view_settings',         // gated: advanced_settings
+            'inventory.manage_shipments',      // gated: sales_fulfillment (WRITE)
+            'inventory.integration.retry',     // gated: solabooks_integration (WRITE)
+            'inventory.manage_settings',       // gated: advanced_settings (WRITE)
+        ];
 
-        $this->assertTrue($read['allowed'], 'read-only stock view remains safe in restricted mode');
-        $this->assertSame('restricted_safe_mode', $read['access_mode']);
-        $this->assertTrue($integrationStatus['allowed'], 'read-only SolaBooks status remains safe in restricted mode');
-        $this->assertSame('restricted_safe_mode', $integrationStatus['access_mode']);
-        $this->assertTrue($settingsView['allowed'], 'read-only settings view remains safe in restricted mode');
-        $this->assertSame('restricted_safe_mode', $settingsView['access_mode']);
-        $this->assertFalse($write['allowed'], 'stock mutation remains blocked in restricted mode');
-        $this->assertSame('entitlement_verification_stale', $write['reason_code']);
-        $this->assertFalse($integrationRetry['allowed'], 'SolaBooks delivery retry remains blocked in restricted mode');
-        $this->assertSame('entitlement_verification_stale', $integrationRetry['reason_code']);
-        $this->assertFalse($settingsWrite['allowed'], 'settings mutation remains blocked in restricted mode');
-        $this->assertSame('entitlement_verification_stale', $settingsWrite['reason_code']);
+        foreach ($permissions as $permission) {
+            $decision = $service->checkPermission($permission);
+
+            $this->assertTrue(
+                $decision['allowed'],
+                "{$permission} must NOT be denied because our snapshot is old."
+            );
+            $this->assertSame(200, $decision['status']);
+
+            // No more `restricted_safe_mode`: the snapshot's own access mode stands.
+            $this->assertSame('full', $decision['access_mode']);
+
+            // Staleness is still SURFACED — the caller may want to show a banner —
+            // but it labels an ALLOWED decision, it is never a denial.
+            $this->assertSame('snapshot_stale', $decision['reason_code']);
+            $this->assertFalse($service->isInfrastructureDenial($decision['reason_code']));
+        }
     }
 
     #[Test]
