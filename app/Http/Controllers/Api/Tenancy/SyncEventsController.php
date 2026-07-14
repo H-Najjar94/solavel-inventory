@@ -4,18 +4,24 @@ namespace App\Http\Controllers\Api\Tenancy;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Services\Entitlements\EntitlementClock;
+use App\Services\Entitlements\EntitlementSigner;
 use App\Services\Entitlements\EntitlementsCache;
 use App\Services\Tenancy\TenantManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class SyncEventsController extends ApiController
 {
+    private EntitlementSigner $signer;
+
     public function __construct(
         private TenantManager $tenants,
         private EntitlementsCache $entitlements,
+        ?EntitlementSigner $signer = null,
     ) {
+        $this->signer = $signer ?? new EntitlementSigner;
     }
 
     public function __invoke(Request $request): JsonResponse
@@ -50,6 +56,21 @@ class SyncEventsController extends ApiController
                 'code' => 'sync_payload_checksum_invalid',
                 'status' => 'rejected',
             ], 422);
+        }
+
+        // SIGNATURE + TENANT IDENTITY.
+        //
+        // The transport HMAC (VerifySolavelSyncSignature) only proves "central sent
+        // this over the wire". It says nothing once the payload is at rest in
+        // `tenant_entitlements_snapshots` — and that row now grants paid access for
+        // WEEKS without a refresh, which makes it worth forging.
+        //
+        // So the entitlement carries its own signature, over its own canonical
+        // bytes, bound to the tenant it was issued for. A failure REJECTS the
+        // incoming entitlement and leaves the last valid one exactly where it is:
+        // we never overwrite good state with unverifiable state.
+        if (($rejection = $this->verifyEntitlement($payload, $clientId)) !== null) {
+            return $rejection;
         }
 
         $projects = (array) ($payload['projects'] ?? []);
@@ -119,6 +140,87 @@ class SyncEventsController extends ApiController
             'database' => $database,
             'snapshots_stored' => $stored,
         ]);
+    }
+
+    /**
+     * Verify the entitlement's own signature and the tenant it was issued for.
+     *
+     * Returns null when the payload may be applied, or the 422 rejection response
+     * when it may not. Rejecting means the PREVIOUS, valid entitlement stays in
+     * place untouched — an unverifiable entitlement must never be able to downgrade
+     * (or upgrade) a customer.
+     */
+    private function verifyEntitlement(array $payload, int $clientId): ?JsonResponse
+    {
+        $signed = $this->signer->isSigned($payload);
+        $requireSignature = (bool) config('entitlements.signing.require_signature', false);
+
+        // Signed with a key we do not hold. We cannot check it — which is NOT the
+        // same as it being forged. Rejecting here would freeze every snapshot the
+        // moment central rotated or introduced a key, so accept and shout instead.
+        if ($signed && ! $this->signer->canVerify($payload)) {
+            Log::error('Entitlement signed with an unknown key_id — accepted UNVERIFIED', [
+                'client_id' => $clientId,
+                'key_id' => $payload['key_id'] ?? null,
+                'alert' => 'entitlement_signing_key_unknown',
+            ]);
+
+            return $requireSignature
+                ? $this->rejectEntitlement('entitlement_signature_invalid', 'Unknown signing key and a signature is required.')
+                : null;
+        }
+
+        if ($signed) {
+            if (! $this->signer->verify($payload)) {
+                Log::critical('Entitlement signature INVALID — rejected, previous entitlement retained', [
+                    'client_id' => $clientId,
+                    'key_id' => $payload['key_id'] ?? null,
+                    'revision' => $payload['revision'] ?? null,
+                    'alert' => 'entitlement_signature_invalid',
+                ]);
+
+                return $this->rejectEntitlement('entitlement_signature_invalid', 'Entitlement signature did not verify.');
+            }
+
+            // Bind the entitlement to THIS tenant: one issued for another client must
+            // not be replayable into this one, however valid its signature is.
+            $signedFor = (int) ($payload['client_id'] ?? 0);
+
+            if ($signedFor !== $clientId) {
+                Log::critical('Entitlement issued for a DIFFERENT client — rejected, previous entitlement retained', [
+                    'received_for' => $clientId,
+                    'signed_for' => $signedFor,
+                    'alert' => 'entitlement_tenant_mismatch',
+                ]);
+
+                return $this->rejectEntitlement('entitlement_tenant_mismatch', 'Entitlement client_id mismatch.');
+            }
+
+            return null;
+        }
+
+        // Unsigned. During rollout this is a pre-signing snapshot, not a forgery —
+        // accept it and flag it. Once every app is signing, flip
+        // ENTITLEMENT_REQUIRE_SIGNATURE on and this becomes a hard rejection.
+        if ($requireSignature) {
+            Log::critical('Unsigned entitlement rejected (signature required)', [
+                'client_id' => $clientId,
+                'alert' => 'entitlement_signature_missing',
+            ]);
+
+            return $this->rejectEntitlement('entitlement_signature_missing', 'Entitlement is not signed.');
+        }
+
+        return null;
+    }
+
+    private function rejectEntitlement(string $code, string $message): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'code' => $code,
+            'status' => 'rejected',
+        ], 422);
     }
 
     private function normalizeEnvelope(array $input): array

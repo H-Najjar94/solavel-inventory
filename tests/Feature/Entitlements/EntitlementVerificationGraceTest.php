@@ -14,14 +14,22 @@ use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
- * The entitlement verification state machine for SolaStock.
+ * The entitlement DELIVERY-HEALTH state machine for SolaStock.
  *
  * Regression cover for the July 2026 incident: a paying Premium customer was
  * denied a feature they owned because ONE central push failed, nothing retried
  * it, and 24h later the gate FAILED CLOSED.
  *
+ * The first fix added a 72h "grace" window — which only moved the lockout from
+ * hour 24 to hour 96. The real fix is that snapshot age may not deny AT ALL: the
+ * customer keeps what they are entitled to until `access_until`, the authoritative
+ * paid-through date. See EntitlementAccessDecision and PaidThroughAccessTest.
+ *
+ * Two tests in this file (marked REWRITTEN) used to assert denial once grace
+ * expired. They encoded the old contract and now assert its inverse.
+ *
  * The contract pinned down here:
- *   - an INFRASTRUCTURE failure must not revoke a paid feature (grace), and
+ *   - an INFRASTRUCTURE failure must NEVER revoke a paid feature — at any age, and
  *   - a real de-entitlement must still be enforced immediately (no hole), and
  *   - SolaStock's live FUTURE-DATED rows (d0ea747 wrote Asia/Amman wall clock into
  *     a UTC column) must not freeze the tenant once correct UTC pushes arrive.
@@ -58,7 +66,8 @@ class EntitlementVerificationGraceTest extends TestCase
         $this->originalTimezone = date_default_timezone_get();
 
         Config::set('cache.default', 'array');
-        // 24h to unverified, then 72h of grace before anyone is restricted.
+        // 24h to "unverified", then 72h to "badly unhealthy". Both are ALERTING
+        // thresholds now — neither restricts anyone.
         Config::set('entitlements.stale_after_minutes', 1440);
         Config::set('entitlements.grace_minutes', 4320);
 
@@ -167,35 +176,69 @@ class EntitlementVerificationGraceTest extends TestCase
         $this->assertFalse($decision['snapshot']['beyond_max_stale']);
     }
 
-    public function test_access_is_restricted_once_the_configured_grace_expires(): void
+    /**
+     * REWRITTEN — this was `test_access_is_restricted_once_the_configured_grace_expires`
+     * and it asserted the exact opposite of what it asserts now.
+     *
+     * It encoded the OLD contract: past 24h + 72h, the gate denied writes with
+     * `entitlement_verification_stale` and dropped the tenant into restricted safe
+     * mode. But "grace expired" only ever meant OUR push pipeline had been down for
+     * four days. It is a statement about our infrastructure, not about whether the
+     * customer paid — and turning it into a denial is precisely the July incident
+     * this file was written to prevent, merely deferred by 72 hours.
+     *
+     * The new contract: age NEVER denies. It is reported and alerted on, and the
+     * customer keeps everything they are entitled to until `access_until`.
+     */
+    public function test_expired_grace_no_longer_restricts_anyone(): void
     {
         $this->freeze('2026-07-11 09:00:00');
 
-        // 24h stale boundary + 72h grace = 96h. Pushed 97h ago ⇒ grace exhausted.
+        // 24h stale boundary + 72h grace = 96h. Pushed 97h ago ⇒ "grace exhausted".
         $this->storeSnapshot(pushedAt: '2026-07-07 08:00:00');
 
         $gate = $this->gate();
         $write = $gate->checkPermission(self::PAID_PERMISSION);
         $read = $gate->checkPermission('inventory.view_stock');
 
-        $this->assertFalse($write['allowed']);
-        $this->assertSame('entitlement_verification_stale', $write['reason_code']);
-        $this->assertSame('restricted_safe_mode', $write['access_mode']);
+        // The snapshot is REPORTED as badly unhealthy…
         $this->assertSame(EntitlementsCache::STATE_GRACE_EXPIRED, $write['snapshot']['verification_state']);
-        $this->assertTrue($gate->isInfrastructureDenial($write['reason_code']));
+        $this->assertTrue($write['snapshot']['beyond_max_stale']);
 
-        $this->assertTrue($read['allowed'], 'read-only stock view stays safe in restricted mode.');
+        // …and it restricts nobody. The customer's plan never changed; our pipeline
+        // broke, and that is ours to fix.
+        $this->assertTrue($write['allowed'], 'a four-day-old snapshot must not revoke a paid write.');
+        $this->assertTrue($read['allowed']);
+        $this->assertSame('snapshot_stale', $write['reason_code']);
+        $this->assertNotSame('restricted_safe_mode', $write['access_mode']);
     }
 
-    public function test_grace_window_is_configurable(): void
+    /**
+     * REWRITTEN — was `test_grace_window_is_configurable`, which asserted that
+     * shrinking `grace_minutes` DENIED a paying customer sooner.
+     *
+     * `grace_minutes` is now an ALERTING threshold: it tunes how quickly we call our
+     * own delivery pipeline unhealthy. It is no longer an access boundary, so
+     * shrinking it must change the reported HEALTH and nothing else.
+     */
+    public function test_grace_window_configures_health_reporting_not_access(): void
     {
-        Config::set('entitlements.grace_minutes', 60); // 1h of grace only
+        Config::set('entitlements.grace_minutes', 60); // alert sooner
         $this->freeze('2026-07-11 09:00:00');
 
-        // 48h old: inside the DEFAULT 72h grace, but outside this 1h grace.
+        // 48h old: inside the DEFAULT 72h alerting window, outside this 1h one.
         $this->storeSnapshot(pushedAt: '2026-07-09 09:00:00');
 
-        $this->assertFalse($this->gate()->checkPermission(self::PAID_PERMISSION)['allowed']);
+        $decision = $this->gate()->checkPermission(self::PAID_PERMISSION);
+
+        // The health state flips…
+        $this->assertSame(EntitlementsCache::STATE_GRACE_EXPIRED, $decision['snapshot']['verification_state']);
+
+        // …and access does not.
+        $this->assertTrue(
+            $decision['allowed'],
+            'tightening an ALERTING threshold must never deny a paying customer.'
+        );
     }
 
     public function test_legacy_max_stale_minutes_key_still_drives_the_stale_after_boundary(): void
