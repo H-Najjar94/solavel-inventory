@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api\Tenancy;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Services\Entitlements\EntitlementClock;
 use App\Services\Entitlements\EntitlementsCache;
 use App\Services\Tenancy\TenantManager;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -62,20 +62,13 @@ class SyncEventsController extends ApiController
             $version = substr(sha1(json_encode($projects, JSON_UNESCAPED_SLASHES) ?: ''), 0, 16);
         }
 
-        // App-local time (Asia/Amman), matching finance/hr/projects. Writing
-        // these in UTC left SolaStock's snapshot rows a constant 3h behind its
-        // siblings for the same push, so cross-app freshness checks read them
-        // as permanently stale.
-        $syncedAt = now();
-        if (! empty($payload['computed_at'])) {
-            try {
-                $syncedAt = Carbon::parse((string) $payload['computed_at'])->setTimezone(config('app.timezone'));
-            } catch (\Throwable) {
-                $syncedAt = now();
-            }
-        }
+        // Absolute UTC, always. The previous code coerced central's UTC instants
+        // into Asia/Amman wall clock before writing them to a UTC column, which put
+        // every live SolaStock row three hours in the FUTURE. See EntitlementClock.
+        $syncedAt = EntitlementClock::parse($payload['computed_at'] ?? null) ?? EntitlementClock::now();
 
         $metadata = array_intersect_key($payload, array_flip([
+            'revision',
             'evaluated_at',
             'pushed_at',
             'valid_until',
@@ -83,6 +76,32 @@ class SyncEventsController extends ApiController
             'source_version',
             'state_hash',
         ]));
+
+        // Normalise the ordering timestamps to absolute UTC before they are compared
+        // against anything already stored.
+        foreach (['evaluated_at', 'pushed_at', 'valid_until'] as $key) {
+            if (array_key_exists($key, $metadata)) {
+                $metadata[$key] = EntitlementClock::format(EntitlementClock::parse($metadata[$key]));
+            }
+        }
+
+        // PRIMARY ordering key. Central is expected to send a monotonic `revision`,
+        // but the pushers have not all shipped it yet — and SolaStock cannot wait,
+        // because its stored rows are future-dated: a corrected UTC snapshot looks
+        // "older" than them and would be rejected FOREVER, freezing the tenant.
+        //
+        // Deriving the revision from the push instant (epoch millis) is monotonic by
+        // construction and carries no new information, so ordering between two
+        // revisioned snapshots is unchanged. What it buys is the CUTOVER: a snapshot
+        // WITH a revision always beats a stored row WITHOUT one, which is exactly how
+        // today's future-dated legacy rows get replaced instead of freezing.
+        if (! isset($metadata['revision']) || ! is_numeric($metadata['revision'])) {
+            $orderingInstant = EntitlementClock::parse($metadata['pushed_at'] ?? null)
+                ?? EntitlementClock::parse($metadata['evaluated_at'] ?? null)
+                ?? $syncedAt;
+
+            $metadata['revision'] = $orderingInstant->getTimestampMs();
+        }
 
         $stored = 0;
         foreach ($projects as $projectSlug => $projectPayload) {
