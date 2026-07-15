@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
 
 class WarehouseController extends ApiController
 {
+    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits;
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
@@ -76,6 +78,11 @@ class WarehouseController extends ApiController
 
     public function store(StoreWarehouseRequest $request): JsonResponse
     {
+        // Grandfathered warehouse ceiling: block only new warehouses past the
+        // plan limit. Existing warehouses stay fully usable — clients 2 & 18 are
+        // already over the Free cap of 1 and must not be locked out of theirs.
+        $this->enforceLimit('stock.max_warehouses', Warehouse::query()->count());
+
         return $this->success(Warehouse::create($request->validated())->fresh(), 201);
     }
 

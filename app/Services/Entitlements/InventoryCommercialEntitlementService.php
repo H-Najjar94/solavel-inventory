@@ -51,6 +51,45 @@ class InventoryCommercialEntitlementService
     }
 
     /**
+     * Check a stock.* FEATURE key directly (not via a permission). Used by the
+     * route-level feature gate for paid surfaces that share a base/free
+     * permission and therefore cannot be gated through the permission map.
+     *
+     * Same decision engine, same paid-through + fail-closed semantics as
+     * checkPermission — only the entry point differs (feature vs permission).
+     *
+     * @return array{allowed:bool,status:int,reason_code:string,access_mode:string,tier:?string,feature:?string,snapshot:array<string,mixed>|null}
+     */
+    public function checkFeature(string $featureKey): array
+    {
+        $clientId = $this->cache->currentClientId();
+        $snapshot = $clientId ? $this->cache->getProjectSnapshot($clientId) : null;
+        $meta = $snapshot !== null ? (array) ($snapshot['_snapshot'] ?? []) : null;
+
+        $this->alertIfUnhealthy($meta);
+
+        $decision = $this->decisions->decide($snapshot, $featureKey);
+
+        // No snapshot at all: fail closed on the paid feature (a feature-gated
+        // route is never a free permission).
+        if ($decision['reason'] === EntitlementAccessDecision::DENY_NO_ENTITLEMENT) {
+            return $this->decision(false, 'entitlement_service_unavailable', 'limited', null, $featureKey, null);
+        }
+
+        $accessMode = (string) ($snapshot['access_mode'] ?? 'full');
+
+        if ($decision['allowed']) {
+            return $this->decision(true, $this->grantReason($snapshot, $meta), $accessMode, $snapshot, $featureKey, $meta);
+        }
+
+        if ($this->decisions->isSubscriptionDenial($decision['reason'])) {
+            return $this->decision(false, $decision['reason'], 'blocked', $snapshot, $featureKey, $meta);
+        }
+
+        return $this->decision(false, 'feature_not_in_plan', $accessMode, $snapshot, $featureKey, $meta);
+    }
+
+    /**
      * @return array{allowed:bool,status:int,reason_code:string,access_mode:string,tier:?string,feature:?string,snapshot:array<string,mixed>|null}
      */
     public function checkPermission(string $permission): array

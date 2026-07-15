@@ -40,7 +40,12 @@ Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
         ->name('api.tenancy.sync.events');
 });
 
-Route::prefix('v1')->middleware(['inv.tenant'])->group(function () {
+// 'feature' (bare) derives each route's required stock.* feature from its route
+// name via config('inventory_entitlements.route_features') and denies with the
+// commercial envelope when the plan excludes it. INERT until
+// SOLASTOCK_FEATURE_ENFORCEMENT=true. Runs alongside perm:, never replacing role
+// auth; routes with no mapped feature pass straight through.
+Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
 
     // Client-side SPA navigation tracking: forwards one page_view per
     // react-router move to the central event log (source_app=inventory) so
