@@ -18,9 +18,9 @@ class TenancySafetyGuardTest extends TestCase
     #[Test]
     public function it_accepts_the_three_reserved_solastock_databases(): void
     {
-        TenancySafetyGuard::assertSafeTestDatabase('tenant_990010'); // tenant A
-        TenancySafetyGuard::assertSafeTestDatabase('tenant_990003'); // tenant B
-        TenancySafetyGuard::assertSafeTestDatabase('tenant_990004'); // central
+        TenancySafetyGuard::assertSafeTestDatabase('solastock_test_a');
+        TenancySafetyGuard::assertSafeTestDatabase('solastock_test_b');
+        TenancySafetyGuard::assertSafeTestDatabase('solastock_test_central');
         $this->addToAssertionCount(1);
     }
 
@@ -107,8 +107,8 @@ class TenancySafetyGuardTest extends TestCase
     #[Test]
     public function it_accepts_valid_resolved_environment(): void
     {
-        config(['database.connections.tenant.database' => 'tenant_990010']);
-        config(['database.connections.mysql.database' => 'tenant_990004']);
+        config(['database.connections.tenant.database' => 'solastock_test_a']);
+        config(['database.connections.mysql.database' => 'solastock_test_central']);
 
         TenancySafetyGuard::assertSafeTestEnvironment();
         $this->addToAssertionCount(1);
@@ -117,8 +117,8 @@ class TenancySafetyGuardTest extends TestCase
     #[Test]
     public function it_rejects_resolved_environment_when_central_equals_tenant(): void
     {
-        config(['database.connections.tenant.database' => 'tenant_990010']);
-        config(['database.connections.mysql.database' => 'tenant_990010']);
+        config(['database.connections.tenant.database' => 'solastock_test_a']);
+        config(['database.connections.mysql.database' => 'solastock_test_a']);
 
         $this->expectException(RuntimeException::class);
         TenancySafetyGuard::assertSafeTestEnvironment();

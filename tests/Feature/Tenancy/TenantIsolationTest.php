@@ -11,11 +11,7 @@ use Tests\TestCase;
 use Tests\Traits\TenantAware;
 
 /**
- * Real MySQL tenancy isolation using the FIXED reserved databases:
- *   tenant A = tenant_990010, tenant B = tenant_990003, central = tenant_990004.
- * No databases are created or dropped; each test rolls back its transaction.
- *
- * Requires the reserved DBs to exist and be migrated (see docs/TESTING_TENANCY.md).
+ * Real MySQL isolation using disposable solastock_test_* schemas.
  */
 class TenantIsolationTest extends TestCase
 {
@@ -25,10 +21,10 @@ class TenantIsolationTest extends TestCase
     public function tenant_a_and_b_use_distinct_reserved_databases(): void
     {
         $dbA = $this->useTenantA();
-        $this->assertSame('tenant_990010', $dbA);
+        $this->assertSame('solastock_test_a', $dbA);
 
         $dbB = $this->useTenantB();
-        $this->assertSame('tenant_990003', $dbB);
+        $this->assertSame('solastock_test_b', $dbB);
 
         $this->assertNotSame($dbA, $dbB);
     }
@@ -77,8 +73,8 @@ class TenantIsolationTest extends TestCase
         $central = config('database.connections.mysql.database');
         $tenant = config('database.connections.tenant.database');
 
-        $this->assertSame('tenant_990004', $central);
-        $this->assertSame('tenant_990010', $tenant);
+        $this->assertSame('solastock_test_central', $central);
+        $this->assertSame('solastock_test_a', $tenant);
         $this->assertNotSame($central, $tenant);
     }
 
@@ -87,15 +83,15 @@ class TenantIsolationTest extends TestCase
     {
         $this->useTenantA();
 
-        // Inventory model → tenant connection → tenant_990010.
+        // Inventory model → tenant connection → disposable tenant A.
         $item = new Item;
         $this->assertSame('tenant', $item->getConnectionName());
-        $this->assertSame('tenant_990010', $item->getConnection()->getDatabaseName());
+        $this->assertSame('solastock_test_a', $item->getConnection()->getDatabaseName());
 
-        // Central/landlord model → mysql connection → tenant_990004.
+        // Central/landlord model → mysql connection → disposable central schema.
         $org = new \App\Models\Landlord\Organization;
         $this->assertSame('mysql', $org->getConnectionName());
-        $this->assertSame('tenant_990004', $org->getConnection()->getDatabaseName());
+        $this->assertSame('solastock_test_central', $org->getConnection()->getDatabaseName());
     }
 
     #[Test]

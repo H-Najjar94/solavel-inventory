@@ -19,11 +19,7 @@ use Illuminate\Support\Facades\DB;
  * States (one of):
  *   no_organization      — authenticated but no client/org in context
  *   no_access            — org present but user lacks any inventory permission
- *   tenant_missing       — shared tenant DB does not exist
- *   tenant_unmigrated    — DB exists but SolaStock tables not migrated yet
- *   schema_failed        — DB exists, but required SolaStock schema audit failed
- *   needs_inventory_tenant — alias surfaced to the UI when setup is required
- *   live_ready           — real org + migrated SolaStock tables → real data
+ *   live_ready           — real org + centrally enabled SolaStock access
  *   demo_preview         — operator-selected safe demo tenant
  *   (none)               — no live org and no demo → read-only sample preview
  */
@@ -33,7 +29,6 @@ class LiveTenantResolver
         private TenantResolver $demoResolver,
         private TenantManager $tenants,
         private InventoryPermissionService $permissions,
-        private TenantSchemaAuditService $schemaAudit,
     ) {}
 
     /** Client id (central organization/client) from the SSO-seeded session. */
@@ -323,23 +318,11 @@ class LiveTenantResolver
                 return $this->result('needs_activation', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'app_not_enabled', $clientId);
             }
 
-            $probe = $this->probeTenant($db);
-            if ($probe['state'] === 'unreachable') {
-                return $this->result('tenant_unreachable', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'db_unreachable', $clientId);
-            }
-            if ($probe['state'] === 'missing') {
-                return $this->result('tenant_missing', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'tenant_missing', $clientId);
-            }
-            if ($probe['state'] === 'unmigrated') {
-                return $this->result('tenant_unmigrated', 'live', 'Setup required', $orgId, $db, $authenticated, $canAccess, 'migrations_missing', $clientId);
-            }
-            if ($probe['state'] === 'schema_failed') {
-                return $this->result('schema_failed', 'live', 'Schema audit failed', $orgId, $db, $authenticated, $canAccess, 'schema_audit_failed', $clientId, [
-                    'schema_audit' => $probe['audit'] ?? null,
-                ]);
-            }
-
-            // Ready: real org + migrated SolaStock tables.
+            // Central enablement is the customer-facing launch contract. Schema
+            // diagnostics remain available to administrators, but never become a
+            // second activation gate. The old information_schema probe used the
+            // restricted landlord connection and falsely blocked healthy tenants
+            // after database privilege separation.
             return $this->result('live_ready', 'live', 'Live tenant', $orgId, $db, $authenticated, $canAccess, null, $clientId);
         }
 
@@ -386,39 +369,6 @@ class LiveTenantResolver
             true,
             $readiness['available'] ? null : $readiness['reason'],
         );
-    }
-
-    /** @return array{state:'ready'|'missing'|'unmigrated'|'unreachable'|'schema_failed', audit?:array} */
-    private function probeTenant(string $db): array
-    {
-        try {
-            $exists = collect(DB::connection('mysql')->select(
-                'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [$db]
-            ))->isNotEmpty();
-        } catch (\Throwable $e) {
-            return ['state' => 'unreachable'];
-        }
-        if (! $exists) {
-            return ['state' => 'missing'];
-        }
-        try {
-            $tables = DB::connection('mysql')->select(
-                'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
-                [$db, 'stock_ledger']
-            );
-
-            if (count($tables) === 0) {
-                return ['state' => 'unmigrated'];
-            }
-
-            $audit = $this->schemaAudit->auditDatabase($db, 'mysql');
-
-            return ($audit['ok'] ?? false)
-                ? ['state' => 'ready', 'audit' => $audit]
-                : ['state' => 'schema_failed', 'audit' => $audit];
-        } catch (\Throwable $e) {
-            return ['state' => 'unmigrated'];
-        }
     }
 
     private function result(string $state, string $mode, string $badge, ?int $orgId, ?string $db, bool $auth, bool $canAccess, ?string $reason = null, ?int $clientId = null, array $extra = []): array

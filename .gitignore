@@ -2,6 +2,7 @@
 .DS_Store
 .env
 .env.backup
+.env.bak-*
 .env.production
 .env.testing
 .env.*.local

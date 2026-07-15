@@ -9,7 +9,7 @@ use Tests\Support\TenantTestManager;
 /**
  * Helper for tenant-backed tests using the FIXED reserved-database model
  * (mirrors Finance's TenantAware): switch the `tenant` connection between the
- * pre-provisioned reserved DBs (tenant_990002 = A, tenant_990003 = B) and rely
+ * disposable schemas (solastock_test_a / solastock_test_b) and rely
  * on transaction rollback for cleanup. The suite never creates or drops DBs.
  */
 trait TenantAware
@@ -32,7 +32,7 @@ trait TenantAware
         return $this->tenantTestManager->useTenant(TenantTestManager::ORG_A);
     }
 
-    /** Activate reserved tenant B (tenant_990003) and begin a test transaction. */
+    /** Activate disposable tenant B and begin a test transaction. */
     protected function useTenantB(): string
     {
         $this->ensureManager();

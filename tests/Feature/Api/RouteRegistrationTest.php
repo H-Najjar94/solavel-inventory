@@ -78,7 +78,8 @@ class RouteRegistrationTest extends TestCase
     public function settings_read_route_requires_settings_permission(): void
     {
         $mw = Route::getRoutes()->getByName('api.v1.settings.show')->gatherMiddleware();
-        $this->assertContains('perm:inventory.manage_settings', $mw);
+        $this->assertContains('perm:inventory.view_settings', $mw);
+        $this->assertNotContains('perm:inventory.manage_settings', $mw);
     }
 
     #[Test]

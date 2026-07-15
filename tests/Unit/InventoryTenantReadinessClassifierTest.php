@@ -39,7 +39,7 @@ class InventoryTenantReadinessClassifierTest extends TestCase
     }
 
     #[Test]
-    public function it_blocks_disabled_stale_tenants_with_integrity_failures(): void
+    public function it_classifies_disabled_tenants_as_not_entitled(): void
     {
         $status = app(InventoryTenantReadinessClassifier::class)->classify([
             'tenant_key' => 'tenant_000008',
@@ -50,7 +50,7 @@ class InventoryTenantReadinessClassifierTest extends TestCase
             'inventory_enabled' => false,
         ]);
 
-        $this->assertSame('disabled_stale_integrity_failed', $status['final_status']);
+        $this->assertSame('not_entitled', $status['final_status']);
     }
 
     #[Test]
@@ -62,14 +62,14 @@ class InventoryTenantReadinessClassifierTest extends TestCase
             'schema_status' => 'pass',
             'integrity_status' => 'pass',
             'access_status' => 'no_safe_access_path',
-            'inventory_enabled' => false,
+            'inventory_enabled' => true,
         ]);
 
         $this->assertSame('no_safe_access_path', $status['final_status']);
     }
 
     #[Test]
-    public function it_separates_partial_schema_from_unprovisioned_schema(): void
+    public function it_marks_reachable_incomplete_schema_as_migrations_incomplete(): void
     {
         $classifier = app(InventoryTenantReadinessClassifier::class);
 
@@ -78,15 +78,37 @@ class InventoryTenantReadinessClassifierTest extends TestCase
             'db_exists' => true,
             'schema_status' => 'fail',
             'missing_tables_count' => 18,
+            'inventory_enabled' => true,
         ]);
         $empty = $classifier->classify([
             'tenant_key' => 'tenant_000019',
             'db_exists' => true,
             'schema_status' => 'fail',
             'missing_tables_count' => 22,
+            'inventory_enabled' => true,
         ]);
 
-        $this->assertSame('schema_repair_needed', $partial['final_status']);
-        $this->assertSame('provisioning_needed', $empty['final_status']);
+        $this->assertSame('migrations_incomplete', $partial['final_status']);
+        $this->assertSame('migrations_incomplete', $empty['final_status']);
+    }
+
+    #[Test]
+    public function it_distinguishes_not_entitled_from_entitled_but_not_provisioned(): void
+    {
+        $classifier = app(InventoryTenantReadinessClassifier::class);
+
+        $notEntitled = $classifier->classify([
+            'tenant_key' => 'tenant_000012',
+            'database_status' => 'missing',
+            'inventory_enabled' => false,
+        ]);
+        $notProvisioned = $classifier->classify([
+            'tenant_key' => 'tenant_000019',
+            'database_status' => 'missing',
+            'inventory_enabled' => true,
+        ]);
+
+        $this->assertSame('not_entitled', $notEntitled['final_status']);
+        $this->assertSame('entitled_not_provisioned', $notProvisioned['final_status']);
     }
 }

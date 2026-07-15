@@ -13,11 +13,9 @@ use Symfony\Component\HttpFoundation\Response;
  * Resolves the SolaStock tenant the Solavel way and switches the tenant DB.
  *
  * Precedence: LIVE central org (SSO-seeded session) → operator demo → none.
- * For a live org it shares the per-client tenant DB (tenant_{clientId}) and
- * activates ONLY when SolaStock's own tables are migrated there. A live org
- * whose SolaStock tables are missing/unmigrated returns a precise setup state
- * (HTTP 409, code 'setup_required') — it NEVER silently falls back to sample
- * data. No-org / no-access return their own clean codes.
+ * For a live org it shares the per-client tenant DB (tenant_{clientId}). Customer
+ * access follows central enablement and permissions; admin diagnostics never act
+ * as a second launch gate. No-org / no-access return their own clean codes.
  */
 class ResolveInventoryTenant
 {
