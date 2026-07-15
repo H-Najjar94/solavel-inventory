@@ -77,9 +77,26 @@ return [
         'inventory.view_reports' => 'stock.reports',
         'inventory.export_reports' => 'stock.reports',
 
-        // Batch & expiry tracking == the lot/traceability read+manage surface.
+        // Traceability module == batch/expiry tracking. One module (one controller,
+        // one nav group): lots + serials + recalls + expiry all governed by the
+        // stock.batch_expiry key (owner decision 2026-07-15, model B). view_traceability
+        // is the shared read gate; manage_lots/serials/recalls are the write gates.
         'inventory.view_traceability' => 'stock.batch_expiry',
         'inventory.manage_lots' => 'stock.batch_expiry',
+        'inventory.manage_serials' => 'stock.batch_expiry',
+        'inventory.manage_recalls' => 'stock.batch_expiry',
+
+        // Sales Fulfillment == orders → reserve → pick → pack → ship → returns.
+        // One coherent module (one "Sales / Fulfillment" nav group), governed by the
+        // new stock.sales_fulfillment key (owner decision 2026-07-15). Every write
+        // permission in the flow maps to it; view_sales is the read gate.
+        'inventory.view_sales' => 'stock.sales_fulfillment',
+        'inventory.manage_sales_orders' => 'stock.sales_fulfillment',
+        'inventory.manage_reservations' => 'stock.sales_fulfillment',
+        'inventory.manage_picking' => 'stock.sales_fulfillment',
+        'inventory.manage_packing' => 'stock.sales_fulfillment',
+        'inventory.manage_shipments' => 'stock.sales_fulfillment',
+        'inventory.manage_returns' => 'stock.sales_fulfillment',
 
         // Solavel Finance (SolaBooks) integration — the whole integration family.
         'inventory.integration.view' => 'stock.finance_integration',
@@ -89,12 +106,9 @@ return [
 
         // NOTE deliberately NOT mapped, and why:
         //  - manage_settings/view_settings: cross-cutting (units, categories,
-        //    reorder rules, roles); no single stock.* key. Left ungated.
-        //  - manage_serials / manage_recalls / the whole Sales-Fulfillment family
-        //    (view_sales, manage_sales_orders/reservations/picking/packing/
-        //    shipments/returns): REAL SolaStock domains with NO stock.* catalog
-        //    key. Cannot be gated without inventing a key (forbidden). Documented
-        //    as a catalog gap; these remain role-gated only.
+        //    reorder rules, roles); no single stock.* key. Left ungated (base).
+        //  - override_quarantine/override_expired_lot: cross-cutting post-time policy
+        //    toggles, permission-gated; base capability of the stock engine.
     ],
 
     /*
@@ -172,17 +186,21 @@ return [
     ],
 
     /*
-    | catalog_only — stock.* keys with NO enforceable code surface today. Recorded
-    | so the readiness audit reports them as intentionally un-enforced rather than
-    | as a wiring gap. (reorder_suggestions: no suggested-PO endpoint exists;
-    | stock.api: no per-tenant API-access gate — the whole v1 group is the API;
-    | stock.costing: a per-item costing_method property + read-only valuation, not
-    | a gateable module; stock.movements/stock.items: base product, ungated.)
+    | catalog_only — stock.* keys intentionally NOT route/limit-gated, each with a
+    | resolved reason (owner decision 2026-07-15). NONE is an accidental gap:
+    |  - stock.items / stock.movements: base product (model C, every tier).
+    |  - stock.reorder_alerts: dashboard alerts on view_dashboard (base, every tier).
+    |  - stock.costing: per-item costing_method property + read-only valuation, not a
+    |    gateable module (model C, every tier).
+    |  - stock.api: Enterprise-only entitlement MARKER; there is no per-tenant API gate
+    |    (the whole v1 group is the API). Enforced as a plan flag, not a route.
+    | (stock.reorder_suggestions was REMOVED here — it is now disabled in every plan
+    |  at the catalog level until a suggested-PO endpoint exists, so it is not a
+    |  catalog-only-but-sold key any more.)
     */
     'catalog_only' => [
         'stock.items',
         'stock.movements',
-        'stock.reorder_suggestions',
         'stock.reorder_alerts',
         'stock.api',
         'stock.costing',
