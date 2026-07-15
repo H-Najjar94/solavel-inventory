@@ -24,8 +24,10 @@ class InventoryCommercialEntitlementTest extends TestCase
     {
         $service = $this->service(null);
 
+        // view_items is a free/core permission; view_reports maps to the paid
+        // stock.reports feature (permission_features, rebuilt to the stock.* catalog).
         $free = $service->checkPermission('inventory.view_items');
-        $paid = $service->checkPermission('inventory.manage_shipments');
+        $paid = $service->checkPermission('inventory.view_reports');
 
         $this->assertTrue($free['allowed']);
         $this->assertSame('entitlement_service_unavailable', $free['reason_code']);
@@ -40,8 +42,8 @@ class InventoryCommercialEntitlementTest extends TestCase
             'effective_tier' => 'premium',
             'access_mode' => 'full',
             'reason_code' => 'paid_active',
-            'allowed_features' => ['inventory.sales_fulfillment'],
-        ])->checkPermission('inventory.manage_shipments');
+            'allowed_features' => ['stock.reports'],
+        ])->checkPermission('inventory.view_reports');
 
         $this->assertTrue($decision['allowed']);
         $this->assertSame('paid_active', $decision['reason_code']);
@@ -54,8 +56,8 @@ class InventoryCommercialEntitlementTest extends TestCase
             'effective_tier' => 'free',
             'access_mode' => 'free',
             'reason_code' => 'paid_expired_free_fallback',
-            'blocked_features' => ['inventory.sales_fulfillment'],
-        ])->checkPermission('inventory.manage_shipments');
+            'blocked_features' => ['stock.reports'],
+        ])->checkPermission('inventory.view_reports');
 
         $this->assertFalse($decision['allowed']);
         $this->assertSame('feature_not_in_plan', $decision['reason_code']);
@@ -69,12 +71,12 @@ class InventoryCommercialEntitlementTest extends TestCase
             'effective_tier' => 'professional',
             'access_mode' => 'full',
             'reason_code' => 'paid_active',
-            'allowed_features' => ['inventory.sales_fulfillment'],
+            'allowed_features' => ['stock.reports'],
             '_snapshot' => [
                 'stale' => true,
                 'beyond_max_stale' => false,
             ],
-        ])->checkPermission('inventory.manage_shipments');
+        ])->checkPermission('inventory.view_reports');
 
         $this->assertTrue($decision['allowed']);
         $this->assertSame('snapshot_stale', $decision['reason_code']);
@@ -103,7 +105,7 @@ class InventoryCommercialEntitlementTest extends TestCase
             'effective_tier' => 'premium',
             'access_mode' => 'full',
             'reason_code' => 'paid_active',
-            'allowed_features' => ['inventory.sales_fulfillment'],
+            'allowed_features' => ['stock.reports', 'stock.finance_integration', 'stock.batch_expiry'],
             '_snapshot' => [
                 'stale' => true,
                 // Four days without a successful push. Under the old model this
@@ -115,11 +117,11 @@ class InventoryCommercialEntitlementTest extends TestCase
 
         $permissions = [
             'inventory.view_stock',            // free
-            'inventory.integration.view',      // gated: solabooks_integration
-            'inventory.view_settings',         // gated: advanced_settings
-            'inventory.manage_shipments',      // gated: sales_fulfillment (WRITE)
-            'inventory.integration.retry',     // gated: solabooks_integration (WRITE)
-            'inventory.manage_settings',       // gated: advanced_settings (WRITE)
+            'inventory.integration.view',      // gated: stock.finance_integration
+            'inventory.view_reports',          // gated: stock.reports
+            'inventory.view_traceability',     // gated: stock.batch_expiry
+            'inventory.integration.retry',     // gated: stock.finance_integration (WRITE)
+            'inventory.manage_lots',           // gated: stock.batch_expiry (WRITE)
         ];
 
         foreach ($permissions as $permission) {

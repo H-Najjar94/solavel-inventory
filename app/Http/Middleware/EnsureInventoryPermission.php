@@ -33,6 +33,15 @@ class EnsureInventoryPermission
             abort(403, "Missing permission: {$permission}");
         }
 
+        // DARK-LAUNCH: the commercial (paid-plan) layer only denies when feature
+        // enforcement is switched on. Role/permission auth above ALWAYS runs — this
+        // flag governs the plan gate alone. Deploying the corrected stock.* feature
+        // map changes nothing for customers until SOLASTOCK_FEATURE_ENFORCEMENT is
+        // flipped, so the map can ship and be audited against real tenants first.
+        if (! (bool) config('inventory_entitlements.feature_enforcement', false)) {
+            return $next($request);
+        }
+
         $commercial = $this->entitlements->checkPermission($permission);
         if (! $commercial['allowed']) {
             if ($request->expectsJson() || $request->is('api/*')) {

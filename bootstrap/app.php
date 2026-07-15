@@ -33,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // SolaStock middleware aliases (mirrors Finance naming).
         $middleware->alias([
             'perm' => \App\Http\Middleware\EnsureInventoryPermission::class,
+            'feature' => \App\Http\Middleware\EnsureInventoryFeature::class,
             'inv.tenant' => \App\Http\Middleware\ResolveInventoryTenant::class,
             'sync.signature' => \App\Http\Middleware\VerifySolavelSyncSignature::class,
         ]);

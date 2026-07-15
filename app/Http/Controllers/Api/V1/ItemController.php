@@ -23,6 +23,8 @@ use Illuminate\Validation\Rule;
 
 class ItemController extends ApiController
 {
+    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits;
+
     /** Strip non-column / transient fields before persisting the item row. */
     private function itemAttributes(array $data): array
     {
@@ -440,6 +442,10 @@ class ItemController extends ApiController
 
     public function store(StoreItemRequest $request): JsonResponse
     {
+        // Grandfathered SKU ceiling: block only new items past the plan limit.
+        // Item is org-scoped, so count() is the active org's current SKU count.
+        $this->enforceLimit('stock.max_items', Item::query()->count());
+
         $data = $request->validated();
         $item = Item::create($this->itemAttributes($data));
 
