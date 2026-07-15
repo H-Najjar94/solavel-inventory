@@ -51,7 +51,7 @@ class EntitlementVerificationGraceTest extends TestCase
     /** A paid, feature-gated permission: not free, not restricted-safe. */
     private const PAID_PERMISSION = 'inventory.manage_shipments';
 
-    private const PAID_FEATURE = 'inventory.sales_fulfillment';
+    private const PAID_FEATURE = 'stock.sales_fulfillment';
 
     private string $originalTimezone;
 

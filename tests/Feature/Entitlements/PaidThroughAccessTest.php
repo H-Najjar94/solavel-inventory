@@ -50,7 +50,7 @@ class PaidThroughAccessTest extends TestCase
     /** A paid, feature-gated permission. */
     private const PAID_PERMISSION = 'inventory.manage_shipments';
 
-    private const PAID_FEATURE = 'inventory.sales_fulfillment';
+    private const PAID_FEATURE = 'stock.sales_fulfillment';
 
     /** A second paid feature, used to prove a downgrade is surgical. */
     private const OTHER_PERMISSION = 'inventory.view_reports';
