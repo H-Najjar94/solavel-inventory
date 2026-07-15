@@ -20,6 +20,8 @@ use RuntimeException;
  */
 class OpeningStockController extends ApiController
 {
+    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits;
+
     public function __construct(private OpeningStockService $service, private OrganizationContext $context) {}
 
     public function index(Request $request): JsonResponse
@@ -115,6 +117,12 @@ class OpeningStockController extends ApiController
         $lines = [];
         $created = 0;
 
+        // The CSV import creates new SKUs, so it must honour the same stock.max_items
+        // ceiling as ItemController::store — a bulk import is not an escape hatch past
+        // the plan limit. Count the org's existing items ONCE; the per-row guard below
+        // adds $created so the (existing + newly-imported) total is what's checked.
+        $existingItemCount = Item::query()->count();
+
         foreach ($rows as $index => $row) {
             $sku = trim((string) ($row['sku'] ?? ''));
             $name = trim((string) ($row['name'] ?? $sku));
@@ -128,6 +136,10 @@ class OpeningStockController extends ApiController
 
             $item = Item::query()->where('sku', $sku)->first();
             if (! $item) {
+                // Grandfathered ceiling: block the import at the plan limit (existing
+                // + created so far), exactly like a single create. Existing items are
+                // untouched; only NEW rows past the limit are refused (402).
+                $this->enforceLimit('stock.max_items', $existingItemCount + $created);
                 $item = Item::query()->create([
                     'organization_id' => $orgId,
                     'sku' => $sku,

@@ -3,15 +3,44 @@
 namespace App\Services\Reports;
 
 use App\Models\Tenant\InventoryScheduledReport;
+use App\Services\Entitlements\InventoryCommercialEntitlementService;
 use Illuminate\Support\Facades\Mail;
 
 class ScheduledReportRunner
 {
     public function __construct(private InventoryReportService $reports) {}
 
+    /**
+     * Does the CURRENT org's plan include stock.reports? A scheduled report is the
+     * same paid capability as the interactive report route (both gate stock.reports),
+     * so the background runner must re-check it — §5: a background job must enforce
+     * the feature. Dark-launch aware; unchanged when enforcement is off.
+     */
+    private function reportsEnabled(): bool
+    {
+        if (! (bool) config('inventory_entitlements.feature_enforcement', false)) {
+            return true;
+        }
+
+        return app(InventoryCommercialEntitlementService::class)->checkFeature('stock.reports')['allowed'];
+    }
+
     /** @return array{schedule:InventoryScheduledReport,result:array} */
     public function run(InventoryScheduledReport $schedule): array
     {
+        // A de-entitled org keeps its schedule rows but the runner stops generating
+        // and emailing — parity with losing the interactive report route. The
+        // schedule is pushed to its next slot and marked skipped; no data is deleted.
+        if (! $this->reportsEnabled()) {
+            $schedule->forceFill([
+                'last_run_at' => now(),
+                'last_status' => 'skipped_not_in_plan',
+                'next_run_at' => $this->nextRunAt($schedule->frequency),
+            ])->save();
+
+            return ['schedule' => $schedule->fresh(), 'result' => ['title' => '', 'rows' => [], 'summary' => []]];
+        }
+
         $result = $this->reports->run($schedule->report_key, ReportFilters::fromArray((array) $schedule->filters));
         $recipients = array_values(array_filter((array) $schedule->recipients));
         $status = 'generated';
