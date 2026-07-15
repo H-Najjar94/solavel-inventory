@@ -1,73 +1,69 @@
 #!/usr/bin/env bash
-#
-# rebuild-test-db.sh — migrate SolaStock's FIXED reserved test databases.
-#
-# Finance/Projects-style model: the reserved DBs are pre-provisioned (empty
-# schemas created once by an admin). This script ONLY runs migrations into them.
-# It NEVER creates or drops the databases themselves, and it refuses any name
-# outside SolaStock's three reserved databases.
-#
-#   tenant_990010 = SolaStock tenant A   (tenant/inventory migrations)
-#   tenant_990011 = SolaStock tenant B   (tenant/inventory migrations)
-#   tenant_990012 = SolaStock central     (landlord migrations)
-#
-# Explicitly refuses tenant_990001 (Finance), tenant_990002 (Projects), and any
-# other database.
-#
-# Auth: uses the Finance-compatible 'mysql' MySQL account (auth_socket). Run this
-# script as the 'mysql' OS user (same as Finance/Projects test runs).
-#
-# Usage:
-#   sudo -u mysql bash scripts/rebuild-test-db.sh           # migrate
-#   sudo -u mysql bash scripts/rebuild-test-db.sh --fresh   # migrate:fresh (reserved DBs only)
+# Recreate SolaStock's disposable MySQL test schemas using .env.testing only.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-TENANT_A="tenant_990010"
-TENANT_B="tenant_990011"
-CENTRAL="tenant_990012"
-FRESH="${1:-}"
+TENANT_A="solastock_test_a"
+TENANT_B="solastock_test_b"
+CENTRAL="solastock_test_central"
 
-ALLOWED=("$TENANT_A" "$TENANT_B" "$CENTRAL")
-FORBIDDEN=("tenant_990001" "tenant_990002")
+case "${1:-rebuild}" in
+  rebuild|cleanup) ;;
+  *) echo "Usage: $0 [rebuild|cleanup]" >&2; exit 2 ;;
+esac
 
-assert_allowed() {
-  local db="$1"
-  for f in "${FORBIDDEN[@]}"; do
-    if [ "$db" = "$f" ]; then
-      echo "REFUSING: '$db' is reserved by another Solavel app (Finance/Projects)." >&2; exit 1
-    fi
-  done
-  for a in "${ALLOWED[@]}"; do
-    [ "$db" = "$a" ] && return 0
-  done
-  echo "REFUSING: '$db' is not a SolaStock reserved test DB (allowed: ${ALLOWED[*]})." >&2; exit 1
+manage_databases() {
+  local mode="$1"
+  APP_ENV=testing DB_DATABASE= TENANT_DB_DATABASE= \
+    php artisan tinker --execute="
+      config(['database.connections.mysql.database' => null]);
+      DB::purge('mysql');
+      foreach (['${TENANT_A}', '${TENANT_B}', '${CENTRAL}'] as \$db) {
+          if (!in_array(\$db, ['solastock_test_a', 'solastock_test_b', 'solastock_test_central'], true)) throw new RuntimeException('unsafe test database');
+          DB::connection('mysql')->statement('DROP DATABASE IF EXISTS '.\$db);
+          if ('${mode}' === 'rebuild') {
+              DB::connection('mysql')->statement('CREATE DATABASE '.\$db.' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+          }
+      }
+    " >/dev/null
 }
 
-for db in "${ALLOWED[@]}"; do assert_allowed "$db"; done
+if [ "${1:-rebuild}" = "cleanup" ]; then
+  manage_databases cleanup
+  echo "SolaStock disposable test schemas removed."
+  exit 0
+fi
 
-FRESH_FLAG=""
-[ "$FRESH" = "--fresh" ] && FRESH_FLAG="--fresh"
+manage_databases rebuild
 
-run_migrate() {
-  local conn="$1" db="$2" path="$3"
-  assert_allowed "$db"
-  echo "==> Migrating ${db} via '${conn}' (${path}) ${FRESH_FLAG}"
-  if [ "$conn" = "tenant" ]; then
-    TENANT_DB_DATABASE="$db" php artisan migrate ${FRESH_FLAG} \
-      --database=tenant --path="$path" --force
-  else
-    DB_DATABASE="$db" php artisan migrate ${FRESH_FLAG} \
-      --database=mysql --path="$path" --force
-  fi
-}
+APP_ENV=testing DB_DATABASE="$CENTRAL" php artisan migrate:fresh \
+  --database=mysql --path=database/migrations/landlord --force --no-interaction >/dev/null
 
-# Central / landlord schema → tenant_990012
-run_migrate mysql "$CENTRAL" database/migrations/landlord
+# The real User model is pinned to Central. SolaStock owns no Central users
+# migration, so the disposable harness supplies only the columns its auth tests
+# consume; production Central remains the source of truth.
+APP_ENV=testing DB_DATABASE="$CENTRAL" php artisan tinker --execute="
+  if (!Schema::connection('mysql')->hasTable('users')) {
+      Schema::connection('mysql')->create('users', function (\$table) {
+          \$table->id();
+          \$table->unsignedBigInteger('client_id')->nullable();
+          \$table->string('name');
+          \$table->string('email')->unique();
+          \$table->string('phone')->nullable();
+          \$table->string('identification_number')->nullable();
+          \$table->text('address')->nullable();
+          \$table->string('password');
+          \$table->string('status')->nullable();
+          \$table->rememberToken();
+          \$table->timestamps();
+      });
+  }
+" >/dev/null
 
-# Inventory tenant schema → tenant_990010 and tenant_990011
-run_migrate tenant "$TENANT_A" database/migrations/tenant
-run_migrate tenant "$TENANT_B" database/migrations/tenant
+for db in "$TENANT_A" "$TENANT_B"; do
+  APP_ENV=testing TENANT_DB_DATABASE="$db" INVENTORY_USE_DERIVED_TENANT_DB_USER=false \
+    php artisan migrate:fresh --database=tenant --path=database/migrations/tenant \
+      --force --no-interaction >/dev/null
+done
 
-echo "==> Done. SolaStock reserved test DBs migrated."
-echo "    tenant_990001 (Finance) and tenant_990002 (Projects) untouched."
+echo "SolaStock disposable test schemas rebuilt: ${TENANT_A}, ${TENANT_B}, ${CENTRAL}."

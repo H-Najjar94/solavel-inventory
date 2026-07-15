@@ -42,7 +42,7 @@ class InventoryIntegrityRepairPlanCommandTest extends TestCase
 
         $this->artisan('inventory:integrity-repair-plan', [
             '--org' => TenantTestManager::ORG_A,
-            '--database' => 'tenant_990010',
+            '--database' => 'solastock_test_a',
             '--json' => true,
         ])->assertSuccessful()
             ->expectsOutputToContain('"missing_balance_rows": 1');
@@ -57,7 +57,7 @@ class InventoryIntegrityRepairPlanCommandTest extends TestCase
 
         $this->artisan('inventory:integrity-repair-plan', [
             '--org' => TenantTestManager::ORG_A,
-            '--database' => 'tenant_990010',
+            '--database' => 'solastock_test_a',
             '--apply' => true,
             '--json' => true,
         ])->assertFailed()

@@ -4,10 +4,10 @@ namespace App\Console\Commands;
 
 use App\Services\Stock\IntegrityChecker;
 use App\Services\Tenancy\InventoryTenantReadinessClassifier;
+use App\Services\Tenancy\TenantManager;
 use App\Services\Tenancy\TenantSchemaAuditService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -24,6 +24,7 @@ class InventoryTenantReadinessAudit extends Command
         IntegrityChecker $integrity,
         InventoryTenantReadinessClassifier $classifier,
         OrganizationContext $context,
+        TenantManager $tenantManager,
     ): int {
         if (! $this->option('all')) {
             $this->error('Pass --all to run the production-safe all-tenant audit.');
@@ -33,7 +34,7 @@ class InventoryTenantReadinessAudit extends Command
 
         $tenants = [];
         foreach ($this->discoverTenantKeys() as $tenantKey) {
-            $tenants[] = $this->auditTenant($tenantKey, $schemaAudit, $integrity, $classifier, $context);
+            $tenants[] = $this->auditTenant($tenantKey, $schemaAudit, $integrity, $classifier, $context, $tenantManager);
         }
 
         $payload = [
@@ -70,22 +71,28 @@ class InventoryTenantReadinessAudit extends Command
         IntegrityChecker $integrity,
         InventoryTenantReadinessClassifier $classifier,
         OrganizationContext $context,
+        TenantManager $tenants,
     ): array {
         $central = $this->centralState($tenantKey);
-        $dbExists = $this->databaseExists($tenantKey);
+        $database = $this->probeSupportedRuntimeConnection($tenantKey, $tenants);
+        $dbExists = $database['status'] === 'reachable';
         $schema = $dbExists
-            ? $schemaAudit->auditDatabase($tenantKey)
+            ? $schemaAudit->audit('tenant')
             : ['ok' => false, 'status' => 'fail', 'missing_database' => true, 'missing_tables' => [], 'missing_columns' => [], 'missing_indexes' => []];
 
         $tenantOrgIds = [];
         $integrityStatus = 'not_run';
         $integrityIssues = [];
+        $activeInventoryOrgIds = $central['active_inventory_org_ids'];
 
         if ($dbExists && ($schema['ok'] ?? false)) {
-            $this->switchTenantConnection($tenantKey);
             $tenantOrgIds = $this->tenantOrgIds();
 
-            foreach ($tenantOrgIds as $orgId) {
+            // For enabled tenants, launch readiness concerns the active entitled
+            // organizations. Historical rows belonging to an inactive org remain
+            // isolated and must not block a different org's launch.
+            $integrityOrgIds = $activeInventoryOrgIds !== [] ? $activeInventoryOrgIds : $tenantOrgIds;
+            foreach ($integrityOrgIds as $orgId) {
                 $result = $context->runFor((int) $orgId, fn () => $integrity->check('tenant', (int) $orgId));
                 if (! ($result['ok'] ?? false)) {
                     $integrityIssues[(string) $orgId] = $result['problems'] ?? [];
@@ -96,18 +103,20 @@ class InventoryTenantReadinessAudit extends Command
             $context->forget();
         }
 
-        $activeInventoryOrgIds = $central['active_inventory_org_ids'];
         $accessStatus = match (true) {
-            ! $dbExists => 'missing_database',
+            $database['status'] === 'missing' && ! $central['inventory_enabled'] => 'not_entitled',
+            $database['status'] === 'missing' => 'entitled_not_provisioned',
+            $database['status'] === 'unreachable' => 'runtime_unreachable',
             ! ($schema['ok'] ?? false) => 'schema_failed',
             $activeInventoryOrgIds === [] => ($central['orgs'] === [] ? 'no_safe_access_path' : 'disabled'),
-            $tenantOrgIds === [] => 'no_safe_access_path',
             $central['active_users_count'] <= 0 => 'no_safe_access_path',
             default => 'safe_path_available',
         };
 
         $readinessStatus = match (true) {
             ! $central['inventory_enabled'] => 'disabled',
+            $database['status'] === 'missing' => 'entitled_not_provisioned',
+            $database['status'] === 'unreachable' => 'runtime_unreachable',
             ! ($schema['ok'] ?? false) => 'schema_failed',
             $integrityStatus === 'fail' => 'integrity_failed',
             $accessStatus !== 'safe_path_available' => $accessStatus,
@@ -119,8 +128,10 @@ class InventoryTenantReadinessAudit extends Command
             'client_id' => $this->clientId($tenantKey),
             'org_client' => $central['org_client'],
             'db_exists' => $dbExists,
+            'database_status' => $database['status'],
+            'database_evidence' => $database['evidence'],
             'schema_status' => ($schema['ok'] ?? false) ? 'pass' : 'fail',
-            'missing_database' => (bool) ($schema['missing_database'] ?? false),
+            'missing_database' => $database['status'] === 'missing',
             'missing_tables_count' => count($schema['missing_tables'] ?? []),
             'missing_columns_count' => count($schema['missing_columns'] ?? []),
             'missing_indexes_count' => count($schema['missing_indexes'] ?? []),
@@ -218,19 +229,30 @@ class InventoryTenantReadinessAudit extends Command
         return array_keys($ids);
     }
 
-    private function switchTenantConnection(string $tenantKey): void
+    /**
+     * Probe through the supported derived runtime identity. The restricted
+     * landlord connection deliberately cannot enumerate tenant schemas.
+     *
+     * @return array{status:'reachable'|'missing'|'unreachable',evidence:string}
+     */
+    private function probeSupportedRuntimeConnection(string $tenantKey, TenantManager $tenants): array
     {
-        Config::set('database.connections.tenant.database', $tenantKey);
-        DB::purge('tenant');
-        DB::reconnect('tenant');
-    }
+        try {
+            $tenants->switchToDatabase($tenantKey);
+            $selected = (string) (DB::connection('tenant')->selectOne('SELECT DATABASE() database_name')->database_name ?? '');
 
-    private function databaseExists(string $tenantKey): bool
-    {
-        return (bool) DB::connection('mysql')->selectOne(
-            'SELECT 1 ok FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ? LIMIT 1',
-            [$tenantKey]
-        );
+            return $selected === $tenantKey
+                ? ['status' => 'reachable', 'evidence' => 'derived_runtime_connection']
+                : ['status' => 'unreachable', 'evidence' => 'runtime_selected_unexpected_database'];
+        } catch (\Throwable $e) {
+            $message = $e->getMessage().' '.($e->getPrevious()?->getMessage() ?? '');
+            $missing = str_contains($message, '1049') || str_contains(strtolower($message), 'unknown database');
+
+            return [
+                'status' => $missing ? 'missing' : 'unreachable',
+                'evidence' => $missing ? 'runtime_unknown_database' : 'runtime_connection_failed',
+            ];
+        }
     }
 
     private function clientId(string $tenantKey): ?int

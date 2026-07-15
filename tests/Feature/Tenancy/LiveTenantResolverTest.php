@@ -15,9 +15,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * No-DB checks for the Solavel-style live tenant resolution. The DB probe inside
- * the resolver fails closed to a clear state (tenant_unreachable) when MySQL is
- * not reachable from the test process — these assertions never require a live DB.
+ * Checks for the Solavel-style live tenant resolution. Customer launch follows
+ * central enablement and permissions; schema diagnostics are admin-only.
  */
 class LiveTenantResolverTest extends TestCase
 {
@@ -51,10 +50,7 @@ class LiveTenantResolverTest extends TestCase
         $s = app(LiveTenantResolver::class)->state($this->request(['client_id' => 123, 'selected_central_org_id' => 123]));
         $this->assertSame('tenant_000123', $s['database']);
         $this->assertSame('live', $s['mode']);
-        // DB is unreachable in the test process → a precise setup/unreachable state,
-        // NEVER a silent sample fallback for a real org.
-        $this->assertContains($s['state'], ['live_ready', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'schema_failed']);
-        $this->assertNotSame('sample_preview', $s['state']);
+        $this->assertSame('live_ready', $s['state']);
     }
 
     #[Test]

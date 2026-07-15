@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\DB;
  * leave no residue — exactly Finance's TenantAware approach, extended to two
  * tenant DBs (A and B) for cross-tenant isolation tests.
  *
- * Reserved DBs (configurable via env, defaulting to the agreed values):
- *   tenant A = tenant_990002   tenant B = tenant_990003   central = tenant_990004
+ * Disposable DBs (created and removed by scripts/run-tests.sh):
+ *   tenant A = solastock_test_a   tenant B = solastock_test_b
+ *   central = solastock_test_central
  */
 class TenantTestManager
 {
@@ -45,17 +46,17 @@ class TenantTestManager
 
     public function tenantADatabase(): string
     {
-        return (string) env('SOLASTOCK_TEST_TENANT_A', 'tenant_990010');
+        return (string) env('SOLASTOCK_TEST_TENANT_A', 'solastock_test_a');
     }
 
     public function tenantBDatabase(): string
     {
-        return (string) env('SOLASTOCK_TEST_TENANT_B', 'tenant_990003');
+        return (string) env('SOLASTOCK_TEST_TENANT_B', 'solastock_test_b');
     }
 
     public function centralDatabase(): string
     {
-        return (string) env('SOLASTOCK_TEST_CENTRAL', 'tenant_990004');
+        return (string) env('SOLASTOCK_TEST_CENTRAL', 'solastock_test_central');
     }
 
     /** Map an org id to its fixed reserved database name. */

@@ -14,17 +14,13 @@ use RuntimeException;
 class TenancySafetyGuard
 {
     /**
-     * FIXED reserved test databases for SolaStock (Finance-style model — these
-     * are pre-provisioned and NEVER created/dropped by the test suite):
-     *   tenant_990010 = SolaStock tenant A
-     *   tenant_990003 = SolaStock tenant B
-     *   tenant_990004 = SolaStock central/landlord test database
-     * tenant_990001 belongs to Finance and is explicitly forbidden here.
+     * Disposable SolaStock-only schemas. They cannot collide with the canonical
+     * tenant_NNNNNN namespace and are created/dropped by scripts/run-tests.sh.
      */
     public const ALLOWED_TEST_DATABASES = [
-        'tenant_990010', // SolaStock tenant A
-        'tenant_990003', // SolaStock tenant B
-        'tenant_990004', // SolaStock central / landlord
+        'solastock_test_a',
+        'solastock_test_b',
+        'solastock_test_central',
     ];
 
     /**
@@ -97,7 +93,7 @@ class TenancySafetyGuard
             }
         }
 
-        // Strict allow-list: only the three fixed SolaStock reserved DBs.
+        // Strict allow-list: only the three disposable SolaStock schemas.
         if (! in_array($name, self::ALLOWED_TEST_DATABASES, true)) {
             throw new RuntimeException(
                 "TenancySafetyGuard: database '{$database}' is not an allowed SolaStock test database. "

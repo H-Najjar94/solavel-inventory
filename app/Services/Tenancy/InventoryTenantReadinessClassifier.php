@@ -13,17 +13,26 @@ class InventoryTenantReadinessClassifier
         $inventoryEnabled = (bool) ($tenant['inventory_enabled'] ?? false);
         $isQa = str_starts_with($tenantKey, 'tenant_99');
 
-        if (! ($tenant['db_exists'] ?? false)) {
-            return $this->result('provisioning_needed', 'Tenant database is missing; keep disabled until provisioned.');
+        $databaseStatus = (string) ($tenant['database_status'] ?? (($tenant['db_exists'] ?? false) ? 'reachable' : 'missing'));
+
+        if ($databaseStatus === 'unreachable') {
+            return $this->result('runtime_unreachable', 'Tenant runtime connection failed; investigate credentials or database availability.');
+        }
+
+        if ($databaseStatus === 'missing') {
+            return $inventoryEnabled
+                ? $this->result('entitled_not_provisioned', 'SolaStock is enabled but its tenant database is not provisioned.')
+                : $this->result('not_entitled', 'Tenant is not entitled to SolaStock and no inventory database is provisioned.');
+        }
+
+        if (! $inventoryEnabled) {
+            return $this->result('not_entitled', 'Tenant is not currently entitled to SolaStock.');
         }
 
         if ($schemaStatus !== 'pass') {
             $missingTables = (int) ($tenant['missing_tables_count'] ?? 0);
 
-            return $this->result(
-                $missingTables > 0 && $missingTables < 22 ? 'schema_repair_needed' : 'provisioning_needed',
-                'SolaStock schema does not pass; do not show as usable.'
-            );
+            return $this->result('migrations_incomplete', 'Tenant is reachable but required SolaStock migrations are incomplete.');
         }
 
         if ($accessStatus === 'no_safe_access_path') {
@@ -36,10 +45,6 @@ class InventoryTenantReadinessClassifier
             }
 
             return $this->result('blocked_by_data_integrity', 'Enabled/candidate tenant has integrity failures.');
-        }
-
-        if (! $inventoryEnabled) {
-            return $this->result('disabled_not_ready', 'SolaStock is disabled for this tenant.');
         }
 
         if ($isQa) {

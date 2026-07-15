@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
-    protected ?string $connection = null;
+    protected $connection = null;
 
     public function __construct()
     {
