@@ -161,4 +161,45 @@ class FeatureEnforcementTest extends TestCase
         $this->assertNull($limits->remaining('stock.max_items', 100_000));
         $this->assertTrue($limits->usage('stock.max_items', 100_000)['unlimited']);
     }
+
+    /* =================================================================
+     * 4. Bypass fixes (§5): imports + scheduled jobs re-enforce
+     * ================================================================= */
+
+    #[Test]
+    public function csv_import_respects_the_item_limit_across_the_running_total(): void
+    {
+        // The opening-stock CSV import must honour stock.max_items like a single
+        // create: with limit=200 and 198 already present, only 2 more may be created,
+        // and the running total (existing + created-so-far) is what's checked.
+        $limits = $this->limits(['flags' => ['stock.max_items' => 200]]);
+        $existing = 198;
+
+        // rows 199, 200 allowed; 201 blocked — exactly the importCsv per-row guard.
+        $this->assertTrue($limits->canCreate('stock.max_items', $existing + 0));
+        $this->assertTrue($limits->canCreate('stock.max_items', $existing + 1));
+        $this->assertFalse($limits->canCreate('stock.max_items', $existing + 2));
+    }
+
+    #[Test]
+    public function scheduled_report_runner_gate_matches_the_interactive_report_feature(): void
+    {
+        // §5 bypass fix: the scheduled report runner re-checks stock.reports. When a
+        // plan lacks it, checkFeature denies with the same 402 reason the route uses.
+        $denied = $this->service([
+            'effective_tier' => 'free',
+            'access_mode' => 'free',
+            'reason_code' => 'paid_expired_free_fallback',
+            'blocked_features' => ['stock.reports'],
+        ])->checkFeature('stock.reports');
+
+        $this->assertFalse($denied['allowed']);
+        $this->assertSame('feature_not_in_plan', $denied['reason_code']);
+
+        $allowed = $this->service([
+            'effective_tier' => 'professional', 'access_mode' => 'full',
+            'reason_code' => 'paid_active', 'allowed_features' => ['stock.reports'],
+        ])->checkFeature('stock.reports');
+        $this->assertTrue($allowed['allowed']);
+    }
 }
