@@ -119,15 +119,19 @@ class SalesOrderService
                     continue;
                 }
 
-                $res = $this->reservations->reserveAvailable(
+                $needed = Decimal::sub((string) $line->ordered_qty, (string) $line->reserved_qty);
+                $res = $this->reservations->reserveAvailableAcrossLots(
                     (int) $line->item_id, (int) ($line->warehouse_id ?? $so->warehouse_id),
-                    (string) $line->ordered_qty, 'sales_order', (int) $so->id,
+                    $needed, 'sales_order', (int) $so->id,
                     $line->bin_id ? (int) $line->bin_id : null,
-                    null,
                     $expiresAt,
                     $priority
                 );
-                $line->reserved_qty = $res ? $res->qty : $line->reserved_qty;
+                $allocated = collect($res)->reduce(
+                    fn (string $total, $reservation): string => Decimal::add($total, (string) $reservation->qty),
+                    '0',
+                );
+                $line->reserved_qty = Decimal::qty(Decimal::add((string) $line->reserved_qty, $allocated));
                 $line->save();
                 if (Decimal::lt((string) $line->reserved_qty, (string) $line->ordered_qty)) {
                     $allReserved = false;

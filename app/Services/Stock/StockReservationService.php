@@ -8,6 +8,7 @@ use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockBalance;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -68,6 +69,81 @@ class StockReservationService
     }
 
     /**
+     * Reserve across the item's balance coordinates. Traceable receipts are
+     * projected one row per lot, so an item-level reservation must not inspect
+     * only the NULL-lot aggregate. Allocations are ordered FEFO when an expiry
+     * date exists and then by lot id as the deterministic receipt-order tie
+     * break. The returned reservations are the concrete coordinates held.
+     *
+     * @return array<int, Reservation>
+     */
+    public function reserveAvailableAcrossLots(
+        int $itemId,
+        int $warehouseId,
+        string $qty,
+        string $sourceType,
+        int $sourceId,
+        ?int $binId = null,
+        ?Carbon $expiresAt = null,
+        int $priority = 100,
+    ): array {
+        $orgId = $this->context->idOrFail();
+        $requested = Decimal::qty($qty);
+        if (! Decimal::gt($requested, '0')) {
+            throw new RuntimeException('Reservation quantity must be greater than zero.');
+        }
+
+        return DB::connection($this->conn())->transaction(function () use (
+            $orgId, $itemId, $warehouseId, $requested, $sourceType, $sourceId,
+            $binId, $expiresAt, $priority,
+        ) {
+            $this->expireOverdue(null, null, $itemId, $warehouseId);
+            $balances = StockBalance::query()
+                ->where('organization_id', $orgId)
+                ->where('item_id', $itemId)
+                ->where('warehouse_id', $warehouseId)
+                ->when($binId !== null, fn ($q) => $q->where('bin_id', $binId), fn ($q) => $q->whereNull('bin_id'))
+                ->with('lot')
+                ->get()
+                ->sortBy(function (StockBalance $balance): string {
+                    $expiry = $balance->lot?->expiry_date?->toDateString() ?? '9999-12-31';
+
+                    return $expiry.'|'.str_pad((string) ($balance->lot_id ?? 0), 12, '0', STR_PAD_LEFT);
+                });
+
+            $remaining = $requested;
+            $allocations = [];
+            foreach ($balances as $balance) {
+                $available = Decimal::sub((string) $balance->on_hand_qty, (string) $balance->reserved_qty);
+                if (! Decimal::gt($available, '0')) {
+                    continue;
+                }
+                $take = ! Decimal::gt($remaining, $available) ? $remaining : $available;
+                $allocations[] = [$balance->lot_id ? (int) $balance->lot_id : null, $take];
+                $remaining = Decimal::sub($remaining, $take);
+                if (! Decimal::gt($remaining, '0')) {
+                    break;
+                }
+            }
+
+            $allowNegative = (bool) (InventorySetting::query()->first()->allow_negative_stock ?? false);
+            if (Decimal::gt($remaining, '0') && ! $allowNegative) {
+                throw new RuntimeException("Cannot reserve {$requested}: only ".Decimal::sub($requested, $remaining).' available for item #'.$itemId.' at warehouse #'.$warehouseId.'.');
+            }
+
+            $result = [];
+            foreach ($allocations as [$lotId, $take]) {
+                $result[] = $this->reserveInternal(
+                    $itemId, $warehouseId, $take, $sourceType, $sourceId,
+                    $binId, $lotId, $expiresAt, $priority, false,
+                );
+            }
+
+            return array_values(array_filter($result));
+        });
+    }
+
+    /**
      * Release overdue reservations and reconcile their balance projections.
      * Existing status values are preserved by marking expired rows as released
      * with expired_at set, avoiding a destructive enum change.
@@ -124,8 +200,7 @@ class StockReservationService
         ?Carbon $expiresAt,
         int $priority,
         bool $partial
-    ): ?Reservation
-    {
+    ): ?Reservation {
         $orgId = $this->context->idOrFail();
         $qty = Decimal::qty($qty);
         if (! Decimal::gt($qty, '0')) {
@@ -316,13 +391,13 @@ class StockReservationService
                 'bin_id' => $binId, 'lot_id' => $lotId,
                 'on_hand_qty' => '0', 'reserved_qty' => '0', 'average_cost' => '0', 'total_value' => '0',
             ]);
-        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+        } catch (UniqueConstraintViolationException $e) {
             // concurrent insert won — fall through to lock the existing row
         }
 
         $balance = $lockedFetch();
         if (! $balance) {
-            throw new \RuntimeException('stock_balances row could not be locked after creation.');
+            throw new RuntimeException('stock_balances row could not be locked after creation.');
         }
 
         return $balance;
