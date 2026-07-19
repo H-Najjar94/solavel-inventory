@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Concerns\EnforcesInventoryLimits;
 use App\Http\Requests\Api\StoreWarehouseRequest;
 use App\Http\Requests\Api\UpdateWarehouseRequest;
 use App\Models\Tenant\StockBalance;
@@ -10,13 +11,16 @@ use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseBin;
 use App\Models\Tenant\WarehouseZone;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SourceDocumentPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class WarehouseController extends ApiController
 {
-    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits;
+    use EnforcesInventoryLimits;
+
+    public function __construct(private WarehouseAccessService $warehouseAccess) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -26,6 +30,7 @@ class WarehouseController extends ApiController
             ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.$request->query('search').'%'))
             ->when($request->has('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
             ->orderBy('name');
+        $this->warehouseAccess->scope($query, 'id');
 
         return $this->paginated(
             $query->paginate($perPage)->withQueryString()->through(function ($w) {
@@ -40,12 +45,14 @@ class WarehouseController extends ApiController
 
     public function show(Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $zones = WarehouseZone::query()->where('warehouse_id', $warehouse->id)->get();
         $bins = WarehouseBin::query()->where('warehouse_id', $warehouse->id)->get();
         $balances = StockBalance::query()->with(['item:id,name,sku'])->where('warehouse_id', $warehouse->id)->get()
             ->map(function (StockBalance $balance) {
                 $balance->setAttribute('item_name', $balance->item?->name);
                 $balance->setAttribute('item_sku', $balance->item?->sku);
+
                 return $balance;
             });
         $lowStock = $balances->filter(fn ($b) => (float) $b->available_qty <= 0)->count();

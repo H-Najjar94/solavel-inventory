@@ -444,6 +444,8 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.view_settings')->name('api.v1.settings.custom-roles.index');
     Route::middleware('perm:inventory.manage_settings')->group(function () {
         Route::put('/settings', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateSettings']);
+        Route::put('/settings/taxes', [\App\Http\Controllers\Api\V1\SettingsController::class, 'updateTaxes']);
+        Route::get('/settings/warehouse-assignments', [\App\Http\Controllers\Api\V1\SettingsController::class, 'allWarehouseAssignments']);
         Route::get('/settings/warehouse-assignments/{userId}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'warehouseAssignments']);
         Route::put('/settings/warehouse-assignments/{userId}', [\App\Http\Controllers\Api\V1\SettingsController::class, 'syncWarehouseAssignments']);
         Route::post('/settings/units', [\App\Http\Controllers\Api\V1\SettingsController::class, 'storeUnit']);

@@ -12,7 +12,11 @@ trait BelongsToWarehouseScope
     {
         static::addGlobalScope('warehouse_access', function (Builder $builder): void {
             if (app()->bound(WarehouseAccessService::class)) {
-                app(WarehouseAccessService::class)->scope($builder);
+                $model = $builder->getModel();
+                $column = method_exists($model, 'getWarehouseScopeColumn')
+                    ? $model->getWarehouseScopeColumn()
+                    : 'warehouse_id';
+                app(WarehouseAccessService::class)->scope($builder, $column);
             }
         });
     }

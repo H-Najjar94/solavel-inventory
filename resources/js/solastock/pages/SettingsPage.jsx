@@ -9,6 +9,7 @@ export default function SettingsPage() {
     const { data, isMock } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
     const integration = useApiQuery(['integration'], api.integrationStatus, { fallback: { connected: false, planned_events: [], account_mappings: {} } });
     const rolesQuery = useApiQuery(['custom-roles'], api.customRoles, { fallback: { permissions: [], roles: [], assignments: [], builtin_roles: [] } });
+    const warehouseAssignmentsQuery = useApiQuery(['warehouse-assignments'], api.allWarehouseAssignments, { fallback: [] });
     const qc = useQueryClient();
     const toast = useToast();
     const s = data ?? {};
@@ -27,6 +28,9 @@ export default function SettingsPage() {
     const [currencyRate, setCurrencyRate] = useState({ currency_code: '', rate_to_base: '', effective_date: new Date().toISOString().slice(0, 10) });
     const [customRole, setCustomRole] = useState({ name: '', key: '', permissions: [] });
     const [roleAssignment, setRoleAssignment] = useState({ user_id: '', role_id: '' });
+    const [warehouseAssignment, setWarehouseAssignment] = useState({ user_id: '', warehouse_ids: [] });
+    const [taxes, setTaxes] = useState([]);
+    const [taxDraft, setTaxDraft] = useState({ code: '', name: '', rate: '', treatment: 'standard', active: true, purchase: true, sales: true });
     const [reorderRule, setReorderRule] = useState({
         item_id: '',
         warehouse_id: '',
@@ -47,6 +51,7 @@ export default function SettingsPage() {
                 allow_negative_stock: !!s.settings.allow_negative_stock,
                 picking_policy: s.settings.picking_policy ?? 'manual',
             });
+            setTaxes(Array.isArray(s.settings.taxes) ? s.settings.taxes : []);
         }
     }, [s.settings]);
 
@@ -64,6 +69,24 @@ export default function SettingsPage() {
             setSaving(false);
         }
     }
+
+    async function saveWarehouseAssignment(e) {
+        e.preventDefault();
+        if (!warehouseAssignment.user_id) return;
+        try {
+            await api.syncWarehouseAssignments(Number(warehouseAssignment.user_id), warehouseAssignment.warehouse_ids.map(Number));
+            await qc.invalidateQueries({ queryKey: ['warehouse-assignments'] });
+            toast.push('Warehouse scope saved.', 'success');
+        } catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    async function saveTaxes(e) {
+        e.preventDefault();
+        try { await api.updateTaxes(taxes); await qc.invalidateQueries({ queryKey: ['settings'] }); toast.push('Tax settings saved.', 'success'); }
+        catch (err) { toast.push(err.message, 'error'); }
+    }
+
+    function addTax(e) { e.preventDefault(); if (!taxDraft.code || !taxDraft.name) return; setTaxes([...taxes, { ...taxDraft, rate: Number(taxDraft.rate || 0) }]); setTaxDraft({ code: '', name: '', rate: '', treatment: 'standard', active: true, purchase: true, sales: true }); }
 
     async function addConversion(e) {
         e.preventDefault();
@@ -267,6 +290,31 @@ export default function SettingsPage() {
                     </Field>
                 </div>
                 <button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? 'Saving…' : 'Save policy'}</button>
+            </div>
+
+            <div className="panel">
+                <h2>Tax administration</h2>
+                <p className="muted">Organization-scoped tax treatments used by purchase and sales documents.</p>
+                <form className="fg2" onSubmit={addTax}>
+                    <Field label="Code"><input className="input" value={taxDraft.code} onChange={(e) => setTaxDraft({ ...taxDraft, code: e.target.value })} /></Field>
+                    <Field label="Name"><input className="input" value={taxDraft.name} onChange={(e) => setTaxDraft({ ...taxDraft, name: e.target.value })} /></Field>
+                    <Field label="Rate"><input className="input" type="number" step="0.0001" min="0" max="100" value={taxDraft.rate} onChange={(e) => setTaxDraft({ ...taxDraft, rate: e.target.value })} /></Field>
+                    <Field label="Treatment"><select className="input" value={taxDraft.treatment} onChange={(e) => setTaxDraft({ ...taxDraft, treatment: e.target.value })}><option value="standard">Standard</option><option value="zero">Zero</option><option value="exempt">Exempt</option></select></Field>
+                    <label className="check-inline"><input type="checkbox" checked={taxDraft.active} onChange={(e) => setTaxDraft({ ...taxDraft, active: e.target.checked })} /> Active</label>
+                    <button className="btn btn--sm">Add tax</button>
+                </form>
+                <form onSubmit={saveTaxes}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Code</th><th>Name</th><th>Rate</th><th>Treatment</th><th>Active</th><th>Use</th><th></th></tr></thead><tbody>{taxes.map((tax, i) => <tr key={`${tax.code}-${i}`}><td>{tax.code}</td><td>{tax.name}</td><td>{tax.rate}%</td><td>{tax.treatment}</td><td>{tax.active ? 'Yes' : 'No'}</td><td>{[tax.purchase && 'Purchase', tax.sales && 'Sales'].filter(Boolean).join(', ')}</td><td><button type="button" className="btn btn--sm" onClick={() => setTaxes(taxes.filter((_, j) => j !== i))}>Remove</button></td></tr>)}</tbody></table><button className="btn btn--primary" style={{ marginTop: 12 }}>Save tax settings</button></form>
+            </div>
+
+            <div className="panel">
+                <h2>Warehouse user scope</h2>
+                <p className="muted">Assign an operational user to one or more warehouses. Owners remain unrestricted.</p>
+                <form className="fg2" onSubmit={saveWarehouseAssignment}>
+                    <Field label="Central user ID"><input className="input" type="number" min="1" value={warehouseAssignment.user_id} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, user_id: e.target.value })} placeholder="e.g. 91" /></Field>
+                    <div><span className="field-label">Allowed warehouses</span>{(s.warehouses ?? []).map((warehouse) => <label className="check-inline" key={warehouse.id}><input type="checkbox" checked={warehouseAssignment.warehouse_ids.includes(Number(warehouse.id))} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, warehouse_ids: e.target.checked ? [...warehouseAssignment.warehouse_ids, Number(warehouse.id)] : warehouseAssignment.warehouse_ids.filter((id) => id !== Number(warehouse.id)) })} /> {warehouse.code} · {warehouse.name}</label>)}</div>
+                    <button className="btn btn--primary">Save warehouse scope</button>
+                </form>
+                {(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>User</th><th>Warehouse</th></tr></thead><tbody>{(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).map((row) => <tr key={row.id}><td>{row.user_id}</td><td>{row.warehouse_id}</td></tr>)}</tbody></table>}
             </div>
 
             <div className="panel">

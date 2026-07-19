@@ -2,12 +2,14 @@
 
 namespace App\Services\Documents;
 
-use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\Customer;
 use App\Models\Tenant\Item;
+use App\Models\Tenant\SalesOrder;
+use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockReservationService;
 use App\Services\Stock\Support\Decimal;
+use App\Services\Tax\InventoryTaxService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,7 @@ class SalesOrderService
         private OrganizationContext $context,
         private StockReservationService $reservations,
         private IntegrationOutboxService $outbox,
+        private InventoryTaxService $taxes,
     ) {}
 
     private function conn(): string
@@ -39,7 +42,7 @@ class SalesOrderService
             // Server-issued order number when none was supplied (users don't type it).
             $attributes['order_number'] = ! empty($attributes['order_number'])
                 ? $attributes['order_number']
-                : \App\Services\Documents\Support\DocumentNumber::next('SO', SalesOrder::class, 'order_number', $orgId, $this->conn());
+                : DocumentNumber::next('SO', SalesOrder::class, 'order_number', $orgId, $this->conn());
 
             // Default a missing/blank date (order_date is a NOT NULL column). Done here
             // rather than only in array_merge so a null in $attributes can't win.
@@ -112,6 +115,7 @@ class SalesOrderService
             ]) as $line) {
                 if (! Decimal::gt((string) $line->ordered_qty, (string) $line->reserved_qty)) {
                     $anyReserved = true;
+
                     continue;
                 }
 
@@ -153,7 +157,10 @@ class SalesOrderService
         return DB::connection($this->conn())->transaction(function () use ($so) {
             $so = SalesOrder::query()->lockForUpdate()->with('lines')->findOrFail($so->id);
             $this->reservations->release('sales_order', (int) $so->id);
-            foreach ($so->lines as $line) { $line->reserved_qty = '0'; $line->save(); }
+            foreach ($so->lines as $line) {
+                $line->reserved_qty = '0';
+                $line->save();
+            }
             $so->status = 'confirmed';
             $so->save();
             $this->outbox->record('stock_reservation_released', $so, 'sales_order', $so->order_number, (string) $so->order_date);
@@ -188,8 +195,9 @@ class SalesOrderService
             $discountRate = Decimal::cost((string) ($line['discount_rate'] ?? '0'));
             $discountAmount = Decimal::money(Decimal::div(Decimal::mul($gross, $discountRate), '100'));
             $taxBase = Decimal::sub($gross, $discountAmount);
-            $taxRate = Decimal::cost((string) ($line['tax_rate'] ?? '0'));
-            $taxAmount = Decimal::money(Decimal::div(Decimal::mul($taxBase, $taxRate), '100'));
+            $tax = $this->taxes->resolve($line['tax_code'] ?? $item?->tax_code, isset($line['tax_rate']) ? (string) $line['tax_rate'] : null, 'sales');
+            $taxRate = $tax['rate'];
+            $taxAmount = $this->taxes->amount($taxBase, $taxRate);
             $lineTotal = Decimal::money(Decimal::add($taxBase, $taxAmount));
             $so->lines()->create([
                 'organization_id' => $orgId,
@@ -201,7 +209,7 @@ class SalesOrderService
                 'unit_price' => $unitPrice,
                 'discount_rate' => $discountRate,
                 'discount_amount' => $discountAmount,
-                'tax_code' => $line['tax_code'] ?? $item?->tax_code,
+                'tax_code' => $tax['code'],
                 'tax_rate' => $taxRate,
                 'tax_amount' => $taxAmount,
                 'line_total' => $lineTotal,

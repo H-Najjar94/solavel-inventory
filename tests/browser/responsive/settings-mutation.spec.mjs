@@ -52,3 +52,23 @@ test('item edit remains usable at mobile, tablet, and desktop viewports', async 
         await context.close();
     }
 });
+
+test('owner creates and removes an organization tax through the UI', async ({ page }) => {
+    await login(page);
+    await page.goto('/inventory/settings');
+    const taxPanel = page.locator('.panel').filter({ hasText: 'Tax administration' });
+    await taxPanel.getByLabel('Code').fill('QA-VAT-20260719');
+    await taxPanel.getByLabel('Name').fill('QA Standard VAT');
+    await taxPanel.getByRole('spinbutton', { name: 'Rate', exact: true }).fill('15');
+    await taxPanel.getByRole('button', { name: 'Add tax' }).click();
+    await expect(taxPanel.getByText('QA Standard VAT')).toBeVisible();
+    await taxPanel.getByRole('button', { name: 'Save tax settings' }).click();
+    await expect(page.getByText('Tax settings saved.')).toBeVisible();
+    await page.reload();
+    await expect(taxPanel.getByText('QA Standard VAT')).toBeVisible();
+    const response = await page.evaluate(async () => (await fetch('/inventory/api/v1/settings')).json());
+    expect(response.data.settings.taxes.some((tax) => tax.code === 'QA-VAT-20260719')).toBe(true);
+    await taxPanel.getByRole('button', { name: 'Remove' }).click();
+    await taxPanel.getByRole('button', { name: 'Save tax settings' }).click();
+    await expect(page.getByText('Tax settings saved.')).toBeVisible();
+});

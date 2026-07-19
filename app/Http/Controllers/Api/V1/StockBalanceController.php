@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\Tenant\InventoryUserWarehouse;
 use App\Models\Tenant\StockBalance;
+use App\Services\Access\InventoryPermissionService;
+use App\Services\Access\WarehouseAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,6 +30,16 @@ class StockBalanceController extends ApiController
             ->when($request->filled('bin_id'), fn ($q) => $q->where('bin_id', (int) $request->query('bin_id')))
             ->when($request->boolean('low_stock'), fn ($q) => $q->whereColumn('on_hand_qty', '<=', 'reserved_qty'))
             ->orderByDesc('total_value');
+        if (app()->bound(WarehouseAccessService::class)) {
+            $warehouseAccess = app(WarehouseAccessService::class);
+            $allowed = $warehouseAccess->allowedIds((int) ($request->user()?->getAuthIdentifier() ?? 0));
+            if ($allowed === null && $request->user() && ! app(InventoryPermissionService::class)->can($request->user(), 'inventory.manage_settings')) {
+                $allowed = InventoryUserWarehouse::query()->where('user_id', $request->user()->getAuthIdentifier())->pluck('warehouse_id')->map(fn ($id) => (int) $id)->all();
+            }
+            if ($allowed !== null) {
+                $query->whereIn('stock_balances.warehouse_id', $allowed);
+            }
+        }
 
         $paginator = $query->paginate($perPage)->withQueryString();
 
