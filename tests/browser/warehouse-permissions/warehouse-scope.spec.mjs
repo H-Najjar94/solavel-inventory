@@ -52,6 +52,15 @@ test('owner assigns one warehouse and restricted user cannot read or write anoth
     expect(balances.ok()).toBeTruthy();
     const balanceJson = await balances.json();
     expect((balanceJson.data?.data ?? balanceJson.data ?? []).every((row) => Number(row.warehouse_id) !== warehouseB)).toBe(true);
+    for (const query of ['?', '?warehouse_id=2', '?warehouse_id[]=1&warehouse_id[]=2', '?warehouse_ids=1,2', '?warehouse_id=999999', '?warehouse_id=2&warehouse_id=1']) {
+        const response = await restricted.request.get(`/inventory/api/v1/balances${query}`);
+        expect([200, 403, 404, 422]).toContain(response.status());
+        if (response.status() === 200) {
+            const body = await response.json();
+            const rows = body.data?.data ?? body.data ?? [];
+            expect(rows.every((row) => Number(row.warehouse_id) !== warehouseB)).toBe(true);
+        }
+    }
 
     const token = await csrf(restricted);
     const adjustment = await restricted.request.post('/inventory/api/v1/adjustments', {
