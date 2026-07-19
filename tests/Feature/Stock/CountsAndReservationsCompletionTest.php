@@ -142,4 +142,44 @@ class CountsAndReservationsCompletionTest extends TestCase
         $this->assertSame('confirmed', $order->fresh()->status);
         $this->assertSame('0.0000', $order->fresh('lines')->lines->first()->reserved_qty);
     }
+
+    #[Test]
+    public function reservation_allocates_available_traceable_lot_balances(): void
+    {
+        $this->bootTenant();
+        $warehouse = F::warehouse();
+        $item = F::lotItem();
+        $lotA = F::lot($item, ['expiry_date' => now()->addMonths(2)->toDateString()]);
+        $lotB = F::lot($item, ['expiry_date' => now()->addMonths(3)->toDateString()]);
+
+        $opening = app(OpeningStockService::class)->createDraft(
+            ['entry_number' => 'B4-TRACE-OS', 'warehouse_id' => $warehouse->id],
+            [
+                ['item_id' => $item->id, 'lot_id' => $lotA->id, 'quantity' => '1.0000', 'unit_cost' => '5.0000'],
+                ['item_id' => $item->id, 'lot_id' => $lotB->id, 'quantity' => '1.0000', 'unit_cost' => '6.0000'],
+            ]
+        );
+        app(OpeningStockService::class)->post($opening);
+
+        $service = app(SalesOrderService::class);
+        $order = $service->confirm($service->createDraft([
+            'order_number' => 'B4-TRACE-SO',
+            'warehouse_id' => $warehouse->id,
+            'customer_name' => 'Traceability QA',
+        ], [[
+            'item_id' => $item->id,
+            'ordered_qty' => '2.0000',
+            'unit_price' => '9.0000',
+        ]]));
+
+        $reserved = $service->reserve($order);
+
+        $this->assertSame('reserved', $reserved->status);
+        $this->assertSame('2.0000', (string) $reserved->lines->first()->reserved_qty);
+        $this->assertSame(2, Reservation::query()->where('source_id', $reserved->id)->where('status', 'active')->count());
+        $this->assertSame(
+            [$lotA->id, $lotB->id],
+            Reservation::query()->where('source_id', $reserved->id)->where('status', 'active')->orderBy('lot_id')->pluck('lot_id')->all(),
+        );
+    }
 }
