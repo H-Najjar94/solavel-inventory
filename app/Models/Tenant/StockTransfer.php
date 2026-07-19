@@ -2,6 +2,7 @@
 
 namespace App\Models\Tenant;
 
+use App\Services\Access\WarehouseAccessService;
 use App\Tenancy\Concerns\BelongsToOrganization;
 use App\Tenancy\Concerns\LocksWhenPosted;
 use Illuminate\Database\Eloquent\Model;
@@ -25,6 +26,15 @@ class StockTransfer extends Model
         'received_at' => 'datetime',
         'reversed_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('warehouse_access', function ($builder): void {
+            if (app()->bound(WarehouseAccessService::class)) {
+                app(WarehouseAccessService::class)->scopeTransfer($builder);
+            }
+        });
+    }
 
     public function lines()
     {

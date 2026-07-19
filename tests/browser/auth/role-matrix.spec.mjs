@@ -30,6 +30,17 @@ test('owner and viewer reach the live QA inventory workspace', async ({ page }) 
     }
 });
 
+test('manager receives operational permissions without owner settings access', async ({ page }) => {
+    await login(page, 'qa.manager@solavel.test');
+    const meta = await page.evaluate(async () => (await fetch('/inventory/api/v1/meta')).json());
+    expect(meta.success).toBe(true);
+    expect(meta.data.permissions).toContain('inventory.manage_items');
+    expect(meta.data.permissions).toContain('inventory.manage_shipments');
+    expect(meta.data.permissions).not.toContain('inventory.manage_settings');
+    expect(meta.data.permissions).not.toContain('inventory.integration.manage');
+    await page.goto('/sso/logout?to=%2Finventory%2Flogin');
+});
+
 test('a Central-authenticated user without Inventory assignment is denied at SSO', async ({ page }) => {
     await page.goto('/inventory/login');
     await page.locator('input[type="email"]').fill('qa.noinventory@solavel.test');

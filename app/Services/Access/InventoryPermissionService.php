@@ -2,9 +2,9 @@
 
 namespace App\Services\Access;
 
-use App\Tenancy\OrganizationContext;
 use App\Models\Tenant\InventoryCustomRole;
 use App\Models\Tenant\InventoryUserRoleAssignment;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -121,7 +121,7 @@ class InventoryPermissionService
     /**
      * Map a central membership role → an inventory role.
      *   client_owner  → inventory_admin   (full incl. settings/provisioning)
-     *   client_member → inventory_manager (operate inventory, no admin/provision)
+     *   client_manager/client_member → inventory_manager (operate inventory, no admin/provision)
      *   any other role → inventory_viewer (least privilege: read-only)
      *   no membership  → null              (deny — no access)
      */
@@ -129,7 +129,7 @@ class InventoryPermissionService
     {
         return match ($centralRole) {
             'client_owner' => 'inventory_admin',
-            'client_member' => 'inventory_manager',
+            'client_manager', 'client_member' => 'inventory_manager',
             null, '' => null,
             default => 'inventory_viewer',
         };

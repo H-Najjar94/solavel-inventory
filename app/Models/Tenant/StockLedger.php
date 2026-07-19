@@ -3,6 +3,7 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
+use App\Tenancy\Concerns\BelongsToWarehouseScope;
 use App\Tenancy\Concerns\Immutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class StockLedger extends Model
 {
     use BelongsToOrganization;
+    use BelongsToWarehouseScope;
     use Immutable;
 
     protected $table = 'stock_ledger';

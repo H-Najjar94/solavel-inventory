@@ -3,6 +3,7 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
+use App\Tenancy\Concerns\BelongsToWarehouseScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Warehouse extends Model
 {
     use BelongsToOrganization;
+    use BelongsToWarehouseScope;
     use SoftDeletes;
 
     protected $table = 'warehouses';

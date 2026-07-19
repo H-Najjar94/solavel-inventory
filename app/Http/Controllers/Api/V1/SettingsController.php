@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\InventoryCurrencyRate;
 use App\Models\Tenant\InventorySetting;
+use App\Models\Tenant\InventoryUserWarehouse;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBrand;
 use App\Models\Tenant\ItemCategory;
@@ -18,6 +19,7 @@ use App\Services\Replenishment\SafetyStockCalculator;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /**
@@ -74,6 +76,31 @@ class SettingsController extends ApiController
         $settings = InventorySetting::query()->updateOrCreate(['organization_id' => $orgId], $data);
 
         return $this->success($settings);
+    }
+
+    public function warehouseAssignments(int $userId): JsonResponse
+    {
+        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, 'Warehouse assignment migration is pending.');
+        $rows = InventoryUserWarehouse::query()->where('user_id', $userId)->get();
+
+        return $this->success(['user_id' => $userId, 'assignments' => $rows]);
+    }
+
+    public function syncWarehouseAssignments(Request $request, int $userId): JsonResponse
+    {
+        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, 'Warehouse assignment migration is pending.');
+        $data = $request->validate(['warehouse_ids' => ['array'], 'warehouse_ids.*' => ['integer']]);
+        $ids = collect($data['warehouse_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        $valid = Warehouse::query()->whereIn('id', $ids)->pluck('id');
+        if ($valid->count() !== $ids->count()) {
+            return $this->error('invalid_warehouse_scope', 'Every assigned warehouse must belong to the active organization.', 422);
+        }
+        InventoryUserWarehouse::query()->where('user_id', $userId)->delete();
+        foreach ($valid as $warehouseId) {
+            InventoryUserWarehouse::create(['user_id' => $userId, 'warehouse_id' => $warehouseId, 'assigned_by' => auth()->id()]);
+        }
+
+        return $this->warehouseAssignments($userId);
     }
 
     public function storeUnit(Request $request): JsonResponse
