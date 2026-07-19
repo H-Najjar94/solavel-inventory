@@ -60,9 +60,9 @@ class WarehouseAccessService
             ->map(fn ($id) => (int) $id)
             ->values()->all();
 
-        // Existing operational users without an assignment remain organization-wide
-        // until an administrator explicitly assigns a restricted scope.
-        return $ids === [] ? null : $ids;
+        // An operational user with no explicit assignment has no warehouse
+        // access. Organization-wide access is reserved for administrators.
+        return $ids;
     }
 
     public function assertAllowed(int $warehouseId): void
