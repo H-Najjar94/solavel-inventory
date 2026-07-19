@@ -3,6 +3,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# This command is also invoked from a production-cached checkout.  Clear the
+# application config before the first Tinker process so APP_ENV and .env.testing
+# are actually used for disposable schemas rather than the cached live config.
+php artisan config:clear >/dev/null
+
 TENANT_A="solastock_test_a"
 TENANT_B="solastock_test_b"
 CENTRAL="solastock_test_central"
