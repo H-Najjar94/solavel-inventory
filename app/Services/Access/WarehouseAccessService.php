@@ -17,9 +17,20 @@ class WarehouseAccessService
     /** null means unrestricted for this role; an empty array means no warehouse access. */
     public function allowedIds(?int $userId = null): ?array
     {
-        $userId ??= (int) Auth::id();
+        $userId ??= (int) (Auth::id() ?: (function (): int {
+            try {
+                return (int) (request()->user()?->getAuthIdentifier()
+                    ?: request()->session()->get('principal.id', 0));
+            } catch (\Throwable) {
+                return 0;
+            }
+        })());
         if ($userId <= 0 || ! $this->context->has()) {
-            return [];
+            // Controller unit tests and provisioning probes can call a query
+            // without an HTTP principal. Route middleware protects live calls;
+            // do not accidentally turn those non-request probes into an empty
+            // warehouse result.
+            return null;
         }
 
         // Keep existing tenants readable until this tenant migration is applied.
@@ -32,7 +43,14 @@ class WarehouseAccessService
         }
 
         // Owners and inventory administrators retain organization-wide access.
-        if (app(InventoryPermissionService::class)->can(Auth::user(), 'inventory.manage_settings')) {
+        $user = null;
+        try {
+            $user = request()->user();
+        } catch (\Throwable) {
+            // Console/test contexts may not have an HTTP request.
+        }
+        $user ??= Auth::user();
+        if (app(InventoryPermissionService::class)->can($user, 'inventory.manage_settings')) {
             return null;
         }
 

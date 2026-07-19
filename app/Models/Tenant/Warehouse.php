@@ -19,6 +19,11 @@ class Warehouse extends Model
 
     protected $guarded = ['id'];
 
+    public function getWarehouseScopeColumn(): string
+    {
+        return 'id';
+    }
+
     protected $casts = [
         // `address` is a structured object from the form ({line1, city, country})
         // stored as JSON in a longtext column. Without this cast, Eloquent writes

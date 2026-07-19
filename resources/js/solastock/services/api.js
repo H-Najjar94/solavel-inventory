@@ -298,7 +298,9 @@ export const api = {
     // Settings + integration
     settings: () => request('/settings'),
     updateSettings: (body) => request('/settings', { method: 'PUT', body }),
+    updateTaxes: (taxes) => request('/settings/taxes', { method: 'PUT', body: { taxes } }),
     warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}`),
+    allWarehouseAssignments: () => request('/settings/warehouse-assignments'),
     syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
     // SolaBooks integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),

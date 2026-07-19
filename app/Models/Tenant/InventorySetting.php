@@ -3,7 +3,7 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
- use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class InventorySetting extends Model
 {
@@ -19,5 +19,6 @@ class InventorySetting extends Model
         'barcode' => 'array',
         'approvals' => 'array',
         'adjustment_reason_codes' => 'array',
+        'taxes' => 'array',
     ];
 }

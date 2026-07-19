@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\InventoryCurrencyRate;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\InventoryUserWarehouse;
@@ -71,9 +72,36 @@ class SettingsController extends ApiController
             'numbering' => ['nullable', 'array'],
             'barcode' => ['nullable', 'array'],
             'approvals' => ['nullable', 'array'],
+            'taxes' => ['nullable', 'array'],
         ]);
 
         $settings = InventorySetting::query()->updateOrCreate(['organization_id' => $orgId], $data);
+
+        return $this->success($settings);
+    }
+
+    public function updateTaxes(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'taxes' => ['array'],
+            'taxes.*.name' => ['required', 'string', 'max:100'],
+            'taxes.*.code' => ['required', 'string', 'max:50'],
+            'taxes.*.rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'taxes.*.treatment' => ['required', 'in:standard,zero,exempt'],
+            'taxes.*.active' => ['boolean'],
+            'taxes.*.purchase' => ['boolean'],
+            'taxes.*.sales' => ['boolean'],
+        ]);
+        $codes = collect($data['taxes'] ?? [])->pluck('code');
+        abort_if($codes->duplicates()->isNotEmpty(), 422, 'Tax codes must be unique.');
+        $settings = InventorySetting::query()->updateOrCreate(
+            ['organization_id' => $this->context->idOrFail()], ['taxes' => array_values($data['taxes'] ?? [])]
+        );
+        InventoryAuditLog::create([
+            'organization_id' => $this->context->id(), 'actor_user_id' => auth()->id(),
+            'action' => 'inventory.tax_settings.updated', 'entity_type' => 'inventory_settings',
+            'entity_id' => $settings->id, 'after' => ['tax_codes' => $codes->values()->all()], 'created_at' => now(),
+        ]);
 
         return $this->success($settings);
     }
@@ -84,6 +112,13 @@ class SettingsController extends ApiController
         $rows = InventoryUserWarehouse::query()->where('user_id', $userId)->get();
 
         return $this->success(['user_id' => $userId, 'assignments' => $rows]);
+    }
+
+    public function allWarehouseAssignments(): JsonResponse
+    {
+        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, 'Warehouse assignment migration is pending.');
+
+        return $this->success(InventoryUserWarehouse::query()->orderBy('user_id')->orderBy('warehouse_id')->get());
     }
 
     public function syncWarehouseAssignments(Request $request, int $userId): JsonResponse
