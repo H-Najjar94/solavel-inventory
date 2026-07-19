@@ -3,12 +3,14 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
+use App\Tenancy\Concerns\BelongsToWarehouseScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WarehouseReorderRule extends Model
 {
     use BelongsToOrganization;
+    use BelongsToWarehouseScope;
 
     protected $table = 'warehouse_reorder_rules';
 

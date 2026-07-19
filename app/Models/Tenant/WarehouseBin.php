@@ -3,13 +3,15 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Tenancy\Concerns\BelongsToWarehouseScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WarehouseBin extends Model
 {
     use BelongsToOrganization;
+    use BelongsToWarehouseScope;
     use SoftDeletes;
 
     protected $table = 'warehouse_bins';

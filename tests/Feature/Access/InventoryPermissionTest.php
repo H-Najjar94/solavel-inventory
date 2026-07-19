@@ -22,7 +22,8 @@ class InventoryPermissionTest extends TestCase
     /** Permission service with an injectable central role (bypasses the DB). */
     private function perms(?string $centralRole): InventoryPermissionService
     {
-        return new class(app(OrganizationContext::class), $centralRole) extends InventoryPermissionService {
+        return new class(app(OrganizationContext::class), $centralRole) extends InventoryPermissionService
+        {
             public function __construct(OrganizationContext $ctx, private ?string $forcedRole)
             {
                 parent::__construct($ctx);
@@ -101,6 +102,21 @@ class InventoryPermissionTest extends TestCase
         $this->assertTrue($p->can($this->user(), 'inventory.manage_shipments'));
         // …but NOT the admin/provisioning gate.
         $this->assertFalse($p->can($this->user(), 'inventory.manage_settings'), 'member must NOT provision/manage settings');
+    }
+
+    #[Test]
+    public function manager_maps_to_operational_role_without_owner_administration(): void
+    {
+        app(OrganizationContext::class)->set(self::ORG);
+        $p = $this->perms('client_manager');
+
+        $this->assertTrue($p->can($this->user(), 'inventory.manage_items'));
+        $this->assertTrue($p->can($this->user(), 'inventory.manage_sales_orders'));
+        $this->assertTrue($p->can($this->user(), 'inventory.manage_shipments'));
+        $this->assertTrue($p->can($this->user(), 'inventory.integration.view'));
+        $this->assertFalse($p->can($this->user(), 'inventory.manage_settings'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.manage'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.retry'));
     }
 
     #[Test]

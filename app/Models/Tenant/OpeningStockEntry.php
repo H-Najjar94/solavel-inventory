@@ -3,6 +3,7 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
+use App\Tenancy\Concerns\BelongsToWarehouseScope;
 use App\Tenancy\Concerns\LocksWhenPosted;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class OpeningStockEntry extends Model
 {
     use BelongsToOrganization;
+    use BelongsToWarehouseScope;
     use LocksWhenPosted;
     use SoftDeletes;
 

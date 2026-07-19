@@ -3,6 +3,7 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
+use App\Tenancy\Concerns\BelongsToWarehouseScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class SalesOrder extends Model
 {
     use BelongsToOrganization;
+    use BelongsToWarehouseScope;
     use SoftDeletes;
 
     protected $table = 'inventory_sales_orders';

@@ -298,6 +298,8 @@ export const api = {
     // Settings + integration
     settings: () => request('/settings'),
     updateSettings: (body) => request('/settings', { method: 'PUT', body }),
+    warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}`),
+    syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
     // SolaBooks integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
     integrationAccountMappings: () => request('/integration/solabooks/mappings/accounts'),

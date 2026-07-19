@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Concerns\EnforcesInventoryLimits;
 use App\Http\Requests\Api\StoreItemRequest;
 use App\Http\Requests\Api\UpdateItemRequest;
 use App\Models\Tenant\CostLayer;
@@ -10,10 +11,11 @@ use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBarcode;
 use App\Models\Tenant\ItemVariant;
-use App\Models\Tenant\Supplier;
-use App\Models\Tenant\SupplierPriceList;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
+use App\Models\Tenant\Supplier;
+use App\Models\Tenant\SupplierPriceList;
+use App\Models\Tenant\Warehouse;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -23,7 +25,7 @@ use Illuminate\Validation\Rule;
 
 class ItemController extends ApiController
 {
-    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits;
+    use EnforcesInventoryLimits;
 
     /** Strip non-column / transient fields before persisting the item row. */
     private function itemAttributes(array $data): array
@@ -90,6 +92,7 @@ class ItemController extends ApiController
                 ->groupBy('item_id')->get();
             $match = $itemIds->filter(function ($r) use ($status) {
                 $a = (float) $r->avail;
+
                 return $status === 'out' ? $a <= 0 : ($status === 'low' ? $a > 0 && $a <= 5 : $a > 0);
             })->pluck('item_id');
             $query->whereIn('id', $match);
@@ -413,31 +416,158 @@ class ItemController extends ApiController
             'name' => $item->name,
             'barcode' => $barcode->barcode,
             'type' => $barcode->type,
-            'qr_svg' => $this->qrSvg($barcode->barcode),
+            'barcode_svg' => $this->code128Svg($barcode->barcode),
         ])->values();
 
         return $this->success(['labels' => $rows]);
     }
 
-    private function qrSvg(string $value): string
+    private function code128Svg(string $value): string
     {
-        $hash = hash('sha256', $value);
-        $cells = 21;
-        $rects = [];
-        for ($y = 0; $y < $cells; $y++) {
-            for ($x = 0; $x < $cells; $x++) {
-                $i = ($x + $y * $cells) % strlen($hash);
-                $dark = hexdec($hash[$i]) % 2 === 0;
-                if ($x < 7 && $y < 7 || $x > 13 && $y < 7 || $x < 7 && $y > 13) {
-                    $dark = $x === 0 || $y === 0 || $x === 6 || $y === 6 || ($x >= 2 && $x <= 4 && $y >= 2 && $y <= 4);
+        $patterns = [
+            +'212222',
+            '222122',
+            '222221',
+            '121223',
+            '121322',
+            '131222',
+            '122213',
+            '122312',
+            '132212',
+            '221213',
+            '221312',
+            '231212',
+            '112232',
+            '122132',
+            '122231',
+            '113222',
+            '123122',
+            '123221',
+            '223211',
+            '221132',
+            '221231',
+            '213212',
+            '223112',
+            '312131',
+            '311222',
+            '321122',
+            '321221',
+            '312212',
+            '322112',
+            '322211',
+            '212123',
+            '212321',
+            '232121',
+            '111323',
+            '131123',
+            '131321',
+            '112313',
+            '132113',
+            '132311',
+            '211313',
+            '231113',
+            '231311',
+            '112133',
+            '112331',
+            '132131',
+            '113123',
+            '113321',
+            '133121',
+            '313121',
+            '211331',
+            '231131',
+            '213113',
+            '213311',
+            '213131',
+            '311123',
+            '311321',
+            '331121',
+            '312113',
+            '312311',
+            '332111',
+            '314111',
+            '221411',
+            '431111',
+            '111224',
+            '111422',
+            '121124',
+            '121421',
+            '141122',
+            '141221',
+            '112214',
+            '112412',
+            '122114',
+            '122411',
+            '142112',
+            '142211',
+            '241211',
+            '221114',
+            '413111',
+            '241112',
+            '134111',
+            '111242',
+            '121142',
+            '121241',
+            '114212',
+            '124112',
+            '124211',
+            '411212',
+            '421112',
+            '421211',
+            '212141',
+            '214121',
+            '412121',
+            '111143',
+            '111341',
+            '131141',
+            '114113',
+            '114311',
+            '411113',
+            '411311',
+            '113141',
+            '114131',
+            '311141',
+            '411131',
+            '211412',
+            '211214',
+            '211232',
+            '233111',
+        ];
+        $ids = [104];
+        foreach (str_split($value) as $character) {
+            $code = ord($character);
+            if ($code < 32 || $code > 127) {
+                continue;
+            }
+            $ids[] = $code - 32;
+        }
+        $checksum = $ids[0];
+        foreach (array_slice($ids, 1) as $position => $id) {
+            $checksum += $id * ($position + 1);
+        }
+        $ids[] = $checksum % 103;
+        $ids[] = 106;
+        $x = 10;
+        $scale = 2;
+        $bars = [];
+        foreach ($ids as $id) {
+            $pattern = $patterns[$id];
+            for ($i = 0, $bar = true; $i < strlen($pattern); $i++, $bar = ! $bar) {
+                $width = (int) $pattern[$i] * $scale;
+                if ($bar) {
+                    $bars[] = '<rect x="'.$x.'" y="5" width="'.$width.'" height="70"/>';
                 }
-                if ($dark) {
-                    $rects[] = '<rect x="'.$x.'" y="'.$y.'" width="1" height="1"/>';
-                }
+                $x += $width;
             }
         }
+        $width = $x + 10;
 
-        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" shape-rendering="crispEdges">'.implode('', $rects).'</svg>';
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '.$width.' 80" shape-rendering="crispEdges" role="img" aria-label="Barcode '.$this->escape($value).'"><rect width="100%" height="100%" fill="white"/>'.implode('', $bars).'</svg>';
+    }
+
+    private function escape(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     public function store(StoreItemRequest $request): JsonResponse
@@ -563,7 +693,7 @@ class ItemController extends ApiController
         )->keyBy('cost_layer_id');
 
         // Resolve warehouse names/codes once so the UI shows names, not raw IDs.
-        $warehouseMeta = \App\Models\Tenant\Warehouse::query()
+        $warehouseMeta = Warehouse::query()
             ->whereIn('id', $balances->pluck('warehouse_id')->all())
             ->get(['id', 'name', 'code'])->keyBy('id');
 

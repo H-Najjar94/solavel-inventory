@@ -529,7 +529,7 @@ export default function ItemDetailPage() {
                     </div></div>
                     <div className="card"><div className="card-head"><h3>Labels</h3><span className="spacer" /><button className="btn btn--sm" onClick={loadLabels}>Print labels</button></div><div className="card-body">
                         {!labels ? <EmptyState title="No label preview" hint="Generate item and barcode labels for printing." /> : <div className="label-sheet">
-                            {(labels.labels ?? []).map((l) => <div className="label-card" key={l.barcode}><strong>{l.name}</strong><span>{l.sku}</span><code>{l.barcode}</code><span className="muted">{l.type}</span></div>)}
+                            {(labels.labels ?? []).map((l) => <div className="label-card" key={l.barcode}><strong>{l.name}</strong><span>{l.sku}</span>{l.barcode_svg && <div className="label-barcode" dangerouslySetInnerHTML={{ __html: l.barcode_svg }} />}<code>{l.barcode}</code><span className="muted">{l.type}</span></div>)}
                         </div>}
                     </div></div>
                     <div className="card"><div className="card-head"><h3>Audit</h3></div><div className="card-body"><dl className="kv">
