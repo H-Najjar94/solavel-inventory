@@ -234,6 +234,7 @@ class SalesOrderService
                 'discount_rate' => $discountRate,
                 'discount_amount' => $discountAmount,
                 'tax_code' => $tax['code'],
+                'tax_treatment' => $tax['treatment'],
                 'tax_rate' => $taxRate,
                 'tax_amount' => $taxAmount,
                 'line_total' => $lineTotal,

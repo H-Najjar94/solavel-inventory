@@ -5,6 +5,8 @@ namespace App\Services\Integration;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\IntegrationTaxMapping;
+use App\Models\Tenant\InventorySetting;
 
 /**
  * Read-only integration status + health for the settings page, sync dashboard,
@@ -18,6 +20,7 @@ class IntegrationStatusService
         'inventory_asset', 'cogs', 'adjustment_gain', 'adjustment_loss', 'grni',
         'landed_cost_clearing', 'transfer_clearing', 'opening_offset',
         'sales_returns', 'purchase_returns',
+        'accounts_receivable', 'sales_revenue',
     ];
 
     public function status(int $orgId): array
@@ -41,6 +44,16 @@ class IntegrationStatusService
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->whereIn('status', ['mapped', 'verified'])->pluck('mapping_type')->all();
         $mappingCompleteness = round(count(array_intersect(self::REQUIRED_ACCOUNT_MAPPINGS, $mapped)) / count(self::REQUIRED_ACCOUNT_MAPPINGS) * 100);
+        $taxCodes = collect((array) (InventorySetting::query()->first()?->taxes ?? []))
+            ->where('active', true)->pluck('code')->filter()->unique()->values();
+        $mappedTaxCodes = IntegrationTaxMapping::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->where('status', 'mapped')
+            ->pluck('tax_code')->unique();
+        $taxMappingCompleteness = $taxCodes->isEmpty()
+            ? 100
+            : round($taxCodes->intersect($mappedTaxCodes)->count() / $taxCodes->count() * 100);
 
         $health = match (true) {
             $mode === 'disconnected' => 'disconnected',
@@ -61,6 +74,7 @@ class IntegrationStatusService
             'documents_awaiting_sync' => $pending,
             'mapping_incomplete_events' => $incompleteMapping,
             'mapping_completeness_pct' => $mappingCompleteness,
+            'tax_mapping_completeness_pct' => $taxMappingCompleteness,
             'last_event_generated_at' => IntegrationOutboxEvent::query()->where('organization_id', $orgId)->max('occurred_at'),
             'connection_implemented' => true,
             'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))

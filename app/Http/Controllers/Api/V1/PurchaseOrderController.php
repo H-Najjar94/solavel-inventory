@@ -222,6 +222,9 @@ class PurchaseOrderController extends ApiController
                     'line_total' => $lineTotal,
                 ];
             }
+            if (Schema::connection($this->conn())->hasColumn('purchase_order_lines', 'tax_treatment')) {
+                $lineAttributes['tax_treatment'] = $tax['treatment'];
+            }
             $po->lines()->create($lineAttributes);
         }
         $po->subtotal = Decimal::money($subtotal);

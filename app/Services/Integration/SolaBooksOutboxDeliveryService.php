@@ -2,10 +2,8 @@
 
 namespace App\Services\Integration;
 
-use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
-use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +12,11 @@ use RuntimeException;
 
 class SolaBooksOutboxDeliveryService
 {
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(
+        private OrganizationContext $context,
+        private AccountingJournalBuilder $journals,
+        private IntegrationOutboxService $outbox,
+    ) {}
 
     public function deliver(IntegrationOutboxEvent $event, bool $manual = false): IntegrationOutboxEvent
     {
@@ -146,6 +148,10 @@ class SolaBooksOutboxDeliveryService
 
     private function journalPayload(IntegrationOutboxEvent $event, int $orgId): array
     {
+        if ($event->mapping_status !== 'complete' && $this->outbox->eventMappingsComplete($orgId)) {
+            $event->mapping_status = 'complete';
+            $event->save();
+        }
         if ($event->mapping_status !== 'complete') {
             throw new RuntimeException('SolaBooks mappings are incomplete for this event.');
         }
@@ -156,59 +162,17 @@ class SolaBooksOutboxDeliveryService
         }
 
         $payload = $event->payload ?? [];
-        $amount = Decimal::money((string) abs((float) ($payload['total_inventory_value_change'] ?? 0)));
-        if (! Decimal::gt($amount, '0')) {
-            throw new RuntimeException('Integration event has no value to post.');
-        }
-
-        $debitMapping = (string) ($payload['suggested_debit_account_mapping'] ?? '');
-        $creditMapping = (string) ($payload['suggested_credit_account_mapping'] ?? '');
-        if ((float) ($payload['total_inventory_value_change'] ?? 0) < 0) {
-            [$debitMapping, $creditMapping] = [$creditMapping, $debitMapping];
-        }
-
-        $accounts = $this->accounts($orgId, [$debitMapping, $creditMapping]);
 
         return [
             'date' => $payload['document_date'] ?: now()->toDateString(),
             'reference' => $event->idempotency_key,
             'description' => trim('SolaStock '.$event->event_type.' '.$event->aggregate_number),
-            'lines' => [
-                [
-                    'account_id' => (int) $accounts[$debitMapping],
-                    'debit' => $amount,
-                    'credit' => 0,
-                    'description' => $event->aggregate_number,
-                ],
-                [
-                    'account_id' => (int) $accounts[$creditMapping],
-                    'debit' => 0,
-                    'credit' => $amount,
-                    'description' => $event->aggregate_number,
-                ],
-            ],
+            'source_app' => 'solastock',
+            'source_type' => $event->event_type,
+            'source_id' => $event->aggregate_id,
+            'source_number' => $event->aggregate_number,
+            'lines' => $this->journals->build($event, $orgId),
         ];
-    }
-
-    /** @param array<int,string> $mappingTypes */
-    private function accounts(int $orgId, array $mappingTypes): array
-    {
-        $rows = IntegrationAccountMapping::query()
-            ->where('organization_id', $orgId)
-            ->where('integration', IntegrationEvents::INTEGRATION)
-            ->whereIn('mapping_type', $mappingTypes)
-            ->whereIn('status', ['mapped', 'verified'])
-            ->get()->keyBy('mapping_type');
-
-        $out = [];
-        foreach ($mappingTypes as $type) {
-            if ($type === '' || empty($rows[$type]?->solabooks_account_id)) {
-                throw new RuntimeException("Missing SolaBooks account mapping '{$type}'.");
-            }
-            $out[$type] = $rows[$type]->solabooks_account_id;
-        }
-
-        return $out;
     }
 
     private function markFailed(IntegrationOutboxEvent $event, string $message): void

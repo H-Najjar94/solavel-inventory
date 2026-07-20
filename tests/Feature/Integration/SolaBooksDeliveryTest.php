@@ -33,6 +33,8 @@ class SolaBooksDeliveryTest extends TestCase
             'adjustment_gain' => 404,
             'adjustment_loss' => 405,
             'opening_offset' => 505,
+            'accounts_receivable' => 606,
+            'sales_revenue' => 707,
         ] as $type => $accountId) {
             IntegrationAccountMapping::query()->updateOrCreate(
                 [
@@ -48,14 +50,14 @@ class SolaBooksDeliveryTest extends TestCase
     private function event(array $overrides = []): IntegrationOutboxEvent
     {
         $aggregateId = $overrides['aggregate_id'] ?? random_int(100000, 999999);
-        $aggregateNumber = $overrides['aggregate_number'] ?? 'GRN-'.$aggregateId;
+        $aggregateNumber = $overrides['aggregate_number'] ?? 'ADJ-'.$aggregateId;
 
         return IntegrationOutboxEvent::query()->create(array_merge([
             'organization_id' => TenantTestManager::ORG_A,
             'event_uuid' => 'evt-'.uniqid(),
             'integration' => 'solabooks',
-            'event_type' => 'grn.posted',
-            'aggregate_type' => 'GoodsReceipt',
+            'event_type' => 'adjustment.posted',
+            'aggregate_type' => 'StockAdjustment',
             'aggregate_id' => $aggregateId,
             'aggregate_number' => $aggregateNumber,
             'occurred_at' => now(),
@@ -70,7 +72,7 @@ class SolaBooksDeliveryTest extends TestCase
             'status' => 'pending',
             'mapping_status' => 'complete',
             'attempts' => 0,
-            'idempotency_key' => 'solabooks:grn.posted:GoodsReceipt:'.$aggregateId,
+            'idempotency_key' => 'solabooks:adjustment.posted:StockAdjustment:'.$aggregateId,
         ], $overrides));
     }
 
@@ -107,7 +109,7 @@ class SolaBooksDeliveryTest extends TestCase
                 && $request->hasHeader('Idempotency-Key', $input->idempotency_key)
                 && $body['lines'][0]['account_id'] === 101
                 && $body['lines'][0]['debit'] === '25.00'
-                && $body['lines'][1]['account_id'] === 202
+                && $body['lines'][1]['account_id'] === 404
                 && $body['lines'][1]['credit'] === '25.00';
         });
     }
@@ -124,6 +126,22 @@ class SolaBooksDeliveryTest extends TestCase
 
         $this->assertSame('sent', $result->status);
         Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function it_refreshes_a_historical_incomplete_mapping_snapshot_before_delivery(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 988]], 201),
+        ]);
+
+        $event = $this->event(['mapping_status' => 'incomplete']);
+        $result = app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
+
+        $this->assertSame('complete', $result->mapping_status);
+        $this->assertSame('sent', $result->status);
     }
 
     #[Test]

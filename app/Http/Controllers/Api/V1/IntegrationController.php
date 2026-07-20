@@ -6,11 +6,14 @@ use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\IntegrationTaxMapping;
 use App\Models\Tenant\InventoryAuditLog;
+use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Integration\IntegrationEvents;
+use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\IntegrationStatusService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
@@ -29,6 +32,7 @@ class IntegrationController extends ApiController
         private OrganizationContext $context,
         private IntegrationStatusService $statusService,
         private SolaBooksOutboxDeliveryService $delivery,
+        private IntegrationOutboxService $outbox,
     ) {}
 
     public function status(): JsonResponse
@@ -125,8 +129,73 @@ class IntegrationController extends ApiController
                 ]
             );
         }
+        $this->outbox->refreshMappingStatus($orgId);
 
         return $this->accountMappings();
+    }
+
+    public function taxMappings(): JsonResponse
+    {
+        $existing = IntegrationTaxMapping::query()
+            ->where('integration', IntegrationEvents::INTEGRATION)->get()->keyBy('tax_code');
+        $definitions = collect((array) (InventorySetting::query()->first()?->taxes ?? []));
+
+        return $this->success(['mappings' => $definitions->map(fn (array $tax) => [
+            'tax_code' => $tax['code'],
+            'tax_name' => $tax['name'],
+            'treatment' => $tax['treatment'] ?? 'standard',
+            'active' => (bool) ($tax['active'] ?? false),
+            'solabooks_tax_id' => $existing[$tax['code']]->solabooks_tax_id ?? null,
+            'solabooks_tax_code' => $existing[$tax['code']]->solabooks_tax_code ?? null,
+            'input_tax_account_id' => $existing[$tax['code']]->input_tax_account_id ?? null,
+            'output_tax_account_id' => $existing[$tax['code']]->output_tax_account_id ?? null,
+            'status' => $existing[$tax['code']]->status ?? 'unmapped',
+        ])->values()]);
+    }
+
+    public function updateTaxMappings(Request $request): JsonResponse
+    {
+        $orgId = $this->context->idOrFail();
+        $definitions = collect((array) (InventorySetting::query()->first()?->taxes ?? []))->keyBy('code');
+        $data = $request->validate([
+            'mappings' => ['required', 'array'],
+            'mappings.*.tax_code' => ['required', 'string', 'max:50'],
+            'mappings.*.solabooks_tax_id' => ['nullable', 'integer', 'min:1'],
+            'mappings.*.solabooks_tax_code' => ['nullable', 'string', 'max:50'],
+            'mappings.*.input_tax_account_id' => ['nullable', 'integer', 'min:1'],
+            'mappings.*.output_tax_account_id' => ['nullable', 'integer', 'min:1'],
+            'mappings.*.status' => ['required', 'in:unmapped,mapped,inactive'],
+        ]);
+
+        foreach ($data['mappings'] as $mapping) {
+            $definition = $definitions[$mapping['tax_code']] ?? null;
+            abort_unless($definition, 422, 'Every tax mapping must reference an organization tax code.');
+            if ($mapping['status'] === 'mapped') {
+                abort_unless(! empty($mapping['solabooks_tax_id']) && ! empty($mapping['solabooks_tax_code']), 422, 'Mapped taxes require a stable SolaBooks tax ID and code.');
+                if (($definition['treatment'] ?? 'standard') === 'standard') {
+                    abort_unless(! empty($mapping['input_tax_account_id']) && ! empty($mapping['output_tax_account_id']), 422, 'Standard tax mappings require input and output tax accounts.');
+                }
+            }
+            IntegrationTaxMapping::query()->updateOrCreate(
+                ['organization_id' => $orgId, 'integration' => IntegrationEvents::INTEGRATION, 'tax_code' => $mapping['tax_code']],
+                [
+                    'treatment' => $definition['treatment'] ?? 'standard',
+                    'solabooks_tax_id' => $mapping['solabooks_tax_id'] ?? null,
+                    'solabooks_tax_code' => $mapping['solabooks_tax_code'] ?? null,
+                    'input_tax_account_id' => $mapping['input_tax_account_id'] ?? null,
+                    'output_tax_account_id' => $mapping['output_tax_account_id'] ?? null,
+                    'status' => $mapping['status'],
+                ]
+            );
+        }
+        $this->outbox->refreshMappingStatus($orgId);
+        InventoryAuditLog::create([
+            'organization_id' => $orgId, 'actor_user_id' => auth()->id(),
+            'action' => 'inventory.solabooks_tax_mappings.updated', 'entity_type' => 'integration_tax_mappings',
+            'entity_id' => null, 'after' => ['tax_codes' => collect($data['mappings'])->pluck('tax_code')->all()], 'created_at' => now(),
+        ]);
+
+        return $this->taxMappings();
     }
 
     // ── Item mappings ──

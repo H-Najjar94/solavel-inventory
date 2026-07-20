@@ -150,7 +150,7 @@ class TenantSchemaAuditService
             'cost_layer_consumptions' => ['columns' => ['organization_id', 'ledger_id', 'cost_layer_id', 'qty', 'unit_cost']],
             'inventory_suppliers' => ['columns' => ['organization_id', 'code', 'name', 'is_active']],
             'inventory_purchase_orders' => ['columns' => ['organization_id', 'po_number', 'supplier_id', 'warehouse_id', 'status'], 'indexes' => ['inv_po_org_sup_status_idx']],
-            'purchase_order_lines' => ['columns' => ['organization_id', 'purchase_order_id', 'item_id', 'ordered_qty', 'received_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor', 'tax_code', 'tax_rate', 'tax_amount', 'line_total']],
+            'purchase_order_lines' => ['columns' => ['organization_id', 'purchase_order_id', 'item_id', 'ordered_qty', 'received_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor', 'tax_code', 'tax_treatment', 'tax_rate', 'tax_amount', 'line_total']],
             'purchase_order_backorders' => ['columns' => ['organization_id', 'purchase_order_id', 'purchase_order_line_id', 'item_id', 'warehouse_id', 'backorder_qty', 'status'], 'indexes' => ['po_backorders_org_line_uniq']],
             'goods_receipts' => ['columns' => ['organization_id', 'grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'status', 'blind_receiving', 'inspection_status']],
             'goods_receipt_lines' => ['columns' => ['organization_id', 'goods_receipt_id', 'item_id', 'received_qty', 'accepted_qty', 'rejected_qty', 'inspection_status', 'disposition', 'quarantine_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor']],
@@ -163,7 +163,7 @@ class TenantSchemaAuditService
             'stock_counts' => ['columns' => ['organization_id', 'count_number', 'warehouse_id', 'status', 'adjustment_id', 'blind_count', 'scheduled_for', 'abc_class', 'snapshot_at']],
             'stock_count_lines' => ['columns' => ['organization_id', 'stock_count_id', 'item_id', 'system_qty', 'snapshot_qty', 'counted_qty']],
             'inventory_sales_orders' => ['columns' => ['organization_id', 'order_number', 'warehouse_id', 'customer_name', 'customer_id', 'status', 'subtotal', 'discount_total', 'tax_total', 'total']],
-            'sales_order_lines' => ['columns' => ['organization_id', 'sales_order_id', 'item_id', 'ordered_qty', 'reserved_qty', 'discount_rate', 'tax_rate', 'line_total']],
+            'sales_order_lines' => ['columns' => ['organization_id', 'sales_order_id', 'item_id', 'ordered_qty', 'reserved_qty', 'discount_rate', 'tax_code', 'tax_treatment', 'tax_rate', 'line_total']],
             'reservations' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'qty', 'priority', 'source_type', 'source_id', 'status', 'expires_at', 'expired_at']],
             'shipments' => ['columns' => ['organization_id', 'shipment_number', 'sales_order_id', 'warehouse_id', 'carrier', 'carrier_service', 'tracking_number', 'label_status', 'label_payload', 'tracking_status', 'tracking_events', 'warranty_months']],
             'shipment_lines' => ['columns' => ['organization_id', 'shipment_id', 'item_id', 'quantity', 'lot_id', 'serial_id']],
@@ -175,6 +175,7 @@ class TenantSchemaAuditService
             'inventory_currency_rates' => ['columns' => ['organization_id', 'currency_code', 'rate_to_base', 'effective_date'], 'indexes' => ['inventory_currency_rates_org_ccy_date_uniq']],
             'inventory_custom_roles' => ['columns' => ['organization_id', 'key', 'name', 'permissions', 'is_active'], 'indexes' => ['inventory_custom_roles_org_key_uniq']],
             'inventory_user_role_assignments' => ['columns' => ['organization_id', 'user_id', 'role_id', 'assigned_by'], 'indexes' => ['inventory_role_assignments_org_user_uniq']],
+            'integration_tax_mappings' => ['columns' => ['organization_id', 'integration', 'tax_code', 'treatment', 'solabooks_tax_id', 'solabooks_tax_code', 'input_tax_account_id', 'output_tax_account_id', 'status'], 'indexes' => ['itm_org_int_code_uniq', 'itm_org_status_idx']],
         ];
     }
 
