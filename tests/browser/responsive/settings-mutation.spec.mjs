@@ -68,7 +68,7 @@ test('owner creates and removes an organization tax through the UI', async ({ pa
     await expect(taxPanel.getByText('QA Standard VAT')).toBeVisible();
     const response = await page.evaluate(async () => (await fetch('/inventory/api/v1/settings')).json());
     expect(response.data.settings.taxes.some((tax) => tax.code === 'QA-VAT-20260719')).toBe(true);
-    await taxPanel.getByRole('button', { name: 'Remove' }).click();
+    await taxPanel.getByRole('row', { name: /QA-VAT-20260719/ }).getByRole('button', { name: 'Remove' }).click();
     await taxPanel.getByRole('button', { name: 'Save tax settings' }).click();
     await expect(page.getByText('Tax settings saved.')).toBeVisible();
 });
