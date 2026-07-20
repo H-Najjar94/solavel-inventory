@@ -56,6 +56,7 @@ test('visible taxed purchase, receipt, fulfillment and Finance journal reconcile
     await page.getByRole('button', { name: 'Save & post' }).click();
     await expect(page.getByText('GRN posted — stock received.')).toBeVisible();
     await expect(page).toHaveURL(/\/inventory\/goods-receipts\/\d+/);
+    const grnNumber = (await page.locator('h1').innerText()).trim();
 
     await page.goto('/inventory/sales-orders/new');
     await page.getByLabel('Order number').fill(`${prefix}-SO`);
@@ -120,6 +121,27 @@ test('visible taxed purchase, receipt, fulfillment and Finance journal reconcile
     await expect(page.locator('body')).toContainText(shipmentNumber);
     await expect(page.locator('body')).toContainText(/VAT Output|2201|VAT_STD_B/i);
     await expect(page.locator('body')).toContainText(/Accounts Receivable|Sales|COGS|Inventory/i);
+    await expect(page.locator('body')).not.toContainText(/out of balance|Server Error|Whoops/i);
+
+    await page.goto('/inventory/integrations/solabooks/events');
+    await page.locator('.toolbar select').nth(0).selectOption('pending');
+    await page.locator('.toolbar select').nth(1).selectOption('grn.posted');
+    const grnRow = page.locator('tbody tr').filter({ hasText: grnNumber }).first();
+    await expect(grnRow).toContainText('grn.posted');
+    await grnRow.getByRole('button', { name: 'View' }).click();
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText('Retry attempted.')).toBeVisible();
+    const grnEvent = await page.evaluate(async (number) => {
+        const payload = await (await fetch('/inventory/api/v1/integration/solabooks/events?status=sent&event_type=grn.posted&per_page=100')).json();
+        const rows = payload.data?.data ?? payload.data ?? [];
+        return rows.find((row) => row.aggregate_number === number);
+    }, grnNumber);
+    expect(grnEvent?.external_document_id).toBeTruthy();
+    await page.goto('/sso/finance/redirect?organization_id=29');
+    await page.goto(`/finance/entries/${grnEvent.external_document_id}`);
+    await expect(page.locator('body')).toContainText(grnNumber);
+    await expect(page.locator('body')).toContainText(/VAT Input|1703|VAT_STD_B/i);
+    await expect(page.locator('body')).toContainText(/Inventory|Accounts Payable|GRNI/i);
     await expect(page.locator('body')).not.toContainText(/out of balance|Server Error|Whoops/i);
 
     expect(poUrl).toMatch(/\/purchase-orders\/\d+$/);
