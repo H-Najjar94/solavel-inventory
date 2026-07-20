@@ -137,7 +137,7 @@ class TenantSchemaAuditService
     public static function requirements(): array
     {
         return [
-            'inventory_settings' => ['columns' => ['organization_id', 'default_costing_method', 'allow_negative_stock', 'expiry_warning_days']],
+            'inventory_settings' => ['columns' => ['organization_id', 'default_costing_method', 'allow_negative_stock', 'expiry_warning_days', 'default_purchase_tax_code', 'default_sales_tax_code']],
             'items' => ['columns' => ['organization_id', 'sku', 'name', 'costing_method']],
             'item_variants' => ['columns' => ['organization_id', 'item_id', 'sku', 'variant_attributes', 'is_active']],
             'item_attachments' => ['columns' => ['organization_id', 'item_id', 'name', 'path', 'size_bytes']],
