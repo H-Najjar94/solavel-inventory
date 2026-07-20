@@ -25,6 +25,10 @@ class DocumentNumber
             ->where('organization_id', $orgId)
             ->where($column, 'like', $prefix.'-%')
             ->orderByDesc('id')
+            // Every caller generates inside its document-create transaction.
+            // Serialize concurrent readers on the sequence tail so two creates
+            // cannot both issue the same max+1 number.
+            ->lockForUpdate()
             ->value($column);
 
         $seq = 1;

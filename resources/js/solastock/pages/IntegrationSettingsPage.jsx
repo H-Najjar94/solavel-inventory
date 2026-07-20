@@ -16,9 +16,25 @@ export default function IntegrationSettingsPage() {
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.integration.manage');
     const [tab, setTab] = useState('status');
+    const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '990010', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
+    const [savingConnection, setSavingConnection] = useState(false);
 
     const status = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
     const s = status.data;
+    useEffect(() => {
+        if (s) setConnection((current) => ({ ...current, mode: s.mode === 'disconnected' ? 'connected_pending_mapping' : s.mode, solabooks_organization_id: s.solabooks_organization_id ?? '' }));
+    }, [s]);
+
+    async function saveConnection() {
+        setSavingConnection(true);
+        try {
+            await api.configureIntegration({ ...connection, client_id: Number(connection.client_id), solabooks_organization_id: Number(connection.solabooks_organization_id), api_key: connection.api_key || undefined });
+            setConnection((current) => ({ ...current, api_key: '' }));
+            await qc.invalidateQueries({ queryKey: ['integration-status'] });
+            toast.push('SolaBooks connection saved.', 'success');
+        } catch (error) { toast.push(error.message, 'error'); }
+        finally { setSavingConnection(false); }
+    }
 
     return (
         <section className="page">
@@ -48,11 +64,20 @@ export default function IntegrationSettingsPage() {
                             <dt>Connection implemented</dt><dd>{s.connection_implemented ? 'Yes' : 'No (placeholder)'}</dd>
                         </dl>
                         <div className="doc-actions">
-                            <button className="btn" disabled title="Production credentials require owner approval">Reconnect</button>
-                            <button className="btn" disabled title="Production credentials require owner approval">Disable</button>
                             <Link className="btn btn--primary" to="/integrations/solabooks/events">View events</Link>
                         </div>
                         <p className="muted">Events are recorded locally when inventory documents post, then delivered to SolaBooks with authenticated, idempotent retry. SolaStock never writes directly to finance tables.</p>
+                    </div>
+                    <div className="panel">
+                        <h2>Connection</h2>
+                        <p className="muted">The API key is encrypted at rest and is never returned by this API.</p>
+                        <div className="fg2">
+                            <label className="field"><span className="field-label">Mode</span><select className="input" disabled={!gate.allowed} value={connection.mode} onChange={(e) => setConnection({ ...connection, mode: e.target.value })}><option value="connected_readonly">Read only</option><option value="connected_pending_mapping">Pending mappings</option><option value="active">Active</option><option value="paused">Paused</option></select></label>
+                            <label className="field"><span className="field-label">Central client ID</span><input className="input" type="number" disabled={!gate.allowed} value={connection.client_id} onChange={(e) => setConnection({ ...connection, client_id: e.target.value })} /></label>
+                            <label className="field"><span className="field-label">SolaBooks organization ID</span><input className="input" type="number" disabled={!gate.allowed} value={connection.solabooks_organization_id} onChange={(e) => setConnection({ ...connection, solabooks_organization_id: e.target.value })} /></label>
+                            <label className="field"><span className="field-label">SolaBooks API key</span><input className="input" type="password" autoComplete="new-password" disabled={!gate.allowed} value={connection.api_key} onChange={(e) => setConnection({ ...connection, api_key: e.target.value })} placeholder={s?.delivery_configured ? 'Configured — leave blank to keep' : 'Paste newly generated key'} /></label>
+                        </div>
+                        <button className="btn btn--primary" disabled={!gate.allowed || savingConnection} onClick={saveConnection}>{savingConnection ? 'Saving…' : 'Save connection'}</button>
                     </div>
                 </>
             ))}

@@ -7,6 +7,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge, FulfillmentProgressStepper, ReservationStatusBadge, PickPackShipTimeline } from '../components/document.jsx';
+import { SerialSelector } from '../components/traceability.jsx';
 
 export default function SalesOrderDetailPage() {
     const { id } = useParams();
@@ -18,6 +19,7 @@ export default function SalesOrderDetailPage() {
     const [tab, setTab] = useState('lines');
     const [busy, setBusy] = useState(false);
     const [reservationOptions, setReservationOptions] = useState({ expires_at: '', priority: '100' });
+    const [serialSelections, setSerialSelections] = useState({});
 
     const { data, isLoading, isMock } = useApiQuery(['sales-order', id], () => api.salesOrder(id), { fallback: null });
     const so = data?.sales_order;
@@ -107,13 +109,25 @@ export default function SalesOrderDetailPage() {
                     <label className="field"><span>Expires at</span><input className="input" type="datetime-local" value={reservationOptions.expires_at} onChange={(e) => setReservationOptions({ ...reservationOptions, expires_at: e.target.value })} /></label>
                     <label className="field"><span>Priority</span><input className="input" type="number" min="1" max="999" value={reservationOptions.priority} onChange={(e) => setReservationOptions({ ...reservationOptions, priority: e.target.value })} /></label>
                 </div>
+                {lines.filter((line) => ['serial', 'lot_serial'].includes(line.item?.tracking_type)).map((line) => (
+                    <div key={line.id} className="panel panel--subtle">
+                        <strong>{line.item?.sku} · select {Number(line.ordered_qty) - Number(line.reserved_qty)} serial(s)</strong>
+                        <SerialSelector
+                            itemId={line.item_id}
+                            warehouseId={line.warehouse_id ?? so.warehouse_id}
+                            value={serialSelections[line.id] ?? []}
+                            expectedQty={Number(line.ordered_qty) - Number(line.reserved_qty)}
+                            onChange={(ids) => setSerialSelections((current) => ({ ...current, [line.id]: ids }))}
+                        />
+                    </div>
+                ))}
                 {reservations.length === 0 ? <EmptyState title="No reservations" hint="Confirmed orders can reserve available stock." /> : (
                     <table className="data-table">
                         <thead><tr><th>Item</th><th>Warehouse</th><th>Qty</th><th>Priority</th><th>Expires</th><th>Status</th></tr></thead>
                         <tbody>{reservations.map((r) => <tr key={r.id}>
                             <td>{r.item?.name ?? `#${r.item_id}`}{r.item?.sku && <span className="muted"> · {r.item.sku}</span>}</td>
                             <td>{r.warehouse?.name ?? `#${r.warehouse_id}`}</td>
-                            <td>{r.qty}</td><td>{r.priority ?? 100}</td><td>{r.expires_at ?? '—'}</td>
+                            <td>{r.qty}{r.serial?.serial ? ` · ${r.serial.serial}` : ''}</td><td>{r.priority ?? 100}</td><td>{r.expires_at ?? '—'}</td>
                             <td>{r.expired_at ? 'expired' : r.status}</td>
                         </tr>)}</tbody>
                     </table>
@@ -122,7 +136,7 @@ export default function SalesOrderDetailPage() {
 
             <div className="doc-actions">
                 {isDraft && <button className="btn btn--primary" disabled={!canSO.allowed || busy} onClick={() => act(() => api.confirmSalesOrder(id), 'Sales order confirmed.')}>Confirm</button>}
-                {isConfirmed && <button className="btn btn--primary" disabled={!canRes.allowed || busy} onClick={() => act(() => api.reserveSalesOrder(id, reservationOptions), 'Stock reserved.')}>Reserve stock</button>}
+                {isConfirmed && <button className="btn btn--primary" disabled={!canRes.allowed || busy} onClick={() => act(() => api.reserveSalesOrder(id, { ...reservationOptions, serial_ids: serialSelections }), 'Stock reserved.')}>Reserve stock</button>}
                 {isReserved && <button className="btn" disabled={!canRes.allowed || busy} onClick={() => act(() => api.releaseSalesOrderReservation(id), 'Reservation released.')}>Release reservation</button>}
                 {isReserved && <button className="btn" disabled={!canPick.allowed || busy} onClick={createPickList}>Create pick list</button>}
                 {canShipNow && <button className="btn btn--primary" disabled={!canShip.allowed || busy} onClick={createShipment}>Create shipment</button>}

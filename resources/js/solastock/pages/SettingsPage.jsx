@@ -14,7 +14,7 @@ export default function SettingsPage() {
     const toast = useToast();
     const s = data ?? {};
     const intg = integration.data ?? {};
-    const [policy, setPolicy] = useState({ default_costing_method: 'average', allow_negative_stock: false, picking_policy: 'manual' });
+    const [policy, setPolicy] = useState({ default_costing_method: 'average', allow_negative_stock: false, picking_policy: 'manual', value_tolerance: '0.0100', expiry_warning_days: 30 });
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
     const [calculatingSafety, setCalculatingSafety] = useState(false);
@@ -50,6 +50,8 @@ export default function SettingsPage() {
                 default_costing_method: s.settings.default_costing_method ?? 'average',
                 allow_negative_stock: !!s.settings.allow_negative_stock,
                 picking_policy: s.settings.picking_policy ?? 'manual',
+                value_tolerance: s.settings.value_tolerance ?? '0.0100',
+                expiry_warning_days: s.settings.expiry_warning_days ?? 30,
             });
             setTaxes(Array.isArray(s.settings.taxes) ? s.settings.taxes : []);
         }
@@ -287,6 +289,12 @@ export default function SettingsPage() {
                     </Field>
                     <Field label="Negative stock">
                         <label className="check-inline"><input type="checkbox" checked={policy.allow_negative_stock} onChange={(e) => setPolicy({ ...policy, allow_negative_stock: e.target.checked })} /> Allow when policy permits it</label>
+                    </Field>
+                    <Field label="Value reconciliation tolerance">
+                        <input className="input" type="number" min="0" step="0.0001" value={policy.value_tolerance} onChange={(e) => setPolicy({ ...policy, value_tolerance: e.target.value })} />
+                    </Field>
+                    <Field label="Expiry warning days">
+                        <input className="input" type="number" min="0" max="3650" value={policy.expiry_warning_days} onChange={(e) => setPolicy({ ...policy, expiry_warning_days: Number(e.target.value) })} />
                     </Field>
                 </div>
                 <button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? 'Saving…' : 'Save policy'}</button>

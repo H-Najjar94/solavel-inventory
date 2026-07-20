@@ -57,9 +57,9 @@ export default function PickListDetailPage() {
             </dl></div>
 
             <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Bin</th><th>Reserved</th><th>Picked</th></tr></thead>
+                <thead><tr><th>Item</th><th>Bin</th><th>Lot / Serial</th><th>Reserved</th><th>Picked</th></tr></thead>
                 <tbody>{(pl.lines ?? []).map((l) => (
-                    <tr key={l.id}><td>#{l.item_id}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.reserved_qty}</td>
+                    <tr key={l.id}><td>#{l.item_id}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.lot_id ? `lot #${l.lot_id}` : ''}{l.serial_id ? ` serial #${l.serial_id}` : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.reserved_qty}</td>
                         <td>{editable ? <QuantityInput value={picks[l.id] ?? ''} onChange={(v) => setPicks({ ...picks, [l.id]: v })} /> : l.picked_qty}</td></tr>
                 ))}</tbody>
             </table></div>

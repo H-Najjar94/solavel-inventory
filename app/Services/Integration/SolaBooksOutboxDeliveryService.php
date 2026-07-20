@@ -7,6 +7,7 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -106,11 +107,15 @@ class SolaBooksOutboxDeliveryService
         return $result;
     }
 
-    private function client(IntegrationOutboxEvent $event): \Illuminate\Http\Client\PendingRequest
+    private function client(IntegrationOutboxEvent $event): PendingRequest
     {
-        $apiKey = (string) config('services.solabooks.api_key');
-        $clientId = (string) config('services.solabooks.client_id');
-        $orgId = (string) config('services.solabooks.organization_id');
+        $setting = IntegrationSetting::query()
+            ->where('organization_id', $this->context->idOrFail())
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->first();
+        $apiKey = (string) ($setting?->apiKey() ?: config('services.solabooks.api_key'));
+        $clientId = (string) ($setting?->meta['client_id'] ?? config('services.solabooks.client_id'));
+        $orgId = (string) ($setting?->solabooks_organization_id ?: config('services.solabooks.organization_id'));
 
         if ($apiKey === '' || $clientId === '' || $orgId === '') {
             throw new RuntimeException('SolaBooks API credentials are not configured.');

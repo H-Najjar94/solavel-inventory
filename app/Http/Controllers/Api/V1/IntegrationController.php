@@ -5,15 +5,18 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
+use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
-use App\Services\Integration\IntegrationEvents;
-use App\Services\Integration\SolaBooksOutboxDeliveryService;
-use App\Services\Integration\IntegrationStatusService;
 use App\Services\Documents\SourceDocumentPresenter;
+use App\Services\Integration\IntegrationEvents;
+use App\Services\Integration\IntegrationStatusService;
+use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 
 /**
  * SolaBooks integration API. Posting stays outbox-only inside inventory
@@ -31,6 +34,50 @@ class IntegrationController extends ApiController
     public function status(): JsonResponse
     {
         return $this->success($this->statusService->status($this->context->idOrFail()));
+    }
+
+    public function configure(Request $request): JsonResponse
+    {
+        $orgId = $this->context->idOrFail();
+        $data = $request->validate([
+            'mode' => ['required', 'in:disconnected,connected_readonly,connected_pending_mapping,active,paused'],
+            'solabooks_organization_id' => ['required_unless:mode,disconnected', 'nullable', 'integer', 'min:1'],
+            'client_id' => ['required_unless:mode,disconnected', 'nullable', 'integer', 'min:1'],
+            'api_key' => ['nullable', 'string', 'min:32', 'max:255'],
+            'require_mapping_before_post' => ['boolean'],
+        ]);
+        $setting = IntegrationSetting::query()->firstOrNew([
+            'organization_id' => $orgId,
+            'integration' => IntegrationEvents::INTEGRATION,
+        ]);
+        $meta = $setting->meta ?? [];
+        if (! empty($data['api_key'])) {
+            $meta['api_key_encrypted'] = Crypt::encryptString($data['api_key']);
+        }
+        if (! empty($data['client_id'])) {
+            $meta['client_id'] = (int) $data['client_id'];
+        }
+        if ($data['mode'] !== 'disconnected' && empty($meta['api_key_encrypted'])) {
+            return $this->error('api_key_required', 'A SolaBooks API key is required to connect.', 422);
+        }
+        $setting->fill([
+            'mode' => $data['mode'],
+            'solabooks_organization_id' => $data['solabooks_organization_id'] ?? null,
+            'require_mapping_before_post' => $data['require_mapping_before_post'] ?? true,
+            'meta' => $meta,
+            'last_error' => null,
+        ])->save();
+        InventoryAuditLog::create([
+            'organization_id' => $orgId,
+            'actor_user_id' => auth()->id(),
+            'action' => 'inventory.solabooks_connection.updated',
+            'entity_type' => 'integration_settings',
+            'entity_id' => $setting->id,
+            'after' => ['mode' => $setting->mode, 'solabooks_organization_id' => $setting->solabooks_organization_id, 'credential_configured' => ! empty($meta['api_key_encrypted'])],
+            'created_at' => now(),
+        ]);
+
+        return $this->status();
     }
 
     // ── Account mappings ──

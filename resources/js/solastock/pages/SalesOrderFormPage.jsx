@@ -23,6 +23,8 @@ export default function SalesOrderFormPage() {
     const [saving, setSaving] = useState(false);
 
     const existing = useApiQuery(['sales-order', id], () => api.salesOrder(id), { fallback: null, enabled: isEdit });
+    const settings = useApiQuery(['settings'], api.settings, { fallback: { settings: { taxes: [] } } });
+    const taxOptions = (settings.data?.settings?.taxes ?? []).filter((tax) => tax.active && tax.sales);
     useEffect(() => {
         if (isEdit && existing.data?.sales_order) {
             const s = existing.data.sales_order;
@@ -42,7 +44,7 @@ export default function SalesOrderFormPage() {
             const payload = {
                 ...header,
                 requested_ship_date: header.requested_ship_date || null,
-                lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, unit_price: l.unit_price || 0, discount_rate: l.discount_rate || 0, tax_rate: l.tax_rate || 0, tax_code: l.tax_code || undefined })),
+                lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, unit_price: l.unit_price || 0, discount_rate: l.discount_rate || 0, tax_code: l.tax_code || undefined })),
             };
             if (payload.lines.length === 0) { toast.push('Add at least one line with ordered qty.', 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateSalesOrder(id, payload) : await api.createSalesOrder(payload);
@@ -61,7 +63,7 @@ export default function SalesOrderFormPage() {
         { key: 'qty', label: 'Ordered qty', width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
         { key: 'price', label: 'Unit price', width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
         { key: 'disc', label: 'Discount %', width: 110, render: (l, i) => <MoneyInput value={l.discount_rate} onChange={(v) => setLine(i, { discount_rate: v })} /> },
-        { key: 'tax', label: 'Tax %', width: 110, render: (l, i) => <MoneyInput value={l.tax_rate} onChange={(v) => setLine(i, { tax_rate: v })} /> },
+        { key: 'tax', label: 'Tax', width: 150, render: (l, i) => <select className="input" aria-label={`Sales tax line ${i + 1}`} value={l.tax_code} onChange={(e) => { const tax = taxOptions.find((option) => option.code === e.target.value); setLine(i, { tax_code: e.target.value, tax_rate: tax?.treatment === 'standard' ? tax.rate : 0 }); }}><option value="">No tax</option>{taxOptions.map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.treatment === 'standard' ? `${tax.rate}%` : tax.treatment}</option>)}</select> },
         { key: 'total', label: 'Line total', width: 110, render: (l) => {
             const gross = Number(l.ordered_qty || 0) * Number(l.unit_price || 0);
             const discount = gross * Number(l.discount_rate || 0) / 100;

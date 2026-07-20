@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Lot;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockBalance;
@@ -237,7 +238,7 @@ class TraceabilityController extends ApiController
 
     public function expiryRiskSummary(Request $request): JsonResponse
     {
-        $days = (int) $request->query('within_days', 90);
+        $days = (int) $request->query('within_days', InventorySetting::expiryWarningDays());
         $cutoff = now()->addDays($days)->toDateString();
         $rows = Lot::query()->with('item:id,sku,name')
             ->whereNotNull('expiry_date')->where('status', '!=', 'consumed')
@@ -257,7 +258,7 @@ class TraceabilityController extends ApiController
 
     public function expiryReport(Request $request): JsonResponse
     {
-        $days = (int) $request->query('within_days', 90);
+        $days = (int) $request->query('within_days', InventorySetting::expiryWarningDays());
         $query = Lot::query()->with('item:id,sku,name')->whereNotNull('expiry_date')
             ->whereDate('expiry_date', '<=', now()->addDays($days)->toDateString())
             ->orderBy('expiry_date');

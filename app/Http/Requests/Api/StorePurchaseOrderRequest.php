@@ -1,9 +1,15 @@
 <?php
+
 namespace App\Http\Requests\Api;
+
 use Illuminate\Foundation\Http\FormRequest;
+
 class StorePurchaseOrderRequest extends FormRequest
 {
-    public function authorize(): bool { return true; }
+    public function authorize(): bool
+    {
+        return true;
+    }
 
     protected function prepareForValidation(): void
     {
@@ -29,22 +35,23 @@ class StorePurchaseOrderRequest extends FormRequest
     {
         return [
             // Optional: generated server-side if not supplied.
-            'po_number' => ['nullable','string','max:50'],
-            'supplier_id' => ['nullable','integer'],
-            'warehouse_id' => ['required','integer'],
-            'order_date' => ['nullable','date'],
-            'expected_date' => ['nullable','date'],
-            'currency_code' => ['nullable','string','size:3'],
-            'notes' => ['nullable','string'],
-            'lines' => ['required','array','min:1'],
-            'lines.*.item_id' => ['required','integer'],
-            'lines.*.variant_id' => ['nullable','integer'],
-            'lines.*.ordered_qty' => ['required','numeric','gt:0'],
-            'lines.*.entered_qty' => ['nullable','numeric','gt:0'],
-            'lines.*.entered_unit_id' => ['nullable','integer'],
-            'lines.*.unit_price' => ['nullable','numeric','min:0'],
-            'lines.*.tax_code' => ['nullable','string','max:50'],
-            'lines.*.expected_date' => ['nullable','date'],
+            'po_number' => ['nullable', 'string', 'max:50'],
+            'supplier_id' => ['nullable', 'integer'],
+            'warehouse_id' => ['required', 'integer'],
+            'order_date' => ['nullable', 'date'],
+            'expected_date' => ['nullable', 'date'],
+            'currency_code' => ['nullable', 'string', 'size:3'],
+            'notes' => ['nullable', 'string'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.item_id' => ['required', 'integer'],
+            'lines.*.variant_id' => ['nullable', 'integer'],
+            'lines.*.ordered_qty' => ['required', 'numeric', 'gt:0'],
+            'lines.*.entered_qty' => ['nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_unit_id' => ['nullable', 'integer'],
+            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.tax_code' => ['nullable', 'string', 'max:50'],
+            'lines.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'lines.*.expected_date' => ['nullable', 'date'],
         ];
     }
 }

@@ -304,6 +304,7 @@ export const api = {
     syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
     // SolaBooks integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
+    configureIntegration: (body) => request('/integration/solabooks/connection', { method: 'PUT', body }),
     integrationAccountMappings: () => request('/integration/solabooks/mappings/accounts'),
     saveIntegrationAccountMappings: (mappings) => request('/integration/solabooks/mappings/accounts', { method: 'PUT', body: { mappings } }),
     integrationItemMappings: (params) => request('/integration/solabooks/mappings/items', { params }),

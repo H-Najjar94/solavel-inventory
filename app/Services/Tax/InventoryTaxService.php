@@ -19,14 +19,18 @@ class InventoryTaxService
             return ['code' => null, 'rate' => Decimal::cost($rate ?? '0')];
         }
         $tax = collect($this->definitions())->firstWhere('code', $code);
-        if (! $tax && $rate !== null) {
+        if (! $tax && $rate !== null && $this->definitions() === []) {
             return ['code' => $code, 'rate' => Decimal::cost($rate)];
         }
         if (! $tax || ! ($tax['active'] ?? false) || ! ($tax[$use] ?? false)) {
             throw ValidationException::withMessages(['tax_code' => 'The selected tax is inactive or not applicable.']);
         }
 
-        return ['code' => $tax['code'], 'rate' => Decimal::cost((string) $tax['rate'])];
+        $resolvedRate = in_array($tax['treatment'] ?? 'standard', ['zero', 'exempt'], true)
+            ? '0'
+            : (string) $tax['rate'];
+
+        return ['code' => $tax['code'], 'rate' => Decimal::cost($resolvedRate)];
     }
 
     public function amount(string $base, string $rate): string

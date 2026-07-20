@@ -9,6 +9,7 @@ use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -34,9 +35,12 @@ class PackService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($pl, $attributes, $orgId) {
-            $pl = PickList::query()->with('lines')->findOrFail($pl->id);
+            $pl = PickList::query()->lockForUpdate()->with('lines')->findOrFail($pl->id);
             if ($pl->status !== 'picked') {
                 throw new RuntimeException("Pick list {$pl->id} must be picked before packing (status '{$pl->status}').");
+            }
+            if (Pack::query()->where('pick_list_id', $pl->id)->whereNotIn('status', ['cancelled'])->exists()) {
+                throw new RuntimeException("Pick list {$pl->id} already belongs to an active pack.");
             }
 
             $pack = new Pack(array_merge([
@@ -53,14 +57,18 @@ class PackService
                 if (! Decimal::gt((string) $line->picked_qty, '0')) {
                     continue;
                 }
-                $pack->lines()->create([
+                $attributes = [
                     'organization_id' => $orgId,
                     'sales_order_line_id' => $line->sales_order_line_id,
                     'item_id' => $line->item_id,
                     'picked_qty' => Decimal::qty((string) $line->picked_qty),
                     'packed_qty' => '0',
                     'package_number' => 1,
-                ]);
+                ];
+                if (Schema::connection($this->conn())->hasColumn('pack_lines', 'serial_id')) {
+                    $attributes += ['lot_id' => $line->lot_id, 'serial_id' => $line->serial_id];
+                }
+                $pack->lines()->create($attributes);
             }
 
             return $pack->fresh('lines');

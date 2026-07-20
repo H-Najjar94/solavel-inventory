@@ -58,9 +58,9 @@ export default function PackDetailPage() {
             </div>}
 
             <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Picked</th><th>Packed</th></tr></thead>
+                <thead><tr><th>Item</th><th>Lot / Serial</th><th>Picked</th><th>Packed</th></tr></thead>
                 <tbody>{(pk.lines ?? []).map((l) => (
-                    <tr key={l.id}><td>#{l.item_id}</td><td>{l.picked_qty}</td>
+                    <tr key={l.id}><td>#{l.item_id}</td><td>{l.lot_id ? `lot #${l.lot_id}` : ''}{l.serial_id ? ` serial #${l.serial_id}` : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.picked_qty}</td>
                         <td>{editable ? <QuantityInput value={packs[l.id] ?? ''} onChange={(v) => setPacks({ ...packs, [l.id]: v })} /> : l.packed_qty}</td></tr>
                 ))}</tbody>
             </table></div>

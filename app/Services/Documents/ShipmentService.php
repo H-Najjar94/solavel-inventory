@@ -2,9 +2,10 @@
 
 namespace App\Services\Documents;
 
+use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SalesOrder;
-use App\Models\Tenant\Shipment;
 use App\Models\Tenant\SerialNumber;
+use App\Models\Tenant\Shipment;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
@@ -60,18 +61,31 @@ class ShipmentService
     /** Build a draft shipment from a sales order's outstanding (ordered − shipped). */
     public function fromSalesOrder(SalesOrder $so): array
     {
-        $so->loadMissing('lines');
+        $so->loadMissing(['lines.item', 'reservations']);
 
-        return $so->lines->map(function ($l) use ($so) {
+        return $so->lines->flatMap(function ($l) use ($so) {
             $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->shipped_qty));
-
-            return [
+            $base = [
                 'sales_order_line_id' => $l->id,
                 'item_id' => $l->item_id,
                 'warehouse_id' => $l->warehouse_id ?? $so->warehouse_id,
                 'bin_id' => $l->bin_id,
-                'quantity' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
             ];
+            if ($l->item?->tracksSerials()) {
+                return $so->reservations
+                    ->where('item_id', $l->item_id)
+                    ->where('warehouse_id', $l->warehouse_id ?? $so->warehouse_id)
+                    ->where('status', 'active')
+                    ->whereNotNull('serial_id')
+                    ->take((int) $remaining)
+                    ->map(fn ($reservation) => $base + [
+                        'quantity' => '1.0000',
+                        'lot_id' => $reservation->lot_id,
+                        'serial_id' => $reservation->serial_id,
+                    ]);
+            }
+
+            return [$base + ['quantity' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining]];
         })->filter(fn ($l) => Decimal::gt((string) $l['quantity'], '0'))->values()->all();
     }
 
@@ -84,6 +98,7 @@ class ShipmentService
             if ($s->status !== 'draft') {
                 throw new RuntimeException("Only a draft shipment can be edited (status '{$s->status}').");
             }
+
             $s->fill(collect($attributes)->only([
                 'shipment_number', 'sales_order_id', 'pack_id', 'ship_date', 'warehouse_id',
                 'carrier', 'carrier_service', 'tracking_number', 'ship_to',
@@ -96,6 +111,25 @@ class ShipmentService
 
             return $s->fresh('lines');
         });
+    }
+
+    private function validateReservedSerials(Shipment $shipment): void
+    {
+        if (! $shipment->sales_order_id) {
+            return;
+        }
+        foreach ($shipment->lines->whereNotNull('serial_id') as $line) {
+            $reserved = Reservation::query()
+                ->where('source_type', 'sales_order')
+                ->where('source_id', $shipment->sales_order_id)
+                ->where('serial_id', $line->serial_id)
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->exists();
+            if (! $reserved) {
+                throw new RuntimeException("Serial {$line->serial_id} is not actively reserved by this sales order.");
+            }
+        }
     }
 
     /**
@@ -115,6 +149,8 @@ class ShipmentService
             if ($s->status !== 'draft') {
                 throw new RuntimeException("Shipment {$s->id} cannot be posted from status '{$s->status}'.");
             }
+
+            $this->validateReservedSerials($s);
 
             // Release the SO reservation first so the OUT does not trip the
             // negative-stock check against still-reserved quantity.

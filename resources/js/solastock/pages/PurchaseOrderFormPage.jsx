@@ -9,7 +9,7 @@ import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx'
 import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 
-const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', notes: '' });
+const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', tax_code: '', notes: '' });
 const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function PurchaseOrderFormPage() {
@@ -24,6 +24,8 @@ export default function PurchaseOrderFormPage() {
     const [saving, setSaving] = useState(false);
 
     const existing = useApiQuery(['po', id], () => api.purchaseOrder(id), { fallback: null, enabled: isEdit });
+    const settings = useApiQuery(['settings'], api.settings, { fallback: { settings: { taxes: [] } } });
+    const taxOptions = (settings.data?.settings?.taxes ?? []).filter((tax) => tax.active && tax.purchase);
     useEffect(() => {
         if (isEdit && existing.data?.purchase_order) {
             const po = existing.data.purchase_order;
@@ -34,13 +36,19 @@ export default function PurchaseOrderFormPage() {
                 ordered_qty: l.entered_qty ?? l.ordered_qty,
                 entered_unit_id: l.entered_unit_id ?? null,
                 unit_price: enteredCost(l.unit_price, l.unit_conversion_factor),
+                tax_code: l.tax_code ?? '',
                 notes: l.notes ?? '',
             })));
         }
     }, [isEdit, existing.data]);
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
-    const total = lines.reduce((s, l) => s + Number(l.ordered_qty || 0) * Number(l.unit_price || 0), 0);
+    const totals = lines.reduce((sum, line) => {
+        const net = Number(line.ordered_qty || 0) * Number(line.unit_price || 0);
+        const tax = taxOptions.find((option) => option.code === line.tax_code);
+        const rate = tax && tax.treatment === 'standard' ? Number(tax.rate || 0) : 0;
+        return { net: sum.net + net, tax: sum.tax + (net * rate / 100) };
+    }, { net: 0, tax: 0 });
 
     async function save() {
         if (!gate.allowed) return;
@@ -71,7 +79,8 @@ export default function PurchaseOrderFormPage() {
         { key: 'qty', label: 'Quantity', width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
         { key: 'unit', label: 'Unit', width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: 'Unit cost', width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
-        { key: 'line_total', label: 'Line total', width: 110, render: (l) => <span>{(Number(l.ordered_qty || 0) * Number(l.unit_price || 0)).toFixed(2)}</span> },
+        { key: 'tax', label: 'Tax', width: 150, render: (l, i) => <select className="input" aria-label={`Purchase tax line ${i + 1}`} value={l.tax_code} onChange={(e) => setLine(i, { tax_code: e.target.value })}><option value="">No tax</option>{taxOptions.map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.treatment === 'standard' ? `${tax.rate}%` : tax.treatment}</option>)}</select> },
+        { key: 'line_total', label: 'Line total', width: 110, render: (l) => { const net = Number(l.ordered_qty || 0) * Number(l.unit_price || 0); const tax = taxOptions.find((option) => option.code === l.tax_code); const rate = tax?.treatment === 'standard' ? Number(tax.rate || 0) : 0; return <span>{(net * (1 + rate / 100)).toFixed(2)}</span>; } },
     ];
 
     return (
@@ -92,7 +101,7 @@ export default function PurchaseOrderFormPage() {
             <div className="panel">
                 <h2>Lines</h2>
                 <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
-                <DocumentTotals rows={[{ label: 'Total', value: total.toFixed(2) }]} />
+                <DocumentTotals rows={[{ label: 'Net', value: totals.net.toFixed(2) }, { label: 'Tax', value: totals.tax.toFixed(2) }, { label: 'Total', value: (totals.net + totals.tax).toFixed(2) }]} />
             </div>
 
             <div className="doc-actions">
