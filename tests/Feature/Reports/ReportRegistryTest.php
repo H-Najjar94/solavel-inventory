@@ -5,7 +5,9 @@ namespace Tests\Feature\Reports;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportExportService;
 use App\Services\Reports\ReportFilters;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -101,6 +103,19 @@ class ReportRegistryTest extends TestCase
     {
         $mw = Route::getRoutes()->getByName('api.v1.reports.export')->gatherMiddleware();
         $this->assertContains('perm:inventory.export_reports', $mw);
+    }
+
+    #[Test]
+    public function report_filters_reject_array_and_invalid_warehouse_identifiers(): void
+    {
+        foreach ([['warehouse_id' => [1, 2]], ['warehouse_id' => '1,2'], ['warehouse_id' => 0]] as $query) {
+            try {
+                ReportFilters::fromRequest(Request::create('/reports', 'GET', $query));
+                $this->fail('Invalid warehouse report filter was accepted.');
+            } catch (ValidationException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     #[Test]

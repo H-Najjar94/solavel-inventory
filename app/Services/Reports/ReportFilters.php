@@ -28,6 +28,16 @@ final class ReportFilters
 
     public static function fromRequest(Request $r): self
     {
+        $r->validate([
+            'item_id' => ['nullable', 'integer', 'min:1'],
+            'warehouse_id' => ['nullable', 'integer', 'min:1'],
+            'bin_id' => ['nullable', 'integer', 'min:1'],
+            'category_id' => ['nullable', 'integer', 'min:1'],
+            'supplier_id' => ['nullable', 'integer', 'min:1'],
+            'days' => ['nullable', 'integer', 'min:0'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:5000'],
+        ]);
+
         return new self(
             itemId: $r->filled('item_id') ? (int) $r->query('item_id') : null,
             warehouseId: $r->filled('warehouse_id') ? (int) $r->query('warehouse_id') : null,
