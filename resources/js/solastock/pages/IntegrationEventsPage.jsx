@@ -7,7 +7,11 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge, SourceDocumentLink } from '../components/document.jsx';
 
-const EVENT_TYPES = ['', 'opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'transfer.posted', 'stock_count.posted'];
+const EVENT_TYPES = [
+    '', 'opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed',
+    'grn.posted', 'transfer.posted', 'stock_count.posted', 'sales_order.confirmed', 'stock_reserved',
+    'stock_reservation_released', 'pick_list.picked', 'pack.packed', 'shipment.posted', 'sales_return.posted',
+];
 const STATUSES = ['', 'pending', 'sent', 'failed', 'ignored'];
 
 export default function IntegrationEventsPage() {
