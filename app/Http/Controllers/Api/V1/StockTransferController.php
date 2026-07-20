@@ -124,8 +124,8 @@ class StockTransferController extends ApiController
         $avail = StockBalance::query()
             ->leftJoin('warehouse_bins as bin', 'stock_balances.bin_id', '=', 'bin.id')
             ->leftJoin('lots as lot', 'stock_balances.lot_id', '=', 'lot.id')
-            ->where('item_id', (int) $request->query('item_id'))
-            ->where('warehouse_id', (int) $request->query('warehouse_id'))
+            ->where('stock_balances.item_id', (int) $request->query('item_id'))
+            ->where('stock_balances.warehouse_id', (int) $request->query('warehouse_id'))
             ->where(function ($q) {
                 $q->whereNull('bin.id')
                     ->orWhereNotIn('bin.coords->bin_type', ['quarantine', 'damaged']);
