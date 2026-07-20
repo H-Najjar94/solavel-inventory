@@ -82,6 +82,7 @@ class AccountingJournalBuilderTest extends TestCase
         $this->assertSame(['50.00', '8.00', '0.00'], array_column($lines, 'debit'));
         $this->assertSame('58.00', $lines[2]['credit']);
         $this->assertSame(7, $lines[1]['tax_rate_id']);
+        $this->assertSame('50.00', $lines[1]['taxable_base_amount']);
     }
 
     #[Test]
@@ -122,6 +123,7 @@ class AccountingJournalBuilderTest extends TestCase
         $this->assertSame('52.20', $lines[0]['debit']);
         $this->assertSame('45.00', $lines[1]['credit']);
         $this->assertSame('7.20', $lines[2]['credit']);
+        $this->assertSame('45.00', $lines[2]['taxable_base_amount']);
         $this->assertSame('30.00', $lines[3]['debit']);
         $this->assertSame('30.00', $lines[4]['credit']);
     }
