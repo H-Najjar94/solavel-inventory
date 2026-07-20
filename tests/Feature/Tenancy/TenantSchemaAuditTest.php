@@ -22,6 +22,8 @@ class TenantSchemaAuditTest extends TestCase
         $this->assertSame('pass', $audit['status']);
         $this->assertContains('stock_ledger', $audit['checked_tables']);
         $this->assertContains('expiry_warning_days', TenantSchemaAuditService::requirements()['inventory_settings']['columns']);
+        $this->assertContains('default_purchase_tax_code', TenantSchemaAuditService::requirements()['inventory_settings']['columns']);
+        $this->assertContains('default_sales_tax_code', TenantSchemaAuditService::requirements()['inventory_settings']['columns']);
         $this->assertContains('tax_amount', TenantSchemaAuditService::requirements()['purchase_order_lines']['columns']);
         $this->assertContains('serial_id', TenantSchemaAuditService::requirements()['pack_lines']['columns']);
         $this->assertContains('packl_org_serial_idx', TenantSchemaAuditService::requirements()['pack_lines']['indexes']);
