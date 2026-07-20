@@ -4,9 +4,11 @@ namespace Tests\Feature\Stock;
 
 use App\Http\Controllers\Api\V1\ItemController;
 use App\Models\Tenant\InventorySetting;
+use App\Models\Tenant\Item;
 use App\Services\Documents\OpeningStockService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
+use App\Tenancy\OrganizationContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
 use Tests\Support\TenantTestManager;
@@ -33,7 +35,7 @@ class ItemValuationTest extends TestCase
 
     private function valuationFor(int $itemId): array
     {
-        $item = \App\Models\Tenant\Item::query()->findOrFail($itemId);
+        $item = Item::query()->findOrFail($itemId);
 
         return app(ItemController::class)->valuation($item)->getData(true)['data'];
     }
@@ -120,6 +122,34 @@ class ItemValuationTest extends TestCase
     }
 
     #[Test]
+    public function valuation_aggregates_multiple_lot_coordinates_per_warehouse(): void
+    {
+        $this->boot();
+        $warehouse = F::warehouse();
+        $item = F::lotItem(['costing_method' => 'fifo']);
+        $lotA = F::lot($item, ['lot_code' => 'V-LOT-A']);
+        $lotB = F::lot($item, ['lot_code' => 'V-LOT-B']);
+        $opening = app(OpeningStockService::class);
+        $opening->post($opening->createDraft(
+            ['entry_number' => 'V-LOTS', 'warehouse_id' => $warehouse->id],
+            [
+                ['item_id' => $item->id, 'lot_id' => $lotA->id, 'quantity' => '3.0000', 'unit_cost' => '5.0000'],
+                ['item_id' => $item->id, 'lot_id' => $lotB->id, 'quantity' => '2.0000', 'unit_cost' => '8.0000'],
+            ]
+        ));
+
+        $valuation = $this->valuationFor($item->id);
+
+        $this->assertCount(1, $valuation['warehouses']);
+        $warehouseValue = $valuation['warehouses'][0];
+        $this->assertSame('5.0000', $warehouseValue['on_hand_qty']);
+        $this->assertSame('31.00', $warehouseValue['average_value']);
+        $this->assertSame('31.00', $warehouseValue['fifo_value']);
+        $this->assertTrue($warehouseValue['qty_reconciled']);
+        $this->assertCount(2, $warehouseValue['layers']);
+    }
+
+    #[Test]
     public function valuation_is_org_scoped_other_orgs_item_is_not_visible(): void
     {
         // Seed an item for ORG_A.
@@ -133,9 +163,9 @@ class ItemValuationTest extends TestCase
         $idInA = $item->id;
 
         // Switch to ORG_B (same tenant DB rows are scoped): the item must not resolve.
-        app(\App\Tenancy\OrganizationContext::class)->set(TenantTestManager::ORG_B);
+        app(OrganizationContext::class)->set(TenantTestManager::ORG_B);
         $this->assertNull(
-            \App\Models\Tenant\Item::query()->find($idInA),
+            Item::query()->find($idInA),
             'item from ORG_A must be invisible under ORG_B scope'
         );
     }
