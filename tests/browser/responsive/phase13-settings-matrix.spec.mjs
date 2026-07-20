@@ -47,6 +47,8 @@ test('owner mutates, persists, audits and restores every policy setting', async 
     else await page.getByLabel('Allow when policy permits it').uncheck();
     await page.getByLabel('Value reconciliation tolerance').fill(changed.tolerance);
     await page.getByLabel('Expiry warning days').fill(String(changed.expiry));
+    await page.getByLabel('Expiry warning days').blur();
+    await page.waitForTimeout(50);
     await page.getByRole('button', { name: 'Save policy' }).click();
     await expect(page.getByText('Settings saved.').last()).toBeVisible();
     await page.reload();
@@ -70,6 +72,8 @@ test('owner mutates, persists, audits and restores every policy setting', async 
     else await page.getByLabel('Allow when policy permits it').uncheck();
     await page.getByLabel('Value reconciliation tolerance').fill(String(before.value_tolerance ?? '0.0100'));
     await page.getByLabel('Expiry warning days').fill(String(before.expiry_warning_days ?? 30));
+    await page.getByLabel('Expiry warning days').blur();
+    await page.waitForTimeout(50);
     await page.getByRole('button', { name: 'Save policy' }).click();
     await expect(page.getByText('Settings saved.').last()).toBeVisible();
     const restored = (await api(page, 'GET', '/settings')).body.data.settings;
