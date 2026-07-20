@@ -10,6 +10,7 @@ use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockLedger;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -113,7 +114,24 @@ class TraceabilityService
             ->selectRaw('l.id lot_id, l.lot_code, l.expiry_date, l.status, b.warehouse_id, w.name warehouse, b.bin_id, b.on_hand_qty, b.reserved_qty')
             ->orderBy('l.expiry_date')->get();
 
-        return $rows->all();
+        return $rows->map(function ($row) {
+            $row->status = self::effectiveAvailabilityStatus($row->status, $row->expiry_date);
+
+            return $row;
+        })->all();
+    }
+
+    /** Match Lot::effectiveStatus() for raw-query availability projections. */
+    public static function effectiveAvailabilityStatus(?string $status, mixed $expiryDate): string
+    {
+        if (in_array($status, ['recalled', 'quarantined'], true)) {
+            return $status;
+        }
+        if ($expiryDate && CarbonImmutable::parse($expiryDate)->isPast()) {
+            return 'expired';
+        }
+
+        return $status ?? 'active';
     }
 
     /**
