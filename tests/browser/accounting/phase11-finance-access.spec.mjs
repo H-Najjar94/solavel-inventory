@@ -168,9 +168,10 @@ test('QA owner delivers a new mapped adjustment to Finance and retry stays idemp
     await expect(page).toHaveURL(/\/inventory\/dashboard/);
 
     await page.goto('/inventory/adjustments/new');
-    await page.locator('.form-grid input').first().fill(`QA11-ACC-${Date.now()}`);
-    await page.locator('.form-grid select').selectOption('1');
-    await page.locator('.form-grid input').nth(2).fill('Phase 11 accounting delivery proof');
+    await page.getByLabel('Document number').fill(`QA11-ACC-${Date.now()}`);
+    await page.getByLabel('Warehouse').selectOption('1');
+    await page.getByLabel('Reason code').selectOption({ index: 1 });
+    await page.getByLabel('Notes').fill('Phase 11 accounting delivery proof');
     await page.locator('.panel select').nth(1).selectOption('1');
     await page.locator('.panel input[type="number"]').first().fill('1');
     await page.locator('.panel input[type="number"]').last().fill('1');
