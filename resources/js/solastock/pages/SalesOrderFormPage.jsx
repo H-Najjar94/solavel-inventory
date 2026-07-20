@@ -26,6 +26,10 @@ export default function SalesOrderFormPage() {
     const settings = useApiQuery(['settings'], api.settings, { fallback: { settings: { taxes: [] } } });
     const taxOptions = (settings.data?.settings?.taxes ?? []).filter((tax) => tax.active && tax.sales);
     useEffect(() => {
+        const code = settings.data?.settings?.default_sales_tax_code;
+        if (!isEdit && code) setLines((current) => current.map((line) => line.tax_code ? line : { ...line, tax_code: code, tax_rate: taxOptions.find((tax) => tax.code === code)?.rate ?? 0 }));
+    }, [isEdit, settings.data?.settings?.default_sales_tax_code]);
+    useEffect(() => {
         if (isEdit && existing.data?.sales_order) {
             const s = existing.data.sales_order;
             if (s.status !== 'draft') { toast.push('Only draft sales orders can be edited.', 'error'); nav(`/sales-orders/${id}`); return; }
@@ -91,7 +95,7 @@ export default function SalesOrderFormPage() {
             <div className="panel">
                 <h2>Lines</h2>
                 <DocumentLinesTable columns={columns} lines={lines}
-                    onAdd={() => setLines([...lines, emptyLine()])}
+                    onAdd={() => { const code = settings.data?.settings?.default_sales_tax_code ?? ''; const tax = taxOptions.find((row) => row.code === code); setLines([...lines, { ...emptyLine(), tax_code: code, tax_rate: tax?.treatment === 'standard' ? tax.rate : 0 }]); }}
                     onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
             </div>
 

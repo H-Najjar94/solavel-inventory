@@ -27,6 +27,10 @@ export default function PurchaseOrderFormPage() {
     const settings = useApiQuery(['settings'], api.settings, { fallback: { settings: { taxes: [] } } });
     const taxOptions = (settings.data?.settings?.taxes ?? []).filter((tax) => tax.active && tax.purchase);
     useEffect(() => {
+        const code = settings.data?.settings?.default_purchase_tax_code;
+        if (!isEdit && code) setLines((current) => current.map((line) => line.tax_code ? line : { ...line, tax_code: code }));
+    }, [isEdit, settings.data?.settings?.default_purchase_tax_code]);
+    useEffect(() => {
         if (isEdit && existing.data?.purchase_order) {
             const po = existing.data.purchase_order;
             if (po.status !== 'draft') { toast.push('Only draft POs can be edited.', 'error'); nav(`/purchase-orders/${id}`); return; }
@@ -100,7 +104,7 @@ export default function PurchaseOrderFormPage() {
 
             <div className="panel">
                 <h2>Lines</h2>
-                <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[{ label: 'Net', value: totals.net.toFixed(2) }, { label: 'Tax', value: totals.tax.toFixed(2) }, { label: 'Total', value: (totals.net + totals.tax).toFixed(2) }]} />
             </div>
 

@@ -124,4 +124,39 @@ class DocumentTaxCalculationTest extends TestCase
             $this->assertSame(422, $exception->getStatusCode());
         }
     }
+
+    #[Test]
+    public function tax_defaults_are_validated_and_used_historical_codes_cannot_be_removed(): void
+    {
+        $this->bootTaxTenant();
+        $controller = app(SettingsController::class);
+        $saved = $controller->updateTaxes(Request::create('/settings/taxes', 'PUT', [
+            'taxes' => $this->taxes,
+            'default_purchase_tax_code' => 'STD15',
+            'default_sales_tax_code' => 'ZERO',
+        ]))->getData(true)['data'];
+        $this->assertSame('STD15', $saved['default_purchase_tax_code']);
+        $this->assertSame('ZERO', $saved['default_sales_tax_code']);
+
+        $item = F::item(['sku' => 'TAX-HISTORY']);
+        $this->purchase([['item_id' => $item->id, 'ordered_qty' => '1', 'unit_price' => '10', 'tax_code' => 'STD15']]);
+        try {
+            $controller->updateTaxes(Request::create('/settings/taxes', 'PUT', [
+                'taxes' => array_values(array_filter($this->taxes, fn (array $tax) => $tax['code'] !== 'STD15')),
+            ]));
+            $this->fail('A tax referenced by a historical document must not be removed.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+        }
+
+        try {
+            $controller->updateTaxes(Request::create('/settings/taxes', 'PUT', [
+                'taxes' => $this->taxes,
+                'default_purchase_tax_code' => 'OFF',
+            ]));
+            $this->fail('An inactive tax must not be accepted as a default.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+        }
+    }
 }

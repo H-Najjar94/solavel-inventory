@@ -298,7 +298,7 @@ export const api = {
     // Settings + integration
     settings: () => request('/settings'),
     updateSettings: (body) => request('/settings', { method: 'PUT', body }),
-    updateTaxes: (taxes) => request('/settings/taxes', { method: 'PUT', body: { taxes } }),
+    updateTaxes: (taxes, defaults = {}) => request('/settings/taxes', { method: 'PUT', body: { taxes, default_purchase_tax_code: defaults.purchase || null, default_sales_tax_code: defaults.sales || null } }),
     warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}`),
     allWarehouseAssignments: () => request('/settings/warehouse-assignments'),
     syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
