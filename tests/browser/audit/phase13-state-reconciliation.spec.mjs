@@ -24,6 +24,15 @@ async function getJson(page, path) {
     return response.json();
 }
 
+async function getAllEvents(page, status) {
+    const rows = [];
+    for (let current = 1; ; current += 1) {
+        const payload = await getJson(page, `/integration/solabooks/events?status=${status}&per_page=100&page=${current}`);
+        rows.push(...(payload.data?.data ?? payload.data ?? []));
+        if (current >= Number(payload.meta?.last_page ?? 1)) return rows;
+    }
+}
+
 test('exact outbox totals and the 16 percent tax mapping are unambiguous', async ({ page }) => {
     await login(page);
     const statuses = {};
@@ -33,6 +42,11 @@ test('exact outbox totals and the 16 percent tax mapping are unambiguous', async
     }
     const all = await getJson(page, '/integration/solabooks/events?per_page=1');
     expect(Object.values(statuses).reduce((sum, count) => sum + count, 0)).toBe(all.meta.total);
+    const statusEvents = {};
+    for (const status of ['pending', 'sent', 'failed', 'ignored']) statusEvents[status] = await getAllEvents(page, status);
+    const byType = Object.fromEntries(Object.entries(statusEvents).map(([status, events]) => [status,
+        Object.fromEntries(Object.entries(Object.groupBy(events, (event) => event.event_type))
+            .map(([type, typed]) => [type, { count: typed.length, ids: typed.map((event) => event.id) }]))]));
 
     const settings = await getJson(page, '/settings');
     const standard = settings.data.settings.taxes.find((tax) => tax.code === 'QA12-STD16');
@@ -57,7 +71,7 @@ test('exact outbox totals and the 16 percent tax mapping are unambiguous', async
     fs.mkdirSync(evidenceDir, { recursive: true });
     fs.writeFileSync(`${evidenceDir}/state-reconciliation.json`, `${JSON.stringify({
         captured_at: new Date().toISOString(),
-        outbox: { statuses, total: all.meta.total },
+        outbox: { statuses, total: all.meta.total, by_type: byType },
         phase12_manual_reclassifications: historical,
         phase12_tax: {
             name: standard.name,
