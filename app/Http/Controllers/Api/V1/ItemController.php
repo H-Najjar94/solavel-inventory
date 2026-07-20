@@ -687,7 +687,16 @@ class ItemController extends ApiController
     {
         $balances = $this->warehouseAccess->scope(
             StockBalance::query()->where('item_id', $item->id)
-        )->get();
+        )
+            // A tracked item can have several balance coordinates in one
+            // warehouse (one per lot, serial, or bin). Valuation is exposed per
+            // warehouse, so aggregate those coordinates before comparing them
+            // with the warehouse-level FIFO layer stack. Mapping each coordinate
+            // separately duplicated the same layers and falsely reported a
+            // reconciliation failure for lot/serial-controlled items.
+            ->selectRaw('item_id, warehouse_id, SUM(on_hand_qty) AS on_hand_qty, SUM(reserved_qty) AS reserved_qty, SUM(on_hand_qty) - SUM(reserved_qty) AS available_qty, SUM(total_value) AS total_value, CASE WHEN SUM(on_hand_qty) = 0 THEN 0 ELSE SUM(total_value) / SUM(on_hand_qty) END AS average_cost')
+            ->groupBy('item_id', 'warehouse_id')
+            ->get();
         $layers = $this->warehouseAccess->scope(
             CostLayer::query()->where('item_id', $item->id)
         )
