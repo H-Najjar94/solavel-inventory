@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemAttachment;
 use Illuminate\Http\JsonResponse;
@@ -70,6 +71,12 @@ class ItemAttachmentController extends ApiController
         if (! isset(self::ALLOWED_TYPES[$ext]) || ! in_array($mime, self::ALLOWED_TYPES[$ext], true)) {
             throw ValidationException::withMessages(['attachment' => 'The attachment content does not match an allowed image or PDF type.']);
         }
+        if ($ext === 'pdf') {
+            $content = file_get_contents($file->getRealPath()) ?: '';
+            if (preg_match('/\/(JavaScript|JS|Launch|EmbeddedFile)\b/i', $content)) {
+                throw ValidationException::withMessages(['attachment' => 'PDF attachments containing active or embedded content are not allowed.']);
+            }
+        }
         $path = "inventory/item-attachments/{$orgId}/{$item->id}/".Str::uuid()->toString().'.'.$ext;
         Storage::disk(self::DISK)->putFileAs(dirname($path), $file, basename($path));
 
@@ -81,6 +88,16 @@ class ItemAttachmentController extends ApiController
                 'path' => $path,
                 'mime_type' => $mime,
                 'size_bytes' => $file->getSize() ?: 0,
+            ]);
+            InventoryAuditLog::create([
+                'organization_id' => $orgId,
+                'actor_user_id' => auth()->id(),
+                'action' => 'item.attachment.created',
+                'entity_type' => 'item_attachment',
+                'entity_id' => $attachment->id,
+                'after' => ['item_id' => $item->id, 'name' => $name, 'mime_type' => $mime, 'size_bytes' => $file->getSize() ?: 0],
+                'document_ref' => $item->sku,
+                'created_at' => now(),
             ]);
         } catch (Throwable $exception) {
             Storage::disk(self::DISK)->delete($path);
@@ -98,14 +115,28 @@ class ItemAttachmentController extends ApiController
         return Storage::disk(self::DISK)->response(
             $attachment->path,
             $attachment->name,
-            ['Cache-Control' => 'private, max-age=0, no-store']
+            [
+                'Cache-Control' => 'private, max-age=0, no-store',
+                'X-Content-Type-Options' => 'nosniff',
+                'Content-Security-Policy' => "sandbox; default-src 'none'",
+            ]
         );
     }
 
     public function destroy(ItemAttachment $attachment): JsonResponse
     {
+        $audit = [
+            'organization_id' => $attachment->organization_id,
+            'actor_user_id' => auth()->id(),
+            'action' => 'item.attachment.deleted',
+            'entity_type' => 'item_attachment',
+            'entity_id' => $attachment->id,
+            'before' => ['item_id' => $attachment->item_id, 'name' => $attachment->name, 'mime_type' => $attachment->mime_type, 'size_bytes' => $attachment->size_bytes],
+            'created_at' => now(),
+        ];
         Storage::disk(self::DISK)->delete($attachment->path);
         $attachment->delete();
+        InventoryAuditLog::create($audit);
 
         return $this->success(['deleted' => true]);
     }
