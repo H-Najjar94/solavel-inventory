@@ -58,6 +58,15 @@ class FefoAndCaptureTest extends TestCase
     }
 
     #[Test]
+    public function availability_projects_the_effective_expiry_status(): void
+    {
+        $this->assertSame('expired', TraceabilityService::effectiveAvailabilityStatus('active', now()->subDay()->toDateString()));
+        $this->assertSame('active', TraceabilityService::effectiveAvailabilityStatus('active', now()->addDay()->toDateString()));
+        $this->assertSame('quarantined', TraceabilityService::effectiveAvailabilityStatus('quarantined', now()->subDay()->toDateString()));
+        $this->assertSame('recalled', TraceabilityService::effectiveAvailabilityStatus('recalled', null));
+    }
+
+    #[Test]
     public function fefo_and_capture_helper_routes_are_registered(): void
     {
         $names = collect(Route::getRoutes()->getRoutes())->map(fn ($r) => $r->getName())->filter()->all();
