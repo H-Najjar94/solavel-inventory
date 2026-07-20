@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\CostLayer;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,8 @@ use Illuminate\Http\Request;
  */
 class StockLedgerController extends ApiController
 {
+    public function __construct(private WarehouseAccessService $warehouseAccess) {}
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min((int) $request->query('per_page', 50), 200);
@@ -31,6 +34,7 @@ class StockLedgerController extends ApiController
             ->when($request->filled('to'), fn ($q) => $q->whereDate('moved_at', '<=', $request->query('to')))
             // Ledger is chronological: oldest→newest gives a meaningful running balance.
             ->orderBy('moved_at')->orderBy('id');
+        $this->warehouseAccess->scope($query);
 
         $page = $query->paginate($perPage)->withQueryString();
         $page->setCollection(SourceDocumentPresenter::decorateRows($page->getCollection()));

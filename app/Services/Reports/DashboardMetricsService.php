@@ -4,10 +4,12 @@ namespace App\Services\Reports;
 
 use App\Http\Controllers\Api\V1\StockLedgerController;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Aggregates dashboard KPIs from canonical projections + document tables.
@@ -20,6 +22,8 @@ use Illuminate\Support\Facades\DB;
  */
 class DashboardMetricsService
 {
+    public function __construct(private WarehouseAccessService $warehouseAccess) {}
+
     private function db()
     {
         return DB::connection(config('tenancy.tenant_connection', 'tenant'));
@@ -42,7 +46,14 @@ class DashboardMetricsService
     {
         $alias = preg_match('/\s+as\s+(\w+)\s*$/i', $table, $m) ? $m[1] : $table;
 
-        return $this->db()->table($table)->where($alias.'.organization_id', $this->orgId());
+        $query = $this->db()->table($table)->where($alias.'.organization_id', $this->orgId());
+        $allowed = $this->warehouseAccess->allowedIds();
+        $baseTable = preg_replace('/\s+as\s+\w+\s*$/i', '', $table);
+        if ($allowed !== null && Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasColumn($baseTable, 'warehouse_id')) {
+            $query->whereIn($alias.'.warehouse_id', $allowed);
+        }
+
+        return $query;
     }
 
     public function metrics(): array
@@ -50,11 +61,16 @@ class DashboardMetricsService
         $balances = $this->scoped('stock_balances')->get(['item_id', 'on_hand_qty', 'reserved_qty', 'total_value']);
 
         $inventoryValue = '0';
-        $low = 0; $out = 0;
+        $low = 0;
+        $out = 0;
         foreach ($balances as $b) {
             $inventoryValue = Decimal::add($inventoryValue, (string) $b->total_value);
             $avail = (float) $b->on_hand_qty - (float) $b->reserved_qty;
-            if ($avail <= 0) { $out++; } elseif ($avail <= 5) { $low++; }
+            if ($avail <= 0) {
+                $out++;
+            } elseif ($avail <= 5) {
+                $low++;
+            }
         }
 
         $today = now()->toDateString();
@@ -106,7 +122,7 @@ class DashboardMetricsService
 
     private function recentMovements()
     {
-        $rows = StockLedger::query()
+        $rows = $this->warehouseAccess->scope(StockLedger::query())
             ->with(['warehouse:id,name,code', 'item:id,name,sku'])
             ->orderByDesc('id')
             ->limit(10)

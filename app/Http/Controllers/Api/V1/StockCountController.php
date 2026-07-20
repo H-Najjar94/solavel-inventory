@@ -30,6 +30,7 @@ class StockCountController extends ApiController
             ->with(['warehouse:id,name,code', 'adjustment:id,adjustment_number'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->orderByDesc('id');
+        $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockCount $count) {
             $count->setAttribute('warehouse_name', $count->warehouse?->name);
@@ -66,6 +67,7 @@ class StockCountController extends ApiController
     {
         $request->validate(['warehouse_id' => ['required', 'integer']]);
         $warehouseId = (int) $request->query('warehouse_id');
+        $this->warehouseAccess->assertAllowed($warehouseId);
         $rows = StockBalance::query()
             ->where('warehouse_id', $warehouseId)
             ->when($request->filled('bin_id'), fn ($q) => $q->where('bin_id', (int) $request->query('bin_id')))

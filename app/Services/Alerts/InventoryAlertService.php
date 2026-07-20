@@ -3,13 +3,17 @@
 namespace App\Services\Alerts;
 
 use App\Models\Tenant\InventoryAlert;
+use App\Services\Access\WarehouseAccessService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class InventoryAlertService
 {
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(
+        private OrganizationContext $context,
+        private WarehouseAccessService $warehouseAccess,
+    ) {}
 
     /** Refresh in-app/email-ready exception alerts from canonical projections. */
     public function refresh(): Collection
@@ -29,6 +33,7 @@ class InventoryAlertService
                     ->on('rr.organization_id', '=', 'b.organization_id');
             })
             ->where('b.organization_id', $orgId)
+            ->when($this->warehouseAccess->allowedIds() !== null, fn ($query) => $query->whereIn('b.warehouse_id', $this->warehouseAccess->allowedIds()))
             ->whereRaw('COALESCE(rr.reorder_point, i.reorder_point) IS NOT NULL')
             ->whereRaw('(b.on_hand_qty - b.reserved_qty) <= COALESCE(rr.reorder_point, i.reorder_point)')
             ->selectRaw('i.id item_id, i.sku, i.name item, w.name warehouse, b.warehouse_id,
@@ -68,6 +73,7 @@ class InventoryAlertService
             ->join('lots as l', 'l.id', '=', 'b.lot_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->where('b.organization_id', $orgId)
+            ->when($this->warehouseAccess->allowedIds() !== null, fn ($query) => $query->whereIn('b.warehouse_id', $this->warehouseAccess->allowedIds()))
             ->where('b.on_hand_qty', '>', 0)
             ->whereNotNull('l.expiry_date')
             ->whereDate('l.expiry_date', '<=', now()->addDays(30)->toDateString())
@@ -109,11 +115,22 @@ class InventoryAlertService
             ->whereIn('status', ['open', 'acknowledged'])
             ->update(['status' => 'resolved']);
 
-        return InventoryAlert::query()
+        $alerts = InventoryAlert::query()
             ->whereIn('status', ['open', 'acknowledged'])
             ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")
             ->orderByDesc('triggered_at')
             ->limit(100)
             ->get();
+
+        $allowed = $this->warehouseAccess->allowedIds();
+        if ($allowed !== null) {
+            $alerts = $alerts->filter(function (InventoryAlert $alert) use ($allowed) {
+                $warehouseId = data_get($alert->metadata, 'warehouse_id');
+
+                return $warehouseId === null || in_array((int) $warehouseId, $allowed, true);
+            })->values();
+        }
+
+        return $alerts;
     }
 }

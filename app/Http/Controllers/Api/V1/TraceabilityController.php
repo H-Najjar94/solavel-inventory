@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\Lot;
-use App\Models\Tenant\Recall;
 use App\Models\Tenant\SerialNumber;
+use App\Models\Tenant\StockBalance;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Traceability\LotService;
 use App\Services\Traceability\SerialService;
 use App\Services\Traceability\TraceabilityService;
@@ -24,6 +25,7 @@ class TraceabilityController extends ApiController
         private TraceabilityService $trace,
         private LotService $lots,
         private SerialService $serials,
+        private WarehouseAccessService $warehouseAccess,
     ) {}
 
     // ── Lots ──
@@ -36,17 +38,24 @@ class TraceabilityController extends ApiController
             ->when($request->filled('q'), fn ($q) => $q->where('lot_code', 'like', '%'.$request->query('q').'%'))
             ->when($request->boolean('expiring'), fn ($q) => $q->whereNotNull('expiry_date')->orderBy('expiry_date'))
             ->orderByDesc('id');
+        if (($allowed = $this->warehouseAccess->allowedIds()) !== null) {
+            $query->whereIn('id', StockBalance::query()->whereIn('warehouse_id', $allowed)->where('on_hand_qty', '>', 0)->whereNotNull('lot_id')->pluck('lot_id'));
+        }
 
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 
     public function lot(Lot $lot): JsonResponse
     {
+        $this->warehouseAccess->assertLotAllowed((int) $lot->id);
+
         return $this->success($this->trace->lotTrace($lot));
     }
 
     public function lotMovements(Lot $lot): JsonResponse
     {
+        $this->warehouseAccess->assertLotAllowed((int) $lot->id);
+
         return $this->success(['movements' => $this->trace->lotTrace($lot)['movements']]);
     }
 
@@ -54,6 +63,9 @@ class TraceabilityController extends ApiController
     {
         $itemId = (int) $request->query('item_id');
         $warehouseId = $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+        if ($warehouseId !== null) {
+            $this->warehouseAccess->assertAllowed($warehouseId);
+        }
 
         return $this->success(['lots' => $this->trace->lotAvailability($itemId, $warehouseId)]);
     }
@@ -79,17 +91,22 @@ class TraceabilityController extends ApiController
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('q'), fn ($q) => $q->where('serial', 'like', '%'.$request->query('q').'%'))
             ->orderByDesc('id');
+        $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 
     public function serial(SerialNumber $serial): JsonResponse
     {
+        $this->warehouseAccess->assertSerialAllowed((int) $serial->id);
+
         return $this->success($this->trace->serialTrace($serial));
     }
 
     public function serialLifecycle(SerialNumber $serial): JsonResponse
     {
+        $this->warehouseAccess->assertSerialAllowed((int) $serial->id);
+
         $t = $this->trace->serialTrace($serial);
 
         return $this->success(['timeline' => $t['timeline'], 'lifecycle_status' => $t['lifecycle_status']]);
@@ -99,6 +116,9 @@ class TraceabilityController extends ApiController
     {
         $itemId = (int) $request->query('item_id');
         $warehouseId = $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+        if ($warehouseId !== null) {
+            $this->warehouseAccess->assertAllowed($warehouseId);
+        }
 
         return $this->success(['serials' => $this->trace->serialAvailability($itemId, $warehouseId)]);
     }
