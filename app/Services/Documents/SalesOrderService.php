@@ -58,7 +58,7 @@ class SalesOrderService
             $this->refreshTotals($so);
 
             return $so->fresh(['lines', 'customer']);
-        });
+        }, 3);
     }
 
     public function updateDraft(SalesOrder $so, array $attributes, array $lines): SalesOrder
