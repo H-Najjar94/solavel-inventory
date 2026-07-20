@@ -327,7 +327,15 @@ export default function SettingsPage() {
                     <label className="check-inline"><input type="checkbox" checked={taxDraft.active} onChange={(e) => setTaxDraft({ ...taxDraft, active: e.target.checked })} /> Active</label>
                     <button className="btn btn--sm">Add tax</button>
                 </form>
-                <form onSubmit={saveTaxes}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Code</th><th>Name</th><th>Rate</th><th>Treatment</th><th>Active</th><th>Use</th><th></th></tr></thead><tbody>{taxes.map((tax, i) => <tr key={`${tax.code}-${i}`}><td>{tax.code}</td><td>{tax.name}</td><td>{tax.rate}%</td><td>{tax.treatment}</td><td>{tax.active ? 'Yes' : 'No'}</td><td>{[tax.purchase && 'Purchase', tax.sales && 'Sales'].filter(Boolean).join(', ')}</td><td><button type="button" className="btn btn--sm" onClick={() => setTaxes(taxes.filter((_, j) => j !== i))}>Remove</button></td></tr>)}</tbody></table><button className="btn btn--primary" style={{ marginTop: 12 }}>Save tax settings</button></form>
+                <form onSubmit={saveTaxes}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>Code</th><th>Name</th><th>Rate</th><th>Treatment</th><th>Active</th><th>Use</th><th></th></tr></thead><tbody>{taxes.map((tax, i) => <tr key={`${tax.code}-${i}`}>
+                    <td>{tax.code}</td>
+                    <td><input className="input" aria-label={`Tax name ${tax.code}`} value={tax.name} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, name: e.target.value } : row))} /></td>
+                    <td><input className="input" aria-label={`Tax rate ${tax.code}`} type="number" min="0" max="100" step="0.0001" value={tax.rate} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, rate: Number(e.target.value) } : row))} /></td>
+                    <td><select className="input" aria-label={`Tax treatment ${tax.code}`} value={tax.treatment} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, treatment: e.target.value } : row))}><option value="standard">Standard</option><option value="zero">Zero</option><option value="exempt">Exempt</option></select></td>
+                    <td><input aria-label={`Tax active ${tax.code}`} type="checkbox" checked={!!tax.active} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, active: e.target.checked } : row))} /></td>
+                    <td><label className="check-inline"><input aria-label={`Tax purchase ${tax.code}`} type="checkbox" checked={!!tax.purchase} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, purchase: e.target.checked } : row))} /> Purchase</label><label className="check-inline"><input aria-label={`Tax sales ${tax.code}`} type="checkbox" checked={!!tax.sales} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, sales: e.target.checked } : row))} /> Sales</label></td>
+                    <td><button type="button" className="btn btn--sm" onClick={() => setTaxes(taxes.filter((_, j) => j !== i))}>Remove</button></td>
+                </tr>)}</tbody></table><button className="btn btn--primary" style={{ marginTop: 12 }}>Save tax settings</button></form>
             </div>
 
             <div className="panel">
