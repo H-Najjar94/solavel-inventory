@@ -3,6 +3,7 @@
 namespace Tests\Feature\Catalog;
 
 use App\Http\Controllers\Api\V1\ItemAttachmentController;
+use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\ItemAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -38,12 +39,14 @@ class ItemAttachmentSecurityTest extends TestCase
         $this->assertSame('دليل.pdf', $first['name']);
         $this->assertSame('دليل.pdf', $second['name']);
         $this->assertNotSame(ItemAttachment::findOrFail($first['id'])->path, ItemAttachment::findOrFail($second['id'])->path);
+        $this->assertTrue(InventoryAuditLog::query()->where('action', 'item.attachment.created')->where('entity_id', $first['id'])->exists());
 
         $path = ItemAttachment::findOrFail($first['id'])->path;
         Storage::disk('local')->assertExists($path);
         app(ItemAttachmentController::class)->destroy(ItemAttachment::findOrFail($first['id']));
         Storage::disk('local')->assertMissing($path);
         $this->assertNull(ItemAttachment::query()->find($first['id']));
+        $this->assertTrue(InventoryAuditLog::query()->where('action', 'item.attachment.deleted')->where('entity_id', $first['id'])->exists());
 
         $this->useTenantB();
         $this->assertNull(ItemAttachment::query()->find($second['id']));
@@ -61,6 +64,7 @@ class ItemAttachmentSecurityTest extends TestCase
             UploadedFile::fake()->create('empty.pdf', 0, 'application/pdf'),
             UploadedFile::fake()->create('image.jpg', 2, 'application/pdf'),
             UploadedFile::fake()->create('payload.php', 2, 'application/x-php'),
+            UploadedFile::fake()->createWithContent('active.pdf', "%PDF-1.4\n/JavaScript /JS /Launch\n%%EOF"),
         ];
 
         foreach ($cases as $file) {
