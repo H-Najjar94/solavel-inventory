@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\StoreStockCountRequest;
+use App\Models\Tenant\Lot;
+use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\StockCountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +18,10 @@ use RuntimeException;
 
 class StockCountController extends ApiController
 {
-    public function __construct(private StockCountService $service) {}
+    public function __construct(
+        private StockCountService $service,
+        private WarehouseAccessService $warehouseAccess,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -29,12 +35,14 @@ class StockCountController extends ApiController
             $count->setAttribute('warehouse_name', $count->warehouse?->name);
             $count->setAttribute('warehouse_code', $count->warehouse?->code);
             $count->setAttribute('adjustment_number', $count->adjustment?->adjustment_number);
+
             return $count;
         }));
     }
 
     public function show(StockCount $stock_count): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $stock_count->warehouse_id);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         $stock_count->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
         $stock_count->setAttribute('warehouse_name', $stock_count->warehouse?->name);
@@ -65,11 +73,11 @@ class StockCountController extends ApiController
 
         // Lot metadata for the prefilled lot rows (code + expiry for the UI).
         $lotIds = $rows->pluck('lot_id')->filter()->unique()->values();
-        $lots = \App\Models\Tenant\Lot::query()->whereIn('id', $lotIds)->get(['id', 'lot_code', 'expiry_date', 'status'])->keyBy('id');
+        $lots = Lot::query()->whereIn('id', $lotIds)->get(['id', 'lot_code', 'expiry_date', 'status'])->keyBy('id');
 
         // Expected serials currently in stock at this warehouse, grouped by item,
         // so a serial-tracked count line can present its expected serial list.
-        $serials = \App\Models\Tenant\SerialNumber::query()
+        $serials = SerialNumber::query()
             ->where('warehouse_id', $warehouseId)
             ->whereIn('status', ['available', 'in_stock'])
             ->get(['id', 'item_id', 'serial', 'lot_id'])
@@ -101,6 +109,7 @@ class StockCountController extends ApiController
 
     public function update(StoreStockCountRequest $request, StockCount $stock_count): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $stock_count->warehouse_id);
         try {
             $data = $request->validated();
             $count = $this->service->updateDraft($stock_count, collect($data)->except('lines')->toArray(), $data['lines']);
@@ -113,8 +122,12 @@ class StockCountController extends ApiController
 
     public function post(StockCount $stock_count): JsonResponse
     {
-        try { $count = $this->service->post($stock_count); }
-        catch (RuntimeException $e) { return $this->error('count_post_failed', $e->getMessage(), 422); }
+        $this->warehouseAccess->assertAllowed((int) $stock_count->warehouse_id);
+        try {
+            $count = $this->service->post($stock_count);
+        } catch (RuntimeException $e) {
+            return $this->error('count_post_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($count->fresh('lines'));
     }

@@ -73,6 +73,12 @@ class WarehouseAccessService
         }
     }
 
+    public function assertTransferAllowed(int $fromWarehouseId, int $toWarehouseId): void
+    {
+        $this->assertAllowed($fromWarehouseId);
+        $this->assertAllowed($toWarehouseId);
+    }
+
     public function scope(Builder $query, string $column = 'warehouse_id'): Builder
     {
         $allowed = $this->allowedIds();

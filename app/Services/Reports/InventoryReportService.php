@@ -2,10 +2,12 @@
 
 namespace App\Services\Reports;
 
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 
 /**
@@ -86,8 +88,19 @@ class InventoryReportService
     private function scoped(string $table)
     {
         $alias = preg_match('/\s+as\s+(\w+)\s*$/i', $table, $m) ? $m[1] : $table;
+        $query = $this->db()->table($table)->where($alias.'.organization_id', $this->orgId());
+        $allowed = app(WarehouseAccessService::class)->allowedIds();
+        $baseTable = preg_replace('/\s+as\s+\w+\s*$/i', '', $table);
+        if ($allowed !== null) {
+            if ($baseTable === 'stock_transfers') {
+                $query->whereIn($alias.'.from_warehouse_id', $allowed)
+                    ->whereIn($alias.'.to_warehouse_id', $allowed);
+            } elseif (Schema::connection($this->conn())->hasColumn($baseTable, 'warehouse_id')) {
+                $query->whereIn($alias.'.warehouse_id', $allowed);
+            }
+        }
 
-        return $this->db()->table($table)->where($alias.'.organization_id', $this->orgId());
+        return $query;
     }
 
     // ── 1. Inventory Valuation ──

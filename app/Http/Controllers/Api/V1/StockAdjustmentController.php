@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\StockAdjustmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,9 +19,12 @@ use RuntimeException;
  */
 class StockAdjustmentController extends ApiController
 {
-    use \App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
+    use ResolvesTraceOverrides;
 
-    public function __construct(private StockAdjustmentService $service) {}
+    public function __construct(
+        private StockAdjustmentService $service,
+        private WarehouseAccessService $warehouseAccess,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -33,12 +38,14 @@ class StockAdjustmentController extends ApiController
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockAdjustment $adjustment) {
             $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
             $adjustment->setAttribute('warehouse_code', $adjustment->warehouse?->code);
+
             return $adjustment;
         }));
     }
 
     public function show(StockAdjustment $adjustment): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         $adjustment->load(['lines.item:id,name,sku', 'lines.bin:id,code', 'warehouse:id,name,code']);
         $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
@@ -52,6 +59,7 @@ class StockAdjustmentController extends ApiController
                 $row->setAttribute('item_sku', $row->item?->sku);
                 $row->setAttribute('warehouse_name', $row->warehouse?->name);
                 $row->setAttribute('warehouse_code', $row->warehouse?->code);
+
                 return $row;
             });
 
@@ -76,6 +84,7 @@ class StockAdjustmentController extends ApiController
 
     public function update(StoreStockAdjustmentRequest $request, StockAdjustment $adjustment): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         try {
             $data = $request->validated();
             $updated = $this->service->updateDraft($adjustment, collect($data)->except('lines')->toArray(), $data['lines']);
@@ -88,6 +97,7 @@ class StockAdjustmentController extends ApiController
 
     public function post(Request $request, StockAdjustment $adjustment): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         try {
             $adjustment = $this->service->post($adjustment, $this->resolveTraceOverrides($request));
         } catch (RuntimeException $e) {
@@ -99,6 +109,7 @@ class StockAdjustmentController extends ApiController
 
     public function reverse(StockAdjustment $adjustment): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         try {
             $adjustment = $this->service->reverse($adjustment);
         } catch (RuntimeException $e) {
