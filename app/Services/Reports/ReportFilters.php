@@ -2,6 +2,7 @@
 
 namespace App\Services\Reports;
 
+use App\Models\Tenant\InventorySetting;
 use Illuminate\Http\Request;
 
 /**
@@ -38,7 +39,7 @@ final class ReportFilters
             to: $r->query('to') ?: null,
             asAt: $r->query('as_at') ?: null,
             currency: $r->query('currency') ? strtoupper((string) $r->query('currency')) : null,
-            days: (int) $r->query('days', 90),
+            days: (int) $r->query('days', self::defaultExpiryDays()),
             limit: min((int) $r->query('limit', 1000), 5000),
         );
     }
@@ -56,9 +57,14 @@ final class ReportFilters
             to: $filters['to'] ?? null,
             asAt: $filters['as_at'] ?? null,
             currency: isset($filters['currency']) ? strtoupper((string) $filters['currency']) : null,
-            days: (int) ($filters['days'] ?? 90),
+            days: (int) ($filters['days'] ?? self::defaultExpiryDays()),
             limit: min((int) ($filters['limit'] ?? 1000), 5000),
         );
+    }
+
+    private static function defaultExpiryDays(): int
+    {
+        return InventorySetting::expiryWarningDays();
     }
 
     public function toArray(): array

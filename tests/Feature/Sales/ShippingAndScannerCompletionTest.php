@@ -15,6 +15,7 @@ use App\Services\Documents\OpeningStockService;
 use App\Services\Documents\SalesOrderService;
 use App\Services\Documents\ShipmentService;
 use App\Services\Shipping\CarrierService;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
@@ -53,12 +54,12 @@ class ShippingAndScannerCompletionTest extends TestCase
         ItemBarcode::create(['item_id' => $item->id, 'barcode' => 'B6-ITEM-BC', 'type' => 'primary']);
         $customer = Customer::create(['code' => 'B6-CUST', 'name' => 'Batch Six Customer', 'is_active' => true]);
 
-        $labels = (new WarehouseStructureController(app(\App\Tenancy\OrganizationContext::class)))
+        $labels = (new WarehouseStructureController(app(OrganizationContext::class)))
             ->labelSheet($warehouse)->getData(true)['data']['labels'];
         $this->assertSame('BIN-A-01', $labels[0]['barcode']);
         $this->assertStringContainsString('<svg', $labels[0]['qr_svg']);
 
-        $scanner = new ScannerController();
+        $scanner = new ScannerController;
         $itemScan = $scanner->lookup(Request::create('/scanner/lookup', 'GET', ['code' => 'B6-ITEM-BC']))->getData(true)['data'];
         $this->assertSame('item', $itemScan['type']);
         $binScan = $scanner->lookup(Request::create('/scanner/lookup', 'GET', ['code' => 'BIN-A-01']))->getData(true)['data'];
@@ -90,6 +91,9 @@ class ShippingAndScannerCompletionTest extends TestCase
             'unit_price' => '25.0000',
         ]]);
         $order = $sales->confirm($order);
+        $order = $sales->reserve($order, [
+            'serial_ids' => [$order->lines->first()->id => [$serial->id]],
+        ]);
 
         $shipment = app(ShipmentService::class)->createDraft([
             'shipment_number' => 'B6-SHIP',

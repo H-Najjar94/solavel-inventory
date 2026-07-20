@@ -100,7 +100,7 @@ class SalesOrderService
     public function reserve(SalesOrder $so, array $options = []): SalesOrder
     {
         return DB::connection($this->conn())->transaction(function () use ($so, $options) {
-            $so = SalesOrder::query()->lockForUpdate()->with('lines')->findOrFail($so->id);
+            $so = SalesOrder::query()->lockForUpdate()->with('lines.item')->findOrFail($so->id);
             if (! in_array($so->status, ['confirmed', 'partially_reserved', 'reserved'], true)) {
                 throw new RuntimeException("Sales order must be confirmed before reserving (status '{$so->status}').");
             }
@@ -120,13 +120,33 @@ class SalesOrderService
                 }
 
                 $needed = Decimal::sub((string) $line->ordered_qty, (string) $line->reserved_qty);
-                $res = $this->reservations->reserveAvailableAcrossLots(
-                    (int) $line->item_id, (int) ($line->warehouse_id ?? $so->warehouse_id),
-                    $needed, 'sales_order', (int) $so->id,
-                    $line->bin_id ? (int) $line->bin_id : null,
-                    $expiresAt,
-                    $priority
-                );
+                $warehouseId = (int) ($line->warehouse_id ?? $so->warehouse_id);
+                $selectedSerials = array_values(array_unique(array_map('intval', $options['serial_ids'][$line->id] ?? [])));
+                if ($line->item?->tracksSerials()) {
+                    if ((float) $needed !== (float) count($selectedSerials)) {
+                        throw new RuntimeException("Select exactly {$needed} serial(s) for {$line->item->sku}.");
+                    }
+                    $res = [];
+                    foreach ($selectedSerials as $serialId) {
+                        $res[] = $this->reservations->reserveSerial(
+                            (int) $line->item_id,
+                            $warehouseId,
+                            $serialId,
+                            'sales_order',
+                            (int) $so->id,
+                            $expiresAt,
+                            $priority,
+                        );
+                    }
+                } else {
+                    $res = $this->reservations->reserveAvailableAcrossLots(
+                        (int) $line->item_id, $warehouseId,
+                        $needed, 'sales_order', (int) $so->id,
+                        $line->bin_id ? (int) $line->bin_id : null,
+                        $expiresAt,
+                        $priority
+                    );
+                }
                 $allocated = collect($res)->reduce(
                     fn (string $total, $reservation): string => Decimal::add($total, (string) $reservation->qty),
                     '0',

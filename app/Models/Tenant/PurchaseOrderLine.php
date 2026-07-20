@@ -20,6 +20,9 @@ class PurchaseOrderLine extends Model
         'unit_price' => 'decimal:4',
         'entered_qty' => 'decimal:4',
         'unit_conversion_factor' => 'decimal:8',
+        'tax_rate' => 'decimal:4',
+        'tax_amount' => 'decimal:2',
+        'line_total' => 'decimal:2',
     ];
 
     /** The item this line is for — used to surface names, not raw IDs. */

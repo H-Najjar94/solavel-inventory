@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\StoreSalesOrderRequest;
 use App\Models\Tenant\SalesOrder;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SalesOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,10 @@ use RuntimeException;
 
 class SalesOrderController extends ApiController
 {
-    public function __construct(private SalesOrderService $service) {}
+    public function __construct(
+        private SalesOrderService $service,
+        private WarehouseAccessService $warehouseAccess,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -25,21 +29,24 @@ class SalesOrderController extends ApiController
                 ->where('order_number', 'like', '%'.$request->query('q').'%')
                 ->orWhere('customer_name', 'like', '%'.$request->query('q').'%')))
             ->orderByDesc('id');
+        $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (SalesOrder $order) {
             $order->setAttribute('warehouse_name', $order->warehouse?->name);
             $order->setAttribute('warehouse_code', $order->warehouse?->code);
             $order->setAttribute('customer_name', $order->customer?->name ?? $order->customer_name);
+
             return $order;
         }));
     }
 
     public function show(SalesOrder $sales_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
         $sales_order = $this->service->expireOverdueReservations($sales_order);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         // customer_name is already a denormalized string on the header (no customer table).
-        $sales_order->load(['lines.item:id,name,sku', 'warehouse:id,name,code', 'customer:id,code,name,contact', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code']);
+        $sales_order->load(['lines.item:id,name,sku,tracking_type', 'warehouse:id,name,code', 'customer:id,code,name,contact', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code', 'reservations.serial:id,serial,status']);
         $sales_order->setAttribute('warehouse_name', $sales_order->warehouse?->name);
         $sales_order->setAttribute('customer_name', $sales_order->customer?->name ?? $sales_order->customer_name);
 
@@ -50,6 +57,7 @@ class SalesOrderController extends ApiController
     {
         $data = $request->validated();
         unset($data['order_number']);
+        $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         $so = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
         return $this->success($so, 201);
@@ -59,6 +67,7 @@ class SalesOrderController extends ApiController
     {
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $so = $this->service->updateDraft($sales_order, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('sales_order_update_failed', $e->getMessage(), 422);
@@ -69,37 +78,56 @@ class SalesOrderController extends ApiController
 
     public function confirm(SalesOrder $sales_order): JsonResponse
     {
-        try { $so = $this->service->confirm($sales_order); }
-        catch (RuntimeException $e) { return $this->error('sales_order_confirm_failed', $e->getMessage(), 422); }
+        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        try {
+            $so = $this->service->confirm($sales_order);
+        } catch (RuntimeException $e) {
+            return $this->error('sales_order_confirm_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($so);
     }
 
     public function reserve(Request $request, SalesOrder $sales_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
         $data = $request->validate([
             'expires_at' => ['nullable', 'date'],
             'priority' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'serial_ids' => ['nullable', 'array'],
+            'serial_ids.*' => ['array'],
+            'serial_ids.*.*' => ['integer', 'distinct'],
         ]);
 
-        try { $so = $this->service->reserve($sales_order, $data); }
-        catch (RuntimeException $e) { return $this->error('reservation_failed', $e->getMessage(), 422); }
+        try {
+            $so = $this->service->reserve($sales_order, $data);
+        } catch (RuntimeException $e) {
+            return $this->error('reservation_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($so);
     }
 
     public function releaseReservation(SalesOrder $sales_order): JsonResponse
     {
-        try { $so = $this->service->releaseReservation($sales_order); }
-        catch (RuntimeException $e) { return $this->error('release_failed', $e->getMessage(), 422); }
+        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        try {
+            $so = $this->service->releaseReservation($sales_order);
+        } catch (RuntimeException $e) {
+            return $this->error('release_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($so);
     }
 
     public function cancel(SalesOrder $sales_order): JsonResponse
     {
-        try { $so = $this->service->cancel($sales_order); }
-        catch (RuntimeException $e) { return $this->error('sales_order_cancel_failed', $e->getMessage(), 422); }
+        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        try {
+            $so = $this->service->cancel($sales_order);
+        } catch (RuntimeException $e) {
+            return $this->error('sales_order_cancel_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($so);
     }

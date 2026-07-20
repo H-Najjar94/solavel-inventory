@@ -6,15 +6,19 @@ use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\StorePurchaseOrderRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\InventoryAuditLog;
+use App\Models\Tenant\Item;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\PurchaseOrderBackorder;
-use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Stock\Support\Decimal;
+use App\Services\Tax\InventoryTaxService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -27,6 +31,7 @@ class PurchaseOrderController extends ApiController
         private OrganizationContext $context,
         private UnitConversionResolver $conversions,
         private PurchaseOrderBackorderService $backorders,
+        private InventoryTaxService $taxes,
     ) {}
 
     private function conn(): string
@@ -52,6 +57,7 @@ class PurchaseOrderController extends ApiController
                 ->where('purchase_order_id', $po->id)
                 ->where('status', 'open')
                 ->sum('backorder_qty'));
+
             return $po;
         }));
     }
@@ -101,7 +107,7 @@ class PurchaseOrderController extends ApiController
         try {
             $po = DB::connection($this->conn())->transaction(function () use ($data, $orgId) {
                 // Server-issued PO number. Ignore client-submitted numbers on create.
-                $poNumber = \App\Services\Documents\Support\DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
+                $poNumber = DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
 
                 $po = PurchaseOrder::create(collect($data)->except('lines')
                     // Drop a null currency_code so the column's DB default (SAR) applies
@@ -177,11 +183,26 @@ class PurchaseOrderController extends ApiController
     {
         $orgId = $this->context->idOrFail();
         $subtotal = '0';
+        $taxTotal = '0';
+        $items = Item::query()
+            ->whereIn('id', collect($lines)->pluck('item_id')->filter()->unique())
+            ->get(['id', 'tax_code'])
+            ->keyBy('id');
         foreach ($lines as $line) {
             $line = $this->conversions->normalizeLine($line, 'ordered_qty');
             $unitPrice = $this->baseUnitCost((string) ($line['unit_price'] ?? '0'), $line['unit_conversion_factor'] ?? null);
-            $subtotal = Decimal::add($subtotal, Decimal::mul((string) $line['ordered_qty'], $unitPrice));
-            $po->lines()->create([
+            $lineSubtotal = Decimal::mul((string) $line['ordered_qty'], $unitPrice);
+            $item = $items[$line['item_id']] ?? null;
+            $tax = $this->taxes->resolve(
+                $line['tax_code'] ?? $item?->tax_code,
+                isset($line['tax_rate']) ? (string) $line['tax_rate'] : null,
+                'purchase',
+            );
+            $taxAmount = $this->taxes->amount($lineSubtotal, $tax['rate']);
+            $lineTotal = Decimal::money(Decimal::add($lineSubtotal, $taxAmount));
+            $subtotal = Decimal::add($subtotal, $lineSubtotal);
+            $taxTotal = Decimal::add($taxTotal, $taxAmount);
+            $lineAttributes = [
                 'organization_id' => $orgId,
                 'item_id' => $line['item_id'],
                 'variant_id' => $line['variant_id'] ?? null,
@@ -190,13 +211,22 @@ class PurchaseOrderController extends ApiController
                 'entered_unit_id' => $line['entered_unit_id'] ?? null,
                 'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
                 'unit_price' => $unitPrice,
-                'tax_code' => $line['tax_code'] ?? null,
+                'tax_code' => $tax['code'],
                 'expected_date' => $line['expected_date'] ?? null,
                 'notes' => $line['notes'] ?? null,
-            ]);
+            ];
+            if (Schema::connection($this->conn())->hasColumn('purchase_order_lines', 'tax_rate')) {
+                $lineAttributes += [
+                    'tax_rate' => $tax['rate'],
+                    'tax_amount' => $taxAmount,
+                    'line_total' => $lineTotal,
+                ];
+            }
+            $po->lines()->create($lineAttributes);
         }
         $po->subtotal = Decimal::money($subtotal);
-        $po->total = Decimal::money($subtotal); // tax/discount placeholder
+        $po->tax_total = Decimal::money($taxTotal);
+        $po->total = Decimal::money(Decimal::add($subtotal, $taxTotal));
         $po->save();
     }
 

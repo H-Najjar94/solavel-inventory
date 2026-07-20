@@ -3,6 +3,7 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\PickList;
+use App\Models\Tenant\PickListLine;
 use App\Models\Tenant\SalesOrder;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\Support\Decimal;
@@ -33,7 +34,7 @@ class PickListService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($so, $attributes, $orgId) {
-            $so = SalesOrder::query()->with('lines')->findOrFail($so->id);
+            $so = SalesOrder::query()->lockForUpdate()->with(['lines.item', 'reservations'])->findOrFail($so->id);
             $pl = new PickList(array_merge([
                 'status' => 'draft',
                 'pick_number' => $attributes['pick_number'] ?? null,
@@ -48,16 +49,36 @@ class PickListService
                 if (! Decimal::gt($reserved, '0')) {
                     continue;
                 }
-                $pl->lines()->create([
+                $base = [
                     'organization_id' => $orgId,
                     'sales_order_line_id' => $line->id,
                     'item_id' => $line->item_id,
                     'warehouse_id' => $line->warehouse_id ?? $so->warehouse_id,
                     'bin_id' => $line->bin_id,
-                    'reserved_qty' => $reserved,
                     'picked_qty' => '0',
                     'status' => 'open',
-                ]);
+                ];
+                if ($line->item?->tracksSerials()) {
+                    $serialReservations = $so->reservations
+                        ->where('item_id', $line->item_id)
+                        ->where('warehouse_id', $line->warehouse_id ?? $so->warehouse_id)
+                        ->where('status', 'active')
+                        ->whereNotNull('serial_id');
+                    foreach ($serialReservations as $reservation) {
+                        if (PickListLine::query()->where('serial_id', $reservation->serial_id)
+                            ->whereHas('pickList', fn ($query) => $query->whereNotIn('status', ['cancelled']))
+                            ->lockForUpdate()->exists()) {
+                            throw new RuntimeException("Serial {$reservation->serial_id} already belongs to an active pick list.");
+                        }
+                        $pl->lines()->create($base + [
+                            'reserved_qty' => '1.0000',
+                            'lot_id' => $reservation->lot_id,
+                            'serial_id' => $reservation->serial_id,
+                        ]);
+                    }
+                } else {
+                    $pl->lines()->create($base + ['reserved_qty' => $reserved]);
+                }
             }
 
             return $pl->fresh('lines');

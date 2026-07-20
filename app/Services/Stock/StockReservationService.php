@@ -5,6 +5,7 @@ namespace App\Services\Stock;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SalesOrder;
+use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockBalance;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -66,6 +67,51 @@ class StockReservationService
         int $priority = 100
     ): ?Reservation {
         return $this->reserveInternal($itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, true);
+    }
+
+    public function reserveSerial(
+        int $itemId,
+        int $warehouseId,
+        int $serialId,
+        string $sourceType,
+        int $sourceId,
+        ?Carbon $expiresAt = null,
+        int $priority = 100,
+    ): Reservation {
+        $orgId = $this->context->idOrFail();
+
+        return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $serialId, $sourceType, $sourceId, $expiresAt, $priority) {
+            $serial = SerialNumber::query()->where('organization_id', $orgId)->lockForUpdate()->find($serialId);
+            if (! $serial || (int) $serial->item_id !== $itemId || (int) $serial->warehouse_id !== $warehouseId) {
+                throw new RuntimeException('The selected serial is not available for this item and warehouse.');
+            }
+            if (! in_array($serial->status, ['available', 'in_stock', 'returned'], true)) {
+                throw new RuntimeException("Serial {$serial->serial} is not available (status: {$serial->status}).");
+            }
+
+            $active = Reservation::query()->where('serial_id', $serialId)->where('status', 'active')->lockForUpdate()->first();
+            if ($active) {
+                if ($active->source_type === $sourceType && (int) $active->source_id === $sourceId) {
+                    return $active;
+                }
+
+                throw new RuntimeException("Serial {$serial->serial} is already reserved.");
+            }
+
+            return $this->reserveInternal(
+                $itemId,
+                $warehouseId,
+                '1',
+                $sourceType,
+                $sourceId,
+                $serial->bin_id ? (int) $serial->bin_id : null,
+                $serial->lot_id ? (int) $serial->lot_id : null,
+                $expiresAt,
+                $priority,
+                false,
+                $serialId,
+            );
+        });
     }
 
     /**
@@ -199,7 +245,8 @@ class StockReservationService
         ?int $lotId,
         ?Carbon $expiresAt,
         int $priority,
-        bool $partial
+        bool $partial,
+        ?int $serialId = null,
     ): ?Reservation {
         $orgId = $this->context->idOrFail();
         $qty = Decimal::qty($qty);
@@ -209,7 +256,7 @@ class StockReservationService
         $priority = max(1, min(999, $priority));
         $this->expireOverdue(null, null, $itemId, $warehouseId);
 
-        return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, $partial) {
+        return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, $partial, $serialId) {
             $balance = $this->lockBalance($orgId, $itemId, $warehouseId, $binId, $lotId);
 
             // Idempotent active reservation per source+coordinate.
@@ -219,6 +266,7 @@ class StockReservationService
                 ->where('status', 'active')
                 ->when($binId !== null, fn ($q) => $q->where('bin_id', $binId), fn ($q) => $q->whereNull('bin_id'))
                 ->when($lotId !== null, fn ($q) => $q->where('lot_id', $lotId), fn ($q) => $q->whereNull('lot_id'))
+                ->when($serialId !== null, fn ($q) => $q->where('serial_id', $serialId), fn ($q) => $q->whereNull('serial_id'))
                 ->first();
 
             $available = Decimal::sub((string) $balance->on_hand_qty, (string) $balance->reserved_qty);
@@ -252,6 +300,7 @@ class StockReservationService
                 'warehouse_id' => $warehouseId,
                 'bin_id' => $binId,
                 'lot_id' => $lotId,
+                'serial_id' => $serialId,
                 'qty' => $qty,
                 'priority' => $priority,
                 'source_type' => $sourceType,

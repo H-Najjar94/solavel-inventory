@@ -31,4 +31,9 @@ class Reservation extends Model
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
+
+    public function serial(): BelongsTo
+    {
+        return $this->belongsTo(SerialNumber::class, 'serial_id');
+    }
 }

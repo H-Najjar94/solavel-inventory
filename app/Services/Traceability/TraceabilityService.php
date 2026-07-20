@@ -2,9 +2,11 @@
 
 namespace App\Services\Traceability;
 
+use App\Models\Tenant\InventorySetting;
+use App\Models\Tenant\Item;
 use App\Models\Tenant\Lot;
+use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SerialNumber;
-use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -131,7 +133,7 @@ class TraceabilityService
 
         $policy = $this->pickingPolicy();
         if ($tracksExpiry === null) {
-            $tracksExpiry = (bool) \App\Models\Tenant\Item::query()->where('id', $itemId)->value('tracks_expiry');
+            $tracksExpiry = (bool) Item::query()->where('id', $itemId)->value('tracks_expiry');
         }
         $effective = $policy === 'manual' && $tracksExpiry ? 'fefo' : $policy;
 
@@ -197,14 +199,18 @@ class TraceabilityService
 
     public function pickingPolicy(): string
     {
-        return (string) (\App\Models\Tenant\InventorySetting::query()->value('picking_policy') ?? 'manual');
+        return (string) (InventorySetting::query()->value('picking_policy') ?? 'manual');
     }
 
     /** Serials currently available for an item (for OUT selectors). */
     public function serialAvailability(int $itemId, ?int $warehouseId = null): array
     {
+        $reservedSerialIds = Reservation::query()
+            ->where('status', 'active')->whereNotNull('serial_id')->pluck('serial_id');
+
         return SerialNumber::query()->where('item_id', $itemId)
             ->whereIn('status', ['available', 'in_stock', 'returned'])
+            ->whereNotIn('id', $reservedSerialIds)
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
             ->orderBy('serial')->limit(500)->get()->all();
     }

@@ -63,7 +63,9 @@ class IntegrationStatusService
             'mapping_completeness_pct' => $mappingCompleteness,
             'last_event_generated_at' => IntegrationOutboxEvent::query()->where('organization_id', $orgId)->max('occurred_at'),
             'connection_implemented' => true,
-            'delivery_configured' => config('services.solabooks.api_key') && config('services.solabooks.client_id') && config('services.solabooks.organization_id'),
+            'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))
+                && ($settings->meta['client_id'] ?? config('services.solabooks.client_id'))
+                && ($settings->solabooks_organization_id || config('services.solabooks.organization_id'))),
         ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services\Reports;
 
 use App\Http\Controllers\Api\V1\StockLedgerController;
+use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\StockLedger;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SourceDocumentPresenter;
@@ -74,6 +75,7 @@ class DashboardMetricsService
         }
 
         $today = now()->toDateString();
+        $expiryWarningDays = InventorySetting::expiryWarningDays();
         $deadCutoff = now()->subDays(90)->toDateTimeString();
         $movedItems = $this->scoped('stock_ledger')->where('direction', 'out')->where('moved_at', '>=', $deadCutoff)->distinct()->pluck('item_id');
 
@@ -101,7 +103,7 @@ class DashboardMetricsService
             // ── Traceability alerts ──
             'expiring_lots_30d' => $this->scoped('lots')->whereNotNull('expiry_date')
                 ->where('status', '!=', 'consumed')
-                ->whereDate('expiry_date', '<=', now()->addDays(30)->toDateString())
+                ->whereDate('expiry_date', '<=', now()->addDays($expiryWarningDays)->toDateString())
                 ->whereDate('expiry_date', '>=', $today)->count(),
             'expired_lots' => $this->scoped('lots')->whereNotNull('expiry_date')
                 ->where('status', '!=', 'consumed')->whereDate('expiry_date', '<', $today)->count(),

@@ -4,6 +4,7 @@ namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class InventorySetting extends Model
 {
@@ -20,5 +21,16 @@ class InventorySetting extends Model
         'approvals' => 'array',
         'adjustment_reason_codes' => 'array',
         'taxes' => 'array',
+        'expiry_warning_days' => 'integer',
     ];
+
+    public static function expiryWarningDays(): int
+    {
+        $connection = config('tenancy.tenant_connection', 'tenant');
+        if (! Schema::connection($connection)->hasColumn('inventory_settings', 'expiry_warning_days')) {
+            return 30;
+        }
+
+        return (int) (static::query()->value('expiry_warning_days') ?? 30);
+    }
 }

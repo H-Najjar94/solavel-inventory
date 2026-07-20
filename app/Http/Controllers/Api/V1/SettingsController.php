@@ -69,13 +69,33 @@ class SettingsController extends ApiController
             'allow_negative_stock' => ['boolean'],
             'picking_policy' => ['nullable', 'in:manual,fifo,fefo'],
             'value_tolerance' => ['nullable', 'numeric', 'min:0'],
+            'expiry_warning_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
             'numbering' => ['nullable', 'array'],
             'barcode' => ['nullable', 'array'],
             'approvals' => ['nullable', 'array'],
             'taxes' => ['nullable', 'array'],
         ]);
+        if (array_key_exists('expiry_warning_days', $data)
+            && ! Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasColumn('inventory_settings', 'expiry_warning_days')) {
+            // Preserve existing settings administration while a tenant awaits
+            // this additive migration. The UI's fallback value is 30; only an
+            // attempted expiry-policy change is blocked.
+            if ((int) $data['expiry_warning_days'] !== 30) {
+                return $this->error('tenant_migration_pending', 'Expiry warning settings require the pending tenant migration.', 503);
+            }
+            unset($data['expiry_warning_days']);
+        }
 
         $settings = InventorySetting::query()->updateOrCreate(['organization_id' => $orgId], $data);
+        InventoryAuditLog::create([
+            'organization_id' => $orgId,
+            'actor_user_id' => auth()->id(),
+            'action' => 'inventory.settings.updated',
+            'entity_type' => 'inventory_settings',
+            'entity_id' => $settings->id,
+            'after' => $data,
+            'created_at' => now(),
+        ]);
 
         return $this->success($settings);
     }
