@@ -125,4 +125,39 @@ class AccountingJournalBuilderTest extends TestCase
         $this->assertSame('30.00', $lines[3]['debit']);
         $this->assertSame('30.00', $lines[4]['credit']);
     }
+
+    #[Test]
+    public function direct_shipment_posts_cogs_and_inventory_without_revenue_lines(): void
+    {
+        $this->useTenantA();
+        $this->mappings();
+        $warehouse = F::warehouse();
+        $item = F::fifoItem();
+        $order = SalesOrder::query()->create([
+            'order_number' => 'SO-DIRECT', 'order_date' => now(), 'warehouse_id' => $warehouse->id,
+            'status' => 'confirmed', 'subtotal' => 0, 'discount_total' => 0, 'tax_total' => 0, 'total' => 0,
+        ]);
+        $shipment = Shipment::query()->create([
+            'shipment_number' => 'SHIP-DIRECT', 'sales_order_id' => $order->id, 'ship_date' => now(),
+            'warehouse_id' => $warehouse->id, 'status' => 'posted',
+        ]);
+        $line = $shipment->lines()->create([
+            'item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'quantity' => 2,
+        ]);
+        StockLedger::query()->create([
+            'item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'direction' => 'out',
+            'quantity' => 2, 'unit_cost' => 6, 'total_cost' => 12, 'costing_method' => 'fifo',
+            'source_type' => Shipment::class, 'source_id' => $shipment->id, 'source_line_id' => $line->id,
+            'moved_at' => now(), 'posted_at' => now(), 'idempotency_key' => fake()->uuid(),
+        ]);
+
+        $lines = app(AccountingJournalBuilder::class)->build(
+            $this->event('shipment.posted', 'Shipment', $shipment->id, 'SHIP-DIRECT'),
+            TenantTestManager::ORG_A
+        );
+
+        $this->assertSame([500, 100], array_column($lines, 'account_id'));
+        $this->assertSame(['12.00', '0.00'], array_column($lines, 'debit'));
+        $this->assertSame(['0.00', '12.00'], array_column($lines, 'credit'));
+    }
 }

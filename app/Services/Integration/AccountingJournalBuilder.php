@@ -71,7 +71,9 @@ class AccountingJournalBuilder
                 ? SalesOrderLine::query()->find($line->sales_order_line_id)
                 : null;
             if (! $orderLine) {
-                throw new RuntimeException('Shipment accounting requires a source sales-order line.');
+                // Direct shipments have no receivable/revenue source document,
+                // but their stock movement still requires COGS / Inventory.
+                continue;
             }
             $ratio = Decimal::div((string) $line->quantity, (string) $orderLine->ordered_qty);
             $gross = Decimal::mul((string) $line->quantity, (string) $orderLine->unit_price);
@@ -90,12 +92,13 @@ class AccountingJournalBuilder
         }
         $net = Decimal::money($net);
         $cogs = $this->inventoryValue($event);
-        $lines = [
-            $this->line($this->account($orgId, 'accounts_receivable'), Decimal::money(Decimal::add($net, $taxTotal)), '0', $event),
-            $this->line($this->account($orgId, 'sales_revenue'), '0', $net, $event),
-        ];
-        foreach ($taxByAccount as $account => $tax) {
-            $lines[] = $this->line($account, '0', $tax['amount'], $event, $tax['mapping']);
+        $lines = [];
+        if (Decimal::gt(Decimal::add($net, $taxTotal), '0')) {
+            $lines[] = $this->line($this->account($orgId, 'accounts_receivable'), Decimal::money(Decimal::add($net, $taxTotal)), '0', $event);
+            $lines[] = $this->line($this->account($orgId, 'sales_revenue'), '0', $net, $event);
+            foreach ($taxByAccount as $account => $tax) {
+                $lines[] = $this->line($account, '0', $tax['amount'], $event, $tax['mapping']);
+            }
         }
         $lines[] = $this->line($this->account($orgId, 'cogs'), $cogs, '0', $event);
         $lines[] = $this->line($this->account($orgId, 'inventory_asset'), '0', $cogs, $event);
