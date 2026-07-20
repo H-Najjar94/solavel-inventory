@@ -3,12 +3,15 @@
 namespace Tests\Feature\Tax;
 
 use App\Http\Controllers\Api\V1\PurchaseOrderController;
+use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Requests\Api\StorePurchaseOrderRequest;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\PurchaseOrder;
 use App\Services\Documents\SalesOrderService;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\StockTestFactory as F;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -102,6 +105,23 @@ class DocumentTaxCalculationTest extends TestCase
             } catch (ValidationException $exception) {
                 $this->assertArrayHasKey('tax_code', $exception->errors());
             }
+        }
+    }
+
+    #[Test]
+    public function tax_definition_codes_are_normalized_and_case_insensitive_duplicates_are_rejected(): void
+    {
+        $this->useTenantA();
+        $controller = app(SettingsController::class);
+
+        try {
+            $controller->updateTaxes(Request::create('/settings/taxes', 'PUT', ['taxes' => [
+                ['code' => ' vat16 ', 'name' => 'VAT one', 'rate' => 16, 'treatment' => 'standard', 'active' => true, 'purchase' => true, 'sales' => true],
+                ['code' => 'VAT16', 'name' => 'VAT two', 'rate' => 16, 'treatment' => 'standard', 'active' => true, 'purchase' => true, 'sales' => true],
+            ]]));
+            $this->fail('Case-insensitive duplicate tax codes must be rejected.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
         }
     }
 }
