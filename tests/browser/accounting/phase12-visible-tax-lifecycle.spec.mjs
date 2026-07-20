@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 
 test.use({ trace: 'retain-on-failure', screenshot: 'only-on-failure' });
+test.setTimeout(90_000);
 const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
 const prefix = `QA-SOLASTOCK-PHASE12-${Date.now()}`;
 
@@ -86,6 +87,7 @@ test('visible taxed purchase, receipt, fulfillment and Finance journal reconcile
     await page.getByRole('link', { name: 'Go to order to ship' }).click();
     await page.getByRole('button', { name: 'Create shipment' }).click();
     await expect(page).toHaveURL(/\/inventory\/shipments\/\d+/);
+    const shipmentNumber = (await page.locator('h1').innerText()).trim();
     await page.getByRole('button', { name: 'Post shipment' }).click();
     await page.locator('.modal').getByRole('button', { name: /Post/i }).click();
     await expect(page.getByText('Shipment posted — stock shipped OUT.')).toBeVisible();
@@ -93,23 +95,29 @@ test('visible taxed purchase, receipt, fulfillment and Finance journal reconcile
     await page.goto('/inventory/integrations/solabooks/events');
     await page.locator('.toolbar select').nth(0).selectOption('pending');
     await page.locator('.toolbar select').nth(1).selectOption('shipment.posted');
-    const eventRow = page.locator('tbody tr').filter({ hasText: `${prefix}-SO` }).first();
+    const pendingEvent = await page.evaluate(async (number) => {
+        const payload = await (await fetch('/inventory/api/v1/integration/solabooks/events?status=pending&event_type=shipment.posted&per_page=100')).json();
+        const rows = payload.data?.data ?? payload.data ?? [];
+        return rows.find((row) => row.aggregate_number === number);
+    }, shipmentNumber);
+    expect(pendingEvent?.id).toBeTruthy();
+    const eventRow = page.locator('tbody tr').filter({ hasText: shipmentNumber }).first();
     await expect(eventRow).toContainText('shipment.posted');
     await eventRow.getByRole('button', { name: 'View' }).click();
     await page.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByText('Retry attempted.')).toBeVisible();
 
-    const event = await page.evaluate(async (needle) => {
+    const event = await page.evaluate(async (number) => {
         const payload = await (await fetch('/inventory/api/v1/integration/solabooks/events?status=sent&event_type=shipment.posted&per_page=100')).json();
         const rows = payload.data?.data ?? payload.data ?? [];
-        return rows.find((row) => row.aggregate_number?.includes(needle));
-    }, prefix);
+        return rows.find((row) => row.aggregate_number === number);
+    }, shipmentNumber);
     expect(event?.external_document_id).toBeTruthy();
 
     await page.goto('/sso/finance/redirect?organization_id=29');
     await expect(page).toHaveURL(/\/finance\//);
     await page.goto(`/finance/entries/${event.external_document_id}`);
-    await expect(page.locator('body')).toContainText(`${prefix}-SO`);
+    await expect(page.locator('body')).toContainText(shipmentNumber);
     await expect(page.locator('body')).toContainText(/VAT Output|2201|VAT_STD_B/i);
     await expect(page.locator('body')).toContainText(/Accounts Receivable|Sales|COGS|Inventory/i);
     await expect(page.locator('body')).not.toContainText(/out of balance|Server Error|Whoops/i);
