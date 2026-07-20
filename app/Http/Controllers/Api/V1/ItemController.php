@@ -16,6 +16,7 @@ use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Supplier;
 use App\Models\Tenant\SupplierPriceList;
 use App\Models\Tenant\Warehouse;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -26,6 +27,8 @@ use Illuminate\Validation\Rule;
 class ItemController extends ApiController
 {
     use EnforcesInventoryLimits;
+
+    public function __construct(private WarehouseAccessService $warehouseAccess) {}
 
     /** Strip non-column / transient fields before persisting the item row. */
     private function itemAttributes(array $data): array
@@ -122,7 +125,9 @@ class ItemController extends ApiController
         ]);
 
         // Stock by warehouse from the balances projection (not item fields).
-        $balances = StockBalance::query()->where('item_id', $item->id)->get();
+        $balances = $this->warehouseAccess->scope(
+            StockBalance::query()->where('item_id', $item->id)
+        )->get();
 
         // Private, org-scoped serve URLs (never public file URLs).
         $images = $item->images->sortByDesc('is_primary')->values()->map(fn ($img) => [
@@ -660,6 +665,7 @@ class ItemController extends ApiController
         $query = StockLedger::query()->with(['warehouse:id,name,code', 'item:id,name,sku'])
             ->where('item_id', $item->id)
             ->orderBy('moved_at')->orderBy('id');
+        $this->warehouseAccess->scope($query);
 
         // Same read-only shape as the ledger index: running balance + warehouse
         // NAME (not a bare id) + movement cost.
@@ -679,14 +685,18 @@ class ItemController extends ApiController
      */
     public function valuation(Item $item): JsonResponse
     {
-        $balances = StockBalance::query()->where('item_id', $item->id)->get();
-        $layers = CostLayer::query()->where('item_id', $item->id)
+        $balances = $this->warehouseAccess->scope(
+            StockBalance::query()->where('item_id', $item->id)
+        )->get();
+        $layers = $this->warehouseAccess->scope(
+            CostLayer::query()->where('item_id', $item->id)
+        )
             ->where('remaining_qty', '>', 0)
             ->orderBy('warehouse_id')->orderBy('received_at')->orderBy('id')
             ->get();
         $layersByWarehouse = $layers->groupBy('warehouse_id');
         $sourceLedgerRows = SourceDocumentPresenter::decorateRows(
-            StockLedger::query()
+            $this->warehouseAccess->scope(StockLedger::query())
                 ->whereIn('cost_layer_id', $layers->pluck('id')->all())
                 ->where('direction', 'in')
                 ->get()

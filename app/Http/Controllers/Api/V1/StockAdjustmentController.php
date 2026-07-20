@@ -34,6 +34,7 @@ class StockAdjustmentController extends ApiController
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->orderByDesc('id');
+        $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockAdjustment $adjustment) {
             $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);

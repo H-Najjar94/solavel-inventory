@@ -3,6 +3,9 @@
 namespace App\Services\Access;
 
 use App\Models\Tenant\InventoryUserWarehouse;
+use App\Models\Tenant\SerialNumber;
+use App\Models\Tenant\StockBalance;
+use App\Models\Tenant\StockLedger;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
@@ -77,6 +80,33 @@ class WarehouseAccessService
     {
         $this->assertAllowed($fromWarehouseId);
         $this->assertAllowed($toWarehouseId);
+    }
+
+    public function assertLotAllowed(int $lotId): void
+    {
+        $allowed = $this->allowedIds();
+        if ($allowed === null) {
+            return;
+        }
+        $warehouses = StockBalance::query()->where('lot_id', $lotId)->where('on_hand_qty', '>', 0)->pluck('warehouse_id');
+        if ($warehouses->isEmpty()) {
+            $warehouses = StockLedger::query()->where('lot_id', $lotId)->distinct()->pluck('warehouse_id');
+        }
+        foreach ($warehouses as $warehouseId) {
+            $this->assertAllowed((int) $warehouseId);
+        }
+    }
+
+    public function assertSerialAllowed(int $serialId): void
+    {
+        $allowed = $this->allowedIds();
+        if ($allowed === null) {
+            return;
+        }
+        $warehouseId = SerialNumber::query()->whereKey($serialId)->value('warehouse_id');
+        if ($warehouseId !== null) {
+            $this->assertAllowed((int) $warehouseId);
+        }
     }
 
     public function scope(Builder $query, string $column = 'warehouse_id'): Builder
