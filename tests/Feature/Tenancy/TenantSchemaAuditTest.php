@@ -21,9 +21,29 @@ class TenantSchemaAuditTest extends TestCase
         $this->assertTrue($audit['ok']);
         $this->assertSame('pass', $audit['status']);
         $this->assertContains('stock_ledger', $audit['checked_tables']);
+        $this->assertContains('expiry_warning_days', TenantSchemaAuditService::requirements()['inventory_settings']['columns']);
+        $this->assertContains('tax_amount', TenantSchemaAuditService::requirements()['purchase_order_lines']['columns']);
+        $this->assertContains('serial_id', TenantSchemaAuditService::requirements()['pack_lines']['columns']);
+        $this->assertContains('packl_org_serial_idx', TenantSchemaAuditService::requirements()['pack_lines']['indexes']);
         $this->assertSame([], $audit['missing_tables']);
         $this->assertSame([], $audit['missing_columns']);
         $this->assertSame([], $audit['missing_indexes']);
+    }
+
+    #[Test]
+    public function phase_11_columns_are_release_blocking_requirements(): void
+    {
+        $this->useTenantA();
+
+        foreach ([
+            ['inventory_settings' => ['columns' => ['definitely_missing_expiry_warning_days']]],
+            ['purchase_order_lines' => ['columns' => ['definitely_missing_tax_snapshot']]],
+            ['pack_lines' => ['columns' => ['definitely_missing_serial_traceability']]],
+        ] as $requirements) {
+            $audit = app(TenantSchemaAuditService::class)->audit(requirements: $requirements);
+            $this->assertFalse($audit['ok']);
+            $this->assertNotEmpty($audit['missing_columns']);
+        }
     }
 
     #[Test]
