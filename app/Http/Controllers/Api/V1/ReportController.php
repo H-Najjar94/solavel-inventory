@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\InventoryScheduledReport;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportExportService;
 use App\Services\Reports\ReportFilters;
@@ -24,6 +25,7 @@ class ReportController extends ApiController
         private InventoryReportService $reports,
         private ReportExportService $export,
         private ScheduledReportRunner $scheduledReports,
+        private WarehouseAccessService $warehouseAccess,
     ) {}
 
     /** List available reports (for the selector cards). */
@@ -53,7 +55,11 @@ class ReportController extends ApiController
             return $this->error('unknown_format', "Unknown export format: {$format}", 422);
         }
 
-        $result = $this->reports->run($report, ReportFilters::fromRequest($request));
+        $filters = ReportFilters::fromRequest($request);
+        if ($filters->warehouseId !== null) {
+            $this->warehouseAccess->assertAllowed($filters->warehouseId);
+        }
+        $result = $this->reports->run($report, $filters);
 
         return match ($format) {
             'xlsx' => $this->export->xlsx($result),
