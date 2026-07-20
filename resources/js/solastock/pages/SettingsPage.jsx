@@ -30,6 +30,7 @@ export default function SettingsPage() {
     const [roleAssignment, setRoleAssignment] = useState({ user_id: '', role_id: '' });
     const [warehouseAssignment, setWarehouseAssignment] = useState({ user_id: '', warehouse_ids: [] });
     const [taxes, setTaxes] = useState([]);
+    const [defaultTaxes, setDefaultTaxes] = useState({ purchase: '', sales: '' });
     const [taxDraft, setTaxDraft] = useState({ code: '', name: '', rate: '', treatment: 'standard', active: true, purchase: true, sales: true });
     const [reorderRule, setReorderRule] = useState({
         item_id: '',
@@ -54,6 +55,7 @@ export default function SettingsPage() {
                 expiry_warning_days: s.settings.expiry_warning_days ?? 30,
             });
             setTaxes(Array.isArray(s.settings.taxes) ? s.settings.taxes : []);
+            setDefaultTaxes({ purchase: s.settings.default_purchase_tax_code ?? '', sales: s.settings.default_sales_tax_code ?? '' });
         }
     }, [s.settings]);
 
@@ -84,7 +86,7 @@ export default function SettingsPage() {
 
     async function saveTaxes(e) {
         e.preventDefault();
-        try { await api.updateTaxes(taxes); await qc.invalidateQueries({ queryKey: ['settings'] }); toast.push('Tax settings saved.', 'success'); }
+        try { await api.updateTaxes(taxes, defaultTaxes); await qc.invalidateQueries({ queryKey: ['settings'] }); toast.push('Tax settings saved.', 'success'); }
         catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -313,6 +315,10 @@ export default function SettingsPage() {
             <div className="panel">
                 <h2>Tax administration</h2>
                 <p className="muted">Organization-scoped tax treatments used by purchase and sales documents.</p>
+                <div className="fg2">
+                    <Field label="Default purchase tax"><select className="input" value={defaultTaxes.purchase} onChange={(e) => setDefaultTaxes({ ...defaultTaxes, purchase: e.target.value })}><option value="">No default</option>{taxes.filter((tax) => tax.active && tax.purchase).map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.name}</option>)}</select></Field>
+                    <Field label="Default sales tax"><select className="input" value={defaultTaxes.sales} onChange={(e) => setDefaultTaxes({ ...defaultTaxes, sales: e.target.value })}><option value="">No default</option>{taxes.filter((tax) => tax.active && tax.sales).map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.name}</option>)}</select></Field>
+                </div>
                 <form className="fg2" onSubmit={addTax}>
                     <Field label="Code"><input className="input" value={taxDraft.code} onChange={(e) => setTaxDraft({ ...taxDraft, code: e.target.value })} /></Field>
                     <Field label="Name"><input className="input" value={taxDraft.name} onChange={(e) => setTaxDraft({ ...taxDraft, name: e.target.value })} /></Field>

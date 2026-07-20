@@ -10,6 +10,8 @@ use App\Models\Tenant\InventoryUserWarehouse;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBrand;
 use App\Models\Tenant\ItemCategory;
+use App\Models\Tenant\PurchaseOrderLine;
+use App\Models\Tenant\SalesOrderLine;
 use App\Models\Tenant\Unit;
 use App\Models\Tenant\UnitConversion;
 use App\Models\Tenant\Warehouse;
@@ -104,6 +106,8 @@ class SettingsController extends ApiController
     {
         $data = $request->validate([
             'taxes' => ['array'],
+            'default_purchase_tax_code' => ['nullable', 'string', 'max:50'],
+            'default_sales_tax_code' => ['nullable', 'string', 'max:50'],
             'taxes.*.name' => ['required', 'string', 'max:100'],
             'taxes.*.code' => ['required', 'string', 'max:50'],
             'taxes.*.rate' => ['required', 'numeric', 'min:0', 'max:100'],
@@ -119,8 +123,24 @@ class SettingsController extends ApiController
         })->values()->all();
         $codes = collect($data['taxes'])->pluck('code');
         abort_if($codes->duplicates()->isNotEmpty(), 422, 'Tax codes must be unique.');
+        $existing = collect((array) (InventorySetting::query()->first()?->taxes ?? []))->pluck('code');
+        $removed = $existing->diff($codes);
+        $used = $removed->first(fn (string $code) => PurchaseOrderLine::query()->where('tax_code', $code)->exists()
+            || SalesOrderLine::query()->where('tax_code', $code)->exists());
+        abort_if($used !== null, 422, "Tax code {$used} is used by historical documents and cannot be removed; deactivate it instead.");
+
+        foreach (['default_purchase_tax_code' => 'purchase', 'default_sales_tax_code' => 'sales'] as $field => $use) {
+            $code = isset($data[$field]) ? strtoupper(trim((string) $data[$field])) : null;
+            $definition = collect($data['taxes'])->firstWhere('code', $code);
+            abort_if($code && (! $definition || ! ($definition['active'] ?? false) || ! ($definition[$use] ?? false)), 422, "The {$use} default must reference an active {$use} tax.");
+            $data[$field] = $code ?: null;
+        }
         $settings = InventorySetting::query()->updateOrCreate(
-            ['organization_id' => $this->context->idOrFail()], ['taxes' => array_values($data['taxes'] ?? [])]
+            ['organization_id' => $this->context->idOrFail()], [
+                'taxes' => array_values($data['taxes'] ?? []),
+                'default_purchase_tax_code' => $data['default_purchase_tax_code'] ?? null,
+                'default_sales_tax_code' => $data['default_sales_tax_code'] ?? null,
+            ]
         );
         InventoryAuditLog::create([
             'organization_id' => $this->context->id(), 'actor_user_id' => auth()->id(),
