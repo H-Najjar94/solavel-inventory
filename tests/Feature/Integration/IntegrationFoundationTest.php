@@ -55,7 +55,9 @@ class IntegrationFoundationTest extends TestCase
         foreach (['disconnected', 'connected_readonly', 'connected_pending_mapping', 'active', 'paused', 'error'] as $mode) {
             $this->assertContains($mode, IntegrationStatusService::MODES);
         }
-        $this->assertCount(10, IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS);
+        $this->assertCount(12, IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS);
+        $this->assertFalse(IntegrationEvents::postsJournal('transfer.posted'));
+        $this->assertTrue(IntegrationEvents::postsJournal('grn.posted'));
     }
 
     #[Test]
@@ -65,6 +67,7 @@ class IntegrationFoundationTest extends TestCase
         $names = collect($routes->getRoutes())->map(fn ($r) => $r->getName())->filter()->all();
         foreach ([
             'api.v1.integration.status', 'api.v1.integration.accounts.index', 'api.v1.integration.accounts.update',
+            'api.v1.integration.taxes.index', 'api.v1.integration.taxes.update',
             'api.v1.integration.items.index', 'api.v1.integration.events.index', 'api.v1.integration.events.retry',
         ] as $n) {
             $this->assertContains($n, $names, "missing route {$n}");

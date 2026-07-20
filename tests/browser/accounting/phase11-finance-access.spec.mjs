@@ -132,6 +132,8 @@ test('QA owner maps every required Inventory concept to visible QA Finance accou
         opening_offset: ['767', '3501', 'Opening Balance Equity'],
         sales_returns: ['769', '4102', 'Sales Returns (Contra)'],
         purchase_returns: ['781', '5103', 'Purchase Discounts (Contra)'],
+        accounts_receivable: ['699', '1200', 'Accounts Receivable (AR)'],
+        sales_revenue: ['768', '4101', 'Sales – Products'],
     };
 
     await page.goto('/inventory/settings/solabooks');

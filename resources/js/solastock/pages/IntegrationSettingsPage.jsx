@@ -45,7 +45,7 @@ export default function IntegrationSettingsPage() {
                 <span className="badge badge--live">outbox delivery</span>
             </header>
 
-            <Tabs tabs={[{ key: 'status', label: 'Status' }, { key: 'accounts', label: 'Account mappings' }, { key: 'items', label: 'Item mappings' }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'status', label: 'Status' }, { key: 'accounts', label: 'Account mappings' }, { key: 'taxes', label: 'Tax mappings' }, { key: 'items', label: 'Item mappings' }]} active={tab} onChange={setTab} />
 
             {tab === 'status' && (status.isLoading ? <Skeleton /> : !s ? <EmptyState title="Unavailable" hint="Select a tenant." /> : (
                 <>
@@ -55,6 +55,7 @@ export default function IntegrationSettingsPage() {
                         <div className="widget-card"><div className="widget-card-label">Failed events</div><div className="widget-card-value">{s.events?.failed ?? 0}</div></div>
                         <div className="widget-card"><div className="widget-card-label">Ignored</div><div className="widget-card-value">{s.events?.ignored ?? 0}</div></div>
                         <div className="widget-card"><div className="widget-card-label">Mapping completeness</div><div className="widget-card-value">{s.mapping_completeness_pct ?? 0}%</div></div>
+                        <div className="widget-card"><div className="widget-card-label">Tax mappings</div><div className="widget-card-value">{s.tax_mapping_completeness_pct ?? 0}%</div></div>
                     </div>
                     <div className="panel">
                         <dl className="kv">
@@ -83,9 +84,41 @@ export default function IntegrationSettingsPage() {
             ))}
 
             {tab === 'accounts' && <AccountMappings gate={gate} toast={toast} qc={qc} />}
+            {tab === 'taxes' && <TaxMappings gate={gate} toast={toast} qc={qc} />}
             {tab === 'items' && <ItemMappings gate={gate} toast={toast} qc={qc} />}
         </section>
     );
+}
+
+function TaxMappings({ gate, toast, qc }) {
+    const { data, isLoading } = useApiQuery(['integration-taxes'], api.integrationTaxMappings, { fallback: null });
+    const [rows, setRows] = useState([]);
+    const [saving, setSaving] = useState(false);
+    useEffect(() => { if (data?.mappings) setRows(data.mappings); }, [data]);
+    function set(i, key, value) { setRows((current) => current.map((row, index) => index === i ? { ...row, [key]: value } : row)); }
+    async function save() {
+        setSaving(true);
+        try {
+            await api.saveIntegrationTaxMappings(rows);
+            toast.push('Tax mappings saved.', 'success');
+            qc.invalidateQueries({ queryKey: ['integration-taxes'] });
+            qc.invalidateQueries({ queryKey: ['integration-status'] });
+        } catch (error) { toast.push(error.message, 'error'); } finally { setSaving(false); }
+    }
+    if (isLoading) return <Skeleton />;
+    return <div className="panel">
+        <p className="muted">Map stable Inventory tax codes to Finance tax entities and VAT accounts.</p>
+        <table className="data-table"><thead><tr><th>Inventory tax</th><th>Treatment</th><th>Finance tax ID</th><th>Finance code</th><th>Input VAT account</th><th>Output VAT account</th><th>Status</th></tr></thead>
+            <tbody>{rows.map((row, i) => <tr key={row.tax_code}>
+                <td>{row.tax_code} — {row.tax_name}</td><td>{row.treatment}</td>
+                <td><input className="input" disabled={!gate.allowed} value={row.solabooks_tax_id ?? ''} onChange={(e) => set(i, 'solabooks_tax_id', e.target.value ? Number(e.target.value) : null)} /></td>
+                <td><input className="input" disabled={!gate.allowed} value={row.solabooks_tax_code ?? ''} onChange={(e) => set(i, 'solabooks_tax_code', e.target.value)} /></td>
+                <td><input className="input" disabled={!gate.allowed} value={row.input_tax_account_id ?? ''} onChange={(e) => set(i, 'input_tax_account_id', e.target.value ? Number(e.target.value) : null)} /></td>
+                <td><input className="input" disabled={!gate.allowed} value={row.output_tax_account_id ?? ''} onChange={(e) => set(i, 'output_tax_account_id', e.target.value ? Number(e.target.value) : null)} /></td>
+                <td><select className="input" disabled={!gate.allowed} value={row.status} onChange={(e) => set(i, 'status', e.target.value)}><option value="unmapped">Unmapped</option><option value="mapped">Mapped</option><option value="inactive">Inactive</option></select></td>
+            </tr>)}</tbody></table>
+        <div className="doc-actions"><button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={save}>{saving ? 'Saving…' : 'Save tax mappings'}</button></div>
+    </div>;
 }
 
 function AccountMappings({ gate, toast, qc }) {

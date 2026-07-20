@@ -502,6 +502,10 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.accounts.index');
         Route::put('/mappings/accounts', [IntegrationController::class, 'updateAccountMappings'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.accounts.update');
+        Route::get('/mappings/taxes', [IntegrationController::class, 'taxMappings'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.taxes.index');
+        Route::put('/mappings/taxes', [IntegrationController::class, 'updateTaxMappings'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.taxes.update');
 
         Route::get('/mappings/items', [IntegrationController::class, 'itemMappings'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.items.index');

@@ -4,6 +4,8 @@ namespace Tests\Feature\Integration;
 
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\IntegrationTaxMapping;
+use App\Models\Tenant\InventorySetting;
 use App\Services\Integration\IntegrationEvents;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
@@ -35,5 +37,31 @@ class IntegrationConnectionConfigurationTest extends TestCase
         $this->assertStringNotContainsString($plainKey, json_encode($payload));
         $this->assertTrue($payload['data']['delivery_configured']);
         $this->assertSame('connected_pending_mapping', $payload['data']['mode']);
+    }
+
+    #[Test]
+    public function tax_mappings_use_stable_codes_and_are_organization_scoped(): void
+    {
+        $this->useTenantA();
+        InventorySetting::query()->create([
+            'default_costing_method' => 'fifo', 'allow_negative_stock' => false,
+            'taxes' => [
+                ['code' => 'STD16', 'name' => 'Standard 16%', 'rate' => 16, 'treatment' => 'standard', 'active' => true, 'purchase' => true, 'sales' => true],
+                ['code' => 'ZERO', 'name' => 'Zero', 'rate' => 0, 'treatment' => 'zero', 'active' => true, 'purchase' => true, 'sales' => true],
+            ],
+        ]);
+
+        app(IntegrationController::class)->updateTaxMappings(Request::create('/integration/solabooks/mappings/taxes', 'PUT', [
+            'mappings' => [
+                ['tax_code' => 'STD16', 'solabooks_tax_id' => 7, 'solabooks_tax_code' => 'VAT_STD_B', 'input_tax_account_id' => 647, 'output_tax_account_id' => 648, 'status' => 'mapped'],
+                ['tax_code' => 'ZERO', 'solabooks_tax_id' => 8, 'solabooks_tax_code' => 'VAT_ZR_B', 'status' => 'mapped'],
+            ],
+        ]));
+
+        $this->assertSame(2, IntegrationTaxMapping::query()->where('status', 'mapped')->count());
+        $this->assertSame(100, app(IntegrationController::class)->status()->getData(true)['data']['tax_mapping_completeness_pct']);
+
+        $this->useTenantB();
+        $this->assertSame(0, IntegrationTaxMapping::query()->count());
     }
 }

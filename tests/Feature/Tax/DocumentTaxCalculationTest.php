@@ -65,6 +65,7 @@ class DocumentTaxCalculationTest extends TestCase
         $this->assertSame('3.00', (string) $po->tax_total);
         $this->assertSame('35.00', (string) $po->total);
         $this->assertSame(['3.00', '0.00', '0.00'], $po->lines->pluck('tax_amount')->map(fn ($amount) => (string) $amount)->all());
+        $this->assertSame(['standard', 'zero', 'exempt'], $po->lines->pluck('tax_treatment')->all());
 
         $sales = app(SalesOrderService::class)->createDraft([
             'warehouse_id' => $po->warehouse_id,
@@ -79,6 +80,7 @@ class DocumentTaxCalculationTest extends TestCase
         $this->assertSame('3.00', (string) $sales->discount_total);
         $this->assertSame('4.05', (string) $sales->tax_total);
         $this->assertSame('31.05', (string) $sales->total);
+        $this->assertSame('standard', $sales->lines->first()->tax_treatment);
 
         InventorySetting::query()->firstOrFail()->update([
             'taxes' => array_map(fn (array $tax) => $tax['code'] === 'STD15' ? array_merge($tax, ['rate' => 20]) : $tax, $this->taxes),

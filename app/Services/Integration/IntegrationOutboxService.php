@@ -48,7 +48,13 @@ class IntegrationOutboxService
 
         // If integration is disconnected, still record — status reflects the mode.
         $mode = $this->mode($orgId);
-        $status = $mode === 'disconnected' ? 'ignored' : 'pending';
+        $postsJournal = IntegrationEvents::postsJournal($eventType);
+        $status = $mode === 'disconnected' || ! $postsJournal ? 'ignored' : 'pending';
+        if (! $postsJournal) {
+            $payload['accounting_policy'] = $eventType === 'transfer.posted'
+                ? 'no_journal_same_entity_inventory_transfer'
+                : 'operational_event_no_journal';
+        }
 
         return IntegrationOutboxEvent::create([
             'organization_id' => $orgId,
@@ -73,10 +79,23 @@ class IntegrationOutboxService
             ->where('integration', IntegrationEvents::INTEGRATION)->value('mode') ?? 'disconnected');
     }
 
+    public function refreshMappingStatus(int $orgId): void
+    {
+        IntegrationOutboxEvent::query()
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->whereIn('status', ['pending', 'failed'])
+            ->update(['mapping_status' => $this->coreMappingsComplete($orgId) ? 'complete' : 'incomplete']);
+    }
+
+    public function eventMappingsComplete(int $orgId): bool
+    {
+        return $this->coreMappingsComplete($orgId);
+    }
+
     /** The core account mappings needed for any posting to be "complete". */
     private function coreMappingsComplete(int $orgId): bool
     {
-        $required = ['inventory_asset', 'cogs', 'adjustment_gain', 'adjustment_loss', 'grni', 'opening_offset'];
+        $required = ['inventory_asset', 'cogs', 'adjustment_gain', 'adjustment_loss', 'grni', 'opening_offset', 'accounts_receivable', 'sales_revenue'];
         $mapped = IntegrationAccountMapping::query()
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
