@@ -43,17 +43,22 @@ class AccountingJournalBuilder
             $mapping = $this->taxMapping($orgId, (string) $poLine->tax_code, 'purchase');
             $ratio = Decimal::div((string) $line->accepted_qty, (string) $poLine->ordered_qty);
             $amount = Decimal::money(Decimal::mul((string) $poLine->tax_amount, $ratio));
+            $baseAmount = Decimal::money(Decimal::mul(
+                Decimal::sub((string) $poLine->line_total, (string) $poLine->tax_amount),
+                $ratio
+            ));
             $taxTotal = Decimal::add($taxTotal, $amount);
             if (Decimal::gt($amount, '0')) {
                 $account = (int) $mapping->input_tax_account_id;
                 $taxByAccount[$account]['amount'] = Decimal::add($taxByAccount[$account]['amount'] ?? '0', $amount);
+                $taxByAccount[$account]['base_amount'] = Decimal::add($taxByAccount[$account]['base_amount'] ?? '0', $baseAmount);
                 $taxByAccount[$account]['mapping'] = $mapping;
             }
         }
 
         $lines = [$this->line($this->account($orgId, 'inventory_asset'), $inventory, '0', $event)];
         foreach ($taxByAccount as $account => $tax) {
-            $lines[] = $this->line($account, $tax['amount'], '0', $event, $tax['mapping']);
+            $lines[] = $this->line($account, $tax['amount'], '0', $event, $tax['mapping'], $tax['base_amount']);
         }
         $lines[] = $this->line($this->account($orgId, 'grni'), '0', Decimal::money(Decimal::add($inventory, $taxTotal)), $event);
 
@@ -78,7 +83,8 @@ class AccountingJournalBuilder
             $ratio = Decimal::div((string) $line->quantity, (string) $orderLine->ordered_qty);
             $gross = Decimal::mul((string) $line->quantity, (string) $orderLine->unit_price);
             $discount = Decimal::mul((string) $orderLine->discount_amount, $ratio);
-            $net = Decimal::add($net, Decimal::sub($gross, $discount));
+            $lineNet = Decimal::sub($gross, $discount);
+            $net = Decimal::add($net, $lineNet);
             if ($orderLine->tax_code) {
                 $mapping = $this->taxMapping($orgId, (string) $orderLine->tax_code, 'sales');
                 $amount = Decimal::money(Decimal::mul((string) $orderLine->tax_amount, $ratio));
@@ -86,6 +92,7 @@ class AccountingJournalBuilder
                 if (Decimal::gt($amount, '0')) {
                     $account = (int) $mapping->output_tax_account_id;
                     $taxByAccount[$account]['amount'] = Decimal::add($taxByAccount[$account]['amount'] ?? '0', $amount);
+                    $taxByAccount[$account]['base_amount'] = Decimal::add($taxByAccount[$account]['base_amount'] ?? '0', $lineNet);
                     $taxByAccount[$account]['mapping'] = $mapping;
                 }
             }
@@ -97,7 +104,7 @@ class AccountingJournalBuilder
             $lines[] = $this->line($this->account($orgId, 'accounts_receivable'), Decimal::money(Decimal::add($net, $taxTotal)), '0', $event);
             $lines[] = $this->line($this->account($orgId, 'sales_revenue'), '0', $net, $event);
             foreach ($taxByAccount as $account => $tax) {
-                $lines[] = $this->line($account, '0', $tax['amount'], $event, $tax['mapping']);
+                $lines[] = $this->line($account, '0', $tax['amount'], $event, $tax['mapping'], $tax['base_amount']);
             }
         }
         $lines[] = $this->line($this->account($orgId, 'cogs'), $cogs, '0', $event);
@@ -179,8 +186,14 @@ class AccountingJournalBuilder
         return $mapping;
     }
 
-    private function line(int $accountId, string $debit, string $credit, IntegrationOutboxEvent $event, ?IntegrationTaxMapping $tax = null): array
-    {
+    private function line(
+        int $accountId,
+        string $debit,
+        string $credit,
+        IntegrationOutboxEvent $event,
+        ?IntegrationTaxMapping $tax = null,
+        ?string $taxableBaseAmount = null,
+    ): array {
         return [
             'account_id' => $accountId,
             'debit' => Decimal::money($debit),
@@ -189,6 +202,7 @@ class AccountingJournalBuilder
             'tax_rate_id' => $tax?->solabooks_tax_id,
             'tax_rate_code' => $tax?->solabooks_tax_code,
             'is_tax_line' => $tax !== null,
+            'taxable_base_amount' => $tax ? Decimal::money((string) $taxableBaseAmount) : null,
         ];
     }
 }
