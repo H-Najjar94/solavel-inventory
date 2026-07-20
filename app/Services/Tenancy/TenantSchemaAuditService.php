@@ -19,6 +19,7 @@ class TenantSchemaAuditService
         foreach ($requirements as $table => $checks) {
             if (! Schema::connection($connection)->hasTable($table)) {
                 $missingTables[] = $table;
+
                 continue;
             }
 
@@ -105,6 +106,7 @@ class TenantSchemaAuditService
         foreach ($requirements as $table => $checks) {
             if (! isset($existingSet[$table])) {
                 $missingTables[] = $table;
+
                 continue;
             }
 
@@ -135,7 +137,7 @@ class TenantSchemaAuditService
     public static function requirements(): array
     {
         return [
-            'inventory_settings' => ['columns' => ['organization_id', 'default_costing_method', 'allow_negative_stock']],
+            'inventory_settings' => ['columns' => ['organization_id', 'default_costing_method', 'allow_negative_stock', 'expiry_warning_days']],
             'items' => ['columns' => ['organization_id', 'sku', 'name', 'costing_method']],
             'item_variants' => ['columns' => ['organization_id', 'item_id', 'sku', 'variant_attributes', 'is_active']],
             'item_attachments' => ['columns' => ['organization_id', 'item_id', 'name', 'path', 'size_bytes']],
@@ -148,7 +150,7 @@ class TenantSchemaAuditService
             'cost_layer_consumptions' => ['columns' => ['organization_id', 'ledger_id', 'cost_layer_id', 'qty', 'unit_cost']],
             'inventory_suppliers' => ['columns' => ['organization_id', 'code', 'name', 'is_active']],
             'inventory_purchase_orders' => ['columns' => ['organization_id', 'po_number', 'supplier_id', 'warehouse_id', 'status'], 'indexes' => ['inv_po_org_sup_status_idx']],
-            'purchase_order_lines' => ['columns' => ['organization_id', 'purchase_order_id', 'item_id', 'ordered_qty', 'received_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor']],
+            'purchase_order_lines' => ['columns' => ['organization_id', 'purchase_order_id', 'item_id', 'ordered_qty', 'received_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor', 'tax_code', 'tax_rate', 'tax_amount', 'line_total']],
             'purchase_order_backorders' => ['columns' => ['organization_id', 'purchase_order_id', 'purchase_order_line_id', 'item_id', 'warehouse_id', 'backorder_qty', 'status'], 'indexes' => ['po_backorders_org_line_uniq']],
             'goods_receipts' => ['columns' => ['organization_id', 'grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'status', 'blind_receiving', 'inspection_status']],
             'goods_receipt_lines' => ['columns' => ['organization_id', 'goods_receipt_id', 'item_id', 'received_qty', 'accepted_qty', 'rejected_qty', 'inspection_status', 'disposition', 'quarantine_qty', 'entered_qty', 'entered_unit_id', 'unit_conversion_factor']],
@@ -165,6 +167,7 @@ class TenantSchemaAuditService
             'reservations' => ['columns' => ['organization_id', 'item_id', 'warehouse_id', 'qty', 'priority', 'source_type', 'source_id', 'status', 'expires_at', 'expired_at']],
             'shipments' => ['columns' => ['organization_id', 'shipment_number', 'sales_order_id', 'warehouse_id', 'carrier', 'carrier_service', 'tracking_number', 'label_status', 'label_payload', 'tracking_status', 'tracking_events', 'warranty_months']],
             'shipment_lines' => ['columns' => ['organization_id', 'shipment_id', 'item_id', 'quantity', 'lot_id', 'serial_id']],
+            'pack_lines' => ['columns' => ['organization_id', 'pack_id', 'item_id', 'package_number', 'lot_id', 'serial_id'], 'indexes' => ['packl_org_serial_idx']],
             'sales_returns' => ['columns' => ['organization_id', 'return_number', 'warehouse_id', 'status', 'customer_id', 'authorized_at', 'inspected_at']],
             'sales_return_lines' => ['columns' => ['organization_id', 'sales_return_id', 'item_id', 'returned_qty', 'condition', 'inspection_status', 'disposition']],
             'inventory_alerts' => ['columns' => ['organization_id', 'alert_key', 'type', 'severity', 'title', 'status', 'channels'], 'indexes' => ['inventory_alerts_org_key_uniq']],
