@@ -1,5 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
+const requestedViewport = process.env.SOLASTOCK_VIEWPORT?.match(/^(\d+)x(\d+)$/);
+const viewport = requestedViewport
+    ? { width: Number(requestedViewport[1]), height: Number(requestedViewport[2]) }
+    : undefined;
+
 export default defineConfig({
     testDir: './tests/browser',
     timeout: 30_000,
@@ -13,6 +18,7 @@ export default defineConfig({
         baseURL: 'https://solavel.com',
         browserName: 'chromium',
         headless: true,
+        viewport,
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
     },

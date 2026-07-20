@@ -31,9 +31,12 @@ test('owner posts a transfer, adjustment, and stock count through visible forms'
     await expect(page).toHaveURL(/\/inventory\/transfers\/\d+/);
 
     await page.goto('/inventory/adjustments/new');
-    await page.locator('.form-grid input').first().fill(`${prefix}-ADJUSTMENT`);
-    await page.locator('.form-grid select').selectOption('1');
-    await page.locator('.form-grid input').nth(2).fill('QA7 browser verification');
+    await page.getByLabel('Document number').fill(`${prefix}-ADJUSTMENT`);
+    await page.getByLabel('Warehouse').selectOption('1');
+    const reason = page.getByLabel('Reason code');
+    if (await reason.evaluate((element) => element.tagName === 'SELECT')) await reason.selectOption({ index: 1 });
+    else await reason.fill('found');
+    await page.getByLabel('Notes').fill('QA7 browser verification');
     await page.locator('.panel select').nth(1).selectOption('1');
     await page.locator('.panel input[type="number"]').first().fill('1');
     await page.locator('.panel input[type="number"]').last().fill('3');
@@ -45,9 +48,12 @@ test('owner posts a transfer, adjustment, and stock count through visible forms'
     await page.locator('.form-grid select').nth(1).selectOption('1');
     await page.getByRole('button', { name: 'Prefill expected from stock' }).click();
     await expect(page.locator('.panel input.input--num').first()).toBeVisible();
-    const counted = page.locator('.panel input.input--num');
-    await counted.first().fill('31');
-    if (await counted.count() > 1) await counted.nth(1).fill('0');
+    const countRows = page.locator('tbody tr');
+    for (let index = 0; index < await countRows.count(); index += 1) {
+        const row = countRows.nth(index);
+        const expected = (await row.locator('td').nth(3).innerText()).match(/-?[\d.]+/)?.[0] ?? '0';
+        await row.locator('input[type="number"]').fill(expected);
+    }
     await page.getByRole('button', { name: 'Save & post variance' }).click();
     await expect(page.getByText('Count posted — variance adjustment created.')).toBeVisible();
     await expect(page).toHaveURL(/\/inventory\/counts\/\d+/);

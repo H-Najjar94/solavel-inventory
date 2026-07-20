@@ -173,7 +173,15 @@ test('deployed manual expiry policy covers selection, blocking, movement, report
     const original = Number(await page.getByLabel('Expiry warning days').inputValue());
     const changed = original === 12 ? 13 : 12;
     await page.getByLabel('Expiry warning days').fill(String(changed));
-    await page.getByRole('button', { name: 'Save policy' }).click();
+    await page.getByLabel('Expiry warning days').blur();
+    await expect(page.getByLabel('Expiry warning days')).toHaveValue(String(changed));
+    await page.waitForTimeout(50); // allow React's controlled-state render before the separate click event
+    const [saveResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/inventory/api/v1/settings') && response.request().method() === 'PUT'),
+        page.getByRole('button', { name: 'Save policy' }).click(),
+    ]);
+    expect(saveResponse.status()).toBe(200);
+    expect(Number((await saveResponse.json()).data.expiry_warning_days)).toBe(changed);
     await expect(page.getByText('Settings saved.')).toBeVisible();
     await page.reload();
     await expect(page.getByLabel('Expiry warning days')).toHaveValue(String(changed));
@@ -189,7 +197,15 @@ test('deployed manual expiry policy covers selection, blocking, movement, report
 
     await page.goto('/inventory/settings');
     await page.getByLabel('Expiry warning days').fill(String(original));
-    await page.getByRole('button', { name: 'Save policy' }).click();
+    await page.getByLabel('Expiry warning days').blur();
+    await expect(page.getByLabel('Expiry warning days')).toHaveValue(String(original));
+    await page.waitForTimeout(50);
+    const [restoreResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/inventory/api/v1/settings') && response.request().method() === 'PUT'),
+        page.getByRole('button', { name: 'Save policy' }).click(),
+    ]);
+    expect(restoreResponse.status()).toBe(200);
+    expect(Number((await restoreResponse.json()).data.expiry_warning_days)).toBe(original);
     await expect(page.getByText('Settings saved.')).toBeVisible();
     await page.reload();
     await expect(page.getByLabel('Expiry warning days')).toHaveValue(String(original));

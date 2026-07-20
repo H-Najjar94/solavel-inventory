@@ -3,10 +3,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
-import { Field, fieldErrors } from '../components/ui.jsx';
+import { Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 
 export default function SettingsPage() {
-    const { data, isMock } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
+    const { data, isLoading, isMock } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
     const integration = useApiQuery(['integration'], api.integrationStatus, { fallback: { connected: false, planned_events: [], account_mappings: {} } });
     const rolesQuery = useApiQuery(['custom-roles'], api.customRoles, { fallback: { permissions: [], roles: [], assignments: [], builtin_roles: [] } });
     const warehouseAssignmentsQuery = useApiQuery(['warehouse-assignments'], api.allWarehouseAssignments, { fallback: [] });
@@ -278,6 +278,8 @@ export default function SettingsPage() {
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
+    if (isLoading || !s.settings) return <section className="page"><Skeleton /></section>;
+
     return (
         <section className="page">
             <header className="page-head"><h1>Settings</h1>{isMock && <span className="badge badge--warn">sample data</span>}</header>
@@ -286,27 +288,27 @@ export default function SettingsPage() {
                 <h2>Inventory Policy</h2>
                 <div className="fg2">
                     <Field label="Default costing method" error={errors.default_costing_method}>
-                        <select className="input" value={policy.default_costing_method} onChange={(e) => setPolicy({ ...policy, default_costing_method: e.target.value })}>
+                        <select className="input" value={policy.default_costing_method} onChange={(e) => setPolicy((current) => ({ ...current, default_costing_method: e.target.value }))}>
                             <option value="average">Weighted average</option>
                             <option value="fifo">FIFO</option>
                             <option value="standard">Standard</option>
                         </select>
                     </Field>
                     <Field label="Picking policy" error={errors.picking_policy}>
-                        <select className="input" value={policy.picking_policy} onChange={(e) => setPolicy({ ...policy, picking_policy: e.target.value })}>
+                        <select className="input" value={policy.picking_policy} onChange={(e) => setPolicy((current) => ({ ...current, picking_policy: e.target.value }))}>
                             <option value="manual">Manual</option>
                             <option value="fifo">FIFO</option>
                             <option value="fefo">FEFO</option>
                         </select>
                     </Field>
                     <Field label="Negative stock">
-                        <label className="check-inline"><input type="checkbox" checked={policy.allow_negative_stock} onChange={(e) => setPolicy({ ...policy, allow_negative_stock: e.target.checked })} /> Allow when policy permits it</label>
+                        <label className="check-inline"><input type="checkbox" checked={policy.allow_negative_stock} onChange={(e) => setPolicy((current) => ({ ...current, allow_negative_stock: e.target.checked }))} /> Allow when policy permits it</label>
                     </Field>
                     <Field label="Value reconciliation tolerance">
-                        <input className="input" type="number" min="0" step="0.0001" value={policy.value_tolerance} onChange={(e) => setPolicy({ ...policy, value_tolerance: e.target.value })} />
+                        <input className="input" type="number" min="0" step="0.0001" value={policy.value_tolerance} onChange={(e) => setPolicy((current) => ({ ...current, value_tolerance: e.target.value }))} />
                     </Field>
                     <Field label="Expiry warning days">
-                        <input className="input" type="number" min="0" max="3650" value={policy.expiry_warning_days} onChange={(e) => setPolicy({ ...policy, expiry_warning_days: Number(e.target.value) })} />
+                        <input className="input" type="number" min="0" max="3650" value={policy.expiry_warning_days} onChange={(e) => setPolicy((current) => ({ ...current, expiry_warning_days: Number(e.target.value) }))} />
                     </Field>
                 </div>
                 <button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? 'Saving…' : 'Save policy'}</button>
