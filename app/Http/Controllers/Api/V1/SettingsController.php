@@ -112,7 +112,12 @@ class SettingsController extends ApiController
             'taxes.*.purchase' => ['boolean'],
             'taxes.*.sales' => ['boolean'],
         ]);
-        $codes = collect($data['taxes'] ?? [])->pluck('code');
+        $data['taxes'] = collect($data['taxes'] ?? [])->map(function (array $tax): array {
+            $tax['code'] = strtoupper(trim($tax['code']));
+
+            return $tax;
+        })->values()->all();
+        $codes = collect($data['taxes'])->pluck('code');
         abort_if($codes->duplicates()->isNotEmpty(), 422, 'Tax codes must be unique.');
         $settings = InventorySetting::query()->updateOrCreate(
             ['organization_id' => $this->context->idOrFail()], ['taxes' => array_values($data['taxes'] ?? [])]

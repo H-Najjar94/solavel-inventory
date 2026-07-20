@@ -88,7 +88,17 @@ export default function SettingsPage() {
         catch (err) { toast.push(err.message, 'error'); }
     }
 
-    function addTax(e) { e.preventDefault(); if (!taxDraft.code || !taxDraft.name) return; setTaxes([...taxes, { ...taxDraft, rate: Number(taxDraft.rate || 0) }]); setTaxDraft({ code: '', name: '', rate: '', treatment: 'standard', active: true, purchase: true, sales: true }); }
+    function addTax(e) {
+        e.preventDefault();
+        const code = taxDraft.code.trim().toUpperCase();
+        if (!code || !taxDraft.name.trim()) return;
+        if (taxes.some((tax) => String(tax.code).trim().toUpperCase() === code)) {
+            toast.push('Tax codes must be unique.', 'error');
+            return;
+        }
+        setTaxes([...taxes, { ...taxDraft, code, name: taxDraft.name.trim(), rate: Number(taxDraft.rate || 0) }]);
+        setTaxDraft({ code: '', name: '', rate: '', treatment: 'standard', active: true, purchase: true, sales: true });
+    }
 
     async function addConversion(e) {
         e.preventDefault();
