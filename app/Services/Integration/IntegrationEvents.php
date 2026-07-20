@@ -47,6 +47,19 @@ final class IntegrationEvents
         ], true);
     }
 
+    /** Journal-bearing document types can still be operational no-ops. */
+    public static function postsJournalForPayload(string $type, array $payload): bool
+    {
+        if (! self::postsJournal($type)) {
+            return false;
+        }
+        if (in_array($type, ['adjustment.posted', 'stock_count.posted'], true)) {
+            return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;
+        }
+
+        return true;
+    }
+
     public static function aggregateType(string $type): ?string
     {
         return self::TYPES[$type][0] ?? null;

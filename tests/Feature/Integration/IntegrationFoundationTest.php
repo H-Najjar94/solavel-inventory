@@ -58,6 +58,9 @@ class IntegrationFoundationTest extends TestCase
         $this->assertCount(12, IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS);
         $this->assertFalse(IntegrationEvents::postsJournal('transfer.posted'));
         $this->assertTrue(IntegrationEvents::postsJournal('grn.posted'));
+        $this->assertFalse(IntegrationEvents::postsJournalForPayload('stock_count.posted', ['total_inventory_value_change' => '0.0000']));
+        $this->assertTrue(IntegrationEvents::postsJournalForPayload('stock_count.posted', ['total_inventory_value_change' => '1.2500']));
+        $this->assertFalse(IntegrationEvents::postsJournalForPayload('adjustment.posted', ['total_inventory_value_change' => '0']));
     }
 
     #[Test]

@@ -48,7 +48,7 @@ class IntegrationOutboxService
 
         // If integration is disconnected, still record — status reflects the mode.
         $mode = $this->mode($orgId);
-        $postsJournal = IntegrationEvents::postsJournal($eventType);
+        $postsJournal = IntegrationEvents::postsJournalForPayload($eventType, $payload);
         $status = $mode === 'disconnected' || ! $postsJournal ? 'ignored' : 'pending';
         if (! $postsJournal) {
             $payload['accounting_policy'] = $eventType === 'transfer.posted'
