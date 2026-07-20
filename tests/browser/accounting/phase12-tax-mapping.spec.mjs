@@ -19,20 +19,22 @@ async function login(page) {
 
 test('owner creates standard, zero and exempt taxes visibly and maps them to Finance', async ({ page }) => {
     await login(page);
-    await page.evaluate(async () => {
+    const existingCodes = await page.evaluate(async () => {
         const response = await fetch('/inventory/api/v1/settings');
         const payload = await response.json();
         const taxes = payload.data?.settings?.taxes ?? [];
         const unique = [...new Map(taxes.map((tax) => [String(tax.code).trim().toUpperCase(), { ...tax, code: String(tax.code).trim().toUpperCase() }])).values()];
-        if (unique.length === taxes.length) return;
-        const token = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
-        const saved = await fetch('/inventory/api/v1/settings/taxes', {
-            method: 'PUT',
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ taxes: unique }),
-        });
-        if (!saved.ok) throw new Error(`Tax cleanup failed with HTTP ${saved.status}`);
+        if (unique.length !== taxes.length) {
+            const token = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+            const saved = await fetch('/inventory/api/v1/settings/taxes', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ taxes: unique }),
+            });
+            if (!saved.ok) throw new Error(`Tax cleanup failed with HTTP ${saved.status}`);
+        }
+        return unique.map((tax) => tax.code);
     });
     await page.goto('/inventory/settings');
     const panel = page.locator('.panel').filter({ hasText: 'Tax administration' });
@@ -42,18 +44,19 @@ test('owner creates standard, zero and exempt taxes visibly and maps them to Fin
         ['QA12-EXEMPT', 'QA Phase 12 Exempt', '0', 'exempt'],
     ];
     for (const [code, name, rate, treatment] of definitions) {
-        if (await panel.getByText(name, { exact: true }).count()) continue;
-        await panel.getByLabel('Code').fill(code);
-        await panel.getByLabel('Name').fill(name);
-        await panel.getByRole('spinbutton', { name: 'Rate', exact: true }).fill(rate);
-        await panel.getByLabel('Treatment').selectOption(treatment);
-        await panel.getByRole('button', { name: 'Add tax' }).click();
-        await expect(panel.getByText(name, { exact: true }).first()).toBeVisible();
+        if (existingCodes.includes(code)) continue;
+        const form = panel.locator('form').first();
+        await form.getByLabel('Code', { exact: true }).fill(code);
+        await form.getByLabel('Name', { exact: true }).fill(name);
+        await form.getByRole('spinbutton', { name: 'Rate', exact: true }).fill(rate);
+        await form.getByLabel('Treatment').selectOption(treatment);
+        await form.getByRole('button', { name: 'Add tax' }).click();
+        await expect(panel.getByLabel(`Tax name ${code}`)).toHaveValue(name);
     }
     await panel.getByRole('button', { name: 'Save tax settings' }).click();
     await expect(page.getByText('Tax settings saved.')).toBeVisible();
     await page.reload();
-    for (const [, name] of definitions) await expect(panel.getByText(name, { exact: true }).first()).toBeVisible();
+    for (const [code, name] of definitions) await expect(panel.getByLabel(`Tax name ${code}`)).toHaveValue(name);
 
     await page.goto('/inventory/settings/solabooks');
     await page.getByRole('button', { name: 'Account mappings' }).click();
