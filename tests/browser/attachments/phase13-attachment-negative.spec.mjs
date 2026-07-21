@@ -26,15 +26,18 @@ async function openMedia(page, itemId) {
 }
 
 async function upload(page, chooser, file) {
+    const uploadButton = page.getByRole('button', { name: 'Upload attachment' });
+    await expect(uploadButton).toBeEnabled({ timeout: 20_000 });
     const [response] = await Promise.all([
-        page.waitForResponse((candidate) => candidate.url().includes('/attachments') && candidate.request().method() === 'POST'),
+        page.waitForResponse((candidate) => candidate.url().includes('/attachments') && candidate.request().method() === 'POST', { timeout: 30_000 }),
         chooser.setInputFiles(file),
     ]);
+    await expect(uploadButton).toBeEnabled({ timeout: 20_000 });
     return response;
 }
 
 test('live attachment negative, header, retry, role and cleanup matrix', async ({ browser }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(150_000);
     const ownerContext = await browser.newContext();
     const owner = await ownerContext.newPage();
     await login(owner, 'qa.owner@solavel.test');
