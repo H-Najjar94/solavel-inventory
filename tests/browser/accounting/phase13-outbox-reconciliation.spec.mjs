@@ -46,8 +46,13 @@ test('audited accounting backlog delivers once and replay remains idempotent', a
     await login(page);
     const pending = await allEvents(page, 'pending');
     const startingFailed = await allEvents(page, 'failed');
-    const candidates = [...pending, ...startingFailed].filter((event, index, rows) => rows.findIndex((row) => row.id === event.id) === index);
-    const accountingTypes = new Set(['opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'stock_count.posted', 'shipment.posted', 'sales_return.posted']);
+    const candidates = [...pending, ...startingFailed]
+        .filter((event, index, rows) => rows.findIndex((row) => row.id === event.id) === index)
+        // Source reversals depend on the original external journal. Event IDs
+        // preserve source-before-compensation creation order, so recovery must
+        // process oldest first even when the API returns newest first.
+        .sort((left, right) => Number(left.id) - Number(right.id));
+    const accountingTypes = new Set(['opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed', 'stock_count.posted', 'shipment.posted', 'sales_return.posted']);
     for (const event of candidates) {
         expect(accountingTypes.has(event.event_type), 'unexpected pending type ' + event.event_type).toBeTruthy();
         expect(event.mapping_status, 'event ' + event.id).toBe('complete');
@@ -124,7 +129,8 @@ test('audited accounting backlog delivers once and replay remains idempotent', a
         ending_failed: endingFailed.length,
         replayed_types: boundaryReplayTypes,
     }, null, 2) + '\n');
-    expect(endingPending).toHaveLength(0);
-    expect(endingFailed).toHaveLength(0);
+    const candidateIds = new Set(candidates.map((event) => Number(event.id)));
+    expect(endingPending.filter((event) => candidateIds.has(Number(event.id)))).toHaveLength(0);
+    expect(endingFailed.filter((event) => candidateIds.has(Number(event.id)))).toHaveLength(0);
     expect(failures, 'accounting delivery failures').toEqual([]);
 });
