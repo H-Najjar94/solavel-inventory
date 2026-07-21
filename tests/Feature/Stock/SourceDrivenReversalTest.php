@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Stock;
 
+use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Models\Tenant\CostLayer;
 use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Documents\InventoryReversalService;
 use App\Services\Documents\OpeningStockService;
@@ -17,6 +19,8 @@ use App\Services\Documents\ShipmentService;
 use App\Services\Documents\StockAdjustmentService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Tests\Support\StockTestFactory as F;
@@ -273,5 +277,29 @@ class SourceDrivenReversalTest extends TestCase
 
         $this->assertSame('sold', $serial->fresh()->status);
         $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+    }
+
+    #[Test]
+    public function goods_receipt_reversal_explicitly_enforces_warehouse_access_before_mutation(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-GRN-DENIED-WH']);
+        $receipt = app(GoodsReceiptService::class)->createDraft([
+            'grn_number' => 'REV-GRN-DENIED',
+            'warehouse_id' => $warehouse->id,
+        ], [[
+            'item_id' => F::fifoItem(['sku' => 'REV-GRN-DENIED-ITEM'])->id,
+            'received_qty' => '1',
+            'accepted_qty' => '1',
+            'unit_cost' => '5',
+        ]]);
+        app(GoodsReceiptService::class)->post($receipt);
+
+        $access = $this->mock(WarehouseAccessService::class);
+        $access->shouldReceive('assertAllowed')->once()->with($warehouse->id)->andThrow(new AuthorizationException('denied'));
+        $controller = app(GoodsReceiptController::class);
+
+        $this->expectException(AuthorizationException::class);
+        $controller->reverse(Request::create('/', 'POST', ['reason' => 'unauthorized reversal']), $receipt);
     }
 }
