@@ -94,9 +94,9 @@ async function balance(page, itemId, warehouseId = 1) {
     return Number(row?.on_hand_qty ?? 0);
 }
 
-async function createPostedGrn(page, supplier, lines, suffix, taxCodes) {
+async function createPostedGrn(page, supplier, lines, suffix, taxCodes, warehouseId = 1) {
     const po = await api(page, 'POST', '/purchase-orders', {
-        warehouse_id: 1,
+        warehouse_id: warehouseId,
         supplier_id: supplier.id,
         order_date: new Date().toISOString().slice(0, 10),
         notes: prefix,
@@ -115,7 +115,7 @@ async function createPostedGrn(page, supplier, lines, suffix, taxCodes) {
         grn_number: `${doc}-${suffix}`,
         purchase_order_id: po.body.data.id,
         supplier_id: supplier.id,
-        warehouse_id: 1,
+        warehouse_id: warehouseId,
         receipt_date: new Date().toISOString().slice(0, 10),
         notes: prefix,
         lines: lines.map((line, index) => ({
@@ -480,4 +480,62 @@ test('deployed reversal races and permission boundaries create one mutation with
     fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2) + '\n');
 
     await Promise.all([ownerAContext.close(), ownerBContext.close(), viewerContext.close(), restrictedContext.close(), zeroContext.close(), managerContext.close()]);
+});
+
+test('deployed GRN eligibility failures preserve stock and warehouse scope without mutation', async ({ browser }) => {
+    const ownerContext = await browser.newContext();
+    const owner = await ownerContext.newPage();
+    await login(owner);
+    const settings = (await api(owner, 'GET', '/settings')).body.data.settings;
+    const reasonCode = settings.adjustment_reason_codes.find((code) => code.active !== false)?.code;
+    const supplier = rows(await api(owner, 'GET', '/suppliers?per_page=1'))[0];
+
+    const consumedItem = await createItem(owner, 'ELIGIBILITY-CONSUMED');
+    const receipt = await createPostedGrn(owner, supplier, [{ item: consumedItem, quantity: 2, cost: 5 }], 'ELIGIBILITY-CONSUMED', ['QA12-ZERO']);
+    const consumption = await postAdjustment(owner, reasonCode, [{ direction: 'decrease', item_id: consumedItem.id, quantity: 1 }], 'ELIGIBILITY-CONSUMPTION');
+    expect(await balance(owner, consumedItem.id)).toBe(1);
+
+    await owner.goto(`/inventory/goods-receipts/${receipt.grn.id}`);
+    await owner.getByRole('button', { name: 'Reverse', exact: true }).click();
+    await owner.getByPlaceholder('Explain why this source document is being reversed').fill(`${prefix} downstream eligibility rejection`);
+    await owner.locator('.modal').getByRole('button', { name: 'Reverse', exact: true }).click();
+    await expect(owner.locator('body')).toContainText(/downstream stock consumption/i);
+    const receiptAfterFailure = (await api(owner, 'GET', `/goods-receipts/${receipt.grn.id}`)).body.data.grn;
+    expect(receiptAfterFailure.reversal_id).toBeNull();
+    expect(await balance(owner, consumedItem.id)).toBe(1);
+
+    await visibleReverse(owner, `/inventory/adjustments/${consumption.id}`, `${prefix} restore consumed receipt stock`);
+    const consumptionReversal = (await api(owner, 'GET', `/adjustments/${consumption.id}`)).body.data.adjustment.reversal.id;
+    expect(await balance(owner, consumedItem.id)).toBe(2);
+
+    const warehouseBItem = await createItem(owner, 'WAREHOUSE-B-GRN');
+    const warehouseBReceipt = await createPostedGrn(owner, supplier, [{ item: warehouseBItem, quantity: 1, cost: 6 }], 'WAREHOUSE-B-GRN', ['QA12-ZERO'], 2);
+    const restrictedContext = await browser.newContext();
+    const restricted = await restrictedContext.newPage();
+    await login(restricted, 'qa.warehouse@solavel.test');
+    const warehouseDenied = await api(restricted, 'POST', `/goods-receipts/${warehouseBReceipt.grn.id}/reverse`, { reason: 'restricted warehouse reversal' });
+    expect([403, 404]).toContain(warehouseDenied.status);
+    expect(JSON.stringify(warehouseDenied.body)).not.toMatch(/unit_cost|journal_id|tax_amount|serial_id|lot_id/i);
+    const unknownDenied = await api(restricted, 'POST', '/goods-receipts/999999999/reverse', { reason: 'modified source id' });
+    expect([403, 404]).toContain(unknownDenied.status);
+    const warehouseBCleanup = await api(owner, 'POST', `/goods-receipts/${warehouseBReceipt.grn.id}/reverse`, { reason: `${prefix} Warehouse B cleanup` });
+    expect(warehouseBCleanup.status).toBe(200);
+
+    const delivered = [];
+    for (const [eventType, aggregateId] of [
+        ['grn.posted', receipt.grn.id],
+        ['adjustment.posted', consumption.id],
+        ['adjustment.reversed', consumptionReversal],
+        ['grn.posted', warehouseBReceipt.grn.id],
+        ['grn.reversed', warehouseBCleanup.body.data.reversal.id],
+    ]) delivered.push(await deliver(owner, eventType, aggregateId));
+
+    const evidence = JSON.parse(fs.readFileSync(evidenceFile, 'utf8'));
+    evidence.eligibility = {
+        downstream_consumption: { source_id: receipt.grn.id, result: 'rejected without mutation after downstream history', adjustment_reversal_id: consumptionReversal, final_on_hand: 2 },
+        warehouse_scope: { source_id: warehouseBReceipt.grn.id, restricted_status: warehouseDenied.status, modified_id_status: unknownDenied.status },
+        finance_journals: delivered.map((row) => row.journal_id),
+    };
+    fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2) + '\n');
+    await Promise.all([ownerContext.close(), restrictedContext.close()]);
 });
