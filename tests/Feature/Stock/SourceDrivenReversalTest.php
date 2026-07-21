@@ -250,4 +250,28 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame($return->id, (int) $shipment->fresh()->reversal_sales_return_id);
         $this->assertSame(1, StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $return->id)->count());
     }
+
+    #[Test]
+    public function canonical_available_serial_can_leave_stock_after_a_resellable_return(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-SERIAL-AVAILABLE-WH']);
+        $item = F::serialItem(['sku' => 'REV-SERIAL-AVAILABLE-ITEM', 'costing_method' => 'fifo']);
+        $serial = F::serial($item, 'REV-SERIAL-AVAILABLE-001', [
+            'warehouse_id' => $warehouse->id,
+            'status' => 'pending',
+        ]);
+        $ledger = app(StockLedgerService::class);
+        $ledger->post([
+            new StockMovement('in', $item->id, $warehouse->id, '1', self::class, 9101, unitCost: '12', serialId: $serial->id),
+        ], 'returned-serial:in');
+
+        $serial->fresh()->forceFill(['status' => 'available'])->save();
+        $ledger->post([
+            new StockMovement('out', $item->id, $warehouse->id, '1', self::class, 9102, serialId: $serial->id),
+        ], 'returned-serial:out');
+
+        $this->assertSame('sold', $serial->fresh()->status);
+        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+    }
 }

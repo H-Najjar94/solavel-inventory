@@ -622,7 +622,7 @@ class StockLedgerService
             $serial->warehouse_id = $m->warehouseId;
             $serial->bin_id = $m->binId;
         } else {
-            if ($serial->status !== 'in_stock') {
+            if (! $serial->isAvailable()) {
                 throw new RuntimeException("Serial {$serial->serial} is not in stock (status: {$serial->status}).");
             }
             $serial->status = 'sold';
