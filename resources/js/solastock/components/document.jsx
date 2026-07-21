@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmModal } from './ui.jsx';
 
@@ -166,9 +166,23 @@ export function ConfirmPostModal({ open, onConfirm, onCancel, name = 'document' 
 }
 
 export function ConfirmReverseModal({ open, onConfirm, onCancel, name = 'document' }) {
-    return <ConfirmModal open={open} danger title={`Reverse ${name}?`}
-        message="Reversing appends opposite ledger entries to unwind this document's stock. The original entries are kept for audit."
-        confirmLabel="Reverse" onConfirm={onConfirm} onCancel={onCancel} />;
+    const [reason, setReason] = useState('');
+    useEffect(() => { if (open) setReason(''); }, [open]);
+    if (!open) return null;
+    return <div className="modal-overlay" onClick={onCancel}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{`Reverse ${name}?`}</h3>
+            <p>Reversing appends opposite ledger entries from the original source. The original entries remain immutable.</p>
+            <label className="field">
+                <span className="field-label">Reason <span className="field-req">*</span></span>
+                <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="Explain why this source document is being reversed" />
+            </label>
+            <div className="modal-actions">
+                <button className="btn" onClick={onCancel}>Cancel</button>
+                <button className="btn btn--danger" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>Reverse</button>
+            </div>
+        </div>
+    </div>;
 }
 
 export function LedgerPreview({ rows }) {

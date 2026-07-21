@@ -6,6 +6,7 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -43,7 +44,10 @@ class SolaBooksOutboxDeliveryService
 
             try {
                 $payload = $this->journalPayload($event, $orgId);
-                $response = $this->client($event)->post($this->journalEndpoint(), $payload);
+                $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+                $response = $this->signedClient($event, $payload, $body)
+                    ->withBody($body, 'application/json')
+                    ->post($this->journalEndpoint());
 
                 if (! $response->successful()) {
                     throw new RuntimeException($response->json('error.message') ?: 'SolaBooks rejected the journal event.');
@@ -63,6 +67,16 @@ class SolaBooksOutboxDeliveryService
                     ['organization_id' => $orgId, 'integration' => IntegrationEvents::INTEGRATION],
                     ['last_sync_at' => now(), 'last_error' => null]
                 );
+                $setting = IntegrationSetting::query()
+                    ->where('organization_id', $orgId)
+                    ->where('integration', IntegrationEvents::INTEGRATION)
+                    ->first();
+                if ($setting) {
+                    $meta = $setting->meta ?? [];
+                    $meta['last_signed_delivery_at'] = now()->toIso8601String();
+                    $setting->meta = $meta;
+                    $setting->save();
+                }
 
                 return $event;
             } catch (\Throwable $e) {
@@ -136,6 +150,117 @@ class SolaBooksOutboxDeliveryService
             ]);
     }
 
+    private function signedClient(IntegrationOutboxEvent $event, array $payload, string $body): PendingRequest
+    {
+        $setting = IntegrationSetting::query()
+            ->where('organization_id', $this->context->idOrFail())
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->first();
+        $secret = $setting?->signingSecret();
+        $keyId = (string) ($setting?->meta['signing_key_id'] ?? '');
+        $version = (string) ($setting?->meta['signing_protocol_version'] ?? ExternalRequestSignature::VERSION);
+        if (! $setting || ! $secret || $keyId === '' || $version !== ExternalRequestSignature::VERSION) {
+            throw new RuntimeException('SolaBooks request signing is not configured.');
+        }
+
+        $endpoint = $this->journalEndpoint();
+        $path = (string) (parse_url($endpoint, PHP_URL_PATH) ?: '/');
+        $query = (string) (parse_url($endpoint, PHP_URL_QUERY) ?: '');
+        $timestamp = (string) now()->timestamp;
+        $nonce = ExternalRequestSignature::nonce();
+        $contentHash = ExternalRequestSignature::bodyHash($body);
+        $inventoryOrg = (string) $this->context->idOrFail();
+        $financeOrg = (string) $setting->solabooks_organization_id;
+        $sourceKey = (string) $payload['external_source_key'];
+        $eventType = (string) $payload['event_type'];
+        $canonical = ExternalRequestSignature::canonicalString(
+            'POST', $path, $query, 'application/json', $timestamp, $nonce, $contentHash,
+            $inventoryOrg, $financeOrg, $sourceKey, $eventType, $version,
+        );
+
+        return $this->client($event)->withHeaders([
+            'X-Solavel-Signature-Version' => $version,
+            'X-Solavel-Key-Id' => $keyId,
+            'X-Solavel-Timestamp' => $timestamp,
+            'X-Solavel-Nonce' => $nonce,
+            'X-Solavel-Content-SHA256' => $contentHash,
+            'X-Solavel-Signature' => ExternalRequestSignature::sign($canonical, $secret),
+            'X-Solavel-Inventory-Organization-Id' => $inventoryOrg,
+            'X-Solavel-External-Source-Key' => $sourceKey,
+            'X-Solavel-Event-Type' => $eventType,
+        ]);
+    }
+
+    public function rotateSigningKey(): IntegrationSetting
+    {
+        $orgId = $this->context->idOrFail();
+        $setting = IntegrationSetting::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->firstOrFail();
+        $response = $this->clientForProvisioning($setting)->post($this->signingEndpoint('rotate'), [
+            'inventory_organization_id' => $orgId,
+        ]);
+        if (! $response->successful()) {
+            throw new RuntimeException($response->json('error.message') ?: 'SolaBooks signing-key rotation failed.');
+        }
+        $data = $response->json('data') ?? [];
+        if (empty($data['key_id']) || empty($data['secret']) || ($data['protocol_version'] ?? null) !== ExternalRequestSignature::VERSION) {
+            throw new RuntimeException('SolaBooks returned an invalid signing-key response.');
+        }
+        $meta = $setting->meta ?? [];
+        $meta['signing_key_id'] = (string) $data['key_id'];
+        $meta['signing_secret_encrypted'] = Crypt::encryptString((string) $data['secret']);
+        $meta['signing_protocol_version'] = (string) $data['protocol_version'];
+        $meta['signing_key_rotated_at'] = now()->toIso8601String();
+        $setting->meta = $meta;
+        $setting->save();
+
+        return $setting->fresh();
+    }
+
+    public function revokeSigningKey(string $keyId): void
+    {
+        $setting = IntegrationSetting::query()
+            ->where('organization_id', $this->context->idOrFail())
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->firstOrFail();
+        $response = $this->clientForProvisioning($setting)->post($this->signingEndpoint(rawurlencode($keyId).'/revoke'), [
+            'inventory_organization_id' => $this->context->idOrFail(),
+        ]);
+        if (! $response->successful()) {
+            throw new RuntimeException($response->json('error.message') ?: 'SolaBooks signing-key revocation failed.');
+        }
+        $meta = $setting->meta ?? [];
+        if (($meta['signing_key_id'] ?? null) === $keyId) {
+            unset($meta['signing_key_id'], $meta['signing_secret_encrypted'], $meta['signing_protocol_version']);
+            $meta['signing_key_revoked_at'] = now()->toIso8601String();
+            $setting->meta = $meta;
+            $setting->save();
+        }
+    }
+
+    private function clientForProvisioning(IntegrationSetting $setting): PendingRequest
+    {
+        $apiKey = (string) ($setting->apiKey() ?: config('services.solabooks.api_key'));
+        $clientId = (string) ($setting->meta['client_id'] ?? config('services.solabooks.client_id'));
+        $financeOrg = (string) ($setting->solabooks_organization_id ?: config('services.solabooks.organization_id'));
+        if ($apiKey === '' || $clientId === '' || $financeOrg === '') {
+            throw new RuntimeException('SolaBooks API credentials are not configured.');
+        }
+
+        return Http::acceptJson()->asJson()->timeout((int) config('services.solabooks.timeout', 10))->retry(0)->withHeaders([
+            'X-API-Key' => $apiKey,
+            'X-Client-Id' => $clientId,
+            'X-Organization-Id' => $financeOrg,
+        ]);
+    }
+
+    private function signingEndpoint(string $suffix): string
+    {
+        return rtrim((string) config('services.solabooks.api_base_url'), '/').'/external-signing-keys/'.$suffix;
+    }
+
     private function journalEndpoint(): string
     {
         $endpoint = (string) config('services.solabooks.journal_entries_url');
@@ -162,6 +287,12 @@ class SolaBooksOutboxDeliveryService
         }
 
         $payload = $event->payload ?? [];
+        $originalSource = $payload['original_source'] ?? null;
+        if (is_array($originalSource) && ! empty($originalSource['event_uuid'])) {
+            $originalSource['external_source_key'] = IntegrationOutboxEvent::query()
+                ->where('event_uuid', $originalSource['event_uuid'])
+                ->value('idempotency_key');
+        }
 
         return [
             'date' => $payload['document_date'] ?: now()->toDateString(),
@@ -171,6 +302,11 @@ class SolaBooksOutboxDeliveryService
             'source_type' => $event->event_type,
             'source_id' => $event->aggregate_id,
             'source_number' => $event->aggregate_number,
+            'inventory_organization_id' => $orgId,
+            'finance_organization_id' => (int) $setting->solabooks_organization_id,
+            'external_source_key' => $event->idempotency_key,
+            'event_type' => $event->event_type,
+            'original_source' => $originalSource,
             'lines' => $this->journals->build($event, $orgId),
         ];
     }

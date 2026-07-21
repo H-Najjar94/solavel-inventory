@@ -6,6 +6,7 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationTaxMapping;
+use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\Shipment;
@@ -23,7 +24,7 @@ class AccountingJournalBuilderTest extends TestCase
 
     private function mappings(): void
     {
-        foreach (['inventory_asset' => 100, 'grni' => 200, 'accounts_receivable' => 300, 'sales_revenue' => 400, 'cogs' => 500] as $type => $id) {
+        foreach (['inventory_asset' => 100, 'grni' => 200, 'accounts_receivable' => 300, 'sales_revenue' => 400, 'cogs' => 500, 'adjustment_gain' => 600, 'adjustment_loss' => 601] as $type => $id) {
             IntegrationAccountMapping::query()->create([
                 'mapping_type' => $type, 'integration' => 'solabooks',
                 'solabooks_account_id' => (string) $id, 'status' => 'mapped',
@@ -161,5 +162,37 @@ class AccountingJournalBuilderTest extends TestCase
         $this->assertSame([500, 100], array_column($lines, 'account_id'));
         $this->assertSame(['12.00', '0.00'], array_column($lines, 'debit'));
         $this->assertSame(['0.00', '12.00'], array_column($lines, 'credit'));
+    }
+
+    #[Test]
+    public function adjustment_reversal_inverts_the_original_source_journal_instead_of_recalculating_it(): void
+    {
+        $this->useTenantA();
+        $this->mappings();
+        $original = $this->event('adjustment.posted', 'StockAdjustment', 98701, 'ADJ-SOURCE');
+        $original->payload = [
+            'document_date' => now()->toDateString(),
+            'total_inventory_value_change' => '-32.50',
+        ];
+        $original->save();
+        $reversal = InventoryReversal::query()->create([
+            'reversal_number' => 'REV-ADJ-98701',
+            'source_type' => 'stock_adjustment',
+            'source_id' => 98701,
+            'source_number' => 'ADJ-SOURCE',
+            'reversal_date' => now(),
+            'status' => 'posted',
+            'reason' => 'Source correction',
+            'posted_at' => now(),
+            'posted_guard_key' => 'test-adjustment-reversal:98701',
+        ]);
+        $reversalEvent = $this->event('adjustment.reversed', 'InventoryReversal', $reversal->id, $reversal->reversal_number);
+
+        $lines = app(AccountingJournalBuilder::class)->build($reversalEvent, TenantTestManager::ORG_A);
+
+        $this->assertSame([601, 100], array_column($lines, 'account_id'));
+        $this->assertSame(['0.00', '32.50'], array_column($lines, 'debit'));
+        $this->assertSame(['32.50', '0.00'], array_column($lines, 'credit'));
+        $this->assertSame(['REV-ADJ-98701', 'REV-ADJ-98701'], array_column($lines, 'description'));
     }
 }

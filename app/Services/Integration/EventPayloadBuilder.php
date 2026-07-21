@@ -2,6 +2,8 @@
 
 namespace App\Services\Integration;
 
+use App\Models\Tenant\InventoryReversal;
+use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\StockLedger;
 use App\Services\Stock\Support\Decimal;
 
@@ -61,9 +63,33 @@ class EventPayloadBuilder
             'currency' => null, // placeholder until multi-currency
             'total_inventory_value_change' => Decimal::money($totalChange),
             'lines' => $lines,
+            'original_source' => $this->originalSource($document),
         ], $suggested, [
             'mapping_status' => $mappingComplete ? 'complete' : 'incomplete',
             'requires_review' => ! $mappingComplete,
         ]);
+    }
+
+    private function originalSource(object $document): ?array
+    {
+        if ($document instanceof InventoryReversal) {
+            return [
+                'type' => $document->source_type,
+                'id' => (int) $document->source_id,
+                'number' => $document->source_number,
+                'event_uuid' => $document->original_event_uuid,
+                'reason' => $document->reason,
+            ];
+        }
+        if ($document instanceof SalesReturn && $document->is_source_reversal) {
+            return [
+                'type' => 'shipment',
+                'id' => (int) $document->source_reversal_shipment_id,
+                'event_uuid' => $document->original_event_uuid,
+                'reason' => $document->reason,
+            ];
+        }
+
+        return null;
     }
 }

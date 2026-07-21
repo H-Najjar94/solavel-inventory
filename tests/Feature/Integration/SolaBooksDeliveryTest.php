@@ -5,8 +5,10 @@ namespace Tests\Feature\Integration;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Services\Integration\ExternalRequestSignature;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
@@ -23,7 +25,15 @@ class SolaBooksDeliveryTest extends TestCase
 
         IntegrationSetting::query()->updateOrCreate(
             ['organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks'],
-            ['mode' => 'active']
+            [
+                'mode' => 'active',
+                'solabooks_organization_id' => 14,
+                'meta' => [
+                    'signing_key_id' => 'test-signing-key',
+                    'signing_secret_encrypted' => Crypt::encryptString('test-signing-secret'),
+                    'signing_protocol_version' => ExternalRequestSignature::VERSION,
+                ],
+            ]
         );
 
         foreach ([
@@ -82,6 +92,7 @@ class SolaBooksDeliveryTest extends TestCase
         Config::set('services.solabooks.api_key', 'key');
         Config::set('services.solabooks.client_id', '7');
         Config::set('services.solabooks.organization_id', '14');
+        Config::set('services.solabooks.api_base_url', 'https://books.test/api/v1');
     }
 
     #[Test]
@@ -102,11 +113,28 @@ class SolaBooksDeliveryTest extends TestCase
 
         Http::assertSent(function ($request) use ($input) {
             $body = $request->data();
+            $raw = $request->body();
+            $canonical = ExternalRequestSignature::canonicalString(
+                'POST',
+                '/api/v1/journal-entries',
+                '',
+                'application/json',
+                $request->header('X-Solavel-Timestamp')[0],
+                $request->header('X-Solavel-Nonce')[0],
+                $request->header('X-Solavel-Content-SHA256')[0],
+                (string) TenantTestManager::ORG_A,
+                '14',
+                $input->idempotency_key,
+                'adjustment.posted',
+                ExternalRequestSignature::VERSION,
+            );
 
             return $request->hasHeader('X-API-Key', 'key')
                 && $request->hasHeader('X-Client-Id', '7')
                 && $request->hasHeader('X-Organization-Id', '14')
                 && $request->hasHeader('Idempotency-Key', $input->idempotency_key)
+                && hash('sha256', $raw) === $request->header('X-Solavel-Content-SHA256')[0]
+                && ExternalRequestSignature::sign($canonical, 'test-signing-secret') === $request->header('X-Solavel-Signature')[0]
                 && $body['lines'][0]['account_id'] === 101
                 && $body['lines'][0]['debit'] === '25.00'
                 && $body['lines'][1]['account_id'] === 404
@@ -151,6 +179,7 @@ class SolaBooksDeliveryTest extends TestCase
         Config::set('services.solabooks.api_key', null);
         Config::set('services.solabooks.client_id', null);
         Config::set('services.solabooks.organization_id', null);
+        IntegrationSetting::query()->where('integration', 'solabooks')->update(['solabooks_organization_id' => null, 'meta' => null]);
 
         $event = $this->event();
 
@@ -158,13 +187,39 @@ class SolaBooksDeliveryTest extends TestCase
             app(SolaBooksOutboxDeliveryService::class)->deliver($event);
             $this->fail('delivery should fail without credentials');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('credentials', $e->getMessage());
+            $this->assertStringContainsString('signing', $e->getMessage());
         }
 
         $event = $event->fresh();
         $this->assertSame('failed', $event->status);
         $this->assertSame(1, $event->attempts);
         $this->assertNotNull($event->next_attempt_at);
-        $this->assertStringContainsString('credentials', $event->last_error);
+        $this->assertStringContainsString('signing', $event->last_error);
+    }
+
+    #[Test]
+    public function signing_key_rotation_stores_the_one_time_secret_encrypted_and_revocation_clears_local_use(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            '*/external-signing-keys/rotate' => Http::response([
+                'data' => ['key_id' => 'rotated-key', 'secret' => 'one-time-remote-secret', 'protocol_version' => 'v1'],
+            ], 201),
+            '*/external-signing-keys/rotated-key/revoke' => Http::response([
+                'data' => ['key_id' => 'rotated-key', 'status' => 'revoked'],
+            ]),
+        ]);
+
+        $service = app(SolaBooksOutboxDeliveryService::class);
+        $setting = $service->rotateSigningKey();
+        $this->assertSame('rotated-key', $setting->meta['signing_key_id']);
+        $this->assertSame('one-time-remote-secret', $setting->signingSecret());
+        $this->assertNotSame('one-time-remote-secret', $setting->meta['signing_secret_encrypted']);
+
+        $service->revokeSigningKey('rotated-key');
+        $setting = $setting->fresh();
+        $this->assertNull($setting->signingSecret());
+        $this->assertArrayNotHasKey('signing_key_id', $setting->meta);
     }
 }

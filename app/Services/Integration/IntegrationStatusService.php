@@ -80,6 +80,13 @@ class IntegrationStatusService
             'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))
                 && ($settings->meta['client_id'] ?? config('services.solabooks.client_id'))
                 && ($settings->solabooks_organization_id || config('services.solabooks.organization_id'))),
+            'signing' => [
+                'configured' => (bool) ($settings->signingSecret() && ($settings->meta['signing_key_id'] ?? null)),
+                'key_id' => $settings->meta['signing_key_id'] ?? null,
+                'protocol_version' => $settings->meta['signing_protocol_version'] ?? null,
+                'rotated_at' => $settings->meta['signing_key_rotated_at'] ?? null,
+                'last_successful_delivery_at' => $settings->meta['last_signed_delivery_at'] ?? null,
+            ],
         ];
     }
 }

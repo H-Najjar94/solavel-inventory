@@ -278,6 +278,8 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.update');
     Route::post('/goods-receipts/{goods_receipt}/post', [GoodsReceiptController::class, 'post'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.post');
+    Route::post('/goods-receipts/{goods_receipt}/reverse', [GoodsReceiptController::class, 'reverse'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.reverse');
 
     // ── Stock Transfers (OUT+IN via service) ──
     Route::get('/transfers', [StockTransferController::class, 'index'])
@@ -497,6 +499,10 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.status');
         Route::put('/connection', [IntegrationController::class, 'configure'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.connection.update');
+        Route::post('/signing-keys/rotate', [IntegrationController::class, 'rotateSigningKey'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.signing.rotate');
+        Route::post('/signing-keys/revoke', [IntegrationController::class, 'revokeSigningKey'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.signing.revoke');
 
         Route::get('/mappings/accounts', [IntegrationController::class, 'accountMappings'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.accounts.index');

@@ -36,6 +36,7 @@ export default function SalesReturnFormPage() {
     }, [isEdit, shipmentId, ship.data]);
 
     const existing = useApiQuery(['sales-return', id], () => api.salesReturn(id), { fallback: null, enabled: isEdit });
+    const sourceDriven = !!shipmentId || !!existing.data?.sales_return?.is_source_reversal;
     useEffect(() => {
         if (isEdit && existing.data?.sales_return) {
             const r = existing.data.sales_return;
@@ -68,17 +69,17 @@ export default function SalesReturnFormPage() {
     if ((isEdit && existing.isLoading) || (shipmentId && !isEdit && ship.isLoading)) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
-        { key: 'qty', label: 'Returned qty', width: 110, render: (l, i) => <QuantityInput value={l.returned_qty} onChange={(v) => setLine(i, { returned_qty: v })} /> },
+        { key: 'item', label: 'Item', render: (l, i) => sourceDriven ? <span>#{l.item_id}</span> : <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'qty', label: 'Returned qty', width: 110, render: (l, i) => sourceDriven ? <span>{l.returned_qty}</span> : <QuantityInput value={l.returned_qty} onChange={(v) => setLine(i, { returned_qty: v })} /> },
         { key: 'cond', label: 'Condition', width: 140, render: (l, i) => (
-            <select className="input" value={l.condition} onChange={(e) => setLine(i, { condition: e.target.value })}>
+            sourceDriven ? <span>Resellable</span> : <select className="input" value={l.condition} onChange={(e) => setLine(i, { condition: e.target.value })}>
                 <option value="resellable">Resellable</option>
                         <option value="quarantine">Quarantine</option>
                         <option value="damaged">Damaged (no restock)</option>
                         <option value="retired">Retired (no restock)</option>
             </select>) },
-        { key: 'bin', label: 'Bin', render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'cost', label: 'Unit cost', width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
+        { key: 'bin', label: 'Bin', render: (l, i) => sourceDriven ? <span>{l.bin_id ? `#${l.bin_id}` : '—'}</span> : <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
+        { key: 'cost', label: 'Unit cost', width: 110, render: (l, i) => sourceDriven ? <span>{l.unit_cost}</span> : <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
     ];
 
     return (
@@ -91,7 +92,7 @@ export default function SalesReturnFormPage() {
                 <Field label="Return number" required error={errors.return_number}><input className="input" value={header.return_number} onChange={(e) => setHeader({ ...header, return_number: e.target.value })} /></Field>
                 <Field label="Customer" error={errors.customer_id}><CustomerPicker value={header.customer_id} onChange={(v) => setHeader({ ...header, customer_id: v })} /></Field>
                 <Field label="Customer name" error={errors.customer_name}><input className="input" value={header.customer_name} onChange={(e) => setHeader({ ...header, customer_name: e.target.value })} placeholder="Optional override" /></Field>
-                <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
+                <Field label="Warehouse" required error={errors.warehouse_id}>{sourceDriven ? <span>#{header.warehouse_id ?? '—'} (from shipment)</span> : <WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} />}</Field>
                 <Field label="Return date" error={errors.return_date}><input className="input" type="date" value={header.return_date} onChange={(e) => setHeader({ ...header, return_date: e.target.value })} /></Field>
                 <Field label="Source shipment">{header.shipment_id ? `#${header.shipment_id}` : <span className="muted">none</span>}</Field>
                 <Field label="Reason"><input className="input" value={header.reason} onChange={(e) => setHeader({ ...header, reason: e.target.value })} /></Field>
@@ -101,8 +102,8 @@ export default function SalesReturnFormPage() {
                 <h2>Lines</h2>
                 <DocumentLinesTable columns={columns} lines={lines}
                     onAdd={() => setLines([...lines, emptyLine()])}
-                    onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
-                <p className="muted">Resellable &amp; quarantine units re-enter stock at the unit cost they shipped at. Damaged units are recorded only.</p>
+                    onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={sourceDriven} />
+                <p className="muted">{sourceDriven ? 'Source reversal quantities, warehouse, lot/serial identity, and cost are locked to the posted shipment ledger.' : 'Resellable & quarantine units re-enter stock at the unit cost they shipped at. Damaged units are recorded only.'}</p>
             </div>
 
             <div className="doc-actions">

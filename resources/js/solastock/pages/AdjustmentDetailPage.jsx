@@ -40,6 +40,7 @@ export default function AdjustmentDetailPage() {
             <div className="panel"><dl className="kv">
                 <dt>Date</dt><dd>{adj.adjustment_date}</dd><dt>Warehouse</dt><dd>{adj.warehouse_name ?? `#${adj.warehouse_id}`}</dd>
                 <dt>Reason</dt><dd>{adj.reason_code ?? '—'}</dd>
+                <dt>Reversal</dt><dd>{adj.reversal ? `${adj.reversal.reversal_number} — ${adj.reversal.reason}` : '—'}</dd>
                 <dt>Increase value</dt><dd>{adj.total_increase_value}</dd><dt>Decrease value</dt><dd>{adj.total_decrease_value}</dd>
             </dl></div>
 
@@ -58,7 +59,7 @@ export default function AdjustmentDetailPage() {
             <ConfirmPostModal open={confirmPost} name="adjustment"
                 onConfirm={() => { setConfirmPost(false); act(api.postAdjustment, 'Adjustment posted.'); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name="adjustment"
-                onConfirm={() => { setConfirmReverse(false); act(api.reverseAdjustment, 'Adjustment reversed.'); }} onCancel={() => setConfirmReverse(false)} />
+                onConfirm={(reason) => { setConfirmReverse(false); act(() => api.reverseAdjustment(id, reason), 'Adjustment reversed.'); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }

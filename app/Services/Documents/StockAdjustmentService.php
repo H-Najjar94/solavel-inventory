@@ -3,9 +3,14 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\StockAdjustment;
+use App\Services\Documents\Concerns\CapturesTraceability;
+use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
+use App\Services\Traceability\LotService;
+use App\Services\Traceability\SerialService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -19,22 +24,22 @@ use RuntimeException;
  */
 class StockAdjustmentService
 {
-    use \App\Services\Documents\Concerns\CapturesTraceability;
+    use CapturesTraceability;
 
     public function __construct(
         private OrganizationContext $context,
         private StockLedgerService $ledger,
-        private \App\Services\Integration\IntegrationOutboxService $outbox,
-        private \App\Services\Traceability\LotService $lots,
-        private \App\Services\Traceability\SerialService $serials,
+        private IntegrationOutboxService $outbox,
+        private LotService $lots,
+        private SerialService $serials,
     ) {}
 
-    protected function lotService(): \App\Services\Traceability\LotService
+    protected function lotService(): LotService
     {
         return $this->lots;
     }
 
-    protected function serialService(): \App\Services\Traceability\SerialService
+    protected function serialService(): SerialService
     {
         return $this->serials;
     }
@@ -65,7 +70,7 @@ class StockAdjustmentService
             // adjustment) is always respected.
             $attributes['adjustment_number'] = ! empty($attributes['adjustment_number'])
                 ? $attributes['adjustment_number']
-                : \App\Services\Documents\Support\DocumentNumber::next('ADJ', StockAdjustment::class, 'adjustment_number', $orgId, $this->connection());
+                : DocumentNumber::next('ADJ', StockAdjustment::class, 'adjustment_number', $orgId, $this->connection());
 
             // Default a missing/blank date (adjustment_date is a NOT NULL column). Done
             // here rather than only in array_merge so a null in $attributes can't win.
@@ -250,31 +255,8 @@ class StockAdjustmentService
     /** Reverse a posted adjustment via opposite ledger entries. */
     public function reverse(StockAdjustment $adj): StockAdjustment
     {
-        return DB::connection($this->connection())->transaction(function () use ($adj) {
-            $adj = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->id);
+        app(InventoryReversalService::class)->reverseNegativeAdjustment($adj, 'Canonical source reversal');
 
-            if ($adj->isReversed()) {
-                return $adj; // idempotent
-            }
-            if (! $adj->isPosted()) {
-                throw new RuntimeException("Only a posted adjustment can be reversed (status '{$adj->status}').");
-            }
-
-            $this->ledger->reverse($this->postNamespace($adj), $this->reverseNamespace($adj), [
-                'action' => 'stock_adjustment.reverse',
-                'entity_type' => 'stock_adjustment',
-                'entity_id' => $adj->id,
-                'document_ref' => $adj->adjustment_number,
-            ]);
-
-            $adj->status = 'reversed';
-            $adj->reversed_at = now();
-            $adj->reversed_by = auth()->id();
-            $adj->markSystemTransition()->save();
-
-            $this->outbox->record('adjustment.reversed', $adj, 'stock_adjustment', $adj->adjustment_number, (string) $adj->adjustment_date);
-
-            return $adj;
-        });
+        return $adj->fresh(['lines', 'reversal']);
     }
 }

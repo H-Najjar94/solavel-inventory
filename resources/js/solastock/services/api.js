@@ -159,7 +159,7 @@ export const api = {
     createAdjustment: (body) => request('/adjustments', { method: 'POST', body }),
     updateAdjustment: (id, body) => request(`/adjustments/${id}`, { method: 'PUT', body }),
     postAdjustment: (id) => request(`/adjustments/${id}/post`, { method: 'POST' }),
-    reverseAdjustment: (id) => request(`/adjustments/${id}/reverse`, { method: 'POST' }),
+    reverseAdjustment: (id, reason) => request(`/adjustments/${id}/reverse`, { method: 'POST', body: { reason } }),
 
     ledger: (params) => request('/ledger', { params }),
     auditLogs: (params) => request('/audit-logs', { params }),
@@ -191,6 +191,7 @@ export const api = {
     createGoodsReceipt: (body) => request('/goods-receipts', { method: 'POST', body }),
     updateGoodsReceipt: (id, body) => request(`/goods-receipts/${id}`, { method: 'PUT', body }),
     postGoodsReceipt: (id) => request(`/goods-receipts/${id}/post`, { method: 'POST' }),
+    reverseGoodsReceipt: (id, reason) => request(`/goods-receipts/${id}/reverse`, { method: 'POST', body: { reason } }),
 
     // Transfers
     transfers: (params) => request('/transfers', { params }),
@@ -305,6 +306,8 @@ export const api = {
     // SolaBooks integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
     configureIntegration: (body) => request('/integration/solabooks/connection', { method: 'PUT', body }),
+    rotateIntegrationSigningKey: () => request('/integration/solabooks/signing-keys/rotate', { method: 'POST' }),
+    revokeIntegrationSigningKey: (key_id) => request('/integration/solabooks/signing-keys/revoke', { method: 'POST', body: { key_id } }),
     integrationAccountMappings: () => request('/integration/solabooks/mappings/accounts'),
     saveIntegrationAccountMappings: (mappings) => request('/integration/solabooks/mappings/accounts', { method: 'PUT', body: { mappings } }),
     integrationTaxMappings: () => request('/integration/solabooks/mappings/taxes'),

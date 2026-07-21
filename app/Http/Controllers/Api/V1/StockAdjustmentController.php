@@ -8,6 +8,7 @@ use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockLedger;
 use App\Services\Access\WarehouseAccessService;
+use App\Services\Documents\InventoryReversalService;
 use App\Services\Documents\StockAdjustmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class StockAdjustmentController extends ApiController
 
     public function __construct(
         private StockAdjustmentService $service,
+        private InventoryReversalService $reversals,
         private WarehouseAccessService $warehouseAccess,
     ) {}
 
@@ -48,7 +50,7 @@ class StockAdjustmentController extends ApiController
     {
         $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
-        $adjustment->load(['lines.item:id,name,sku', 'lines.bin:id,code', 'warehouse:id,name,code']);
+        $adjustment->load(['lines.item:id,name,sku', 'lines.bin:id,code', 'warehouse:id,name,code', 'reversal']);
         $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
         $ledger = StockLedger::query()
             ->with(['item:id,name,sku', 'warehouse:id,name,code'])
@@ -108,15 +110,19 @@ class StockAdjustmentController extends ApiController
         return $this->success($adjustment->fresh('lines'));
     }
 
-    public function reverse(StockAdjustment $adjustment): JsonResponse
+    public function reverse(Request $request, StockAdjustment $adjustment): JsonResponse
     {
         $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
+        $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         try {
-            $adjustment = $this->service->reverse($adjustment);
+            $reversal = $this->reversals->reverseNegativeAdjustment($adjustment, $data['reason']);
         } catch (RuntimeException $e) {
             return $this->error('adjustment_reverse_failed', $e->getMessage(), 422);
         }
 
-        return $this->success($adjustment->fresh('lines'));
+        return $this->success([
+            'adjustment' => $adjustment->fresh(['lines', 'reversal']),
+            'reversal' => $reversal,
+        ]);
     }
 }

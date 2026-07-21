@@ -3,15 +3,15 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Tenancy\Concerns\LocksWhenPosted;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Shipment extends Model
 {
     use BelongsToOrganization;
-    use SoftDeletes;
     use LocksWhenPosted;
+    use SoftDeletes;
 
     protected $table = 'shipments';
 
@@ -30,10 +30,16 @@ class Shipment extends Model
         'label_generated_at' => 'datetime',
         'tracking_events' => 'array',
         'warranty_months' => 'integer',
+        'reversed_at' => 'datetime',
     ];
 
     public function lines()
     {
         return $this->hasMany(ShipmentLine::class, 'shipment_id');
+    }
+
+    public function reversal()
+    {
+        return $this->belongsTo(SalesReturn::class, 'reversal_sales_return_id');
     }
 }
