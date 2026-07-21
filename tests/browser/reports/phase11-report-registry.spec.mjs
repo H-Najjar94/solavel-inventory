@@ -68,7 +68,10 @@ test('viewer can read reports but cannot use direct export URLs', async ({ page 
 });
 
 test('all report rows, totals, representative exports and role warehouse boundaries agree', async ({ browser }) => {
-    test.setTimeout(180_000);
+    // This matrix performs more than 200 live report/export requests across
+    // four independently authenticated roles. Keep the exhaustive coverage
+    // while allowing the standing QA dataset to grow over repeated runs.
+    test.setTimeout(420_000);
     const contexts = {
         owner: await browser.newContext(),
         manager: await browser.newContext(),

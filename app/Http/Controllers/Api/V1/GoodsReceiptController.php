@@ -29,8 +29,10 @@ class GoodsReceiptController extends ApiController
         $query = GoodsReceipt::query()
             ->with(['warehouse:id,name,code', 'supplier:id,name,code', 'purchaseOrder:id,po_number'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
+            ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('purchase_order_id'), fn ($q) => $q->where('purchase_order_id', (int) $request->query('purchase_order_id')))
             ->orderByDesc('id');
+        $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (GoodsReceipt $grn) {
             $grn->setAttribute('warehouse_name', $grn->warehouse?->name);
@@ -45,6 +47,7 @@ class GoodsReceiptController extends ApiController
 
     public function show(GoodsReceipt $goods_receipt): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         $goods_receipt->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code', 'reversal']);
         $goods_receipt->setAttribute('warehouse_name', $goods_receipt->warehouse?->name);
@@ -64,6 +67,7 @@ class GoodsReceiptController extends ApiController
      */
     public function fromPo(Request $request, PurchaseOrder $purchase_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if (! in_array($purchase_order->status, ['approved', 'partially_received'], true)) {
             return $this->error('po_not_receivable', 'Only an approved/partially-received PO can be received.', 422);
         }
@@ -106,6 +110,7 @@ class GoodsReceiptController extends ApiController
     {
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             unset($data['grn_number']);
             $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
@@ -118,7 +123,9 @@ class GoodsReceiptController extends ApiController
     public function update(StoreGoodsReceiptRequest $request, GoodsReceipt $goods_receipt): JsonResponse
     {
         try {
+            $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $grn = $this->service->updateDraft($goods_receipt, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('grn_update_failed', $e->getMessage(), 422);
@@ -129,6 +136,7 @@ class GoodsReceiptController extends ApiController
 
     public function post(GoodsReceipt $goods_receipt): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
         try {
             $grn = $this->service->post($goods_receipt);
         } catch (RuntimeException $e) {
