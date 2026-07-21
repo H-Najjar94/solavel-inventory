@@ -24,10 +24,11 @@ async function getJson(page, path) {
     return response.json();
 }
 
-async function getAllEvents(page, status) {
+async function getAllEvents(page, status = null) {
     const rows = [];
     for (let current = 1; ; current += 1) {
-        const payload = await getJson(page, `/integration/solabooks/events?status=${status}&per_page=100&page=${current}`);
+        const statusQuery = status ? `status=${status}&` : '';
+        const payload = await getJson(page, `/integration/solabooks/events?${statusQuery}per_page=100&page=${current}`);
         rows.push(...(payload.data?.data ?? payload.data ?? []));
         if (current >= Number(payload.meta?.last_page ?? 1)) return rows;
     }
@@ -35,15 +36,13 @@ async function getAllEvents(page, status) {
 
 test('exact outbox totals and the 16 percent tax mapping are unambiguous', async ({ page }) => {
     await login(page);
-    const statuses = {};
-    for (const status of ['pending', 'processing', 'sent', 'failed', 'ignored']) {
-        const payload = await getJson(page, `/integration/solabooks/events?status=${status}&per_page=1`);
-        statuses[status] = payload.meta.total;
-    }
-    const all = await getJson(page, '/integration/solabooks/events?per_page=1');
-    expect(Object.values(statuses).reduce((sum, count) => sum + count, 0)).toBe(all.meta.total);
-    const statusEvents = {};
-    for (const status of ['pending', 'sent', 'failed', 'ignored']) statusEvents[status] = await getAllEvents(page, status);
+    const allEvents = await getAllEvents(page);
+    const grouped = Object.groupBy(allEvents, (event) => event.status);
+    const statuses = Object.fromEntries(['pending', 'processing', 'sent', 'failed', 'ignored']
+        .map((status) => [status, grouped[status]?.length ?? 0]));
+    expect(Object.values(statuses).reduce((sum, count) => sum + count, 0)).toBe(allEvents.length);
+    const statusEvents = Object.fromEntries(['pending', 'sent', 'failed', 'ignored']
+        .map((status) => [status, grouped[status] ?? []]));
     const byType = Object.fromEntries(Object.entries(statusEvents).map(([status, events]) => [status,
         Object.fromEntries(Object.entries(Object.groupBy(events, (event) => event.event_type))
             .map(([type, typed]) => [type, { count: typed.length, ids: typed.map((event) => event.id) }]))]));
@@ -71,7 +70,7 @@ test('exact outbox totals and the 16 percent tax mapping are unambiguous', async
     fs.mkdirSync(evidenceDir, { recursive: true });
     fs.writeFileSync(`${evidenceDir}/state-reconciliation.json`, `${JSON.stringify({
         captured_at: new Date().toISOString(),
-        outbox: { statuses, total: all.meta.total, by_type: byType },
+        outbox: { statuses, total: allEvents.length, by_type: byType },
         phase12_manual_reclassifications: historical,
         phase12_tax: {
             name: standard.name,
