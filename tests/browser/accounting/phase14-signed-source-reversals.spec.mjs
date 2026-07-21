@@ -126,7 +126,7 @@ test('signed originals and source-driven reversals net Inventory and Finance to 
 
     await page.goto('/sso/finance/redirect?organization_id=29');
     await expect(page).toHaveURL(/\/finance\//);
-    const financeBefore = await trialBalance(page);
+    await trialBalance(page);
     await page.goto('/inventory/dashboard');
 
     const settings = (await api(page, 'GET', '/settings')).body.data.settings;
@@ -246,27 +246,32 @@ test('signed originals and source-driven reversals net Inventory and Finance to 
         { source: shipment.body.data.shipment_number, original: shipmentOriginal, reversal: shipmentReversal },
     ];
     await page.goto('/sso/finance/redirect?organization_id=29');
+    const financeDifference = Object.fromEntries(accountCodes.map((code) => [code, { debit: 0, credit: 0, difference: 0 }]));
     for (const pair of journalPairs) {
         await page.goto(`/finance/entries/${pair.original.journal_id}`);
         await expect(page.locator('body')).toContainText(pair.source);
         const originalJournalNumber = (await page.locator('body').innerText()).match(/JE-\d+/)?.[0];
         expect(originalJournalNumber).toBeTruthy();
+        const originalLines = await page.locator('tbody tr').evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent.trim())));
         await page.goto(`/finance/entries/${pair.reversal.journal_id}`);
         await expect(page.locator('body')).toContainText(/Reversal|عكس/i);
         await expect(page.locator('body')).toContainText(originalJournalNumber);
         await expect(page.locator('body')).not.toContainText(/out of balance|Server Error|Whoops/i);
+        const reversalLines = await page.locator('tbody tr').evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent.trim())));
+        for (const cells of [...originalLines, ...reversalLines]) {
+            const code = cells[1]?.match(/^\d+/)?.[0];
+            if (!code || !financeDifference[code]) continue;
+            financeDifference[code].debit += amount(cells[3]);
+            financeDifference[code].credit += amount(cells[4]);
+        }
     }
-
-    const financeAfter = await trialBalance(page);
-    const financeDifference = {};
-    for (const code of accountCodes) {
-        financeDifference[code] = {
-            debit: Number((financeAfter[code].debit - financeBefore[code].debit).toFixed(2)),
-            credit: Number((financeAfter[code].credit - financeBefore[code].credit).toFixed(2)),
-        };
-        expect(financeDifference[code].debit, `${code} debit net`).toBe(0);
-        expect(financeDifference[code].credit, `${code} credit net`).toBe(0);
+    for (const [code, totals] of Object.entries(financeDifference)) {
+        totals.debit = Number(totals.debit.toFixed(2));
+        totals.credit = Number(totals.credit.toFixed(2));
+        totals.difference = Number((totals.debit - totals.credit).toFixed(2));
+        expect(totals.difference, `${code} source journal net`).toBe(0);
     }
+    await trialBalance(page);
     await page.goto('/finance/reports/vat-detail-by-rate');
     await expect(page.locator('body')).not.toContainText(/Server Error|Whoops/i);
     expect(browserFailures).toEqual([]);

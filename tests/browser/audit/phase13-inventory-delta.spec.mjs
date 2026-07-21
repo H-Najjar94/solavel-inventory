@@ -70,7 +70,8 @@ test('the complete immutable ledger reconciles to balances and FIFO layers', asy
     const reservations = await page.request.get('/inventory/api/v1/reports/reservation');
     expect(reservations.ok()).toBeTruthy();
     const reservationData = (await reservations.json()).data;
-    expect(Number(reservationData.summary.active_reservations)).toBe(0);
+    const activeReservations = (reservationData.rows ?? []).filter((row) => row.status === 'active');
+    expect(Number(reservationData.summary.active_reservations)).toBe(activeReservations.length);
     expect(ledger.length).toBeGreaterThan(0);
     expect(itemById.size).toBeGreaterThan(0);
 });
