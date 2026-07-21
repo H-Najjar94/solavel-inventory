@@ -7,6 +7,7 @@ use App\Http\Requests\Api\StoreGoodsReceiptRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Documents\InventoryReversalService;
 use App\Services\Stock\Support\Decimal;
@@ -19,6 +20,7 @@ class GoodsReceiptController extends ApiController
     public function __construct(
         private GoodsReceiptService $service,
         private InventoryReversalService $reversals,
+        private WarehouseAccessService $warehouseAccess,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -138,6 +140,7 @@ class GoodsReceiptController extends ApiController
 
     public function reverse(Request $request, GoodsReceipt $goods_receipt): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         try {
             $reversal = $this->reversals->reverseGoodsReceipt($goods_receipt, $data['reason']);
