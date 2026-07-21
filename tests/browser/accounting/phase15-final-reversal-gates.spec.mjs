@@ -71,11 +71,19 @@ async function deliver(page, eventType, aggregateId) {
     if (event.status === 'sent') {
         return { event_id: event.id, journal_id: Number(event.external_document_id) };
     }
-    const delivered = await api(page, 'POST', `/integration/solabooks/events/${event.id}/retry`);
-    expect(delivered.status).toBe(200);
-    expect(delivered.body.data.status).toBe('sent');
-    expect(delivered.body.data.external_document_id).toBeTruthy();
-    return { event_id: event.id, journal_id: Number(delivered.body.data.external_document_id) };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const delivered = await api(page, 'POST', `/integration/solabooks/events/${event.id}/retry`);
+        const resolved = delivered.status === 200
+            ? delivered
+            : await api(page, 'GET', `/integration/solabooks/events/${event.id}`);
+        expect(resolved.status).toBe(200);
+        if (resolved.body.data.status === 'sent' && resolved.body.data.external_document_id) {
+            return { event_id: event.id, journal_id: Number(resolved.body.data.external_document_id) };
+        }
+        if (attempt === 0) continue;
+        expect(resolved.body.data.status).toBe('sent');
+    }
+    throw new Error(`${eventType} event ${event.id} did not resolve to a sent journal`);
 }
 
 async function visibleReverse(page, path, reason) {

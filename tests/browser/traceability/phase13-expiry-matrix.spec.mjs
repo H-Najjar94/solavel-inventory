@@ -50,20 +50,15 @@ async function visibleIncrease(page, itemId, lotCode, expiryDate, quantity) {
 
 test('deployed manual expiry policy covers selection, blocking, movement, reports and restored warning setting', async ({ page }) => {
     await login(page);
-    const itemsPayload = await api(page, 'GET', '/items?per_page=100&is_active=true');
-    const items = itemsPayload.body.data?.data ?? itemsPayload.body.data ?? [];
-    let item = items.find((row) => row.tracks_expiry && ['lot', 'lot_serial'].includes(row.tracking_type));
-    if (!item) {
-        await page.goto('/inventory/items/new');
-        await page.getByLabel('Item name').fill(`${prefix} Expiry Item`);
-        await page.getByLabel('SKU').fill(`${prefix}-EXP-ITEM`);
-        await page.getByLabel('Costing method').selectOption('fifo');
-        await page.getByLabel('Lot', { exact: true }).check();
-        await page.getByLabel('Expiry', { exact: true }).check();
-        await page.getByRole('button', { name: 'Create item' }).click();
-        await expect(page).toHaveURL(/\/inventory\/items\/\d+$/);
-        item = { id: Number(page.url().match(/(\d+)$/)[1]), tracks_expiry: true, tracking_type: 'lot' };
-    }
+    await page.goto('/inventory/items/new');
+    await page.getByLabel('Item name').fill(`${prefix} Expiry Item`);
+    await page.getByLabel('SKU').fill(`${prefix}-EXP-ITEM`);
+    await page.getByLabel('Costing method').selectOption('fifo');
+    await page.getByLabel('Lot', { exact: true }).check();
+    await page.getByLabel('Expiry', { exact: true }).check();
+    await page.getByRole('button', { name: 'Create item' }).click();
+    await expect(page).toHaveURL(/\/inventory\/items\/\d+$/);
+    const item = { id: Number(page.url().match(/(\d+)$/)[1]), tracks_expiry: true, tracking_type: 'lot' };
     expect(item?.id).toBeTruthy();
     const today = new Date();
     const iso = (offset) => new Date(today.getTime() + offset * 86400000).toISOString().slice(0, 10);
