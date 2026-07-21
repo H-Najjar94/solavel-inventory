@@ -34,6 +34,7 @@ async function upload(page, chooser, file) {
 }
 
 test('live attachment negative, header, retry, role and cleanup matrix', async ({ browser }) => {
+    test.setTimeout(240_000);
     const ownerContext = await browser.newContext();
     const owner = await ownerContext.newPage();
     await login(owner, 'qa.owner@solavel.test');

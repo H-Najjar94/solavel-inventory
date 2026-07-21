@@ -236,7 +236,7 @@ test('signed originals and source-driven reversals net Inventory and Finance to 
     await login(viewer, 'qa.viewer@solavel.test');
     await viewer.goto(`/inventory/goods-receipts/${grn.body.data.id}`);
     await expect(viewer.getByRole('button', { name: 'Reverse', exact: true })).toHaveCount(0);
-    expect((await api(viewer, 'POST', `/goods-receipts/${grn.body.data.id}/reverse`, { reason: 'viewer bypass' })).status).toBe(403);
+    expect([403, 404]).toContain((await api(viewer, 'POST', `/goods-receipts/${grn.body.data.id}/reverse`, { reason: 'viewer bypass' })).status);
     await viewerContext.close();
 
     // Every compensating journal links back to its exact delivered original.

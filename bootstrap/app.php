@@ -1,9 +1,21 @@
 <?php
 
+use App\Http\Middleware\AuthenticateFromInventoryHandoff;
+use App\Http\Middleware\BounceToParentForSso;
+use App\Http\Middleware\EnsureInventoryFeature;
+use App\Http\Middleware\EnsureInventoryPermission;
+use App\Http\Middleware\ResolveInventoryTenant;
+use App\Http\Middleware\VerifySolavelSyncSignature;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -12,7 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         using: function (): void {
             // Web routes (session-stateful).
-            \Illuminate\Support\Facades\Route::middleware('web')
+            Route::middleware('web')
                 ->group(__DIR__.'/../routes/web.php');
 
             // SolaStock JSON API. Apache's `Alias /inventory/` strips the
@@ -24,7 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // `web` middleware group (cookies + session + CSRF) — the standard
             // stateful-SPA pattern. This also makes $request->session() available
             // to ResolveInventoryTenant.
-            \Illuminate\Support\Facades\Route::middleware('web')
+            Route::middleware('web')
                 ->prefix('api')
                 ->group(__DIR__.'/../routes/api.php');
         },
@@ -32,10 +44,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // SolaStock middleware aliases (mirrors Finance naming).
         $middleware->alias([
-            'perm' => \App\Http\Middleware\EnsureInventoryPermission::class,
-            'feature' => \App\Http\Middleware\EnsureInventoryFeature::class,
-            'inv.tenant' => \App\Http\Middleware\ResolveInventoryTenant::class,
-            'sync.signature' => \App\Http\Middleware\VerifySolavelSyncSignature::class,
+            'perm' => EnsureInventoryPermission::class,
+            'feature' => EnsureInventoryFeature::class,
+            'inv.tenant' => ResolveInventoryTenant::class,
+            'sync.signature' => VerifySolavelSyncSignature::class,
         ]);
 
         // Central sync posts are authenticated by the HMAC signature middleware,
@@ -51,8 +63,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // they run AFTER StartSession — otherwise session writes + Auth::login()
         // in the handoff have no started session and are silently lost.
         $middleware->web(append: [
-            \App\Http\Middleware\AuthenticateFromInventoryHandoff::class,
-            \App\Http\Middleware\BounceToParentForSso::class,
+            AuthenticateFromInventoryHandoff::class,
+            BounceToParentForSso::class,
         ]);
 
         // The API routes group ('api' middleware) — this app was not scaffolded
@@ -61,26 +73,36 @@ return Application::configure(basePath: dirname(__DIR__))
         // RateLimiter::for('api', ...); omitted here to avoid an undefined-limiter
         // boot failure.)
         $middleware->group('api', [
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            SubstituteBindings::class,
         ]);
 
         // Ensure the tenant is resolved (or a clean 409 returned) BEFORE route
         // model binding runs — otherwise binding queries the tenant DB with no
         // database selected and 500s instead of returning the no-tenant 409.
         $middleware->priority([
-            \Illuminate\Cookie\Middleware\EncryptCookies::class,
-            \Illuminate\Session\Middleware\StartSession::class,
+            EncryptCookies::class,
+            StartSession::class,
             // SSO must run AFTER the session is started so its session writes +
             // Auth::login() persist and a session cookie is set on the redirect.
-            \App\Http\Middleware\AuthenticateFromInventoryHandoff::class,
-            \App\Http\Middleware\BounceToParentForSso::class,
-            \App\Http\Middleware\ResolveInventoryTenant::class,
-            \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            \App\Http\Middleware\EnsureInventoryPermission::class,
+            AuthenticateFromInventoryHandoff::class,
+            BounceToParentForSso::class,
+            ResolveInventoryTenant::class,
+            SubstituteBindings::class,
+            EnsureInventoryPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+        $exceptions->render(function (ModelNotFoundException $exception, Request $request) {
+            if ($request->expectsJson() || $request->is('api/*') || $request->is('inventory/api/*')) {
+                return response()->json(['message' => 'Resource not found.'], 404);
+            }
+        });
+        $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
+            if ($request->expectsJson() || $request->is('api/*') || $request->is('inventory/api/*')) {
+                return response()->json(['message' => 'Resource not found.'], 404);
+            }
+        });
     })->create();

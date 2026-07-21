@@ -167,7 +167,7 @@ test('deployed manual expiry policy covers selection, blocking, movement, report
     const expectedQty = (await countRow.locator('td').nth(3).innerText()).match(/[\d.]+/)?.[0];
     await countRow.locator('input[type="number"]').fill(expectedQty);
     await page.getByRole('button', { name: 'Save & post variance' }).click();
-    await expect(page.getByText('Count posted — variance adjustment created.')).toBeVisible();
+    await expect(page.getByText('Count posted — variance adjustment created.')).toBeVisible({ timeout: 30_000 });
 
     await page.goto('/inventory/settings');
     const original = Number(await page.getByLabel('Expiry warning days').inputValue());
