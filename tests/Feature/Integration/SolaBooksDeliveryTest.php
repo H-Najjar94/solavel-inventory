@@ -222,4 +222,70 @@ class SolaBooksDeliveryTest extends TestCase
         $this->assertNull($setting->signingSecret());
         $this->assertArrayNotHasKey('signing_key_id', $setting->meta);
     }
+
+    #[Test]
+    public function recoverable_finance_failures_retry_once_without_duplicate_inventory_delivery_state(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            'books.test/*' => Http::sequence()
+                ->push(['message' => 'finance unavailable'], 503)
+                ->push(['success' => true, 'data' => ['id' => 1200]], 200)
+                ->push(['message' => 'invalid signature'], 401)
+                ->push(['success' => true, 'data' => ['id' => 1201]], 200)
+                ->push(['message' => 'locked accounting period'], 422)
+                ->push(['success' => true, 'data' => ['id' => 1202]], 200),
+        ]);
+
+        foreach (['finance unavailable', 'invalid signature', 'locked accounting period'] as $index => $message) {
+            $event = $this->event();
+
+            try {
+                app(SolaBooksOutboxDeliveryService::class)->deliver($event);
+                $this->fail($message.' must leave a recoverable failed event');
+            } catch (\RuntimeException) {
+                // Expected remote rejection/outage.
+            }
+
+            $this->assertSame('failed', $event->fresh()->status);
+            $this->assertSame(1, $event->fresh()->attempts);
+            $recovered = app(SolaBooksOutboxDeliveryService::class)->deliver($event->fresh(), true);
+            $this->assertSame('sent', $recovered->status);
+            $this->assertSame((string) (1200 + $index), $recovered->external_document_id);
+            $this->assertSame(
+                $recovered->external_document_id,
+                app(SolaBooksOutboxDeliveryService::class)->deliver($recovered->fresh(), true)->external_document_id,
+            );
+        }
+        Http::assertSentCount(6);
+    }
+
+    #[Test]
+    public function missing_account_mapping_blocks_delivery_without_http_and_recovers_after_restoration(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $mapping = IntegrationAccountMapping::query()->where('mapping_type', 'inventory_asset')->firstOrFail();
+        $mapping->update(['solabooks_account_id' => null, 'status' => 'unmapped']);
+        Http::fake([
+            'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 1300]], 200),
+        ]);
+        $event = $this->event(['mapping_status' => 'incomplete']);
+
+        try {
+            app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
+            $this->fail('Incomplete account mappings must block delivery.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('mapping', strtolower($e->getMessage()));
+        }
+        Http::assertNothingSent();
+        $this->assertSame('failed', $event->fresh()->status);
+
+        $mapping->update(['solabooks_account_id' => '101', 'status' => 'mapped']);
+        $recovered = app(SolaBooksOutboxDeliveryService::class)->deliver($event->fresh(), true);
+        $this->assertSame('sent', $recovered->status);
+        $this->assertSame('1300', $recovered->external_document_id);
+        Http::assertSentCount(1);
+    }
 }
