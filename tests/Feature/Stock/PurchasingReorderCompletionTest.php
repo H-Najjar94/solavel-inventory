@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Stock;
 
+use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Models\Tenant\CostLayer;
@@ -11,8 +12,10 @@ use App\Models\Tenant\PurchaseOrderBackorder;
 use App\Models\Tenant\PurchaseOrderLine;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\WarehouseReorderRule;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Documents\OpeningStockService;
+use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use Illuminate\Http\Request;
@@ -24,6 +27,66 @@ use Tests\Traits\TenantAware;
 class PurchasingReorderCompletionTest extends TestCase
 {
     use TenantAware;
+
+    #[Test]
+    public function purchase_order_index_applies_the_canonical_warehouse_scope(): void
+    {
+        $this->useTenantA();
+        $allowed = F::warehouse(['code' => 'PO-SCOPE-A']);
+        $restricted = F::warehouse(['code' => 'PO-SCOPE-B']);
+        PurchaseOrder::query()->create([
+            'po_number' => 'PO-SCOPE-ALLOWED', 'warehouse_id' => $allowed->id,
+            'order_date' => now()->toDateString(), 'status' => 'draft',
+        ]);
+        PurchaseOrder::query()->create([
+            'po_number' => 'PO-SCOPE-RESTRICTED', 'warehouse_id' => $restricted->id,
+            'order_date' => now()->toDateString(), 'status' => 'draft',
+        ]);
+
+        $access = \Mockery::mock(WarehouseAccessService::class);
+        $access->shouldReceive('scope')->andReturnUsing(function ($query) use ($allowed) {
+            $table = $query->getModel()->getTable();
+
+            return $table === 'warehouses'
+                ? $query->whereIn('warehouses.id', [$allowed->id])
+                : $query->whereIn("{$table}.warehouse_id", [$allowed->id]);
+        });
+        app()->instance(WarehouseAccessService::class, $access);
+
+        $response = app(PurchaseOrderController::class)
+            ->index(Request::create('/purchase-orders', 'GET'))
+            ->getData(true);
+        $rows = $response['data']['data'] ?? $response['data'];
+
+        $this->assertSame(['PO-SCOPE-ALLOWED'], collect($rows)->pluck('po_number')->all());
+    }
+
+    #[Test]
+    public function goods_receipt_index_applies_the_canonical_warehouse_scope(): void
+    {
+        $this->useTenantA();
+        $allowed = F::warehouse(['code' => 'GRN-SCOPE-A']);
+        $restricted = F::warehouse(['code' => 'GRN-SCOPE-B']);
+        GoodsReceipt::query()->create(['grn_number' => 'GRN-SCOPE-ALLOWED', 'warehouse_id' => $allowed->id, 'receipt_date' => now()->toDateString(), 'status' => 'draft']);
+        GoodsReceipt::query()->create(['grn_number' => 'GRN-SCOPE-RESTRICTED', 'warehouse_id' => $restricted->id, 'receipt_date' => now()->toDateString(), 'status' => 'draft']);
+
+        $access = \Mockery::mock(WarehouseAccessService::class);
+        $access->shouldReceive('scope')->andReturnUsing(function ($query) use ($allowed) {
+            $table = $query->getModel()->getTable();
+
+            return $table === 'warehouses'
+                ? $query->whereIn('warehouses.id', [$allowed->id])
+                : $query->whereIn("{$table}.warehouse_id", [$allowed->id]);
+        });
+        app()->instance(WarehouseAccessService::class, $access);
+
+        $response = app(GoodsReceiptController::class)
+            ->index(Request::create('/goods-receipts', 'GET'))
+            ->getData(true);
+        $rows = $response['data']['data'] ?? $response['data'];
+
+        $this->assertSame(['GRN-SCOPE-ALLOWED'], collect($rows)->pluck('grn_number')->all());
+    }
 
     #[Test]
     public function approved_po_creates_explicit_backorders_without_moving_stock(): void
@@ -78,7 +141,7 @@ class PurchasingReorderCompletionTest extends TestCase
             'received_qty' => '0.0000',
             'unit_price' => '4.0000',
         ]);
-        app(\App\Services\Purchasing\PurchaseOrderBackorderService::class)->refresh($po);
+        app(PurchaseOrderBackorderService::class)->refresh($po);
 
         $partial = app(GoodsReceiptService::class)->createDraft([
             'grn_number' => 'GRN-BO-PART',

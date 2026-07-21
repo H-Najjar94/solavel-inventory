@@ -186,19 +186,15 @@ test('two visible contexts create only one serial pick, pack, shipment and outbo
     const shipmentId = Number(shipmentUrls[0].match(/(\d+)$/)[1]);
 
     await Promise.all([pageA.goto(`/inventory/shipments/${shipmentId}`), pageB.goto(`/inventory/shipments/${shipmentId}`)]);
-    for (const page of [pageA, pageB]) {
-        const option = page.locator('label.serial-selector__opt').filter({ hasText: seeded.text });
-        if (await option.count()) await option.click();
-        const save = page.getByRole('button', { name: 'Save lot/serial' });
-        if (await save.isVisible()) await save.click();
-    }
-    await Promise.all([pageA.reload(), pageB.reload()]);
+    const seededShipment = await api(pageA, 'GET', `/shipments/${shipmentId}`);
+    expect(Number(seededShipment.body.data.shipment.lines[0].serial_id)).toBe(Number(seeded.id));
     await Promise.all([
         pageA.getByRole('button', { name: 'Post shipment' }).click().then(() => pageA.locator('.modal').getByRole('button', { name: /Post/i }).click()),
         pageB.getByRole('button', { name: 'Post shipment' }).click().then(() => pageB.locator('.modal').getByRole('button', { name: /Post/i }).click()),
     ]);
     await Promise.all([pageA.waitForTimeout(700), pageB.waitForTimeout(700)]);
 
+    await expect.poll(async () => (await api(pageA, 'GET', `/shipments/${shipmentId}`)).body.data.shipment.status).toBe('posted');
     const shipment = await api(pageA, 'GET', `/shipments/${shipmentId}`);
     expect(shipment.body.data.shipment.status).toBe('posted');
     expect(shipment.body.data.ledger).toHaveLength(1);

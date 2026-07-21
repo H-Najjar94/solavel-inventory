@@ -244,7 +244,9 @@ class TraceabilityController extends ApiController
             ->whereNotNull('expiry_date')->where('status', '!=', 'consumed')
             ->whereDate('expiry_date', '<=', $cutoff)
             ->orderBy('expiry_date')
-            ->limit(min((int) $request->query('limit', 200), 500))->get();
+            ->limit(min((int) $request->query('limit', 200), 500));
+        $this->scopeLotsToAllowedWarehouses($rows);
+        $rows = $rows->get();
 
         $expired = $rows->filter(fn ($l) => $l->isExpired())->count();
 
@@ -262,7 +264,19 @@ class TraceabilityController extends ApiController
         $query = Lot::query()->with('item:id,sku,name')->whereNotNull('expiry_date')
             ->whereDate('expiry_date', '<=', now()->addDays($days)->toDateString())
             ->orderBy('expiry_date');
+        $this->scopeLotsToAllowedWarehouses($query);
 
         return $this->paginated($query->paginate(min((int) $request->query('per_page', 100), 200))->withQueryString());
+    }
+
+    private function scopeLotsToAllowedWarehouses($query): void
+    {
+        if (($allowed = $this->warehouseAccess->allowedIds()) !== null) {
+            $query->whereIn('id', StockBalance::query()
+                ->whereIn('warehouse_id', $allowed)
+                ->where('on_hand_qty', '>', 0)
+                ->whereNotNull('lot_id')
+                ->pluck('lot_id'));
+        }
     }
 }

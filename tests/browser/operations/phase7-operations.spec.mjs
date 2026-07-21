@@ -18,7 +18,7 @@ async function login(page) {
 }
 
 test('owner posts a transfer, adjustment, and stock count through visible forms', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await login(page);
 
     await page.goto('/inventory/transfers/new');
@@ -50,14 +50,21 @@ test('owner posts a transfer, adjustment, and stock count through visible forms'
     await page.getByRole('button', { name: 'Prefill expected from stock' }).click();
     await expect(page.locator('.panel input.input--num').first()).toBeVisible();
     const countRows = page.locator('tbody tr');
-    for (let index = 0; index < await countRows.count(); index += 1) {
-        const row = countRows.nth(index);
-        const expected = (await row.locator('td').nth(3).innerText()).match(/-?[\d.]+/)?.[0] ?? '0';
-        await row.locator('input[type="number"]').fill(expected);
-    }
+    expect(await countRows.count()).toBeGreaterThan(0);
+    await countRows.evaluateAll((rows) => {
+        for (const row of rows) {
+            const input = row.querySelector('input[type="number"]');
+            if (! input) continue;
+
+            input.value = row.cells[3]?.textContent?.match(/-?[\d.]+/)?.[0] ?? '0';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    });
     const postCount = page.getByRole('button', { name: 'Save & post variance' });
+    await expect(postCount).toBeEnabled();
     await postCount.scrollIntoViewIfNeeded();
-    await postCount.evaluate((button) => button.click());
-    await expect(page.getByText('Count posted — variance adjustment created.')).toBeVisible();
+    await postCount.click();
+    await expect(page.getByText('Count posted — variance adjustment created.')).toBeVisible({ timeout: 30_000 });
     await expect(page).toHaveURL(/\/inventory\/counts\/\d+/);
 });

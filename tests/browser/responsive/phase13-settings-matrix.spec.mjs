@@ -124,7 +124,7 @@ test('owner exercises all exposed master-data administration controls and scopes
 
     const reorder = page.locator('.panel').filter({ hasText: 'Reorder Planning' });
     await reorder.getByLabel('Item').selectOption({ index: 1 });
-    await reorder.getByLabel('Warehouse').selectOption('1');
+    await reorder.locator('label').filter({ hasText: /^\s*Warehouse/ }).locator('select').selectOption('1');
     await reorder.getByLabel('Reorder point').fill('3');
     await reorder.getByLabel('Reorder quantity').fill('5');
     await reorder.getByLabel('Minimum stock').fill('1');

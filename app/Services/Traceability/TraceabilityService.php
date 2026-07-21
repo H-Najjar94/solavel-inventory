@@ -8,6 +8,7 @@ use App\Models\Tenant\Lot;
 use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Carbon\CarbonImmutable;
@@ -20,7 +21,10 @@ use Illuminate\Support\Facades\DB;
  */
 class TraceabilityService
 {
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(
+        private OrganizationContext $context,
+        private WarehouseAccessService $warehouseAccess,
+    ) {}
 
     private function db()
     {
@@ -41,6 +45,7 @@ class TraceabilityService
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->leftJoin('warehouse_bins as bin', 'bin.id', '=', 'b.bin_id')
             ->where('b.lot_id', $lot->id)
+            ->when($this->warehouseAccess->allowedIds() !== null, fn ($q) => $q->whereIn('b.warehouse_id', $this->warehouseAccess->allowedIds()))
             ->selectRaw('w.name warehouse, bin.code bin, b.warehouse_id, b.bin_id, b.on_hand_qty, b.reserved_qty')
             ->get();
 
@@ -110,6 +115,7 @@ class TraceabilityService
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->where('b.item_id', $itemId)
             ->where('b.on_hand_qty', '>', 0)
+            ->when($this->warehouseAccess->allowedIds() !== null, fn ($q) => $q->whereIn('b.warehouse_id', $this->warehouseAccess->allowedIds()))
             ->when($warehouseId, fn ($q) => $q->where('b.warehouse_id', $warehouseId))
             ->selectRaw('l.id lot_id, l.lot_code, l.expiry_date, l.status, b.warehouse_id, w.name warehouse, b.bin_id, b.on_hand_qty, b.reserved_qty')
             ->orderBy('l.expiry_date')->get();

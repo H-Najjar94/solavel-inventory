@@ -9,6 +9,7 @@ use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\PurchaseOrderBackorder;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Purchasing\PurchaseOrderBackorderService;
@@ -32,6 +33,7 @@ class PurchaseOrderController extends ApiController
         private UnitConversionResolver $conversions,
         private PurchaseOrderBackorderService $backorders,
         private InventoryTaxService $taxes,
+        private WarehouseAccessService $warehouseAccess,
     ) {}
 
     private function conn(): string
@@ -44,9 +46,11 @@ class PurchaseOrderController extends ApiController
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = PurchaseOrder::query()
             ->with(['warehouse:id,name,code', 'supplier:id,name,code'])
+            ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('supplier_id'), fn ($q) => $q->where('supplier_id', (int) $request->query('supplier_id')))
             ->orderByDesc('id');
+        $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (PurchaseOrder $po) {
             $po->setAttribute('warehouse_name', $po->warehouse?->name);
@@ -64,6 +68,7 @@ class PurchaseOrderController extends ApiController
 
     public function show(PurchaseOrder $purchase_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         // Eager-load names (org-scoped by each model's global scope) so the detail
         // page shows names, not raw #ids.
         $purchase_order->load(['lines.item:id,name,sku,base_unit_id', 'lines.enteredUnit:id,code,name,symbol', 'backorders', 'warehouse:id,name,code', 'supplier:id,name,code']);
@@ -102,6 +107,7 @@ class PurchaseOrderController extends ApiController
     public function store(StorePurchaseOrderRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         unset($data['po_number']);
         $orgId = $this->context->idOrFail();
         try {
@@ -133,10 +139,12 @@ class PurchaseOrderController extends ApiController
 
     public function update(StorePurchaseOrderRequest $request, PurchaseOrder $purchase_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if ($purchase_order->status !== 'draft') {
             return $this->error('po_not_draft', 'Only a draft PO can be edited.', 422);
         }
         $data = $request->validated();
+        $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         try {
             $po = DB::connection($this->conn())->transaction(function () use ($data, $purchase_order) {
                 $purchase_order->update(collect($data)->except('lines')->toArray());
@@ -156,6 +164,7 @@ class PurchaseOrderController extends ApiController
 
     public function approve(PurchaseOrder $purchase_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if ($purchase_order->status !== 'draft') {
             return $this->error('po_not_draft', 'Only a draft PO can be approved.', 422);
         }
@@ -168,6 +177,7 @@ class PurchaseOrderController extends ApiController
 
     public function cancel(PurchaseOrder $purchase_order): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if (in_array($purchase_order->status, ['received', 'cancelled'], true)) {
             return $this->error('po_not_cancellable', "A {$purchase_order->status} PO cannot be cancelled.", 422);
         }
