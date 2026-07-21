@@ -156,9 +156,14 @@ test('deployed manual expiry policy covers selection, blocking, movement, report
     await page.goto('/inventory/counts/new');
     await page.getByLabel('Count number').fill(`${documentPrefix}-EXP-COUNT`);
     await page.getByLabel('Warehouse').selectOption('1');
-    await page.getByRole('button', { name: 'Prefill expected from stock' }).click();
+    const prefillButton = page.getByRole('button', { name: 'Prefill expected from stock' });
+    await Promise.all([
+        page.waitForResponse((response) => response.url().includes('/inventory/api/v1/counts-prefill?warehouse_id=1') && response.status() === 200),
+        prefillButton.click(),
+    ]);
+    await expect(prefillButton).toBeEnabled({ timeout: 20_000 });
     const countRow = page.locator('tbody tr').filter({ hasText: near }).first();
-    await expect(countRow).toBeVisible();
+    await expect(countRow).toBeVisible({ timeout: 20_000 });
     const expectedQty = (await countRow.locator('td').nth(3).innerText()).match(/[\d.]+/)?.[0];
     await countRow.locator('input[type="number"]').fill(expectedQty);
     await page.getByRole('button', { name: 'Save & post variance' }).click();
