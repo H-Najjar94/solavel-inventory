@@ -391,7 +391,7 @@ class StockLedgerService
         $layerForLedger = null;
 
         if ($item->tracksSerials() && $movement->serialId !== null) {
-            $this->applySerial($orgId, $movement, $item);
+            $this->applySerialReversal($orgId, $movement, $item, $orig->direction);
         }
 
         if ((string) $orig->costing_method === 'fifo' && $orig->direction === 'out') {
@@ -627,6 +627,39 @@ class StockLedgerService
             }
             $serial->status = 'sold';
         }
+        $serial->save();
+    }
+
+    /**
+     * Preserve serial lifecycle semantics while undoing a posted movement.
+     * Undoing an inbound receipt removes the serial from on-hand, but it is not
+     * a sale; keep the identity/history and mark it returned. Undoing an outbound
+     * source puts the exact serial back into stock.
+     */
+    private function applySerialReversal(int $orgId, StockMovement $movement, Item $item, string $originalDirection): void
+    {
+        $serial = SerialNumber::query()->where('organization_id', $orgId)->find($movement->serialId);
+        if (! $serial) {
+            throw new RuntimeException("Serial {$movement->serialId} not found.");
+        }
+        if ((int) $serial->item_id !== $movement->itemId) {
+            throw new RuntimeException('Serial does not belong to the movement item.');
+        }
+
+        if ($originalDirection === 'in') {
+            if (! in_array($serial->status, ['available', 'in_stock'], true)) {
+                throw new RuntimeException("Serial {$serial->serial} is not available for receipt reversal (status: {$serial->status}).");
+            }
+            $serial->status = 'returned';
+        } else {
+            if (! in_array($serial->status, ['sold', 'shipped'], true)) {
+                throw new RuntimeException("Serial {$serial->serial} is not shipped for source reversal (status: {$serial->status}).");
+            }
+            $serial->status = 'in_stock';
+            $serial->warehouse_id = $movement->warehouseId;
+            $serial->bin_id = $movement->binId;
+        }
+
         $serial->save();
     }
 

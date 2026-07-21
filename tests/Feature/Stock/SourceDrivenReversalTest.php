@@ -5,6 +5,7 @@ namespace Tests\Feature\Stock;
 use App\Models\Tenant\CostLayer;
 use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\GoodsReceiptService;
@@ -87,6 +88,55 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame('4.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertNull($receipt->fresh()->reversal_id);
         $this->assertSame(0, InventoryReversal::query()->where('source_id', $receipt->id)->count());
+    }
+
+    #[Test]
+    public function receipt_reversal_preserves_lot_expiry_and_marks_a_serial_returned_not_sold(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-TRACE-WH']);
+        $lotItem = F::lotItem(['sku' => 'REV-LOT-ITEM', 'costing_method' => 'fifo']);
+        $serialItem = F::serialItem(['sku' => 'REV-SERIAL-ITEM', 'costing_method' => 'fifo']);
+        $expiry = now()->addMonths(9)->toDateString();
+        $service = app(GoodsReceiptService::class);
+        $receipt = $service->createDraft([
+            'grn_number' => 'REV-TRACE-SOURCE',
+            'warehouse_id' => $warehouse->id,
+            'receipt_date' => now()->toDateString(),
+        ], [
+            [
+                'item_id' => $lotItem->id,
+                'received_qty' => '2',
+                'accepted_qty' => '2',
+                'unit_cost' => '8.50',
+                'lot_code' => 'REV-TRACE-LOT',
+                'expiry_date' => $expiry,
+            ],
+            [
+                'item_id' => $serialItem->id,
+                'received_qty' => '1',
+                'accepted_qty' => '1',
+                'unit_cost' => '12.00',
+                'serials' => ['REV-TRACE-SERIAL'],
+            ],
+        ]);
+        $service->post($receipt);
+        $serial = SerialNumber::query()->where('serial', 'REV-TRACE-SERIAL')->firstOrFail();
+        $lotLedger = StockLedger::query()->where('item_id', $lotItem->id)->where('direction', 'in')->firstOrFail();
+
+        $reversal = app(InventoryReversalService::class)->reverseGoodsReceipt($receipt, 'Return traceable receipt to supplier');
+        $reversedLot = StockLedger::query()
+            ->where('source_type', InventoryReversal::class)
+            ->where('source_id', $reversal->id)
+            ->where('item_id', $lotItem->id)
+            ->firstOrFail();
+
+        $this->assertSame('returned', $serial->fresh()->status);
+        $this->assertNotSame('sold', $serial->fresh()->status);
+        $this->assertSame($lotLedger->lot_id, $reversedLot->lot_id);
+        $this->assertSame($expiry, (string) $reversedLot->expiry_date);
+        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $lotItem->id)->value('on_hand_qty'));
+        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $serialItem->id)->value('on_hand_qty'));
     }
 
     #[Test]
