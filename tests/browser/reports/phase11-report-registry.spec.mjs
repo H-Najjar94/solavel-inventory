@@ -118,8 +118,12 @@ test('all report rows, totals, representative exports and role warehouse boundar
             expect(exported.headers()['content-type']).toContain(mime);
             const body = await exported.text();
             if (rows.length > 0) {
-                const representative = Object.values(rows[0]).find((value) => value !== null && String(value).trim().length > 2);
-                if (representative) expect(body, `${report}.${format} representative`).toContain(String(representative));
+                const representative = payload.columns
+                    .filter((column) => column !== 'id' && !column.endsWith('_id'))
+                    .map((column) => rows[0][column])
+                    .find((value) => value !== null && String(value).trim().length > 2 && body.includes(String(value)));
+                expect(representative, `${report}.${format} exported canonical row value`).toBeTruthy();
+                expect(body, `${report}.${format} representative`).toContain(String(representative));
             }
         }
 

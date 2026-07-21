@@ -77,6 +77,7 @@ test('QA purchase, receipt, reservation and shipment lifecycle creates reconcili
     });
     expect(so.status).toBe(201);
     const soId = so.body.data.id;
+    const soNumber = so.body.data.order_number;
     expect((await api(page, 'POST', `/sales-orders/${soId}/confirm`)).status).toBe(200);
     expect((await api(page, 'POST', `/sales-orders/${soId}/reserve`, {})).status).toBe(200);
     const pick = await api(page, 'POST', '/pick-lists', { sales_order_id: soId, pick_number: `${prefix}-PICK`, warehouse_id: 1 });
@@ -95,5 +96,6 @@ test('QA purchase, receipt, reservation and shipment lifecycle creates reconcili
     expect(shipped.status).toBe(200);
 
     await page.goto(`/inventory/sales-orders/${soId}`);
-    await expect(page.getByText(prefix)).toBeVisible();
+    await expect(page.locator('h1')).toHaveText(soNumber);
+    await expect(page.locator('body')).toContainText(/shipped/i);
 });

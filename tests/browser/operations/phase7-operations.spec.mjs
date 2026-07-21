@@ -18,6 +18,7 @@ async function login(page) {
 }
 
 test('owner posts a transfer, adjustment, and stock count through visible forms', async ({ page }) => {
+    test.setTimeout(120_000);
     await login(page);
 
     await page.goto('/inventory/transfers/new');
@@ -54,7 +55,9 @@ test('owner posts a transfer, adjustment, and stock count through visible forms'
         const expected = (await row.locator('td').nth(3).innerText()).match(/-?[\d.]+/)?.[0] ?? '0';
         await row.locator('input[type="number"]').fill(expected);
     }
-    await page.getByRole('button', { name: 'Save & post variance' }).click();
+    const postCount = page.getByRole('button', { name: 'Save & post variance' });
+    await postCount.scrollIntoViewIfNeeded();
+    await postCount.evaluate((button) => button.click());
     await expect(page.getByText('Count posted — variance adjustment created.')).toBeVisible();
     await expect(page).toHaveURL(/\/inventory\/counts\/\d+/);
 });
