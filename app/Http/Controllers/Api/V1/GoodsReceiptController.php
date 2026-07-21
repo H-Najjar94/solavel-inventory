@@ -8,6 +8,7 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\GoodsReceiptService;
+use App\Services\Documents\InventoryReversalService;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,10 @@ use RuntimeException;
 
 class GoodsReceiptController extends ApiController
 {
-    public function __construct(private GoodsReceiptService $service) {}
+    public function __construct(
+        private GoodsReceiptService $service,
+        private InventoryReversalService $reversals,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -32,6 +36,7 @@ class GoodsReceiptController extends ApiController
             $grn->setAttribute('supplier_name', $grn->supplier?->name);
             $grn->setAttribute('supplier_code', $grn->supplier?->code);
             $grn->setAttribute('purchase_order_number', $grn->purchaseOrder?->po_number);
+
             return $grn;
         }));
     }
@@ -39,7 +44,7 @@ class GoodsReceiptController extends ApiController
     public function show(GoodsReceipt $goods_receipt): JsonResponse
     {
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
-        $goods_receipt->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code']);
+        $goods_receipt->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'supplier:id,name,code', 'reversal']);
         $goods_receipt->setAttribute('warehouse_name', $goods_receipt->warehouse?->name);
         $goods_receipt->setAttribute('supplier_name', $goods_receipt->supplier?->name);
         $ledger = StockLedger::query()->where('source_type', GoodsReceipt::class)->where('source_id', $goods_receipt->id)->get();
@@ -122,9 +127,27 @@ class GoodsReceiptController extends ApiController
 
     public function post(GoodsReceipt $goods_receipt): JsonResponse
     {
-        try { $grn = $this->service->post($goods_receipt); }
-        catch (RuntimeException $e) { return $this->error('grn_post_failed', $e->getMessage(), 422); }
+        try {
+            $grn = $this->service->post($goods_receipt);
+        } catch (RuntimeException $e) {
+            return $this->error('grn_post_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($grn->fresh('lines'));
+    }
+
+    public function reverse(Request $request, GoodsReceipt $goods_receipt): JsonResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
+        try {
+            $reversal = $this->reversals->reverseGoodsReceipt($goods_receipt, $data['reason']);
+        } catch (RuntimeException $e) {
+            return $this->error('grn_reverse_failed', $e->getMessage(), 422);
+        }
+
+        return $this->success([
+            'goods_receipt' => $goods_receipt->fresh('reversal'),
+            'reversal' => $reversal,
+        ]);
     }
 }

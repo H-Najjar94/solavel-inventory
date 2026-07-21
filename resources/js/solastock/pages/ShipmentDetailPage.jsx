@@ -235,7 +235,8 @@ export default function ShipmentDetailPage() {
             <div className="doc-actions">
                 {isDraft && <button className="btn" disabled={!gate.allowed || savingPicks} onClick={savePicks}>{savingPicks ? 'Saving…' : 'Save lot/serial'}</button>}
                 {isDraft && <button className="btn btn--primary" disabled={!gate.allowed || !captureComplete} title={captureComplete ? '' : 'Complete lot/serial capture first'} onClick={() => setConfirmPost(true)}>Post shipment</button>}
-                {s.status === 'posted' && <button className="btn" disabled={!canReturn.allowed} onClick={() => nav(`/sales-returns/new?shipment_id=${s.id}`)}>Create return</button>}
+                {s.reversed_at && <span className="badge badge--demo">Reversed by return #{s.reversal_sales_return_id}</span>}
+                {s.status === 'posted' && !s.reversed_at && <button className="btn" disabled={!canReturn.allowed} onClick={() => nav(`/sales-returns/new?shipment_id=${s.id}`)}>Create source reversal</button>}
             </div>
             {isDraft && !captureComplete && <p className="muted">Select lot/serial for every tracked line before posting.</p>}
             <ConfirmPostModal open={confirmPost} name="shipment"

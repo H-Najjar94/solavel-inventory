@@ -6,7 +6,7 @@ import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
-import { DocumentStatusBadge, DocumentActions, ConfirmPostModal, LedgerPreview } from '../components/document.jsx';
+import { DocumentStatusBadge, DocumentActions, ConfirmPostModal, ConfirmReverseModal, LedgerPreview } from '../components/document.jsx';
 
 export default function GoodsReceiptDetailPage() {
     const { id } = useParams();
@@ -14,6 +14,7 @@ export default function GoodsReceiptDetailPage() {
     const gate = useCanCreate('inventory.manage_adjustments');
     const [tab, setTab] = useState('lines');
     const [confirmPost, setConfirmPost] = useState(false);
+    const [confirmReverse, setConfirmReverse] = useState(false);
 
     const { data, isLoading, isMock } = useApiQuery(['grn', id], () => api.goodsReceipt(id), { fallback: null });
     const grn = data?.grn;
@@ -28,11 +29,16 @@ export default function GoodsReceiptDetailPage() {
         catch (e) { toast.push(e.message, 'error'); }
     }
 
+    async function reverse(reason) {
+        try { await api.reverseGoodsReceipt(id, reason); toast.push('GRN reversed from its original ledger source.', 'success'); qc.invalidateQueries({ queryKey: ['grn'] }); }
+        catch (e) { toast.push(e.message, 'error'); }
+    }
+
     return (
         <section className="page">
             <Breadcrumbs items={[{ label: 'Goods Receipts', to: '/goods-receipts' }, { label: grn.grn_number }]} />
             <header className="page-head">
-                <h1>{grn.grn_number}</h1><DocumentStatusBadge status={grn.status} />
+                <h1>{grn.grn_number}</h1><DocumentStatusBadge status={grn.reversal_id ? 'reversed' : grn.status} />
                 {isMock && <span className="badge badge--warn">sample data</span>}
                 {grn.status === 'draft' && <Link to={`/goods-receipts/${id}/edit`} className="btn" style={{ marginLeft: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>Edit</Link>}
             </header>
@@ -42,6 +48,7 @@ export default function GoodsReceiptDetailPage() {
                 <dt>Warehouse</dt><dd>{grn.warehouse_name ?? `#${grn.warehouse_id}`}</dd>
                 <dt>Supplier</dt><dd>{grn.supplier_name ?? (grn.supplier_id ? `#${grn.supplier_id}` : '—')}</dd>
                 <dt>Source PO</dt><dd>{po ? <Link to={`/purchase-orders/${po.id}`}>{po.po_number}</Link> : '—'}</dd>
+                <dt>Reversal</dt><dd>{grn.reversal ? `${grn.reversal.reversal_number} — ${grn.reversal.reason}` : '—'}</dd>
                 <dt>Notes</dt><dd>{grn.notes ?? '—'}</dd>
             </dl></div>
 
@@ -54,9 +61,11 @@ export default function GoodsReceiptDetailPage() {
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="GRN create/post events are recorded in inventory_audit_logs." /></div>}
 
-            <DocumentActions status={grn.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} postLabel="Post GRN" />
+            <DocumentActions status={grn.reversal_id ? 'reversed' : grn.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} postLabel="Post GRN" />
             <ConfirmPostModal open={confirmPost} name="goods receipt"
                 onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
+            <ConfirmReverseModal open={confirmReverse} name="goods receipt"
+                onConfirm={(reason) => { setConfirmReverse(false); reverse(reason); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }

@@ -17,8 +17,9 @@ final class IntegrationEvents
         'opening_stock.posted' => ['OpeningStockEntry', 'inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['OpeningStockEntry', 'opening_offset', 'inventory_asset'],
         'adjustment.posted' => ['StockAdjustment', 'inventory_asset', 'adjustment_gain'], // direction-dependent; see builder
-        'adjustment.reversed' => ['StockAdjustment', 'adjustment_gain', 'inventory_asset'],
+        'adjustment.reversed' => ['InventoryReversal', 'adjustment_gain', 'inventory_asset'],
         'grn.posted' => ['GoodsReceipt', 'inventory_asset', 'grni'],
+        'grn.reversed' => ['InventoryReversal', 'grni', 'inventory_asset'],
         'transfer.posted' => ['StockTransfer', 'inventory_asset', 'transfer_clearing'],
         'stock_count.posted' => ['StockCount', 'inventory_asset', 'adjustment_gain'],
 
@@ -42,7 +43,7 @@ final class IntegrationEvents
     {
         return in_array($type, [
             'opening_stock.posted', 'opening_stock.reversed',
-            'adjustment.posted', 'adjustment.reversed', 'grn.posted',
+            'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed',
             'stock_count.posted', 'shipment.posted', 'sales_return.posted',
         ], true);
     }
@@ -53,7 +54,7 @@ final class IntegrationEvents
         if (! self::postsJournal($type)) {
             return false;
         }
-        if (in_array($type, ['adjustment.posted', 'stock_count.posted'], true)) {
+        if (in_array($type, ['adjustment.posted', 'adjustment.reversed', 'stock_count.posted'], true)) {
             return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;
         }
 

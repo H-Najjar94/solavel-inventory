@@ -6,8 +6,10 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationTaxMapping;
+use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\PurchaseOrderLine;
 use App\Models\Tenant\SalesOrderLine;
+use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\Shipment;
 use App\Models\Tenant\StockLedger;
 use App\Services\Stock\Support\Decimal;
@@ -19,10 +21,64 @@ class AccountingJournalBuilder
     {
         return match ($event->event_type) {
             'grn.posted' => $this->goodsReceipt($event, $orgId),
+            'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),
             'shipment.posted' => $this->shipment($event, $orgId),
+            'sales_return.posted' => $this->salesReturn($event, $orgId),
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
             default => $this->twoLine($event, $orgId),
         };
+    }
+
+    private function inventoryReversal(IntegrationOutboxEvent $event, int $orgId): array
+    {
+        $reversal = InventoryReversal::query()->findOrFail($event->aggregate_id);
+        $originalType = match ($reversal->source_type) {
+            'goods_receipt' => 'grn.posted',
+            'stock_adjustment' => 'adjustment.posted',
+            default => throw new RuntimeException("Unsupported reversal source '{$reversal->source_type}'."),
+        };
+        $original = $this->originalEvent($originalType, (int) $reversal->source_id);
+        $lines = $originalType === 'grn.posted'
+            ? $this->goodsReceipt($original, $orgId)
+            : $this->adjustment($original, $orgId);
+
+        return $this->invert($lines, $event);
+    }
+
+    private function salesReturn(IntegrationOutboxEvent $event, int $orgId): array
+    {
+        $return = SalesReturn::query()->findOrFail($event->aggregate_id);
+        if (! $return->is_source_reversal || ! $return->source_reversal_shipment_id) {
+            return $this->twoLine($event, $orgId);
+        }
+
+        return $this->invert(
+            $this->shipment($this->originalEvent('shipment.posted', (int) $return->source_reversal_shipment_id), $orgId),
+            $event,
+        );
+    }
+
+    private function originalEvent(string $eventType, int $aggregateId): IntegrationOutboxEvent
+    {
+        $event = IntegrationOutboxEvent::query()
+            ->where('event_type', $eventType)
+            ->where('aggregate_id', $aggregateId)
+            ->first();
+        if (! $event) {
+            throw new RuntimeException("Original accounting event '{$eventType}' was not found.");
+        }
+
+        return $event;
+    }
+
+    private function invert(array $lines, IntegrationOutboxEvent $reversal): array
+    {
+        return array_map(function (array $line) use ($reversal) {
+            [$line['debit'], $line['credit']] = [$line['credit'], $line['debit']];
+            $line['description'] = $reversal->aggregate_number;
+
+            return $line;
+        }, $lines);
     }
 
     private function goodsReceipt(IntegrationOutboxEvent $event, int $orgId): array

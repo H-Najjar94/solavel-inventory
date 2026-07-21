@@ -2,12 +2,17 @@
 
 namespace App\Services\Documents;
 
-use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\Customer;
+use App\Models\Tenant\IntegrationOutboxEvent;
+use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\SerialNumber;
+use App\Models\Tenant\Shipment;
+use App\Models\Tenant\StockLedger;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
+use App\Services\Traceability\SerialService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -37,7 +42,7 @@ class SalesReturnService
         private OrganizationContext $context,
         private StockLedgerService $ledger,
         private IntegrationOutboxService $outbox,
-        private \App\Services\Traceability\SerialService $serials,
+        private SerialService $serials,
     ) {}
 
     private function conn(): string
@@ -55,12 +60,39 @@ class SalesReturnService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($attributes, $lines, $orgId) {
+            $sourceShipment = ! empty($attributes['shipment_id'])
+                ? Shipment::query()->with('lines')->lockForUpdate()->findOrFail((int) $attributes['shipment_id'])
+                : null;
+            if ($sourceShipment) {
+                if ($sourceShipment->status !== 'posted' || $sourceShipment->reversed_at) {
+                    throw new RuntimeException('Only an unreversed posted shipment can create a source reversal.');
+                }
+                if (mb_strlen(trim((string) ($attributes['reason'] ?? ''))) < 3) {
+                    throw new RuntimeException('A source reversal reason of at least 3 characters is required.');
+                }
+                $existing = SalesReturn::query()
+                    ->where('source_reversal_shipment_id', $sourceShipment->id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    return $existing->fresh('lines');
+                }
+                $attributes['warehouse_id'] = $sourceShipment->warehouse_id;
+                $attributes['is_source_reversal'] = true;
+                $attributes['source_reversal_shipment_id'] = $sourceShipment->id;
+                $attributes['original_event_uuid'] = IntegrationOutboxEvent::query()
+                    ->where('event_type', 'shipment.posted')
+                    ->where('aggregate_id', $sourceShipment->id)
+                    ->value('event_uuid');
+            }
             $r = new SalesReturn(array_merge([
                 'status' => 'draft', 'return_date' => $attributes['return_date'] ?? now()->toDateString(),
             ], $this->applyCustomerName($attributes)));
             $r->organization_id = $orgId;
             $r->save();
-            $this->syncLines($r, $lines, $orgId);
+            $sourceShipment
+                ? $this->syncSourceLines($r, $sourceShipment, $orgId)
+                : $this->syncLines($r, $lines, $orgId);
 
             return $r->fresh('lines');
         });
@@ -74,6 +106,9 @@ class SalesReturnService
             $r = SalesReturn::query()->lockForUpdate()->findOrFail($r->id);
             if ($r->status !== 'draft') {
                 throw new RuntimeException("Only a draft sales return can be edited (status '{$r->status}').");
+            }
+            if ($r->is_source_reversal) {
+                throw new RuntimeException('A shipment source reversal is immutable. Cancel it and start again before posting.');
             }
             $attributes = $this->applyCustomerName($attributes);
             $r->fill(collect($attributes)->only(['return_number', 'shipment_id', 'customer_id', 'customer_name', 'return_date', 'warehouse_id', 'reason', 'notes'])->toArray());
@@ -121,7 +156,28 @@ class SalesReturnService
                 );
             }
 
-            if ($movements !== []) {
+            if ($r->is_source_reversal) {
+                $shipment = Shipment::query()->lockForUpdate()->findOrFail($r->source_reversal_shipment_id);
+                if ($shipment->reversal_sales_return_id && (int) $shipment->reversal_sales_return_id !== (int) $r->id) {
+                    throw new RuntimeException('This shipment was already reversed by another return.');
+                }
+                $this->ledger->reverse(
+                    'shipment:'.$shipment->id.':post',
+                    $this->postNamespace($r),
+                    [
+                        'action' => 'shipment.reverse',
+                        'entity_type' => 'sales_return',
+                        'entity_id' => $r->id,
+                        'document_ref' => $r->return_number,
+                    ],
+                    SalesReturn::class,
+                    $r->id,
+                );
+                $shipment->reversal_sales_return_id = $r->id;
+                $shipment->reversed_at = now();
+                $shipment->reversed_by = auth()->id();
+                $shipment->markSystemTransition()->save();
+            } elseif ($movements !== []) {
                 $this->ledger->post($movements, $this->postNamespace($r), [
                     'action' => 'sales_return.post', 'entity_type' => 'sales_return',
                     'entity_id' => $r->id, 'document_ref' => $r->return_number,
@@ -136,7 +192,7 @@ class SalesReturnService
                     continue;
                 }
                 $status = self::SERIAL_DISPOSITION[$line->condition] ?? 'returned';
-                $serial = \App\Models\Tenant\SerialNumber::query()->find($line->serial_id);
+                $serial = SerialNumber::query()->find($line->serial_id);
                 if ($serial) {
                     $this->serials->setStatus($serial, $status, ['sales_return_id' => $r->id, 'warehouse_id' => $line->warehouse_id ?? $r->warehouse_id]);
                 }
@@ -148,7 +204,11 @@ class SalesReturnService
             $r->posted_guard_key = $this->postNamespace($r);
             $r->markSystemTransition()->save();
 
-            $this->outbox->record('sales_return.posted', $r, 'sales_return', $r->return_number, (string) $r->return_date);
+            $event = $this->outbox->record('sales_return.posted', $r, 'sales_return', $r->return_number, (string) $r->return_date);
+            if ($event) {
+                $r->reversal_event_uuid = $event->event_uuid;
+                $r->markSystemTransition()->save();
+            }
 
             return $r->fresh('lines');
         });
@@ -229,6 +289,36 @@ class SalesReturnService
                 },
                 'lot_id' => $line['lot_id'] ?? null,
                 'serial_id' => $line['serial_id'] ?? null,
+            ]);
+        }
+    }
+
+    private function syncSourceLines(SalesReturn $return, Shipment $shipment, int $orgId): void
+    {
+        $ledger = StockLedger::query()
+            ->where('source_type', Shipment::class)
+            ->where('source_id', $shipment->id)
+            ->where('direction', 'out')
+            ->orderBy('id')
+            ->get();
+        if ($ledger->isEmpty()) {
+            throw new RuntimeException('The posted shipment has no canonical ledger rows to reverse.');
+        }
+
+        foreach ($ledger as $row) {
+            $return->lines()->create([
+                'organization_id' => $orgId,
+                'item_id' => $row->item_id,
+                'variant_id' => $row->variant_id,
+                'warehouse_id' => $row->warehouse_id,
+                'bin_id' => $row->bin_id,
+                'returned_qty' => $row->quantity,
+                'unit_cost' => $row->unit_cost,
+                'condition' => 'resellable',
+                'inspection_status' => 'pending',
+                'disposition' => 'restock',
+                'lot_id' => $row->lot_id,
+                'serial_id' => $row->serial_id,
             ]);
         }
     }

@@ -97,9 +97,9 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
         $this->assertSame('authorized', $return->status);
         $return = app(SalesReturnService::class)->inspect($return, 'Quarantine on receipt.');
         $this->assertSame('inspected', $return->status);
-        $this->assertSame('quarantine', $return->lines->first()->disposition);
+        $this->assertSame('restock', $return->lines->first()->disposition);
         app(SalesReturnService::class)->post($return);
-        $this->assertSame('9.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('10.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         $recall = app(RecallService::class)->createDraft([
             'recall_number' => 'B5-REC-1',

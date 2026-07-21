@@ -18,6 +18,7 @@ export default function IntegrationSettingsPage() {
     const [tab, setTab] = useState('status');
     const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '990010', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
     const [savingConnection, setSavingConnection] = useState(false);
+    const [rotatingKey, setRotatingKey] = useState(false);
 
     const status = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
     const s = status.data;
@@ -34,6 +35,16 @@ export default function IntegrationSettingsPage() {
             toast.push('SolaBooks connection saved.', 'success');
         } catch (error) { toast.push(error.message, 'error'); }
         finally { setSavingConnection(false); }
+    }
+
+    async function rotateSigningKey() {
+        setRotatingKey(true);
+        try {
+            await api.rotateIntegrationSigningKey();
+            await qc.invalidateQueries({ queryKey: ['integration-status'] });
+            toast.push('Signing key generated and transferred securely.', 'success');
+        } catch (error) { toast.push(error.message, 'error'); }
+        finally { setRotatingKey(false); }
     }
 
     return (
@@ -63,6 +74,9 @@ export default function IntegrationSettingsPage() {
                             <dt>Last sync</dt><dd>{s.last_sync_at ?? '—'}</dd>
                             <dt>Last event generated</dt><dd>{s.last_event_generated_at ?? '—'}</dd>
                             <dt>Connection implemented</dt><dd>{s.connection_implemented ? 'Yes' : 'No (placeholder)'}</dd>
+                            <dt>Signing protocol</dt><dd>{s.signing?.protocol_version ?? 'Not configured'}</dd>
+                            <dt>Signing key ID</dt><dd>{s.signing?.key_id ?? '—'}</dd>
+                            <dt>Last signed delivery</dt><dd>{s.signing?.last_successful_delivery_at ?? '—'}</dd>
                         </dl>
                         <div className="doc-actions">
                             <Link className="btn btn--primary" to="/integrations/solabooks/events">View events</Link>
@@ -79,6 +93,8 @@ export default function IntegrationSettingsPage() {
                             <label className="field"><span className="field-label">SolaBooks API key</span><input className="input" type="password" autoComplete="new-password" disabled={!gate.allowed} value={connection.api_key} onChange={(e) => setConnection({ ...connection, api_key: e.target.value })} placeholder={s?.delivery_configured ? 'Configured — leave blank to keep' : 'Paste newly generated key'} /></label>
                         </div>
                         <button className="btn btn--primary" disabled={!gate.allowed || savingConnection} onClick={saveConnection}>{savingConnection ? 'Saving…' : 'Save connection'}</button>
+                        <button className="btn" style={{ marginLeft: 8 }} disabled={!gate.allowed || rotatingKey || !s?.delivery_configured} onClick={rotateSigningKey}>{rotatingKey ? 'Rotating…' : (s?.signing?.configured ? 'Rotate signing key' : 'Generate signing key')}</button>
+                        <p className="muted">The signing secret is generated in SolaBooks, transferred once over the authenticated internal API, encrypted at rest, and never returned by Inventory status APIs.</p>
                     </div>
                 </>
             ))}

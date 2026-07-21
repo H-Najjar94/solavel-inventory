@@ -22,4 +22,11 @@ class IntegrationSetting extends Model
 
         return $encrypted ? Crypt::decryptString($encrypted) : null;
     }
+
+    public function signingSecret(): ?string
+    {
+        $encrypted = $this->meta['signing_secret_encrypted'] ?? null;
+
+        return $encrypted ? Crypt::decryptString($encrypted) : null;
+    }
 }

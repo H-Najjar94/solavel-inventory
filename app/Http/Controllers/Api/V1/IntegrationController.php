@@ -84,6 +84,51 @@ class IntegrationController extends ApiController
         return $this->status();
     }
 
+    public function rotateSigningKey(): JsonResponse
+    {
+        $orgId = $this->context->idOrFail();
+        try {
+            $setting = $this->delivery->rotateSigningKey();
+        } catch (\RuntimeException $e) {
+            return $this->error('signing_key_rotation_failed', $e->getMessage(), 422);
+        }
+        InventoryAuditLog::create([
+            'organization_id' => $orgId,
+            'actor_user_id' => auth()->id(),
+            'action' => 'inventory.solabooks_signing_key.rotated',
+            'entity_type' => 'integration_settings',
+            'entity_id' => $setting->id,
+            'after' => [
+                'key_id' => $setting->meta['signing_key_id'] ?? null,
+                'protocol_version' => $setting->meta['signing_protocol_version'] ?? null,
+            ],
+            'created_at' => now(),
+        ]);
+
+        return $this->status();
+    }
+
+    public function revokeSigningKey(Request $request): JsonResponse
+    {
+        $data = $request->validate(['key_id' => ['required', 'string', 'max:64']]);
+        try {
+            $this->delivery->revokeSigningKey($data['key_id']);
+        } catch (\RuntimeException $e) {
+            return $this->error('signing_key_revoke_failed', $e->getMessage(), 422);
+        }
+        InventoryAuditLog::create([
+            'organization_id' => $this->context->idOrFail(),
+            'actor_user_id' => auth()->id(),
+            'action' => 'inventory.solabooks_signing_key.revoked',
+            'entity_type' => 'integration_settings',
+            'entity_id' => null,
+            'after' => ['key_id' => $data['key_id']],
+            'created_at' => now(),
+        ]);
+
+        return $this->status();
+    }
+
     // ── Account mappings ──
     public function accountMappings(): JsonResponse
     {

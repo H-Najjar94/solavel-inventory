@@ -49,4 +49,9 @@ class GoodsReceipt extends Model
     {
         return $this->belongsTo(PurchaseOrder::class, 'purchase_order_id');
     }
+
+    public function reversal(): BelongsTo
+    {
+        return $this->belongsTo(InventoryReversal::class, 'reversal_id');
+    }
 }

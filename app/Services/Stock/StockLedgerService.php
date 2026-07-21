@@ -15,6 +15,7 @@ use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseBin;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -96,12 +97,17 @@ class StockLedgerService
      *
      * @return StockLedger[]
      */
-    public function reverse(string $originalNamespace, string $reversalNamespace, array $audit = []): array
-    {
+    public function reverse(
+        string $originalNamespace,
+        string $reversalNamespace,
+        array $audit = [],
+        ?string $reversalSourceType = null,
+        ?int $reversalSourceId = null,
+    ): array {
         $orgId = $this->context->idOrFail();
         $connection = $this->connection();
 
-        return DB::connection($connection)->transaction(function () use ($originalNamespace, $reversalNamespace, $orgId, $audit) {
+        return DB::connection($connection)->transaction(function () use ($originalNamespace, $reversalNamespace, $orgId, $audit, $reversalSourceType, $reversalSourceId) {
             $alreadyReversed = StockLedger::query()
                 ->where('idempotency_key', 'like', $reversalNamespace.'#%')
                 ->orderBy('id')
@@ -124,35 +130,14 @@ class StockLedgerService
             // Reverse in REVERSE order so balances/layers unwind cleanly (LIFO of
             // the original sequence).
             foreach ($originals->reverse()->values() as $orig) {
-                // FIFO must restore the EXACT layers the original movement touched
-                // (preserving layer order + valuation), not re-cost into a blended
-                // layer. Average re-costs naturally via the generic path.
-                if ((string) $orig->costing_method === 'fifo') {
-                    $created[] = $this->applyFifoReversal($orig, $reversalNamespace, $index);
-                    $index++;
-                    continue;
-                }
-
-                $reverseDirection = $orig->direction === 'in' ? 'out' : 'in';
-                $movement = new StockMovement(
-                    direction: $reverseDirection,
-                    itemId: (int) $orig->item_id,
-                    warehouseId: (int) $orig->warehouse_id,
-                    quantity: (string) $orig->quantity,
-                    sourceType: $orig->source_type,
-                    sourceId: (int) $orig->source_id,
-                    sourceLineId: $orig->source_line_id ? (int) $orig->source_line_id : null,
-                    variantId: $orig->variant_id ? (int) $orig->variant_id : null,
-                    zoneId: $orig->zone_id ? (int) $orig->zone_id : null,
-                    binId: $orig->bin_id ? (int) $orig->bin_id : null,
-                    lotId: $orig->lot_id ? (int) $orig->lot_id : null,
-                    serialId: $orig->serial_id ? (int) $orig->serial_id : null,
-                    unitCost: (string) $orig->unit_cost,
-                    movedAt: now()->toDateTimeString(),
-                );
-
-                $created[] = $this->applyMovement(
-                    $movement, $orgId, $reversalNamespace, $index, isReversal: true
+                // Every reversal preserves the exact original ledger value. FIFO
+                // additionally restores/removes the precise source layers.
+                $created[] = $this->applyExactReversal(
+                    $orig,
+                    $reversalNamespace,
+                    $index,
+                    $reversalSourceType,
+                    $reversalSourceId,
                 );
                 $index++;
             }
@@ -367,8 +352,13 @@ class StockLedgerService
      *     reversing OUT.
      * Balances are projected via the shared projectBalance() to stay consistent.
      */
-    private function applyFifoReversal(StockLedger $orig, string $namespace, int $index): StockLedger
-    {
+    private function applyExactReversal(
+        StockLedger $orig,
+        string $namespace,
+        int $index,
+        ?string $reversalSourceType = null,
+        ?int $reversalSourceId = null,
+    ): StockLedger {
         $orgId = $this->context->idOrFail();
         $item = Item::query()->find((int) $orig->item_id);
         if (! $item || (int) $item->organization_id !== $orgId) {
@@ -385,8 +375,8 @@ class StockLedgerService
             itemId: (int) $orig->item_id,
             warehouseId: (int) $orig->warehouse_id,
             quantity: $qty,
-            sourceType: $orig->source_type,
-            sourceId: (int) $orig->source_id,
+            sourceType: $reversalSourceType ?? $orig->source_type,
+            sourceId: $reversalSourceId ?? (int) $orig->source_id,
             sourceLineId: $orig->source_line_id ? (int) $orig->source_line_id : null,
             variantId: $orig->variant_id ? (int) $orig->variant_id : null,
             zoneId: $orig->zone_id ? (int) $orig->zone_id : null,
@@ -400,7 +390,11 @@ class StockLedgerService
         $balance = $this->lockBalance($orgId, $movement, $item);
         $layerForLedger = null;
 
-        if ($orig->direction === 'out') {
+        if ($item->tracksSerials() && $movement->serialId !== null) {
+            $this->applySerial($orgId, $movement, $item);
+        }
+
+        if ((string) $orig->costing_method === 'fifo' && $orig->direction === 'out') {
             // RESTORE the exact layers this OUT consumed (add back per-layer qty).
             $consumptions = CostLayerConsumption::query()->where('ledger_id', $orig->id)->orderBy('id')->get();
             foreach ($consumptions as $c) {
@@ -411,7 +405,7 @@ class StockLedgerService
                 }
             }
             $layerForLedger = $consumptions->first()?->cost_layer_id ? (int) $consumptions->first()->cost_layer_id : null;
-        } else {
+        } elseif ((string) $orig->costing_method === 'fifo') {
             // REMOVE the qty from the layer this IN created. If the layer no longer
             // holds the full received quantity, those units were already consumed
             // downstream (sold, transferred, adjusted out) — the receipt cannot be
@@ -459,10 +453,10 @@ class StockLedgerService
             'quantity' => $qty,
             'unit_cost' => $unitCost,
             'total_cost' => $totalCost,
-            'costing_method' => 'fifo',
+            'costing_method' => $orig->costing_method,
             'cost_layer_id' => $layerForLedger,
-            'source_type' => $orig->source_type,
-            'source_id' => $orig->source_id,
+            'source_type' => $reversalSourceType ?? $orig->source_type,
+            'source_id' => $reversalSourceId ?? $orig->source_id,
             'source_line_id' => $orig->source_line_id,
             'moved_at' => now(),
             'posted_at' => now(),
@@ -512,7 +506,7 @@ class StockLedgerService
                 'average_cost' => '0',
                 'total_value' => '0',
             ]);
-        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+        } catch (UniqueConstraintViolationException $e) {
             // A concurrent transaction created it first — fall through to lock it.
         }
 
