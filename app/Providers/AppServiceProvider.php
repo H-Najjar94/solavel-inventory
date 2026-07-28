@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Tenant\Item;
+use App\Observers\ItemCatalogObserver;
 use App\Services\Tenancy\TenantManager;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +25,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Item::observe(ItemCatalogObserver::class);
     }
 }
