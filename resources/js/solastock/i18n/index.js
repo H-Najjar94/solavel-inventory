@@ -11,10 +11,11 @@ import * as adjustment from './adjustments.js';
 import * as ledger from './ledger.js';
 import * as onboarding from './onboarding.js';
 import { warehouseDetailEn, warehouseDetailAr } from './warehouseDetail.js';
+import * as receiving from './receiving.js';
 
 export const dictionaries = {
-  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, sales.en, traceability.en, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en),
-  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, sales.ar, traceability.ar, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar),
+  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, sales.en, traceability.en, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en),
+  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, sales.ar, traceability.ar, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar),
 };
 
 // English source phrases used by page islands. Keeping this separate from

@@ -9,11 +9,13 @@ import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx'
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, TraceabilityRequiredBadge } from '../components/traceability.jsx';
+import { useI18n } from '../i18n/context.jsx';
 
 const emptyLine = () => ({ item_id: null, received_qty: '', accepted_qty: '', entered_unit_id: null, unit_cost: '', bin_id: null, purchase_order_line_id: null, ordered_qty: null, remaining_qty: null, lot_code: '', expiry_date: '', serials: [] });
 const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function GoodsReceiptFormPage() {
+    const { t } = useI18n();
     const { id, poId } = useParams();
     const isEdit = !!id;
     const fromPo = !!poId;
@@ -49,7 +51,7 @@ export default function GoodsReceiptFormPage() {
     useEffect(() => {
         if (isEdit && existing.data?.grn) {
             const g = existing.data.grn;
-            if (g.status !== 'draft') { toast.push('Only draft GRNs can be edited.', 'error'); nav(`/goods-receipts/${id}`); return; }
+            if (g.status !== 'draft') { toast.push(t('receiving.grn.messages.onlyDraftEditable', 'Only draft goods receipts can be edited.'), 'error'); nav(`/goods-receipts/${id}`); return; }
             setHeader({ grn_number: g.grn_number, purchase_order_id: g.purchase_order_id, supplier_id: g.supplier_id, warehouse_id: g.warehouse_id, receipt_date: g.receipt_date, notes: g.notes ?? '' });
             setBlindReceiving(!!g.blind_receiving);
             setLines((g.lines ?? []).map((l) => ({
@@ -95,14 +97,14 @@ export default function GoodsReceiptFormPage() {
                     };
                 }),
             };
-            if (payload.lines.length === 0) { toast.push('Add at least one line with received qty.', 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { toast.push(t('receiving.grn.validation.lineRequired', 'Add at least one line with a received quantity.'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateGoodsReceipt(id, payload) : await api.createGoodsReceipt(payload);
             const docId = res?.data?.id ?? id;
-            if (post) { await api.postGoodsReceipt(docId); toast.push('GRN posted — stock received.', 'success'); }
-            else toast.push(isEdit ? 'Draft updated.' : 'Draft saved.', 'success');
+            if (post) { await api.postGoodsReceipt(docId); toast.push(t('receiving.grn.messages.posted', 'Goods receipt posted. Stock has been received.'), 'success'); }
+            else toast.push(isEdit ? t('receiving.grn.messages.draftUpdated', 'Draft updated.') : t('receiving.grn.messages.draftSaved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['grns'] }); qc.invalidateQueries({ queryKey: ['po'] });
             nav(`/goods-receipts/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || 'Save failed.', 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('receiving.common.saveFailed', 'Save failed.'), 'error'); }
         finally { setSaving(false); }
     }
 
@@ -111,30 +113,30 @@ export default function GoodsReceiptFormPage() {
     const sourcePoNumber = poDraft.data?.purchase_order?.po_number
         ?? sourcePo.data?.purchase_order?.po_number
         ?? null;
-    const sourcePoLabel = sourcePoNumber ?? (header.purchase_order_id ? 'Selected purchase order' : null);
+    const sourcePoLabel = sourcePoNumber ?? (header.purchase_order_id ? t('receiving.grn.form.selectedPurchaseOrder', 'Selected purchase order') : null);
 
     const columns = [
-        { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
         ...(fromPo && !blindReceiving ? [
-            { key: 'ord', label: 'Ordered', width: 90, render: (l) => <span>{l.ordered_qty}</span> },
-            { key: 'rem', label: 'Remaining', width: 90, render: (l) => <span>{l.remaining_qty}</span> },
+            { key: 'ord', label: t('receiving.po.fields.ordered', 'Ordered'), width: 90, render: (l) => <span>{l.ordered_qty}</span> },
+            { key: 'rem', label: t('receiving.common.remaining', 'Remaining'), width: 90, render: (l) => <span>{l.remaining_qty}</span> },
         ] : []),
-        { key: 'recv', label: 'Received', width: 110, render: (l, i) => {
+        { key: 'recv', label: t('receiving.grn.fields.received', 'Received'), width: 110, render: (l, i) => {
             const t = trackingOf(l.item_id);
             const tracksSerial = t.tracking_type === 'serial' || t.tracking_type === 'lot_serial';
             return tracksSerial
-                ? <span className="muted" title="Quantity is the serial count">{(l.serials ?? []).length}</span>
+                ? <span className="muted" title={t('receiving.grn.form.serialCountHint', 'Quantity equals the number of serial numbers')}>{(l.serials ?? []).length}</span>
                 : <QuantityInput value={l.received_qty} onChange={(v) => setLine(i, { received_qty: v, accepted_qty: v })} />;
         } },
-        { key: 'accepted', label: 'Accepted', width: 110, render: (l, i) => <QuantityInput value={l.accepted_qty} onChange={(v) => setLine(i, { accepted_qty: v })} /> },
-        { key: 'rejected', label: 'Rejected', width: 110, render: (l, i) => <QuantityInput value={l.rejected_qty ?? ''} onChange={(v) => setLine(i, { rejected_qty: v })} /> },
-        { key: 'disposition', label: 'Disposition', width: 140, render: (l, i) => <select className="input" value={l.disposition ?? 'restock'} onChange={(e) => setLine(i, { disposition: e.target.value })}>
-            <option value="restock">Restock</option>
-            <option value="quarantine">Quarantine</option>
-            <option value="reject">Reject</option>
+        { key: 'accepted', label: t('receiving.grn.fields.accepted', 'Accepted'), width: 110, render: (l, i) => <QuantityInput value={l.accepted_qty} onChange={(v) => setLine(i, { accepted_qty: v })} /> },
+        { key: 'rejected', label: t('receiving.grn.fields.rejected', 'Rejected'), width: 110, render: (l, i) => <QuantityInput value={l.rejected_qty ?? ''} onChange={(v) => setLine(i, { rejected_qty: v })} /> },
+        { key: 'disposition', label: t('receiving.grn.fields.disposition', 'Disposition'), width: 140, render: (l, i) => <select className="input" value={l.disposition ?? 'restock'} onChange={(e) => setLine(i, { disposition: e.target.value })}>
+            <option value="restock">{t('receiving.disposition.restock', 'Restock')}</option>
+            <option value="quarantine">{t('receiving.disposition.quarantine', 'Quarantine')}</option>
+            <option value="reject">{t('receiving.disposition.reject', 'Reject')}</option>
         </select> },
-        { key: 'unit', label: 'Unit', width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
-        { key: 'trace', label: 'Lot / Serial / Expiry', render: (l, i) => {
+        { key: 'unit', label: t('receiving.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
+        { key: 'trace', label: t('receiving.grn.fields.traceability', 'Lot / Serial / Expiry'), render: (l, i) => {
             const t = trackingOf(l.item_id);
             if (!t.tracking_type || t.tracking_type === 'none') return <span className="muted">—</span>;
             const tracksLot = t.tracking_type === 'lot' || t.tracking_type === 'lot_serial';
@@ -150,41 +152,41 @@ export default function GoodsReceiptFormPage() {
                 </div>
             );
         } },
-        { key: 'bin', label: 'Bin', render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'cost', label: 'Unit cost', width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
+        { key: 'bin', label: t('receiving.common.bin', 'Bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
+        { key: 'cost', label: t('receiving.common.unitCost', 'Unit cost'), width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
     ];
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Goods Receipts', to: '/goods-receipts' }, { label: fromPo ? `From ${sourcePoLabel ?? 'purchase order'}` : (isEdit ? 'Edit draft' : 'New') }]} />
-            <header className="page-head"><h1>{isEdit ? 'Edit goods receipt' : 'New goods receipt'}</h1></header>
+            <Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts'), to: '/goods-receipts' }, { label: fromPo ? t('receiving.grn.form.fromPurchaseOrder', 'From :purchaseOrder', { purchaseOrder: sourcePoLabel ?? t('receiving.po.singular', 'purchase order') }) : (isEdit ? t('receiving.common.editDraft', 'Edit draft') : t('receiving.common.new', 'New')) }]} />
+            <header className="page-head"><h1>{isEdit ? t('receiving.grn.form.editTitle', 'Edit goods receipt') : t('receiving.grn.form.newTitle', 'New goods receipt')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label="GRN number" required error={errors.grn_number}><input className="input" value={header.grn_number} onChange={(e) => setHeader({ ...header, grn_number: e.target.value })} /></Field>
-                <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} disabled={fromPo} /></Field>
-                <Field label="Received date" error={errors.receipt_date}><input className="input" type="date" value={header.receipt_date} onChange={(e) => setHeader({ ...header, receipt_date: e.target.value })} /></Field>
-                <Field label="Source PO">{sourcePoLabel ?? <span className="muted">none (ad-hoc receipt)</span>}</Field>
-                <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
+                <Field label={t('receiving.grn.fields.number', 'GRN number')} required error={errors.grn_number}><input className="input" value={header.grn_number} onChange={(e) => setHeader({ ...header, grn_number: e.target.value })} /></Field>
+                <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} disabled={fromPo} /></Field>
+                <Field label={t('receiving.grn.fields.receivedDate', 'Received date')} error={errors.receipt_date}><input className="input" type="date" value={header.receipt_date} onChange={(e) => setHeader({ ...header, receipt_date: e.target.value })} /></Field>
+                <Field label={t('receiving.grn.fields.sourcePo', 'Source PO')}>{sourcePoLabel ?? <span className="muted">{t('receiving.grn.form.adHocReceipt', 'None (ad-hoc receipt)')}</span>}</Field>
+                <Field label={t('receiving.common.notes', 'Notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
             {fromPo && <label className="checkline">
                 <input type="checkbox" checked={blindReceiving} onChange={(e) => setBlindReceiving(e.target.checked)} />
-                Blind receiving
+                {t('receiving.grn.form.blindReceiving', 'Blind receiving')}
             </label>}
 
             <div className="panel">
-                <h2>Lines</h2>
+                <h2>{t('receiving.common.lines', 'Lines')}</h2>
                 <DocumentLinesTable columns={columns} lines={lines}
                     onAdd={fromPo ? undefined : () => setLines([...lines, emptyLine()])}
                     onRemove={fromPo ? () => {} : (i) => setLines(lines.filter((_, idx) => idx !== i))}
                     readOnly={false} />
-                {fromPo && <p className="muted">Lines come from the PO's remaining quantities. Adjust received amounts for partial receipts.</p>}
+                {fromPo && <p className="muted">{t('receiving.grn.form.poLinesHint', "Lines use the purchase order's remaining quantities. Adjust received amounts for partial receipts.")}</p>}
             </div>
 
             <div className="doc-actions">
-                <button className="btn" onClick={() => nav('/goods-receipts')}>Cancel</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? 'Saving…' : 'Save draft'}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>Save & post</button>
+                <button className="btn" onClick={() => nav('/goods-receipts')}>{t('receiving.common.cancel', 'Cancel')}</button>
+                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('receiving.common.saving', 'Saving…') : t('receiving.common.saveDraft', 'Save draft')}</button>
+                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('receiving.grn.actions.saveAndPost', 'Save & post')}</button>
             </div>
         </section>
     );
