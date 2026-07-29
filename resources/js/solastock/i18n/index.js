@@ -21,10 +21,11 @@ import * as dashboard from './dashboard.js';
 import * as counts from './counts.js';
 import * as traceabilityPages from './traceabilityPages.js';
 import * as openingStock from './openingStock.js';
+import * as partners from './partners.js';
 
 export const dictionaries = {
-  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, transfers.en, sales.en, returns.en, traceability.en, traceabilityPages.traceabilityPagesEn, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en, reports.en, sharedDocuments.en, errors.en, dashboard.en, counts.en, openingStock.en),
-  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, transfers.ar, sales.ar, returns.ar, traceability.ar, traceabilityPages.traceabilityPagesAr, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar, reports.ar, sharedDocuments.ar, errors.ar, dashboard.ar, counts.ar, openingStock.ar),
+  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, transfers.en, sales.en, returns.en, traceability.en, traceabilityPages.traceabilityPagesEn, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en, reports.en, sharedDocuments.en, errors.en, dashboard.en, counts.en, openingStock.en, partners.en),
+  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, transfers.ar, sales.ar, returns.ar, traceability.ar, traceabilityPages.traceabilityPagesAr, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar, reports.ar, sharedDocuments.ar, errors.ar, dashboard.ar, counts.ar, openingStock.ar, partners.ar),
 };
 
 // English source phrases used by page islands. Keeping this separate from
