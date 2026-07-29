@@ -5,11 +5,13 @@ import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import { useI18n } from '../i18n/context.jsx';
 
 const EMPTY = { code: '', name: '', email: '', phone: '', address: '', tax_number: '', currency: '', payment_terms: '', is_active: true, notes: '' };
 
 export default function SupplierFormPage() {
+    const { t } = useI18n();
     const { id } = useParams();
     const isEdit = !!id;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
@@ -19,6 +21,7 @@ export default function SupplierFormPage() {
     const [saving, setSaving] = useState(false);
 
     const existing = useApiQuery(['supplier', id], () => api.supplier(id), { fallback: null, enabled: isEdit });
+    const gateReason = gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied');
     useEffect(() => {
         if (isEdit && existing.data) {
             const s = existing.data; const c = s.contact ?? {};
@@ -34,34 +37,39 @@ export default function SupplierFormPage() {
         setSaving(true); setErrors({});
         try {
             const res = isEdit ? await api.updateSupplier(id, form) : await api.createSupplierFull(form);
-            toast.push(isEdit ? 'Supplier updated.' : 'Supplier created.', 'success');
+            toast.push(t(isEdit ? 'partners.suppliers.form.updated' : 'partners.suppliers.form.created'), 'success');
             qc.invalidateQueries({ queryKey: ['suppliers'] });
             nav(`/suppliers/${res?.data?.id ?? id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || 'Save failed.', 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.push(t('partners.suppliers.form.saveFailed'), 'error'); }
         finally { setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
+    if (isEdit && existing.isError) return <section className="page">
+        <Breadcrumbs items={[{ label: t('partners.common.suppliers'), to: '/suppliers' }, { label: t('partners.common.edit') }]} />
+        <EmptyState title={t('partners.suppliers.form.loadErrorTitle')} hint={t('partners.suppliers.form.loadErrorHint')}
+            action={<button type="button" className="btn" onClick={() => existing.refetch()}>{t('partners.common.retry')}</button>} />
+    </section>;
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Suppliers', to: '/suppliers' }, { label: isEdit ? 'Edit' : 'New supplier' }]} />
-            <header className="page-head"><h1>{isEdit ? 'Edit supplier' : 'New supplier'}</h1></header>
-            {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
+            <Breadcrumbs items={[{ label: t('partners.common.suppliers'), to: '/suppliers' }, { label: t(isEdit ? 'partners.suppliers.form.editBreadcrumb' : 'partners.suppliers.form.newBreadcrumb') }]} />
+            <header className="page-head"><h1>{t(isEdit ? 'partners.suppliers.form.editTitle' : 'partners.suppliers.form.newTitle')}</h1></header>
+            {!gate.allowed && <div className="banner banner--warn">{gateReason}</div>}
             <form className="form-grid" onSubmit={submit}>
-                <Field label="Code" required error={errors.code}><input className="input" value={form.code} onChange={(e) => set('code', e.target.value)} /></Field>
-                <Field label="Name" required error={errors.name}><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
-                <Field label="Email" error={errors.email}><input className="input" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
-                <Field label="Phone"><input className="input" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} /></Field>
-                <Field label="Address"><input className="input" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></Field>
-                <Field label="Tax number"><input className="input" value={form.tax_number ?? ''} onChange={(e) => set('tax_number', e.target.value)} /></Field>
-                <Field label="Currency"><input className="input" value={form.currency ?? ''} onChange={(e) => set('currency', e.target.value)} /></Field>
-                <Field label="Payment terms"><input className="input" value={form.payment_terms ?? ''} onChange={(e) => set('payment_terms', e.target.value)} /></Field>
-                <Field label="Status"><label><input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Active</label></Field>
-                <Field label="Notes"><textarea className="input" rows="2" value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field>
+                <Field label={t('partners.common.code')} required error={errors.code}><input className="input" dir="auto" value={form.code} onChange={(e) => set('code', e.target.value)} /></Field>
+                <Field label={t('partners.common.name')} required error={errors.name}><input className="input" dir="auto" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
+                <Field label={t('partners.common.email')} error={errors.email}><input className="input" dir="ltr" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
+                <Field label={t('partners.common.phone')}><input className="input" dir="auto" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} /></Field>
+                <Field label={t('partners.common.address')}><input className="input" dir="auto" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></Field>
+                <Field label={t('partners.common.taxNumber')}><input className="input" dir="auto" value={form.tax_number ?? ''} onChange={(e) => set('tax_number', e.target.value)} /></Field>
+                <Field label={t('partners.common.currency')}><input className="input" dir="ltr" value={form.currency ?? ''} onChange={(e) => set('currency', e.target.value)} /></Field>
+                <Field label={t('partners.common.paymentTerms')}><input className="input" dir="auto" value={form.payment_terms ?? ''} onChange={(e) => set('payment_terms', e.target.value)} /></Field>
+                <Field label={t('partners.common.status')}><label><input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> {t('partners.common.active')}</label></Field>
+                <Field label={t('partners.common.notes')}><textarea className="input" dir="auto" rows="2" value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field>
                 <div className="form-actions">
-                    <button type="button" className="btn" onClick={() => nav('/suppliers')}>Cancel</button>
-                    <button type="submit" className="btn btn--primary" disabled={!gate.allowed || saving}>{saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Create supplier')}</button>
+                    <button type="button" className="btn" onClick={() => nav('/suppliers')}>{t('partners.common.cancel')}</button>
+                    <button type="submit" className="btn btn--primary" disabled={!gate.allowed || saving}>{saving ? t('partners.common.saving') : t(isEdit ? 'partners.common.saveChanges' : 'partners.suppliers.form.create')}</button>
                 </div>
             </form>
         </section>
