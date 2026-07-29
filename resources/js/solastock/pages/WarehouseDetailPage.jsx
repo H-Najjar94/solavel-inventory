@@ -8,6 +8,7 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState } from '../components/ui.jsx';
 import WarehouseFloorMap from '../components/WarehouseFloorMap.jsx';
 import WarehouseImages from '../components/WarehouseImages.jsx';
+import { t } from '../i18n/index.js';
 
 export default function WarehouseDetailPage() {
     const { id } = useParams();
@@ -27,39 +28,39 @@ export default function WarehouseDetailPage() {
     const recent = data?.recent_movements ?? [];
 
     if (isLoading) return <section className="page"><Skeleton /></section>;
-    if (!w) return <section className="page"><Breadcrumbs items={[{ label: 'Warehouses', to: '/warehouses' }, { label: 'Not found' }]} /><EmptyState title="Warehouse unavailable" hint="Select a tenant to load real data." /></section>;
+    if (!w) return <section className="page"><Breadcrumbs items={[{ label: t('warehouses'), to: '/warehouses' }, { label: t('warehouseDetail.notFound') }]} /><EmptyState title={t('warehouseDetail.unavailable')} hint={t('warehouseDetail.unavailableHint')} /></section>;
 
     async function addZone(e) {
         e.preventDefault();
-        try { await api.createZone(id, zoneForm); toast.push('Zone created.', 'success'); setZoneForm({ code: '', name: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
+        try { await api.createZone(id, zoneForm); toast.push(t('warehouseDetail.zoneCreated'), 'success'); setZoneForm({ code: '', name: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
         catch (err) { toast.push(err.message, 'error'); }
     }
     async function addBin(e) {
         e.preventDefault();
-        try { await api.createBin(id, binForm); toast.push('Bin created.', 'success'); setBinForm({ zone_id: '', code: '', bin_type: 'storage', capacity: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
+        try { await api.createBin(id, binForm); toast.push(t('warehouseDetail.binCreated'), 'success'); setBinForm({ zone_id: '', code: '', bin_type: 'storage', capacity: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
         catch (err) { toast.push(err.message, 'error'); }
     }
     async function loadLabels() {
-        try { const res = await api.warehouseLabels(id); setLabels(res.data); toast.push('Bin labels generated.', 'success'); }
+        try { const res = await api.warehouseLabels(id); setLabels(res.data); toast.push(t('warehouseDetail.binLabelsGenerated'), 'success'); }
         catch (err) { toast.push(err.message, 'error'); }
     }
 
     const tabs = [
-        { key: 'overview', label: 'Overview' }, { key: 'zones', label: `Zones (${zones.length})` },
-        { key: 'bins', label: `Bins (${bins.length})` }, { key: 'stock', label: 'Stock' },
-        { key: 'movements', label: 'Movements' }, { key: 'media', label: 'Media' }, { key: 'floor', label: 'Floor map' }, { key: 'audit', label: 'Audit' },
+        { key: 'overview', label: t('warehouseDetail.overview') }, { key: 'zones', label: t('warehouseDetail.zones', undefined, { count: zones.length }) },
+        { key: 'bins', label: t('warehouseDetail.bins', undefined, { count: bins.length }) }, { key: 'stock', label: t('warehouseDetail.stock') },
+        { key: 'movements', label: t('warehouseDetail.movements') }, { key: 'media', label: t('warehouseDetail.media') }, { key: 'floor', label: t('warehouseDetail.floorMap') }, { key: 'audit', label: t('warehouseDetail.audit') },
     ];
     const editStyle = { marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 };
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Warehouses', to: '/warehouses' }, { label: w.name }]} />
+            <Breadcrumbs items={[{ label: t('warehouses'), to: '/warehouses' }, { label: w.name }]} />
 
             {/* Banner hero — wide primary image (or placeholder). */}
             <div className="wh-hero">
                 {data.primary_image_url
                     ? <img src={data.primary_image_url} alt={w.name} className="wh-hero-img" />
-                    : <div className="wh-hero-ph"><span>🏬</span><span className="wh-hero-ph-txt">No warehouse image</span></div>}
+                    : <div className="wh-hero-ph"><span>🏬</span><span className="wh-hero-ph-txt">{t('warehouseDetail.noImage')}</span></div>}
                 <div className="wh-hero-overlay">
                     <span className="wh-hero-name">{w.name}</span>
                     <span className="wh-hero-sub">{w.code} · {w.type}</span>
@@ -68,16 +69,16 @@ export default function WarehouseDetailPage() {
 
             <header className="page-head">
                 <h1>{w.name}</h1><StatusBadge active={w.is_active} />
-                {isMock && <span className="badge badge--warn">sample data</span>}
-                <Link to={`/warehouses/${w.id}/edit`} className="btn btn--primary" style={editStyle} title={gate.allowed ? '' : gate.reason}>Edit</Link>
+                {isMock && <span className="badge badge--warn">{t('warehouses.sampleData')}</span>}
+                <Link to={`/warehouses/${w.id}/edit`} className="btn btn--primary" style={editStyle} title={gate.allowed ? '' : gate.reason}>{t('warehouses.edit')}</Link>
             </header>
 
             <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
             {tab === 'overview' && <div className="panel"><dl className="kv">
-                <dt>Code</dt><dd>{w.code}</dd><dt>Type</dt><dd>{w.type}</dd>
-                <dt>Capacity</dt><dd>{w.max_capacity_units ?? '—'}</dd>
-                <dt>Low-stock items</dt><dd>{data?.low_stock_count ?? 0}</dd>
+                <dt>{t('warehouses.code')}</dt><dd>{w.code}</dd><dt>{t('warehouses.type')}</dt><dd>{w.type}</dd>
+                <dt>{t('warehouses.capacity')}</dt><dd>{w.max_capacity_units ?? '—'}</dd>
+                <dt>{t('warehouseDetail.lowStockItems')}</dt><dd>{data?.low_stock_count ?? 0}</dd>
             </dl></div>}
 
             {tab === 'zones' && <div className="panel">
