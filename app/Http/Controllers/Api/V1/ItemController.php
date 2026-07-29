@@ -194,14 +194,14 @@ class ItemController extends ApiController
     {
         $code = trim((string) $request->query('barcode', ''));
         if ($code === '') {
-            return $this->error('barcode_required', 'Barcode is required.', 422);
+            return $this->error('barcode_required', __('inventory.catalog.barcode_required'), 422);
         }
 
         $barcode = ItemBarcode::query()->with('item:id,sku,name,item_type,tracking_type,is_active')
             ->where('barcode', $code)->first();
 
         if (! $barcode) {
-            return $this->error('barcode_not_found', 'No item matches that barcode.', 404);
+            return $this->error('barcode_not_found', __('inventory.catalog.barcode_not_found'), 404);
         }
 
         return $this->success($this->barcodeRow($barcode));
@@ -217,7 +217,7 @@ class ItemController extends ApiController
 
         $exists = ItemBarcode::query()->where('barcode', $data['barcode'])->exists();
         if ($exists) {
-            return $this->error('barcode_taken', 'Barcode must be unique within the organization.', 422);
+            return $this->error('barcode_taken', __('inventory.validation.barcode_unique'), 422);
         }
 
         $barcode = ItemBarcode::query()->create([
@@ -234,7 +234,7 @@ class ItemController extends ApiController
     public function destroyBarcode(Item $item, ItemBarcode $barcode): JsonResponse
     {
         if ((int) $barcode->item_id !== (int) $item->id) {
-            return $this->error('barcode_item_mismatch', 'Barcode does not belong to this item.', 404);
+            return $this->error('barcode_item_mismatch', __('inventory.catalog.barcode_item_mismatch'), 404);
         }
 
         $barcode->delete();
@@ -245,7 +245,7 @@ class ItemController extends ApiController
     public function primaryBarcode(Item $item, ItemBarcode $barcode): JsonResponse
     {
         if ((int) $barcode->item_id !== (int) $item->id) {
-            return $this->error('barcode_item_mismatch', 'Barcode does not belong to this item.', 404);
+            return $this->error('barcode_item_mismatch', __('inventory.catalog.barcode_item_mismatch'), 404);
         }
 
         ItemBarcode::query()->where('item_id', $item->id)->where('type', 'primary')->update(['type' => 'internal']);
@@ -266,10 +266,10 @@ class ItemController extends ApiController
         ]);
 
         if (ItemVariant::query()->where('sku', $data['sku'])->exists() || Item::query()->where('sku', $data['sku'])->exists()) {
-            return $this->error('variant_sku_taken', 'Variant SKU must be unique.', 422);
+            return $this->error('variant_sku_taken', __('inventory.catalog.variant_sku_unique'), 422);
         }
         if (! empty($data['barcode_primary']) && ItemBarcode::query()->where('barcode', $data['barcode_primary'])->exists()) {
-            return $this->error('barcode_taken', 'Barcode must be unique within the organization.', 422);
+            return $this->error('barcode_taken', __('inventory.validation.barcode_unique'), 422);
         }
 
         $variant = ItemVariant::query()->create([
@@ -300,7 +300,7 @@ class ItemController extends ApiController
     public function updateVariant(Request $request, Item $item, ItemVariant $variant): JsonResponse
     {
         if ((int) $variant->item_id !== (int) $item->id) {
-            return $this->error('variant_item_mismatch', 'Variant does not belong to this item.', 404);
+            return $this->error('variant_item_mismatch', __('inventory.catalog.variant_item_mismatch'), 404);
         }
 
         $data = $request->validate([
@@ -313,7 +313,7 @@ class ItemController extends ApiController
         ]);
 
         if (ItemVariant::query()->where('sku', $data['sku'])->whereKeyNot($variant->id)->exists() || Item::query()->where('sku', $data['sku'])->exists()) {
-            return $this->error('variant_sku_taken', 'Variant SKU must be unique.', 422);
+            return $this->error('variant_sku_taken', __('inventory.catalog.variant_sku_unique'), 422);
         }
 
         $variant->fill([
@@ -330,7 +330,7 @@ class ItemController extends ApiController
                 ->where(fn ($q) => $q->whereNull('variant_id')->orWhere('variant_id', '!=', $variant->id))
                 ->exists();
             if ($existing) {
-                return $this->error('barcode_taken', 'Barcode must be unique within the organization.', 422);
+                return $this->error('barcode_taken', __('inventory.validation.barcode_unique'), 422);
             }
             ItemBarcode::query()->updateOrCreate(
                 ['variant_id' => $variant->id, 'type' => 'primary'],
@@ -344,7 +344,7 @@ class ItemController extends ApiController
     public function destroyVariant(Item $item, ItemVariant $variant): JsonResponse
     {
         if ((int) $variant->item_id !== (int) $item->id) {
-            return $this->error('variant_item_mismatch', 'Variant does not belong to this item.', 404);
+            return $this->error('variant_item_mismatch', __('inventory.catalog.variant_item_mismatch'), 404);
         }
         $variant->delete();
 
@@ -384,7 +384,7 @@ class ItemController extends ApiController
     public function updateSupplierPrice(Request $request, Item $item, SupplierPriceList $price): JsonResponse
     {
         if ((int) $price->item_id !== (int) $item->id) {
-            return $this->error('supplier_price_item_mismatch', 'Supplier price does not belong to this item.', 404);
+            return $this->error('supplier_price_item_mismatch', __('inventory.catalog.supplier_price_item_mismatch'), 404);
         }
         $data = $request->validate([
             'supplier_id' => ['required', 'integer'],
@@ -405,7 +405,7 @@ class ItemController extends ApiController
     public function destroySupplierPrice(Item $item, SupplierPriceList $price): JsonResponse
     {
         if ((int) $price->item_id !== (int) $item->id) {
-            return $this->error('supplier_price_item_mismatch', 'Supplier price does not belong to this item.', 404);
+            return $this->error('supplier_price_item_mismatch', __('inventory.catalog.supplier_price_item_mismatch'), 404);
         }
         $price->delete();
 
@@ -634,7 +634,7 @@ class ItemController extends ApiController
         ])->filter(fn ($v) => $v !== null)->all();
 
         if ($fields === []) {
-            return $this->error('bulk_update_empty', 'Select at least one bulk update field.', 422);
+            return $this->error('bulk_update_empty', __('inventory.catalog.bulk_update_empty'), 422);
         }
 
         $items = Item::query()->whereIn('id', $data['item_ids'])->get();

@@ -85,7 +85,7 @@ class TenantSchemaAuditService
         if (! $exists) {
             return array_merge($base, [
                 'missing_database' => true,
-                'warnings' => ['Tenant database does not exist.'],
+                'warnings' => [__('inventory.tenancy.database_missing')],
             ]);
         }
 

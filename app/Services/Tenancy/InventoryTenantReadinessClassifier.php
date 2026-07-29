@@ -21,18 +21,18 @@ class InventoryTenantReadinessClassifier
 
         if ($databaseStatus === 'missing') {
             return $inventoryEnabled
-                ? $this->result('entitled_not_provisioned', 'SolaStock is enabled but its tenant database is not provisioned.')
-                : $this->result('not_entitled', 'Tenant is not entitled to SolaStock and no inventory database is provisioned.');
+                ? $this->result('entitled_not_provisioned', __('inventory.tenancy.enabled_unprovisioned'))
+                : $this->result('not_entitled', __('inventory.tenancy.not_entitled_unprovisioned'));
         }
 
         if (! $inventoryEnabled) {
-            return $this->result('not_entitled', 'Tenant is not currently entitled to SolaStock.');
+            return $this->result('not_entitled', __('inventory.tenancy.not_entitled'));
         }
 
         if ($schemaStatus !== 'pass') {
             $missingTables = (int) ($tenant['missing_tables_count'] ?? 0);
 
-            return $this->result('migrations_incomplete', 'Tenant is reachable but required SolaStock migrations are incomplete.');
+            return $this->result('migrations_incomplete', __('inventory.tenancy.migrations_incomplete'));
         }
 
         if ($accessStatus === 'no_safe_access_path') {
@@ -41,17 +41,17 @@ class InventoryTenantReadinessClassifier
 
         if ($integrityStatus === 'fail') {
             if (! $inventoryEnabled) {
-                return $this->result('disabled_stale_integrity_failed', 'Disabled tenant has stale SolaStock data with integrity failures.');
+                return $this->result('disabled_stale_integrity_failed', __('inventory.tenancy.disabled_integrity_failed'));
             }
 
             return $this->result('blocked_by_data_integrity', 'Enabled/candidate tenant has integrity failures.');
         }
 
         if ($isQa) {
-            return $this->result('qa_ok', 'QA tenant passes schema, integrity, and access checks.');
+            return $this->result('qa_ok', __('inventory.tenancy.qa_ok'));
         }
 
-        return $this->result('production_ok', 'Tenant passes schema, integrity, and access checks.');
+        return $this->result('production_ok', __('inventory.tenancy.production_ok'));
     }
 
     private function result(string $status, string $action): array

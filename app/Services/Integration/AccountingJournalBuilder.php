@@ -174,7 +174,7 @@ class AccountingJournalBuilder
         $change = (string) ($event->payload['total_inventory_value_change'] ?? '0');
         $amount = Decimal::money((string) abs((float) $change));
         if (! Decimal::gt($amount, '0')) {
-            throw new RuntimeException('Integration event has no value to post.');
+            throw new RuntimeException(__('inventory.integration.event_no_value'));
         }
         if ((float) $change > 0) {
             return [
@@ -194,7 +194,7 @@ class AccountingJournalBuilder
         $payload = $event->payload ?? [];
         $amount = Decimal::money((string) abs((float) ($payload['total_inventory_value_change'] ?? 0)));
         if (! Decimal::gt($amount, '0')) {
-            throw new RuntimeException('Integration event has no value to post.');
+            throw new RuntimeException(__('inventory.integration.event_no_value'));
         }
         $debit = (string) ($payload['suggested_debit_account_mapping'] ?? '');
         $credit = (string) ($payload['suggested_credit_account_mapping'] ?? '');

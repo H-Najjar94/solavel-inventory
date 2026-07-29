@@ -31,7 +31,7 @@ class CustomerController extends ApiController
     {
         $data = $this->validateCustomer($request);
         if (Customer::query()->where('code', $data['code'])->exists()) {
-            return $this->error('customer_code_taken', 'Customer code must be unique.', 422);
+            return $this->error('customer_code_taken', __('inventory.validation.customer_code_unique'), 422);
         }
 
         return $this->success(Customer::create($this->pack($data))->fresh(), 201);

@@ -94,7 +94,7 @@ trait ValidatesItem
                 $exists = Item::on($conn)->where('organization_id', $orgId)->where('sku', $sku)
                     ->when($id, fn ($q) => $q->where('id', '!=', $id))->exists();
                 if ($exists) {
-                    $v->errors()->add('sku', 'SKU must be unique within the organization.');
+                    $v->errors()->add('sku', __('inventory.validation.sku_unique'));
                 }
             }
 
@@ -103,18 +103,18 @@ trait ValidatesItem
                 $dup = \Illuminate\Support\Facades\DB::connection($conn)->table('item_barcodes')
                     ->where('organization_id', $orgId)->where('barcode', $barcode)->exists();
                 if ($dup) {
-                    $v->errors()->add('barcode', 'Barcode must be unique within the organization.');
+                    $v->errors()->add('barcode', __('inventory.validation.barcode_unique'));
                 }
             }
 
             // service items cannot track stock
             if ($type === 'service' && $tracking !== 'none') {
-                $v->errors()->add('tracking_type', 'Service items cannot have stock tracking enabled.');
+                $v->errors()->add('tracking_type', __('inventory.validation.service_tracking'));
             }
 
             // expiry requires lot tracking
             if ($this->boolean('track_expiry') && ! in_array($tracking, ['lot', 'lot_serial'], true)) {
-                $v->errors()->add('track_expiry', 'Expiry tracking requires lot tracking.');
+                $v->errors()->add('track_expiry', __('inventory.validation.expiry_requires_lot'));
             }
 
             // costing method / item type immutability once stock exists
@@ -125,10 +125,10 @@ trait ValidatesItem
                     $current = Item::on($conn)->where('organization_id', $orgId)->find($id);
                     if ($current) {
                         if ($this->filled('costing_method') && $this->input('costing_method') !== $current->costing_method) {
-                            $v->errors()->add('costing_method', 'Costing method cannot change after stock exists.');
+                            $v->errors()->add('costing_method', __('inventory.validation.costing_locked'));
                         }
                         if ($this->filled('item_type') && $this->input('item_type') !== $current->item_type) {
-                            $v->errors()->add('item_type', 'Item type cannot change after stock exists.');
+                            $v->errors()->add('item_type', __('inventory.validation.item_type_locked'));
                         }
                     }
                 }

@@ -166,7 +166,7 @@ class OpeningStockController extends ApiController
         }
 
         if ($lines === []) {
-            return $this->error('empty_import', 'Import file did not contain any item rows.', 422);
+            return $this->error('empty_import', __('inventory.imports.empty'), 422);
         }
 
         $entry = $this->service->createDraft([

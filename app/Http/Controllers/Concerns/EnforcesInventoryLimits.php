@@ -43,7 +43,7 @@ trait EnforcesInventoryLimits
             'success' => false,
             'error' => [
                 'code' => 'plan_limit_reached',
-                'message' => 'Your plan limit for this resource has been reached. Upgrade to add more.',
+                'message' => __('inventory.common.plan_limit'),
                 'reason_code' => 'feature_not_in_plan',
                 'feature' => $featureKey,
                 'limit' => $usage['limit'],

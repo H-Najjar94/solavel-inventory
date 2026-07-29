@@ -33,7 +33,7 @@ trait ValidatesWarehouse
                 $exists = Warehouse::on($conn)->where('organization_id', $orgId)->where('code', $code)
                     ->when($id, fn ($q) => $q->where('id', '!=', $id))->exists();
                 if ($exists) {
-                    $v->errors()->add('code', 'Warehouse code must be unique within the organization.');
+                    $v->errors()->add('code', __('inventory.validation.warehouse_code_unique'));
                 }
             }
         });

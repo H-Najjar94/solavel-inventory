@@ -59,7 +59,7 @@ class ItemAttachmentController extends ApiController
 
         $file = $request->file('attachment');
         if (($file->getSize() ?: 0) <= 0) {
-            throw ValidationException::withMessages(['attachment' => 'The attachment must not be empty.']);
+            throw ValidationException::withMessages(['attachment' => __('inventory.validation.attachment_empty')]);
         }
         $orgId = (int) $item->organization_id;
         $name = $request->input('name') ?: $file->getClientOriginalName();
@@ -69,12 +69,12 @@ class ItemAttachmentController extends ApiController
         $ext = strtolower($file->getClientOriginalExtension());
         $mime = $file->getMimeType();
         if (! isset(self::ALLOWED_TYPES[$ext]) || ! in_array($mime, self::ALLOWED_TYPES[$ext], true)) {
-            throw ValidationException::withMessages(['attachment' => 'The attachment content does not match an allowed image or PDF type.']);
+            throw ValidationException::withMessages(['attachment' => __('inventory.validation.attachment_type')]);
         }
         if ($ext === 'pdf') {
             $content = file_get_contents($file->getRealPath()) ?: '';
             if (preg_match('/\/(JavaScript|JS|Launch|EmbeddedFile)\b/i', $content)) {
-                throw ValidationException::withMessages(['attachment' => 'PDF attachments containing active or embedded content are not allowed.']);
+                throw ValidationException::withMessages(['attachment' => __('inventory.validation.attachment_active_pdf')]);
             }
         }
         $path = "inventory/item-attachments/{$orgId}/{$item->id}/".Str::uuid()->toString().'.'.$ext;

@@ -39,7 +39,7 @@ class WarehouseStructureController extends ApiController
 
         $dupe = WarehouseZone::query()->where('warehouse_id', $warehouse->id)->where('code', $data['code'])->exists();
         if ($dupe) {
-            return $this->error('zone_code_taken', 'Zone code must be unique within the warehouse.', 422);
+            return $this->error('zone_code_taken', __('inventory.catalog.zone_code_unique'), 422);
         }
 
         $zone = $warehouse->organization_id
@@ -59,7 +59,7 @@ class WarehouseStructureController extends ApiController
         ]);
 
         if (array_key_exists('is_active', $data) && ! $data['is_active'] && $this->zoneHasStock($zone)) {
-            return $this->error('zone_has_stock', 'Cannot deactivate a zone that still holds stock.', 422);
+            return $this->error('zone_has_stock', __('inventory.catalog.zone_has_stock'), 422);
         }
 
         $zone->update($data);
@@ -82,7 +82,7 @@ class WarehouseStructureController extends ApiController
 
         $dupe = WarehouseBin::query()->where('warehouse_id', $warehouse->id)->where('code', $data['code'])->exists();
         if ($dupe) {
-            return $this->error('bin_code_taken', 'Bin code must be unique within the warehouse.', 422);
+            return $this->error('bin_code_taken', __('inventory.catalog.bin_code_unique'), 422);
         }
 
         // bin_type/barcode are stored in coords json if columns are absent (schema-light).
@@ -113,7 +113,7 @@ class WarehouseStructureController extends ApiController
         ]);
 
         if (array_key_exists('is_active', $data) && ! $data['is_active'] && $this->binHasStock($bin)) {
-            return $this->error('bin_has_stock', 'Cannot deactivate a bin that still holds stock.', 422);
+            return $this->error('bin_has_stock', __('inventory.catalog.bin_has_stock'), 422);
         }
 
         $bin->update($data);

@@ -246,7 +246,7 @@ class InventoryReportService
     private function reportItemLedger(ReportFilters $f): array
     {
         if (! $f->itemId) {
-            return ['columns' => [], 'rows' => [], 'summary' => ['note' => 'Select an item to view its ledger.']];
+            return ['columns' => [], 'rows' => [], 'summary' => ['note' => __('inventory.documents.report_select_item')]];
         }
         $rows = $this->scoped('stock_ledger as l')
             ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')

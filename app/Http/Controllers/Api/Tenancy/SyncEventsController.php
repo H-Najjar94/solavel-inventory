@@ -52,7 +52,7 @@ class SyncEventsController extends ApiController
         $checksum = (string) ($validated['checksum'] ?? '');
         if (str_starts_with($checksum, 'sha256:') && ! hash_equals($checksum, $this->payloadChecksum($payload))) {
             return response()->json([
-                'message' => 'Invalid sync payload checksum.',
+                'message' => __('inventory.sync.checksum_invalid'),
                 'code' => 'sync_payload_checksum_invalid',
                 'status' => 'rejected',
             ], 422);
@@ -166,7 +166,7 @@ class SyncEventsController extends ApiController
             ]);
 
             return $requireSignature
-                ? $this->rejectEntitlement('entitlement_signature_invalid', 'Unknown signing key and a signature is required.')
+                ? $this->rejectEntitlement('entitlement_signature_invalid', __('inventory.sync.signing_key_unknown'))
                 : null;
         }
 
@@ -179,7 +179,7 @@ class SyncEventsController extends ApiController
                     'alert' => 'entitlement_signature_invalid',
                 ]);
 
-                return $this->rejectEntitlement('entitlement_signature_invalid', 'Entitlement signature did not verify.');
+                return $this->rejectEntitlement('entitlement_signature_invalid', __('inventory.sync.entitlement_invalid'));
             }
 
             // Bind the entitlement to THIS tenant: one issued for another client must
@@ -208,7 +208,7 @@ class SyncEventsController extends ApiController
                 'alert' => 'entitlement_signature_missing',
             ]);
 
-            return $this->rejectEntitlement('entitlement_signature_missing', 'Entitlement is not signed.');
+            return $this->rejectEntitlement('entitlement_signature_missing', __('inventory.sync.entitlement_unsigned'));
         }
 
         return null;

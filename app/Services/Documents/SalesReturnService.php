@@ -65,7 +65,7 @@ class SalesReturnService
                 : null;
             if ($sourceShipment) {
                 if ($sourceShipment->status !== 'posted' || $sourceShipment->reversed_at) {
-                    throw new RuntimeException('Only an unreversed posted shipment can create a source reversal.');
+                    throw new RuntimeException(__('inventory.documents.return_source_invalid'));
                 }
                 if (mb_strlen(trim((string) ($attributes['reason'] ?? ''))) < 3) {
                     throw new RuntimeException('A source reversal reason of at least 3 characters is required.');
@@ -108,7 +108,7 @@ class SalesReturnService
                 throw new RuntimeException("Only a draft sales return can be edited (status '{$r->status}').");
             }
             if ($r->is_source_reversal) {
-                throw new RuntimeException('A shipment source reversal is immutable. Cancel it and start again before posting.');
+                throw new RuntimeException(__('inventory.documents.return_source_immutable'));
             }
             $attributes = $this->applyCustomerName($attributes);
             $r->fill(collect($attributes)->only(['return_number', 'shipment_id', 'customer_id', 'customer_name', 'return_date', 'warehouse_id', 'reason', 'notes'])->toArray());
@@ -159,7 +159,7 @@ class SalesReturnService
             if ($r->is_source_reversal) {
                 $shipment = Shipment::query()->lockForUpdate()->findOrFail($r->source_reversal_shipment_id);
                 if ($shipment->reversal_sales_return_id && (int) $shipment->reversal_sales_return_id !== (int) $r->id) {
-                    throw new RuntimeException('This shipment was already reversed by another return.');
+                    throw new RuntimeException(__('inventory.documents.shipment_already_reversed'));
                 }
                 $this->ledger->reverse(
                     'shipment:'.$shipment->id.':post',
@@ -302,7 +302,7 @@ class SalesReturnService
             ->orderBy('id')
             ->get();
         if ($ledger->isEmpty()) {
-            throw new RuntimeException('The posted shipment has no canonical ledger rows to reverse.');
+            throw new RuntimeException(__('inventory.documents.shipment_no_ledger'));
         }
 
         foreach ($ledger as $row) {

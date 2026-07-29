@@ -32,7 +32,7 @@ class LotService
         $orgId = $this->context->idOrFail();
         $lotCode = trim($lotCode);
         if ($lotCode === '') {
-            throw new RuntimeException('A lot code is required for lot-tracked items.');
+            throw new RuntimeException(__('inventory.validation.lot_code_required'));
         }
 
         return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $lotCode, $attributes) {

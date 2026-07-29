@@ -59,7 +59,7 @@ class EnsureInventoryFeature
                         'success' => false,
                         'error' => [
                             'code' => 'commercial_entitlement_required',
-                            'message' => 'This SolaStock feature is not available for the current plan or entitlement state.',
+                            'message' => __('inventory.common.feature_unavailable'),
                             'reason_code' => $commercial['reason_code'],
                             'access_mode' => $commercial['access_mode'],
                             'tier' => $commercial['tier'],
@@ -69,7 +69,7 @@ class EnsureInventoryFeature
                     ], $commercial['status']);
                 }
 
-                abort($commercial['status'], 'This SolaStock feature is not available for the current plan or entitlement state.');
+                abort($commercial['status'], __('inventory.common.feature_unavailable'));
             }
         }
 

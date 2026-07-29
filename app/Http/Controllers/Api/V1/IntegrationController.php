@@ -62,7 +62,7 @@ class IntegrationController extends ApiController
             $meta['client_id'] = (int) $data['client_id'];
         }
         if ($data['mode'] !== 'disconnected' && empty($meta['api_key_encrypted'])) {
-            return $this->error('api_key_required', 'A SolaBooks API key is required to connect.', 422);
+            return $this->error('api_key_required', __('inventory.integration.api_key_required'), 422);
         }
         $setting->fill([
             'mode' => $data['mode'],
@@ -214,11 +214,11 @@ class IntegrationController extends ApiController
 
         foreach ($data['mappings'] as $mapping) {
             $definition = $definitions[$mapping['tax_code']] ?? null;
-            abort_unless($definition, 422, 'Every tax mapping must reference an organization tax code.');
+            abort_unless($definition, 422, __('inventory.integration.tax_mapping_code'));
             if ($mapping['status'] === 'mapped') {
-                abort_unless(! empty($mapping['solabooks_tax_id']) && ! empty($mapping['solabooks_tax_code']), 422, 'Mapped taxes require a stable SolaBooks tax ID and code.');
+                abort_unless(! empty($mapping['solabooks_tax_id']) && ! empty($mapping['solabooks_tax_code']), 422, __('inventory.integration.mapped_tax_id'));
                 if (($definition['treatment'] ?? 'standard') === 'standard') {
-                    abort_unless(! empty($mapping['input_tax_account_id']) && ! empty($mapping['output_tax_account_id']), 422, 'Standard tax mappings require input and output tax accounts.');
+                    abort_unless(! empty($mapping['input_tax_account_id']) && ! empty($mapping['output_tax_account_id']), 422, __('inventory.integration.standard_tax_accounts'));
                 }
             }
             IntegrationTaxMapping::query()->updateOrCreate(

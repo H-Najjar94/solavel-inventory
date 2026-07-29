@@ -37,7 +37,7 @@ class SupplierController extends ApiController
 
         $dupe = Supplier::query()->where('code', $data['code'])->exists();
         if ($dupe) {
-            return $this->error('supplier_code_taken', 'Supplier code must be unique.', 422);
+            return $this->error('supplier_code_taken', __('inventory.validation.supplier_code_unique'), 422);
         }
 
         return $this->success(Supplier::create($this->pack($data))->fresh(), 201);

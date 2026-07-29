@@ -129,7 +129,7 @@ class StockAdjustmentService
         foreach ($lines as $line) {
             $direction = $line['direction'] ?? null;
             if (! in_array($direction, ['increase', 'decrease'], true)) {
-                throw new RuntimeException("Adjustment line direction must be 'increase' or 'decrease'.");
+                throw new RuntimeException(__('inventory.stock.adjustment_direction'));
             }
             $unitCost = Decimal::cost((string) ($line['unit_cost'] ?? '0'));
 

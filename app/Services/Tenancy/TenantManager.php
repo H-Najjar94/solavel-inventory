@@ -242,7 +242,7 @@ class TenantManager
             'exception_code'  => $e ? $e->getCode() : null,
         ]);
 
-        abort(503, 'This workspace is temporarily unavailable. Please try again shortly.');
+        abort(503, __('inventory.common.workspace_unavailable'));
     }
 
     /**

@@ -31,7 +31,7 @@ class SolaBooksOutboxDeliveryService
                 return $event;
             }
             if ($event->status === 'ignored') {
-                throw new RuntimeException('Ignored integration events cannot be delivered.');
+                throw new RuntimeException(__('inventory.integration.ignored_delivery'));
             }
             if (! $manual && $event->next_attempt_at && $event->next_attempt_at->isFuture()) {
                 return $event;
@@ -50,7 +50,7 @@ class SolaBooksOutboxDeliveryService
                     ->post($this->journalEndpoint());
 
                 if (! $response->successful()) {
-                    throw new RuntimeException($response->json('error.message') ?: 'SolaBooks rejected the journal event.');
+                    throw new RuntimeException($response->json('error.message') ?: __('inventory.integration.journal_rejected'));
                 }
 
                 $data = $response->json('data') ?? [];
@@ -134,7 +134,7 @@ class SolaBooksOutboxDeliveryService
         $orgId = (string) ($setting?->solabooks_organization_id ?: config('services.solabooks.organization_id'));
 
         if ($apiKey === '' || $clientId === '' || $orgId === '') {
-            throw new RuntimeException('SolaBooks API credentials are not configured.');
+            throw new RuntimeException(__('inventory.integration.credentials_missing'));
         }
 
         return Http::acceptJson()
@@ -160,7 +160,7 @@ class SolaBooksOutboxDeliveryService
         $keyId = (string) ($setting?->meta['signing_key_id'] ?? '');
         $version = (string) ($setting?->meta['signing_protocol_version'] ?? ExternalRequestSignature::VERSION);
         if (! $setting || ! $secret || $keyId === '' || $version !== ExternalRequestSignature::VERSION) {
-            throw new RuntimeException('SolaBooks request signing is not configured.');
+            throw new RuntimeException(__('inventory.integration.signing_missing'));
         }
 
         $endpoint = $this->journalEndpoint();
@@ -202,11 +202,11 @@ class SolaBooksOutboxDeliveryService
             'inventory_organization_id' => $orgId,
         ]);
         if (! $response->successful()) {
-            throw new RuntimeException($response->json('error.message') ?: 'SolaBooks signing-key rotation failed.');
+            throw new RuntimeException($response->json('error.message') ?: __('inventory.integration.rotation_failed'));
         }
         $data = $response->json('data') ?? [];
         if (empty($data['key_id']) || empty($data['secret']) || ($data['protocol_version'] ?? null) !== ExternalRequestSignature::VERSION) {
-            throw new RuntimeException('SolaBooks returned an invalid signing-key response.');
+            throw new RuntimeException(__('inventory.integration.invalid_signing_response'));
         }
         $meta = $setting->meta ?? [];
         $meta['signing_key_id'] = (string) $data['key_id'];
@@ -229,7 +229,7 @@ class SolaBooksOutboxDeliveryService
             'inventory_organization_id' => $this->context->idOrFail(),
         ]);
         if (! $response->successful()) {
-            throw new RuntimeException($response->json('error.message') ?: 'SolaBooks signing-key revocation failed.');
+            throw new RuntimeException($response->json('error.message') ?: __('inventory.integration.revocation_failed'));
         }
         $meta = $setting->meta ?? [];
         if (($meta['signing_key_id'] ?? null) === $keyId) {
@@ -246,7 +246,7 @@ class SolaBooksOutboxDeliveryService
         $clientId = (string) ($setting->meta['client_id'] ?? config('services.solabooks.client_id'));
         $financeOrg = (string) ($setting->solabooks_organization_id ?: config('services.solabooks.organization_id'));
         if ($apiKey === '' || $clientId === '' || $financeOrg === '') {
-            throw new RuntimeException('SolaBooks API credentials are not configured.');
+            throw new RuntimeException(__('inventory.integration.credentials_missing'));
         }
 
         return Http::acceptJson()->asJson()->timeout((int) config('services.solabooks.timeout', 10))->retry(0)->withHeaders([
@@ -278,12 +278,12 @@ class SolaBooksOutboxDeliveryService
             $event->save();
         }
         if ($event->mapping_status !== 'complete') {
-            throw new RuntimeException('SolaBooks mappings are incomplete for this event.');
+            throw new RuntimeException(__('inventory.integration.mappings_incomplete'));
         }
 
         $setting = IntegrationSetting::query()->where('organization_id', $orgId)->where('integration', IntegrationEvents::INTEGRATION)->first();
         if (! $setting || $setting->mode !== 'active') {
-            throw new RuntimeException('SolaBooks integration is not active.');
+            throw new RuntimeException(__('inventory.integration.inactive'));
         }
 
         $payload = $event->payload ?? [];

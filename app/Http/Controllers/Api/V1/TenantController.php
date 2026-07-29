@@ -31,11 +31,11 @@ class TenantController extends ApiController
     private function reasonMessage(?string $reason): ?string
     {
         return match ($reason) {
-            'demo_disabled' => 'Demo tenant is disabled. Set INVENTORY_DEMO_TENANT_ENABLED=true.',
-            'db_missing' => 'Demo database does not exist yet. Run scripts/setup-demo-tenant.sh.',
-            'migrations_missing' => 'Demo database exists but is not migrated. Run scripts/setup-demo-tenant.sh.',
-            'db_unreachable' => 'Cannot reach the database from the app. Check DB credentials / MySQL access.',
-            'forbidden_database', 'invalid_org' => 'Demo tenant is misconfigured (forbidden database or invalid org).',
+            'demo_disabled' => __('inventory.tenancy.demo_disabled'),
+            'db_missing' => __('inventory.tenancy.demo_database_missing'),
+            'migrations_missing' => __('inventory.tenancy.demo_migrations_missing'),
+            'db_unreachable' => __('inventory.tenancy.database_unreachable'),
+            'forbidden_database', 'invalid_org' => __('inventory.tenancy.demo_misconfigured'),
             default => null,
         };
     }
@@ -47,26 +47,26 @@ class TenantController extends ApiController
         // fallback — no_access/no_organization are decisive (the shell renders a
         // state screen instead of the page), so they are NOT 'sample'.
         return match ($state) {
-            'live_ready' => ['Live tenant', 'real'],
-            'demo_preview' => [config('inventory.demo_tenant.label', 'Demo tenant'), 'demo'],
-            'needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'schema_failed', 'demo_setup_required' => ['Setup required', 'setup'],
-            'no_organization' => ['No organization', 'no_organization'],
-            'no_access' => ['No access', 'no_access'],
-            'sample_preview' => ['Sample preview', 'sample'],
-            default => ['Sample preview', 'sample'],
+            'live_ready' => [__('inventory.tenancy.badge_live'), 'real'],
+            'demo_preview' => [config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo')), 'demo'],
+            'needs_activation', 'tenant_missing', 'tenant_unmigrated', 'tenant_unreachable', 'schema_failed', 'demo_setup_required' => [__('inventory.tenancy.badge_setup'), 'setup'],
+            'no_organization' => [__('inventory.tenancy.badge_no_organization'), 'no_organization'],
+            'no_access' => [__('inventory.tenancy.badge_no_access'), 'no_access'],
+            'sample_preview' => [__('inventory.tenancy.badge_sample'), 'sample'],
+            default => [__('inventory.tenancy.badge_sample'), 'sample'],
         };
     }
 
     private function stateMessage(string $state): ?string
     {
         return match ($state) {
-            'no_organization' => 'You are signed in but no Solavel organization is active. Open SolaStock from the Solavel app launcher.',
-            'no_access' => 'Your account does not have SolaStock access for this organization. Ask an administrator to grant inventory permissions.',
-            'needs_activation' => 'SolaStock is not enabled for this organization yet. Activate it to get started.',
-            'tenant_missing' => 'This organization has no SolaStock data yet. An administrator can provision it from the setup screen.',
-            'tenant_unmigrated' => 'SolaStock tables are not installed for this organization yet. Run the setup to migrate them.',
-            'tenant_unreachable' => 'Cannot reach the database from the app. Check DB access.',
-            'schema_failed' => 'Inventory is not ready for this workspace. A SolaStock schema audit found missing tables, columns, or indexes. Ask an administrator to review the schema audit before enabling use.',
+            'no_organization' => __('inventory.tenancy.no_organization_launcher'),
+            'no_access' => __('inventory.tenancy.no_access_admin'),
+            'needs_activation' => __('inventory.tenancy.needs_activation_start'),
+            'tenant_missing' => __('inventory.tenancy.tenant_missing'),
+            'tenant_unmigrated' => __('inventory.tenancy.tenant_unmigrated'),
+            'tenant_unreachable' => __('inventory.tenancy.tenant_unreachable'),
+            'schema_failed' => __('inventory.tenancy.schema_failed_detail'),
             default => null,
         };
     }
@@ -88,7 +88,7 @@ class TenantController extends ApiController
             'badge' => $badge,
             'organization_id' => $s['organization_id'],
             'organization_name' => $s['mode'] === 'demo'
-                ? config('inventory.demo_tenant.label', 'Demo tenant')
+                ? config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo'))
                 : $this->live->organizationName($s['organization_id']),
             'user' => $principal ? ['name' => $principal['name'] ?? null, 'email' => $principal['email'] ?? null] : null,
             'database' => $s['database'],
@@ -103,7 +103,7 @@ class TenantController extends ApiController
             'demo_reason' => $readiness['reason'],
             'demo_reason_message' => $this->reasonMessage($readiness['reason']),
             'demo_db' => $readiness['database'],
-            'demo_label' => config('inventory.demo_tenant.label', 'Demo tenant'),
+            'demo_label' => config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo')),
         ]);
     }
 
@@ -112,10 +112,10 @@ class TenantController extends ApiController
     {
         $readiness = $this->resolver->demoReadiness();
         if (in_array($readiness['reason'], ['demo_disabled', 'forbidden_database', 'invalid_org'], true)) {
-            return $this->error($readiness['reason'], $this->reasonMessage($readiness['reason']) ?? 'Demo tenant unavailable.', 403);
+            return $this->error($readiness['reason'], $this->reasonMessage($readiness['reason']) ?? __('inventory.tenancy.demo_unavailable'), 403);
         }
         if (! $request->hasSession()) {
-            return $this->error('no_session', 'A session is required to select a tenant.', 400);
+            return $this->error('no_session', __('inventory.tenancy.session_select'), 400);
         }
 
         // Allow selection even when the DB/migrations are not ready yet — the UI
@@ -124,7 +124,7 @@ class TenantController extends ApiController
 
         return $this->success([
             'mode' => 'demo',
-            'badge' => config('inventory.demo_tenant.label', 'Demo tenant'),
+            'badge' => config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo')),
             'organization_id' => (int) config('inventory.demo_tenant.organization_id'),
             'ready' => $readiness['available'],
             'reason' => $readiness['reason'],
@@ -139,7 +139,7 @@ class TenantController extends ApiController
             $request->session()->forget('inventory_demo_tenant');
         }
 
-        return $this->success(['mode' => 'none', 'badge' => 'No tenant selected']);
+        return $this->success(['mode' => 'none', 'badge' => __('inventory.tenancy.no_tenant_selected')]);
     }
 
     /**
@@ -199,12 +199,12 @@ class TenantController extends ApiController
     {
         $user = Auth::user();
         if (! $user || ! $request->hasSession()) {
-            return $this->error('no_session', 'A signed-in session is required to switch organizations.', 401);
+            return $this->error('no_session', __('inventory.tenancy.session_switch'), 401);
         }
 
         $orgId = (int) $request->input('organization_id', 0);
         if ($orgId <= 0) {
-            return $this->error('invalid', 'organization_id is required.', 422);
+            return $this->error('invalid', __('inventory.tenancy.organization_required'), 422);
         }
 
         try {
@@ -218,11 +218,11 @@ class TenantController extends ApiController
                 ->select('o.id', 'o.client_id')
                 ->first();
         } catch (\Throwable $e) {
-            return $this->error('lookup_failed', 'Could not verify organization access.', 500);
+            return $this->error('lookup_failed', __('inventory.tenancy.lookup_failed'), 500);
         }
 
         if (! $org) {
-            return $this->error('forbidden', 'You do not have access to that organization.', 403);
+            return $this->error('forbidden', __('inventory.tenancy.organization_forbidden'), 403);
         }
 
         // Switch the SSO/session context: the selected org wins everywhere, and
@@ -254,19 +254,19 @@ class TenantController extends ApiController
         // not-yet-enabled org (needs_activation) is rejected here and sent to
         // onboarding; only enabled-but-unprovisioned states may initialize.
         if ($s['state'] === 'needs_activation') {
-            return $this->error('not_enabled', 'SolaStock must be set up through onboarding before it can be initialized.', 409);
+            return $this->error('not_enabled', __('inventory.tenancy.onboarding_required'), 409);
         }
         if (! in_array($s['state'], ['tenant_unmigrated', 'live_ready'], true) || ! $s['organization_id']) {
-            return $this->error('not_provisionable', 'No live organization to initialize.', 409);
+            return $this->error('not_provisionable', __('inventory.tenancy.no_live_organization'), 409);
         }
         if (! $s['can_provision'] && $s['state'] !== 'live_ready') {
-            return $this->error('forbidden', 'You are not allowed to initialize SolaStock for this organization.', 403);
+            return $this->error('forbidden', __('inventory.tenancy.initialize_forbidden'), 403);
         }
 
         $db = (string) $s['database'];
         foreach ((array) config('inventory.forbidden_demo_databases', []) as $bad) {
             if ($db === $bad) {
-                return $this->error('forbidden_database', "Refusing to provision '{$db}'.", 422);
+                return $this->error('forbidden_database', __('inventory.tenancy.database_forbidden'), 422);
             }
         }
 
@@ -278,9 +278,9 @@ class TenantController extends ApiController
             return $this->success([
                 'provisioned' => false,
                 'reason' => 'insufficient_privileges',
-                'message' => 'Provisioning could not run from the app. A server admin must run the command below.',
+                'message' => __('inventory.tenancy.provision_admin'),
                 'admin_command' => $this->adminProvisionCommand($db, (int) $s['organization_id']),
-                'error' => $e->getMessage(),
+                'error_code' => 'provision_failed',
             ]);
         }
 
@@ -291,13 +291,13 @@ class TenantController extends ApiController
     {
         $s = $this->live->state($request);
         if (! in_array($s['state'], ['live_ready', 'tenant_missing', 'tenant_unmigrated', 'schema_failed'], true) || ! $s['organization_id'] || ! $s['database']) {
-            return $this->error('not_auditable', 'No live SolaStock tenant database is available to audit.', 409, [
+            return $this->error('not_auditable', __('inventory.tenancy.not_auditable'), 409, [
                 'state' => $s['state'],
                 'database' => $s['database'],
             ]);
         }
         if (! $s['can_access'] || ! $permissions->can(Auth::user(), 'inventory.manage_settings')) {
-            return $this->error('forbidden', 'You are not allowed to audit this SolaStock workspace.', 403);
+            return $this->error('forbidden', __('inventory.tenancy.audit_forbidden'), 403);
         }
 
         try {
