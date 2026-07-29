@@ -4,7 +4,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
 import { Field, Skeleton, fieldErrors } from '../components/ui.jsx';
-import { useSettingsTranslation } from '../i18n/settingsPages.js';
+import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
 export default function SettingsPage() {
     const tr = useSettingsTranslation();
@@ -465,7 +465,7 @@ export default function SettingsPage() {
             <div className="panel">
                 <h2>{tr('settings.currency.title')}</h2>
                 <form className="fg2" onSubmit={addCurrencyRate}>
-                    <Field label={tr('settings.currency.currency')}><input className="input" value={currencyRate.currency_code} onChange={(e) => setCurrencyRate({ ...currencyRate, currency_code: e.target.value.toUpperCase().slice(0, 3) })} placeholder="USD" required /></Field>
+                    <Field label={tr('settings.currency.currency')}><input className="input" value={currencyRate.currency_code} onChange={(e) => setCurrencyRate({ ...currencyRate, currency_code: e.target.value.toUpperCase().slice(0, 3) })} placeholder={tr('settings.currency.codePlaceholder')} required dir="ltr" /></Field>
                     <Field label={tr('settings.currency.rateToBase')}><input className="input" type="number" step="0.00000001" min="0" value={currencyRate.rate_to_base} onChange={(e) => setCurrencyRate({ ...currencyRate, rate_to_base: e.target.value })} required /></Field>
                     <Field label={tr('settings.currency.effectiveDate')}><input className="input" type="date" value={currencyRate.effective_date} onChange={(e) => setCurrencyRate({ ...currencyRate, effective_date: e.target.value })} required /></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{tr('settings.currency.save')}</button></div>

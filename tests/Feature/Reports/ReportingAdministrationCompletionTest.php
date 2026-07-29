@@ -301,8 +301,9 @@ class ReportingAdministrationCompletionTest extends TestCase
         $csv->sendContent();
         $body = ob_get_clean();
 
-        $this->assertStringContainsString('value_currency', $body);
-        $this->assertStringContainsString('converted_total_value', $body);
+        $this->assertStringContainsString('Value currency', $body);
+        $this->assertStringContainsString('Converted total value', $body);
+        $this->assertStringContainsString('EXP-ITEM', $body);
         $this->assertStringContainsString('USD', $body);
         $this->assertSame(1, StockLedger::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->count());
     }

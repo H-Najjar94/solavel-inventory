@@ -6,7 +6,7 @@ import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
-import { useSettingsTranslation } from '../i18n/settingsPages.js';
+import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
 function HealthBadge({ health, tr }) {
     const map = { healthy: 'badge--live', needs_mapping: 'badge--demo', error: 'badge--warn', disconnected: 'badge--muted' };

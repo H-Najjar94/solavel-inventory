@@ -23,6 +23,14 @@ if rg -n --glob '*.jsx' --glob '*.js' \
   status=1
 fi
 
+# Literal accessibility labels, tooltips and placeholders can render outside
+# ordinary text nodes (including portals and native controls).
+if rg -n --glob '*.jsx' --glob '*.js' \
+  '(placeholder|title|aria-label)=["'"'"'][A-Za-z][^"'"'"']{2,}["'"'"']' \
+  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components"; then
+  status=1
+fi
+
 if rg -n --glob '*.php' "['\"][A-Z][A-Za-z ,.'\"-]{8,}[.!?]['\"]" \
   "$root/app/Http" "$root/app/Services" "$root/app/Http/Requests"; then
   status=1

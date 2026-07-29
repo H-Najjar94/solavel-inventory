@@ -1,5 +1,3 @@
-import { useI18n } from './context.jsx';
-
 export const en = {
     'settings.title': 'Settings',
     'settings.sampleData': 'sample data',
@@ -116,6 +114,7 @@ export const en = {
     'settings.reasons.saved': 'Adjustment reason code saved.',
     'settings.currency.title': 'Currency Rates',
     'settings.currency.currency': 'Currency',
+    'settings.currency.codePlaceholder': 'USD',
     'settings.currency.rateToBase': 'Rate to base',
     'settings.currency.effectiveDate': 'Effective date',
     'settings.currency.effective': 'Effective',
@@ -427,6 +426,7 @@ export const ar = {
     'settings.reasons.saved': 'تم حفظ رمز سبب التسوية.',
     'settings.currency.title': 'أسعار صرف العملات',
     'settings.currency.currency': 'العملة',
+    'settings.currency.codePlaceholder': 'USD',
     'settings.currency.rateToBase': 'السعر مقابل العملة الأساسية',
     'settings.currency.effectiveDate': 'تاريخ السريان',
     'settings.currency.effective': 'ساري من',
@@ -618,12 +618,3 @@ export const ar = {
     'integration.eventType.shipment.posted': 'تم ترحيل الشحنة',
     'integration.eventType.sales_return.posted': 'تم ترحيل مرتجع المبيعات',
 };
-
-function interpolate(value, params) {
-    return String(value).replace(/:([A-Za-z0-9_]+)/g, (_, name) => params[name] ?? `:${name}`);
-}
-
-export function useSettingsTranslation() {
-    const { locale } = useI18n();
-    return (key, params = {}, fallback = key) => interpolate((locale === 'ar' ? ar : en)[key] ?? en[key] ?? fallback, params);
-}
