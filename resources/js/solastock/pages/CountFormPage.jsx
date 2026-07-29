@@ -5,15 +5,19 @@ import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput } from '../components/pickers.jsx';
+import { useI18n } from '../i18n/context.jsx';
+import { translateCountPlural, translateCounts } from '../i18n/counts.js';
 
 const emptyLine = () => ({ item_id: null, bin_id: null, system_qty: '0', snapshot_qty: null, counted_qty: '' });
 
 export default function CountFormPage() {
     const { id } = useParams();
     const isEdit = !!id;
+    const { locale } = useI18n();
+    const t = (key, fallback, params) => translateCounts(locale, key, fallback, params);
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.manage_adjustments');
 
@@ -30,7 +34,7 @@ export default function CountFormPage() {
     useEffect(() => {
         if (isEdit && existing.data?.count) {
             const c = existing.data.count;
-            if (c.status !== 'draft') { toast.push('Only draft counts can be edited.', 'error'); nav(`/counts/${id}`); return; }
+            if (c.status !== 'draft') { toast.push(t('counts.form.draftOnly'), 'error'); nav(`/counts/${id}`); return; }
             setHeader({
                 count_number: c.count_number,
                 count_type: c.count_type,
@@ -51,14 +55,14 @@ export default function CountFormPage() {
     const variance = (l) => (l.counted_qty === '' ? null : Number(l.counted_qty) - Number(l.system_qty || 0));
 
     async function prefill() {
-        if (!header.warehouse_id) { toast.push('Select a warehouse to prefill expected quantities.', 'error'); return; }
+        if (!header.warehouse_id) { toast.push(t('counts.form.selectWarehouse'), 'error'); return; }
         setPrefilling(true);
         try {
             const res = await api.countPrefill(header.warehouse_id);
             const rows = res?.data?.lines ?? [];
-            if (rows.length === 0) { toast.push('No stock found for this scope.', 'info'); }
+            if (rows.length === 0) { toast.push(t('counts.form.noStock'), 'info'); }
             setLines(rows.length ? rows.map((r) => ({ item_id: r.item_id, bin_id: r.bin_id, lot_id: r.lot_id ?? null, lot_code: r.lot_code ?? null, expiry_date: r.expiry_date ?? null, system_qty: r.system_qty, snapshot_qty: r.system_qty, counted_qty: '', expected_serials: r.expected_serials ?? [] })) : [emptyLine()]);
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch { toast.push(t('counts.form.prefillFailed'), 'error'); }
         finally { setPrefilling(false); }
     }
 
@@ -67,80 +71,87 @@ export default function CountFormPage() {
         setSaving(true); setErrors({});
         try {
             const payload = { ...header, lines: lines.filter((l) => l.item_id).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id || undefined, system_qty: l.system_qty || '0', counted_qty: l.counted_qty === '' ? null : l.counted_qty })) };
-            if (payload.lines.length === 0) { toast.push('Add at least one line.', 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { toast.push(t('counts.form.lineRequired'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateCount(id, payload) : await api.createCount(payload);
             const docId = res?.data?.id ?? id;
-            if (post) { await api.postCount(docId); toast.push('Count posted — variance adjustment created.', 'success'); }
-            else toast.push(isEdit ? 'Draft updated.' : 'Draft saved.', 'success');
+            if (post) { await api.postCount(docId); toast.push(t('counts.form.posted'), 'success'); }
+            else toast.push(t(isEdit ? 'counts.form.updated' : 'counts.form.saved'), 'success');
             qc.invalidateQueries({ queryKey: ['counts'] });
             nav(`/counts/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || 'Save failed.', 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.push(t('counts.form.saveFailed'), 'error'); }
         finally { setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
+    if (isEdit && existing.isError) return (
+        <section className="page">
+            <Breadcrumbs items={[{ label: t('counts.breadcrumb'), to: '/counts' }, { label: t('counts.form.editBreadcrumb') }]} />
+            <EmptyState title={t('counts.form.loadErrorTitle')} hint={t('counts.form.loadErrorHint')}
+                action={<button className="btn" onClick={() => existing.refetch()}>{t('counts.retry')}</button>} />
+        </section>
+    );
 
     const columns = [
-        { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
-        { key: 'lot', label: 'Lot', width: 150, render: (l) => l.lot_code
-            ? <span title={l.expiry_date ? `exp ${l.expiry_date}` : ''}>{l.lot_code}{l.expiry_date ? ` · ${l.expiry_date}` : ''}</span>
+        { key: 'item', label: t('counts.form.item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'lot', label: t('counts.form.lot'), width: 150, render: (l) => l.lot_code
+            ? <span title={l.expiry_date ? t('counts.form.lotExpiry', undefined, { date: l.expiry_date }) : ''}><bdi>{l.lot_code}</bdi>{l.expiry_date ? <> · <bdi>{l.expiry_date}</bdi></> : ''}</span>
             : <span className="muted">—</span> },
-        { key: 'bin', label: 'Bin', render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'exp', label: header.blind_count ? 'Expected' : 'Expected / snapshot', width: 130, render: (l) => (
-            <span>{header.blind_count ? 'Hidden' : (l.snapshot_qty ?? l.system_qty)}{!header.blind_count && (l.expected_serials ?? []).length > 0 && <span className="muted" title={(l.expected_serials).map((s) => s.serial).join(', ')}> · {(l.expected_serials).length} serial(s)</span>}</span>
+        { key: 'bin', label: t('counts.form.bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
+        { key: 'exp', label: t(header.blind_count ? 'counts.form.expected' : 'counts.form.expectedSnapshot'), width: 130, render: (l) => (
+            <span>{header.blind_count ? t('counts.form.hidden') : <bdi>{l.snapshot_qty ?? l.system_qty}</bdi>}{!header.blind_count && (l.expected_serials ?? []).length > 0 && <span className="muted" title={(l.expected_serials).map((s) => s.serial).join(', ')}> · {translateCountPlural(locale, 'counts.form.serialCount', (l.expected_serials).length)}</span>}</span>
         ) },
-        { key: 'cnt', label: 'Counted', width: 110, render: (l, i) => <QuantityInput value={l.counted_qty} onChange={(v) => setLine(i, { counted_qty: v })} /> },
-        { key: 'var', label: 'Variance', width: 100, render: (l) => { const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}>{v === null ? '—' : v}</span>; } },
+        { key: 'cnt', label: t('counts.form.counted'), width: 110, render: (l, i) => <QuantityInput value={l.counted_qty} onChange={(v) => setLine(i, { counted_qty: v })} /> },
+        { key: 'var', label: t('counts.form.variance'), width: 100, render: (l) => { const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}><bdi>{v === null ? '—' : v}</bdi></span>; } },
     ];
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Stock Counts', to: '/counts' }, { label: isEdit ? 'Edit draft' : 'New' }]} />
-            <header className="page-head"><h1>{isEdit ? 'Edit count' : 'New count'}</h1></header>
+            <Breadcrumbs items={[{ label: t('counts.breadcrumb'), to: '/counts' }, { label: t(isEdit ? 'counts.form.editBreadcrumb' : 'counts.form.newBreadcrumb') }]} />
+            <header className="page-head"><h1>{t(isEdit ? 'counts.form.editTitle' : 'counts.form.newTitle')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label="Count number" error={errors.count_number}><input className="input" placeholder="Auto" value={header.count_number} onChange={(e) => setHeader({ ...header, count_number: e.target.value })} /></Field>
-                <Field label="Type" error={errors.count_type}>
+                <Field label={t('counts.form.number')} error={errors.count_number}><input className="input" placeholder={t('counts.form.numberPlaceholder')} value={header.count_number} onChange={(e) => setHeader({ ...header, count_number: e.target.value })} /></Field>
+                <Field label={t('counts.form.type')} error={errors.count_type}>
                     <select className="input" value={header.count_type} onChange={(e) => setHeader({ ...header, count_type: e.target.value })}>
-                        <option value="cycle">Cycle count</option><option value="full">Full stocktake</option>
+                        <option value="cycle">{t('counts.type.cycle')}</option><option value="full">{t('counts.type.full')}</option>
                     </select>
                 </Field>
-                <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
-                <Field label="Scheduled for" error={errors.scheduled_for}><input className="input" type="date" value={header.scheduled_for} onChange={(e) => setHeader({ ...header, scheduled_for: e.target.value })} /></Field>
-                <Field label="Cadence" error={errors.recurrence}>
+                <Field label={t('counts.form.warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
+                <Field label={t('counts.form.scheduledFor')} error={errors.scheduled_for}><input className="input" type="date" value={header.scheduled_for} onChange={(e) => setHeader({ ...header, scheduled_for: e.target.value })} /></Field>
+                <Field label={t('counts.form.cadence')} error={errors.recurrence}>
                     <select className="input" value={header.recurrence} onChange={(e) => setHeader({ ...header, recurrence: e.target.value })}>
-                        <option value="once">Once</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option>
+                        <option value="once">{t('counts.recurrence.once')}</option><option value="weekly">{t('counts.recurrence.weekly')}</option><option value="monthly">{t('counts.recurrence.monthly')}</option><option value="quarterly">{t('counts.recurrence.quarterly')}</option>
                     </select>
                 </Field>
-                <Field label="ABC class" error={errors.abc_class}>
+                <Field label={t('counts.form.abcClass')} error={errors.abc_class}>
                     <select className="input" value={header.abc_class} onChange={(e) => setHeader({ ...header, abc_class: e.target.value })}>
-                        <option value="">Not classified</option><option value="A">A - high value</option><option value="B">B - standard</option><option value="C">C - low velocity</option>
+                        <option value="">{t('counts.form.notClassified')}</option><option value="A">{t('counts.form.abcA')}</option><option value="B">{t('counts.form.abcB')}</option><option value="C">{t('counts.form.abcC')}</option>
                     </select>
                 </Field>
-                <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
+                <Field label={t('counts.form.notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
 
             <div className="panel">
-                <label className="check-row"><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> Blind count</label>
-                <label className="check-row"><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> Freeze expected snapshot</label>
+                <label className="check-row" title={t('counts.form.blindHelp')}><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> {t('counts.form.blindCount')}</label>
+                <label className="check-row" title={t('counts.form.freezeHelp')}><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> {t('counts.form.freezeSnapshot')}</label>
             </div>
 
             <div className="panel">
                 <div className="page-head" style={{ marginBottom: 12 }}>
-                    <h2 style={{ margin: 0 }}>Lines</h2>
+                    <h2 style={{ margin: 0 }}>{t('counts.form.lines')}</h2>
                     <button type="button" className="btn btn--sm" style={{ marginLeft: 'auto' }} disabled={prefilling || !header.warehouse_id} onClick={prefill}>
-                        {prefilling ? 'Loading…' : 'Prefill expected from stock'}
+                        {prefilling ? t('counts.form.prefilling') : t('counts.form.prefill')}
                     </button>
                 </div>
-                <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
-                <p className="muted">Zero-variance lines create no stock movement. Posting generates a single adjustment for the non-zero variances.</p>
+                <DocumentLinesTable columns={columns} lines={lines} addLabel={t('counts.form.addLine')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <p className="muted">{t('counts.form.varianceHelp')}</p>
             </div>
 
             <div className="doc-actions">
-                <button className="btn" onClick={() => nav('/counts')}>Cancel</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? 'Saving…' : 'Save draft'}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>Save & post variance</button>
+                <button className="btn" onClick={() => nav('/counts')}>{t('counts.form.cancel')}</button>
+                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('counts.form.saving') : t('counts.form.saveDraft')}</button>
+                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('counts.form.savePost')}</button>
             </div>
         </section>
     );
