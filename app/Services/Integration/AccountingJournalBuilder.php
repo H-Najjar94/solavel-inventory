@@ -250,8 +250,22 @@ class AccountingJournalBuilder
         ?IntegrationTaxMapping $tax = null,
         ?string $taxableBaseAmount = null,
     ): array {
+        $role = $tax
+            ? 'tax'
+            : (string) IntegrationAccountMapping::query()
+                ->where('organization_id', $event->organization_id)
+                ->where('integration', IntegrationEvents::INTEGRATION)
+                ->where('solabooks_account_id', (string) $accountId)
+                ->whereIn('status', ['mapped', 'verified'])
+                ->orderBy('id')
+                ->value('mapping_type');
+        if ($role === '') {
+            throw new RuntimeException("SolaBooks account {$accountId} has no active organization mapping role.");
+        }
+
         return [
             'account_id' => $accountId,
+            'account_role' => $role,
             'debit' => Decimal::money($debit),
             'credit' => Decimal::money($credit),
             'description' => $event->aggregate_number,
