@@ -39,6 +39,7 @@ export const en = {
   'media.imagesUploaded': ':count images uploaded.',
   'media.imagesHint': 'JPG, PNG or WEBP · up to 5 MB each · stored privately · ★ sets the primary image.',
   'status.unknown': 'Unknown (:value)',
+  'common.newValue': 'New :label…',
 };
 
 export const ar = {
@@ -82,4 +83,5 @@ export const ar = {
   'media.imagesUploaded': 'تم رفع :count صورة.',
   'media.imagesHint': 'JPG أو PNG أو WEBP · بحد أقصى 5 MB للصورة · تخزين خاص · ★ لتعيين الصورة الرئيسية.',
   'status.unknown': 'حالة غير معروفة (:value)',
+  'common.newValue': ':label جديد…',
 };
