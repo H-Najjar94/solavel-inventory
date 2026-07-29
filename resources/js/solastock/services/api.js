@@ -8,6 +8,10 @@ function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 }
 
+function locale() {
+    return window.SOLASTOCK_LOCALE?.locale === 'ar' ? 'ar' : 'en';
+}
+
 async function request(path, { method = 'GET', body, params } = {}) {
     const url = new URL(BASE + path, window.location.origin);
     if (params) {
@@ -23,6 +27,8 @@ async function request(path, { method = 'GET', body, params } = {}) {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': csrfToken(),
             'X-Requested-With': 'XMLHttpRequest',
+            'Accept-Language': locale(),
+            'X-Locale': locale(),
         },
         credentials: 'same-origin',
         body: body ? JSON.stringify(body) : undefined,
@@ -55,6 +61,8 @@ async function requestForm(path, formData) {
             Accept: 'application/json',
             'X-CSRF-TOKEN': csrfToken(),
             'X-Requested-With': 'XMLHttpRequest',
+            'Accept-Language': locale(),
+            'X-Locale': locale(),
         },
         credentials: 'same-origin',
         body: formData,

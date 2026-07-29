@@ -269,7 +269,11 @@ export default function AppShell() {
                         <button
                             type="button"
                             className="language-toggle"
-                            onClick={() => { window.location.href = `${window.location.pathname}?locale=${locale === 'ar' ? 'en' : 'ar'}`; }}
+                            onClick={() => {
+                                const next = new URL(window.location.href);
+                                next.searchParams.set('locale', locale === 'ar' ? 'en' : 'ar');
+                                window.location.assign(next.toString());
+                            }}
                             title={t('language')}
                         >
                             {locale === 'ar' ? 'EN' : 'عربي'}
