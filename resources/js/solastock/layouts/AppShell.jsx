@@ -38,7 +38,7 @@ function OrgSwitcher({ tenant }) {
     const currentName = tenant.loading
         ? ' '
         : (tenant.organization_name
-            || (tenant.organization_id ? `Organization #${tenant.organization_id}` : 'No organization'));
+            || (tenant.organization_id ? t('shell.organizationNumber', undefined, { id: tenant.organization_id }) : t('shell.noOrganization')));
 
     async function pick(org) {
         if (org.current || busyId) return;
@@ -49,7 +49,7 @@ function OrgSwitcher({ tenant }) {
 
     // Single (or zero) org → no need for a menu; just show the name.
     if (orgs.length <= 1) {
-        return <span className="org-name" title="Active organization">{currentName}</span>;
+        return <span className="org-name" title={t('shell.activeOrganization')}>{currentName}</span>;
     }
 
     return (
@@ -58,7 +58,7 @@ function OrgSwitcher({ tenant }) {
                 type="button"
                 className="org-switcher__btn"
                 onClick={() => setOpen((o) => !o)}
-                title="Switch organization"
+                title={t('shell.switchOrganization')}
                 style={{
                     display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
                     background: 'transparent', border: 'none', font: 'inherit', color: 'inherit',
@@ -83,7 +83,7 @@ function OrgSwitcher({ tenant }) {
                         }}
                     >
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-soft,#9a9384)', padding: '6px 10px' }}>
-                            Your organizations
+                            {t('shell.yourOrganizations')}
                         </div>
                         {orgs.map((org) => (
                             <button
@@ -110,7 +110,7 @@ function OrgSwitcher({ tenant }) {
                                 {busyId === org.id
                                     ? <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 12, opacity: 0.6 }} aria-hidden="true" />
                                     : <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: org.inventory_enabled ? '#2f7a4f' : 'var(--ink-soft,#9a9384)' }}>
-                                        {org.inventory_enabled ? 'Active' : 'Set up'}
+                                        {org.inventory_enabled ? t('shell.active') : t('shell.setup')}
                                       </span>}
                             </button>
                         ))}
@@ -147,11 +147,11 @@ export default function AppShell() {
         : tenant.isSetup ? 'badge--warn' : 'badge--warn';
 
     const dataChip = {
-        demo: ['Demo data', 'badge--demo'],
-        setup: ['Setup required', 'badge--warn'],
-        sample: ['Sample preview', 'badge--warn'],
-        no_organization: ['No organization', 'badge--warn'],
-        no_access: ['No access', 'badge--warn'],
+        demo: [t('shell.demoData'), 'badge--demo'],
+        setup: [t('shell.setupRequired'), 'badge--warn'],
+        sample: [t('shell.samplePreview'), 'badge--warn'],
+        no_organization: [t('shell.noOrganization'), 'badge--warn'],
+        no_access: [t('shell.noAccess'), 'badge--warn'],
     }[tenant.dataState] ?? null;
 
     return (
@@ -225,13 +225,14 @@ export default function AppShell() {
                         {!collapsed && (
                             <div className="side-locked">
                                 <i className="fa-solid fa-lock side-locked__icon" aria-hidden="true" />
-                                <span>{tenant.isSetup ? 'Finish setup to use SolaStock' : tenant.isNoOrg ? 'No organization' : tenant.isNoAccess ? 'No access' : 'Sign in to continue'}</span>
+                                <span>{tenant.isSetup ? t('shell.finishSetup') : tenant.isNoOrg ? t('shell.noOrganization') : tenant.isNoAccess ? t('shell.noAccess') : t('shell.signIn')}</span>
                             </div>
                         )}
                     </nav>
                 )}
-                <button className="side-collapse" onClick={() => setCollapsed((c) => !c)}>
-                    {collapsed ? '»' : '« Collapse'}
+                <button className="side-collapse" onClick={() => setCollapsed((c) => !c)}
+                    aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}>
+                    {collapsed ? '»' : `« ${t('shell.collapse')}`}
                 </button>
             </aside>
 
@@ -242,27 +243,27 @@ export default function AppShell() {
                     </div>
                     <div className="topbar-right">
                         {tenant.loading ? (
-                            <span className="badge badge--muted">Loading…</span>
+                            <span className="badge badge--muted">{t('shell.loading')}</span>
                         ) : !tenant.isLive && (<>
                             {dataChip && (
                                 <span className={`badge ${dataChip[1]}`}
-                                    title={`Data mode: ${tenant.dataState}`}>{dataChip[0]}</span>
+                                    title={t('shell.dataMode', undefined, { mode: tenant.dataState })}>{dataChip[0]}</span>
                             )}
-                            <span className={`badge ${badgeClass}`} title="Tenant status">{tenant.badge}</span>
+                            <span className={`badge ${badgeClass}`} title={t('shell.tenantStatus')}>{tenant.badge}</span>
                         </>)}
                         {/* Demo is a SECONDARY preview option, only offered when there is no live org. */}
                         {!tenant.loading && tenant.mode === 'none' && !tenant.authenticated && tenant.demo_available && (
                             <button className="btn btn--sm" onClick={() => tenant.selectDemo()}>
-                                Use SolaStock Demo Tenant
+                                {t('shell.useDemo')}
                             </button>
                         )}
                         {!tenant.loading && tenant.isDemo && (
-                            <button className="btn btn--sm" onClick={() => tenant.clear()}>Exit demo</button>
+                            <button className="btn btn--sm" onClick={() => tenant.clear()}>{t('shell.exitDemo')}</button>
                         )}
                         <button
                             className="theme-toggle"
                             onClick={() => setTheme(toggleTheme())}
-                            title="Toggle light / dark"
+                            title={t('shell.toggleTheme')}
                         >
                             {theme === 'dark' ? '☾' : '☀'}
                         </button>
@@ -279,8 +280,8 @@ export default function AppShell() {
                             {locale === 'ar' ? 'EN' : 'عربي'}
                         </button>
                         {!tenant.loading && (
-                            <span className="user-menu" title={tenant.user?.email || 'Account'}>
-                                {tenant.user?.name || tenant.user?.email || 'Account'}
+                            <span className="user-menu" title={tenant.user?.email || t('shell.account')}>
+                                {tenant.user?.name || tenant.user?.email || t('shell.account')}
                             </span>
                         )}
                     </div>
@@ -312,7 +313,7 @@ function TenantContent({ tenant }) {
         return (
             <div className="app-loading">
                 <i className="fa-solid fa-circle-notch fa-spin app-loading__spin" aria-hidden="true" />
-                <span>Loading SolaStock…</span>
+                <span>{t('shell.loadingApp')}</span>
             </div>
         );
     }
@@ -340,10 +341,10 @@ function TenantContent({ tenant }) {
 function SamplePreviewBanner({ tenant }) {
     return (
         <div className="setup-hint">
-            <strong>Sample Preview — not your organization data.</strong>{' '}
+            <strong>{t('shell.sampleWarning')}</strong>{' '}
             {tenant.authenticated
-                ? 'Open SolaStock from the Solavel launcher to load your organization’s real data.'
-                : (tenant.demo_available ? 'Or click “Use SolaStock Demo Tenant” above to preview with demo data.' : 'Sign in via Solavel to load your real data.')}
+                ? t('shell.sampleLauncherHint')
+                : (tenant.demo_available ? t('shell.sampleDemoHint') : t('shell.sampleSignInHint'))}
         </div>
     );
 }
@@ -363,18 +364,18 @@ function TenantStateBanner({ tenant }) {
     if (tenant.isNoOrg) {
         return (
             <div className="state-screen">
-                <h2>No organization active</h2>
-                <p>{tenant.state_message || 'You are signed in but no Solavel organization is active.'}</p>
-                <p className="muted">Open SolaStock from the Solavel app launcher to select an organization.</p>
+                <h2>{t('shell.noOrganizationTitle')}</h2>
+                <p>{tenant.state_message || t('shell.noOrganizationMessage')}</p>
+                <p className="muted">{t('shell.noOrganizationHint')}</p>
             </div>
         );
     }
     if (tenant.isNoAccess) {
         return (
             <div className="state-screen">
-                <h2>No SolaStock access</h2>
-                <p>{tenant.state_message || 'Your account does not have access to SolaStock for this organization.'}</p>
-                <p className="muted">Ask an administrator to grant you inventory permissions.</p>
+                <h2>{t('shell.noAccessTitle')}</h2>
+                <p>{tenant.state_message || t('shell.noAccessMessage')}</p>
+                <p className="muted">{t('shell.noAccessHint')}</p>
             </div>
         );
     }
@@ -412,10 +413,10 @@ function SetupHero({ tenant }) {
     const isAdminBlocked = readinessBlocked && tenant.can_access;
 
     const features = [
-        ['fa-boxes-stacked', 'Items & warehouses', 'Catalog, multi-warehouse, zones & bins'],
-        ['fa-layer-group', 'Real-time stock', 'One immutable ledger, live balances & costing'],
-        ['fa-truck-fast', 'Purchasing & fulfillment', 'PO → GRN, sales orders, pick/pack/ship'],
-        ['fa-barcode', 'Traceability', 'Lots, serials, expiry & recalls'],
+        ['fa-boxes-stacked', t('shell.featureCatalog'), t('shell.featureCatalogHint')],
+        ['fa-layer-group', t('shell.featureStock'), t('shell.featureStockHint')],
+        ['fa-truck-fast', t('shell.featureFulfillment'), t('shell.featureFulfillmentHint')],
+        ['fa-barcode', t('shell.featureTraceability'), t('shell.featureTraceabilityHint')],
     ];
 
     // When SolaStock isn't enabled yet (needs_activation), the user MUST go
@@ -437,7 +438,7 @@ function SetupHero({ tenant }) {
         try {
             const res = await tenant.provision();
             if (res && res.provisioned === false) {
-                setError(res.message || 'Activation could not finish automatically.');
+                setError(res.message || t('shell.activationAutomaticFailed'));
                 if (res.admin_command) setAdminCmd(res.admin_command);
             }
             // On success the refetched status (live_ready) re-renders the shell.
@@ -445,7 +446,7 @@ function SetupHero({ tenant }) {
             setError(
                 e?.response?.data?.message
                 || e?.message
-                || 'Could not activate SolaStock right now. Please try again.'
+                || t('shell.activationFailed')
             );
         } finally {
             setBusy(false);
@@ -458,26 +459,26 @@ function SetupHero({ tenant }) {
                 <div className="setup-hero__brand">
                     <img src="/inventory/imgs/favicon-solastock.svg" alt="" className="setup-hero__logo"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    <span className="setup-hero__eyebrow">SolaStock · Inventory</span>
+                    <span className="setup-hero__eyebrow">{t('shell.inventoryName')}</span>
                 </div>
 
                 <h1 className="setup-hero__title">
                     {needsActivation
-                        ? `Activate SolaStock for ${tenant.organization_name || 'your organization'}`
+                        ? t('shell.activateTitle', undefined, { organization: tenant.organization_name || t('shell.yourOrganization') })
                         : readinessBlocked
-                            ? `Inventory is not ready for ${tenant.organization_name || 'this workspace'}`
-                            : `Finish setting up SolaStock for ${tenant.organization_name || 'your organization'}`}
+                            ? t('shell.notReadyTitle', undefined, { organization: tenant.organization_name || t('shell.thisWorkspace') })
+                            : t('shell.finishTitle', undefined, { organization: tenant.organization_name || t('shell.yourOrganization') })}
                 </h1>
                 <p className="setup-hero__sub">
                     {needsActivation
-                        ? 'Your organization is connected. Set up SolaStock to start managing stock, purchasing, fulfillment and traceability — choose your organization and plan in a quick guided setup.'
+                        ? t('shell.activateDescription')
                         : readinessBlocked
                             ? (isAdminBlocked
                                 ? (tenant.state === 'schema_failed'
-                                    ? 'SolaStock is enabled, but the schema audit found missing tables, columns, or indexes. Review the schema audit and complete an owner-approved repair before users enter this workspace.'
-                                    : 'SolaStock is enabled, but the tenant database is not ready. Complete owner-approved provisioning or database repair before users enter this workspace.')
-                                : 'SolaStock is temporarily unavailable for this workspace. Please contact an administrator.')
-                            : 'SolaStock is enabled for your organization. This last step initializes your inventory tables so you can start managing stock.'}
+                                    ? t('shell.schemaBlockedDescription')
+                                    : t('shell.databaseBlockedDescription'))
+                                : t('shell.unavailableDescription'))
+                            : t('shell.finishDescription')}
                 </p>
 
                 <div className="setup-hero__features">
@@ -498,8 +499,8 @@ function SetupHero({ tenant }) {
                     {readinessBlocked ? (
                         <div className="setup-error" role="status" style={{ color: '#6f4a00', fontSize: 13, maxWidth: 560 }}>
                             <i className="fa-solid fa-shield-halved" /> {isAdminBlocked
-                                ? 'Next step: run the read-only schema audit from Settings, then provision or repair only after owner approval.'
-                                : 'An administrator must finish SolaStock readiness before this workspace can be used.'}
+                                ? t('shell.adminNextStep')
+                                : t('shell.adminReadiness')}
                         </div>
                     ) : (
                         <button
@@ -509,8 +510,8 @@ function SetupHero({ tenant }) {
                             disabled={needsActivation ? false : (busy || !canInitialize)}
                         >
                             {needsActivation
-                                ? 'Set up SolaStock'
-                                : (busy ? 'Initializing…' : 'Finish setup')}
+                                ? t('shell.startSetup')
+                                : (busy ? t('shell.initializing') : t('shell.finishSetupButton'))}
                         </button>
                     )}
 

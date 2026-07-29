@@ -15,11 +15,14 @@ echo "Root: $root"
 #   shown to administrators; translating it would make the server command wrong.
 # - ItemsPage.jsx `<th>SKU</th>`: internationally recognized inventory
 #   abbreviation; the underlying identifier and its heading remain exact.
+# - AppShell.jsx `SolaStock`: registered product brand in the sidebar.
 if rg -n --glob '*.jsx' --glob '*.js' \
   '<[^>]+>[[:space:]]*[A-Za-z][A-Za-z ,./&+#?()’'"'"'_-]{2,}[[:space:]]*<' \
   "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components" \
+  "$root/resources/js/solastock/layouts" "$root/resources/js/solastock/router" "$root/resources/js/solastock/stores" \
   | rg -v 'OnboardingPage\.jsx:.*<code>migrated_at_inv</code>' \
-  | rg -v 'ItemsPage\.jsx:.*<th>SKU</th>'; then
+  | rg -v 'ItemsPage\.jsx:.*<th>SKU</th>' \
+  | rg -v 'AppShell\.jsx:.*<span className="side-name">SolaStock</span>'; then
   status=1
 fi
 
@@ -27,7 +30,8 @@ fi
 # ordinary text nodes (including portals and native controls).
 if rg -n --glob '*.jsx' --glob '*.js' \
   '(placeholder|title|aria-label)=["'"'"'][A-Za-z][^"'"'"']{2,}["'"'"']' \
-  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components"; then
+  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components" \
+  "$root/resources/js/solastock/layouts" "$root/resources/js/solastock/router" "$root/resources/js/solastock/stores"; then
   status=1
 fi
 

@@ -60,19 +60,21 @@ The coverage scanner has two narrow reviewed exclusions:
 |---|---|---|
 | `SKU` | `ItemsPage.jsx` table heading | Internationally recognized inventory abbreviation; identifier must remain exact |
 | `migrated_at_inv` | `OnboardingPage.jsx` administrator guidance | Immutable tenant migration marker used by the server command |
+| `SolaStock` | `AppShell.jsx` sidebar brand | Registered product name |
 
 No directory, page, component, controller, service, validator, report, or document surface is broadly excluded.
 
 ## Verification log
 
 - `scripts/check-localization-coverage.sh`: exit 0 after scanning React pages/components and PHP controllers/services/requests.
+- Frontend dictionaries: 2,373 EN keys / 2,373 AR keys, no missing or empty values.
 - Backend dictionaries: 143 EN keys / 143 AR keys at the backend-message checkpoint, no missing keys. Report keys were added subsequently with matching parity.
 - Locale and report/export tests: 14 passed, 707 assertions.
 - Sales order tests: 9 passed, 90 assertions.
 - Fulfillment tests: 3 passed, 35 assertions.
 - Counts tests: 4 passed, 30 assertions.
 - Traceability tests: 20 passed, 77 assertions.
-- Latest `npm run build`: passed; chunk-size warning only.
+- Latest `npm run build`: passed (`app-CT22BKnq.js`, `solastock-J9-uGh4Z.css`); chunk-size warning only.
 - Latest `git diff --check`: passed.
 
 ## Remaining release gates
