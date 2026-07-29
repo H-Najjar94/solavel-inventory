@@ -4,6 +4,7 @@ import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useToast } from '../stores/toast.jsx';
 import { Skeleton, EmptyState } from './ui.jsx';
+import { t } from '../i18n/index.js';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
@@ -64,7 +65,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
 
     async function remove(id) {
         setBusy(true);
-        try { await api.deleteItemImage(id); toast.push('Image removed.', 'success'); invalidate(); }
+        try { await api.deleteItemImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); }
         catch (err) { toast.push(err.message, 'error'); }
         finally { setBusy(false); }
     }
@@ -75,7 +76,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
         <>
             <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-                {busy && progress ? `Uploading ${progress.done}/${progress.total}…` : (images.length ? '+ Add images' : 'Upload images')}
+                {busy && progress ? t('media.uploading', 'Uploading :done/:total…', progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadImages'))}
             </button>
         </>
     );
@@ -83,7 +84,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
     if (!images.length) {
         return (
             <div className="item-gallery-empty">
-                <EmptyState title="No images yet"
+                <EmptyState title={t('media.noImages')}
                     hint={canManage ? 'Upload one or more product photos (JPG, PNG or WEBP, up to 5 MB each). Stored privately.' : 'No product photos have been added for this item.'}
                     action={uploadBtn} />
             </div>
@@ -96,11 +97,11 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
                 {images.map((img) => (
                     <figure key={img.id} className={`gallery-cell ${img.is_primary ? 'gallery-cell--primary' : ''}`}>
                         <img src={img.url} alt="" loading="lazy" />
-                        {img.is_primary && <span className="gallery-primary-badge">Primary</span>}
+                        {img.is_primary && <span className="gallery-primary-badge">{t('media.primary')}</span>}
                         {canManage && (
                             <div className="gallery-actions">
-                                {!img.is_primary && <button className="gallery-act" title="Set primary" disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
-                                <button className="gallery-act gallery-act--danger" title="Delete" disabled={busy} onClick={() => remove(img.id)}>🗑</button>
+                                {!img.is_primary && <button className="gallery-act" title={t('media.setPrimary')} disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
+                                <button className="gallery-act gallery-act--danger" title={t('delete')} disabled={busy} onClick={() => remove(img.id)}>🗑</button>
                             </div>
                         )}
                     </figure>

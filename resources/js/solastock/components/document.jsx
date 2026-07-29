@@ -1,34 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmModal } from './ui.jsx';
+import { t } from '../i18n/index.js';
 
 const STATUS = {
-    draft: ['Draft', 'badge--muted'],
-    posted: ['Posted', 'badge--live'],
-    reversed: ['Reversed', 'badge--demo'],
-    cancelled: ['Cancelled', 'badge--muted'],
-    approved: ['Approved', 'badge--live'],
-    partially_received: ['Partially received', 'badge--demo'],
-    received: ['Received', 'badge--live'],
-    in_transit: ['In transit', 'badge--demo'],
-    counting: ['Counting', 'badge--demo'],
-    review: ['In review', 'badge--demo'],
+    draft: ['document.draft', 'badge--muted'], posted: ['document.posted', 'badge--live'], reversed: ['document.reversed', 'badge--demo'], cancelled: ['document.cancelled', 'badge--muted'], approved: ['document.approved', 'badge--live'], partially_received: ['document.partiallyReceived', 'badge--demo'], received: ['document.received', 'badge--live'], in_transit: ['document.inTransit', 'badge--demo'], counting: ['document.counting', 'badge--demo'], review: ['document.review', 'badge--demo'],
     // Sales fulfillment
-    confirmed: ['Confirmed', 'badge--demo'],
-    partially_reserved: ['Partially reserved', 'badge--demo'],
-    reserved: ['Reserved', 'badge--demo'],
-    picking: ['Picking', 'badge--demo'],
-    partially_picked: ['Partially picked', 'badge--demo'],
-    picked: ['Picked', 'badge--demo'],
-    packing: ['Packing', 'badge--demo'],
-    packed: ['Packed', 'badge--demo'],
-    partially_shipped: ['Partially shipped', 'badge--demo'],
-    shipped: ['Shipped', 'badge--live'],
+    confirmed: ['document.confirmed', 'badge--demo'], partially_reserved: ['document.partiallyReserved', 'badge--demo'], reserved: ['document.reserved', 'badge--demo'], picking: ['document.picking', 'badge--demo'], partially_picked: ['document.partiallyPicked', 'badge--demo'], picked: ['document.picked', 'badge--demo'], packing: ['document.packing', 'badge--demo'], packed: ['document.packed', 'badge--demo'], partially_shipped: ['document.partiallyShipped', 'badge--demo'], shipped: ['document.shipped', 'badge--live'],
 };
 
 export function DocumentStatusBadge({ status }) {
     const [label, cls] = STATUS[status] ?? [status, 'badge--muted'];
-    return <span className={`badge ${cls}`}>{label}</span>;
+    return <span className={`badge ${cls}`}>{t(label, status)}</span>;
 }
 
 export function SourceDocumentLink({ sourceType, sourceId, sourceDisplay, sourceRoute }) {
@@ -67,7 +50,7 @@ export function FulfillmentProgressStepper({ status }) {
                 return (
                     <li key={step} className={`fulfillment-step fulfillment-step--${state}`}>
                         <span className="fulfillment-step__dot">{i + 1}</span>
-                        <span className="fulfillment-step__label">{step.charAt(0).toUpperCase() + step.slice(1)}</span>
+                        <span className="fulfillment-step__label">{t(`document.${step}`, step)}</span>
                     </li>
                 );
             })}
@@ -130,7 +113,7 @@ export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, 
                 </thead>
                 <tbody>
                     {lines.length === 0 && (
-                        <tr><td colSpan={columns.length + (readOnly ? 0 : 1)} className="muted">No lines yet.</td></tr>
+                        <tr><td colSpan={columns.length + (readOnly ? 0 : 1)} className="muted">{t('document.noLines')}</td></tr>
                     )}
                     {lines.map((line, i) => (
                         <tr key={i} className={errors[i] ? 'row--error' : ''}>
@@ -151,10 +134,10 @@ export function DocumentActions({ status, canManage, onSave, onPost, onReverse, 
     return (
         <div className="doc-actions">
             {extra}
-            {isDraft && onSave && <button className="btn" disabled={!canManage || saving} onClick={onSave}>{saving ? 'Saving…' : 'Save draft'}</button>}
-            {isDraft && onApprove && <button className="btn btn--primary" disabled={!canManage} onClick={onApprove}>Approve</button>}
+            {isDraft && onSave && <button className="btn" disabled={!canManage || saving} onClick={onSave}>{saving ? t('document.saving') : t('document.saveDraft')}</button>}
+            {isDraft && onApprove && <button className="btn btn--primary" disabled={!canManage} onClick={onApprove}>{t('document.approve')}</button>}
             {isDraft && onPost && <button className="btn btn--primary" disabled={!canManage} onClick={onPost}>{postLabel}</button>}
-            {isPosted && onReverse && <button className="btn btn--danger" disabled={!canManage} onClick={onReverse}>Reverse</button>}
+            {isPosted && onReverse && <button className="btn btn--danger" disabled={!canManage} onClick={onReverse}>{t('document.reverse')}</button>}
         </div>
     );
 }
@@ -186,7 +169,7 @@ export function ConfirmReverseModal({ open, onConfirm, onCancel, name = 'documen
 }
 
 export function LedgerPreview({ rows }) {
-    if (!rows || rows.length === 0) return <p className="muted">No ledger entries yet. They appear here after posting.</p>;
+    if (!rows || rows.length === 0) return <p className="muted">{t('document.noLedger')}</p>;
     return (
         <table className="data-table">
             <thead><tr><th>Date</th><th>Item</th><th>WH</th><th>Dir</th><th>Qty</th><th>Unit cost</th><th>Total</th><th>Running qty</th></tr></thead>
@@ -199,7 +182,7 @@ export function LedgerPreview({ rows }) {
 }
 
 export function AuditTimeline({ events }) {
-    if (!events || events.length === 0) return <p className="muted">No audit events recorded.</p>;
+    if (!events || events.length === 0) return <p className="muted">{t('document.noAudit')}</p>;
     return (
         <ul className="audit-timeline">
             {events.map((e, i) => (
