@@ -16,10 +16,11 @@ import * as transfers from './transfers.js';
 import * as reports from './reports.js';
 import * as sharedDocuments from './sharedDocuments.js';
 import * as returns from './returns.js';
+import * as errors from './errors.js';
 
 export const dictionaries = {
-  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, transfers.en, sales.en, returns.en, traceability.en, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en, reports.en, sharedDocuments.en),
-  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, transfers.ar, sales.ar, returns.ar, traceability.ar, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar, reports.ar, sharedDocuments.ar),
+  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, transfers.en, sales.en, returns.en, traceability.en, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en, reports.en, sharedDocuments.en, errors.en),
+  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, transfers.ar, sales.ar, returns.ar, traceability.ar, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar, reports.ar, sharedDocuments.ar, errors.ar),
 };
 
 // English source phrases used by page islands. Keeping this separate from
