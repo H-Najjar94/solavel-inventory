@@ -12,6 +12,27 @@ import { useToast } from '../stores/toast.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { openingStockT } from '../i18n/openingStock.js';
 
+const requiredCsvColumns = ['sku', 'name', 'quantity', 'unit_cost'];
+const optionalCsvColumns = ['lot_code', 'expiry_date', 'bin_id'];
+
+function CsvColumnList({ columns, t }) {
+    return columns.map((column, index) => (
+        <React.Fragment key={column}>
+            {index > 0 && '، '}
+            <span>{t(`openingStock.csvColumn.${column}`)} (<code dir="ltr"><bdi>{column}</bdi></code>)</span>
+        </React.Fragment>
+    ));
+}
+
+function CsvColumnsHelp({ t }) {
+    return (
+        <div className="muted">
+            <p><strong>{t('openingStock.csvRequiredColumns')}:</strong>{' '}<CsvColumnList columns={requiredCsvColumns} t={t} />.</p>
+            <p><strong>{t('openingStock.csvOptionalColumns')}:</strong>{' '}<CsvColumnList columns={optionalCsvColumns} t={t} />.</p>
+        </div>
+    );
+}
+
 export default function OpeningStockPage() {
     const { locale } = useI18n();
     const t = (key, params) => openingStockT(locale, key, params);
@@ -60,7 +81,7 @@ export default function OpeningStockPage() {
                 </div>
                 <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label={t('openingStock.csvInput')} hidden onChange={importCsv} />
                 <button className="btn btn--primary" disabled={busy || !importState.warehouse_id} onClick={() => fileRef.current?.click()}>{busy ? t('openingStock.importing') : t('openingStock.importCsv')}</button>
-                <p className="muted" dir="auto">{t('openingStock.csvColumns')}</p>
+                <CsvColumnsHelp t={t} />
             </div>}
             {rows.length === 0 ? <EmptyState title={t('openingStock.emptyTitle')} hint={t('openingStock.emptyHint')} /> : (
                 <table className="data-table"><thead><tr><th>{t('openingStock.number')}</th><th>{t('openingStock.date')}</th><th>{t('openingStock.warehouseShort')}</th><th>{t('openingStock.status')}</th><th>{t('openingStock.value')}</th></tr></thead>
