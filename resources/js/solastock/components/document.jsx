@@ -61,24 +61,24 @@ export function FulfillmentProgressStepper({ status }) {
 /** Reservation coverage badge: reserved vs ordered. */
 export function ReservationStatusBadge({ reserved = 0, ordered = 0 }) {
     const r = Number(reserved); const o = Number(ordered);
-    let label = 'None'; let cls = 'badge--muted';
-    if (o > 0 && r >= o) { label = 'Fully reserved'; cls = 'badge--live'; }
-    else if (r > 0) { label = `Partial (${r}/${o})`; cls = 'badge--demo'; }
-    return <span className={`badge ${cls}`} title={`${r} of ${o} reserved`}>{label}</span>;
+    let label = t('document.reservation.none'); let cls = 'badge--muted';
+    if (o > 0 && r >= o) { label = t('document.reservation.full'); cls = 'badge--live'; }
+    else if (r > 0) { label = t('document.reservation.partial', undefined, { reserved: r, ordered: o }); cls = 'badge--demo'; }
+    return <span className={`badge ${cls}`} title={t('document.reservation.title', undefined, { reserved: r, ordered: o })}>{label}</span>;
 }
 
 /** Pick → Pack → Ship timeline from a sales order's per-step quantities. */
 export function PickPackShipTimeline({ picked = 0, packed = 0, shipped = 0, ordered = 0 }) {
     const steps = [
-        { label: 'Picked', qty: picked }, { label: 'Packed', qty: packed }, { label: 'Shipped', qty: shipped },
+        { key: 'picked', qty: picked }, { key: 'packed', qty: packed }, { key: 'shipped', qty: shipped },
     ];
     return (
         <ul className="ppst">
             {steps.map((s) => {
                 const done = Number(ordered) > 0 && Number(s.qty) >= Number(ordered);
                 return (
-                    <li key={s.label} className={done ? 'ppst__step ppst__step--done' : 'ppst__step'}>
-                        <span className="ppst__label">{s.label}</span>
+                    <li key={s.key} className={done ? 'ppst__step ppst__step--done' : 'ppst__step'}>
+                        <span className="ppst__label">{t(`document.${s.key}`)}</span>
                         <span className="ppst__qty">{s.qty}{Number(ordered) > 0 ? ` / ${ordered}` : ''}</span>
                     </li>
                 );
@@ -101,7 +101,7 @@ export function DocumentTotals({ rows }) {
  * Generic line editor table. `columns` = [{ key, label, render(line, set, i), width? }].
  * Read-only mode hides add/remove and disables inputs (callers pass disabled cols).
  */
-export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel = 'Add line', errors = {} }) {
+export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel, errors = {} }) {
     return (
         <div className="doc-lines">
             <table className="data-table">
@@ -123,12 +123,12 @@ export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, 
                     ))}
                 </tbody>
             </table>
-            {!readOnly && <button type="button" className="btn btn--sm" onClick={onAdd}>+ {addLabel}</button>}
+            {!readOnly && <button type="button" className="btn btn--sm" onClick={onAdd}>+ {addLabel ?? t('document.addLine')}</button>}
         </div>
     );
 }
 
-export function DocumentActions({ status, canManage, onSave, onPost, onReverse, onApprove, saving, postLabel = 'Post', extra }) {
+export function DocumentActions({ status, canManage, onSave, onPost, onReverse, onApprove, saving, postLabel, extra }) {
     const isDraft = status === 'draft';
     const isPosted = status === 'posted';
     return (
@@ -136,16 +136,17 @@ export function DocumentActions({ status, canManage, onSave, onPost, onReverse, 
             {extra}
             {isDraft && onSave && <button className="btn" disabled={!canManage || saving} onClick={onSave}>{saving ? t('document.saving') : t('document.saveDraft')}</button>}
             {isDraft && onApprove && <button className="btn btn--primary" disabled={!canManage} onClick={onApprove}>{t('document.approve')}</button>}
-            {isDraft && onPost && <button className="btn btn--primary" disabled={!canManage} onClick={onPost}>{postLabel}</button>}
+            {isDraft && onPost && <button className="btn btn--primary" disabled={!canManage} onClick={onPost}>{postLabel ?? t('document.post')}</button>}
             {isPosted && onReverse && <button className="btn btn--danger" disabled={!canManage} onClick={onReverse}>{t('document.reverse')}</button>}
         </div>
     );
 }
 
 export function ConfirmPostModal({ open, onConfirm, onCancel, name = 'document' }) {
-    return <ConfirmModal open={open} title={`Post ${name}?`}
-        message="Posting writes stock movements to the canonical ledger and locks this document. This cannot be edited afterwards."
-        confirmLabel="Post" onConfirm={onConfirm} onCancel={onCancel} />;
+    const localizedName = t(`document.kind.${name}`, name);
+    return <ConfirmModal open={open} title={t('document.confirmPostTitle', undefined, { name: localizedName })}
+        message={t('document.confirmPostMessage')}
+        confirmLabel={t('document.post')} onConfirm={onConfirm} onCancel={onCancel} />;
 }
 
 export function ConfirmReverseModal({ open, onConfirm, onCancel, name = 'document' }) {
@@ -154,15 +155,15 @@ export function ConfirmReverseModal({ open, onConfirm, onCancel, name = 'documen
     if (!open) return null;
     return <div className="modal-overlay" onClick={onCancel}>
         <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{`Reverse ${name}?`}</h3>
-            <p>Reversing appends opposite ledger entries from the original source. The original entries remain immutable.</p>
+            <h3>{t('document.confirmReverseTitle', undefined, { name: t(`document.kind.${name}`, name) })}</h3>
+            <p>{t('document.confirmReverseMessage')}</p>
             <label className="field">
-                <span className="field-label">Reason <span className="field-req">*</span></span>
-                <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="Explain why this source document is being reversed" />
+                <span className="field-label">{t('document.reason')} <span className="field-req">*</span></span>
+                <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder={t('document.reversePlaceholder')} />
             </label>
             <div className="modal-actions">
-                <button className="btn" onClick={onCancel}>Cancel</button>
-                <button className="btn btn--danger" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>Reverse</button>
+                <button className="btn" onClick={onCancel}>{t('document.cancel')}</button>
+                <button className="btn btn--danger" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>{t('document.reverse')}</button>
             </div>
         </div>
     </div>;
@@ -172,10 +173,10 @@ export function LedgerPreview({ rows }) {
     if (!rows || rows.length === 0) return <p className="muted">{t('document.noLedger')}</p>;
     return (
         <table className="data-table">
-            <thead><tr><th>Date</th><th>Item</th><th>WH</th><th>Dir</th><th>Qty</th><th>Unit cost</th><th>Total</th><th>Running qty</th></tr></thead>
+            <thead><tr><th>{t('document.date')}</th><th>{t('document.item')}</th><th>{t('document.warehouseShort')}</th><th>{t('document.direction')}</th><th>{t('document.quantity')}</th><th>{t('document.unitCost')}</th><th>{t('document.total')}</th><th>{t('document.runningQuantity')}</th></tr></thead>
             <tbody>{rows.map((r) => (
                 <tr key={r.id}><td>{r.moved_at}</td><td>{r.item_name ?? `#${r.item_id}`}</td><td>{r.warehouse_name ?? `#${r.warehouse_id}`}</td>
-                    <td>{r.direction}</td><td>{r.quantity}</td><td>{r.unit_cost}</td><td>{r.total_cost}</td><td>{r.balance_qty_after}</td></tr>
+                    <td>{t(`document.direction.${r.direction}`, r.direction)}</td><td>{r.quantity}</td><td>{r.unit_cost}</td><td>{r.total_cost}</td><td>{r.balance_qty_after}</td></tr>
             ))}</tbody>
         </table>
     );

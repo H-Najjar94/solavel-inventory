@@ -147,10 +147,10 @@ export function SerialSelector({ itemId, warehouseId, value = [], onChange, expe
     return (
         <div className="serial-selector">
             <span className={countOk ? 'badge badge--live' : 'badge badge--warn'}>
-                {value.length}{expectedQty != null ? ` / ${expectedQty}` : ''} selected
+                {value.length}{expectedQty != null ? ` / ${expectedQty}` : ''} {t('trace.selected')}
             </span>
             <div className="serial-selector__list">
-                {serials.length === 0 && <span className="muted">No available serials.</span>}
+                {serials.length === 0 && <span className="muted">{t('trace.noAvailableSerials')}</span>}
                 {serials.map((s) => (
                     <label key={s.id} className="serial-selector__opt">
                         <input type="checkbox" disabled={disabled} checked={value.includes(s.id)} onChange={() => toggle(s.id)} />
