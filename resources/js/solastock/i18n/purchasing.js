@@ -1,0 +1,2 @@
+export const en = { purchasing: 'Purchasing', purchaseOrders: 'Purchase Orders', goodsReceipts: 'Goods Receipts', purchaseOrder: 'Purchase Order', goodsReceipt: 'Goods Receipt', receipt: 'Receipt', received: 'Received', ordered: 'Ordered', supplier: 'Supplier', reference: 'Reference' };
+export const ar = { purchasing: 'المشتريات', purchaseOrders: 'أوامر الشراء', goodsReceipts: 'إيصالات الاستلام', purchaseOrder: 'أمر شراء', goodsReceipt: 'إيصال استلام', receipt: 'الإيصال', received: 'مستلم', ordered: 'مطلوب', supplier: 'المورد', reference: 'المرجع' };

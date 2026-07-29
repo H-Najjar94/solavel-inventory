@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 
 export default class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -14,9 +15,9 @@ export default class ErrorBoundary extends React.Component {
         if (this.state.error) {
             return (
                 <div className="error-screen">
-                    <h1>Something went wrong</h1>
+                    <h1>{t('common.error.title')}</h1>
                     <p>{this.state.error.message}</p>
-                    <button onClick={() => window.location.reload()}>Reload</button>
+                    <button onClick={() => window.location.reload()}>{t('common.error.reload')}</button>
                 </div>
             );
         }

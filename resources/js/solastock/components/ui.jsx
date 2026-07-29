@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { t } from '../i18n/index.js';
 
 // ── Breadcrumbs ──
 export function Breadcrumbs({ items }) {
@@ -25,7 +26,7 @@ export function Skeleton({ rows = 5 }) {
 }
 
 // ── Empty state ──
-export function EmptyState({ title = 'Nothing here yet', hint, action }) {
+export function EmptyState({ title = t('common.empty'), hint, action }) {
     return (
         <div className="empty-state">
             <div className="empty-state-title">{title}</div>
@@ -49,7 +50,7 @@ export function Tabs({ tabs, active, onChange }) {
 }
 
 // ── Status badge ──
-export function StatusBadge({ active, labels = ['Active', 'Inactive'] }) {
+export function StatusBadge({ active, labels = [t('active'), t('inactive', 'Inactive')] }) {
     return <span className={`badge ${active ? 'badge--live' : 'badge--muted'}`}>{active ? labels[0] : labels[1]}</span>;
 }
 
@@ -65,7 +66,7 @@ export function Field({ label, error, children, required }) {
 }
 
 // ── Confirm modal ──
-export function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', onConfirm, onCancel, danger }) {
+export function ConfirmModal({ open, title, message, confirmLabel = t('confirm'), onConfirm, onCancel, danger }) {
     if (!open) return null;
     return (
         <div className="modal-overlay" onClick={onCancel}>
@@ -73,7 +74,7 @@ export function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', o
                 <h3>{title}</h3>
                 <p>{message}</p>
                 <div className="modal-actions">
-                    <button className="btn" onClick={onCancel}>Cancel</button>
+                    <button className="btn" onClick={onCancel}>{t('common.cancel')}</button>
                     <button className={`btn ${danger ? 'btn--danger' : 'btn--primary'}`} onClick={onConfirm}>{confirmLabel}</button>
                 </div>
             </div>
@@ -82,7 +83,7 @@ export function ConfirmModal({ open, title, message, confirmLabel = 'Confirm', o
 }
 
 // ── Quick-create select: a dropdown with an inline "+ create" option ──
-export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = '— none —', createLabel = 'Create…', error }) {
+export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = '— none —', createLabel = t('common.create'), error }) {
     const [creating, setCreating] = useState(false);
     const [text, setText] = useState('');
 
@@ -98,10 +99,10 @@ export function QuickCreateSelect({ label, value, onChange, options, onCreate, p
         <Field label={label} error={error}>
             {creating ? (
                 <div className="quick-create">
-                    <input className="input" autoFocus value={text} placeholder={`New ${label.toLowerCase()}…`}
+                    <input className="input" autoFocus value={text} placeholder={t('common.newValue', 'New :label…', { label })}
                         onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
-                    <button type="button" className="btn btn--sm btn--primary" onClick={submit}>Add</button>
-                    <button type="button" className="btn btn--sm" onClick={() => setCreating(false)}>Cancel</button>
+                    <button type="button" className="btn btn--sm btn--primary" onClick={submit}>{t('common.add')}</button>
+                    <button type="button" className="btn btn--sm" onClick={() => setCreating(false)}>{t('common.cancel')}</button>
                 </div>
             ) : (
                 <div className="quick-create">
@@ -127,7 +128,7 @@ export function Drawer({ open, title, subtitle, onClose, children, width = 460 }
                         <h3>{title}</h3>
                         {subtitle && <div className="drawer-sub">{subtitle}</div>}
                     </div>
-                    <button className="drawer-close" onClick={onClose} aria-label="Close">×</button>
+                    <button className="drawer-close" onClick={onClose} aria-label={t('common.close')}>×</button>
                 </header>
                 <div className="drawer-body">{children}</div>
             </aside>

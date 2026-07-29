@@ -1,0 +1,2 @@
+export const en = { traceability: 'Traceability', lots: 'Lots / Batches', serials: 'Serial Numbers', recalls: 'Recalls', lot: 'Lot', serial: 'Serial', recall: 'Recall', expiry: 'Expiry', expired: 'Expired', quarantined: 'Quarantined', lifecycle: 'Lifecycle timeline' };
+export const ar = { traceability: 'التتبع', lots: 'التشغيلات / الدفعات', serials: 'الأرقام التسلسلية', recalls: 'الاستدعاءات', lot: 'دفعة', serial: 'رقم تسلسلي', recall: 'استدعاء', expiry: 'تاريخ الانتهاء', expired: 'منتهي', quarantined: 'معزول', lifecycle: 'الخط الزمني لدورة الحياة' };

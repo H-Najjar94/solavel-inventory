@@ -8,6 +8,7 @@ import { TenantProvider } from './stores/tenant.jsx';
 import { ToastProvider } from './stores/toast.jsx';
 import { applyTheme, getTheme } from './stores/theme.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { I18nProvider } from './i18n/context.jsx';
 import './styles/solastock.css';
 
 // Apply persisted theme before first paint (no flash).
@@ -20,15 +21,17 @@ if (el) {
     createRoot(el).render(
         <React.StrictMode>
             <ErrorBoundary>
-                <QueryClientProvider client={queryClient}>
-                    <TenantProvider>
-                        <MetaProvider>
-                            <ToastProvider>
-                                <RouterProvider router={router} />
-                            </ToastProvider>
-                        </MetaProvider>
-                    </TenantProvider>
-                </QueryClientProvider>
+                <I18nProvider>
+                    <QueryClientProvider client={queryClient}>
+                        <TenantProvider>
+                            <MetaProvider>
+                                <ToastProvider>
+                                    <RouterProvider router={router} />
+                                </ToastProvider>
+                            </MetaProvider>
+                        </TenantProvider>
+                    </QueryClientProvider>
+                </I18nProvider>
             </ErrorBoundary>
         </React.StrictMode>
     );

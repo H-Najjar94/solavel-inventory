@@ -1,0 +1,2 @@
+export const en = { admin: 'Admin', settings: 'Settings', solabooks: 'SolaBooks', integrations: 'Integrations', integration: 'Integration', events: 'Events', connected: 'Connected', disconnected: 'Disconnected', healthy: 'Healthy', retry: 'Retry' };
+export const ar = { admin: 'الإدارة', settings: 'الإعدادات', solabooks: 'SolaBooks', integrations: 'التكاملات', integration: 'التكامل', events: 'الأحداث', connected: 'متصل', disconnected: 'غير متصل', healthy: 'سليم', retry: 'إعادة المحاولة' };

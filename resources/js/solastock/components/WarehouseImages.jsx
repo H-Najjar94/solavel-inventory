@@ -4,6 +4,7 @@ import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useToast } from '../stores/toast.jsx';
 import { Skeleton, EmptyState } from './ui.jsx';
+import { t } from '../i18n/index.js';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
@@ -54,7 +55,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
     }
 
     async function makePrimary(id) { setBusy(true); try { await api.setWarehouseImagePrimary(id); invalidate(); } catch (e) { toast.push(e.message, 'error'); } finally { setBusy(false); } }
-    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push('Image removed.', 'success'); invalidate(); } catch (e) { toast.push(e.message, 'error'); } finally { setBusy(false); } }
+    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); } catch (e) { toast.push(e.message, 'error'); } finally { setBusy(false); } }
 
     if (isLoading) return <Skeleton rows={2} />;
 
@@ -62,13 +63,13 @@ export default function WarehouseImages({ warehouseId, canManage }) {
         <>
             <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-                {busy && progress ? `Uploading ${progress.done}/${progress.total}…` : (images.length ? '+ Add images' : 'Upload banner')}
+                {busy && progress ? t('media.uploading', 'Uploading :done/:total…', progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadBanner'))}
             </button>
         </>
     );
 
     if (!images.length) {
-        return <div className="wh-gallery-empty"><EmptyState title="No warehouse image yet"
+        return <div className="wh-gallery-empty"><EmptyState title={t('media.noWarehouseImage')}
             hint={canManage ? 'Upload a wide banner photo of this location (JPG, PNG or WEBP, up to 5 MB). Stored privately.' : 'No photo has been added for this warehouse.'}
             action={uploadBtn} /></div>;
     }
@@ -81,11 +82,11 @@ export default function WarehouseImages({ warehouseId, canManage }) {
                     {images.map((img) => (
                         <figure key={img.id} className={`wh-thumb ${img.is_primary ? 'wh-thumb--primary' : ''}`}>
                             <img src={img.url} alt="" loading="lazy" />
-                            {img.is_primary && <span className="gallery-primary-badge">Primary</span>}
+                            {img.is_primary && <span className="gallery-primary-badge">{t('media.primary')}</span>}
                             {canManage && (
                                 <div className="gallery-actions">
-                                    {!img.is_primary && <button className="gallery-act" title="Set primary" disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
-                                    <button className="gallery-act gallery-act--danger" title="Delete" disabled={busy} onClick={() => remove(img.id)}>🗑</button>
+                                    {!img.is_primary && <button className="gallery-act" title={t('media.setPrimary')} disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
+                                    <button className="gallery-act gallery-act--danger" title={t('delete')} disabled={busy} onClick={() => remove(img.id)}>🗑</button>
                                 </div>
                             )}
                         </figure>
@@ -95,7 +96,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
             {canManage && (
                 <div className="item-images-actions">
                     {uploadBtn}
-                    {images.length === 1 && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(primary.id)}>Remove image</button>}
+                    {images.length === 1 && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(primary.id)}>{t('media.removeImage')}</button>}
                     <div className="item-images-hint">JPG, PNG or WEBP · up to 5 MB each · stored privately · ★ sets the banner.</div>
                 </div>
             )}

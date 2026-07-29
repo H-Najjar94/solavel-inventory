@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { visibleNav } from '../router/nav.js';
 import { useMeta } from '../stores/meta.jsx';
 import { useTenant } from '../stores/tenant.jsx';
 import { getTheme, toggleTheme } from '../stores/theme.js';
+import { getLocale, t } from '../i18n/index.js';
 
 // Group nav items by their `group` key, preserving first-seen order (Finance-style
 // sectioned sidebar).
@@ -15,6 +16,17 @@ function groupNav(items) {
     }
     return out;
 }
+
+const NAV_LABELS = {
+    dashboard: 'dashboard', items: 'items', warehouses: 'warehouses', balances: 'currentStock',
+    ledger: 'stockLedger', opening: 'openingStock', adjustments: 'adjustments', transfers: 'transfers',
+    counts: 'counts', scanner: 'scanner', suppliers: 'suppliers', 'purchase-orders': 'purchaseOrders',
+    'goods-receipts': 'goodsReceipts', customers: 'customers', 'sales-orders': 'salesOrders',
+    'pick-lists': 'picking', packs: 'packing', shipments: 'shipments', 'sales-returns': 'salesReturns',
+    traceability: 'traceability', lots: 'lots', serials: 'serials', recalls: 'recalls', reports: 'reports',
+    integration: 'solabooks', settings: 'settings',
+};
+const GROUP_LABELS = { Catalog: 'catalog', Stock: 'stock', Operations: 'operations', Purchasing: 'purchasing', 'Sales / Fulfillment': 'sales', Traceability: 'traceability', Insights: 'insights', Admin: 'admin' };
 
 // Top-bar organization switcher. Lists the signed-in user's organizations and
 // switches the active org/client in the SSO session (POST /tenant/select-org),
@@ -114,22 +126,33 @@ function OrgSwitcher({ tenant }) {
 export default function AppShell() {
     const meta = useMeta();
     const tenant = useTenant();
+    const location = useLocation();
     const nav = visibleNav(meta.permissions);
+    const primaryNav = useMemo(() => nav.filter((item) => item.key === 'dashboard'), [nav]);
+    const groupedNav = useMemo(() => groupNav(nav.filter((item) => item.key !== 'dashboard')), [nav]);
+    const activeGroup = Object.entries(groupedNav).find(([, items]) => (
+        items.some((item) => location.pathname === item.path
+            || (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`)))
+    ))?.[0] ?? null;
     const [theme, setTheme] = useState(getTheme());
     const [collapsed, setCollapsed] = useState(false);
+    const [openGroup, setOpenGroup] = useState(activeGroup);
+    const locale = getLocale();
 
-    const badgeClass = tenant.isLive ? 'badge--live'
-        : tenant.isDemo ? 'badge--demo'
+    useEffect(() => {
+        setOpenGroup(activeGroup);
+    }, [activeGroup]);
+
+    const badgeClass = tenant.isDemo ? 'badge--demo'
         : tenant.isSetup ? 'badge--warn' : 'badge--warn';
 
     const dataChip = {
-        real: ['Real data', 'badge--live'],
         demo: ['Demo data', 'badge--demo'],
         setup: ['Setup required', 'badge--warn'],
         sample: ['Sample preview', 'badge--warn'],
         no_organization: ['No organization', 'badge--warn'],
         no_access: ['No access', 'badge--warn'],
-    }[tenant.dataState] ?? ['Sample preview', 'badge--warn'];
+    }[tenant.dataState] ?? null;
 
     return (
         <div className="app">
@@ -149,23 +172,53 @@ export default function AppShell() {
                     </nav>
                 ) : tenant.ready ? (
                     <nav className="side-nav">
-                        {Object.entries(groupNav(nav)).map(([group, items]) => (
-                            <div className="side-group" key={group}>
-                                {!collapsed && <div className="side-group__label">{group}</div>}
-                                {items.map((n) => (
+                        <div className="side-primary">
+                            {primaryNav.map((item) => (
+                                <NavLink
+                                    key={item.key}
+                                    to={item.path}
+                                    end
+                                    className={({ isActive }) => `side-link side-link--primary ${isActive ? 'is-active' : ''}`}
+                                    title={t(NAV_LABELS[item.key], item.label)}
+                                >
+                                    <i className={`side-link-icon ${item.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
+                                    {!collapsed && <span className="side-link-label">{t(NAV_LABELS[item.key], item.label)}</span>}
+                                </NavLink>
+                            ))}
+                        </div>
+                        {Object.entries(groupedNav).map(([group, items]) => {
+                            const isOpen = collapsed || openGroup === group;
+
+                            return (
+                            <div className={`side-group ${isOpen ? 'is-open' : ''}`} key={group}>
+                                {!collapsed && (
+                                    <button
+                                        type="button"
+                                        className="side-group__toggle"
+                                        aria-expanded={isOpen}
+                                        onClick={() => setOpenGroup((current) => current === group ? null : group)}
+                                    >
+                                        <span>{t(GROUP_LABELS[group], group)}</span>
+                                        <i className={`fa-solid fa-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden="true" />
+                                    </button>
+                                )}
+                                <div className="side-group__items">
+                                  {items.map((n) => (
                                     <NavLink
                                         key={n.key}
                                         to={n.path}
                                         end={n.path === '/dashboard'}
                                         className={({ isActive }) => `side-link ${isActive ? 'is-active' : ''}`}
-                                        title={n.label}
+                                        title={t(NAV_LABELS[n.key], n.label)}
                                     >
                                         <i className={`side-link-icon ${n.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
-                                        {!collapsed && <span className="side-link-label">{n.label}</span>}
+                                        {!collapsed && <span className="side-link-label">{t(NAV_LABELS[n.key], n.label)}</span>}
                                     </NavLink>
-                                ))}
+                                  ))}
+                                </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </nav>
                 ) : (
                     <nav className="side-nav side-nav--locked">
@@ -190,10 +243,12 @@ export default function AppShell() {
                     <div className="topbar-right">
                         {tenant.loading ? (
                             <span className="badge badge--muted">Loading…</span>
-                        ) : (<>
-                            <span className={`badge ${dataChip[1]}`}
-                                title={`Data mode: ${tenant.dataState}`}>{dataChip[0]}</span>
-                            <span className={`badge ${badgeClass}`} title="Active tenant">{tenant.badge}</span>
+                        ) : !tenant.isLive && (<>
+                            {dataChip && (
+                                <span className={`badge ${dataChip[1]}`}
+                                    title={`Data mode: ${tenant.dataState}`}>{dataChip[0]}</span>
+                            )}
+                            <span className={`badge ${badgeClass}`} title="Tenant status">{tenant.badge}</span>
                         </>)}
                         {/* Demo is a SECONDARY preview option, only offered when there is no live org. */}
                         {!tenant.loading && tenant.mode === 'none' && !tenant.authenticated && tenant.demo_available && (
@@ -210,6 +265,14 @@ export default function AppShell() {
                             title="Toggle light / dark"
                         >
                             {theme === 'dark' ? '☾' : '☀'}
+                        </button>
+                        <button
+                            type="button"
+                            className="language-toggle"
+                            onClick={() => { window.location.href = `${window.location.pathname}?locale=${locale === 'ar' ? 'en' : 'ar'}`; }}
+                            title={t('language')}
+                        >
+                            {locale === 'ar' ? 'EN' : 'عربي'}
                         </button>
                         {!tenant.loading && (
                             <span className="user-menu" title={tenant.user?.email || 'Account'}>
