@@ -128,7 +128,7 @@ export default function ReportsPage() {
                 <h2>{t('reports.scheduledDelivery')}</h2>
                 <form className="fg2" onSubmit={saveSchedule}>
                     <Field label={t('reports.scheduleName')}><input className="input" value={schedule.name} onChange={(e) => setSchedule({ ...schedule, name: e.target.value })} placeholder={t('reports.weeklyValuation')} /></Field>
-                    <Field label={t('reports.recipients')}><input className="input" value={schedule.recipients} onChange={(e) => setSchedule({ ...schedule, recipients: e.target.value })} placeholder="ops@example.com, finance@example.com" /></Field>
+                    <Field label={t('reports.recipients')}><input className="input" value={schedule.recipients} onChange={(e) => setSchedule({ ...schedule, recipients: e.target.value })} placeholder={t('reports.recipientsPlaceholder')} dir="ltr" /></Field>
                     <Field label={t('reports.frequency')}><select className="input" value={schedule.frequency} onChange={(e) => setSchedule({ ...schedule, frequency: e.target.value })}><option value="daily">{t('reports.daily')}</option><option value="weekly">{t('reports.weekly')}</option><option value="monthly">{t('reports.monthly')}</option></select></Field>
                     <Field label={t('reports.format')}><select className="input" value={schedule.format} onChange={(e) => setSchedule({ ...schedule, format: e.target.value })}><option value="csv">{t('reports.formatCsv')}</option><option value="xlsx">{t('reports.formatXlsx')}</option><option value="pdf">{t('reports.formatPdf')}</option></select></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{t('reports.saveSchedule')}</button></div>

@@ -30,6 +30,8 @@ export const en = {
     'ledger.before': 'Before',
     'ledger.after': 'After',
     'ledger.system': 'System',
+    'ledger.actionPlaceholder': 'item.updated',
+    'ledger.entityPlaceholder': 'item',
 };
 
 export const ar = {
@@ -64,4 +66,6 @@ export const ar = {
     'ledger.before': 'قبل',
     'ledger.after': 'بعد',
     'ledger.system': 'النظام',
+    'ledger.actionPlaceholder': 'item.updated',
+    'ledger.entityPlaceholder': 'item',
 };

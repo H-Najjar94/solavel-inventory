@@ -8,6 +8,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
+        "test:localization": "node scripts/check-i18n-dictionaries.mjs && bash scripts/check-localization-coverage.sh",
         "test:browser": "playwright test"
     },
     "devDependencies": {

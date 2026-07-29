@@ -6,7 +6,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge, SourceDocumentLink } from '../components/document.jsx';
-import { useSettingsTranslation } from '../i18n/settingsPages.js';
+import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
 const EVENT_TYPES = [
     '', 'opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed',
