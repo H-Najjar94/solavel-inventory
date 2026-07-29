@@ -7,10 +7,11 @@ import * as sales from './sales.js';
 import * as traceability from './traceability.js';
 import * as insights from './insights.js';
 import * as admin from './admin.js';
+import * as adjustment from './adjustments.js';
 
 export const dictionaries = {
-  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, operations.en, purchasing.en, sales.en, traceability.en, insights.en, admin.en),
-  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, operations.ar, purchasing.ar, sales.ar, traceability.ar, insights.ar, admin.ar),
+  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, stock.en, stock.warehouseEn, stock.warehouseDetailEn, operations.en, purchasing.en, sales.en, traceability.en, insights.en, admin.en, adjustment.en),
+  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, operations.ar, purchasing.ar, sales.ar, traceability.ar, insights.ar, admin.ar, adjustment.ar),
 };
 
 // English source phrases used by page islands. Keeping this separate from

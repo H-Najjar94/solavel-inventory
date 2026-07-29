@@ -10,6 +10,7 @@ import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, BinPicker, QuantityInput, MoneyInput, WarehousePicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, LotSelector, SerialSelector, TraceabilityRequiredBadge, FefoHint } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
+import { t } from '../i18n/index.js';
 
 const emptyLine = () => ({ direction: 'increase', item_id: null, bin_id: null, quantity: '', unit_cost: '', lot_id: null, lot_code: '', expiry_date: '', serials: [], serial_ids: [] });
 
@@ -29,7 +30,7 @@ export default function AdjustmentFormPage() {
     useEffect(() => {
         if (isEdit && existing.data?.adjustment) {
             const a = existing.data.adjustment;
-            if (a.status !== 'draft') { toast.push('Posted documents are read-only.', 'error'); nav(`/adjustments/${id}`); return; }
+            if (a.status !== 'draft') { toast.push(t('adjustment.readOnly'), 'error'); nav(`/adjustments/${id}`); return; }
             setHeader({ adjustment_number: a.adjustment_number, adjustment_date: a.adjustment_date, warehouse_id: a.warehouse_id, reason_code: a.reason_code ?? '', notes: a.notes ?? '' });
             setLines((a.lines ?? []).map((l) => ({ direction: l.direction, item_id: l.item_id, bin_id: l.bin_id, quantity: l.quantity, unit_cost: l.unit_cost })));
         }
@@ -64,35 +65,35 @@ export default function AdjustmentFormPage() {
                         };
                     }),
             };
-            if (payload.lines.length === 0) { toast.push('Add at least one line.', 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { toast.push(t('adjustment.addLineRequired'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateAdjustment(id, payload) : await api.createAdjustment(payload);
             const docId = res?.data?.id ?? id;
-            if (post) { await api.postAdjustment(docId); toast.push('Adjustment posted.', 'success'); }
-            else toast.push(isEdit ? 'Draft updated.' : 'Draft saved.', 'success');
+            if (post) { await api.postAdjustment(docId); toast.push(t('adjustment.posted'), 'success'); }
+            else toast.push(t(isEdit ? 'adjustment.draftUpdated' : 'adjustment.draftSaved'), 'success');
             qc.invalidateQueries({ queryKey: ['adjustments'] });
             nav(`/adjustments/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || 'Save failed.', 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('adjustment.saveFailed'), 'error'); }
         finally { setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'dir', label: 'Type', width: 130, render: (l, i) => (
+        { key: 'dir', label: t('adjustment.type'), width: 130, render: (l, i) => (
             <select className="input" value={l.direction} onChange={(e) => setLine(i, { direction: e.target.value })}>
-                <option value="increase">Increase</option><option value="decrease">Decrease</option>
+                <option value="increase">{t('adjustment.direction.increase')}</option><option value="decrease">{t('adjustment.direction.decrease')}</option>
             </select>) },
-        { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
-        { key: 'bin', label: 'Bin', render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'qty', label: 'Quantity', width: 110, render: (l, i) => {
+        { key: 'item', label: t('adjustment.item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'bin', label: t('adjustment.bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
+        { key: 'qty', label: t('adjustment.quantity'), width: 110, render: (l, i) => {
             const serial = tracking.tracksSerial(l.item_id);
             if (serial) {
                 const n = l.direction === 'increase' ? (l.serials ?? []).length : (l.serial_ids ?? []).length;
-                return <span className="muted" title="Quantity = serial count">{n}</span>;
+                return <span className="muted" title={t('adjustment.serialQuantity')}>{n}</span>;
             }
             return <QuantityInput value={l.quantity} onChange={(v) => setLine(i, { quantity: v })} />;
         } },
-        { key: 'trace', label: 'Lot / Serial', render: (l, i) => {
+        { key: 'trace', label: t('adjustment.lotSerial'), render: (l, i) => {
             const t = tracking.trackingOf(l.item_id);
             if (!t.tracking_type || t.tracking_type === 'none') return <span className="muted">—</span>;
             const inc = l.direction === 'increase';
@@ -118,44 +119,44 @@ export default function AdjustmentFormPage() {
                 </div>
             );
         } },
-        { key: 'cost', label: 'Unit cost', width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} disabled={l.direction === 'decrease'} /> },
+        { key: 'cost', label: t('adjustment.unitCost'), width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} disabled={l.direction === 'decrease'} /> },
     ];
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Adjustments', to: '/adjustments' }, { label: isEdit ? 'Edit draft' : 'New' }]} />
-            <header className="page-head"><h1>{isEdit ? 'Edit adjustment' : 'New adjustment'}</h1></header>
+            <Breadcrumbs items={[{ label: t('adjustments'), to: '/adjustments' }, { label: t(isEdit ? 'adjustment.editDraft' : 'adjustment.new') }]} />
+            <header className="page-head"><h1>{t(isEdit ? 'adjustment.editTitle' : 'adjustment.newTitle')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label="Document number" required error={errors.adjustment_number}><input className="input" value={header.adjustment_number} onChange={(e) => setHeader({ ...header, adjustment_number: e.target.value })} /></Field>
-                <Field label="Date" error={errors.adjustment_date}><input className="input" type="date" value={header.adjustment_date} onChange={(e) => setHeader({ ...header, adjustment_date: e.target.value })} /></Field>
-                <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
-                <Field label="Reason code" error={errors.reason_code}>
+                <Field label={t('adjustment.documentNumber')} required error={errors.adjustment_number}><input className="input" value={header.adjustment_number} onChange={(e) => setHeader({ ...header, adjustment_number: e.target.value })} /></Field>
+                <Field label={t('adjustment.date')} error={errors.adjustment_date}><input className="input" type="date" value={header.adjustment_date} onChange={(e) => setHeader({ ...header, adjustment_date: e.target.value })} /></Field>
+                <Field label={t('adjustment.warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
+                <Field label={t('adjustment.reasonCode')} error={errors.reason_code}>
                     {reasonCodes.length > 0 ? (
                         <select className="input" value={header.reason_code} onChange={(e) => setHeader({ ...header, reason_code: e.target.value })} required>
-                            <option value="">Select reason</option>
+                            <option value="">{t('adjustment.selectReason')}</option>
                             {reasonCodes.map((code) => <option key={code.code} value={code.code}>{code.label ?? code.code}</option>)}
                         </select>
                     ) : (
-                        <input className="input" value={header.reason_code} onChange={(e) => setHeader({ ...header, reason_code: e.target.value })} placeholder="e.g. damage, found, cycle_count" />
+                        <input className="input" value={header.reason_code} onChange={(e) => setHeader({ ...header, reason_code: e.target.value })} placeholder={t('adjustment.reasonPlaceholder')} />
                     )}
                 </Field>
-                <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
+                <Field label={t('adjustment.notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
 
             <div className="panel">
-                <h2>Lines</h2>
+                <h2>{t('adjustment.lines')}</h2>
                 <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[
-                    { label: 'Increase value', value: lines.filter((l) => l.direction === 'increase').reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_cost || 0), 0).toFixed(2) },
+                    { label: t('adjustment.increaseValue'), value: lines.filter((l) => l.direction === 'increase').reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_cost || 0), 0).toFixed(2) },
                 ]} />
             </div>
 
             <div className="doc-actions">
-                <button className="btn" onClick={() => nav('/adjustments')}>Cancel</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? 'Saving…' : 'Save draft'}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>Save & post</button>
+                <button className="btn" onClick={() => nav('/adjustments')}>{t('adjustment.cancel')}</button>
+                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('adjustment.saving') : t('adjustment.saveDraft')}</button>
+                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('adjustment.savePost')}</button>
             </div>
         </section>
     );
