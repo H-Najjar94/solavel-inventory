@@ -196,6 +196,14 @@ final class Phase2MappingSafetyTest extends TestCase
                 deleted_at TIMESTAMP NULL
             )'
             );
+            DB::connection('tenant')->statement(
+            'CREATE TABLE accounts (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                organization_id BIGINT UNSIGNED NOT NULL,
+                is_active TINYINT(1) NOT NULL,
+                is_postable TINYINT(1) NOT NULL
+            )'
+            );
             DB::connection('tenant')->table('organizations')->insert([
             'id' => 14,
             'central_org_id' => TenantTestManager::ORG_A,
@@ -204,6 +212,27 @@ final class Phase2MappingSafetyTest extends TestCase
             ['id' => 501, 'organization_id' => 14, 'sku' => 'PH2-EXACT', 'barcode' => null, 'name' => 'Exact'],
             ['id' => 502, 'organization_id' => 14, 'sku' => 'BOOK-A', 'barcode' => null, 'name' => 'Ambiguous'],
             ['id' => 503, 'organization_id' => 14, 'sku' => 'BOOK-B', 'barcode' => null, 'name' => 'Ambiguous'],
+        ]);
+        DB::connection('tenant')->table('accounts')->insert([
+            'id' => 701, 'organization_id' => 14, 'is_active' => 1, 'is_postable' => 1,
+        ]);
+        DB::connection('tenant')->table('integration_account_mappings')->insert([
+            [
+                'organization_id' => TenantTestManager::ORG_A,
+                'integration' => 'solabooks',
+                'mapping_type' => 'inventory_asset',
+                'solabooks_account_id' => '701',
+                'status' => 'mapped',
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'organization_id' => TenantTestManager::ORG_A,
+                'integration' => 'solabooks',
+                'mapping_type' => 'cogs',
+                'solabooks_account_id' => '701',
+                'status' => 'mapped',
+                'created_at' => now(), 'updated_at' => now(),
+            ],
         ]);
         Item::query()->insert([
             [
@@ -252,6 +281,11 @@ final class Phase2MappingSafetyTest extends TestCase
         );
         $this->assertContains('ambiguous_match', array_column($report['results'], 'classification'));
         $this->assertContains('missing_finance_record', array_column($report['results'], 'classification'));
+        $this->assertSame(
+            2,
+            collect($report['results'])->where('classification', 'conflicting_candidates')->count(),
+            'Many-to-one account-role candidates must remain unresolved.'
+        );
 
         $applied = $service->applyDeterministic($organization->mapping_uuid, $report['manifest_hash']);
         $this->assertSame(1, $applied['created_mappings']);
@@ -271,7 +305,12 @@ final class Phase2MappingSafetyTest extends TestCase
             DB::connection('tenant')->table('integration_master_data_mappings')->delete();
             DB::connection('tenant')->table('integration_organization_mappings')->delete();
             IntegrationSetting::query()->where('organization_id', TenantTestManager::ORG_A)->delete();
+            DB::connection('tenant')->table('integration_account_mappings')
+                ->where('organization_id', TenantTestManager::ORG_A)
+                ->whereIn('mapping_type', ['inventory_asset', 'cogs'])
+                ->delete();
             Item::query()->whereIn('sku', ['PH2-EXACT', 'STOCK-AMB', 'STOCK-MISSING'])->forceDelete();
+            DB::connection('tenant')->statement('DROP TABLE IF EXISTS accounts');
             DB::connection('tenant')->statement('DROP TABLE IF EXISTS inventory_items');
             DB::connection('tenant')->statement('DROP TABLE IF EXISTS organizations');
         }

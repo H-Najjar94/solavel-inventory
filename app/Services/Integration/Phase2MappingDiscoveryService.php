@@ -28,6 +28,26 @@ final class Phase2MappingDiscoveryService
         $results->push(...$this->discoverUnitConversions($mapping));
         $results->push(...$this->discoverAccountRoles($mapping, $existing));
         $results->push(...$this->discoverTaxes($mapping, $existing));
+        $duplicateFinanceTargets = $results
+            ->filter(fn (array $row) => $row['classification'] === 'exact_match'
+                && count($row['solabooks_record_ids']) === 1)
+            ->groupBy(fn (array $row) => $row['entity_type'].'|'.$row['solabooks_record_ids'][0])
+            ->filter(fn (Collection $group) => $group->count() > 1)
+            ->keys()
+            ->flip();
+        $results = $results->map(function (array $row) use ($duplicateFinanceTargets): array {
+            $targetKey = count($row['solabooks_record_ids']) === 1
+                ? $row['entity_type'].'|'.$row['solabooks_record_ids'][0]
+                : null;
+            if ($row['classification'] === 'exact_match'
+                && $targetKey !== null
+                && $duplicateFinanceTargets->has($targetKey)) {
+                $row['classification'] = 'conflicting_candidates';
+                $row['safe_details']['reason'] = 'multiple_solastock_identities_target_one_finance_record';
+            }
+
+            return $row;
+        });
 
         $results = $results
             ->sortBy(fn (array $row) => implode('|', [
