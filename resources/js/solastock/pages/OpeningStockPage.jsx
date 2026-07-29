@@ -9,8 +9,12 @@ import { Breadcrumbs, EmptyState, Field } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
 import { WarehousePicker } from '../components/pickers.jsx';
 import { useToast } from '../stores/toast.jsx';
+import { useI18n } from '../i18n/context.jsx';
+import { openingStockT } from '../i18n/openingStock.js';
 
 export default function OpeningStockPage() {
+    const { locale } = useI18n();
+    const t = (key, params) => openingStockT(locale, key, params);
     const gate = useCanCreate('inventory.manage_opening_stock');
     const toast = useToast();
     const qc = useQueryClient();
@@ -24,14 +28,15 @@ export default function OpeningStockPage() {
         const file = e.target.files?.[0];
         e.target.value = '';
         if (!file || !importState.warehouse_id) {
-            toast.push('Choose a warehouse before importing.', 'error');
+            toast.push(t('openingStock.chooseWarehouse'), 'error');
             return;
         }
         setBusy(true);
         try {
             const res = await api.importOpeningStock(file, { warehouse_id: importState.warehouse_id, post: importState.post ? '1' : '0' });
             await qc.invalidateQueries({ queryKey: ['opening'] });
-            toast.push(`Imported ${res.data?.line_count ?? 0} rows${importState.post ? ' and posted stock.' : '.'}`, 'success');
+            const key = importState.post ? 'openingStock.importedPosted' : 'openingStock.importedDraft';
+            toast.push(t(key, { count: res.data?.line_count ?? 0 }), 'success');
         } catch (err) {
             toast.push(err.message, 'error');
         } finally {
@@ -41,25 +46,25 @@ export default function OpeningStockPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Opening Stock' }]} />
-            <header className="page-head"><h1>Opening Stock</h1>{isMock && <span className="badge badge--warn">sample data</span>}
+            <Breadcrumbs items={[{ label: t('openingStock.title') }]} />
+            <header className="page-head"><h1>{t('openingStock.title')}</h1>{isMock && <span className="badge badge--warn">{t('openingStock.sampleData')}</span>}
                 <Link to="/opening-stock/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>New entry</Link></header>
-            <p className="muted">Posting/reversal delegate to OpeningStockService → the canonical stock ledger. Posted entries are immutable.</p>
+                    title={gate.allowed ? '' : gate.reason}>{t('openingStock.newEntry')}</Link></header>
+            <p className="muted">{t('openingStock.description')}</p>
             {gate.allowed && <div className="panel">
-                <h2>Bulk import</h2>
+                <h2>{t('openingStock.bulkImport')}</h2>
                 <div className="fg2">
-                    <Field label="Warehouse"><WarehousePicker value={importState.warehouse_id} onChange={(v) => setImportState({ ...importState, warehouse_id: v })} /></Field>
-                    <Field label="Posting"><label className="check-inline"><input type="checkbox" checked={importState.post} onChange={(e) => setImportState({ ...importState, post: e.target.checked })} /> Post after import</label></Field>
+                    <Field label={t('openingStock.warehouse')}><WarehousePicker value={importState.warehouse_id} onChange={(v) => setImportState({ ...importState, warehouse_id: v })} /></Field>
+                    <Field label={t('openingStock.posting')}><label className="check-inline"><input type="checkbox" checked={importState.post} onChange={(e) => setImportState({ ...importState, post: e.target.checked })} /> {t('openingStock.postAfterImport')}</label></Field>
                 </div>
-                <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={importCsv} />
-                <button className="btn btn--primary" disabled={busy || !importState.warehouse_id} onClick={() => fileRef.current?.click()}>{busy ? 'Importing...' : 'Import CSV'}</button>
-                <p className="muted">CSV columns: sku, name, quantity, unit_cost, optional lot_code, expiry_date, bin_id.</p>
+                <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label={t('openingStock.csvInput')} hidden onChange={importCsv} />
+                <button className="btn btn--primary" disabled={busy || !importState.warehouse_id} onClick={() => fileRef.current?.click()}>{busy ? t('openingStock.importing') : t('openingStock.importCsv')}</button>
+                <p className="muted" dir="auto">{t('openingStock.csvColumns')}</p>
             </div>}
-            {rows.length === 0 ? <EmptyState title="No opening-stock entries" hint="Create one to set starting quantities." /> : (
-                <table className="data-table"><thead><tr><th>Number</th><th>Date</th><th>WH</th><th>Status</th><th>Value</th></tr></thead>
-                <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}>{e.entry_number}</Link></td><td>{e.opening_date}</td><td>{e.warehouse_name ?? `#${e.warehouse_id}`}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table>
+            {rows.length === 0 ? <EmptyState title={t('openingStock.emptyTitle')} hint={t('openingStock.emptyHint')} /> : (
+                <table className="data-table"><thead><tr><th>{t('openingStock.number')}</th><th>{t('openingStock.date')}</th><th>{t('openingStock.warehouseShort')}</th><th>{t('openingStock.status')}</th><th>{t('openingStock.value')}</th></tr></thead>
+                <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}><bdi>{e.entry_number}</bdi></Link></td><td>{e.opening_date}</td><td>{e.warehouse_name ?? <bdi>#{e.warehouse_id}</bdi>}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table>
             )}
         </section>
     );
