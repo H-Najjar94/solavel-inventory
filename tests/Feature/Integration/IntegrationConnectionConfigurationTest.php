@@ -7,6 +7,7 @@ use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\IntegrationTaxMapping;
 use App\Models\Tenant\InventorySetting;
 use App\Services\Integration\IntegrationEvents;
+use App\Services\Integration\IntegrationStatusService;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
@@ -16,6 +17,29 @@ use Tests\Traits\TenantAware;
 class IntegrationConnectionConfigurationTest extends TestCase
 {
     use TenantAware;
+
+    #[Test]
+    public function shared_solabooks_workspace_is_reported_as_read_only_connected_without_delivery_credentials(): void
+    {
+        $this->useTenantA();
+        IntegrationSetting::query()->where('integration', IntegrationEvents::INTEGRATION)->delete();
+        $financeOrgId = 41;
+        $service = new class($financeOrgId) extends IntegrationStatusService {
+            public function __construct(private int $financeOrgId) {}
+
+            protected function sharedFinanceOrganizationId(int $orgId): ?int
+            {
+                return $this->financeOrgId;
+            }
+        };
+
+        $status = $service->status(TenantTestManager::ORG_A);
+
+        $this->assertSame('connected_readonly', $status['mode']);
+        $this->assertTrue($status['workspace_connected']);
+        $this->assertSame($financeOrgId, $status['solabooks_organization_id']);
+        $this->assertFalse($status['delivery_configured']);
+    }
 
     #[Test]
     public function owner_configuration_encrypts_the_key_and_status_never_returns_it(): void
