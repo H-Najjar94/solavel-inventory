@@ -106,7 +106,7 @@ test('forms, details, exports, SSO handoff and organization switching preserve l
         'sales-orders/new', 'sales-returns/new', 'recalls/new',
     ];
     for (const route of forms) {
-        await page.goto(`/inventory/${route}`);
+        await page.goto(`/inventory/${route}?locale=ar`);
         await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
         await expect(page.locator('h1').first()).toBeVisible();
         await expect(page.locator('body')).not.toContainText(/\b(?:common|document|validation|status)\.[a-z][a-zA-Z0-9_.-]+\b/);
@@ -126,7 +126,7 @@ test('forms, details, exports, SSO handoff and organization switching preserve l
         const payload = json.data?.data ?? json.data ?? [];
         const row = Array.isArray(payload) ? payload[0] : null;
         if (!row?.id) continue;
-        await page.goto(`/inventory/${route}/${row.id}`);
+        await page.goto(`/inventory/${route}/${row.id}?locale=ar`);
         await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
         await expect(page.locator('h1').first()).toBeVisible();
         await expect(page.locator('body')).not.toContainText('Error 500');
