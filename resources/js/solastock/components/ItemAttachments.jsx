@@ -4,6 +4,7 @@ import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useToast } from '../stores/toast.jsx';
 import { EmptyState, Skeleton } from './ui.jsx';
+import { t } from '../i18n/index.js';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -20,13 +21,13 @@ export default function ItemAttachments({ itemId, canManage }) {
         e.target.value = '';
         if (!file) return;
         if (file.size > MAX_BYTES) {
-            toast.push('Attachment must be 10 MB or smaller.', 'error');
+            toast.push(t('media.attachmentSizeError', 'Attachment must be 10 MB or smaller.'), 'error');
             return;
         }
         setBusy(true);
         try {
             await api.uploadItemAttachment(itemId, file);
-            toast.push('Attachment uploaded.', 'success');
+            toast.push(t('media.attachmentUploaded', 'Attachment uploaded.'), 'success');
             await refetch();
             await qc.invalidateQueries({ queryKey: ['item', String(itemId)] });
         } catch (err) {
@@ -40,7 +41,7 @@ export default function ItemAttachments({ itemId, canManage }) {
         setBusy(true);
         try {
             await api.deleteItemAttachment(id);
-            toast.push('Attachment removed.', 'success');
+            toast.push(t('media.attachmentRemoved', 'Attachment removed.'), 'success');
             await refetch();
             await qc.invalidateQueries({ queryKey: ['item', String(itemId)] });
         } catch (err) {
@@ -56,26 +57,26 @@ export default function ItemAttachments({ itemId, canManage }) {
         <>
             <input ref={fileRef} type="file" hidden onChange={upload} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-                {busy ? 'Uploading...' : 'Upload attachment'}
+                {busy ? t('media.uploading', 'Uploading…') : t('media.uploadAttachment')}
             </button>
         </>
     );
 
     if (!rows.length) {
-        return <EmptyState title="No attachments" hint="Item documents, specification sheets and supplier files appear here." action={action} />;
+        return <EmptyState title={t('media.noAttachments')} hint={t('attachments.emptyHint', 'Item documents, specification sheets and supplier files appear here.')} action={action} />;
     }
 
     return (
         <div>
-            <div className="card-head"><h3>Documents</h3><span className="spacer" />{action}</div>
+            <div className="card-head"><h3>{t('attachments.documents', 'Documents')}</h3><span className="spacer" />{action}</div>
             <table className="data-table">
-                <thead><tr><th>Name</th><th>Type</th><th>Size</th><th></th></tr></thead>
+                <thead><tr><th>{t('attachments.name', 'Name')}</th><th>{t('type')}</th><th>{t('attachments.size', 'Size')}</th><th></th></tr></thead>
                 <tbody>{rows.map((a) => (
                     <tr key={a.id}>
                         <td><a href={a.download_url} target="_blank" rel="noreferrer">{a.name}</a></td>
                         <td>{a.mime_type ?? 'file'}</td>
                         <td>{Math.ceil((a.size_bytes ?? 0) / 1024)} KB</td>
-                        <td style={{ textAlign: 'right' }}>{canManage && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(a.id)}>Delete</button>}</td>
+                        <td style={{ textAlign: 'right' }}>{canManage && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(a.id)}>{t('delete')}</button>}</td>
                     </tr>
                 ))}</tbody>
             </table>

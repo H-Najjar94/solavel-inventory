@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
+import { t } from '../i18n/index.js';
 
 // ── Traceability capture + selection components ───────────────────────────────
 // Capture (IN): LotCapture, SerialCapture/SerialNumberListInput, ExpiryDateInput.
@@ -9,18 +10,18 @@ import { api } from '../services/api.js';
 
 export function TraceabilityRequiredBadge({ trackingType, tracksExpiry }) {
     const tags = [];
-    if (trackingType === 'lot' || trackingType === 'lot_serial') tags.push('Lot');
-    if (trackingType === 'serial' || trackingType === 'lot_serial') tags.push('Serial');
-    if (tracksExpiry) tags.push('Expiry');
+    if (trackingType === 'lot' || trackingType === 'lot_serial') tags.push(t('trace.lot', 'Lot'));
+    if (trackingType === 'serial' || trackingType === 'lot_serial') tags.push(t('trace.serial', 'Serial'));
+    if (tracksExpiry) tags.push(t('trace.expiry', 'Expiry'));
     if (tags.length === 0) return null;
-    return <span className="badge badge--demo" title="Traceability required on this item">{tags.join(' + ')} tracked</span>;
+    return <span className="badge badge--demo" title={t('trace.required', 'Traceability required on this item')}>{tags.join(' + ')} {t('trace.tracked', 'tracked')}</span>;
 }
 
 export function ExpiryDateInput({ value, onChange, required, error }) {
     return (
         <input className={`input${error ? ' input--error' : ''}`} type="date"
             value={value ?? ''} required={required}
-            onChange={(e) => onChange(e.target.value)} aria-label="Expiry date" />
+            onChange={(e) => onChange(e.target.value)} aria-label={t('trace.expiryDate', 'Expiry date')} />
     );
 }
 
@@ -30,8 +31,8 @@ export function LotCapture({ value, onChange, requireExpiry, error }) {
     const set = (patch) => onChange({ ...v, ...patch });
     return (
         <div className="lot-capture">
-            <input className={`input${error?.lot_code ? ' input--error' : ''}`} placeholder="Lot / batch code"
-                value={v.lot_code ?? ''} onChange={(e) => set({ lot_code: e.target.value })} aria-label="Lot code" />
+            <input className={`input${error?.lot_code ? ' input--error' : ''}`} placeholder={t('trace.lotCode', 'Lot / batch code')}
+                value={v.lot_code ?? ''} onChange={(e) => set({ lot_code: e.target.value })} aria-label={t('trace.lotCode', 'Lot code')} />
             <ExpiryDateInput value={v.expiry_date} onChange={(d) => set({ expiry_date: d })}
                 required={requireExpiry} error={error?.expiry_date} />
         </div>
@@ -196,12 +197,12 @@ export function FefoHint({ itemId, warehouseId, quantity, selectedLotId, onApply
 
 export function LotStatusBadge({ status }) {
     const map = {
-        active: ['Active', 'badge--live'], expired: ['Expired', 'badge--warn'],
-        quarantined: ['Quarantined', 'badge--warn'], consumed: ['Consumed', 'badge--muted'],
-        recalled: ['Recalled', 'badge--danger'],
+        active: ['trace.status.active', 'badge--live'], expired: ['trace.status.expired', 'badge--warn'],
+        quarantined: ['trace.status.quarantined', 'badge--warn'], consumed: ['trace.status.consumed', 'badge--muted'],
+        recalled: ['trace.status.recalled', 'badge--danger'],
     };
     const [label, cls] = map[status] ?? [status, 'badge--muted'];
-    return <span className={`badge ${cls}`}>{label}</span>;
+    return <span className={`badge ${cls}`}>{t(label, status)}</span>;
 }
 
 export function SerialStatusBadge({ status }) {

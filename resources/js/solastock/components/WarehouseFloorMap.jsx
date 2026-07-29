@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { EmptyState } from './ui.jsx';
+import { t } from '../i18n/index.js';
 
 // Simple 2D floor map: zones → bins grid. Bin color reflects occupancy status.
 // Clicking a bin opens a side panel. Falls back to a visual placeholder grid when
@@ -32,7 +33,7 @@ export default function WarehouseFloorMap({ zones = [], bins = [], balances = []
         // Visual placeholder grid so the floor view is never blank.
         return (
             <div>
-                <EmptyState title="No bins defined yet" hint="Add zones and bins to see the live floor map." />
+                <EmptyState title={t('floor.noBins')} hint={t('floor.noBinsHint', 'Add zones and bins to see the live floor map.')} />
                 <div className="floor-grid floor-grid--placeholder">
                     {Array.from({ length: 24 }).map((_, i) => (
                         <div key={i} className="floor-bin" style={{ background: STATUS_COLOR.empty }} />
@@ -64,7 +65,7 @@ export default function WarehouseFloorMap({ zones = [], bins = [], balances = []
                 {/* bins without a known zone */}
                 {bins.some((b) => !zones.find((z) => Number(z.id) === Number(b.zone_id))) && (
                     <div className="floor-zone">
-                        <div className="floor-zone-title muted">Unzoned</div>
+                        <div className="floor-zone-title muted">{t('floor.unzoned')}</div>
                         <div className="floor-grid">
                             {bins.filter((b) => !zones.find((z) => Number(z.id) === Number(b.zone_id))).map((b) => {
                                 const st = binStatus(b, balances);
@@ -83,11 +84,11 @@ export default function WarehouseFloorMap({ zones = [], bins = [], balances = []
 
             {selected && (
                 <aside className="floor-panel">
-                    <div className="floor-panel-head"><strong>Bin {selected.code}</strong><button className="btn btn--sm" onClick={() => setSelected(null)}>×</button></div>
+                    <div className="floor-panel-head"><strong>{t('floor.bin', 'Bin :code', { code: selected.code })}</strong><button className="btn btn--sm" aria-label={t('common.close')} onClick={() => setSelected(null)}>×</button></div>
                     <dl className="kv">
-                        <dt>Status</dt><dd>{selected.status}</dd>
-                        <dt>Type</dt><dd>{selected.coords?.bin_type ?? 'storage'}</dd>
-                        <dt>Capacity</dt><dd>{selected.capacity ?? '—'}</dd>
+                        <dt>{t('document.status', 'Status')}</dt><dd>{selected.status}</dd>
+                        <dt>{t('type')}</dt><dd>{selected.coords?.bin_type ?? 'storage'}</dd>
+                        <dt>{t('floor.capacity', 'Capacity')}</dt><dd>{selected.capacity ?? '—'}</dd>
                     </dl>
                 </aside>
             )}
