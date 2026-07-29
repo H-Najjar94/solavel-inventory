@@ -37,6 +37,10 @@ return [
         'inventory.manage_opening_stock',
         'inventory.manage_adjustments',
         'inventory.view_ledger',
+        // Read-only visibility must survive a plan change so an existing
+        // SolaBooks connection never becomes an opaque "feature unavailable"
+        // error. Manage/retry/export remain gated by stock.finance_integration.
+        'inventory.integration.view',
     ],
 
     'restricted_safe_permissions' => [
@@ -98,7 +102,9 @@ return [
         'inventory.manage_shipments' => 'stock.sales_fulfillment',
         'inventory.manage_returns' => 'stock.sales_fulfillment',
 
-        // Solavel Finance (SolaBooks) integration — the whole integration family.
+        // Solavel Finance (SolaBooks) integration. Read-only status/events are
+        // intentionally a free permission above; all mutations and delivery
+        // operations remain paid-feature gated.
         'inventory.integration.view' => 'stock.finance_integration',
         'inventory.integration.manage' => 'stock.finance_integration',
         'inventory.integration.retry' => 'stock.finance_integration',
