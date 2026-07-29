@@ -28,12 +28,14 @@ function binStatus(bin, balances) {
 
 export default function WarehouseFloorMap({ zones = [], bins = [], balances = [] }) {
     const [selected, setSelected] = useState(null);
+    const statusLabel = (status) => t(`warehouseDetail.floor.status.${status}`, status);
+    const binTypeLabel = (type) => t(`warehouseDetail.binType.${type}`, type);
 
     if (bins.length === 0) {
         // Visual placeholder grid so the floor view is never blank.
         return (
             <div>
-                <EmptyState title={t('floor.noBins')} hint={t('floor.noBinsHint', 'Add zones and bins to see the live floor map.')} />
+                <EmptyState title={t('warehouseDetail.floor.noBins')} hint={t('warehouseDetail.floor.noBinsHint')} />
                 <div className="floor-grid floor-grid--placeholder">
                     {Array.from({ length: 24 }).map((_, i) => (
                         <div key={i} className="floor-bin" style={{ background: STATUS_COLOR.empty }} />
@@ -53,9 +55,10 @@ export default function WarehouseFloorMap({ zones = [], bins = [], balances = []
                             {bins.filter((b) => Number(b.zone_id) === Number(z.id)).map((b) => {
                                 const st = binStatus(b, balances);
                                 return (
-                                    <button key={b.id} className="floor-bin floor-bin--btn" title={`${b.code} · ${st}`}
+                                    <button key={b.id} className="floor-bin floor-bin--btn" title={t('warehouseDetail.floor.binStatus', undefined, { code: b.code, status: statusLabel(st) })}
+                                        aria-label={t('warehouseDetail.floor.binStatus', undefined, { code: b.code, status: statusLabel(st) })}
                                         style={{ background: STATUS_COLOR[st] }} onClick={() => setSelected({ ...b, status: st })}>
-                                        {b.code}
+                                        <bdi>{b.code}</bdi>
                                     </button>
                                 );
                             })}
@@ -65,11 +68,14 @@ export default function WarehouseFloorMap({ zones = [], bins = [], balances = []
                 {/* bins without a known zone */}
                 {bins.some((b) => !zones.find((z) => Number(z.id) === Number(b.zone_id))) && (
                     <div className="floor-zone">
-                        <div className="floor-zone-title muted">{t('floor.unzoned')}</div>
+                        <div className="floor-zone-title muted">{t('warehouseDetail.floor.unzoned')}</div>
                         <div className="floor-grid">
                             {bins.filter((b) => !zones.find((z) => Number(z.id) === Number(b.zone_id))).map((b) => {
                                 const st = binStatus(b, balances);
-                                return <button key={b.id} className="floor-bin floor-bin--btn" style={{ background: STATUS_COLOR[st] }} onClick={() => setSelected({ ...b, status: st })}>{b.code}</button>;
+                                return <button key={b.id} className="floor-bin floor-bin--btn"
+                                    title={t('warehouseDetail.floor.binStatus', undefined, { code: b.code, status: statusLabel(st) })}
+                                    aria-label={t('warehouseDetail.floor.binStatus', undefined, { code: b.code, status: statusLabel(st) })}
+                                    style={{ background: STATUS_COLOR[st] }} onClick={() => setSelected({ ...b, status: st })}><bdi>{b.code}</bdi></button>;
                             })}
                         </div>
                     </div>
@@ -78,17 +84,17 @@ export default function WarehouseFloorMap({ zones = [], bins = [], balances = []
 
             <div className="floor-legend">
                 {Object.entries(STATUS_COLOR).map(([k, c]) => (
-                    <span key={k} className="floor-legend-item"><span className="floor-swatch" style={{ background: c }} /> {k}</span>
+                    <span key={k} className="floor-legend-item"><span className="floor-swatch" style={{ background: c }} /> {statusLabel(k)}</span>
                 ))}
             </div>
 
             {selected && (
                 <aside className="floor-panel">
-                    <div className="floor-panel-head"><strong>{t('floor.bin', 'Bin :code', { code: selected.code })}</strong><button className="btn btn--sm" aria-label={t('common.close')} onClick={() => setSelected(null)}>×</button></div>
+                    <div className="floor-panel-head"><strong>{t('warehouseDetail.floor.bin', undefined, { code: selected.code })}</strong><button className="btn btn--sm" aria-label={t('common.close')} onClick={() => setSelected(null)}>×</button></div>
                     <dl className="kv">
-                        <dt>{t('document.status', 'Status')}</dt><dd>{selected.status}</dd>
-                        <dt>{t('type')}</dt><dd>{selected.coords?.bin_type ?? 'storage'}</dd>
-                        <dt>{t('floor.capacity', 'Capacity')}</dt><dd>{selected.capacity ?? '—'}</dd>
+                        <dt>{t('warehouseDetail.floor.status')}</dt><dd>{statusLabel(selected.status)}</dd>
+                        <dt>{t('warehouseDetail.floor.type')}</dt><dd>{binTypeLabel(selected.coords?.bin_type ?? 'storage')}</dd>
+                        <dt>{t('warehouseDetail.floor.capacity')}</dt><dd>{selected.capacity ?? '—'}</dd>
                     </dl>
                 </aside>
             )}

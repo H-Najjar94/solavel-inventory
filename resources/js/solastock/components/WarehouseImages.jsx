@@ -38,8 +38,8 @@ export default function WarehouseImages({ warehouseId, canManage }) {
         e.target.value = '';
         const valid = [];
         for (const f of files) {
-            if (!ALLOWED.includes(f.type)) { toast.push(`${f.name}: only JPG, PNG or WEBP allowed.`, 'error'); continue; }
-            if (f.size > MAX_BYTES) { toast.push(`${f.name}: must be 5 MB or smaller.`, 'error'); continue; }
+            if (!ALLOWED.includes(f.type)) { toast.push(t('warehouseDetail.media.invalidType', undefined, { file: f.name }), 'error'); continue; }
+            if (f.size > MAX_BYTES) { toast.push(t('warehouseDetail.media.tooLarge', undefined, { file: f.name }), 'error'); continue; }
             valid.push(f);
         }
         if (!valid.length) return;
@@ -47,15 +47,15 @@ export default function WarehouseImages({ warehouseId, canManage }) {
         let ok = 0;
         for (let i = 0; i < valid.length; i++) {
             try { await api.uploadWarehouseImage(warehouseId, valid[i]); ok++; }
-            catch (err) { toast.push(`${valid[i].name}: ${err.message}`, 'error'); }
+            catch { toast.push(t('warehouseDetail.media.uploadFailed', undefined, { file: valid[i].name }), 'error'); }
             setProgress({ done: i + 1, total: valid.length });
         }
         setBusy(false); setProgress(null);
-        if (ok) { toast.push(ok === 1 ? 'Image uploaded.' : `${ok} images uploaded.`, 'success'); invalidate(); }
+        if (ok) { toast.push(ok === 1 ? t('warehouseDetail.media.uploadedOne') : t('warehouseDetail.media.uploadedMany', undefined, { count: ok }), 'success'); invalidate(); }
     }
 
-    async function makePrimary(id) { setBusy(true); try { await api.setWarehouseImagePrimary(id); invalidate(); } catch (e) { toast.push(e.message, 'error'); } finally { setBusy(false); } }
-    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); } catch (e) { toast.push(e.message, 'error'); } finally { setBusy(false); } }
+    async function makePrimary(id) { setBusy(true); try { await api.setWarehouseImagePrimary(id); invalidate(); } catch { toast.push(t('warehouseDetail.media.primaryFailed'), 'error'); } finally { setBusy(false); } }
+    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); } catch { toast.push(t('warehouseDetail.media.removeFailed'), 'error'); } finally { setBusy(false); } }
 
     if (isLoading) return <Skeleton rows={2} />;
 
@@ -63,20 +63,20 @@ export default function WarehouseImages({ warehouseId, canManage }) {
         <>
             <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-                {busy && progress ? t('media.uploading', 'Uploading :done/:total…', progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadBanner'))}
+                {busy && progress ? t('media.uploading', undefined, progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadBanner'))}
             </button>
         </>
     );
 
     if (!images.length) {
         return <div className="wh-gallery-empty"><EmptyState title={t('media.noWarehouseImage')}
-            hint={canManage ? 'Upload a wide banner photo of this location (JPG, PNG or WEBP, up to 5 MB). Stored privately.' : 'No photo has been added for this warehouse.'}
+            hint={canManage ? t('warehouseDetail.media.emptyManageHint') : t('warehouseDetail.media.emptyViewHint')}
             action={uploadBtn} /></div>;
     }
 
     return (
         <div className="wh-gallery">
-            {primary && <div className="wh-banner"><img src={primary.url} alt="Warehouse" /></div>}
+            {primary && <div className="wh-banner"><img src={primary.url} alt={t('warehouseDetail.media.imageAlt')} /></div>}
             {images.length > 1 && (
                 <div className="wh-thumb-row">
                     {images.map((img) => (
@@ -86,7 +86,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
                             {canManage && (
                                 <div className="gallery-actions">
                                     {!img.is_primary && <button className="gallery-act" title={t('media.setPrimary')} disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
-                                    <button className="gallery-act gallery-act--danger" title={t('delete')} disabled={busy} onClick={() => remove(img.id)}>🗑</button>
+                                    <button className="gallery-act gallery-act--danger" title={t('warehouseDetail.media.deleteImage')} disabled={busy} onClick={() => remove(img.id)}>🗑</button>
                                 </div>
                             )}
                         </figure>
@@ -97,7 +97,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
                 <div className="item-images-actions">
                     {uploadBtn}
                     {images.length === 1 && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(primary.id)}>{t('media.removeImage')}</button>}
-                    <div className="item-images-hint">JPG, PNG or WEBP · up to 5 MB each · stored privately · ★ sets the banner.</div>
+                    <div className="item-images-hint">{t('warehouseDetail.media.privateHint')}</div>
                 </div>
             )}
         </div>
