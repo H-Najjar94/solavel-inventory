@@ -64,7 +64,9 @@ export default function IntegrationSettingsPage() {
             <header className="page-head">
                 <h1>{tr('integration.title')}</h1>
                 {s && <HealthBadge health={s.health} tr={tr} />}
-                <span className="badge badge--live">{tr('integration.outboxDelivery')}</span>
+                {s && <span className={`badge ${s.delivery_configured ? 'badge--live' : 'badge--muted'}`}>
+                    {tr(s.delivery_configured ? 'integration.delivery.configured' : 'integration.delivery.notConfigured')}
+                </span>}
             </header>
 
             <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'accounts', label: tr('integration.tabs.accounts') }, { key: 'taxes', label: tr('integration.tabs.taxes') }, { key: 'items', label: tr('integration.tabs.items') }]} active={tab} onChange={setTab} />

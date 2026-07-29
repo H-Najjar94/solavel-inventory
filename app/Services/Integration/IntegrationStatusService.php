@@ -7,6 +7,8 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\IntegrationTaxMapping;
 use App\Models\Tenant\InventorySetting;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Read-only integration status + health for the settings page, sync dashboard,
@@ -28,7 +30,15 @@ class IntegrationStatusService
         $settings = IntegrationSetting::query()->firstOrNew([
             'organization_id' => $orgId, 'integration' => IntegrationEvents::INTEGRATION,
         ]);
-        $mode = $settings->mode ?? 'disconnected';
+        $sharedFinanceOrgId = $this->sharedFinanceOrganizationId($orgId);
+        $workspaceConnected = $sharedFinanceOrgId !== null;
+        $configuredMode = $settings->mode ?? 'disconnected';
+        // SolaStock and SolaBooks already share the client's tenant database and
+        // organization registry. Without an outbox API credential that is a real
+        // read-only workspace connection, not a disconnected product.
+        $mode = $configuredMode === 'disconnected' && $workspaceConnected
+            ? 'connected_readonly'
+            : $configuredMode;
 
         $events = IntegrationOutboxEvent::query()
             ->where('organization_id', $orgId)
@@ -65,7 +75,8 @@ class IntegrationStatusService
         return [
             'integration' => IntegrationEvents::INTEGRATION,
             'mode' => $mode,
-            'solabooks_organization_id' => $settings->solabooks_organization_id,
+            'workspace_connected' => $workspaceConnected,
+            'solabooks_organization_id' => $settings->solabooks_organization_id ?: $sharedFinanceOrgId,
             'last_sync_at' => $settings->last_sync_at,
             'last_error' => $settings->last_error,
             'require_mapping_before_post' => (bool) ($settings->require_mapping_before_post ?? false),
@@ -88,5 +99,23 @@ class IntegrationStatusService
                 'last_successful_delivery_at' => $settings->meta['last_signed_delivery_at'] ?? null,
             ],
         ];
+    }
+
+    protected function sharedFinanceOrganizationId(int $orgId): ?int
+    {
+        try {
+            if (! Schema::connection('tenant')->hasTable('organizations')
+                || ! Schema::connection('tenant')->hasColumn('organizations', 'central_org_id')) {
+                return null;
+            }
+
+            $id = DB::connection('tenant')->table('organizations')
+                ->where('central_org_id', $orgId)
+                ->value('id');
+
+            return $id ? (int) $id : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }
