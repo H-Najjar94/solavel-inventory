@@ -6,6 +6,7 @@ import { api } from '../services/api.js';
 import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
 import { useCan } from '../stores/meta.jsx';
 import { useToast } from '../stores/toast.jsx';
+import { t } from '../i18n/index.js';
 
 // Real, zeroed dashboard for a live tenant with no data yet. NEVER mock/sample —
 // the dashboard only ever shows this org's actual numbers.
@@ -23,11 +24,11 @@ const money = (v) => `$${n(v).toLocaleString(undefined, { maximumFractionDigits:
 
 const TONE = { good: '#2f7a4f', warn: '#c97f12', danger: '#d64545', default: 'var(--ink,#222)' };
 const DEFAULT_LAYOUT = [
-    { key: 'kpis', label: 'KPIs', visible: true },
-    { key: 'alerts', label: 'Exception alerts', visible: true },
-    { key: 'operations', label: 'Operations', visible: true },
-    { key: 'integration', label: 'SolaBooks sync', visible: true },
-    { key: 'activity', label: 'Activity', visible: true },
+    { key: 'kpis', visible: true },
+    { key: 'alerts', visible: true },
+    { key: 'operations', visible: true },
+    { key: 'integration', visible: true },
+    { key: 'activity', visible: true },
 ];
 
 // ── Primary KPI (big, prominent) ─────────────────────────────────────
@@ -106,14 +107,14 @@ export default function DashboardPage() {
 
     // Only surface alerts that actually need attention.
     const alerts = [
-        n(d.out_of_stock) > 0 && { label: `${num(d.out_of_stock)} out of stock`, to: '/reports', tone: 'danger', icon: 'fa-circle-xmark' },
-        n(d.low_stock) > 0 && { label: `${num(d.low_stock)} low on stock`, to: '/reports', tone: 'warn', icon: 'fa-triangle-exclamation' },
-        n(d.dead_stock) > 0 && { label: `${num(d.dead_stock)} dead stock`, to: '/reports', tone: 'warn', icon: 'fa-box' },
-        n(d.active_recalls) > 0 && { label: `${num(d.active_recalls)} active recall(s)`, to: '/recalls', tone: 'danger', icon: 'fa-bullhorn' },
-        n(d.recalled_lots) > 0 && { label: `${num(d.recalled_lots)} recalled lot(s)`, to: '/traceability/lots?status=recalled', tone: 'danger', icon: 'fa-barcode' },
-        n(d.expired_lots) > 0 && { label: `${num(d.expired_lots)} expired lot(s)`, to: '/traceability/lots?status=expired', tone: 'warn', icon: 'fa-clock' },
-        n(d.expiring_lots_30d) > 0 && { label: `${num(d.expiring_lots_30d)} expiring in 30d`, to: '/traceability/lots?expiring=1', tone: 'warn', icon: 'fa-hourglass-half' },
-        n(d.quarantined_lots) > 0 && { label: `${num(d.quarantined_lots)} quarantined lot(s)`, to: '/traceability/lots?status=quarantined', tone: 'warn', icon: 'fa-ban' },
+        n(d.out_of_stock) > 0 && { label: t('dashboard.alert.out', undefined, { count: num(d.out_of_stock) }), to: '/reports', tone: 'danger', icon: 'fa-circle-xmark' },
+        n(d.low_stock) > 0 && { label: t('dashboard.alert.low', undefined, { count: num(d.low_stock) }), to: '/reports', tone: 'warn', icon: 'fa-triangle-exclamation' },
+        n(d.dead_stock) > 0 && { label: t('dashboard.alert.dead', undefined, { count: num(d.dead_stock) }), to: '/reports', tone: 'warn', icon: 'fa-box' },
+        n(d.active_recalls) > 0 && { label: t('dashboard.alert.recalls', undefined, { count: num(d.active_recalls) }), to: '/recalls', tone: 'danger', icon: 'fa-bullhorn' },
+        n(d.recalled_lots) > 0 && { label: t('dashboard.alert.recalledLots', undefined, { count: num(d.recalled_lots) }), to: '/traceability/lots?status=recalled', tone: 'danger', icon: 'fa-barcode' },
+        n(d.expired_lots) > 0 && { label: t('dashboard.alert.expiredLots', undefined, { count: num(d.expired_lots) }), to: '/traceability/lots?status=expired', tone: 'warn', icon: 'fa-clock' },
+        n(d.expiring_lots_30d) > 0 && { label: t('dashboard.alert.expiringLots', undefined, { count: num(d.expiring_lots_30d) }), to: '/traceability/lots?expiring=1', tone: 'warn', icon: 'fa-hourglass-half' },
+        n(d.quarantined_lots) > 0 && { label: t('dashboard.alert.quarantinedLots', undefined, { count: num(d.quarantined_lots) }), to: '/traceability/lots?status=quarantined', tone: 'warn', icon: 'fa-ban' },
     ].filter(Boolean);
     const serverAlerts = d.alerts ?? [];
 
@@ -137,9 +138,9 @@ export default function DashboardPage() {
             await api.saveDashboardLayout(layout);
             await qc.invalidateQueries({ queryKey: ['dashboard-layout'] });
             setCustomizing(false);
-            toast.push('Dashboard layout saved.', 'success');
+            toast.push(t('dashboard.layoutSaved'), 'success');
         } catch (e) {
-            toast.push(e.message || 'Could not save layout.', 'error');
+            toast.push(e.message || t('dashboard.layoutSaveFailed'), 'error');
         }
     }
 
@@ -147,29 +148,29 @@ export default function DashboardPage() {
         try {
             await api.acknowledgeDashboardAlert(id);
             await qc.invalidateQueries({ queryKey: ['dashboard'] });
-            toast.push('Alert acknowledged.', 'success');
+            toast.push(t('dashboard.alertAcknowledged'), 'success');
         } catch (e) {
-            toast.push(e.message || 'Could not acknowledge alert.', 'error');
+            toast.push(e.message || t('dashboard.alertAckFailed'), 'error');
         }
     }
 
     const sections = {
         kpis: (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, marginTop: 4 }}>
-                <Kpi label="Inventory Value" value={money(d.inventory_value)} to="/reports" tone="good" icon="fa-coins" sub="on-hand at cost" />
-                <Kpi label="Active SKUs" value={num(d.active_items)} to="/items" icon="fa-tags" sub={`${num(d.total_skus)} total`} />
-                <Kpi label="Low Stock" value={num(d.low_stock)} to="/reports" tone={n(d.low_stock) > 0 ? 'warn' : 'default'} icon="fa-triangle-exclamation" sub="below reorder point" />
-                <Kpi label="Out of Stock" value={num(d.out_of_stock)} to="/reports" tone={n(d.out_of_stock) > 0 ? 'danger' : 'default'} icon="fa-circle-xmark" sub="needs restocking" />
+                <Kpi label={t('dashboard.inventoryValue')} value={money(d.inventory_value)} to="/reports" tone="good" icon="fa-coins" sub={t('dashboard.onHandCost')} />
+                <Kpi label={t('dashboard.activeSkus')} value={num(d.active_items)} to="/items" icon="fa-tags" sub={t('dashboard.totalSkus', undefined, { count: num(d.total_skus) })} />
+                <Kpi label={t('dashboard.lowStock')} value={num(d.low_stock)} to="/reports" tone={n(d.low_stock) > 0 ? 'warn' : 'default'} icon="fa-triangle-exclamation" sub={t('dashboard.belowReorder')} />
+                <Kpi label={t('dashboard.outOfStock')} value={num(d.out_of_stock)} to="/reports" tone={n(d.out_of_stock) > 0 ? 'danger' : 'default'} icon="fa-circle-xmark" sub={t('dashboard.needsRestocking')} />
             </div>
         ),
         alerts: (alerts.length > 0 || serverAlerts.length > 0) && (
             <div className="panel" style={{ marginTop: 16 }}>
-                <h2 style={{ fontSize: 14, marginBottom: 10 }}><i className="fa-solid fa-bell" style={{ color: '#e09921', marginRight: 6 }} /> Needs attention</h2>
+                <h2 style={{ fontSize: 14, marginBottom: 10 }}><i className="fa-solid fa-bell" style={{ color: '#e09921', marginInlineEnd: 6 }} /> {t('dashboard.needsAttention')}</h2>
                 {serverAlerts.length > 0 && <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
                     {serverAlerts.map((a) => (
                         <div key={a.id} className="banner banner--warn" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
                             <span><strong>{a.title}</strong> · {a.message}</span>
-                            {a.status === 'open' && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>Acknowledge</button>}
+                            {a.status === 'open' && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>{t('dashboard.acknowledge')}</button>}
                         </div>
                     ))}
                 </div>}
@@ -189,50 +190,50 @@ export default function DashboardPage() {
         ),
         operations: (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 14, marginTop: 16 }}>
-                <OpsGroup title="Purchasing" icon="fa-truck-fast">
-                    <OpStat label="Pending POs" value={d.pending_pos} to="/purchase-orders" alert />
-                    <OpStat label="Pending GRNs" value={d.pending_grns} to="/goods-receipts" alert />
+                <OpsGroup title={t('dashboard.purchasing')} icon="fa-truck-fast">
+                    <OpStat label={t('dashboard.pendingPos')} value={d.pending_pos} to="/purchase-orders" alert />
+                    <OpStat label={t('dashboard.pendingGrns')} value={d.pending_grns} to="/goods-receipts" alert />
                 </OpsGroup>
-                <OpsGroup title="Fulfillment" icon="fa-box-open">
-                    <OpStat label="Open Sales Orders" value={d.pending_sales_orders} to="/sales-orders" />
-                    <OpStat label="Awaiting Pick" value={d.awaiting_pick} to="/pick-lists" alert />
-                    <OpStat label="Awaiting Pack" value={d.awaiting_pack} to="/packs" alert />
-                    <OpStat label="Awaiting Ship" value={d.awaiting_ship} to="/shipments" alert />
-                    <OpStat label="Shipped today" value={d.shipments_today} to="/shipments" />
+                <OpsGroup title={t('dashboard.fulfillment')} icon="fa-box-open">
+                    <OpStat label={t('dashboard.openSalesOrders')} value={d.pending_sales_orders} to="/sales-orders" />
+                    <OpStat label={t('dashboard.awaitingPick')} value={d.awaiting_pick} to="/pick-lists" alert />
+                    <OpStat label={t('dashboard.awaitingPack')} value={d.awaiting_pack} to="/packs" alert />
+                    <OpStat label={t('dashboard.awaitingShip')} value={d.awaiting_ship} to="/shipments" alert />
+                    <OpStat label={t('dashboard.shippedToday')} value={d.shipments_today} to="/shipments" />
                 </OpsGroup>
-                <OpsGroup title="Stock operations" icon="fa-arrows-rotate">
-                    <OpStat label="Movements today" value={d.movements_today} to="/ledger" />
-                    <OpStat label="Pending Transfers" value={d.pending_transfers} to="/transfers" alert />
-                    <OpStat label="Pending Counts" value={d.pending_counts} to="/counts" alert />
-                    <OpStat label="Reserved stock" value={num(d.reserved_stock_qty)} to="/reports" />
-                    <OpStat label="Warehouses" value={d.warehouses} to="/warehouses" />
+                <OpsGroup title={t('dashboard.stockOperations')} icon="fa-arrows-rotate">
+                    <OpStat label={t('dashboard.movementsToday')} value={d.movements_today} to="/ledger" />
+                    <OpStat label={t('dashboard.pendingTransfers')} value={d.pending_transfers} to="/transfers" alert />
+                    <OpStat label={t('dashboard.pendingCounts')} value={d.pending_counts} to="/counts" alert />
+                    <OpStat label={t('dashboard.reservedStock')} value={num(d.reserved_stock_qty)} to="/reports" />
+                    <OpStat label={t('dashboard.warehouses')} value={d.warehouses} to="/warehouses" />
                 </OpsGroup>
             </div>
         ),
         integration: canViewIntegration && si && (
             <Link to="/settings/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
                 <h2 style={{ fontSize: 14 }}>
-                    <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginRight: 6 }} />
-                    SolaBooks sync <span className={`badge ${si.health === 'healthy' ? 'badge--live' : si.health === 'disconnected' ? 'badge--muted' : 'badge--warn'}`}>{si.health}</span>
+                    <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginInlineEnd: 6 }} />
+                    {t('dashboard.solabooksSync')} <span className={`badge ${si.health === 'healthy' ? 'badge--live' : si.health === 'disconnected' ? 'badge--muted' : 'badge--warn'}`}>{t(`status.${si.health}`, si.health)}</span>
                 </h2>
                 <p className="muted" style={{ margin: 0 }}>
-                    Pending: {si.events?.pending ?? 0} · Failed: {si.events?.failed ?? 0} ·
-                    Mapping {si.mapping_completeness_pct ?? 0}% · Awaiting sync: {si.documents_awaiting_sync ?? 0}
+                    {t('dashboard.pending')}: {si.events?.pending ?? 0} · {t('dashboard.failed')}: {si.events?.failed ?? 0} ·
+                    {t('dashboard.mapping')} {si.mapping_completeness_pct ?? 0}% · {t('dashboard.awaitingSync')}: {si.documents_awaiting_sync ?? 0}
                 </p>
             </Link>
         ),
         activity: (
             <div className="dash-cols" style={{ marginTop: 16 }}>
                 <div className="panel">
-                    <h2 style={{ fontSize: 14 }}><i className="fa-solid fa-arrow-trend-up" style={{ color: '#e09921', marginRight: 6 }} /> Top moving items <span className="muted">(30d)</span></h2>
-                    {(d.top_moving ?? []).length === 0 ? <EmptyState title="No movement yet" /> : (
-                        <table className="data-table"><thead><tr><th>SKU</th><th>Item</th><th>Qty out</th></tr></thead>
+                    <h2 style={{ fontSize: 14 }}><i className="fa-solid fa-arrow-trend-up" style={{ color: '#e09921', marginInlineEnd: 6 }} /> {t('dashboard.topMoving')} <span className="muted">{t('dashboard.last30Days')}</span></h2>
+                    {(d.top_moving ?? []).length === 0 ? <EmptyState title={t('dashboard.noMovement')} /> : (
+                        <table className="data-table"><thead><tr><th>{t('sku')}</th><th>{t('dashboard.item')}</th><th>{t('dashboard.quantityOut')}</th></tr></thead>
                             <tbody>{d.top_moving.map((t, i) => <tr key={i}><td>{t.sku}</td><td>{t.name}</td><td>{t.qty}</td></tr>)}</tbody></table>
                     )}
                 </div>
                 <div className="panel">
-                    <h2 style={{ fontSize: 14 }}><i className="fa-solid fa-clock-rotate-left" style={{ color: '#e09921', marginRight: 6 }} /> Recent movements</h2>
-                    {(d.recent_movements ?? []).length === 0 ? <EmptyState title="No recent movements" /> : (
+                    <h2 style={{ fontSize: 14 }}><i className="fa-solid fa-clock-rotate-left" style={{ color: '#e09921', marginInlineEnd: 6 }} /> {t('dashboard.recentMovements')}</h2>
+                    {(d.recent_movements ?? []).length === 0 ? <EmptyState title={t('dashboard.noRecentMovements')} /> : (
                         <ul className="activity-list">
                             {d.recent_movements.map((m) => (
                                 <li key={m.id}>{m.direction === 'in' ? '▲' : '▼'} {m.item_name ?? `#${m.item_id}`} · {m.quantity} @ {m.unit_cost} <span className="muted">{m.source_display ? `· ${m.source_display} ` : ''}{m.moved_at}</span></li>
@@ -246,28 +247,28 @@ export default function DashboardPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Dashboard' }]} />
+            <Breadcrumbs items={[{ label: t('dashboard.title') }]} />
             <header className="page-head">
-                <h1>Dashboard</h1>
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {d.generated_at && <span className="muted">Updated {d.generated_at}</span>}
+                <h1>{t('dashboard.title')}</h1>
+                <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {d.generated_at && <span className="muted">{t('dashboard.updated', undefined, { date: d.generated_at })}</span>}
                     <button className="btn btn--sm" disabled={isFetching} onClick={() => qc.invalidateQueries({ queryKey: ['dashboard'] })}>
-                        {isFetching ? 'Refreshing…' : 'Refresh'}
+                        {t(isFetching ? 'dashboard.refreshing' : 'dashboard.refresh')}
                     </button>
-                    <button className="btn btn--sm" onClick={() => setCustomizing((v) => !v)}>Customize</button>
+                    <button className="btn btn--sm" onClick={() => setCustomizing((v) => !v)}>{t('dashboard.customize')}</button>
                 </div>
             </header>
 
             {customizing && <div className="panel" style={{ marginBottom: 16 }}>
-                <h2>Dashboard layout</h2>
-                <table className="data-table"><thead><tr><th>Visible</th><th>Section</th><th>Order</th></tr></thead><tbody>
+                <h2>{t('dashboard.layout')}</h2>
+                <table className="data-table"><thead><tr><th>{t('dashboard.visible')}</th><th>{t('dashboard.section')}</th><th>{t('dashboard.order')}</th></tr></thead><tbody>
                     {layout.map((row) => <tr key={row.key}>
                         <td><input type="checkbox" checked={row.visible !== false} onChange={(e) => updateLayout(row.key, { visible: e.target.checked })} /></td>
-                        <td>{row.label}</td>
-                        <td><button className="btn btn--sm" onClick={() => moveLayout(row.key, -1)}>Up</button> <button className="btn btn--sm" onClick={() => moveLayout(row.key, 1)}>Down</button></td>
+                        <td>{t(`dashboard.section.${row.key}`, row.key)}</td>
+                        <td><button className="btn btn--sm" onClick={() => moveLayout(row.key, -1)}>{t('dashboard.up')}</button> <button className="btn btn--sm" onClick={() => moveLayout(row.key, 1)}>{t('dashboard.down')}</button></td>
                     </tr>)}
                 </tbody></table>
-                <button className="btn btn--primary" onClick={saveLayout}>Save layout</button>
+                <button className="btn btn--primary" onClick={saveLayout}>{t('dashboard.saveLayout')}</button>
             </div>}
 
             {layout.filter((row) => row.visible !== false).map((row) => <React.Fragment key={row.key}>{sections[row.key]}</React.Fragment>)}
