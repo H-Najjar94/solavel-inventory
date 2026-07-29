@@ -83,7 +83,7 @@ export function ConfirmModal({ open, title, message, confirmLabel = t('confirm')
 }
 
 // ── Quick-create select: a dropdown with an inline "+ create" option ──
-export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = '— none —', createLabel = t('common.create'), error }) {
+export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = t('none'), createLabel = t('create'), error }) {
     const [creating, setCreating] = useState(false);
     const [text, setText] = useState('');
 
@@ -101,8 +101,8 @@ export function QuickCreateSelect({ label, value, onChange, options, onCreate, p
                 <div className="quick-create">
                     <input className="input" autoFocus value={text} placeholder={t('common.newValue', 'New :label…', { label })}
                         onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
-                    <button type="button" className="btn btn--sm btn--primary" onClick={submit}>{t('common.add')}</button>
-                    <button type="button" className="btn btn--sm" onClick={() => setCreating(false)}>{t('common.cancel')}</button>
+                    <button type="button" className="btn btn--sm btn--primary" onClick={submit}>{t('add')}</button>
+                    <button type="button" className="btn btn--sm" onClick={() => setCreating(false)}>{t('cancel')}</button>
                 </div>
             ) : (
                 <div className="quick-create">
