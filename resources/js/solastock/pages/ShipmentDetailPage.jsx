@@ -9,8 +9,10 @@ import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge, LedgerPreview, ConfirmPostModal } from '../components/document.jsx';
 import { LotSelector, SerialSelector, FefoHint, TraceabilityRequiredBadge } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
+import { useI18n } from '../i18n/context.jsx';
 
 export default function ShipmentDetailPage() {
+    const { t } = useI18n();
     const { id } = useParams();
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.manage_shipments');
@@ -54,7 +56,7 @@ export default function ShipmentDetailPage() {
     }, [s]);
 
     if (isLoading) return <section className="page"><Skeleton /></section>;
-    if (!s) return <section className="page"><Breadcrumbs items={[{ label: 'Shipments', to: '/shipments' }, { label: 'Not found' }]} /><EmptyState title="Unavailable" hint="Select a tenant to load real data." /></section>;
+    if (!s) return <section className="page"><Breadcrumbs items={[{ label: t('fulfillment.shipments.title', 'Shipments'), to: '/shipments' }, { label: t('fulfillment.common.notFound', 'Not found') }]} /><EmptyState title={t('fulfillment.common.unavailable', 'Unavailable')} hint={t('fulfillment.common.selectOrganization', 'Select an organization to load data.')} /></section>;
 
     const isDraft = s.status === 'draft';
     const lines = s.lines ?? [];
@@ -93,9 +95,9 @@ export default function ShipmentDetailPage() {
                 }),
             };
             await api.updateShipment(id, payload);
-            toast.push('Lot/serial selection saved.', 'success');
+            toast.push(t('fulfillment.shipmentDetail.traceabilitySaved', 'Lot/serial selection saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['shipment', id] });
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.traceabilitySaveFailed', 'The lot/serial selection could not be saved.'), 'error'); }
         finally { setSavingPicks(false); }
     }
 
@@ -110,46 +112,51 @@ export default function ShipmentDetailPage() {
                     quantity: l.quantity, lot_id: l.lot_id || undefined, serial_id: l.serial_id || undefined,
                 })),
             });
-            toast.push('Shipping details saved.', 'success');
+            toast.push(t('fulfillment.shipmentDetail.shippingSaved', 'Shipping details saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['shipment', id] });
             qc.invalidateQueries({ queryKey: ['shipment-rates', id] });
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.shippingSaveFailed', 'The shipping details could not be saved.'), 'error'); }
     }
 
     async function generateLabel(serviceCode = null) {
         try {
             const res = await api.shipmentLabel(id, { service_code: serviceCode || shipMeta.carrier_service });
             setLabel(res.data);
-            toast.push('Shipping label generated.', 'success');
+            toast.push(t('fulfillment.shipmentDetail.labelGenerated', 'Shipping label generated.'), 'success');
             qc.invalidateQueries({ queryKey: ['shipment', id] });
             qc.invalidateQueries({ queryKey: ['shipment-tracking', id] });
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.labelFailed', 'The shipping label could not be generated.'), 'error'); }
     }
 
     async function post() {
-        try { await api.postShipment(id, overrides); toast.push('Shipment posted — stock shipped OUT.', 'success'); qc.invalidateQueries({ queryKey: ['shipment', id] }); }
-        catch (e) { toast.push(e.message, 'error'); }
+        try { await api.postShipment(id, overrides); toast.push(t('fulfillment.shipmentDetail.posted', 'Shipment posted — stock shipped OUT.'), 'success'); qc.invalidateQueries({ queryKey: ['shipment', id] }); }
+        catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.postFailed', 'The shipment could not be posted.'), 'error'); }
     }
 
     const setPick = (lineId, patch) => setPicks((p) => ({ ...p, [lineId]: { ...(p[lineId] ?? {}), ...patch } }));
+    const trackingEventLabel = (event) => {
+        if (event.status === 'label_created') return t('fulfillment.trackingEvent.labelCreated', 'Label :tracking created', { tracking: carrierTracking?.tracking_number ?? '' });
+        if (event.status === 'in_transit') return t('fulfillment.trackingEvent.handedToCarrier', 'Shipment handed to carrier');
+        return event.message;
+    };
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Shipments', to: '/shipments' }, { label: s.shipment_number }]} />
-            <header className="page-head"><h1>{s.shipment_number}</h1><DocumentStatusBadge status={s.status} />{isMock && <span className="badge badge--warn">sample data</span>}</header>
+            <Breadcrumbs items={[{ label: t('fulfillment.shipments.title', 'Shipments'), to: '/shipments' }, { label: s.shipment_number }]} />
+            <header className="page-head"><h1>{s.shipment_number}</h1><DocumentStatusBadge status={s.status} />{isMock && <span className="badge badge--warn">{t('fulfillment.common.sampleData', 'Sample data')}</span>}</header>
 
             <div className="panel"><dl className="kv">
-                <dt>Sales order</dt><dd><Link to={`/sales-orders/${s.sales_order_id}`}>#{s.sales_order_id}</Link></dd>
-                <dt>Ship date</dt><dd>{s.ship_date}</dd>
-                <dt>Warehouse</dt><dd>#{s.warehouse_id}</dd>
-                <dt>Carrier</dt><dd>{s.carrier ?? '—'} {s.carrier_service && <span className="muted">· {s.carrier_service}</span>}</dd>
-                <dt>Tracking #</dt><dd>{s.tracking_number ?? '—'}</dd>
-                <dt>Label</dt><dd>{s.label_number ?? '—'} {s.label_status && <span className="badge badge--demo">{s.label_status}</span>}</dd>
+                <dt>{t('fulfillment.common.salesOrder', 'Sales order')}</dt><dd><Link to={`/sales-orders/${s.sales_order_id}`}>#{s.sales_order_id}</Link></dd>
+                <dt>{t('fulfillment.shipmentDetail.shipDate', 'Ship date')}</dt><dd>{s.ship_date}</dd>
+                <dt>{t('fulfillment.common.warehouse', 'Warehouse')}</dt><dd>#{s.warehouse_id}</dd>
+                <dt>{t('fulfillment.common.carrier', 'Carrier')}</dt><dd>{s.carrier ?? '—'} {s.carrier_service && <span className="muted">· {t(`fulfillment.service.${s.carrier_service}`, s.carrier_service)}</span>}</dd>
+                <dt>{t('fulfillment.common.trackingNumber', 'Tracking #')}</dt><dd>{s.tracking_number ?? '—'}</dd>
+                <dt>{t('fulfillment.shipmentDetail.label', 'Label')}</dt><dd>{s.label_number ?? '—'} {s.label_status && <span className="badge badge--demo">{t(`fulfillment.labelStatus.${s.label_status}`, s.label_status)}</span>}</dd>
             </dl></div>
 
-            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'shipping', label: 'Carrier' }, { key: 'tracking', label: 'Tracking' }, { key: 'ledger', label: 'Ledger result' }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'lines', label: t('fulfillment.common.lines', 'Lines') }, { key: 'shipping', label: t('fulfillment.common.carrier', 'Carrier') }, { key: 'tracking', label: t('fulfillment.shipmentDetail.tracking', 'Tracking') }, { key: 'ledger', label: t('fulfillment.shipmentDetail.ledgerResult', 'Ledger result') }]} active={tab} onChange={setTab} />
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Item</th><th>Ship qty</th><th>Lot / Serial</th><th>Selected</th></tr></thead>
+                <thead><tr><th>{t('fulfillment.common.item', 'Item')}</th><th>{t('fulfillment.shipmentDetail.shipQuantity', 'Ship qty')}</th><th>{t('fulfillment.common.traceability', 'Lot / Serial')}</th><th>{t('fulfillment.shipmentDetail.selected', 'Selected')}</th></tr></thead>
                 <tbody>{lines.map((l) => {
                     const p = picks[l.id] ?? {};
                     const t = tracking.trackingOf(l.item_id);
@@ -169,7 +176,7 @@ export default function ShipmentDetailPage() {
                                         {tracking.tracksSerial(l.item_id) && <SerialSelector itemId={l.item_id} warehouseId={s.warehouse_id} value={p.serial_ids ?? []} expectedQty={Number(l.quantity)} onChange={(ids) => setPick(l.id, { serial_ids: ids })} />}
                                     </div>
                                 ) : (
-                                    <span>{l.lot_id ? `lot #${l.lot_id}` : ''}{l.serial_id ? ` serial #${l.serial_id}` : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</span>
+                                    <span>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</span>
                                 )}
                             </td>
                             <td>{selCount}</td>
@@ -180,66 +187,66 @@ export default function ShipmentDetailPage() {
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'shipping' && <div className="panel">
                 <div className="fg4">
-                    <label className="field"><span className="field-label">Carrier</span><input className="input" value={shipMeta.carrier ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, carrier: e.target.value })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Service</span><select className="input" value={shipMeta.carrier_service ?? 'standard'} onChange={(e) => setShipMeta({ ...shipMeta, carrier_service: e.target.value })} disabled={!isDraft}>
-                        <option value="standard">Standard ground</option><option value="express">Express</option><option value="freight">Freight</option>
+                    <label className="field"><span className="field-label">{t('fulfillment.common.carrier', 'Carrier')}</span><input className="input" value={shipMeta.carrier ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, carrier: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.service', 'Service')}</span><select className="input" value={shipMeta.carrier_service ?? 'standard'} onChange={(e) => setShipMeta({ ...shipMeta, carrier_service: e.target.value })} disabled={!isDraft}>
+                        <option value="standard">{t('fulfillment.service.standard', 'Standard ground')}</option><option value="express">{t('fulfillment.service.express', 'Express')}</option><option value="freight">{t('fulfillment.service.freight', 'Freight')}</option>
                     </select></label>
-                    <label className="field"><span className="field-label">Tracking #</span><input className="input" value={shipMeta.tracking_number ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, tracking_number: e.target.value })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Warranty months</span><input className="input" type="number" min="0" max="120" value={shipMeta.warranty_months ?? 12} onChange={(e) => setShipMeta({ ...shipMeta, warranty_months: e.target.value })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Weight</span><input className="input" type="number" step="0.0001" value={shipMeta.package_weight ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_weight: e.target.value })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Length</span><input className="input" type="number" step="0.0001" value={shipMeta.package_length ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_length: e.target.value })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Width</span><input className="input" type="number" step="0.0001" value={shipMeta.package_width ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_width: e.target.value })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Height</span><input className="input" type="number" step="0.0001" value={shipMeta.package_height ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_height: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.common.trackingNumber', 'Tracking #')}</span><input className="input" value={shipMeta.tracking_number ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, tracking_number: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.warrantyMonths', 'Warranty months')}</span><input className="input" type="number" min="0" max="120" value={shipMeta.warranty_months ?? 12} onChange={(e) => setShipMeta({ ...shipMeta, warranty_months: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.weight', 'Weight')}</span><input className="input" type="number" step="0.0001" value={shipMeta.package_weight ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_weight: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.length', 'Length')}</span><input className="input" type="number" step="0.0001" value={shipMeta.package_length ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_length: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.width', 'Width')}</span><input className="input" type="number" step="0.0001" value={shipMeta.package_width ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_width: e.target.value })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.height', 'Height')}</span><input className="input" type="number" step="0.0001" value={shipMeta.package_height ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, package_height: e.target.value })} disabled={!isDraft} /></label>
                 </div>
                 <div className="fg2">
-                    <label className="field"><span className="field-label">Ship to</span><input className="input" value={shipMeta.ship_to?.name ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, ship_to: { ...(shipMeta.ship_to ?? {}), name: e.target.value } })} disabled={!isDraft} /></label>
-                    <label className="field"><span className="field-label">Address</span><input className="input" value={shipMeta.ship_to?.address ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, ship_to: { ...(shipMeta.ship_to ?? {}), address: e.target.value } })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.shipTo', 'Ship to')}</span><input className="input" value={shipMeta.ship_to?.name ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, ship_to: { ...(shipMeta.ship_to ?? {}), name: e.target.value } })} disabled={!isDraft} /></label>
+                    <label className="field"><span className="field-label">{t('fulfillment.shipmentDetail.address', 'Address')}</span><input className="input" value={shipMeta.ship_to?.address ?? ''} onChange={(e) => setShipMeta({ ...shipMeta, ship_to: { ...(shipMeta.ship_to ?? {}), address: e.target.value } })} disabled={!isDraft} /></label>
                 </div>
-                {isDraft && <button className="btn" disabled={!gate.allowed} onClick={saveShipping}>Save shipping details</button>}
-                <h3>Rates</h3>
+                {isDraft && <button className="btn" disabled={!gate.allowed} onClick={saveShipping}>{t('fulfillment.shipmentDetail.saveShipping', 'Save shipping details')}</button>}
+                <h3>{t('fulfillment.shipmentDetail.rates', 'Rates')}</h3>
                 <div className="report-grid">
                     {rates.map((r) => <div className="widget-card" key={r.service_code}>
-                        <div className="widget-card-label">{r.service_name}</div>
+                        <div className="widget-card-label">{t(`fulfillment.service.${r.service_code}`, r.service_name)}</div>
                         <div className="widget-card-value">{r.amount} {r.currency}</div>
-                        <div className="muted">{r.estimated_days} days</div>
-                        <button className="btn btn--sm" disabled={!gate.allowed} onClick={() => generateLabel(r.service_code)}>Use rate & label</button>
+                        <div className="muted">{t('fulfillment.shipmentDetail.estimatedDays', ':count days', { count: r.estimated_days })}</div>
+                        <button className="btn btn--sm" disabled={!gate.allowed} onClick={() => generateLabel(r.service_code)}>{t('fulfillment.shipmentDetail.useRate', 'Use rate & label')}</button>
                     </div>)}
                 </div>
                 {(label?.label || s.label_payload) && <div className="label-card shipping-label">
-                    <strong>{(label?.label ?? s.label_payload).carrier} {(label?.label ?? s.label_payload).service_name}</strong>
+                    <strong>{(label?.label ?? s.label_payload).carrier} {t(`fulfillment.service.${(label?.label ?? s.label_payload).service_code}`, (label?.label ?? s.label_payload).service_name)}</strong>
                     <span>{s.shipment_number}</span>
                     <code>{(label?.label ?? s.label_payload).tracking_number}</code>
                     <span className="qr-preview" dangerouslySetInnerHTML={{ __html: (label?.label ?? s.label_payload).qr_svg }} />
                 </div>}
             </div>}
             {tab === 'tracking' && <div className="panel">
-                {!carrierTracking ? <EmptyState title="No tracking yet" hint="Generate a label to create tracking." /> : <>
-                    <dl className="kv"><dt>Carrier</dt><dd>{carrierTracking.carrier}</dd><dt>Tracking #</dt><dd>{carrierTracking.tracking_number}</dd><dt>Status</dt><dd>{carrierTracking.status}</dd></dl>
-                    <table className="data-table"><thead><tr><th>Time</th><th>Status</th><th>Event</th></tr></thead>
-                    <tbody>{(carrierTracking.events ?? []).map((e, i) => <tr key={i}><td>{e.occurred_at}</td><td>{e.status}</td><td>{e.message}</td></tr>)}</tbody></table>
+                {!carrierTracking ? <EmptyState title={t('fulfillment.shipmentDetail.noTrackingTitle', 'No tracking yet')} hint={t('fulfillment.shipmentDetail.noTrackingHint', 'Generate a label to create tracking.')} /> : <>
+                    <dl className="kv"><dt>{t('fulfillment.common.carrier', 'Carrier')}</dt><dd>{carrierTracking.carrier}</dd><dt>{t('fulfillment.common.trackingNumber', 'Tracking #')}</dt><dd>{carrierTracking.tracking_number}</dd><dt>{t('fulfillment.common.status', 'Status')}</dt><dd>{t(`fulfillment.trackingStatus.${carrierTracking.status}`, carrierTracking.status)}</dd></dl>
+                    <table className="data-table"><thead><tr><th>{t('fulfillment.shipmentDetail.time', 'Time')}</th><th>{t('fulfillment.common.status', 'Status')}</th><th>{t('fulfillment.shipmentDetail.event', 'Event')}</th></tr></thead>
+                    <tbody>{(carrierTracking.events ?? []).map((e, i) => <tr key={i}><td>{e.occurred_at}</td><td>{t(`fulfillment.trackingStatus.${e.status}`, e.status)}</td><td>{trackingEventLabel(e)}</td></tr>)}</tbody></table>
                 </>}
             </div>}
 
             {isDraft && (
                 <div className="panel">
-                    <h3>Override controls</h3>
+                    <h3>{t('fulfillment.shipmentDetail.overrideControls', 'Override controls')}</h3>
                     <label className="trace-override"><input type="checkbox" disabled={!canOverrideExpired.allowed}
                         checked={overrides.allow_expired_lot} onChange={(e) => setOverrides({ ...overrides, allow_expired_lot: e.target.checked })} />
-                        Allow shipping expired lots {!canOverrideExpired.allowed && <span className="muted">(no permission)</span>}</label>
+                        {t('fulfillment.shipmentDetail.allowExpired', 'Allow shipping expired lots')} {!canOverrideExpired.allowed && <span className="muted">{t('fulfillment.common.noPermission', '(no permission)')}</span>}</label>
                     <label className="trace-override"><input type="checkbox" disabled={!canOverrideQuarantine.allowed}
                         checked={overrides.allow_quarantined_lot} onChange={(e) => setOverrides({ ...overrides, allow_quarantined_lot: e.target.checked })} />
-                        Allow shipping quarantined/recalled lots {!canOverrideQuarantine.allowed && <span className="muted">(no permission)</span>}</label>
+                        {t('fulfillment.shipmentDetail.allowQuarantined', 'Allow shipping quarantined/recalled lots')} {!canOverrideQuarantine.allowed && <span className="muted">{t('fulfillment.common.noPermission', '(no permission)')}</span>}</label>
                 </div>
             )}
 
             <div className="doc-actions">
-                {isDraft && <button className="btn" disabled={!gate.allowed || savingPicks} onClick={savePicks}>{savingPicks ? 'Saving…' : 'Save lot/serial'}</button>}
-                {isDraft && <button className="btn btn--primary" disabled={!gate.allowed || !captureComplete} title={captureComplete ? '' : 'Complete lot/serial capture first'} onClick={() => setConfirmPost(true)}>Post shipment</button>}
-                {s.reversed_at && <span className="badge badge--demo">Reversed by return #{s.reversal_sales_return_id}</span>}
-                {s.status === 'posted' && !s.reversed_at && <button className="btn" disabled={!canReturn.allowed} onClick={() => nav(`/sales-returns/new?shipment_id=${s.id}`)}>Create source reversal</button>}
+                {isDraft && <button className="btn" disabled={!gate.allowed || savingPicks} onClick={savePicks}>{savingPicks ? t('fulfillment.common.saving', 'Saving…') : t('fulfillment.shipmentDetail.saveTraceability', 'Save lot/serial')}</button>}
+                {isDraft && <button className="btn btn--primary" disabled={!gate.allowed || !captureComplete} title={captureComplete ? '' : t('fulfillment.shipmentDetail.captureFirst', 'Complete lot/serial capture first')} onClick={() => setConfirmPost(true)}>{t('fulfillment.shipmentDetail.postShipment', 'Post shipment')}</button>}
+                {s.reversed_at && <span className="badge badge--demo">{t('fulfillment.shipmentDetail.reversedByReturn', 'Reversed by return #:reference', { reference: s.reversal_sales_return_id })}</span>}
+                {s.status === 'posted' && !s.reversed_at && <button className="btn" disabled={!canReturn.allowed} onClick={() => nav(`/sales-returns/new?shipment_id=${s.id}`)}>{t('fulfillment.shipmentDetail.createReversal', 'Create source reversal')}</button>}
             </div>
-            {isDraft && !captureComplete && <p className="muted">Select lot/serial for every tracked line before posting.</p>}
-            <ConfirmPostModal open={confirmPost} name="shipment"
+            {isDraft && !captureComplete && <p className="muted">{t('fulfillment.shipmentDetail.captureRequired', 'Select lot/serial for every tracked line before posting.')}</p>}
+            <ConfirmPostModal open={confirmPost} name={t('fulfillment.shipmentDetail.confirmPostName', 'shipment')}
                 onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
         </section>
     );
