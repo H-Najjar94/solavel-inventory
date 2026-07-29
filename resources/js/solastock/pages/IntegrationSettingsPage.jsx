@@ -24,7 +24,12 @@ export default function IntegrationSettingsPage() {
     const [savingConnection, setSavingConnection] = useState(false);
     const [rotatingKey, setRotatingKey] = useState(false);
 
-    const status = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
+    const status = useApiQuery(['integration-status'], api.integrationStatus, {
+        fallback: null,
+        refetchOnMount: 'always',
+        refetchOnWindowFocus: 'always',
+        refetchInterval: 15_000,
+    });
     const s = status.data;
     useEffect(() => {
         if (s || tenant.client_id) {
