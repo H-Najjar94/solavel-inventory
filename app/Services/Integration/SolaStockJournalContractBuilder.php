@@ -5,6 +5,7 @@ namespace App\Services\Integration;
 use App\Models\Landlord\Organization as CentralOrganization;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -24,19 +25,32 @@ final class SolaStockJournalContractBuilder
         $setting = IntegrationSetting::query()->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)->first();
         if (! $setting) {
-            throw new RuntimeException('The immutable SolaBooks integration mapping is missing.');
+            throw new RuntimeException(__('inventory.integration.contract_mapping_missing'));
         }
         $meta = (array) $setting->meta;
         $finance = (array) ($meta['finance_currency_contract'] ?? []);
         foreach (['client_id', 'central_organization_id', 'signing_key_id'] as $field) {
             if (empty($meta[$field])) {
-                throw new RuntimeException("Integration identity field '{$field}' is missing.");
+                throw new RuntimeException(__('inventory.integration.contract_identity_field_missing', ['field' => $field]));
             }
         }
         foreach (['base_currency_code', 'enabled_currency_codes', 'money_scale', 'rate_scale'] as $field) {
             if (! array_key_exists($field, $finance)) {
-                throw new RuntimeException("Authoritative Finance currency field '{$field}' is missing.");
+                throw new RuntimeException(__('inventory.integration.contract_currency_field_missing', ['field' => $field]));
             }
+        }
+        $organizationMapping = IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', $orgId)
+            ->where('finance_organization_id', (int) $setting->solabooks_organization_id)
+            ->where('central_client_id', (int) $meta['client_id'])
+            ->where('central_organization_id', (int) $meta['central_organization_id'])
+            ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
+            ->where('contract_version', SolaStockJournalContract::VERSION)
+            ->where('status', 'verified_hold')
+            ->where('activation_state', 'maintenance_hold')
+            ->first();
+        if (! $organizationMapping) {
+            throw new RuntimeException(__('inventory.integration.contract_v2_mapping_missing'));
         }
         $tenantConnection = config('tenancy.tenant_connection', 'tenant');
         if (Schema::connection($tenantConnection)->hasTable('organizations')) {
@@ -55,25 +69,25 @@ final class SolaStockJournalContractBuilder
             || (property_exists($central, 'is_active') && ! (bool) $central->is_active)
             || (property_exists($central, 'deleted_at') && $central->deleted_at !== null)
             || (property_exists($central, 'setup_status') && $central->setup_status !== 'complete')) {
-            throw new RuntimeException('The central organization is inactive, archived, deleted, or mismatched.');
+            throw new RuntimeException(__('inventory.integration.contract_organization_invalid'));
         }
 
         $eventPayload = (array) $event->payload;
         $transaction = $eventPayload['currency'] ?? null;
         if (! is_array($transaction) || empty($transaction['code'])) {
-            throw new RuntimeException('Transaction currency is required; no currency default is permitted.');
+            throw new RuntimeException(__('inventory.integration.contract_transaction_currency_required'));
         }
         $txCode = (string) $transaction['code'];
         $baseCode = (string) $finance['base_currency_code'];
         if (! preg_match('/^[A-Z]{3}$/', $txCode) || ! preg_match('/^[A-Z]{3}$/', $baseCode)) {
-            throw new RuntimeException('Currency codes must be uppercase three-letter ISO codes.');
+            throw new RuntimeException(__('inventory.integration.contract_currency_code_invalid'));
         }
         if (! in_array($txCode, (array) $finance['enabled_currency_codes'], true)) {
-            throw new RuntimeException("Currency '{$txCode}' is not enabled by SolaBooks for this organization.");
+            throw new RuntimeException(__('inventory.integration.contract_currency_disabled', ['currency' => $txCode]));
         }
         $date = (string) ($eventPayload['document_date'] ?? '');
         if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-            throw new RuntimeException('The source transaction date is required.');
+            throw new RuntimeException(__('inventory.integration.contract_transaction_date_required'));
         }
         if ($txCode === $baseCode) {
             $rate = '1';
@@ -82,14 +96,14 @@ final class SolaStockJournalContractBuilder
         } else {
             foreach (['exchange_rate', 'rate_date', 'rate_source'] as $field) {
                 if (! isset($transaction[$field]) || $transaction[$field] === '') {
-                    throw new RuntimeException("Foreign-currency field '{$field}' is required.");
+                    throw new RuntimeException(__('inventory.integration.contract_foreign_field_required', ['field' => $field]));
                 }
             }
             $rate = (string) $transaction['exchange_rate'];
             $rateDate = (string) $transaction['rate_date'];
             $rateSource = (string) $transaction['rate_source'];
             if (Decimal::cmp($rate, '0') <= 0 || $rateDate !== $date) {
-                throw new RuntimeException('Foreign-currency rate must be positive and dated on the transaction date.');
+                throw new RuntimeException(__('inventory.integration.contract_foreign_rate_invalid'));
             }
         }
 
@@ -111,7 +125,7 @@ final class SolaStockJournalContractBuilder
                 $taxId = (int) $line['tax_rate_id'];
                 $taxAuthority = (array) data_get($meta, "finance_tax_contract.{$taxId}", []);
                 if (! isset($taxAuthority['rate'])) {
-                    throw new RuntimeException("Authoritative Finance tax metadata is missing for tax {$taxId}.");
+                    throw new RuntimeException(__('inventory.integration.contract_tax_metadata_missing', ['tax' => $taxId]));
                 }
                 $taxAmount = Decimal::round(Decimal::gt($debit, $credit) ? $debit : $credit, $txScale);
                 $result['tax'] = [
@@ -136,7 +150,7 @@ final class SolaStockJournalContractBuilder
             $originalKey = IntegrationOutboxEvent::query()->where('organization_id', $orgId)
                 ->where('event_uuid', $original['event_uuid'])->value('idempotency_key');
             if (! $originalKey) {
-                throw new RuntimeException('The original reversal source identity is missing.');
+                throw new RuntimeException(__('inventory.integration.contract_reversal_identity_missing'));
             }
             $reversal = ['original_source_key' => $originalKey, 'reason_code' => $original['reason_code'] ?? null];
         }
@@ -153,7 +167,7 @@ final class SolaStockJournalContractBuilder
                 'central_organization_id' => (int) $meta['central_organization_id'],
                 'inventory_organization_id' => $orgId,
                 'finance_organization_id' => (int) $setting->solabooks_organization_id,
-                'integration_mapping_id' => (int) $setting->id,
+                'integration_mapping_id' => (int) $organizationMapping->id,
                 'signing_key_id' => (string) $meta['signing_key_id'],
             ],
             'source' => [
@@ -195,7 +209,7 @@ final class SolaStockJournalContractBuilder
         $absolute = Decimal::lt($diff, '0') ? ltrim($diff, '-') : $diff;
         $unit = $scale === 0 ? '1' : '0.'.str_repeat('0', $scale - 1).'1';
         if (Decimal::gt($absolute, $unit, $scale)) {
-            throw new RuntimeException('Foreign-currency conversion produced more than one minor unit of base imbalance.');
+            throw new RuntimeException(__('inventory.integration.contract_rounding_imbalance'));
         }
         $target = null;
         foreach ($lines as $index => $line) {

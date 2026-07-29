@@ -218,10 +218,20 @@ class SolaBooksOutboxDeliveryService
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->firstOrFail();
+        $mapping = \App\Models\Tenant\IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', $orgId)
+            ->where('finance_organization_id', (int) $setting->solabooks_organization_id)
+            ->where('central_client_id', (int) ($setting->meta['client_id'] ?? 0))
+            ->where('central_organization_id', (int) ($setting->meta['central_organization_id'] ?? 0))
+            ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
+            ->where('contract_version', SolaStockJournalContract::VERSION)
+            ->where('status', 'verified_hold')
+            ->where('activation_state', 'maintenance_hold')
+            ->firstOrFail();
         $response = $this->clientForProvisioning($setting)->post($this->signingEndpoint('rotate'), [
             'inventory_organization_id' => $orgId,
             'central_organization_id' => (int) ($setting->meta['central_organization_id'] ?? 0),
-            'integration_mapping_id' => (int) $setting->id,
+            'integration_mapping_id' => (int) $mapping->id,
         ]);
         if (! $response->successful()) {
             throw new RuntimeException($response->json('error.message') ?: __('inventory.integration.rotation_failed'));

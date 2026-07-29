@@ -96,6 +96,23 @@ export default function IntegrationSettingsPage() {
                         <div className="widget-card"><div className="widget-card-label">{tr('integration.metrics.mapping')}</div><div className="widget-card-value">{s.mapping_completeness_pct ?? 0}%</div></div>
                         <div className="widget-card"><div className="widget-card-label">{tr('integration.metrics.taxMapping')}</div><div className="widget-card-value">{s.tax_mapping_completeness_pct ?? 0}%</div></div>
                     </div>
+                    <div className="panel" role="status">
+                        <h2>{tr('integration.authority.title')}</h2>
+                        <p>{tr('integration.authority.description')}</p>
+                        <div className="widget-grid">
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.authority.mapped')}</div><div className="widget-card-value">{s.inventory_authority?.mapped ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.authority.missing')}</div><div className="widget-card-value">{s.inventory_authority?.missing ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.authority.conflicting')}</div><div className="widget-card-value">{s.inventory_authority?.conflicting ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.authority.archived')}</div><div className="widget-card-value">{s.inventory_authority?.archived ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.authority.review')}</div><div className="widget-card-value">{s.inventory_authority?.review_required ?? 0}</div></div>
+                        </div>
+                        <dl className="kv">
+                            <dt>{tr('integration.authority.state')}</dt><dd>{tr(`integration.authority.${s.inventory_authority?.state ?? 'unavailable'}`)}</dd>
+                            <dt>{tr('integration.authority.lastRead')}</dt><dd>{s.inventory_authority?.last_successful_read_at ?? '—'}</dd>
+                            <dt>{tr('integration.authority.mappingId')}</dt><dd>{s.organization_mapping?.mapping_uuid ?? tr('integration.details.notConfigured')}</dd>
+                            <dt>{tr('integration.authority.v2Scope')}</dt><dd>{s.organization_mapping?.v2_key_scope_status ?? tr('integration.details.notConfigured')}</dd>
+                        </dl>
+                    </div>
                     <div className="panel">
                         <dl className="kv">
                             <dt>{tr('integration.details.linkedOrg')}</dt><dd>{s.solabooks_organization_id ? `#${s.solabooks_organization_id}` : tr('integration.details.notLinked')}</dd>

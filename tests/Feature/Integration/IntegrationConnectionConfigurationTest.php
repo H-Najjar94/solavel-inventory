@@ -19,7 +19,7 @@ class IntegrationConnectionConfigurationTest extends TestCase
     use TenantAware;
 
     #[Test]
-    public function shared_solabooks_workspace_is_reported_as_read_only_connected_without_delivery_credentials(): void
+    public function an_organization_row_without_an_immutable_mapping_is_not_reported_as_connected(): void
     {
         $this->useTenantA();
         IntegrationSetting::query()->where('integration', IntegrationEvents::INTEGRATION)->delete();
@@ -35,9 +35,10 @@ class IntegrationConnectionConfigurationTest extends TestCase
 
         $status = $service->status(TenantTestManager::ORG_A);
 
-        $this->assertSame('connected_readonly', $status['mode']);
-        $this->assertTrue($status['workspace_connected']);
-        $this->assertSame($financeOrgId, $status['solabooks_organization_id']);
+        $this->assertSame('disconnected', $status['mode']);
+        $this->assertFalse($status['workspace_connected']);
+        $this->assertNull($status['solabooks_organization_id']);
+        $this->assertFalse($status['connection_implemented']);
         $this->assertFalse($status['delivery_configured']);
     }
 
