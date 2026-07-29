@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Integration\IntegrationEvents;
 use App\Services\Tenancy\TenantManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
