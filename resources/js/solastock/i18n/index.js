@@ -9,8 +9,8 @@ import * as insights from './insights.js';
 import * as admin from './admin.js';
 
 export const dictionaries = {
-  en: Object.assign({}, core.en, catalog.en, stock.en, operations.en, purchasing.en, sales.en, traceability.en, insights.en, admin.en),
-  ar: Object.assign({}, core.ar, catalog.ar, stock.ar, operations.ar, purchasing.ar, sales.ar, traceability.ar, insights.ar, admin.ar),
+  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, stock.en, operations.en, purchasing.en, sales.en, traceability.en, insights.en, admin.en),
+  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, stock.ar, operations.ar, purchasing.ar, sales.ar, traceability.ar, insights.ar, admin.ar),
 };
 
 // English source phrases used by page islands. Keeping this separate from

@@ -9,12 +9,13 @@ import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCar
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import { MoneyInput, SupplierPicker } from '../components/pickers.jsx';
+import { t } from '../i18n/index.js';
 
 // ── helpers ──
 const num = (v) => Number(v ?? 0);
 const money = (v) => num(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qty = (v) => num(v).toLocaleString(undefined, { maximumFractionDigits: 4 });
-const sourceText = (obj) => obj?.source_display || obj?.source_label || 'Source document unavailable';
+const sourceText = (obj) => obj?.source_display || obj?.source_label || t('itemDetail.sourceUnavailable');
 const sourceLink = (obj) => obj?.source_route || null;
 const layerValue = (remainingQty, unitCost) => money(num(remainingQty) * num(unitCost));
 
@@ -90,12 +91,12 @@ function ValuationDrawer({ itemId, open, onClose }) {
     const hasStock = (v?.warehouses ?? []).length > 0;
 
     return (
-        <Drawer open={open} onClose={onClose} title="Stock valuation"
-            subtitle={v ? `${v.sku} · ${isFifo ? 'FIFO' : 'Average'} costing` : ''} width={500}>
+        <Drawer open={open} onClose={onClose} title={t('itemDetail.stockValuation')}
+            subtitle={v ? `${v.sku} · ${isFifo ? 'FIFO' : t('items.average')} ${t('itemDetail.costingSuffix')}` : ''} width={500}>
             {isLoading && <Skeleton rows={5} />}
             {isError && (
-                <div className="drawer-error">Couldn’t load valuation{error?.message ? `: ${error.message}` : '.'}
-                    <div><button className="btn btn--sm" onClick={() => refetch()}>Try again</button></div></div>
+                <div className="drawer-error">{t('itemDetail.loadValuationFailed')}{error?.message ? `: ${error.message}` : '.'}
+                    <div><button className="btn btn--sm" onClick={() => refetch()}>{t('itemDetail.tryAgain')}</button></div></div>
             )}
             {v && !isError && (
                 <>
@@ -106,17 +107,17 @@ function ValuationDrawer({ itemId, open, onClose }) {
                     </div>
                     {hasStock && (
                         <div className="wh-card-grid" style={{ marginBottom: 18 }}>
-                            <MetricCard label="On-hand value" value={money(v.on_hand_value)} sub={isFifo ? 'FIFO basis' : 'average basis'} tone="ok" />
-                            <MetricCard label={isFifo ? 'Same stock, average' : 'Same stock, FIFO'} value={money(isFifo ? v.average_value_total : v.fifo_value_total)} sub="for comparison" />
+                        <MetricCard label={t('itemDetail.onHandValue')} value={money(v.on_hand_value)} sub={isFifo ? t('itemDetail.fifoBasis') : t('itemDetail.averageBasis')} tone="ok" />
+                            <MetricCard label={isFifo ? t('itemDetail.sameStockAverage') : t('itemDetail.sameStockFifo')} value={money(isFifo ? v.average_value_total : v.fifo_value_total)} sub={t('itemDetail.forComparison')} />
                         </div>
                     )}
-                    {!hasStock && <EmptyState title="No stock to value yet" hint="Once you receive or open stock, its value and FIFO layers appear here." />}
+                    {!hasStock && <EmptyState title={t('itemDetail.noStockValue')} hint={t('itemDetail.noStockValueHint')} />}
                     {(v.warehouses ?? []).map((w) => (
                         <div className="card wh-card" key={w.warehouse_id} style={{ marginBottom: 14 }}>
                             <div className="wh-card-head">
                                 <span className="wh-card-name">{w.warehouse_name ?? `Warehouse #${w.warehouse_id}`}</span>
                                 {w.warehouse_code && <span className="wh-card-code">{w.warehouse_code}</span>}
-                                {w.qty_reconciled ? <Badge tone="ok">Reconciled</Badge> : <Badge tone="danger">Needs review</Badge>}
+                                {w.qty_reconciled ? <Badge tone="ok">{t('itemDetail.reconciled')}</Badge> : <Badge tone="danger">{t('itemDetail.needsReview')}</Badge>}
                             </div>
                             <div className="wh-card-grid" style={{ marginBottom: 10 }}>
                                 <div><div className="wh-stat-label">On hand</div><div className="wh-stat-val">{qty(w.on_hand_qty)}</div></div>
@@ -264,8 +265,8 @@ export default function ItemDetailPage() {
     if (!item) {
         return (
             <section className="page">
-                <Breadcrumbs items={[{ label: 'Items', to: '/items' }, { label: 'Not found' }]} />
-                <EmptyState title="Item unavailable" hint="Select a tenant to load real data." />
+                <Breadcrumbs items={[{ label: t('items'), to: '/items' }, { label: t('itemDetail.notFound') }]} />
+                <EmptyState title={t('itemDetail.unavailable')} hint={t('itemDetail.unavailableHint')} />
             </section>
         );
     }
@@ -276,12 +277,12 @@ export default function ItemDetailPage() {
     const lowStock = !isService && reorder > 0 && totals.available <= reorder;
 
     const tabs = [
-        { key: 'overview', label: 'Overview' },
-        { key: 'inventory', label: 'Inventory' },
-        { key: 'movements', label: 'Movements' },
-        { key: 'barcodes', label: 'Barcodes' },
-        { key: 'media', label: 'Media' },
-        { key: 'details', label: 'Details' },
+        { key: 'overview', label: t('itemDetail.overview') },
+        { key: 'inventory', label: t('itemDetail.inventory') },
+        { key: 'movements', label: t('itemDetail.movements') },
+        { key: 'barcodes', label: t('itemDetail.barcodes') },
+        { key: 'media', label: t('itemDetail.media') },
+        { key: 'details', label: t('itemDetail.details') },
     ];
 
     async function addBarcode(e) {
@@ -291,7 +292,7 @@ export default function ItemDetailPage() {
             await api.createItemBarcode(item.id, newBarcode);
             setNewBarcode({ barcode: '', type: 'internal' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push('Barcode added.', 'success');
+            toast.push(t('itemDetail.barcodeAdded'), 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -334,7 +335,7 @@ export default function ItemDetailPage() {
             });
             setVariantForm({ sku: '', option: '', value: '', barcode_primary: '', purchase_price: '', sales_price: '' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push('Variant added.', 'success');
+            toast.push(t('itemDetail.variantAdded'), 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -342,7 +343,7 @@ export default function ItemDetailPage() {
         try {
             await api.deleteItemVariant(item.id, variantId);
             await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push('Variant removed.', 'success');
+            toast.push(t('itemDetail.variantRemoved'), 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -353,7 +354,7 @@ export default function ItemDetailPage() {
             await api.createSupplierPrice(item.id, priceForm);
             setPriceForm({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: 'SAR' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push('Supplier price saved.', 'success');
+            toast.push(t('itemDetail.supplierPriceSaved'), 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -361,7 +362,7 @@ export default function ItemDetailPage() {
         try {
             await api.deleteSupplierPrice(item.id, priceId);
             await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push('Supplier price removed.', 'success');
+            toast.push(t('itemDetail.supplierPriceRemoved'), 'success');
         } catch (err) { toast.push(err.message, 'error'); }
     }
 
@@ -375,7 +376,7 @@ export default function ItemDetailPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Items', to: '/items' }, { label: item.name }]} />
+            <Breadcrumbs items={[{ label: t('items'), to: '/items' }, { label: item.name }]} />
 
             {/* ── Hero header ── */}
             <div className="item-hero card">
@@ -388,21 +389,21 @@ export default function ItemDetailPage() {
                     <div className="item-hero-top">
                         <h1>{item.name}</h1>
                         <StatusBadge active={item.is_active} />
-                        {lowStock && <Badge tone="warn">Low stock</Badge>}
+                        {lowStock && <Badge tone="warn">{t('items.low')}</Badge>}
                     </div>
                     <div className="item-hero-meta">
                         <span><b>SKU</b> {item.sku}</span>
-                        <span><b>Barcode</b> {data.primary_barcode ?? '—'}</span>
-                        <span><b>Type</b> {item.item_type}</span>
-                        <span><b>Costing</b> {isService ? '—' : (isFifo ? 'FIFO' : 'Average')}</span>
-                        <span><b>Category</b> {item.category?.name ?? '—'}</span>
-                        <span><b>Brand</b> {item.brand?.name ?? '—'}</span>
+                        <span><b>{t('barcode')}</b> {data.primary_barcode ?? '—'}</span>
+                        <span><b>{t('itemDetail.type')}</b> {item.item_type}</span>
+                        <span><b>{t('items.costing')}</b> {isService ? '—' : (isFifo ? 'FIFO' : t('items.average'))}</span>
+                        <span><b>{t('category')}</b> {item.category?.name ?? '—'}</span>
+                        <span><b>{t('brand')}</b> {item.brand?.name ?? '—'}</span>
                     </div>
                     <div className="item-hero-actions">
-                        <Link to={`/items/${item.id}/edit`} className={`btn btn--sm btn--primary ${gate.allowed ? '' : 'is-disabled'}`}>Edit</Link>
-                        <button className="btn btn--sm" onClick={() => setTab('media')}>Manage images</button>
-                        <Link to="/adjustments/new" className="btn btn--sm">Adjust stock</Link>
-                        <Link to="/transfers/new" className="btn btn--sm">Transfer</Link>
+                        <Link to={`/items/${item.id}/edit`} className={`btn btn--sm btn--primary ${gate.allowed ? '' : 'is-disabled'}`}>{t('items.edit')}</Link>
+                        <button className="btn btn--sm" onClick={() => setTab('media')}>{t('items.manageMedia')}</button>
+                        <Link to="/adjustments/new" className="btn btn--sm">{t('itemDetail.adjustStock')}</Link>
+                        <Link to="/transfers/new" className="btn btn--sm">{t('itemDetail.transfer')}</Link>
                     </div>
                 </div>
             </div>
