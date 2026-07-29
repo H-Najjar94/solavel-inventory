@@ -7,6 +7,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge, DocumentActions, ConfirmPostModal, ConfirmReverseModal, LedgerPreview } from '../components/document.jsx';
+import { t } from '../i18n/index.js';
 
 export default function AdjustmentDetailPage() {
     const { id } = useParams();
@@ -21,7 +22,7 @@ export default function AdjustmentDetailPage() {
     const ledger = data?.ledger ?? [];
 
     if (isLoading) return <section className="page"><Skeleton /></section>;
-    if (!adj) return <section className="page"><Breadcrumbs items={[{ label: 'Adjustments', to: '/adjustments' }, { label: 'Not found' }]} /><EmptyState title="Unavailable" hint="Select a tenant to load real data." /></section>;
+    if (!adj) return <section className="page"><Breadcrumbs items={[{ label: t('adjustments'), to: '/adjustments' }, { label: t('adjustment.notFound') }]} /><EmptyState title={t('adjustment.unavailable')} hint={t('adjustment.unavailableHint')} /></section>;
 
     async function act(fn, label) {
         try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['adjustment'] }); }
@@ -30,36 +31,36 @@ export default function AdjustmentDetailPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Adjustments', to: '/adjustments' }, { label: adj.adjustment_number }]} />
+            <Breadcrumbs items={[{ label: t('adjustments'), to: '/adjustments' }, { label: adj.adjustment_number }]} />
             <header className="page-head">
                 <h1>{adj.adjustment_number}</h1><DocumentStatusBadge status={adj.status} />
-                {isMock && <span className="badge badge--warn">sample data</span>}
-                {adj.status === 'draft' && <Link to={`/adjustments/${id}/edit`} className="btn" style={{ marginLeft: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>Edit</Link>}
+                {isMock && <span className="badge badge--warn">{t('adjustment.sampleData')}</span>}
+                {adj.status === 'draft' && <Link to={`/adjustments/${id}/edit`} className="btn" style={{ marginLeft: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{t('adjustment.edit')}</Link>}
             </header>
 
             <div className="panel"><dl className="kv">
-                <dt>Date</dt><dd>{adj.adjustment_date}</dd><dt>Warehouse</dt><dd>{adj.warehouse_name ?? `#${adj.warehouse_id}`}</dd>
-                <dt>Reason</dt><dd>{adj.reason_code ?? '—'}</dd>
-                <dt>Reversal</dt><dd>{adj.reversal ? `${adj.reversal.reversal_number} — ${adj.reversal.reason}` : '—'}</dd>
-                <dt>Increase value</dt><dd>{adj.total_increase_value}</dd><dt>Decrease value</dt><dd>{adj.total_decrease_value}</dd>
+                <dt>{t('adjustment.date')}</dt><dd>{adj.adjustment_date}</dd><dt>{t('adjustment.warehouse')}</dt><dd>{adj.warehouse_name ?? `#${adj.warehouse_id}`}</dd>
+                <dt>{t('adjustment.reason')}</dt><dd>{adj.reason_code ?? '—'}</dd>
+                <dt>{t('adjustment.reversal')}</dt><dd>{adj.reversal ? `${adj.reversal.reversal_number} — ${adj.reversal.reason}` : '—'}</dd>
+                <dt>{t('adjustment.increaseValue')}</dt><dd>{adj.total_increase_value}</dd><dt>{t('adjustment.decreaseValue')}</dt><dd>{adj.total_decrease_value}</dd>
             </dl></div>
 
-            <Tabs tabs={[{ key: 'lines', label: 'Lines' }, { key: 'ledger', label: 'Ledger result' }, { key: 'audit', label: 'Audit' }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'lines', label: t('adjustment.lines') }, { key: 'ledger', label: t('adjustment.ledgerResult') }, { key: 'audit', label: t('adjustment.audit') }]} active={tab} onChange={setTab} />
 
             {tab === 'lines' && <div className="panel"><table className="data-table">
-                <thead><tr><th>Type</th><th>Item</th><th>Bin</th><th>Qty</th><th>Unit cost</th></tr></thead>
-                <tbody>{(adj.lines ?? []).map((l) => <tr key={l.id}><td>{l.direction}</td><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_code ?? l.bin?.code ?? (l.bin_id ? `#${l.bin_id}` : '—')}</td><td>{l.quantity}</td><td>{l.unit_cost}</td></tr>)}</tbody>
+                <thead><tr><th>{t('adjustment.type')}</th><th>{t('adjustment.item')}</th><th>{t('adjustment.bin')}</th><th>{t('adjustment.quantity')}</th><th>{t('adjustment.unitCost')}</th></tr></thead>
+                <tbody>{(adj.lines ?? []).map((l) => <tr key={l.id}><td>{t(`adjustment.direction.${l.direction}`, l.direction)}</td><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_code ?? l.bin?.code ?? (l.bin_id ? `#${l.bin_id}` : '—')}</td><td>{l.quantity}</td><td>{l.unit_cost}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
-            {tab === 'audit' && <div className="panel"><EmptyState title="Audit timeline" hint="Posted/reversed events are recorded in inventory_audit_logs." /></div>}
+            {tab === 'audit' && <div className="panel"><EmptyState title={t('adjustment.auditTimeline')} hint={t('adjustment.auditHint')} /></div>}
 
             <DocumentActions status={adj.status} canManage={gate.allowed}
                 onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} />
 
             <ConfirmPostModal open={confirmPost} name="adjustment"
-                onConfirm={() => { setConfirmPost(false); act(api.postAdjustment, 'Adjustment posted.'); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={() => { setConfirmPost(false); act(api.postAdjustment, t('adjustment.posted')); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name="adjustment"
-                onConfirm={(reason) => { setConfirmReverse(false); act(() => api.reverseAdjustment(id, reason), 'Adjustment reversed.'); }} onCancel={() => setConfirmReverse(false)} />
+                onConfirm={(reason) => { setConfirmReverse(false); act(() => api.reverseAdjustment(id, reason), t('adjustment.reversed')); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }
