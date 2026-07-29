@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
+import { t } from '../i18n/index.js';
 
 // Lightweight API-backed select pickers used across document line editors.
 // Each falls back to an empty list (no tenant) and is plain <select> for now.
@@ -19,43 +20,43 @@ export function ItemPicker({ value, onChange, disabled }) {
     const { data } = useApiQuery(['items-picker'], () => api.items({ per_page: 200, is_active: true }), { fallback: [] });
     const items = Array.isArray(data) ? data : (data?.data ?? []);
     return <Select value={value} onChange={onChange} options={items} disabled={disabled}
-        placeholder="Item…" getLabel={(i) => `${i.sku} · ${i.name}`} />;
+        placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
 }
 
-export function WarehousePicker({ value, onChange, disabled, placeholder = 'Warehouse…' }) {
+export function WarehousePicker({ value, onChange, disabled, placeholder }) {
     const { data } = useApiQuery(['warehouses-picker'], () => api.warehouses({ per_page: 200 }), { fallback: [] });
     const list = Array.isArray(data) ? data : (data?.data ?? []);
     return <Select value={value} onChange={onChange} options={list} disabled={disabled}
-        placeholder={placeholder} getLabel={(w) => `${w.code} · ${w.name}`} />;
+        placeholder={placeholder ?? t('picker.warehouse')} getLabel={(w) => `${w.code} · ${w.name}`} />;
 }
 
-export function BinPicker({ warehouseId, value, onChange, disabled, placeholder = 'Bin (optional)…' }) {
+export function BinPicker({ warehouseId, value, onChange, disabled, placeholder }) {
     const { data } = useApiQuery(['warehouse', warehouseId], () => api.warehouse(warehouseId),
         { fallback: null, enabled: !!warehouseId });
     const bins = data?.bins ?? [];
     return <Select value={value} onChange={onChange} options={bins} disabled={disabled || !warehouseId}
-        placeholder={placeholder} getLabel={(b) => b.code} />;
+        placeholder={placeholder ?? t('picker.binOptional')} getLabel={(b) => b.code} />;
 }
 
 export function SupplierPicker({ value, onChange, disabled }) {
     const { data } = useApiQuery(['suppliers-picker'], () => api.suppliers({ per_page: 200 }), { fallback: [] });
     const list = Array.isArray(data) ? data : (data?.data ?? []);
     return <Select value={value} onChange={onChange} options={list} disabled={disabled}
-        placeholder="Supplier…" getLabel={(s) => `${s.code} · ${s.name}`} />;
+        placeholder={t('picker.supplier')} getLabel={(s) => `${s.code} · ${s.name}`} />;
 }
 
 export function CustomerPicker({ value, onChange, disabled }) {
     const { data } = useApiQuery(['customers-picker'], () => api.customers({ per_page: 200, is_active: true }), { fallback: [] });
     const list = Array.isArray(data) ? data : (data?.data ?? []);
     return <Select value={value} onChange={onChange} options={list} disabled={disabled}
-        placeholder="Customer…" getLabel={(c) => `${c.code} · ${c.name}`} />;
+        placeholder={t('picker.customer')} getLabel={(c) => `${c.code} · ${c.name}`} />;
 }
 
-export function UnitPicker({ value, onChange, disabled, placeholder = 'Base unit' }) {
+export function UnitPicker({ value, onChange, disabled, placeholder }) {
     const { data } = useApiQuery(['meta'], api.meta, { fallback: { lookups: { units: [] } } });
     const units = data?.lookups?.units ?? [];
     return <Select value={value} onChange={onChange} options={units} disabled={disabled}
-        placeholder={placeholder} getLabel={(u) => `${u.code} · ${u.name}`} />;
+        placeholder={placeholder ?? t('picker.baseUnit')} getLabel={(u) => `${u.code} · ${u.name}`} />;
 }
 
 export function QuantityInput({ value, onChange, disabled }) {

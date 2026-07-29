@@ -54,6 +54,19 @@ class InventoryReportService
         return array_key_exists($key, self::REPORTS);
     }
 
+    public static function title(string $key): string
+    {
+        return __("inventory.reports.titles.{$key}");
+    }
+
+    public static function fieldLabel(string $field): string
+    {
+        $key = "inventory.reports.fields.{$field}";
+        $label = __($key);
+
+        return $label === $key ? str_replace('_', ' ', $field) : $label;
+    }
+
     /** @return array{key:string,title:string,columns:array,rows:array,summary:array} */
     public function run(string $key, ReportFilters $f): array
     {
@@ -63,7 +76,15 @@ class InventoryReportService
         $method = 'report'.str_replace(' ', '', ucwords(str_replace('-', ' ', $key)));
         $payload = $this->{$method}($f);
 
-        return array_merge(['key' => $key, 'title' => self::REPORTS[$key]], $payload);
+        $columns = $payload['columns'] ?? [];
+        $summary = array_keys($payload['summary'] ?? []);
+
+        return array_merge([
+            'key' => $key,
+            'title' => self::title($key),
+            'column_labels' => array_combine($columns, array_map([self::class, 'fieldLabel'], $columns)) ?: [],
+            'summary_labels' => array_combine($summary, array_map([self::class, 'fieldLabel'], $summary)) ?: [],
+        ], $payload);
     }
 
     private function db()

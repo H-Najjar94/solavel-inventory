@@ -65,7 +65,7 @@ export function SerialNumberListInput({ value = [], onChange, expectedQty, autoF
             next.push(p);
         }
         onChange(next);
-        setWarn(dup > 0 ? `${dup} duplicate serial${dup > 1 ? 's' : ''} skipped.` : '');
+        setWarn(dup > 0 ? t('trace.duplicatesSkipped', undefined, { count: dup }) : '');
         setEntry('');
     }
 
@@ -84,17 +84,17 @@ export function SerialNumberListInput({ value = [], onChange, expectedQty, autoF
         <div className="serial-capture">
             <div className="serial-capture__bar">
                 <input ref={inputRef} className={`input${large ? ' input--scan' : ''}`}
-                    placeholder="Scan or type serial, Enter to add"
+                    placeholder={t('trace.serialPlaceholder')}
                     value={entry} onChange={(e) => setEntry(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste}
-                    aria-label="Serial number scan input" />
-                <button type="button" className="btn btn--sm" onClick={() => addMany(entry)}>Add</button>
-                <label className="serial-capture__scanmode" title="Larger input for handheld scanners">
-                    <input type="checkbox" checked={large} onChange={(e) => setLarge(e.target.checked)} /> Scan mode
+                    aria-label={t('trace.serialInputLabel')} dir="ltr" />
+                <button type="button" className="btn btn--sm" onClick={() => addMany(entry)}>{t('trace.addSerial')}</button>
+                <label className="serial-capture__scanmode" title={t('trace.scanModeHint')}>
+                    <input type="checkbox" checked={large} onChange={(e) => setLarge(e.target.checked)} /> {t('trace.scanMode')}
                 </label>
             </div>
             <div className="serial-capture__meta">
                 <span className={countOk ? 'badge badge--live' : 'badge badge--warn'}>
-                    {value.length}{expectedQty != null ? ` / ${expectedQty}` : ''} serials
+                    {t('trace.serialCount', undefined, { count: expectedQty != null ? `${value.length} / ${expectedQty}` : value.length })}
                 </span>
                 {warn && <span className="serial-capture__warn">{warn}</span>}
             </div>
@@ -122,14 +122,14 @@ export function LotSelector({ itemId, warehouseId, value, onChange, disabled }) 
     const lots = data?.lots ?? [];
     return (
         <select className="input" value={value ?? ''} disabled={disabled || !itemId}
-            onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} aria-label="Lot">
-            <option value="">Lot…</option>
+            onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)} aria-label={t('trace.lotLabel')}>
+            <option value="">{t('trace.lotPlaceholder')}</option>
             {lots.map((l) => {
                 const blocked = ['expired', 'quarantined', 'recalled'].includes(l.status);
                 const avail = Number(l.on_hand_qty) - Number(l.reserved_qty ?? 0);
                 return (
                     <option key={l.lot_id} value={l.lot_id} disabled={blocked}>
-                        {l.lot_code} · {avail} avail{l.expiry_date ? ` · exp ${l.expiry_date}` : ''}{blocked ? ` (${l.status})` : ''}
+                        {l.lot_code} · {avail} {t('trace.availableShort')}{l.expiry_date ? ` · ${t('trace.expiresShort', undefined, { date: l.expiry_date })}` : ''}{blocked ? ` (${['expired', 'quarantined', 'recalled'].includes(l.status) ? t(`trace.status.${l.status}`) : t('status.unknown', undefined, { value: l.status })})` : ''}
                     </option>
                 );
             })}
@@ -180,16 +180,16 @@ export function FefoHint({ itemId, warehouseId, quantity, selectedLotId, onApply
     if (selectedLotId && first.lot_id !== selectedLotId) {
         const sel = lots.find((l) => l.lot_id === selectedLotId);
         if (!sel || (first.expiry_date && (!sel?.expiry_date || sel.expiry_date > first.expiry_date))) {
-            warn = `Earlier-expiring lot ${first.lot_code}${first.expiry_date ? ` (exp ${first.expiry_date})` : ''} is available — FEFO suggests it first.`;
+            warn = t('trace.fefoEarlier', undefined, { lot: first.lot_code });
         }
     }
 
     return (
         <div className="fefo-hint">
-            <span className="fefo-hint__policy">{data.policy.toUpperCase()} suggestion:</span>
-            <span className="fefo-hint__lot">{first.lot_code}{first.expiry_date ? ` · exp ${first.expiry_date}` : ''} · {first.suggested_qty}</span>
-            {onApply && <button type="button" className="btn btn--sm" onClick={() => onApply(first)}>Use</button>}
-            {!data.fully_covered && <span className="badge badge--warn">short {data.shortfall}</span>}
+            <span className="fefo-hint__policy">{t('trace.policySuggestion', undefined, { policy: data.policy.toUpperCase() })}</span>
+            <span className="fefo-hint__lot"><bdi>{first.lot_code}</bdi>{first.expiry_date ? ` · ${t('trace.expiresShort', undefined, { date: first.expiry_date })}` : ''} · {first.suggested_qty}</span>
+            {onApply && <button type="button" className="btn btn--sm" onClick={() => onApply(first)}>{t('trace.useSuggestion')}</button>}
+            {!data.fully_covered && <span className="badge badge--warn">{t('trace.shortfall', undefined, { quantity: data.shortfall })}</span>}
             {warn && <div className="fefo-hint__warn">⚠ {warn}</div>}
         </div>
     );
@@ -201,13 +201,15 @@ export function LotStatusBadge({ status }) {
         quarantined: ['trace.status.quarantined', 'badge--warn'], consumed: ['trace.status.consumed', 'badge--muted'],
         recalled: ['trace.status.recalled', 'badge--danger'],
     };
-    const [label, cls] = map[status] ?? [status, 'badge--muted'];
-    return <span className={`badge ${cls}`}>{t(label, status)}</span>;
+    const [label, cls] = map[status] ?? [null, 'badge--muted'];
+    return <span className={`badge ${cls}`}>{label ? t(label) : t('status.unknown', undefined, { value: status })}</span>;
 }
 
 export function SerialStatusBadge({ status }) {
     const live = ['available', 'in_stock'];
     const danger = ['damaged', 'quarantined', 'retired'];
     const cls = live.includes(status) ? 'badge--live' : danger.includes(status) ? 'badge--warn' : 'badge--demo';
-    return <span className={`badge ${cls}`}>{status}</span>;
+    const key = `trace.status.${status}`;
+    const known = ['available', 'in_stock', 'damaged', 'quarantined', 'retired', 'reserved', 'allocated', 'shipped'];
+    return <span className={`badge ${cls}`}>{known.includes(status) ? t(key) : t('status.unknown', undefined, { value: status })}</span>;
 }
