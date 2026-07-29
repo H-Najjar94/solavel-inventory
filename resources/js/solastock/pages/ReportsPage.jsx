@@ -53,6 +53,8 @@ export default function ReportsPage() {
     const cols = report?.columns ?? [];
     const rows = report?.rows ?? [];
     const summary = report?.summary ?? {};
+    const columnLabels = report?.column_labels ?? {};
+    const summaryLabels = report?.summary_labels ?? {};
 
     const canExport = can('inventory.export_reports') && tenant.hasTenant;
     const exportHref = (format) => api.reportExportUrl(active, params, format);
@@ -139,7 +141,7 @@ export default function ReportsPage() {
             {Object.keys(summary).length > 0 && (
                 <div className="widget-grid">
                     {Object.entries(summary).map(([k, v]) => (
-                        <div className="widget-card" key={k}><div className="widget-card-label">{displayKey(k)}</div><div className="widget-card-value">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</div></div>
+                        <div className="widget-card" key={k}><div className="widget-card-label">{summaryLabels[k] ?? displayKey(k)}</div><div className="widget-card-value"><bdi>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</bdi></div></div>
                     ))}
                 </div>
             )}
@@ -151,7 +153,7 @@ export default function ReportsPage() {
                     ? <EmptyState title={t('reports.noRows')} hint={t('reports.noRowsHint')} />
                     : <div style={{ overflowX: 'auto' }}>
                         <table className="data-table">
-                            <thead><tr>{cols.map((c) => <th key={c}>{displayKey(c)}</th>)}</tr></thead>
+                            <thead><tr>{cols.map((c) => <th key={c}>{columnLabels[c] ?? displayKey(c)}</th>)}</tr></thead>
                             <tbody>{rows.slice(0, 500).map((r, i) => <tr key={i}>{cols.map((c) => <td key={c}>{cell(r, c)}</td>)}</tr>)}</tbody>
                         </table>
                         {rows.length > 500 && <p className="muted">{t('reports.first500')}</p>}

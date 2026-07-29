@@ -63,6 +63,7 @@ import SettingsPage from '../pages/SettingsPage.jsx';
 import IntegrationSettingsPage from '../pages/IntegrationSettingsPage.jsx';
 import IntegrationEventsPage from '../pages/IntegrationEventsPage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
+import { t } from '../i18n/index.js';
 // Onboarding/activation lives entirely in the CENTRAL app
 // (https://solavel.com/inventory/onboarding). Apache routes that path away from
 // this SPA, so the former in-app OnboardingPage is intentionally not wired up.
@@ -78,7 +79,7 @@ function RequirePermission({ permission, children }) {
     if (!can(permission)) {
         return (
             <section className="page">
-                <EmptyState title="Access denied" hint="This page requires additional SolaStock permissions." />
+                <EmptyState title={t('common.accessDenied')} hint={t('common.accessDeniedHint')} />
             </section>
         );
     }

@@ -28,8 +28,14 @@ function binStatus(bin, balances) {
 
 export default function WarehouseFloorMap({ zones = [], bins = [], balances = [] }) {
     const [selected, setSelected] = useState(null);
-    const statusLabel = (status) => t(`warehouseDetail.floor.status.${status}`, status);
-    const binTypeLabel = (type) => t(`warehouseDetail.binType.${type}`, type);
+    const knownStatuses = ['empty', 'occupied', 'full', 'low', 'blocked'];
+    const knownBinTypes = ['receiving', 'storage', 'picking', 'packing', 'shipping', 'quarantine', 'damaged'];
+    const statusLabel = (status) => knownStatuses.includes(status)
+        ? t(`warehouseDetail.floor.status.${status}`)
+        : t('status.unknown', undefined, { value: status });
+    const binTypeLabel = (type) => knownBinTypes.includes(type)
+        ? t(`warehouseDetail.binType.${type}`)
+        : t('status.unknown', undefined, { value: type });
 
     if (bins.length === 0) {
         // Visual placeholder grid so the floor view is never blank.

@@ -90,6 +90,44 @@ class ReportRegistryTest extends TestCase
     }
 
     #[Test]
+    public function arabic_exports_use_localized_headings_rtl_and_preserve_identifiers(): void
+    {
+        app()->setLocale('ar');
+        $report = [
+            'key' => 'inventory-valuation',
+            'title' => InventoryReportService::title('inventory-valuation'),
+            'columns' => ['sku', 'item', 'total_value'],
+            'column_labels' => [
+                'sku' => InventoryReportService::fieldLabel('sku'),
+                'item' => InventoryReportService::fieldLabel('item'),
+                'total_value' => InventoryReportService::fieldLabel('total_value'),
+            ],
+            'summary' => ['total_value' => '10.00'],
+            'summary_labels' => ['total_value' => InventoryReportService::fieldLabel('total_value')],
+            'rows' => [['sku' => 'AR-SKU-001', 'item' => 'صنف تجريبي', 'total_value' => '10.00']],
+        ];
+
+        $export = app(ReportExportService::class);
+        $csv = $export->csv($report);
+        $pdf = $export->pdf($report);
+
+        ob_start();
+        $csv->sendContent();
+        $csvBody = ob_get_clean();
+        ob_start();
+        $pdf->sendContent();
+        $pdfBody = ob_get_clean();
+
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $csvBody);
+        $this->assertStringContainsString('القيمة الإجمالية', $csvBody);
+        $this->assertStringContainsString('AR-SKU-001', $csvBody);
+        $this->assertStringContainsString('<html lang="ar" dir="rtl">', $pdfBody);
+        $this->assertStringContainsString('Noto Sans Arabic', $pdfBody);
+        $this->assertStringContainsString('القيمة الإجمالية', $pdfBody);
+        $this->assertStringContainsString('AR-SKU-001', $pdfBody);
+    }
+
+    #[Test]
     public function report_and_dashboard_routes_are_registered(): void
     {
         $names = collect(Route::getRoutes()->getRoutes())->map(fn ($r) => $r->getName())->filter()->all();

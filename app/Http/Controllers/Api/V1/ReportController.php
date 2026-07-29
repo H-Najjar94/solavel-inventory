@@ -32,13 +32,13 @@ class ReportController extends ApiController
     public function index(): JsonResponse
     {
         return $this->success(['reports' => collect(InventoryReportService::REPORTS)
-            ->map(fn ($title, $key) => ['key' => $key, 'title' => $title])->values()]);
+            ->map(fn ($title, $key) => ['key' => $key, 'title' => InventoryReportService::title($key)])->values()]);
     }
 
     public function show(Request $request, string $report): JsonResponse
     {
         if (! InventoryReportService::exists($report)) {
-            return $this->error('unknown_report', "Unknown report: {$report}", 404);
+            return $this->error('unknown_report', __('inventory.reports.unknown_report', ['report' => $report]), 404);
         }
 
         return $this->success($this->reports->run($report, ReportFilters::fromRequest($request)));
@@ -47,12 +47,12 @@ class ReportController extends ApiController
     public function exportReport(Request $request, string $report): Response
     {
         if (! InventoryReportService::exists($report)) {
-            return $this->error('unknown_report', "Unknown report: {$report}", 404);
+            return $this->error('unknown_report', __('inventory.reports.unknown_report', ['report' => $report]), 404);
         }
 
         $format = strtolower((string) $request->query('format', 'csv'));
         if (! in_array($format, ['csv', 'xlsx', 'pdf'], true)) {
-            return $this->error('unknown_format', "Unknown export format: {$format}", 422);
+            return $this->error('unknown_format', __('inventory.reports.unknown_format', ['format' => $format]), 422);
         }
 
         $filters = ReportFilters::fromRequest($request);

@@ -39,8 +39,8 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
 
         const valid = [];
         for (const f of files) {
-            if (!ALLOWED.includes(f.type)) { toast.push(`${f.name}: only JPG, PNG or WEBP allowed.`, 'error'); continue; }
-            if (f.size > MAX_BYTES) { toast.push(`${f.name}: must be 5 MB or smaller.`, 'error'); continue; }
+            if (!ALLOWED.includes(f.type)) { toast.push(t('media.imageTypeError', undefined, { file: f.name }), 'error'); continue; }
+            if (f.size > MAX_BYTES) { toast.push(t('media.imageSizeError', undefined, { file: f.name }), 'error'); continue; }
             valid.push(f);
         }
         if (!valid.length) return;
@@ -53,7 +53,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
             setProgress({ done: i + 1, total: valid.length });
         }
         setBusy(false); setProgress(null);
-        if (ok) { toast.push(ok === 1 ? 'Image uploaded.' : `${ok} images uploaded.`, 'success'); invalidate(); }
+        if (ok) { toast.push(ok === 1 ? t('media.imageUploaded') : t('media.imagesUploaded', undefined, { count: ok }), 'success'); invalidate(); }
     }
 
     async function makePrimary(id) {
@@ -110,7 +110,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
             {canManage && (
                 <div className="item-images-actions">
                     {uploadBtn}
-                    <div className="item-images-hint">JPG, PNG or WEBP · up to 5 MB each · stored privately · ★ sets primary.</div>
+                    <div className="item-images-hint">{t('media.imagesHint')}</div>
                 </div>
             )}
         </div>
