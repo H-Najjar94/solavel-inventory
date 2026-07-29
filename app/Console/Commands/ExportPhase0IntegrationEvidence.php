@@ -48,7 +48,7 @@ final class ExportPhase0IntegrationEvidence extends Command
                 ->filter(function ($event): bool {
                     $payload = json_decode((string) $event->payload, true) ?: [];
 
-                    return IntegrationEvents::postsJournalForPayload((string) $event->event_type, $payload);
+                    return IntegrationEvents::isAccountingEventForReconciliation((string) $event->event_type, $payload);
                 })
                 ->map(fn ($event) => $this->eventRow($database, $event))->all();
             $eventFiles[$status] = $this->writeJsonLines("{$output}/{$database}-{$status}-events.jsonl", $rows);

@@ -50,7 +50,7 @@ class IntegrationStatusService
         $lastSuccessfulDeliveryAt = $settings->meta['last_signed_delivery_at']
             ?? (clone $events)->where('status', 'sent')->max('sent_at');
         $ignored = (clone $events)->where('status', 'ignored')->get(['event_type', 'payload'])
-            ->filter(fn (IntegrationOutboxEvent $event) => IntegrationEvents::postsJournalForPayload(
+            ->filter(fn (IntegrationOutboxEvent $event) => IntegrationEvents::isAccountingEventForReconciliation(
                 (string) $event->event_type,
                 (array) $event->payload
             ))->count();
