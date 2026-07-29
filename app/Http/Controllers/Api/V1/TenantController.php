@@ -87,6 +87,7 @@ class TenantController extends ApiController
             'data_state' => $dataState,       // real | demo | sample | setup
             'badge' => $badge,
             'organization_id' => $s['organization_id'],
+            'client_id' => $s['client_id'],
             'organization_name' => $s['mode'] === 'demo'
                 ? config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo'))
                 : $this->live->organizationName($s['organization_id']),
