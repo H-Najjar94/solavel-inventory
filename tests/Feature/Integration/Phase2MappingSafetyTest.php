@@ -161,6 +161,43 @@ final class Phase2MappingSafetyTest extends TestCase
     }
 
     #[Test]
+    public function v2_scope_preparation_backfills_only_verified_immutable_identity_metadata(): void
+    {
+        $mapping = $this->organizationMapping();
+        $setting = IntegrationSetting::query()->create([
+            'organization_id' => TenantTestManager::ORG_A,
+            'integration' => 'solabooks',
+            'mode' => 'paused',
+            'solabooks_organization_id' => 14,
+            'meta' => [
+                'client_id' => 7,
+                'api_key_encrypted' => Crypt::encryptString('phase2-test-api-key'),
+            ],
+        ]);
+        Http::fake([
+            '*' => Http::response([
+                'data' => [
+                    'key_id' => 'phase2-v2-key',
+                    'secret' => 'phase2-v2-secret',
+                    'protocol_version' => 'v1',
+                    'contract_version' => 'solastock-journal.v2',
+                ],
+            ], 201),
+        ]);
+
+        app(SolaBooksOutboxDeliveryService::class)->rotateSigningKey();
+
+        $meta = (array) $setting->fresh()->meta;
+        $this->assertSame(TenantTestManager::ORG_A, $meta['central_organization_id']);
+        $this->assertSame($mapping->mapping_uuid, $meta['integration_mapping_uuid']);
+        $this->assertSame('solastock-journal.v2', $meta['contract_version']);
+        Http::assertSent(fn ($request) =>
+            $request['central_organization_id'] === TenantTestManager::ORG_A
+            && $request['integration_mapping_id'] === $mapping->id
+        );
+    }
+
+    #[Test]
     public function phase2_maintenance_mapping_and_authority_states_exist_in_english_arabic_and_rtl_ui(): void
     {
         $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
