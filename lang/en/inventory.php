@@ -92,6 +92,7 @@ return [
     ],
     'integration' => [
         'ignored_delivery' => 'Ignored integration events cannot be delivered.',
+        'safety_hold' => 'SolaBooks delivery is temporarily paused for currency-contract maintenance. Existing events are preserved and no delivery was attempted.',
         'journal_rejected' => 'SolaBooks rejected the journal event.',
         'credentials_missing' => 'SolaBooks API credentials are not configured.',
         'signing_missing' => 'SolaBooks request signing is not configured.',

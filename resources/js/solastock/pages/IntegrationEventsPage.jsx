@@ -21,8 +21,10 @@ export default function IntegrationEventsPage() {
     const gate = useCanCreate('inventory.integration.retry');
     const [filters, setFilters] = useState({ status: '', event_type: '', from: '', to: '' });
     const [selected, setSelected] = useState(null);
+    const status = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
+    const deliveryEnabled = status.data?.delivery_enabled !== false;
 
-    const { data, isMock } = useApiQuery(['integration-events', filters],
+    const { data, isMock, isError, error } = useApiQuery(['integration-events', filters],
         () => api.integrationEvents({ status: filters.status || undefined, event_type: filters.event_type || undefined, from: filters.from || undefined, to: filters.to || undefined, per_page: 100 }),
         { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
@@ -36,6 +38,8 @@ export default function IntegrationEventsPage() {
         <section className="page">
             <Breadcrumbs items={[{ label: tr('integration.title'), to: '/settings/solabooks' }, { label: tr('integration.events.breadcrumb') }]} />
             <header className="page-head"><h1>{tr('integration.events.title')}</h1>{isMock && <span className="badge badge--warn">{tr('integration.events.sampleData')}</span>}</header>
+            {status.isError && <div className="panel" role="alert"><strong>{tr('integration.loadFailed')}</strong><p>{status.error?.message || tr('settings.common.errorFallback')}</p></div>}
+            {!deliveryEnabled && <div className="panel" role="status"><strong>{tr('integration.safetyHold.title')}</strong><p>{status.data?.delivery_disabled_message || tr('integration.safetyHold.message')}</p></div>}
 
             <div className="toolbar" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <select className="input" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
@@ -49,7 +53,7 @@ export default function IntegrationEventsPage() {
             </div>
 
             <div className="panel">
-                {rows.length === 0 ? <EmptyState title={tr('integration.events.none')} hint={tr('integration.events.noneHint')} /> : (
+                {isError ? <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} /> : rows.length === 0 ? <EmptyState title={tr('integration.events.none')} hint={tr('integration.events.noneHint')} /> : (
                     <table className="data-table">
                         <thead><tr><th>{tr('integration.events.occurred')}</th><th>{tr('integration.events.event')}</th><th>{tr('integration.events.document')}</th><th>{tr('integration.events.status')}</th><th>{tr('integration.events.mapping')}</th><th></th></tr></thead>
                         <tbody>{rows.map((e) => (
@@ -79,9 +83,9 @@ export default function IntegrationEventsPage() {
                         <strong>{tr('integration.events.payload')}</strong>
                         <pre className="payload-view">{JSON.stringify(selected.payload, null, 2)}</pre>
                         <div className="modal-actions">
-                            {gate.allowed && (selected.status === 'pending' || selected.status === 'failed') &&
+                            {gate.allowed && deliveryEnabled && (selected.status === 'pending' || selected.status === 'failed') &&
                                 <button className="btn" onClick={() => act(api.ignoreIntegrationEvent, selected.id, 'integration.events.ignored')}>{tr('integration.events.ignore')}</button>}
-                            {gate.allowed && <button className="btn" title={tr('integration.events.retryTitle')}
+                            {gate.allowed && deliveryEnabled && <button className="btn" title={tr('integration.events.retryTitle')}
                                 onClick={() => act(api.retryIntegrationEvent, selected.id, 'integration.events.retryAttempted')}>{tr('integration.events.retry')}</button>}
                             <button className="btn btn--primary" onClick={() => setSelected(null)}>{tr('integration.events.close')}</button>
                         </div>

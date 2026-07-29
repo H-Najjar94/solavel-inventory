@@ -27,6 +27,7 @@ class IntegrationStatusService
 
     public function status(int $orgId): array
     {
+        $safety = app(IntegrationSafetyHold::class);
         $settings = IntegrationSetting::query()->firstOrNew([
             'organization_id' => $orgId, 'integration' => IntegrationEvents::INTEGRATION,
         ]);
@@ -46,7 +47,13 @@ class IntegrationStatusService
         $pending = (clone $events)->where('status', 'pending')->count();
         $failed = (clone $events)->where('status', 'failed')->count();
         $sent = (clone $events)->where('status', 'sent')->count();
-        $ignored = (clone $events)->where('status', 'ignored')->count();
+        $lastSuccessfulDeliveryAt = $settings->meta['last_signed_delivery_at']
+            ?? (clone $events)->where('status', 'sent')->max('sent_at');
+        $ignored = (clone $events)->where('status', 'ignored')->get(['event_type', 'payload'])
+            ->filter(fn (IntegrationOutboxEvent $event) => IntegrationEvents::postsJournalForPayload(
+                (string) $event->event_type,
+                (array) $event->payload
+            ))->count();
         $incompleteMapping = (clone $events)->where('mapping_status', 'incomplete')->whereIn('status', ['pending', 'failed'])->count();
 
         $mapped = IntegrationAccountMapping::query()
@@ -66,6 +73,7 @@ class IntegrationStatusService
             : round($taxCodes->intersect($mappedTaxCodes)->count() / $taxCodes->count() * 100);
 
         $health = match (true) {
+            ! $safety->deliveryEnabled() => 'maintenance_hold',
             $mode === 'disconnected' => 'disconnected',
             $failed > 0 => 'error',
             $incompleteMapping > 0 => 'needs_mapping',
@@ -87,16 +95,22 @@ class IntegrationStatusService
             'mapping_completeness_pct' => $mappingCompleteness,
             'tax_mapping_completeness_pct' => $taxMappingCompleteness,
             'last_event_generated_at' => IntegrationOutboxEvent::query()->where('organization_id', $orgId)->max('occurred_at'),
-            'connection_implemented' => true,
+            'connection_implemented' => $workspaceConnected || $settings->exists,
             'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))
                 && ($settings->meta['client_id'] ?? config('services.solabooks.client_id'))
                 && ($settings->solabooks_organization_id || config('services.solabooks.organization_id'))),
+            'delivery_enabled' => $safety->deliveryEnabled(),
+            'delivery_disabled_reason' => $safety->deliveryEnabled() ? null : $safety->reason(),
+            'delivery_disabled_message' => $safety->deliveryEnabled() ? null : $safety->message(),
+            'last_successful_delivery_at' => $lastSuccessfulDeliveryAt,
+            'legacy_finance_inventory_writes_blocked' => (bool) config('integration_safety.legacy_finance_inventory_writes_blocked', false)
+                && ($workspaceConnected || in_array($mode, ['connected_readonly', 'connected_pending_mapping', 'active', 'paused'], true)),
             'signing' => [
                 'configured' => (bool) ($settings->signingSecret() && ($settings->meta['signing_key_id'] ?? null)),
                 'key_id' => $settings->meta['signing_key_id'] ?? null,
                 'protocol_version' => $settings->meta['signing_protocol_version'] ?? null,
                 'rotated_at' => $settings->meta['signing_key_rotated_at'] ?? null,
-                'last_successful_delivery_at' => $settings->meta['last_signed_delivery_at'] ?? null,
+                'last_successful_delivery_at' => $lastSuccessfulDeliveryAt,
             ],
         ];
     }

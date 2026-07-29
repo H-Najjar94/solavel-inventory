@@ -10,7 +10,7 @@ import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import { useTenant } from '../stores/tenant.jsx';
 
 function HealthBadge({ health, tr }) {
-    const map = { healthy: 'badge--live', needs_mapping: 'badge--demo', error: 'badge--warn', disconnected: 'badge--muted' };
+    const map = { healthy: 'badge--live', needs_mapping: 'badge--demo', error: 'badge--warn', disconnected: 'badge--muted', maintenance_hold: 'badge--warn' };
     return <span className={`badge ${map[health] ?? 'badge--muted'}`}>{tr(`integration.health.${health ?? 'unknown'}`, {}, health ?? tr('integration.health.unknown'))}</span>;
 }
 
@@ -84,6 +84,10 @@ export default function IntegrationSettingsPage() {
                 />
             ) : !s ? <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} /> : (
                 <>
+                    {!s.delivery_enabled && <div className="panel" role="status" style={{ borderInlineStart: '4px solid var(--warning, #b7791f)' }}>
+                        <h2>{tr('integration.safetyHold.title')}</h2>
+                        <p>{s.delivery_disabled_message || tr('integration.safetyHold.message')}</p>
+                    </div>}
                     <div className="widget-grid">
                         <div className="widget-card"><div className="widget-card-label">{tr('integration.metrics.mode')}</div><div className="widget-card-value" style={{ fontSize: 18 }}>{tr(`integration.connection.${s.mode === 'connected_readonly' ? 'readOnly' : s.mode === 'connected_pending_mapping' ? 'pendingMappings' : s.mode}`, {}, s.mode)}</div></div>
                         <div className="widget-card"><div className="widget-card-label">{tr('integration.metrics.pending')}</div><div className="widget-card-value">{s.events?.pending ?? 0}</div></div>
@@ -97,10 +101,14 @@ export default function IntegrationSettingsPage() {
                             <dt>{tr('integration.details.linkedOrg')}</dt><dd>{s.solabooks_organization_id ? `#${s.solabooks_organization_id}` : tr('integration.details.notLinked')}</dd>
                             <dt>{tr('integration.details.lastSync')}</dt><dd>{s.last_sync_at ?? '—'}</dd>
                             <dt>{tr('integration.details.lastGenerated')}</dt><dd>{s.last_event_generated_at ?? '—'}</dd>
+                            <dt>{tr('integration.events.lastError')}</dt><dd>{s.last_error ?? '—'}</dd>
                             <dt>{tr('integration.details.implemented')}</dt><dd>{s.connection_implemented ? tr('integration.details.yes') : tr('integration.details.placeholder')}</dd>
                             <dt>{tr('integration.details.signingProtocol')}</dt><dd>{s.signing?.protocol_version ?? tr('integration.details.notConfigured')}</dd>
                             <dt>{tr('integration.details.signingKeyId')}</dt><dd>{s.signing?.key_id ?? '—'}</dd>
                             <dt>{tr('integration.details.lastSigned')}</dt><dd>{s.signing?.last_successful_delivery_at ?? '—'}</dd>
+                            <dt>{tr('integration.details.deliveryEnabled')}</dt><dd>{tr(s.delivery_enabled ? 'integration.details.yes' : 'integration.details.no')}</dd>
+                            <dt>{tr('integration.details.deliveryReason')}</dt><dd>{s.delivery_disabled_reason ? tr('integration.safetyHold.reason') : '—'}</dd>
+                            <dt>{tr('integration.details.legacyBlocked')}</dt><dd>{tr(s.legacy_finance_inventory_writes_blocked ? 'integration.details.yes' : 'integration.details.no')}</dd>
                         </dl>
                         <div className="doc-actions">
                             <Link className="btn btn--primary" to="/integrations/solabooks/events">{tr('integration.details.viewEvents')}</Link>
@@ -111,13 +119,13 @@ export default function IntegrationSettingsPage() {
                         <h2>{tr('integration.connection.title')}</h2>
                         <p className="muted">{tr('integration.connection.apiKeySecurity')}</p>
                         <div className="fg2">
-                            <label className="field"><span className="field-label">{tr('integration.metrics.mode')}</span><select className="input" disabled={!gate.allowed} value={connection.mode} onChange={(e) => setConnection({ ...connection, mode: e.target.value })}><option value="connected_readonly">{tr('integration.connection.readOnly')}</option><option value="connected_pending_mapping">{tr('integration.connection.pendingMappings')}</option><option value="active">{tr('integration.connection.active')}</option><option value="paused">{tr('integration.connection.paused')}</option></select></label>
+                            <label className="field"><span className="field-label">{tr('integration.metrics.mode')}</span><select className="input" disabled={!gate.allowed || !s.delivery_enabled} value={connection.mode} onChange={(e) => setConnection({ ...connection, mode: e.target.value })}><option value="connected_readonly">{tr('integration.connection.readOnly')}</option><option value="connected_pending_mapping">{tr('integration.connection.pendingMappings')}</option><option value="active">{tr('integration.connection.active')}</option><option value="paused">{tr('integration.connection.paused')}</option></select></label>
                             <label className="field"><span className="field-label">{tr('integration.connection.clientId')}</span><input className="input" type="number" disabled={!gate.allowed} value={connection.client_id} onChange={(e) => setConnection({ ...connection, client_id: e.target.value })} /></label>
                             <label className="field"><span className="field-label">{tr('integration.connection.organizationId')}</span><input className="input" type="number" disabled={!gate.allowed} value={connection.solabooks_organization_id} onChange={(e) => setConnection({ ...connection, solabooks_organization_id: e.target.value })} /></label>
                             <label className="field"><span className="field-label">{tr('integration.connection.apiKey')}</span><input className="input" type="password" autoComplete="new-password" disabled={!gate.allowed} value={connection.api_key} onChange={(e) => setConnection({ ...connection, api_key: e.target.value })} placeholder={s?.delivery_configured ? tr('integration.connection.keepKey') : tr('integration.connection.pasteKey')} /></label>
                         </div>
-                        <button className="btn btn--primary" disabled={!gate.allowed || savingConnection} onClick={saveConnection}>{savingConnection ? tr('integration.connection.saving') : tr('integration.connection.save')}</button>
-                        <button className="btn" style={{ marginInlineStart: 8 }} disabled={!gate.allowed || rotatingKey || !s?.delivery_configured} onClick={rotateSigningKey}>{rotatingKey ? tr('integration.connection.rotating') : (s?.signing?.configured ? tr('integration.connection.rotate') : tr('integration.connection.generate'))}</button>
+                        <button className="btn btn--primary" disabled={!gate.allowed || savingConnection || !s.delivery_enabled} onClick={saveConnection}>{savingConnection ? tr('integration.connection.saving') : tr('integration.connection.save')}</button>
+                        <button className="btn" style={{ marginInlineStart: 8 }} disabled={!gate.allowed || rotatingKey || !s?.delivery_configured || !s.delivery_enabled} onClick={rotateSigningKey}>{rotatingKey ? tr('integration.connection.rotating') : (s?.signing?.configured ? tr('integration.connection.rotate') : tr('integration.connection.generate'))}</button>
                         <p className="muted">{tr('integration.connection.signingDescription')}</p>
                     </div>
                 </>
@@ -131,7 +139,7 @@ export default function IntegrationSettingsPage() {
 }
 
 function TaxMappings({ gate, toast, qc, tr }) {
-    const { data, isLoading } = useApiQuery(['integration-taxes'], api.integrationTaxMappings, { fallback: null });
+    const { data, isLoading, isError, error } = useApiQuery(['integration-taxes'], api.integrationTaxMappings, { fallback: null });
     const [rows, setRows] = useState([]);
     const [saving, setSaving] = useState(false);
     useEffect(() => { if (data?.mappings) setRows(data.mappings); }, [data]);
@@ -146,6 +154,7 @@ function TaxMappings({ gate, toast, qc, tr }) {
         } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); } finally { setSaving(false); }
     }
     if (isLoading) return <Skeleton />;
+    if (isError) return <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} />;
     return <div className="panel">
         <p className="muted">{tr('integration.tax.description')}</p>
         <table className="data-table"><thead><tr><th>{tr('integration.tax.inventoryTax')}</th><th>{tr('integration.tax.treatment')}</th><th>{tr('integration.tax.financeTaxId')}</th><th>{tr('integration.tax.financeCode')}</th><th>{tr('integration.tax.inputVat')}</th><th>{tr('integration.tax.outputVat')}</th><th>{tr('integration.tax.status')}</th></tr></thead>
@@ -162,7 +171,7 @@ function TaxMappings({ gate, toast, qc, tr }) {
 }
 
 function AccountMappings({ gate, toast, qc, tr }) {
-    const { data, isLoading } = useApiQuery(['integration-accounts'], api.integrationAccountMappings, { fallback: null });
+    const { data, isLoading, isError, error } = useApiQuery(['integration-accounts'], api.integrationAccountMappings, { fallback: null });
     const [rows, setRows] = useState([]);
     const [saving, setSaving] = useState(false);
     useEffect(() => { if (data?.mappings) setRows(data.mappings); }, [data]);
@@ -175,6 +184,7 @@ function AccountMappings({ gate, toast, qc, tr }) {
     }
 
     if (isLoading) return <Skeleton />;
+    if (isError) return <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} />;
     return (
         <div className="panel">
             <p className="muted">{tr('integration.account.description')}</p>
@@ -196,9 +206,10 @@ function AccountMappings({ gate, toast, qc, tr }) {
 }
 
 function ItemMappings({ tr }) {
-    const { data, isLoading } = useApiQuery(['integration-items'], () => api.integrationItemMappings({ per_page: 50 }), { fallback: [] });
+    const { data, isLoading, isError, error } = useApiQuery(['integration-items'], () => api.integrationItemMappings({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     if (isLoading) return <Skeleton />;
+    if (isError) return <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} />;
     return (
         <div className="panel">
             <p className="muted">{tr('integration.item.description')}</p>

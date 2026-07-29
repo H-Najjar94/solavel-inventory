@@ -92,6 +92,7 @@ return [
     ],
     'integration' => [
         'ignored_delivery' => 'لا يمكن تسليم أحداث التكامل المتجاهلة.',
+        'safety_hold' => 'تم إيقاف التسليم إلى SolaBooks مؤقتًا لصيانة عقد العملات. تم الاحتفاظ بالأحداث الحالية ولم تتم محاولة التسليم.',
         'journal_rejected' => 'رفض SolaBooks حدث القيد المحاسبي.',
         'credentials_missing' => 'بيانات اعتماد API لـ SolaBooks غير مهيأة.',
         'signing_missing' => 'توقيع طلبات SolaBooks غير مهيأ.',
