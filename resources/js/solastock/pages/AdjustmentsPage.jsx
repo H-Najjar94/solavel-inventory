@@ -6,6 +6,7 @@ import { mockAdjustments } from '../services/mockData.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
+import { t } from '../i18n/index.js';
 
 export default function AdjustmentsPage() {
     const gate = useCanCreate('inventory.manage_adjustments');
@@ -14,14 +15,14 @@ export default function AdjustmentsPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Adjustments' }]} />
-            <header className="page-head"><h1>Stock Adjustments</h1>{isMock && <span className="badge badge--warn">sample data</span>}
+            <Breadcrumbs items={[{ label: t('adjustments') }]} />
+            <header className="page-head"><h1>{t('adjustments.title')}</h1>{isMock && <span className="badge badge--warn">{t('warehouses.sampleData')}</span>}
                 <Link to="/adjustments/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>New adjustment</Link></header>
-            <p className="muted">Increase/decrease lines; posting/reversal delegate to StockAdjustmentService → the canonical ledger.</p>
-            {rows.length === 0 ? <EmptyState title="No adjustments" hint="Create one to correct stock." /> : (
-                <table className="data-table"><thead><tr><th>Number</th><th>Date</th><th>WH</th><th>Reason</th><th>Status</th><th>+ Value</th><th>− Value</th></tr></thead>
+                    title={gate.allowed ? '' : gate.reason}>{t('adjustments.new')}</Link></header>
+            <p className="muted">{t('adjustments.hint')}</p>
+            {rows.length === 0 ? <EmptyState title={t('adjustments.empty')} hint={t('adjustments.emptyHint')} /> : (
+                <table className="data-table"><thead><tr><th>{t('adjustments.number')}</th><th>{t('adjustments.date')}</th><th>{t('adjustments.warehouse')}</th><th>{t('adjustments.reason')}</th><th>{t('status')}</th><th>{t('adjustments.increaseValue')}</th><th>{t('adjustments.decreaseValue')}</th></tr></thead>
                 <tbody>{rows.map((a) => (<tr key={a.id}><td><Link to={`/adjustments/${a.id}`}>{a.adjustment_number}</Link></td><td>{a.adjustment_date}</td><td>{a.warehouse_name ?? `#${a.warehouse_id}`}</td><td>{a.reason_code ?? '—'}</td><td><DocumentStatusBadge status={a.status} /></td><td>{a.total_increase_value}</td><td>{a.total_decrease_value}</td></tr>))}</tbody></table>
             )}
         </section>
