@@ -54,7 +54,7 @@ export default function ItemsPage() {
             <Breadcrumbs items={[{ label: t('items') }]} />
             <header className="page-head">
                 <h1>{t('items')}</h1>
-                {isMock && <span className="badge badge--warn">sample data</span>}
+                {isMock && <span className="badge badge--warn">{t('items.sampleData')}</span>}
                 <Link to="/items/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
                     title={gate.allowed ? '' : gate.reason}>{t('items.new')}</Link>
@@ -72,31 +72,31 @@ export default function ItemsPage() {
                 </select>
             </div>
             {gate.allowed && <form className="panel report-filters" onSubmit={applyBulk}>
-                <Field label={t('items.selected')}><input className="input" value={`${selected.length} ${t('items')}`} readOnly /></Field>
+                <Field label={t('items.selected')}><input className="input" value={t('items.selectedCount', ':count items selected', { count: selected.length })} readOnly /></Field>
                 <Field label={t('items.bulkField')}><select className="input" value={bulk.field} onChange={(e) => setBulk({ field: e.target.value, value: e.target.value === 'is_active' || e.target.value === 'enable_reorder_alert' ? '1' : '' })}>
                     <option value="is_active">{t('document.status', 'Status')}</option><option value="category_id">{t('category')}</option><option value="brand_id">{t('brand', 'Brand')}</option><option value="enable_reorder_alert">{t('items.reorderAlerts')}</option><option value="reorder_point">{t('items.reorderPoint')}</option><option value="reorder_qty">{t('items.reorderQuantity')}</option>
                 </select></Field>
-                {(bulk.field === 'is_active' || bulk.field === 'enable_reorder_alert') && <Field label="Value"><select className="input" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}><option value="1">Yes / Active</option><option value="0">No / Inactive</option></select></Field>}
-                {bulk.field === 'category_id' && <Field label="Category"><select className="input" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}><option value="">Clear category</option>{(meta.lookups?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>}
-                {bulk.field === 'brand_id' && <Field label="Brand"><select className="input" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}><option value="">Clear brand</option>{(meta.lookups?.brands ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>}
-                {['reorder_point', 'reorder_qty'].includes(bulk.field) && <Field label="Value"><input className="input" type="number" step="0.0001" min="0" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })} required /></Field>}
-                <div style={{ alignSelf: 'end' }}><button className="btn btn--primary" disabled={selected.length === 0}>Apply</button></div>
+                {(bulk.field === 'is_active' || bulk.field === 'enable_reorder_alert') && <Field label={t('items.value')}><select className="input" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}><option value="1">{t('items.yesActive')}</option><option value="0">{t('items.noInactive')}</option></select></Field>}
+                {bulk.field === 'category_id' && <Field label={t('category')}><select className="input" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}><option value="">{t('items.clearCategory')}</option>{(meta.lookups?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>}
+                {bulk.field === 'brand_id' && <Field label={t('brand')}><select className="input" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}><option value="">{t('items.clearBrand')}</option>{(meta.lookups?.brands ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>}
+                {['reorder_point', 'reorder_qty'].includes(bulk.field) && <Field label={t('items.value')}><input className="input" type="number" step="0.0001" min="0" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })} required /></Field>}
+                <div style={{ alignSelf: 'end' }}><button className="btn btn--primary" disabled={selected.length === 0}>{t('items.apply')}</button></div>
             </form>}
             <table className="data-table">
-                <thead><tr><th><input type="checkbox" checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><th>SKU</th><th>{t('name')}</th><th>{t('type')}</th><th>{t('category')}</th><th>{t('items.salesPrice')}</th><th>{t('document.status', 'Status')}</th></tr></thead>
+                <thead><tr><th><input type="checkbox" aria-label={t('items.selectAll')} checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><th>SKU</th><th>{t('name')}</th><th>{t('type')}</th><th>{t('category')}</th><th>{t('items.salesPrice')}</th><th>{t('document.status', 'Status')}</th></tr></thead>
                 <tbody>
                     {items.length === 0 && <tr><td colSpan="8"><EmptyState title={t('items.noItems')} /></td></tr>}
                     {items.map((it) => (
                         <tr key={it.id}>
-                            <td><input type="checkbox" checked={selected.includes(it.id)} onChange={() => toggle(it.id)} disabled={!gate.allowed} /></td>
+                            <td><input type="checkbox" aria-label={t('items.selectItem', 'Select :name', { name: it.name })} checked={selected.includes(it.id)} onChange={() => toggle(it.id)} disabled={!gate.allowed} /></td>
                             <td className="item-thumb-cell">
                                 {it.primary_image_url
                                     ? <img className="item-thumb" src={it.primary_image_url} alt="" loading="lazy" />
                                     : <span className="item-thumb item-thumb--ph">📦</span>}
                             </td>
-                            <td><Link to={`/items/${it.id}`}>{it.sku}</Link></td>
+                            <td><Link to={`/items/${it.id}`}><bdi>{it.sku}</bdi></Link></td>
                             <td>{it.name}</td>
-                            <td>{it.item_type}</td>
+                            <td>{t(`items.type.${it.item_type}`, it.item_type)}</td>
                             <td>{it.category?.name ?? '—'}</td>
                             <td>{it.sales_price ?? '—'}</td>
                             <td>{it.is_active ? t('active') : t('inactive', 'Inactive')}</td>
