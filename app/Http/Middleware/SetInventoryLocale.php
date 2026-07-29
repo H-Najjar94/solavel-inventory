@@ -12,8 +12,8 @@ class SetInventoryLocale
     {
         $requested = $request->query('locale')
             ?? $request->header('X-Locale')
-            ?? $request->header('Accept-Language')
-            ?? $request->session()->get('solastock_locale');
+            ?? $request->session()->get('solastock_locale')
+            ?? $request->header('Accept-Language');
 
         $locale = is_string($requested)
             ? strtolower(substr(trim($requested), 0, 2))
