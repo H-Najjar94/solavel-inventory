@@ -82,11 +82,13 @@ class Phase0SafetyHoldTest extends TestCase
             'mode' => 'active',
             'solabooks_organization_id' => 14,
         ]);
+        $this->event('ignored');
         $status = app(IntegrationController::class)->status()->getData(true)['data'];
         $this->assertSame('maintenance_hold', $status['health']);
         $this->assertFalse($status['delivery_enabled']);
         $this->assertSame('currency_contract_maintenance', $status['delivery_disabled_reason']);
         $this->assertTrue($status['legacy_finance_inventory_writes_blocked']);
+        $this->assertSame(1, $status['events']['ignored']);
         $this->assertArrayHasKey('pending', $status['events']);
         $this->assertArrayHasKey('ignored', $status['events']);
     }

@@ -61,6 +61,17 @@ final class IntegrationEvents
         return true;
     }
 
+    /**
+     * Phase 0 reconciliation preserves zero-value adjustment events as
+     * accounting events. They remain part of the reviewed historical set even
+     * though delivery would treat them as an operational no-op.
+     */
+    public static function isAccountingEventForReconciliation(string $type, array $payload): bool
+    {
+        return self::postsJournalForPayload($type, $payload)
+            || in_array($type, ['adjustment.posted', 'adjustment.reversed'], true);
+    }
+
     public static function aggregateType(string $type): ?string
     {
         return self::TYPES[$type][0] ?? null;
