@@ -6,6 +6,7 @@ use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\IntegrationTaxMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\InventorySetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -31,15 +32,24 @@ class IntegrationStatusService
         $settings = IntegrationSetting::query()->firstOrNew([
             'organization_id' => $orgId, 'integration' => IntegrationEvents::INTEGRATION,
         ]);
-        $sharedFinanceOrgId = $this->sharedFinanceOrganizationId($orgId);
-        $workspaceConnected = $sharedFinanceOrgId !== null;
+        $organizationMapping = Schema::connection('tenant')->hasTable('integration_organization_mappings')
+            ? IntegrationOrganizationMapping::query()
+                ->where('solastock_organization_id', $orgId)
+                ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
+                ->where('contract_version', 'solastock-journal.v2')
+                ->where('status', 'verified_hold')
+                ->where('activation_state', 'maintenance_hold')
+                ->first()
+            : null;
+        $sharedFinanceOrgId = $organizationMapping?->finance_organization_id;
+        $workspaceConnected = $organizationMapping !== null;
         $configuredMode = $settings->mode ?? 'disconnected';
         // SolaStock and SolaBooks already share the client's tenant database and
         // organization registry. Without an outbox API credential that is a real
         // read-only workspace connection, not a disconnected product.
-        $mode = $configuredMode === 'disconnected' && $workspaceConnected
-            ? 'connected_readonly'
-            : $configuredMode;
+        $mode = ! $workspaceConnected && $settings->exists
+            ? 'connected_pending_mapping'
+            : ($configuredMode === 'disconnected' && $workspaceConnected ? 'connected_readonly' : $configuredMode);
 
         $events = IntegrationOutboxEvent::query()
             ->where('organization_id', $orgId)
@@ -71,6 +81,44 @@ class IntegrationStatusService
         $taxMappingCompleteness = $taxCodes->isEmpty()
             ? 100
             : round($taxCodes->intersect($mappedTaxCodes)->count() / $taxCodes->count() * 100);
+        $masterCoverage = $organizationMapping && Schema::connection('tenant')->hasTable('integration_master_data_mappings')
+            ? DB::connection('tenant')->table('integration_master_data_mappings')
+                ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+                ->selectRaw("SUM(CASE WHEN status IN ('mapped','verified') THEN 1 ELSE 0 END) mapped")
+                ->selectRaw("SUM(CASE WHEN status IN ('missing_finance','missing_solastock') THEN 1 ELSE 0 END) missing")
+                ->selectRaw("SUM(CASE WHEN status = 'conflict' THEN 1 ELSE 0 END) conflicting")
+                ->selectRaw("SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) archived")
+                ->selectRaw("SUM(CASE WHEN status = 'review_required' THEN 1 ELSE 0 END) review_required")
+                ->first()
+            : null;
+        $discoveryCoverage = null;
+        if ($organizationMapping && Schema::connection('tenant')->hasTable('integration_mapping_discovery_runs')) {
+            $lastRun = DB::connection('tenant')->table('integration_mapping_discovery_runs')
+                ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+                ->orderByDesc('started_at')
+                ->value('run_uuid');
+            if ($lastRun) {
+                $discoveryCoverage = DB::connection('tenant')->table('integration_mapping_discovery_results')
+                    ->where('run_uuid', $lastRun)
+                    ->selectRaw("SUM(CASE WHEN classification LIKE 'missing_%' THEN 1 ELSE 0 END) missing")
+                    ->selectRaw("SUM(CASE WHEN classification IN ('ambiguous_match','conflicting_mapping','conflicting_candidates') THEN 1 ELSE 0 END) conflicting")
+                    ->selectRaw("SUM(CASE WHEN classification = 'archived_match' THEN 1 ELSE 0 END) archived")
+                    ->selectRaw("SUM(CASE WHEN classification IN ('cross_organization_risk','incompatible_schema','unit_conversion_incompatible','account_incompatible','tax_incompatible','review_required') THEN 1 ELSE 0 END) review_required")
+                    ->first();
+            }
+        }
+        $authoritativeState = 'unavailable';
+        $lastAuthoritativeRead = null;
+        try {
+            if (Schema::connection('tenant')->hasTable('stock_balances')) {
+                $hasBalances = DB::connection('tenant')->table('stock_balances')
+                    ->where('organization_id', $orgId)->exists();
+                $lastAuthoritativeRead = now()->toIso8601String();
+                $authoritativeState = $hasBalances ? 'available' : 'empty';
+            }
+        } catch (\Throwable) {
+            $authoritativeState = 'unavailable';
+        }
 
         $health = match (true) {
             ! $safety->deliveryEnabled() => 'maintenance_hold',
@@ -95,7 +143,26 @@ class IntegrationStatusService
             'mapping_completeness_pct' => $mappingCompleteness,
             'tax_mapping_completeness_pct' => $taxMappingCompleteness,
             'last_event_generated_at' => IntegrationOutboxEvent::query()->where('organization_id', $orgId)->max('occurred_at'),
-            'connection_implemented' => $workspaceConnected || $settings->exists,
+            'connection_implemented' => $workspaceConnected,
+            'organization_mapping' => $organizationMapping ? [
+                'mapping_uuid' => $organizationMapping->mapping_uuid,
+                'status' => $organizationMapping->status,
+                'activation_state' => $organizationMapping->activation_state,
+                'contract_version' => $organizationMapping->contract_version,
+                'v2_key_scope_status' => $organizationMapping->v2_key_scope_status,
+                'verified_at' => $organizationMapping->verified_at,
+            ] : null,
+            'inventory_authority' => [
+                'inventory_source' => 'solastock',
+                'accounting_source' => 'solabooks',
+                'state' => $authoritativeState,
+                'last_successful_read_at' => $lastAuthoritativeRead,
+                'mapped' => (int) ($masterCoverage->mapped ?? 0),
+                'missing' => max((int) ($masterCoverage->missing ?? 0), (int) ($discoveryCoverage->missing ?? 0)),
+                'conflicting' => max((int) ($masterCoverage->conflicting ?? 0), (int) ($discoveryCoverage->conflicting ?? 0)),
+                'archived' => max((int) ($masterCoverage->archived ?? 0), (int) ($discoveryCoverage->archived ?? 0)),
+                'review_required' => max((int) ($masterCoverage->review_required ?? 0), (int) ($discoveryCoverage->review_required ?? 0)),
+            ],
             'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))
                 && ($settings->meta['client_id'] ?? config('services.solabooks.client_id'))
                 && ($settings->solabooks_organization_id || config('services.solabooks.organization_id'))),

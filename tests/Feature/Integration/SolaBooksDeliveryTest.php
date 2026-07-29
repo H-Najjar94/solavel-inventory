@@ -5,6 +5,7 @@ namespace Tests\Feature\Integration;
 use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationSetting;
 use App\Services\Integration\ExternalRequestSignature;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
@@ -12,6 +13,8 @@ use App\Services\Integration\SolaStockJournalContract;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -49,6 +52,24 @@ class SolaBooksDeliveryTest extends TestCase
                         'rate_scale' => 8,
                     ],
                 ],
+            ]
+        );
+        IntegrationOrganizationMapping::query()->firstOrCreate(
+            [
+                'tenant_database_identity' => (string) DB::connection('tenant')->getDatabaseName(),
+                'solastock_organization_id' => TenantTestManager::ORG_A,
+            ],
+            [
+                'mapping_uuid' => (string) Str::uuid(),
+                'central_client_id' => 7,
+                'central_organization_id' => TenantTestManager::ORG_A,
+                'finance_organization_id' => 14,
+                'contract_version' => SolaStockJournalContract::VERSION,
+                'status' => 'verified_hold',
+                'activation_state' => 'maintenance_hold',
+                'base_currency_code' => 'JOD',
+                'currency_verified_at' => now(),
+                'verified_at' => now(),
             ]
         );
 
@@ -147,7 +168,9 @@ class SolaBooksDeliveryTest extends TestCase
                 SolaStockJournalContract::VERSION,
                 '7',
                 (string) TenantTestManager::ORG_A,
-                (string) IntegrationSetting::query()->where('integration', 'solabooks')->value('id'),
+                (string) IntegrationOrganizationMapping::query()
+                    ->where('solastock_organization_id', TenantTestManager::ORG_A)
+                    ->value('id'),
             );
 
             return $request->hasHeader('X-API-Key', 'key')
