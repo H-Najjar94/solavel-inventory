@@ -5,6 +5,7 @@ import { useTenant } from '../stores/tenant.jsx';
 import { useToast } from '../stores/toast.jsx';
 import { api } from '../services/api.js';
 import { Breadcrumbs } from '../components/ui.jsx';
+import { t } from '../i18n/index.js';
 
 /**
  * SolaStock first-run onboarding — the Solavel-app setup flow. Steps:
@@ -38,8 +39,8 @@ export default function OnboardingPage() {
         try {
             const res = await tenant.provision();
             setProvisionResult(res);
-            if (res?.provisioned) { toast.push('SolaStock provisioned.', 'success'); setStep(4); }
-            else toast.push(res?.message || 'Provisioning needs a server admin.', 'error');
+            if (res?.provisioned) { toast.push(t('onboarding.provisioned'), 'success'); setStep(4); }
+            else toast.push(res?.message || t('onboarding.provisionAdmin'), 'error');
         } catch (e) { toast.push(e.message, 'error'); setProvisionResult({ provisioned: false, message: e.message }); }
         finally { setBusy(false); }
     }
@@ -49,7 +50,7 @@ export default function OnboardingPage() {
         try {
             const res = await api.createWarehouse({ code: wh.code || 'MAIN', name: wh.name || 'Main Warehouse', type: 'warehouse', is_active: true });
             setWh({ ...wh, id: res?.data?.id });
-            toast.push('Warehouse created.', 'success'); setStep(6);
+            toast.push(t('onboarding.warehouseCreated'), 'success'); setStep(6);
         } catch (e) { toast.push(e.message, 'error'); }
         finally { setBusy(false); }
     }
@@ -59,7 +60,7 @@ export default function OnboardingPage() {
         try {
             const res = await api.createItem({ sku: item.sku || 'ITEM-001', name: item.name || 'First Item', item_type: 'inventory', tracking_type: 'none', is_active: true });
             setItem({ ...item, id: res?.data?.id });
-            toast.push('Item created.', 'success'); setStep(7);
+            toast.push(t('onboarding.itemCreated'), 'success'); setStep(7);
         } catch (e) { toast.push(e.message, 'error'); }
         finally { setBusy(false); }
     }
@@ -78,63 +79,63 @@ export default function OnboardingPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Set up SolaStock' }]} />
-            <header className="page-head"><h1>Set up SolaStock</h1></header>
-            <p className="muted">A quick first-run setup to get your inventory workspace ready.</p>
+            <Breadcrumbs items={[{ label: t('onboarding.title') }]} />
+            <header className="page-head"><h1>{t('onboarding.title')}</h1></header>
+            <p className="muted">{t('onboarding.subtitle')}</p>
 
             <div className="onb-wizard">
-                <Step n={1} title="Organization detected">
-                    <p>Organization <strong>#{tenant.organization_id ?? '—'}</strong> is connected.</p>
-                    <button className="btn btn--primary" onClick={() => setStep(2)}>Continue</button>
+                <Step n={1} title={t('onboarding.organizationDetected')}>
+                    <p>{t('onboarding.organizationConnected', undefined, { id: tenant.organization_id ?? '—' })}</p>
+                    <button className="btn btn--primary" onClick={() => setStep(2)}>{t('onboarding.continue')}</button>
                 </Step>
 
-                <Step n={2} title="Check SolaStock tables">
-                    <p>{ready ? 'SolaStock tables are already installed for this organization.' : 'SolaStock tables are not installed yet.'}</p>
-                    <button className="btn btn--primary" onClick={() => setStep(ready ? 4 : 3)}>{ready ? 'Skip to settings' : 'Continue'}</button>
+                <Step n={2} title={t('onboarding.checkTables')}>
+                    <p>{t(ready ? 'onboarding.tablesInstalled' : 'onboarding.tablesMissing')}</p>
+                    <button className="btn btn--primary" onClick={() => setStep(ready ? 4 : 3)}>{t(ready ? 'onboarding.skipSettings' : 'onboarding.continue')}</button>
                 </Step>
 
-                <Step n={3} title="Provision inventory tables">
-                    <p>This creates SolaStock’s tables in your organization’s database (marker <code>migrated_at_inv</code>). No Finance tables are touched.</p>
+                <Step n={3} title={t('onboarding.provisionTables')}>
+                    <p>{t('onboarding.provisionHint')} <code>migrated_at_inv</code></p>
                     {tenant.can_provision
-                        ? <button className="btn btn--primary" disabled={busy} onClick={provision}>{busy ? 'Provisioning…' : 'Provision SolaStock'}</button>
-                        : <p className="muted">An administrator with “Manage settings” must run this step.</p>}
+                        ? <button className="btn btn--primary" disabled={busy} onClick={provision}>{t(busy ? 'onboarding.provisioning' : 'onboarding.provision')}</button>
+                        : <p className="muted">{t('onboarding.manageSettingsRequired')}</p>}
                     {provisionResult && !provisionResult.provisioned && provisionResult.admin_command && (
-                        <div className="setup-error" style={{ marginTop: 12 }}>A server admin must run:<pre className="payload-view">{provisionResult.admin_command}</pre></div>
+                        <div className="setup-error" style={{ marginTop: 12 }}>{t('onboarding.adminCommand')}<pre className="payload-view">{provisionResult.admin_command}</pre></div>
                     )}
                 </Step>
 
-                <Step n={4} title="Basic settings">
-                    <p>Default costing method and policies can be adjusted later in Settings.</p>
-                    <button className="btn btn--primary" onClick={() => setStep(5)}>Continue</button>
+                <Step n={4} title={t('onboarding.basicSettings')}>
+                    <p>{t('onboarding.settingsHint')}</p>
+                    <button className="btn btn--primary" onClick={() => setStep(5)}>{t('onboarding.continue')}</button>
                 </Step>
 
-                <Step n={5} title="Create your first warehouse">
+                <Step n={5} title={t('onboarding.firstWarehouse')}>
                     <div className="form-grid">
-                        <input className="input" placeholder="Code (e.g. MAIN)" value={wh.code} onChange={(e) => setWh({ ...wh, code: e.target.value })} />
-                        <input className="input" placeholder="Name (e.g. Main Warehouse)" value={wh.name} onChange={(e) => setWh({ ...wh, name: e.target.value })} />
+                        <input className="input" placeholder={t('onboarding.warehouseCode')} value={wh.code} onChange={(e) => setWh({ ...wh, code: e.target.value })} />
+                        <input className="input" placeholder={t('onboarding.warehouseName')} value={wh.name} onChange={(e) => setWh({ ...wh, name: e.target.value })} />
                     </div>
-                    <button className="btn btn--primary" disabled={busy} onClick={createWarehouse}>{busy ? 'Creating…' : 'Create warehouse'}</button>
-                    <button className="btn" onClick={() => setStep(6)}>Skip</button>
+                    <button className="btn btn--primary" disabled={busy} onClick={createWarehouse}>{t(busy ? 'onboarding.creating' : 'onboarding.createWarehouse')}</button>
+                    <button className="btn" onClick={() => setStep(6)}>{t('onboarding.skip')}</button>
                 </Step>
 
-                <Step n={6} title="Create your first item">
+                <Step n={6} title={t('onboarding.firstItem')}>
                     <div className="form-grid">
-                        <input className="input" placeholder="SKU (e.g. ITEM-001)" value={item.sku} onChange={(e) => setItem({ ...item, sku: e.target.value })} />
-                        <input className="input" placeholder="Name" value={item.name} onChange={(e) => setItem({ ...item, name: e.target.value })} />
+                        <input className="input" placeholder={t('onboarding.itemSku')} value={item.sku} onChange={(e) => setItem({ ...item, sku: e.target.value })} />
+                        <input className="input" placeholder={t('onboarding.name')} value={item.name} onChange={(e) => setItem({ ...item, name: e.target.value })} />
                     </div>
-                    <button className="btn btn--primary" disabled={busy} onClick={createItem}>{busy ? 'Creating…' : 'Create item'}</button>
-                    <button className="btn" onClick={() => setStep(7)}>Skip</button>
+                    <button className="btn btn--primary" disabled={busy} onClick={createItem}>{t(busy ? 'onboarding.creating' : 'onboarding.createItem')}</button>
+                    <button className="btn" onClick={() => setStep(7)}>{t('onboarding.skip')}</button>
                 </Step>
 
-                <Step n={7} title="Add opening stock (optional)">
-                    <p>You can record opening stock now from the Opening Stock screen, or later.</p>
-                    <button className="btn" onClick={() => nav('/opening-stock/new')}>Go to Opening Stock</button>
-                    <button className="btn btn--primary" onClick={() => setStep(8)}>Continue</button>
+                <Step n={7} title={t('onboarding.openingStock')}>
+                    <p>{t('onboarding.openingStockHint')}</p>
+                    <button className="btn" onClick={() => nav('/opening-stock/new')}>{t('onboarding.goOpeningStock')}</button>
+                    <button className="btn btn--primary" onClick={() => setStep(8)}>{t('onboarding.continue')}</button>
                 </Step>
 
-                <Step n={8} title="Finish">
-                    <p>Setup complete. Your SolaStock workspace is ready.</p>
-                    <button className="btn btn--primary" onClick={finish}>Go to dashboard</button>
+                <Step n={8} title={t('onboarding.finish')}>
+                    <p>{t('onboarding.complete')}</p>
+                    <button className="btn btn--primary" onClick={finish}>{t('onboarding.dashboard')}</button>
                 </Step>
             </div>
         </section>
