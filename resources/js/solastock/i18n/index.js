@@ -25,10 +25,11 @@ import * as partners from './partners.js';
 import * as settingsPages from './settingsPages.js';
 import * as itemDetailFull from './itemDetailFull.js';
 import * as salesOrders from './salesOrders.js';
+import * as recallsScanner from './recallsScanner.js';
 
 export const dictionaries = {
-  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, itemDetailFull.en, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, transfers.en, sales.en, salesOrders.en, returns.en, traceability.en, traceabilityPages.traceabilityPagesEn, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en, reports.en, sharedDocuments.en, errors.en, dashboard.en, counts.en, openingStock.en, partners.en, settingsPages.en),
-  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, itemDetailFull.ar, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, transfers.ar, sales.ar, salesOrders.ar, returns.ar, traceability.ar, traceabilityPages.traceabilityPagesAr, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar, reports.ar, sharedDocuments.ar, errors.ar, dashboard.ar, counts.ar, openingStock.ar, partners.ar, settingsPages.ar),
+  en: Object.assign({}, core.en, catalog.en, catalog.detailEn, catalog.detailExtrasEn, itemDetailFull.en, stock.en, stock.warehouseEn, stock.warehouseDetailEn, warehouseDetailEn, operations.en, purchasing.en, receiving.en, transfers.en, sales.en, salesOrders.en, returns.en, recallsScanner.en, traceability.en, traceabilityPages.traceabilityPagesEn, insights.en, admin.en, adjustment.en, ledger.en, onboarding.en, reports.en, sharedDocuments.en, errors.en, dashboard.en, counts.en, openingStock.en, partners.en, settingsPages.en),
+  ar: Object.assign({}, core.ar, catalog.ar, catalog.detailAr, catalog.detailExtrasAr, itemDetailFull.ar, stock.ar, stock.warehouseAr, stock.warehouseDetailAr, warehouseDetailAr, operations.ar, purchasing.ar, receiving.ar, transfers.ar, sales.ar, salesOrders.ar, returns.ar, recallsScanner.ar, traceability.ar, traceabilityPages.traceabilityPagesAr, insights.ar, admin.ar, adjustment.ar, ledger.ar, onboarding.ar, reports.ar, sharedDocuments.ar, errors.ar, dashboard.ar, counts.ar, openingStock.ar, partners.ar, settingsPages.ar),
 };
 
 // English source phrases used by page islands. Keeping this separate from
