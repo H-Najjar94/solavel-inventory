@@ -43,26 +43,26 @@ class ResolveInventoryTenant
                 break;
 
             case 'no_organization':
-                return $this->stop('no_organization', 'You are signed in but no Solavel organization is active.', 409, $s);
+                return $this->stop('no_organization', __('inventory.tenancy.no_organization'), 409, $s);
 
             case 'no_access':
-                return $this->stop('no_access', 'You do not have access to SolaStock for this organization.', 403, $s);
+                return $this->stop('no_access', __('inventory.tenancy.no_access'), 403, $s);
 
             case 'needs_activation':
-                return $this->stop('needs_activation', 'SolaStock is not enabled for this organization yet.', 409, $s);
+                return $this->stop('needs_activation', __('inventory.tenancy.needs_activation'), 409, $s);
 
             case 'schema_failed':
-                return $this->stop('schema_failed', 'Inventory is not ready for this workspace. A SolaStock schema audit failed.', 409, $s);
+                return $this->stop('schema_failed', __('inventory.tenancy.schema_failed'), 409, $s);
 
             case 'tenant_missing':
             case 'tenant_unmigrated':
             case 'tenant_unreachable':
             case 'demo_setup_required':
-                return $this->stop('setup_required', 'SolaStock is not set up for this organization yet.', 409, $s);
+                return $this->stop('setup_required', __('inventory.tenancy.setup_required'), 409, $s);
 
             case 'sample_preview':
             default:
-                return $this->stop('no_tenant', 'No active organization. Sign in or select the demo tenant to load data.', 409, $s);
+                return $this->stop('no_tenant', __('inventory.tenancy.no_tenant'), 409, $s);
         }
 
         return $next($request);

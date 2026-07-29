@@ -72,13 +72,13 @@ class StoreStockAdjustmentRequest extends FormRequest
 
             $reason = $this->input('reason_code');
             if (! is_string($reason) || $reason === '') {
-                $validator->errors()->add('reason_code', 'Select an adjustment reason.');
+                $validator->errors()->add('reason_code', __('inventory.validation.adjustment_reason_required'));
 
                 return;
             }
 
             if (! $codes->contains($reason)) {
-                $validator->errors()->add('reason_code', 'The selected adjustment reason is not configured.');
+                $validator->errors()->add('reason_code', __('inventory.validation.adjustment_reason_unconfigured'));
             }
         });
     }

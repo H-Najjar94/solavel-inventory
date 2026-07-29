@@ -10,9 +10,16 @@ echo "Root: $root"
 # JSX text nodes and common prop literals. This is intentionally conservative:
 # it reports candidates for review; it never treats customer data or technical
 # identifiers as translatable source text.
+# Narrow reviewed allowlist:
+# - OnboardingPage.jsx `migrated_at_inv`: an immutable tenant migration marker
+#   shown to administrators; translating it would make the server command wrong.
+# - ItemsPage.jsx `<th>SKU</th>`: internationally recognized inventory
+#   abbreviation; the underlying identifier and its heading remain exact.
 if rg -n --glob '*.jsx' --glob '*.js' \
   '<[^>]+>[[:space:]]*[A-Za-z][A-Za-z ,./&+#?()’'"'"'_-]{2,}[[:space:]]*<' \
-  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components"; then
+  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components" \
+  | rg -v 'OnboardingPage\.jsx:.*<code>migrated_at_inv</code>' \
+  | rg -v 'ItemsPage\.jsx:.*<th>SKU</th>'; then
   status=1
 fi
 

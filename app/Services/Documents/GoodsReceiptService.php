@@ -164,7 +164,7 @@ class GoodsReceiptService
 
             $accepted = Decimal::qty((string) ($line['accepted_qty'] ?? $line['received_qty']));
             if (Decimal::gt((string) $base['quarantine_qty'], $accepted)) {
-                throw new RuntimeException('Quarantine quantity cannot exceed accepted quantity.');
+                throw new RuntimeException(__('inventory.stock.quarantine_exceeds_accepted'));
             }
 
             $out[] = $base + [
@@ -232,7 +232,7 @@ class GoodsReceiptService
             }
 
             if ($movements === []) {
-                throw new RuntimeException('GRN has no accepted quantity to receive.');
+                throw new RuntimeException(__('inventory.stock.receipt_no_quantity'));
             }
 
             $this->ledger->post($movements, $this->postNamespace($grn), [

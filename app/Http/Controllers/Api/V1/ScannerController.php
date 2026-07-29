@@ -15,7 +15,7 @@ class ScannerController extends ApiController
     {
         $code = trim((string) $request->query('code', ''));
         if ($code === '') {
-            return $this->error('scan_code_required', 'Scan code is required.', 422);
+            return $this->error('scan_code_required', __('inventory.scanner.code_required'), 422);
         }
 
         $barcode = ItemBarcode::query()->with('item:id,sku,name,item_type,tracking_type,is_active')
@@ -83,6 +83,6 @@ class ScannerController extends ApiController
             ]);
         }
 
-        return $this->error('scan_code_not_found', 'No item, bin or shipment matches that scan.', 404);
+        return $this->error('scan_code_not_found', __('inventory.scanner.not_found'), 404);
     }
 }

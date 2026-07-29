@@ -181,7 +181,7 @@ class ShipmentService
                 );
             }
             if ($movements === []) {
-                throw new RuntimeException('Shipment has no quantity to ship.');
+                throw new RuntimeException(__('inventory.stock.shipment_no_quantity'));
             }
 
             $this->ledger->post($movements, $this->postNamespace($s), [

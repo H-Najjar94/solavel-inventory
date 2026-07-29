@@ -165,7 +165,7 @@ class StockLedgerService
         }
         $qty = Decimal::qty($m->quantity);
         if (! Decimal::gt($qty, '0')) {
-            throw new RuntimeException('Movement quantity must be greater than zero.');
+            throw new RuntimeException(__('inventory.stock.movement_positive'));
         }
 
         // ── validate item & warehouse belong to this org (defense in depth) ──
@@ -174,14 +174,14 @@ class StockLedgerService
             throw new RuntimeException("Item {$m->itemId} not found in this organization.");
         }
         if ((int) $item->organization_id !== $orgId) {
-            throw new RuntimeException('Cross-organization item reference rejected.');
+            throw new RuntimeException(__('inventory.stock.cross_item'));
         }
         $warehouse = Warehouse::query()->find($m->warehouseId);
         if (! $warehouse) {
             throw new RuntimeException("Warehouse {$m->warehouseId} not found in this organization.");
         }
         if ((int) $warehouse->organization_id !== $orgId) {
-            throw new RuntimeException('Cross-organization warehouse reference rejected.');
+            throw new RuntimeException(__('inventory.stock.cross_warehouse'));
         }
 
         // ── tracking compatibility (relaxed for reversals: original coords carried) ──
@@ -215,7 +215,7 @@ class StockLedgerService
         $costLayerId = null;
         if ($m->direction === 'in') {
             if ($m->unitCost === null) {
-                throw new RuntimeException('Inbound movements require a unit cost.');
+                throw new RuntimeException(__('inventory.stock.inbound_cost'));
             }
             $costed = $this->costing->costInbound(
                 $method, $orgId, $m->itemId, $m->variantId, $m->warehouseId, $m->lotId,
@@ -318,13 +318,13 @@ class StockLedgerService
 
         $bin = WarehouseBin::query()->where('organization_id', $orgId)->lockForUpdate()->find($movement->binId);
         if (! $bin) {
-            throw new RuntimeException('Selected bin was not found in this organization.');
+            throw new RuntimeException(__('inventory.stock.bin_not_found'));
         }
         if ((int) $bin->warehouse_id !== $movement->warehouseId) {
-            throw new RuntimeException('Selected bin does not belong to the movement warehouse.');
+            throw new RuntimeException(__('inventory.stock.bin_wrong_warehouse'));
         }
         if (! $bin->is_active) {
-            throw new RuntimeException('Selected bin is inactive.');
+            throw new RuntimeException(__('inventory.stock.bin_inactive'));
         }
         if ($bin->capacity === null) {
             return;
@@ -362,7 +362,7 @@ class StockLedgerService
         $orgId = $this->context->idOrFail();
         $item = Item::query()->find((int) $orig->item_id);
         if (! $item || (int) $item->organization_id !== $orgId) {
-            throw new RuntimeException('Cross-organization item reference rejected during reversal.');
+            throw new RuntimeException(__('inventory.stock.cross_item_reversal'));
         }
 
         $reverseDirection = $orig->direction === 'in' ? 'out' : 'in';
@@ -611,7 +611,7 @@ class StockLedgerService
             throw new RuntimeException("Serial {$m->serialId} not found.");
         }
         if ((int) $serial->item_id !== $m->itemId) {
-            throw new RuntimeException('Serial does not belong to the movement item.');
+            throw new RuntimeException(__('inventory.stock.serial_wrong_item'));
         }
 
         if ($m->direction === 'in') {
@@ -643,7 +643,7 @@ class StockLedgerService
             throw new RuntimeException("Serial {$movement->serialId} not found.");
         }
         if ((int) $serial->item_id !== $movement->itemId) {
-            throw new RuntimeException('Serial does not belong to the movement item.');
+            throw new RuntimeException(__('inventory.stock.serial_wrong_item'));
         }
 
         if ($originalDirection === 'in') {

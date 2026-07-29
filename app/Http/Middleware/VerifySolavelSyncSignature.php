@@ -19,7 +19,7 @@ class VerifySolavelSyncSignature
 
         $secret = (string) config('solavel_sync.secret', '');
         if ($secret === '') {
-            return $this->deny('Sync secret is not configured.', 'sync_secret_missing', 503);
+            return $this->deny(__('inventory.sync.secret_missing'), 'sync_secret_missing', 503);
         }
 
         $signature = (string) ($request->header('X-Solavel-Signature') ?? '');
@@ -28,21 +28,21 @@ class VerifySolavelSyncSignature
         }
 
         if ($signature === '') {
-            return $this->deny('Missing sync signature.', 'sync_signature_missing', 403);
+            return $this->deny(__('inventory.sync.signature_missing'), 'sync_signature_missing', 403);
         }
 
         $timestamp = (string) ($request->header('X-Solavel-Timestamp') ?? '');
         if ($timestamp === '' || ! ctype_digit($timestamp)) {
-            return $this->deny('Missing or invalid sync timestamp.', 'sync_timestamp_invalid', 403);
+            return $this->deny(__('inventory.sync.timestamp_invalid'), 'sync_timestamp_invalid', 403);
         }
 
         if (abs(time() - (int) $timestamp) > (int) config('solavel_sync.allowed_skew_seconds', 300)) {
-            return $this->deny('Sync timestamp outside allowed skew.', 'sync_timestamp_stale', 403);
+            return $this->deny(__('inventory.sync.timestamp_stale'), 'sync_timestamp_stale', 403);
         }
 
         $expected = hash_hmac('sha256', $timestamp . '.' . $request->getContent(), $secret);
         if (! hash_equals($expected, $signature)) {
-            return $this->deny('Invalid sync signature.', 'sync_signature_invalid', 403);
+            return $this->deny(__('inventory.sync.signature_invalid'), 'sync_signature_invalid', 403);
         }
 
         $nonceKey = 'inventory:sync:nonce:' . hash('sha256', $signature);
@@ -52,7 +52,7 @@ class VerifySolavelSyncSignature
                 'success' => true,
                 'status' => 'duplicate',
                 'code' => 'sync_replay_detected',
-                'message' => 'Duplicate sync request.',
+                'message' => __('inventory.sync.duplicate'),
             ]);
         }
 

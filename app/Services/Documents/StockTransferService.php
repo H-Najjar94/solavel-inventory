@@ -69,7 +69,7 @@ class StockTransferService
             $t->organization_id = $orgId;
 
             if ((int) ($attributes['from_warehouse_id'] ?? 0) === (int) ($attributes['to_warehouse_id'] ?? 0)) {
-                throw new RuntimeException('Transfer source and destination warehouses must differ.');
+                throw new RuntimeException(__('inventory.stock.transfer_warehouses_distinct'));
             }
             $t->save();
 
@@ -101,7 +101,7 @@ class StockTransferService
                 throw new RuntimeException("Only a draft transfer can be edited (status '{$t->status}').");
             }
             if ((int) ($attributes['from_warehouse_id'] ?? $t->from_warehouse_id) === (int) ($attributes['to_warehouse_id'] ?? $t->to_warehouse_id)) {
-                throw new RuntimeException('Transfer source and destination warehouses must differ.');
+                throw new RuntimeException(__('inventory.stock.transfer_warehouses_distinct'));
             }
 
             $t->fill(collect($attributes)->only(['transfer_number', 'transfer_date', 'from_warehouse_id', 'to_warehouse_id', 'notes'])->toArray());

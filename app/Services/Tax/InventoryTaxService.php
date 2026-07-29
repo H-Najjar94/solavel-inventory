@@ -23,7 +23,7 @@ class InventoryTaxService
             return ['code' => $code, 'treatment' => 'standard', 'rate' => Decimal::cost($rate)];
         }
         if (! $tax || ! ($tax['active'] ?? false) || ! ($tax[$use] ?? false)) {
-            throw ValidationException::withMessages(['tax_code' => 'The selected tax is inactive or not applicable.']);
+            throw ValidationException::withMessages(['tax_code' => __('inventory.validation.tax_inactive')]);
         }
 
         $resolvedRate = in_array($tax['treatment'] ?? 'standard', ['zero', 'exempt'], true)

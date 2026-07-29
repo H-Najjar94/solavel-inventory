@@ -49,7 +49,7 @@ class StockReservationService
     ): Reservation {
         $reservation = $this->reserveInternal($itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, false);
         if (! $reservation) {
-            throw new RuntimeException('Reservation could not be created.');
+            throw new RuntimeException(__('inventory.stock.reservation_create_failed'));
         }
 
         return $reservation;
@@ -83,7 +83,7 @@ class StockReservationService
         return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $serialId, $sourceType, $sourceId, $expiresAt, $priority) {
             $serial = SerialNumber::query()->where('organization_id', $orgId)->lockForUpdate()->find($serialId);
             if (! $serial || (int) $serial->item_id !== $itemId || (int) $serial->warehouse_id !== $warehouseId) {
-                throw new RuntimeException('The selected serial is not available for this item and warehouse.');
+                throw new RuntimeException(__('inventory.stock.serial_unavailable'));
             }
             if (! in_array($serial->status, ['available', 'in_stock', 'returned'], true)) {
                 throw new RuntimeException("Serial {$serial->serial} is not available (status: {$serial->status}).");
@@ -136,7 +136,7 @@ class StockReservationService
         $orgId = $this->context->idOrFail();
         $requested = Decimal::qty($qty);
         if (! Decimal::gt($requested, '0')) {
-            throw new RuntimeException('Reservation quantity must be greater than zero.');
+            throw new RuntimeException(__('inventory.stock.reservation_positive'));
         }
 
         return DB::connection($this->conn())->transaction(function () use (
@@ -251,7 +251,7 @@ class StockReservationService
         $orgId = $this->context->idOrFail();
         $qty = Decimal::qty($qty);
         if (! Decimal::gt($qty, '0')) {
-            throw new RuntimeException('Reservation quantity must be greater than zero.');
+            throw new RuntimeException(__('inventory.stock.reservation_positive'));
         }
         $priority = max(1, min(999, $priority));
         $this->expireOverdue(null, null, $itemId, $warehouseId);

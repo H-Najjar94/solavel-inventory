@@ -141,7 +141,7 @@ class PurchaseOrderController extends ApiController
     {
         $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if ($purchase_order->status !== 'draft') {
-            return $this->error('po_not_draft', 'Only a draft PO can be edited.', 422);
+            return $this->error('po_not_draft', __('inventory.documents.po_edit_draft'), 422);
         }
         $data = $request->validated();
         $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
@@ -166,7 +166,7 @@ class PurchaseOrderController extends ApiController
     {
         $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if ($purchase_order->status !== 'draft') {
-            return $this->error('po_not_draft', 'Only a draft PO can be approved.', 422);
+            return $this->error('po_not_draft', __('inventory.documents.po_approve_draft'), 422);
         }
         $purchase_order->update(['status' => 'approved']);
         $this->backorders->refresh($purchase_order->fresh('lines'));

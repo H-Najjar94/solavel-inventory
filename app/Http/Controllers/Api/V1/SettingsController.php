@@ -83,7 +83,7 @@ class SettingsController extends ApiController
             // this additive migration. The UI's fallback value is 30; only an
             // attempted expiry-policy change is blocked.
             if ((int) $data['expiry_warning_days'] !== 30) {
-                return $this->error('tenant_migration_pending', 'Expiry warning settings require the pending tenant migration.', 503);
+                return $this->error('tenant_migration_pending', __('inventory.settings.expiry_migration_pending'), 503);
             }
             unset($data['expiry_warning_days']);
         }
@@ -122,7 +122,7 @@ class SettingsController extends ApiController
             return $tax;
         })->values()->all();
         $codes = collect($data['taxes'])->pluck('code');
-        abort_if($codes->duplicates()->isNotEmpty(), 422, 'Tax codes must be unique.');
+        abort_if($codes->duplicates()->isNotEmpty(), 422, __('inventory.validation.tax_codes_unique'));
         $existing = collect((array) (InventorySetting::query()->first()?->taxes ?? []))->pluck('code');
         $removed = $existing->diff($codes);
         $used = $removed->first(fn (string $code) => PurchaseOrderLine::query()->where('tax_code', $code)->exists()
@@ -153,7 +153,7 @@ class SettingsController extends ApiController
 
     public function warehouseAssignments(int $userId): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, 'Warehouse assignment migration is pending.');
+        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $rows = InventoryUserWarehouse::query()->where('user_id', $userId)->get();
 
         return $this->success(['user_id' => $userId, 'assignments' => $rows]);
@@ -161,19 +161,19 @@ class SettingsController extends ApiController
 
     public function allWarehouseAssignments(): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, 'Warehouse assignment migration is pending.');
+        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
 
         return $this->success(InventoryUserWarehouse::query()->orderBy('user_id')->orderBy('warehouse_id')->get());
     }
 
     public function syncWarehouseAssignments(Request $request, int $userId): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, 'Warehouse assignment migration is pending.');
+        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $data = $request->validate(['warehouse_ids' => ['array'], 'warehouse_ids.*' => ['integer']]);
         $ids = collect($data['warehouse_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
         $valid = Warehouse::query()->whereIn('id', $ids)->pluck('id');
         if ($valid->count() !== $ids->count()) {
-            return $this->error('invalid_warehouse_scope', 'Every assigned warehouse must belong to the active organization.', 422);
+            return $this->error('invalid_warehouse_scope', __('inventory.settings.warehouse_scope'), 422);
         }
         InventoryUserWarehouse::query()->where('user_id', $userId)->delete();
         foreach ($valid as $warehouseId) {
@@ -222,11 +222,11 @@ class SettingsController extends ApiController
 
         $parent = ! empty($data['parent_id']) ? ItemCategory::query()->findOrFail($data['parent_id']) : null;
         if ($parent && (int) $parent->id === (int) $category->id) {
-            return $this->error('invalid_category_parent', 'A category cannot be its own parent.', 422);
+            return $this->error('invalid_category_parent', __('inventory.validation.category_self_parent'), 422);
         }
         for ($node = $parent; $node; $node = $node->parent) {
             if ((int) $node->id === (int) $category->id) {
-                return $this->error('invalid_category_parent', 'A category cannot be moved under one of its children.', 422);
+                return $this->error('invalid_category_parent', __('inventory.validation.category_child_parent'), 422);
             }
         }
 
@@ -283,7 +283,7 @@ class SettingsController extends ApiController
 
         $code = strtolower(trim((string) preg_replace('/[^A-Za-z0-9_-]+/', '_', $data['code']), '_'));
         if ($code === '') {
-            return $this->error('invalid_reason_code', 'Reason code must contain at least one letter or number.', 422);
+            return $this->error('invalid_reason_code', __('inventory.validation.reason_code_format'), 422);
         }
 
         $settings = InventorySetting::query()->firstOrCreate(['organization_id' => $orgId]);
@@ -332,7 +332,7 @@ class SettingsController extends ApiController
         ]);
 
         if ((int) $data['from_unit_id'] === (int) $data['to_unit_id']) {
-            return $this->error('same_unit_conversion', 'From and to units must be different.', 422);
+            return $this->error('same_unit_conversion', __('inventory.validation.unit_conversion_distinct'), 422);
         }
 
         $conversion = UnitConversion::query()->updateOrCreate(

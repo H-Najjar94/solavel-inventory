@@ -56,7 +56,7 @@ class WarehouseImageController extends ApiController
 
         $file = $request->file('image');
         if (! in_array($file->getMimeType(), self::ALLOWED, true)) {
-            return $this->error('invalid_image_type', 'Only JPG, PNG or WEBP images are allowed.', 422);
+            return $this->error('invalid_image_type', __('inventory.validation.image_type'), 422);
         }
 
         $orgId = (int) $warehouse->organization_id;

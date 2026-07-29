@@ -43,7 +43,7 @@ class RecallService
             $recall->created_by = auth()->id();
             $recall->save();
             $this->syncLines($recall, $lines, $orgId);
-            $this->logAction($recall, 'created', 'Recall case drafted.');
+            $this->logAction($recall, 'created', __('inventory.documents.recall_drafted'));
 
             return $recall->fresh('lines');
         });
@@ -116,7 +116,7 @@ class RecallService
             $recall->status = 'closed';
             $recall->closed_at = now();
             $recall->save();
-            $this->logAction($recall, 'closed', $notes ?? 'Recall closed.');
+            $this->logAction($recall, 'closed', $notes ?? __('inventory.documents.recall_closed'));
 
             return $recall;
         });

@@ -5,6 +5,7 @@ use App\Http\Middleware\BounceToParentForSso;
 use App\Http\Middleware\EnsureInventoryFeature;
 use App\Http\Middleware\EnsureInventoryPermission;
 use App\Http\Middleware\ResolveInventoryTenant;
+use App\Http\Middleware\SetInventoryLocale;
 use App\Http\Middleware\VerifySolavelSyncSignature;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -63,6 +64,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // they run AFTER StartSession — otherwise session writes + Auth::login()
         // in the handoff have no started session and are silently lost.
         $middleware->web(append: [
+            SetInventoryLocale::class,
             AuthenticateFromInventoryHandoff::class,
             BounceToParentForSso::class,
         ]);
@@ -82,6 +84,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->priority([
             EncryptCookies::class,
             StartSession::class,
+            SetInventoryLocale::class,
             // SSO must run AFTER the session is started so its session writes +
             // Auth::login() persist and a session cookie is set on the redirect.
             AuthenticateFromInventoryHandoff::class,
@@ -97,12 +100,12 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         $exceptions->render(function (ModelNotFoundException $exception, Request $request) {
             if ($request->expectsJson() || $request->is('api/*') || $request->is('inventory/api/*')) {
-                return response()->json(['message' => 'Resource not found.'], 404);
+                return response()->json(['message' => __('inventory.common.resource_not_found')], 404);
             }
         });
         $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
             if ($request->expectsJson() || $request->is('api/*') || $request->is('inventory/api/*')) {
-                return response()->json(['message' => 'Resource not found.'], 404);
+                return response()->json(['message' => __('inventory.common.resource_not_found')], 404);
             }
         });
     })->create();

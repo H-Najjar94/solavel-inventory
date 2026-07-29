@@ -170,7 +170,7 @@ class InventoryReversalService
     {
         $rows = StockLedger::query()->where('idempotency_key', 'like', $namespace.'#%')->get();
         if ($rows->isEmpty()) {
-            throw new RuntimeException('The source document has no posted stock ledger rows.');
+            throw new RuntimeException(__('inventory.documents.reversal_no_ledger'));
         }
 
         foreach ($rows as $row) {
@@ -187,7 +187,7 @@ class InventoryReversalService
                 ->when($row->bin_id, fn ($q) => $q->where('bin_id', $row->bin_id), fn ($q) => $q->whereNull('bin_id'))
                 ->exists();
             if ($downstreamOut) {
-                throw new RuntimeException('Cannot reverse this receipt because downstream stock consumption exists on a received coordinate. Reverse the downstream source first.');
+                throw new RuntimeException(__('inventory.documents.reversal_downstream'));
             }
 
             $balance = StockBalance::query()
@@ -199,7 +199,7 @@ class InventoryReversalService
                 ->lockForUpdate()
                 ->first();
             if (! $balance || Decimal::lt((string) $balance->on_hand_qty, (string) $row->quantity)) {
-                throw new RuntimeException('Cannot reverse this receipt because its stock is no longer fully available.');
+                throw new RuntimeException(__('inventory.documents.reversal_unavailable'));
             }
         }
     }

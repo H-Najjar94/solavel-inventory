@@ -72,7 +72,7 @@ class WarehouseAccessService
     {
         $allowed = $this->allowedIds();
         if ($allowed !== null && ! in_array($warehouseId, $allowed, true)) {
-            throw new AuthorizationException('You are not assigned to this warehouse.');
+            throw new AuthorizationException(__('inventory.common.warehouse_unassigned'));
         }
     }
 
