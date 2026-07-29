@@ -7,6 +7,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
+import { useTenant } from '../stores/tenant.jsx';
 
 function HealthBadge({ health, tr }) {
     const map = { healthy: 'badge--live', needs_mapping: 'badge--demo', error: 'badge--warn', disconnected: 'badge--muted' };
@@ -15,18 +16,26 @@ function HealthBadge({ health, tr }) {
 
 export default function IntegrationSettingsPage() {
     const tr = useSettingsTranslation();
+    const tenant = useTenant();
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.integration.manage');
     const [tab, setTab] = useState('status');
-    const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '990010', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
+    const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
     const [savingConnection, setSavingConnection] = useState(false);
     const [rotatingKey, setRotatingKey] = useState(false);
 
     const status = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
     const s = status.data;
     useEffect(() => {
-        if (s) setConnection((current) => ({ ...current, mode: s.mode === 'disconnected' ? 'connected_pending_mapping' : s.mode, solabooks_organization_id: s.solabooks_organization_id ?? '' }));
-    }, [s]);
+        if (s || tenant.client_id) {
+            setConnection((current) => ({
+                ...current,
+                mode: s?.mode === 'disconnected' ? 'connected_pending_mapping' : (s?.mode ?? current.mode),
+                client_id: String(s?.client_id ?? tenant.client_id ?? current.client_id),
+                solabooks_organization_id: s?.solabooks_organization_id ?? '',
+            }));
+        }
+    }, [s, tenant.client_id]);
 
     async function saveConnection() {
         setSavingConnection(true);
@@ -60,7 +69,13 @@ export default function IntegrationSettingsPage() {
 
             <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'accounts', label: tr('integration.tabs.accounts') }, { key: 'taxes', label: tr('integration.tabs.taxes') }, { key: 'items', label: tr('integration.tabs.items') }]} active={tab} onChange={setTab} />
 
-            {tab === 'status' && (status.isLoading ? <Skeleton /> : !s ? <EmptyState title={tr('integration.unavailable')} hint={tr('integration.selectTenant')} /> : (
+            {tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
+                <EmptyState
+                    title={tr('integration.loadFailed')}
+                    hint={status.error?.message || tr('settings.common.errorFallback')}
+                    action={<button className="btn btn--primary" onClick={() => status.refetch()}>{tr('integration.retry')}</button>}
+                />
+            ) : !s ? <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} /> : (
                 <>
                     <div className="widget-grid">
                         <div className="widget-card"><div className="widget-card-label">{tr('integration.metrics.mode')}</div><div className="widget-card-value" style={{ fontSize: 18 }}>{tr(`integration.connection.${s.mode === 'connected_readonly' ? 'readOnly' : s.mode === 'connected_pending_mapping' ? 'pendingMappings' : s.mode}`, {}, s.mode)}</div></div>
