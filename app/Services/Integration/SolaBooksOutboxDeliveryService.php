@@ -17,10 +17,15 @@ class SolaBooksOutboxDeliveryService
         private OrganizationContext $context,
         private AccountingJournalBuilder $journals,
         private IntegrationOutboxService $outbox,
+        private IntegrationSafetyHold $safety,
     ) {}
 
     public function deliver(IntegrationOutboxEvent $event, bool $manual = false): IntegrationOutboxEvent
     {
+        // This must remain the first operation: a blocked request must not lock
+        // or mutate an event, increment attempts, mint a nonce, or call Finance.
+        $this->safety->assertDeliveryEnabled();
+
         $orgId = $this->context->idOrFail();
         $failure = null;
 
@@ -96,6 +101,10 @@ class SolaBooksOutboxDeliveryService
 
     public function deliverDue(int $limit = 25): array
     {
+        // Covers future commands/workers and bulk paths even though Phase 0
+        // deliberately does not schedule an outbox worker.
+        $this->safety->assertDeliveryEnabled();
+
         $events = IntegrationOutboxEvent::query()
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->whereIn('status', ['pending', 'failed'])

@@ -15,6 +15,7 @@ use App\Services\Documents\SourceDocumentPresenter;
 use App\Services\Integration\IntegrationEvents;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\IntegrationStatusService;
+use App\Services\Integration\IntegrationSafetyHold;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,7 @@ class IntegrationController extends ApiController
         private IntegrationStatusService $statusService,
         private SolaBooksOutboxDeliveryService $delivery,
         private IntegrationOutboxService $outbox,
+        private IntegrationSafetyHold $safety,
     ) {}
 
     public function status(): JsonResponse
@@ -50,6 +52,17 @@ class IntegrationController extends ApiController
             'api_key' => ['nullable', 'string', 'min:32', 'max:255'],
             'require_mapping_before_post' => ['boolean'],
         ]);
+        $existing = IntegrationSetting::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->first();
+        $activating = $data['mode'] !== 'disconnected'
+            && (! $existing || ($existing->mode ?? 'disconnected') === 'disconnected');
+        if ($activating && ! $this->safety->deliveryEnabled()) {
+            return $this->error('integration_safety_hold', $this->safety->message(), 423, [
+                'reason' => $this->safety->reason(),
+            ]);
+        }
         $setting = IntegrationSetting::query()->firstOrNew([
             'organization_id' => $orgId,
             'integration' => IntegrationEvents::INTEGRATION,
@@ -305,6 +318,13 @@ class IntegrationController extends ApiController
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
 
+        if (! $this->safety->deliveryEnabled()) {
+            return $this->error('integration_safety_hold', $this->safety->message(), 423, [
+                'reason' => $this->safety->reason(),
+                'event_uuid' => $event->event_uuid,
+            ]);
+        }
+
         try {
             return $this->success($this->delivery->deliver($event, manual: true)->fresh());
         } catch (\Throwable $e) {
@@ -322,6 +342,12 @@ class IntegrationController extends ApiController
     /** Mark an event ignored (local-only state change; no external call). */
     public function ignore(int $event): JsonResponse
     {
+        if (! $this->safety->deliveryEnabled()) {
+            return $this->error('integration_safety_hold', $this->safety->message(), 423, [
+                'reason' => $this->safety->reason(),
+            ]);
+        }
+
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
         if (in_array($event->status, ['pending', 'failed'], true)) {
             $event->update(['status' => 'ignored']);
