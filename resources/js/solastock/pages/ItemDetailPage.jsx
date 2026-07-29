@@ -413,22 +413,22 @@ export default function ItemDetailPage() {
             {/* ── Overview ── */}
             {tab === 'overview' && (
                 <>
-                    {lowStock && <div className="banner banner--warn">Available stock ({qty(totals.available)}) is at or below the reorder point ({qty(reorder)}).</div>}
+                    {lowStock && <div className="banner banner--warn">{t('itemDetail.lowStockMessage', undefined, { available: qty(totals.available), reorder: qty(reorder) })}</div>}
                     <div className="metric-cards">
-                        <MetricCard label="On hand" value={qty(totals.onHand)} />
-                        <MetricCard label="Available" value={qty(totals.available)} tone={lowStock ? 'warn' : undefined} />
-                        <MetricCard label="Reserved" value={qty(totals.reserved)} />
-                        <MetricCard label="Total stock value" value={money(val?.on_hand_value)} sub={isFifo ? 'FIFO basis' : 'average basis'} tone="ok" />
-                        <MetricCard label="Purchase price" value={money(item.purchase_price)} />
-                        <MetricCard label="Sales price" value={money(item.sales_price)} />
-                        <MetricCard label="Reorder point" value={reorder > 0 ? qty(reorder) : '—'} />
-                        <MetricCard label={isFifo ? 'FIFO value' : 'Avg value'} value={money(val?.fifo_value_total ?? val?.on_hand_value)} />
+                        <MetricCard label={t('itemDetail.onHand')} value={qty(totals.onHand)} />
+                        <MetricCard label={t('itemDetail.available')} value={qty(totals.available)} tone={lowStock ? 'warn' : undefined} />
+                        <MetricCard label={t('itemDetail.reserved')} value={qty(totals.reserved)} />
+                        <MetricCard label={t('itemDetail.totalStockValue')} value={money(val?.on_hand_value)} sub={isFifo ? t('itemDetail.fifoBasis') : t('itemDetail.averageBasis')} tone="ok" />
+                        <MetricCard label={t('items.purchasePrice')} value={money(item.purchase_price)} />
+                        <MetricCard label={t('items.salesPrice')} value={money(item.sales_price)} />
+                        <MetricCard label={t('items.reorderPoint')} value={reorder > 0 ? qty(reorder) : '—'} />
+                        <MetricCard label={isFifo ? t('itemDetail.fifoValue') : t('itemDetail.avgValue')} value={money(val?.fifo_value_total ?? val?.on_hand_value)} />
                     </div>
 
                     <div className="overview-grid">
-                        <div className="card"><div className="card-head"><h3>Stock by warehouse</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>View valuation</button></div>
+                        <div className="card"><div className="card-head"><h3>{t('itemDetail.stockByWarehouse')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>{t('itemDetail.viewValuation')}</button></div>
                             <div className="card-body">{valuation.isLoading ? <Skeleton rows={2} /> : <WarehouseCards cards={cards} />}</div></div>
-                        <div className="card"><div className="card-head"><h3>Recent movements</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setTab('movements')}>See all</button></div>
+                        <div className="card"><div className="card-head"><h3>{t('itemDetail.recentMovements')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setTab('movements')}>{t('itemDetail.seeAll')}</button></div>
                             <div className="card-body">{movements.isLoading ? <Skeleton rows={2} /> : <MovementsTable rows={movementRows.slice(-5).reverse()} onRow={setActiveMovement} />}</div></div>
                     </div>
                 </>
@@ -436,9 +436,9 @@ export default function ItemDetailPage() {
 
             {/* ── Inventory ── */}
             {tab === 'inventory' && (
-                <div className="card"><div className="card-head"><h3>Stock &amp; valuation</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>FIFO layers &amp; valuation</button></div>
+                <div className="card"><div className="card-head"><h3>{t('itemDetail.stockAndValuation')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>{t('itemDetail.fifoLayersValuation')}</button></div>
                     <div className="card-body">{valuation.isLoading ? <Skeleton rows={3} /> : valuation.isError
-                        ? <div className="drawer-error">Couldn’t load stock &amp; valuation.<div><button className="btn btn--sm" onClick={() => valuation.refetch()}>Try again</button></div></div>
+                        ? <div className="drawer-error">{t('itemDetail.loadStockFailed')}<div><button className="btn btn--sm" onClick={() => valuation.refetch()}>{t('itemDetail.tryAgain')}</button></div></div>
                         : <WarehouseCards cards={cards} onValuation={() => setValuationOpen(true)} />}</div></div>
             )}
 
@@ -449,20 +449,20 @@ export default function ItemDetailPage() {
 
             {tab === 'barcodes' && (
                 <div className="overview-grid">
-                    <div className="card"><div className="card-head"><h3>Item barcodes</h3></div><div className="card-body">
-                        {(data.barcodes ?? []).length === 0 ? <EmptyState title="No barcodes" hint="Add EAN, UPC, internal or QR codes for scanner lookup." />
-                            : <table className="data-table"><thead><tr><th>Code</th><th>Type</th><th></th></tr></thead><tbody>
+                    <div className="card"><div className="card-head"><h3>{t('itemDetail.itemBarcodes')}</h3></div><div className="card-body">
+                        {(data.barcodes ?? []).length === 0 ? <EmptyState title={t('itemDetail.noBarcodes')} hint={t('itemDetail.noBarcodesHint')} />
+                            : <table className="data-table"><thead><tr><th>{t('itemDetail.code')}</th><th>{t('itemDetail.type')}</th><th></th></tr></thead><tbody>
                                 {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
-                                    {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>Make primary</button>}
-                                    {gate.allowed && <button className="btn btn--sm" onClick={() => removeBarcode(b.id)}>Delete</button>}
+                                    {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>{t('itemDetail.makePrimary')}</button>}
+                                    {gate.allowed && <button className="btn btn--sm" onClick={() => removeBarcode(b.id)}>{t('itemDetail.delete')}</button>}
                                 </td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addBarcode} style={{ marginTop: 12 }}>
-                            <input className="input" placeholder="Scan or type barcode" value={newBarcode.barcode} onChange={(e) => setNewBarcode({ ...newBarcode, barcode: e.target.value })} />
+                            <input className="input" placeholder={t('itemDetail.scanOrTypeBarcode')} value={newBarcode.barcode} onChange={(e) => setNewBarcode({ ...newBarcode, barcode: e.target.value })} />
                             <select className="input" value={newBarcode.type} onChange={(e) => setNewBarcode({ ...newBarcode, type: e.target.value })}>
-                                <option value="internal">Internal</option><option value="EAN">EAN</option><option value="UPC">UPC</option><option value="QR">QR</option>
+                                <option value="internal">{t('itemDetail.internal')}</option><option value="EAN">EAN</option><option value="UPC">UPC</option><option value="QR">QR</option>
                             </select>
-                            <button className="btn btn--primary">Add barcode</button>
+                            <button className="btn btn--primary">{t('itemDetail.addBarcode')}</button>
                         </form>}
                     </div></div>
                     <div className="card"><div className="card-head"><h3>Scan lookup</h3></div><div className="card-body">
