@@ -8,11 +8,13 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
+import { useI18n } from '../i18n/context.jsx';
 
 const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', tax_code: '', notes: '' });
 const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function PurchaseOrderFormPage() {
+    const { t } = useI18n();
     const { id } = useParams();
     const isEdit = !!id;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
@@ -33,7 +35,7 @@ export default function PurchaseOrderFormPage() {
     useEffect(() => {
         if (isEdit && existing.data?.purchase_order) {
             const po = existing.data.purchase_order;
-            if (po.status !== 'draft') { toast.push('Only draft POs can be edited.', 'error'); nav(`/purchase-orders/${id}`); return; }
+            if (po.status !== 'draft') { toast.push(t('receiving.po.messages.onlyDraftEditable', 'Only draft purchase orders can be edited.'), 'error'); nav(`/purchase-orders/${id}`); return; }
             setHeader({ po_number: po.po_number, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id, order_date: po.order_date, expected_date: po.expected_date ?? '', notes: po.notes ?? '' });
             setLines((existing.data.lines ?? po.lines ?? []).map((l) => ({
                 item_id: l.item_id,
@@ -67,50 +69,50 @@ export default function PurchaseOrderFormPage() {
                     entered_unit_id: l.entered_unit_id || undefined,
                 })),
             };
-            if (payload.lines.length === 0) { toast.push('Add at least one line.', 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { toast.push(t('receiving.po.validation.lineRequired', 'Add at least one line.'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updatePurchaseOrder(id, payload) : await api.createPurchaseOrder(payload);
-            toast.push(isEdit ? 'PO updated.' : 'PO created.', 'success');
+            toast.push(isEdit ? t('receiving.po.messages.updated', 'Purchase order updated.') : t('receiving.po.messages.created', 'Purchase order created.'), 'success');
             qc.invalidateQueries({ queryKey: ['pos'] });
             nav(`/purchase-orders/${res?.data?.id ?? id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || 'Save failed.', 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('receiving.common.saveFailed', 'Save failed.'), 'error'); }
         finally { setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: 'Item', render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
-        { key: 'qty', label: 'Quantity', width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
-        { key: 'unit', label: 'Unit', width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
-        { key: 'price', label: 'Unit cost', width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
-        { key: 'tax', label: 'Tax', width: 150, render: (l, i) => <select className="input" aria-label={`Purchase tax line ${i + 1}`} value={l.tax_code} onChange={(e) => setLine(i, { tax_code: e.target.value })}><option value="">No tax</option>{taxOptions.map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.treatment === 'standard' ? `${tax.rate}%` : tax.treatment}</option>)}</select> },
-        { key: 'line_total', label: 'Line total', width: 110, render: (l) => { const net = Number(l.ordered_qty || 0) * Number(l.unit_price || 0); const tax = taxOptions.find((option) => option.code === l.tax_code); const rate = tax?.treatment === 'standard' ? Number(tax.rate || 0) : 0; return <span>{(net * (1 + rate / 100)).toFixed(2)}</span>; } },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'qty', label: t('receiving.common.quantity', 'Quantity'), width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
+        { key: 'unit', label: t('receiving.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
+        { key: 'price', label: t('receiving.common.unitCost', 'Unit cost'), width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
+        { key: 'tax', label: t('receiving.common.tax', 'Tax'), width: 150, render: (l, i) => <select className="input" aria-label={t('receiving.po.form.taxAria', 'Purchase tax for line :line', { line: i + 1 })} value={l.tax_code} onChange={(e) => setLine(i, { tax_code: e.target.value })}><option value="">{t('receiving.po.form.noTax', 'No tax')}</option>{taxOptions.map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.treatment === 'standard' ? `${tax.rate}%` : t(`receiving.taxTreatment.${tax.treatment}`, tax.treatment)}</option>)}</select> },
+        { key: 'line_total', label: t('receiving.common.lineTotal', 'Line total'), width: 110, render: (l) => { const net = Number(l.ordered_qty || 0) * Number(l.unit_price || 0); const tax = taxOptions.find((option) => option.code === l.tax_code); const rate = tax?.treatment === 'standard' ? Number(tax.rate || 0) : 0; return <span>{(net * (1 + rate / 100)).toFixed(2)}</span>; } },
     ];
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: 'Purchase Orders', to: '/purchase-orders' }, { label: isEdit ? 'Edit draft' : 'New' }]} />
-            <header className="page-head"><h1>{isEdit ? 'Edit purchase order' : 'New purchase order'}</h1></header>
+            <Breadcrumbs items={[{ label: t('receiving.po.list.title', 'Purchase Orders'), to: '/purchase-orders' }, { label: isEdit ? t('receiving.common.editDraft', 'Edit draft') : t('receiving.common.new', 'New') }]} />
+            <header className="page-head"><h1>{isEdit ? t('receiving.po.form.editTitle', 'Edit purchase order') : t('receiving.po.form.newTitle', 'New purchase order')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label="PO number" error={errors.po_number}><input className="input" placeholder="Auto-generated if left blank" value={header.po_number} onChange={(e) => setHeader({ ...header, po_number: e.target.value })} /></Field>
-                <Field label="Supplier" error={errors.supplier_id}><SupplierPicker value={header.supplier_id} onChange={(v) => setHeader({ ...header, supplier_id: v })} /></Field>
-                <Field label="Warehouse" required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
-                <Field label="Order date" error={errors.order_date}><input className="input" type="date" value={header.order_date} onChange={(e) => setHeader({ ...header, order_date: e.target.value })} /></Field>
-                <Field label="Expected date" error={errors.expected_date}><input className="input" type="date" value={header.expected_date} onChange={(e) => setHeader({ ...header, expected_date: e.target.value })} /></Field>
-                <Field label="Notes"><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
+                <Field label={t('receiving.po.fields.number', 'PO number')} error={errors.po_number}><input className="input" placeholder={t('receiving.po.form.numberPlaceholder', 'Auto-generated if left blank')} value={header.po_number} onChange={(e) => setHeader({ ...header, po_number: e.target.value })} /></Field>
+                <Field label={t('receiving.common.supplier', 'Supplier')} error={errors.supplier_id}><SupplierPicker value={header.supplier_id} onChange={(v) => setHeader({ ...header, supplier_id: v })} /></Field>
+                <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
+                <Field label={t('receiving.po.fields.orderDate', 'Order date')} error={errors.order_date}><input className="input" type="date" value={header.order_date} onChange={(e) => setHeader({ ...header, order_date: e.target.value })} /></Field>
+                <Field label={t('receiving.po.fields.expectedDate', 'Expected date')} error={errors.expected_date}><input className="input" type="date" value={header.expected_date} onChange={(e) => setHeader({ ...header, expected_date: e.target.value })} /></Field>
+                <Field label={t('receiving.common.notes', 'Notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
 
             <div className="panel">
-                <h2>Lines</h2>
+                <h2>{t('receiving.common.lines', 'Lines')}</h2>
                 <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
-                <DocumentTotals rows={[{ label: 'Net', value: totals.net.toFixed(2) }, { label: 'Tax', value: totals.tax.toFixed(2) }, { label: 'Total', value: (totals.net + totals.tax).toFixed(2) }]} />
+                <DocumentTotals rows={[{ label: t('receiving.common.net', 'Net'), value: totals.net.toFixed(2) }, { label: t('receiving.common.tax', 'Tax'), value: totals.tax.toFixed(2) }, { label: t('receiving.common.total', 'Total'), value: (totals.net + totals.tax).toFixed(2) }]} />
             </div>
 
             <div className="doc-actions">
-                <button className="btn" onClick={() => nav('/purchase-orders')}>Cancel</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={save}>{saving ? 'Saving…' : (isEdit ? 'Save changes' : 'Create PO')}</button>
+                <button className="btn" onClick={() => nav('/purchase-orders')}>{t('receiving.common.cancel', 'Cancel')}</button>
+                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={save}>{saving ? t('receiving.common.saving', 'Saving…') : (isEdit ? t('receiving.common.saveChanges', 'Save changes') : t('receiving.po.actions.create', 'Create PO'))}</button>
             </div>
         </section>
     );
