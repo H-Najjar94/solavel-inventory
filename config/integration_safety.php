@@ -14,5 +14,8 @@ return [
     // Cross-service status mirror. Deployment verification must prove this
     // matches Finance's enforced legacy-inventory guard before setting true.
     'legacy_finance_inventory_writes_blocked' => env('SOLABOOKS_LEGACY_INVENTORY_WRITES_BLOCKED', false),
+    'legacy_journal_contract_enabled' => env('SOLABOOKS_LEGACY_JOURNAL_CONTRACT_ENABLED', false),
+    'historical_repair_enabled' => env('SOLABOOKS_HISTORICAL_REPAIR_ENABLED', false),
+    'pending_event_replay_enabled' => env('SOLABOOKS_PENDING_EVENT_REPLAY_ENABLED', false),
     'reason' => 'currency_contract_maintenance',
 ];

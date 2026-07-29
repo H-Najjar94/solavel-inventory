@@ -16,6 +16,7 @@ class SolaBooksOutboxDeliveryService
     public function __construct(
         private OrganizationContext $context,
         private AccountingJournalBuilder $journals,
+        private SolaStockJournalContractBuilder $contracts,
         private IntegrationOutboxService $outbox,
         private IntegrationSafetyHold $safety,
     ) {}
@@ -49,7 +50,7 @@ class SolaBooksOutboxDeliveryService
 
             try {
                 $payload = $this->journalPayload($event, $orgId);
-                $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+                $body = SolaStockJournalContract::canonicalJson($payload);
                 $response = $this->signedClient($event, $payload, $body)
                     ->withBody($body, 'application/json')
                     ->post($this->journalEndpoint());
@@ -182,9 +183,15 @@ class SolaBooksOutboxDeliveryService
         $financeOrg = (string) $setting->solabooks_organization_id;
         $sourceKey = (string) $payload['external_source_key'];
         $eventType = (string) $payload['event_type'];
+        $identity = (array) $payload['identity'];
+        $contractVersion = (string) $payload['contract_version'];
         $canonical = ExternalRequestSignature::canonicalString(
             'POST', $path, $query, 'application/json', $timestamp, $nonce, $contentHash,
             $inventoryOrg, $financeOrg, $sourceKey, $eventType, $version,
+            $contractVersion,
+            (string) $identity['central_client_id'],
+            (string) $identity['central_organization_id'],
+            (string) $identity['integration_mapping_id'],
         );
 
         return $this->client($event)->withHeaders([
@@ -197,6 +204,10 @@ class SolaBooksOutboxDeliveryService
             'X-Solavel-Inventory-Organization-Id' => $inventoryOrg,
             'X-Solavel-External-Source-Key' => $sourceKey,
             'X-Solavel-Event-Type' => $eventType,
+            'X-Solavel-Contract-Version' => $contractVersion,
+            'X-Solavel-Central-Client-Id' => (string) $identity['central_client_id'],
+            'X-Solavel-Central-Organization-Id' => (string) $identity['central_organization_id'],
+            'X-Solavel-Integration-Mapping-Id' => (string) $identity['integration_mapping_id'],
         ]);
     }
 
@@ -209,18 +220,22 @@ class SolaBooksOutboxDeliveryService
             ->firstOrFail();
         $response = $this->clientForProvisioning($setting)->post($this->signingEndpoint('rotate'), [
             'inventory_organization_id' => $orgId,
+            'central_organization_id' => (int) ($setting->meta['central_organization_id'] ?? 0),
+            'integration_mapping_id' => (int) $setting->id,
         ]);
         if (! $response->successful()) {
             throw new RuntimeException($response->json('error.message') ?: __('inventory.integration.rotation_failed'));
         }
         $data = $response->json('data') ?? [];
-        if (empty($data['key_id']) || empty($data['secret']) || ($data['protocol_version'] ?? null) !== ExternalRequestSignature::VERSION) {
+        if (empty($data['key_id']) || empty($data['secret']) || ($data['protocol_version'] ?? null) !== ExternalRequestSignature::VERSION
+            || ($data['contract_version'] ?? null) !== SolaStockJournalContract::VERSION) {
             throw new RuntimeException(__('inventory.integration.invalid_signing_response'));
         }
         $meta = $setting->meta ?? [];
         $meta['signing_key_id'] = (string) $data['key_id'];
         $meta['signing_secret_encrypted'] = Crypt::encryptString((string) $data['secret']);
         $meta['signing_protocol_version'] = (string) $data['protocol_version'];
+        $meta['contract_version'] = (string) $data['contract_version'];
         $meta['signing_key_rotated_at'] = now()->toIso8601String();
         $setting->meta = $meta;
         $setting->save();
@@ -295,29 +310,12 @@ class SolaBooksOutboxDeliveryService
             throw new RuntimeException(__('inventory.integration.inactive'));
         }
 
-        $payload = $event->payload ?? [];
-        $originalSource = $payload['original_source'] ?? null;
-        if (is_array($originalSource) && ! empty($originalSource['event_uuid'])) {
-            $originalSource['external_source_key'] = IntegrationOutboxEvent::query()
-                ->where('event_uuid', $originalSource['event_uuid'])
-                ->value('idempotency_key');
-        }
+        return $this->contracts->build($event);
+    }
 
-        return [
-            'date' => $payload['document_date'] ?: now()->toDateString(),
-            'reference' => $event->idempotency_key,
-            'description' => trim('SolaStock '.$event->event_type.' '.$event->aggregate_number),
-            'source_app' => 'solastock',
-            'source_type' => $event->event_type,
-            'source_id' => $event->aggregate_id,
-            'source_number' => $event->aggregate_number,
-            'inventory_organization_id' => $orgId,
-            'finance_organization_id' => (int) $setting->solabooks_organization_id,
-            'external_source_key' => $event->idempotency_key,
-            'event_type' => $event->event_type,
-            'original_source' => $originalSource,
-            'lines' => $this->journals->build($event, $orgId),
-        ];
+    public function preview(IntegrationOutboxEvent $event): array
+    {
+        return $this->contracts->build($event);
     }
 
     private function markFailed(IntegrationOutboxEvent $event, string $message): void

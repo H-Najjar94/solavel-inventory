@@ -35,6 +35,10 @@ final class ExternalRequestSignature
         string $externalSourceKey,
         string $eventType,
         string $version = self::VERSION,
+        string $contractVersion = '',
+        string $centralClientId = '',
+        string $centralOrganizationId = '',
+        string $integrationMappingId = '',
     ): string {
         return implode("\n", [
             'version:'.$version,
@@ -49,6 +53,10 @@ final class ExternalRequestSignature
             'finance-organization-id:'.$financeOrganizationId,
             'external-source-key:'.$externalSourceKey,
             'event-type:'.$eventType,
+            'contract-version:'.$contractVersion,
+            'central-client-id:'.$centralClientId,
+            'central-organization-id:'.$centralOrganizationId,
+            'integration-mapping-id:'.$integrationMappingId,
         ]);
     }
 

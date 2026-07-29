@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Integration;
 
+use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Services\Integration\ExternalRequestSignature;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
+use App\Services\Integration\SolaStockJournalContract;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
@@ -22,6 +24,10 @@ class SolaBooksDeliveryTest extends TestCase
     private function bootActiveIntegration(): void
     {
         $this->useTenantA();
+        Organization::query()->updateOrCreate(
+            ['central_organization_id' => TenantTestManager::ORG_A],
+            ['name' => 'Contract Test Org', 'database_name' => 'solastock_test_a', 'base_currency' => 'JOD', 'is_active' => true]
+        );
 
         IntegrationSetting::query()->updateOrCreate(
             ['organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks'],
@@ -29,9 +35,19 @@ class SolaBooksDeliveryTest extends TestCase
                 'mode' => 'active',
                 'solabooks_organization_id' => 14,
                 'meta' => [
+                    'client_id' => 7,
+                    'central_organization_id' => TenantTestManager::ORG_A,
                     'signing_key_id' => 'test-signing-key',
                     'signing_secret_encrypted' => Crypt::encryptString('test-signing-secret'),
                     'signing_protocol_version' => ExternalRequestSignature::VERSION,
+                    'contract_version' => SolaStockJournalContract::VERSION,
+                    'finance_currency_contract' => [
+                        'base_currency_code' => 'JOD',
+                        'enabled_currency_codes' => ['JOD', 'USD', 'EUR', 'GBP', 'AED', 'SAR'],
+                        'currency_precisions' => ['JOD' => 2, 'USD' => 2, 'EUR' => 2, 'GBP' => 2, 'AED' => 2, 'SAR' => 2],
+                        'money_scale' => 2,
+                        'rate_scale' => 8,
+                    ],
                 ],
             ]
         );
@@ -74,6 +90,7 @@ class SolaBooksDeliveryTest extends TestCase
             'payload' => [
                 'document_date' => now()->toDateString(),
                 'document_number' => $aggregateNumber,
+                'currency' => ['code' => 'JOD'],
                 'total_inventory_value_change' => '25.00',
                 'suggested_debit_account_mapping' => 'inventory_asset',
                 'suggested_credit_account_mapping' => 'grni',
@@ -127,6 +144,10 @@ class SolaBooksDeliveryTest extends TestCase
                 $input->idempotency_key,
                 'adjustment.posted',
                 ExternalRequestSignature::VERSION,
+                SolaStockJournalContract::VERSION,
+                '7',
+                (string) TenantTestManager::ORG_A,
+                (string) IntegrationSetting::query()->where('integration', 'solabooks')->value('id'),
             );
 
             return $request->hasHeader('X-API-Key', 'key')
@@ -140,6 +161,55 @@ class SolaBooksDeliveryTest extends TestCase
                 && $body['lines'][1]['account_id'] === 404
                 && $body['lines'][1]['credit'] === '25.00';
         });
+    }
+
+    #[Test]
+    public function preview_builds_foreign_currency_base_amounts_without_mutating_the_event(): void
+    {
+        $this->bootActiveIntegration();
+        $event = $this->event(['payload' => [
+            'document_date' => '2026-07-29',
+            'document_number' => 'ADJ-FX-1',
+            'currency' => ['code' => 'USD', 'exchange_rate' => '1.41', 'rate_date' => '2026-07-29', 'rate_source' => 'manual'],
+            'total_inventory_value_change' => '141.00',
+            'suggested_debit_account_mapping' => 'inventory_asset',
+            'suggested_credit_account_mapping' => 'grni',
+            'lines' => [],
+        ]]);
+        $before = $event->only(['status', 'attempts', 'next_attempt_at']);
+        $before['updated_at'] = $event->updated_at?->toISOString();
+        $payload = app(SolaBooksOutboxDeliveryService::class)->preview($event);
+        $fresh = $event->fresh();
+        $after = $fresh->only(['status', 'attempts', 'next_attempt_at']);
+        $after['updated_at'] = $fresh->updated_at?->toISOString();
+
+        $this->assertSame('solastock-journal.v2', $payload['contract_version']);
+        $this->assertSame('JOD', $payload['currency']['base_code']);
+        $this->assertSame('USD', $payload['currency']['transaction_code']);
+        $this->assertSame('100.00', $payload['lines'][0]['base_debit']);
+        $this->assertSame('100.00', $payload['lines'][1]['base_credit']);
+        $this->assertSame($before, $after);
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function preview_rejects_missing_and_stale_currency_without_consuming_delivery_state(): void
+    {
+        $this->bootActiveIntegration();
+        foreach ([
+            ['document_date' => '2026-07-29', 'total_inventory_value_change' => '10.00', 'suggested_debit_account_mapping' => 'inventory_asset', 'suggested_credit_account_mapping' => 'grni'],
+            ['document_date' => '2026-07-29', 'currency' => ['code' => 'USD', 'exchange_rate' => '1.41', 'rate_date' => '2026-07-28', 'rate_source' => 'manual'], 'total_inventory_value_change' => '10.00', 'suggested_debit_account_mapping' => 'inventory_asset', 'suggested_credit_account_mapping' => 'grni'],
+        ] as $index => $eventPayload) {
+            $event = $this->event(['payload' => $eventPayload]);
+            try {
+                app(SolaBooksOutboxDeliveryService::class)->preview($event);
+                $this->fail("currency case {$index} must fail");
+            } catch (\RuntimeException) {
+                $this->assertSame('pending', $event->fresh()->status);
+                $this->assertSame(0, $event->fresh()->attempts);
+            }
+        }
+        Http::assertNothingSent();
     }
 
     #[Test]
@@ -187,14 +257,14 @@ class SolaBooksDeliveryTest extends TestCase
             app(SolaBooksOutboxDeliveryService::class)->deliver($event);
             $this->fail('delivery should fail without credentials');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('signing', $e->getMessage());
+            $this->assertStringContainsString('identity', strtolower($e->getMessage()));
         }
 
         $event = $event->fresh();
         $this->assertSame('failed', $event->status);
         $this->assertSame(1, $event->attempts);
         $this->assertNotNull($event->next_attempt_at);
-        $this->assertStringContainsString('signing', $event->last_error);
+        $this->assertStringContainsString('identity', strtolower($event->last_error));
     }
 
     #[Test]
@@ -204,7 +274,7 @@ class SolaBooksDeliveryTest extends TestCase
         $this->configureHttp();
         Http::fake([
             '*/external-signing-keys/rotate' => Http::response([
-                'data' => ['key_id' => 'rotated-key', 'secret' => 'one-time-remote-secret', 'protocol_version' => 'v1'],
+                'data' => ['key_id' => 'rotated-key', 'secret' => 'one-time-remote-secret', 'protocol_version' => 'v1', 'contract_version' => 'solastock-journal.v2'],
             ], 201),
             '*/external-signing-keys/rotated-key/revoke' => Http::response([
                 'data' => ['key_id' => 'rotated-key', 'status' => 'revoked'],
