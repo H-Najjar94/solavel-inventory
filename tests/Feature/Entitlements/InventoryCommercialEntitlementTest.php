@@ -65,6 +65,28 @@ class InventoryCommercialEntitlementTest extends TestCase
     }
 
     #[Test]
+    public function integration_status_remains_visible_while_integration_mutations_stay_plan_gated(): void
+    {
+        $service = $this->service([
+            'effective_tier' => 'free',
+            'access_mode' => 'free',
+            'reason_code' => 'free_tier',
+            'blocked_features' => ['stock.finance_integration'],
+        ]);
+
+        $view = $service->checkPermission('inventory.integration.view');
+        $manage = $service->checkPermission('inventory.integration.manage');
+        $retry = $service->checkPermission('inventory.integration.retry');
+
+        $this->assertTrue($view['allowed'], 'Existing connection status must remain visible.');
+        $this->assertNull($view['feature']);
+        $this->assertFalse($manage['allowed']);
+        $this->assertSame('feature_not_in_plan', $manage['reason_code']);
+        $this->assertFalse($retry['allowed']);
+        $this->assertSame('feature_not_in_plan', $retry['reason_code']);
+    }
+
+    #[Test]
     public function stale_snapshot_within_maximum_uses_lkg_without_false_expiry(): void
     {
         $decision = $this->service([
