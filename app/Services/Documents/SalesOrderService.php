@@ -7,6 +7,7 @@ use App\Models\Tenant\Item;
 use App\Models\Tenant\SalesOrder;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockReservationService;
 use App\Services\Stock\Support\Decimal;
 use App\Services\Tax\InventoryTaxService;
@@ -27,6 +28,7 @@ class SalesOrderService
         private StockReservationService $reservations,
         private IntegrationOutboxService $outbox,
         private InventoryTaxService $taxes,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function conn(): string
@@ -71,7 +73,7 @@ class SalesOrderService
                 throw new RuntimeException("Only a draft sales order can be edited (status '{$so->status}').");
             }
             $attributes = $this->applyCustomerName($attributes);
-            $so->fill(collect($attributes)->only(['order_number', 'customer_id', 'customer_name', 'customer_external_id', 'order_date', 'requested_ship_date', 'warehouse_id', 'notes'])->toArray());
+            $so->fill(collect($attributes)->only(['order_number', 'customer_id', 'customer_name', 'customer_external_id', 'order_date', 'requested_ship_date', 'warehouse_id', 'currency_code', 'notes'])->toArray());
             $so->save();
             $so->lines()->delete();
             $this->syncLines($so, $lines, $orgId);
@@ -88,6 +90,8 @@ class SalesOrderService
             if ($so->status !== 'draft') {
                 throw new RuntimeException("Only a draft sales order can be confirmed (status '{$so->status}').");
             }
+            $so->loadMissing('lines');
+            $this->workflowValidation->assertOperationalDocumentReady($so, 'sales_order.confirmed');
             $so->status = 'confirmed';
             $so->save();
             $this->outbox->record('sales_order.confirmed', $so, 'sales_order', $so->order_number, (string) $so->order_date);
@@ -104,6 +108,7 @@ class SalesOrderService
             if (! in_array($so->status, ['confirmed', 'partially_reserved', 'reserved'], true)) {
                 throw new RuntimeException("Sales order must be confirmed before reserving (status '{$so->status}').");
             }
+            $this->workflowValidation->assertOperationalDocumentReady($so, 'stock_reserved');
 
             $priority = max(1, min(999, (int) ($options['priority'] ?? 100)));
             $expiresAt = ! empty($options['expires_at']) ? Carbon::parse($options['expires_at']) : null;
@@ -180,6 +185,7 @@ class SalesOrderService
     {
         return DB::connection($this->conn())->transaction(function () use ($so) {
             $so = SalesOrder::query()->lockForUpdate()->with('lines')->findOrFail($so->id);
+            $this->workflowValidation->assertOperationalDocumentReady($so, 'stock_reservation_released');
             $this->reservations->release('sales_order', (int) $so->id);
             foreach ($so->lines as $line) {
                 $line->reserved_qty = '0';
@@ -200,6 +206,8 @@ class SalesOrderService
             if (in_array($so->status, ['shipped', 'cancelled'], true)) {
                 throw new RuntimeException("A {$so->status} sales order cannot be cancelled.");
             }
+            $so->loadMissing('lines');
+            $this->workflowValidation->assertOperationalDocumentReady($so, 'stock_reservation_released');
             $this->reservations->release('sales_order', (int) $so->id);
             $so->status = 'cancelled';
             $so->save();

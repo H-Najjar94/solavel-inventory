@@ -6,6 +6,7 @@ use App\Models\Tenant\PickList;
 use App\Models\Tenant\PickListLine;
 use App\Models\Tenant\SalesOrder;
 use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ class PickListService
     public function __construct(
         private OrganizationContext $context,
         private IntegrationOutboxService $outbox,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function conn(): string
@@ -124,6 +126,7 @@ class PickListService
             if ($pl->status === 'cancelled') {
                 throw new RuntimeException("Cancelled pick list {$pl->id} cannot be marked picked.");
             }
+            $this->workflowValidation->assertOperationalDocumentReady($pl, 'pick_list.picked');
             $pl->status = 'picked';
             $pl->save();
 

@@ -83,100 +83,32 @@ class AccountingJournalBuilder
 
     private function goodsReceipt(IntegrationOutboxEvent $event, int $orgId): array
     {
-        $receipt = GoodsReceipt::query()->with('lines')->findOrFail($event->aggregate_id);
         $inventory = $this->inventoryValue($event);
-        $taxByAccount = [];
-        $taxTotal = '0';
 
-        foreach ($receipt->lines as $line) {
-            if (! $line->purchase_order_line_id) {
-                continue;
-            }
-            $poLine = PurchaseOrderLine::query()->find($line->purchase_order_line_id);
-            if (! $poLine || ! $poLine->tax_code) {
-                continue;
-            }
-            $mapping = $this->taxMapping($orgId, (string) $poLine->tax_code, 'purchase');
-            $ratio = Decimal::div((string) $line->accepted_qty, (string) $poLine->ordered_qty);
-            $amount = Decimal::money(Decimal::mul((string) $poLine->tax_amount, $ratio));
-            $baseAmount = Decimal::money(Decimal::mul(
-                Decimal::sub((string) $poLine->line_total, (string) $poLine->tax_amount),
-                $ratio
-            ));
-            $taxTotal = Decimal::add($taxTotal, $amount);
-            if (Decimal::gt($amount, '0')) {
-                $account = (int) $mapping->input_tax_account_id;
-                $taxByAccount[$account]['amount'] = Decimal::add($taxByAccount[$account]['amount'] ?? '0', $amount);
-                $taxByAccount[$account]['base_amount'] = Decimal::add($taxByAccount[$account]['base_amount'] ?? '0', $baseAmount);
-                $taxByAccount[$account]['mapping'] = $mapping;
-            }
-        }
-
-        $lines = [$this->line($this->account($orgId, 'inventory_asset'), $inventory, '0', $event)];
-        foreach ($taxByAccount as $account => $tax) {
-            $lines[] = $this->line($account, $tax['amount'], '0', $event, $tax['mapping'], $tax['base_amount']);
-        }
-        $lines[] = $this->line($this->account($orgId, 'grni'), '0', Decimal::money(Decimal::add($inventory, $taxTotal)), $event);
-
-        return $lines;
+        return [
+            $this->line($this->account($orgId, 'inventory_asset'), $inventory, '0', $event),
+            $this->line($this->account($orgId, 'grni'), '0', $inventory, $event),
+        ];
     }
 
     private function shipment(IntegrationOutboxEvent $event, int $orgId): array
     {
-        $shipment = Shipment::query()->with('lines')->findOrFail($event->aggregate_id);
-        $net = '0';
-        $taxTotal = '0';
-        $taxByAccount = [];
-        foreach ($shipment->lines as $line) {
-            $orderLine = $line->sales_order_line_id
-                ? SalesOrderLine::query()->find($line->sales_order_line_id)
-                : null;
-            if (! $orderLine) {
-                // Direct shipments have no receivable/revenue source document,
-                // but their stock movement still requires COGS / Inventory.
-                continue;
-            }
-            $ratio = Decimal::div((string) $line->quantity, (string) $orderLine->ordered_qty);
-            $gross = Decimal::mul((string) $line->quantity, (string) $orderLine->unit_price);
-            $discount = Decimal::mul((string) $orderLine->discount_amount, $ratio);
-            $lineNet = Decimal::sub($gross, $discount);
-            $net = Decimal::add($net, $lineNet);
-            if ($orderLine->tax_code) {
-                $mapping = $this->taxMapping($orgId, (string) $orderLine->tax_code, 'sales');
-                $amount = Decimal::money(Decimal::mul((string) $orderLine->tax_amount, $ratio));
-                $taxTotal = Decimal::add($taxTotal, $amount);
-                if (Decimal::gt($amount, '0')) {
-                    $account = (int) $mapping->output_tax_account_id;
-                    $taxByAccount[$account]['amount'] = Decimal::add($taxByAccount[$account]['amount'] ?? '0', $amount);
-                    $taxByAccount[$account]['base_amount'] = Decimal::add($taxByAccount[$account]['base_amount'] ?? '0', $lineNet);
-                    $taxByAccount[$account]['mapping'] = $mapping;
-                }
-            }
-        }
-        $net = Decimal::money($net);
         $cogs = $this->inventoryValue($event);
-        $lines = [];
-        if (Decimal::gt(Decimal::add($net, $taxTotal), '0')) {
-            $lines[] = $this->line($this->account($orgId, 'accounts_receivable'), Decimal::money(Decimal::add($net, $taxTotal)), '0', $event);
-            $lines[] = $this->line($this->account($orgId, 'sales_revenue'), '0', $net, $event);
-            foreach ($taxByAccount as $account => $tax) {
-                $lines[] = $this->line($account, '0', $tax['amount'], $event, $tax['mapping'], $tax['base_amount']);
-            }
-        }
-        $lines[] = $this->line($this->account($orgId, 'cogs'), $cogs, '0', $event);
-        $lines[] = $this->line($this->account($orgId, 'inventory_asset'), '0', $cogs, $event);
 
-        return $lines;
+        return [
+            $this->line($this->account($orgId, 'cogs'), $cogs, '0', $event),
+            $this->line($this->account($orgId, 'inventory_asset'), '0', $cogs, $event),
+        ];
     }
 
     private function adjustment(IntegrationOutboxEvent $event, int $orgId): array
     {
         $change = (string) ($event->payload['total_inventory_value_change'] ?? '0');
-        $amount = Decimal::money((string) abs((float) $change));
+        $amount = Decimal::money($this->absolute($change));
         if (! Decimal::gt($amount, '0')) {
             throw new RuntimeException(__('inventory.integration.event_no_value'));
         }
-        if ((float) $change > 0) {
+        if (Decimal::gt($change, '0')) {
             return [
                 $this->line($this->account($orgId, 'inventory_asset'), $amount, '0', $event),
                 $this->line($this->account($orgId, 'adjustment_gain'), '0', $amount, $event),
@@ -192,13 +124,14 @@ class AccountingJournalBuilder
     private function twoLine(IntegrationOutboxEvent $event, int $orgId): array
     {
         $payload = $event->payload ?? [];
-        $amount = Decimal::money((string) abs((float) ($payload['total_inventory_value_change'] ?? 0)));
+        $change = (string) ($payload['total_inventory_value_change'] ?? 0);
+        $amount = Decimal::money($this->absolute($change));
         if (! Decimal::gt($amount, '0')) {
             throw new RuntimeException(__('inventory.integration.event_no_value'));
         }
         $debit = (string) ($payload['suggested_debit_account_mapping'] ?? '');
         $credit = (string) ($payload['suggested_credit_account_mapping'] ?? '');
-        if ((float) ($payload['total_inventory_value_change'] ?? 0) < 0) {
+        if (Decimal::lt($change, '0')) {
             [$debit, $credit] = [$credit, $debit];
         }
 
@@ -210,10 +143,18 @@ class AccountingJournalBuilder
 
     private function inventoryValue(IntegrationOutboxEvent $event): string
     {
-        return Decimal::money((string) abs((float) StockLedger::query()
+        $total = StockLedger::query()
             ->where('source_type', 'App\\Models\\Tenant\\'.$event->aggregate_type)
             ->where('source_id', $event->aggregate_id)
-            ->sum('total_cost')));
+            ->orderBy('id')->pluck('total_cost')
+            ->reduce(fn (string $carry, $value) => Decimal::add($carry, (string) $value), '0');
+
+        return Decimal::money($this->absolute($total));
+    }
+
+    private function absolute(string $value): string
+    {
+        return Decimal::lt($value, '0') ? Decimal::sub('0', $value) : $value;
     }
 
     private function account(int $orgId, string $type): int

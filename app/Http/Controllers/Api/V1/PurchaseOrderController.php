@@ -15,6 +15,8 @@ use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Stock\Support\Decimal;
 use App\Services\Tax\InventoryTaxService;
+use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +36,8 @@ class PurchaseOrderController extends ApiController
         private PurchaseOrderBackorderService $backorders,
         private InventoryTaxService $taxes,
         private WarehouseAccessService $warehouseAccess,
+        private IntegrationOutboxService $outbox,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function conn(): string
@@ -116,9 +120,6 @@ class PurchaseOrderController extends ApiController
                 $poNumber = DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
 
                 $po = PurchaseOrder::create(collect($data)->except('lines')
-                    // Drop a null currency_code so the column's DB default (SAR) applies
-                    // — it's a NOT NULL column; sending null would fail the insert.
-                    ->reject(fn ($v, $k) => $k === 'currency_code' && $v === null)
                     ->merge([
                         'po_number' => $poNumber,
                         'status' => 'draft',
@@ -168,9 +169,18 @@ class PurchaseOrderController extends ApiController
         if ($purchase_order->status !== 'draft') {
             return $this->error('po_not_draft', __('inventory.documents.po_approve_draft'), 422);
         }
+        $purchase_order->loadMissing('lines');
+        $this->workflowValidation->assertOperationalDocumentReady($purchase_order, 'purchase_order.approved');
         $purchase_order->update(['status' => 'approved']);
         $this->backorders->refresh($purchase_order->fresh('lines'));
         $this->audit('purchase_order.approved', $purchase_order);
+        $this->outbox->record(
+            'purchase_order.approved',
+            $purchase_order->fresh('lines'),
+            'purchase_order',
+            $purchase_order->po_number,
+            (string) $purchase_order->order_date,
+        );
 
         return $this->success($purchase_order->fresh());
     }

@@ -210,6 +210,9 @@ final class Phase2MappingSafetyTest extends TestCase
         $this->assertStringContainsString('يتطلب مراجعة', $translations);
         $this->assertStringContainsString('inventory_authority', $page);
         $this->assertStringContainsString('organization_mapping', $page);
+        $this->assertStringContainsString('workflow_lifecycle', $page);
+        $this->assertStringContainsString('Purchasing and sales lifecycle', $translations);
+        $this->assertStringContainsString('دورة المشتريات والمبيعات', $translations);
         $this->assertStringContainsString('dir="{{ $dir }}"', $layout);
     }
 

@@ -107,6 +107,19 @@ class IntegrationStatusService
                     ->first();
             }
         }
+        $workflowCoverage = $organizationMapping
+            && Schema::connection('tenant')->hasTable('integration_document_lifecycle_mappings')
+            ? DB::connection('tenant')->table('integration_document_lifecycle_mappings')
+                ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+                ->selectRaw('COUNT(*) total')
+                ->selectRaw("SUM(CASE WHEN matching_state = 'matched' THEN 1 ELSE 0 END) matched")
+                ->selectRaw("SUM(CASE WHEN matching_state IN ('unmatched','partially_matched') THEN 1 ELSE 0 END) pending")
+                ->selectRaw("SUM(CASE WHEN matching_state = 'conflict' OR conflict_code IS NOT NULL THEN 1 ELSE 0 END) conflicting")
+                ->selectRaw("SUM(CASE WHEN lifecycle_status = 'review_required' OR error_state IS NOT NULL THEN 1 ELSE 0 END) review_required")
+                ->selectRaw("SUM(CASE WHEN source_document_type IN ('purchase_order','goods_receipt','supplier_return','landed_cost') THEN 1 ELSE 0 END) purchasing")
+                ->selectRaw("SUM(CASE WHEN source_document_type IN ('sales_order','reservation','pick_list','pack','shipment','sales_return') THEN 1 ELSE 0 END) sales")
+                ->first()
+            : null;
         $authoritativeState = 'unavailable';
         $lastAuthoritativeRead = null;
         try {
@@ -162,6 +175,18 @@ class IntegrationStatusService
                 'conflicting' => max((int) ($masterCoverage->conflicting ?? 0), (int) ($discoveryCoverage->conflicting ?? 0)),
                 'archived' => max((int) ($masterCoverage->archived ?? 0), (int) ($discoveryCoverage->archived ?? 0)),
                 'review_required' => max((int) ($masterCoverage->review_required ?? 0), (int) ($discoveryCoverage->review_required ?? 0)),
+            ],
+            'workflow_lifecycle' => [
+                'schema_version' => 'phase3.v1',
+                'total' => (int) ($workflowCoverage->total ?? 0),
+                'matched' => (int) ($workflowCoverage->matched ?? 0),
+                'pending' => (int) ($workflowCoverage->pending ?? 0),
+                'conflicting' => (int) ($workflowCoverage->conflicting ?? 0),
+                'review_required' => (int) ($workflowCoverage->review_required ?? 0),
+                'purchasing' => (int) ($workflowCoverage->purchasing ?? 0),
+                'sales' => (int) ($workflowCoverage->sales ?? 0),
+                'execution_enabled' => false,
+                'delivery_enabled' => $safety->deliveryEnabled(),
             ],
             'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))
                 && ($settings->meta['client_id'] ?? config('services.solabooks.client_id'))

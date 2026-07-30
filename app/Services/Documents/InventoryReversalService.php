@@ -11,6 +11,7 @@ use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -28,6 +29,7 @@ class InventoryReversalService
         private OrganizationContext $context,
         private StockLedgerService $ledger,
         private IntegrationOutboxService $outbox,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function connection(): string
@@ -46,6 +48,7 @@ class InventoryReversalService
                 throw new RuntimeException("Only a posted goods receipt can be reversed (status '{$receipt->status}').");
             }
 
+            $this->workflowValidation->assertOperationalDocumentReady($receipt, 'grn.reversed');
             $this->assertReason($reason);
             $this->assertInboundSourceStillReversible('goods_receipt:'.$receipt->id.':post');
             $reversal = $this->createReversal('goods_receipt', $receipt->id, $receipt->grn_number, 'grn.posted', 'REV-GRN', $reason);

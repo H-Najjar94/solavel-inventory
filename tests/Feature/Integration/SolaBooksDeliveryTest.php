@@ -6,6 +6,7 @@ use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationSetting;
 use App\Services\Integration\ExternalRequestSignature;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
@@ -99,7 +100,7 @@ class SolaBooksDeliveryTest extends TestCase
         $aggregateId = $overrides['aggregate_id'] ?? random_int(100000, 999999);
         $aggregateNumber = $overrides['aggregate_number'] ?? 'ADJ-'.$aggregateId;
 
-        return IntegrationOutboxEvent::query()->create(array_merge([
+        $event = IntegrationOutboxEvent::query()->create(array_merge([
             'organization_id' => TenantTestManager::ORG_A,
             'event_uuid' => 'evt-'.uniqid(),
             'integration' => 'solabooks',
@@ -122,6 +123,30 @@ class SolaBooksDeliveryTest extends TestCase
             'attempts' => 0,
             'idempotency_key' => 'solabooks:adjustment.posted:StockAdjustment:'.$aggregateId,
         ], $overrides));
+        $organization = IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', TenantTestManager::ORG_A)->firstOrFail();
+        IntegrationDocumentLifecycleMapping::query()->firstOrCreate([
+            'organization_mapping_uuid' => $organization->mapping_uuid,
+            'source_application' => 'solastock',
+            'source_document_type' => 'stock_adjustment',
+            'source_document_id' => (string) $event->aggregate_id,
+        ], [
+            'mapping_uuid' => (string) Str::uuid(),
+            'central_client_id' => $organization->central_client_id,
+            'central_organization_id' => $organization->central_organization_id,
+            'tenant_database_identity' => $organization->tenant_database_identity,
+            'finance_organization_id' => $organization->finance_organization_id,
+            'solastock_organization_id' => $organization->solastock_organization_id,
+            'document_version' => 'phase3.v1',
+            'lifecycle_status' => 'posted',
+            'base_currency_code' => $organization->base_currency_code,
+            'transaction_currency_code' => 'JOD',
+            'exchange_rate' => 1,
+            'exchange_rate_date' => now()->toDateString(),
+            'accounting_source_key' => $event->idempotency_key,
+        ]);
+
+        return $event;
     }
 
     private function configureHttp(): void
