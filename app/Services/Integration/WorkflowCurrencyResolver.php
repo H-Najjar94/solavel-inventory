@@ -8,6 +8,7 @@ use App\Models\Tenant\InventoryCurrencyRate;
 use App\Services\Stock\Support\Decimal;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -40,7 +41,7 @@ final class WorkflowCurrencyResolver
         $authority = (array) data_get($setting?->meta, 'finance_currency_contract', []);
         $base = (string) ($authority['base_currency_code'] ?? '');
         $enabled = (array) ($authority['enabled_currency_codes'] ?? []);
-        $code = $this->documentCurrency($document, $documentType);
+        $code = $this->documentCurrency($document, $documentType, true);
         $transactionDate = $this->normalizeDate($date);
 
         if (! preg_match('/^[A-Z]{3}$/', $base)
@@ -86,9 +87,10 @@ final class WorkflowCurrencyResolver
         ];
     }
 
-    private function documentCurrency(object $document, string $documentType): string
+    private function documentCurrency(object $document, string $documentType, bool $strictContract = false): string
     {
-        $direct = $document->currency_code ?? null;
+        $direct = $document->integration_currency_code
+            ?? ($strictContract ? null : ($document->currency_code ?? null));
         if (is_string($direct) && $direct !== '') {
             return $direct;
         }
@@ -110,12 +112,14 @@ final class WorkflowCurrencyResolver
                 if ($documentType === 'sales_return') {
                     $salesOrderId = DB::connection('tenant')->table($parentTable)
                         ->where('id', $parentId)->value('sales_order_id');
-                    return (string) DB::connection('tenant')->table('inventory_sales_orders')
-                        ->where('id', $salesOrderId)->value('currency_code');
+                    return $this->storedCurrency(
+                        'inventory_sales_orders',
+                        (int) $salesOrderId,
+                        $strictContract,
+                    );
                 }
 
-                return (string) DB::connection('tenant')->table($parentTable)
-                    ->where('id', $parentId)->value('currency_code');
+                return $this->storedCurrency($parentTable, (int) $parentId, $strictContract);
             }
         }
 
@@ -124,9 +128,29 @@ final class WorkflowCurrencyResolver
             if ($sourceType === 'goods_receipt') {
                 $purchaseOrderId = DB::connection('tenant')->table('goods_receipts')
                     ->where('id', $document->source_id)->value('purchase_order_id');
-                return (string) DB::connection('tenant')->table('inventory_purchase_orders')
-                    ->where('id', $purchaseOrderId)->value('currency_code');
+                return $this->storedCurrency(
+                    'inventory_purchase_orders',
+                    (int) $purchaseOrderId,
+                    $strictContract,
+                );
             }
+        }
+
+        return '';
+    }
+
+    private function storedCurrency(string $table, int $id, bool $strictContract): string
+    {
+        if (Schema::connection('tenant')->hasColumn($table, 'integration_currency_code')) {
+            $value = (string) DB::connection('tenant')->table($table)
+                ->where('id', $id)->value('integration_currency_code');
+            if ($value !== '' || $strictContract) {
+                return $value;
+            }
+        }
+        if (! $strictContract && Schema::connection('tenant')->hasColumn($table, 'currency_code')) {
+            return (string) DB::connection('tenant')->table($table)
+                ->where('id', $id)->value('currency_code');
         }
 
         return '';

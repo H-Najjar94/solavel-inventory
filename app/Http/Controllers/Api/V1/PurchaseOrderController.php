@@ -119,12 +119,16 @@ class PurchaseOrderController extends ApiController
                 // Server-issued PO number. Ignore client-submitted numbers on create.
                 $poNumber = DocumentNumber::next('PO', PurchaseOrder::class, 'po_number', $orgId, $this->conn());
 
-                $po = PurchaseOrder::create(collect($data)->except('lines')
-                    ->merge([
-                        'po_number' => $poNumber,
-                        'status' => 'draft',
-                        'order_date' => $data['order_date'] ?? now()->toDateString(),
-                    ])->toArray());
+                $attributes = collect($data)->except('lines');
+                if (empty($data['currency_code'])) {
+                    $attributes->forget('currency_code');
+                }
+                $po = PurchaseOrder::create($attributes->merge([
+                    'po_number' => $poNumber,
+                    'status' => 'draft',
+                    'order_date' => $data['order_date'] ?? now()->toDateString(),
+                    'integration_currency_code' => $data['currency_code'] ?? null,
+                ])->toArray());
                 $this->syncLines($po, $data['lines']);
                 $this->backorders->refresh($po->fresh('lines'));
                 $this->audit('purchase_order.created', $po);
@@ -145,6 +149,10 @@ class PurchaseOrderController extends ApiController
             return $this->error('po_not_draft', __('inventory.documents.po_edit_draft'), 422);
         }
         $data = $request->validated();
+        $data['integration_currency_code'] = $data['currency_code'] ?? null;
+        if (empty($data['currency_code'])) {
+            unset($data['currency_code']);
+        }
         $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         try {
             $po = DB::connection($this->conn())->transaction(function () use ($data, $purchase_order) {

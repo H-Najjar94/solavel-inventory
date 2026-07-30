@@ -47,6 +47,12 @@ The mapping snapshot includes ordered/reserved/received/billed/shipped/
 invoiced/returned quantities; transaction and base currency/rate; transaction
 and base subtotal/tax/total; and the SolaStock valuation effect.
 
+Operational purchase and sales orders retain an additive nullable
+`integration_currency_code`. The v2 workflow reads only this explicit value;
+it never treats a legacy database default (including historical `SAR`) as user
+currency intent. Missing values therefore fail at the held workflow guard
+without rewriting legacy order data.
+
 Supported canonical document types are:
 
 `purchase_order`, `goods_receipt`, `supplier_bill`, `supplier_return`,
