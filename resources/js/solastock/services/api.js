@@ -326,6 +326,7 @@ export const api = {
     integrationEvent: (id) => request(`/integration/solabooks/events/${id}`),
     retryIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/retry`, { method: 'POST' }),
     ignoreIntegrationEvent: (id) => request(`/integration/solabooks/events/${id}/ignore`, { method: 'POST' }),
+    reviewIntegrationDeadLetter: (id, note, retry = false) => request(`/integration/solabooks/dead-letters/${id}/review`, { method: 'POST', body: { note, retry } }),
 
     // Quick-create master data
     createCategory: (name, parentId = null) => request('/settings/categories', { method: 'POST', body: { name, parent_id: parentId } }),

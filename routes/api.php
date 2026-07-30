@@ -522,6 +522,10 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.index');
         Route::get('/events/{event}', [IntegrationController::class, 'event'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.show');
+        Route::get('/dead-letters', [IntegrationController::class, 'deadLetters'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.dead-letters.index');
+        Route::post('/dead-letters/{event}/review', [IntegrationController::class, 'reviewDeadLetter'])
+            ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.dead-letters.review');
         Route::post('/events/{event}/retry', [IntegrationController::class, 'retry'])
             ->middleware('perm:inventory.integration.retry')->name('api.v1.integration.events.retry');
         Route::post('/events/{event}/retry-placeholder', [IntegrationController::class, 'retryPlaceholder'])

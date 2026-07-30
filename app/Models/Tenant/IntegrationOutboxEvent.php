@@ -20,5 +20,10 @@ class IntegrationOutboxEvent extends Model
         'next_attempt_at' => 'datetime',
         'sent_at' => 'datetime',
         'dead_lettered_at' => 'datetime',
+        'claimed_at' => 'datetime',
+        'lease_expires_at' => 'datetime',
+        'first_failed_at' => 'datetime',
+        'last_failed_at' => 'datetime',
+        'transport_eligible_at' => 'datetime',
     ];
 }

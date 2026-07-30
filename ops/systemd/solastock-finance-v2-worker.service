@@ -1,0 +1,22 @@
+[Unit]
+Description=SolaStock dedicated Finance v2 outbox worker (installed disabled)
+After=network-online.target mariadb.service
+ConditionPathExists=/etc/solavel/enable-solastock-finance-v2-worker
+
+[Service]
+Type=simple
+User=www-data
+Group=sharedgroup
+WorkingDirectory=/var/www/html/solavel-inventory
+Environment=SOLASTOCK_TRANSPORT_WORKER_ENABLED=false
+ExecStart=/usr/bin/php artisan integration:transport-work --database=${TENANT_DATABASE} --limit=250
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillSignal=SIGTERM
+MemoryMax=192M
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

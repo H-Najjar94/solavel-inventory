@@ -3,11 +3,12 @@
 namespace App\Services\Integration;
 
 use App\Models\Tenant\IntegrationAccountMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\IntegrationTaxMapping;
-use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\InventorySetting;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -65,6 +66,21 @@ class IntegrationStatusService
                 (array) $event->payload
             ))->count();
         $incompleteMapping = (clone $events)->where('mapping_status', 'incomplete')->whereIn('status', ['pending', 'failed'])->count();
+        $transportCounts = (clone $events)
+            ->selectRaw('status, COUNT(*) total')
+            ->groupBy('status')->pluck('total', 'status');
+        $oldestActionable = (clone $events)
+            ->whereIn('status', ['ready', 'processing', 'retry_scheduled'])
+            ->min('occurred_at');
+        $expiredLeases = (clone $events)
+            ->where('status', 'processing')->where('lease_expires_at', '<', now())->count();
+        $workerHeartbeat = Schema::connection('tenant')->hasTable('integration_transport_worker_heartbeats')
+            ? DB::connection('tenant')->table('integration_transport_worker_heartbeats')
+                ->orderByDesc('last_seen_at')->first()
+            : null;
+        $workerRunning = (bool) $workerHeartbeat
+            && $workerHeartbeat->state === 'running'
+            && Carbon::parse($workerHeartbeat->last_seen_at)->gte(now()->subMinutes(2));
 
         $mapped = IntegrationAccountMapping::query()
             ->where('organization_id', $orgId)
@@ -195,6 +211,26 @@ class IntegrationStatusService
             'delivery_disabled_reason' => $safety->deliveryEnabled() ? null : $safety->reason(),
             'delivery_disabled_message' => $safety->deliveryEnabled() ? null : $safety->message(),
             'last_successful_delivery_at' => $lastSuccessfulDeliveryAt,
+            'transport' => [
+                'queue' => (string) config('integration_transport.worker.queue'),
+                'worker_enabled' => (bool) config('integration_transport.worker_enabled', false),
+                'worker_running' => $workerRunning,
+                'worker_last_seen_at' => $workerHeartbeat?->last_seen_at,
+                'worker_served_commit' => $workerHeartbeat?->served_commit,
+                'receiver_enabled' => $safety->deliveryEnabled(),
+                'schedule_enabled' => (bool) config('integration_transport.reconciliation_schedule_enabled', false),
+                'counts' => collect([
+                    'pending', 'review_required', 'blocked_mapping', 'blocked_contract',
+                    'ready', 'processing', 'retry_scheduled', 'sent', 'failed',
+                    'dead_letter', 'ignored', 'superseded', 'reversed',
+                ])->mapWithKeys(fn (string $state): array => [
+                    $state => (int) ($transportCounts[$state] ?? 0),
+                ])->all(),
+                'oldest_actionable_at' => $oldestActionable,
+                'expired_leases' => $expiredLeases,
+                'last_reconciliation_at' => null,
+                'reconciliation_state' => 'not_scheduled',
+            ],
             'legacy_finance_inventory_writes_blocked' => (bool) config('integration_safety.legacy_finance_inventory_writes_blocked', false)
                 && ($workspaceConnected || in_array($mode, ['connected_readonly', 'connected_pending_mapping', 'active', 'paused'], true)),
             'signing' => [

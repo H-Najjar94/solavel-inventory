@@ -50,7 +50,16 @@ class IntegrationOutboxService
         // If integration is disconnected, still record — status reflects the mode.
         $mode = $this->mode($orgId);
         $postsJournal = IntegrationEvents::postsJournalForPayload($eventType, $payload);
-        $status = $mode === 'disconnected' || ! $postsJournal ? 'ignored' : 'pending';
+        $transportEligible = $postsJournal && $mappingComplete
+            && $this->transportEnabled($orgId, $eventType);
+        $status = match (true) {
+            $mode === 'disconnected' || ! $postsJournal => 'ignored',
+            $transportEligible => 'ready',
+            // Creation never guesses whether an unresolved mapping is
+            // permanent. A reviewed promotion classifies it later; historical
+            // pending rows are deliberately untouched by Phase 4.
+            default => 'pending',
+        };
         if (! $postsJournal) {
             $payload['accounting_policy'] = $eventType === 'transfer.posted'
                 ? 'no_journal_same_entity_inventory_transfer'
@@ -71,6 +80,14 @@ class IntegrationOutboxService
             'mapping_status' => $mappingComplete ? 'complete' : 'incomplete',
             'attempts' => 0,
             'idempotency_key' => $idem,
+            'contract_version' => $postsJournal ? SolaStockJournalContract::VERSION : null,
+            'payload_hash' => $postsJournal
+                ? hash('sha256', SolaStockJournalContract::canonicalJson($payload))
+                : null,
+            'workflow_key' => $eventType,
+            'ordering_key' => $aggregateType.':'.(int) $document->id,
+            'depends_on_event_uuid' => $payload['original_event_uuid'] ?? null,
+            'transport_eligible_at' => $transportEligible ? now() : null,
         ]);
         $this->workflowDocuments->recordForEvent($event, $document);
         $this->workflowDocuments->recordReservationsForSalesOrder($event, $document);
@@ -82,6 +99,22 @@ class IntegrationOutboxService
     {
         return (string) (IntegrationSetting::query()->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)->value('mode') ?? 'disconnected');
+    }
+
+    private function transportEnabled(int $orgId, string $eventType): bool
+    {
+        if (! app(IntegrationSafetyHold::class)->deliveryEnabled()
+            || ! config('integration_transport.worker_enabled', false)) {
+            return false;
+        }
+        $setting = IntegrationSetting::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION)->first();
+        $enabled = (array) data_get($setting?->meta, 'transport_enabled_workflows', []);
+
+        return $setting?->mode === 'active'
+            && data_get($setting?->meta, 'transport_enabled') === true
+            && in_array($eventType, $enabled, true);
     }
 
     public function refreshMappingStatus(int $orgId): void

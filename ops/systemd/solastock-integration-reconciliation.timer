@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly SolaStock integration reconciliation (installed disabled)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=false
+RandomizedDelaySec=900
+Unit=solastock-integration-reconciliation.service
+
+[Install]
+WantedBy=timers.target

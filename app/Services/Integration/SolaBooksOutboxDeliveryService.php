@@ -2,6 +2,7 @@
 
 namespace App\Services\Integration;
 
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Tenancy\OrganizationContext;
@@ -26,6 +27,9 @@ class SolaBooksOutboxDeliveryService
         // This must remain the first operation: a blocked request must not lock
         // or mutate an event, increment attempts, mint a nonce, or call Finance.
         $this->safety->assertDeliveryEnabled();
+        if (! app()->environment('testing')) {
+            throw new RuntimeException('Direct delivery is disabled; use the dedicated leased v2 worker.');
+        }
 
         $orgId = $this->context->idOrFail();
         $failure = null;
@@ -105,6 +109,9 @@ class SolaBooksOutboxDeliveryService
         // Covers future commands/workers and bulk paths even though Phase 0
         // deliberately does not schedule an outbox worker.
         $this->safety->assertDeliveryEnabled();
+        if (! app()->environment('testing')) {
+            throw new RuntimeException('Legacy bulk delivery is disabled; use the dedicated leased v2 worker.');
+        }
 
         $events = IntegrationOutboxEvent::query()
             ->where('integration', IntegrationEvents::INTEGRATION)
@@ -218,7 +225,7 @@ class SolaBooksOutboxDeliveryService
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->firstOrFail();
-        $mapping = \App\Models\Tenant\IntegrationOrganizationMapping::query()
+        $mapping = IntegrationOrganizationMapping::query()
             ->where('solastock_organization_id', $orgId)
             ->where('finance_organization_id', (int) $setting->solabooks_organization_id)
             ->where('central_client_id', (int) ($setting->meta['client_id'] ?? 0))
@@ -337,6 +344,38 @@ class SolaBooksOutboxDeliveryService
     public function preview(IntegrationOutboxEvent $event): array
     {
         return $this->contracts->build($event);
+    }
+
+    /**
+     * Execute only the immutable remote exchange. The durable transport claims
+     * and commits its lease before invoking this method and acknowledges in a
+     * separate transaction afterwards, so HTTP is never inside a DB transaction.
+     */
+    public function sendClaimed(IntegrationOutboxEvent $event): array
+    {
+        $this->safety->assertDeliveryEnabled();
+        if ($event->status !== 'processing' || ! $event->lease_token) {
+            throw new RuntimeException('A current processing lease is required.');
+        }
+        if ($event->contract_version !== SolaStockJournalContract::VERSION) {
+            throw new RuntimeException('Only solastock-journal.v2 may use the durable transport.');
+        }
+        $payload = $this->journalPayload($event, (int) $event->organization_id);
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $response = $this->signedClient($event, $payload, $body)
+            ->withBody($body, 'application/json')
+            ->post($this->journalEndpoint());
+
+        return [
+            'successful' => $response->successful(),
+            'status' => $response->status(),
+            'data' => (array) ($response->json('data') ?? []),
+            'error_code' => $response->json('error.code'),
+            'safe_error' => mb_substr((string) (
+                $response->json('error.message') ?: $response->json('message') ?: 'Remote request rejected.'
+            ), 0, 500),
+            'retry_after' => $response->header('Retry-After'),
+        ];
     }
 
     private function markFailed(IntegrationOutboxEvent $event, string $message): void
