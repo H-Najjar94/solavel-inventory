@@ -9,15 +9,15 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('inventory_sales_orders')
-            && ! Schema::hasColumn('inventory_sales_orders', 'currency_code')) {
+            && ! Schema::hasColumn('inventory_sales_orders', 'integration_currency_code')) {
             Schema::table('inventory_sales_orders', function (Blueprint $table): void {
-                $table->char('currency_code', 3)->nullable()->after('status');
+                $table->char('integration_currency_code', 3)->nullable()->after('status');
             });
         }
         if (Schema::hasTable('inventory_purchase_orders')
-            && Schema::hasColumn('inventory_purchase_orders', 'currency_code')) {
+            && ! Schema::hasColumn('inventory_purchase_orders', 'integration_currency_code')) {
             Schema::table('inventory_purchase_orders', function (Blueprint $table): void {
-                $table->string('currency_code', 3)->nullable()->default(null)->change();
+                $table->char('integration_currency_code', 3)->nullable()->after('currency_code');
             });
         }
 

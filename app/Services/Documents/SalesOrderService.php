@@ -50,6 +50,8 @@ class SalesOrderService
             // rather than only in array_merge so a null in $attributes can't win.
             $attributes['order_date'] = $attributes['order_date'] ?? now()->toDateString();
             $attributes = $this->applyCustomerName($attributes);
+            $attributes['integration_currency_code'] = $attributes['currency_code'] ?? null;
+            unset($attributes['currency_code']);
 
             $so = new SalesOrder(array_merge([
                 'status' => 'draft', 'source_app' => 'manual',
@@ -73,7 +75,9 @@ class SalesOrderService
                 throw new RuntimeException("Only a draft sales order can be edited (status '{$so->status}').");
             }
             $attributes = $this->applyCustomerName($attributes);
-            $so->fill(collect($attributes)->only(['order_number', 'customer_id', 'customer_name', 'customer_external_id', 'order_date', 'requested_ship_date', 'warehouse_id', 'currency_code', 'notes'])->toArray());
+            $attributes['integration_currency_code'] = $attributes['currency_code'] ?? null;
+            unset($attributes['currency_code']);
+            $so->fill(collect($attributes)->only(['order_number', 'customer_id', 'customer_name', 'customer_external_id', 'order_date', 'requested_ship_date', 'warehouse_id', 'integration_currency_code', 'notes'])->toArray());
             $so->save();
             $so->lines()->delete();
             $this->syncLines($so, $lines, $orgId);

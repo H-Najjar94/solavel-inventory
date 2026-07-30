@@ -86,7 +86,7 @@ final class Phase3WorkflowContractTest extends TestCase
             'rate_to_base' => '1.41000000',
             'effective_date' => $po->order_date,
         ]);
-        $po->update(['currency_code' => 'USD']);
+        $po->update(['currency_code' => 'USD', 'integration_currency_code' => 'USD']);
         $foreign = app(WorkflowCurrencyResolver::class)->resolve(
             $po->fresh(), 'purchase_order', $po->order_date->toDateString()
         );
@@ -94,7 +94,7 @@ final class Phase3WorkflowContractTest extends TestCase
         $this->assertSame('1.41000000', $foreign['exchange_rate']);
         $this->assertSame('solabooks_authoritative_snapshot', $foreign['rate_source']);
 
-        $po->update(['currency_code' => 'CAD']);
+        $po->update(['currency_code' => 'CAD', 'integration_currency_code' => 'CAD']);
         $this->expectException(ValidationException::class);
         app(WorkflowCurrencyResolver::class)->resolve(
             $po->fresh(), 'purchase_order', $po->order_date->toDateString()
@@ -302,6 +302,7 @@ final class Phase3WorkflowContractTest extends TestCase
             'order_date' => '2026-07-30',
             'warehouse_id' => $warehouse->id,
             'currency_code' => $currency,
+            'integration_currency_code' => $currency,
             'status' => 'approved',
             'subtotal' => 10,
             'tax_total' => 0,
@@ -322,7 +323,7 @@ final class Phase3WorkflowContractTest extends TestCase
             'occurred_at' => now(),
             'payload' => [
                 'document_date' => $po->order_date->toDateString(),
-                'currency' => ['code' => $po->currency_code, 'exchange_rate' => '1'],
+                'currency' => ['code' => $po->integration_currency_code, 'exchange_rate' => '1'],
                 'total_inventory_value_change' => '0',
                 'lines' => [],
             ],
