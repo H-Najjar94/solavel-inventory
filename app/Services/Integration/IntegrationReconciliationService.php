@@ -10,15 +10,21 @@ final class IntegrationReconciliationService
     public function report(int $organizationId): array
     {
         $db = DB::connection('tenant');
+        $financeOrganizationId = Schema::connection('tenant')->hasTable('integration_organization_mappings')
+            ? (int) ($db->table('integration_organization_mappings')
+                ->where('solastock_organization_id', $organizationId)
+                ->whereIn('status', ['verified', 'verified_hold'])
+                ->value('finance_organization_id') ?: $organizationId)
+            : $organizationId;
         $events = $db->table('integration_outbox_events')
             ->where('organization_id', $organizationId)
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->orderBy('id')->get();
         $hasJournals = Schema::connection('tenant')->hasTable('journal_entries');
-        $rows = $events->map(function (object $event) use ($db, $organizationId, $hasJournals): array {
+        $rows = $events->map(function (object $event) use ($db, $financeOrganizationId, $hasJournals): array {
             $journal = $hasJournals
                 ? $db->table('journal_entries')
-                    ->where('organization_id', $organizationId)
+                    ->where('organization_id', $financeOrganizationId)
                     ->where('source_key', 'external-api:'.hash('sha256', (string) $event->idempotency_key))
                     ->first(['id'])
                 : null;
@@ -39,6 +45,7 @@ final class IntegrationReconciliationService
             'schema_version' => 'phase4.reconciliation.v1',
             'read_only' => true,
             'organization_id' => $organizationId,
+            'finance_organization_id' => $financeOrganizationId,
             'generated_at' => now()->toIso8601String(),
             'inventory' => $this->inventoryChecks($organizationId),
             'events' => [
