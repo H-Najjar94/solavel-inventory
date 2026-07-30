@@ -4,17 +4,20 @@ namespace Tests\Feature\Integration;
 
 use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationAccountMapping;
-use App\Models\Tenant\IntegrationOutboxEvent;
-use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Services\Integration\DeadLetterReviewService;
+use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\ExternalRequestSignature;
+use App\Services\Integration\IntegrationReconciliationService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Services\Integration\SolaStockJournalContract;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
@@ -405,5 +408,228 @@ class SolaBooksDeliveryTest extends TestCase
         $this->assertSame('sent', $recovered->status);
         $this->assertSame('1300', $recovered->external_document_id);
         Http::assertSentCount(1);
+    }
+
+    private function enableDurableTransport(IntegrationOutboxEvent $event): IntegrationOutboxEvent
+    {
+        Config::set('integration_safety.solabooks_delivery_enabled', true);
+        Config::set('integration_transport.worker_enabled', true);
+        Config::set('integration_transport.jitter_percent', 0);
+        $setting = IntegrationSetting::query()->where('integration', 'solabooks')->firstOrFail();
+        $meta = $setting->meta;
+        $meta['transport_enabled'] = true;
+        $meta['transport_enabled_workflows'] = ['adjustment.posted'];
+        $setting->update(['meta' => $meta]);
+        $event->update([
+            'status' => 'ready',
+            'contract_version' => SolaStockJournalContract::VERSION,
+            'payload_hash' => hash(
+                'sha256',
+                SolaStockJournalContract::canonicalJson((array) $event->payload)
+            ),
+            'workflow_key' => 'adjustment.posted',
+            'ordering_key' => 'StockAdjustment:'.$event->aggregate_id,
+            'transport_eligible_at' => now(),
+        ]);
+
+        return $event->fresh();
+    }
+
+    #[Test]
+    public function durable_transport_claims_commits_then_performs_http_and_acknowledges_by_lease(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $event = $this->enableDurableTransport($this->event());
+        Http::fake(['books.test/*' => Http::response(['data' => ['id' => 5001]], 201)]);
+        $transport = app(DurableOutboxTransportService::class);
+
+        $claimed = $transport->claim(TenantTestManager::ORG_A, 'worker-a');
+        $this->assertSame($event->id, $claimed->id);
+        $this->assertSame('processing', $claimed->status);
+        $this->assertNotNull($claimed->lease_token);
+        $this->assertDatabaseHas('integration_outbox_transition_audits', [
+            'event_id' => $event->id, 'from_status' => 'ready', 'to_status' => 'processing',
+        ]);
+        $audit = DB::connection('tenant')->table('integration_outbox_transition_audits')
+            ->where('event_id', $event->id)->first();
+        $this->assertSame(hash('sha256', (string) $claimed->lease_token), $audit->lease_token_hash);
+        $this->assertNotSame((string) $claimed->lease_token, $audit->lease_token_hash);
+
+        $result = $transport->processClaim($claimed);
+        $this->assertSame('sent', $result['status']);
+        $this->assertSame('5001', $event->fresh()->external_document_id);
+        $this->assertNull($event->fresh()->lease_token);
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function concurrent_claim_and_stale_acknowledgement_fail_closed(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $event = $this->enableDurableTransport($this->event());
+        Http::fake();
+        $transport = app(DurableOutboxTransportService::class);
+        $first = $transport->claim(TenantTestManager::ORG_A, 'worker-a');
+        $this->assertNull($transport->claim(TenantTestManager::ORG_A, 'worker-b'));
+
+        $event->fresh()->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $this->assertSame(1, $transport->recoverExpiredLeases(TenantTestManager::ORG_A));
+        $this->expectException(\RuntimeException::class);
+        $transport->processClaim($first);
+    }
+
+    #[Test]
+    public function retryable_and_permanent_failures_follow_distinct_states_and_backoff(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $transport = app(DurableOutboxTransportService::class);
+
+        $retryable = $this->enableDurableTransport($this->event());
+        Http::fake(['books.test/*' => Http::sequence()
+            ->push(['error' => ['code' => 'rate_limited', 'message' => 'try later']], 429, ['Retry-After' => '120'])
+            ->push(['error' => ['code' => 'currency_invalid', 'message' => 'invalid currency']], 422)]);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-rate')
+        );
+        $this->assertSame('retry_scheduled', $result['status']);
+        $this->assertSame('rate_limit', $retryable->fresh()->failure_category);
+        $this->assertTrue($retryable->fresh()->next_attempt_at->gte(now()->addSeconds(115)));
+
+        $retryable->fresh()->update(['status' => 'superseded']);
+        $permanent = $this->enableDurableTransport($this->event());
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-business')
+        );
+        $this->assertSame('failed', $result['status']);
+        $this->assertSame('business_permanent', $permanent->fresh()->failure_category);
+        $this->assertNull($permanent->fresh()->next_attempt_at);
+    }
+
+    #[Test]
+    public function maximum_attempts_dead_letter_and_remote_commit_ack_crash_are_recoverable(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Config::set('integration_transport.max_attempts', 1);
+        $event = $this->enableDurableTransport($this->event());
+        Http::fake(['books.test/*' => Http::sequence()
+            ->push(['message' => 'unavailable'], 503)
+            ->push(['data' => ['id' => 6001]], 201)
+            ->push(['data' => ['id' => 6001]], 200)]);
+        $transport = app(DurableOutboxTransportService::class);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-dead')
+        );
+        $this->assertSame('dead_letter', $result['status']);
+        $this->assertNotNull($event->fresh()->dead_lettered_at);
+
+        Config::set('integration_transport.max_attempts', 8);
+        $committed = $this->enableDurableTransport($this->event());
+        $claim = $transport->claim(TenantTestManager::ORG_A, 'worker-crash');
+        $remote = app(SolaBooksOutboxDeliveryService::class)->sendClaimed($claim);
+        $this->assertTrue($remote['successful']); // Simulated crash before local ack.
+        $committed->fresh()->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $transport->recoverExpiredLeases(TenantTestManager::ORG_A);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-recovery')
+        );
+        $this->assertSame('sent', $result['status']);
+        $this->assertSame('6001', $committed->fresh()->external_document_id);
+    }
+
+    #[Test]
+    public function durable_transport_uses_real_http_and_recovers_remote_commit(): void
+    {
+        $url = getenv('PHASE4_REAL_HTTP_URL');
+        if (! $url) {
+            $this->markTestSkipped('Run scripts/run-phase4-paired-http.sh for the real HTTP transport proof.');
+        }
+        $this->bootActiveIntegration();
+        Config::set('services.solabooks.journal_entries_url', $url);
+        Config::set('services.solabooks.api_key', 'key');
+        Config::set('services.solabooks.client_id', '7');
+        Config::set('services.solabooks.organization_id', '14');
+        $event = $this->enableDurableTransport($this->event());
+        $transport = app(DurableOutboxTransportService::class);
+        $claim = $transport->claim(TenantTestManager::ORG_A, 'real-http-crash');
+
+        // The first actual HTTP request commits remotely; simulate a process
+        // death by deliberately omitting the local acknowledgement.
+        $remote = app(SolaBooksOutboxDeliveryService::class)->sendClaimed($claim);
+        $this->assertTrue($remote['successful']);
+        $event->fresh()->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $transport->recoverExpiredLeases(TenantTestManager::ORG_A);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'real-http-recovery')
+        );
+
+        $this->assertSame('sent', $result['status']);
+        $this->assertSame('91001', $event->fresh()->external_document_id);
+        $this->assertSame(2, $event->fresh()->attempts);
+    }
+
+    #[Test]
+    public function reconciliation_classifies_without_repairing_any_state(): void
+    {
+        $this->bootActiveIntegration();
+        $pending = $this->event(['status' => 'pending']);
+        $ignored = $this->event(['status' => 'ignored']);
+        $before = IntegrationOutboxEvent::query()->orderBy('id')->get()
+            ->map(fn ($event) => [
+                ...$event->only(['id', 'status', 'attempts']),
+                'updated_at' => $event->updated_at?->toISOString(),
+            ])->all();
+
+        $report = app(IntegrationReconciliationService::class)
+            ->report(TenantTestManager::ORG_A);
+
+        $this->assertTrue($report['read_only']);
+        $this->assertSame(0, $report['mutation']['events']);
+        $this->assertSame(1, $report['events']['counts']['pending']);
+        $this->assertSame(1, $report['events']['counts']['ignored_historical']);
+        $this->assertSame(
+            $before,
+            IntegrationOutboxEvent::query()->orderBy('id')->get()
+                ->map(fn ($event) => [
+                    ...$event->only(['id', 'status', 'attempts']),
+                    'updated_at' => $event->updated_at?->toISOString(),
+                ])->all()
+        );
+        $this->assertSame('pending', $pending->fresh()->status);
+        $this->assertSame('ignored', $ignored->fresh()->status);
+    }
+
+    #[Test]
+    public function dead_letter_recovery_is_reviewed_audited_and_rejects_permanent_blockers(): void
+    {
+        $this->bootActiveIntegration();
+        $event = $this->enableDurableTransport($this->event());
+        $event->update([
+            'status' => 'dead_letter',
+            'failure_category' => 'transport',
+            'failure_code' => 'http_503',
+            'dead_lettered_at' => now(),
+        ]);
+        $reviewed = app(DeadLetterReviewService::class)
+            ->review($event->fresh(), 42, 'Remote service restored.', true);
+        $this->assertSame('ready', $reviewed->status);
+        $this->assertDatabaseHas('integration_dead_letter_reviews', [
+            'event_id' => $event->id,
+            'action' => 'review_and_retry',
+            'reviewer_user_id' => 42,
+        ], 'tenant');
+
+        $permanent = $this->enableDurableTransport($this->event());
+        $permanent->update([
+            'status' => 'dead_letter',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'currency_invalid',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        app(DeadLetterReviewService::class)
+            ->review($permanent->fresh(), 42, 'Not corrected.', true);
     }
 }

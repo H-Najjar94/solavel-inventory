@@ -12,15 +12,18 @@ use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
 use App\Services\Documents\SourceDocumentPresenter;
+use App\Services\Integration\DeadLetterReviewService;
+use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\IntegrationEvents;
 use App\Services\Integration\IntegrationOutboxService;
-use App\Services\Integration\IntegrationStatusService;
 use App\Services\Integration\IntegrationSafetyHold;
+use App\Services\Integration\IntegrationStatusService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 
 /**
  * SolaBooks integration API. Posting stays outbox-only inside inventory
@@ -299,6 +302,14 @@ class IntegrationController extends ApiController
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->filled('event_type'), fn ($q) => $q->where('event_type', $request->query('event_type')))
+            ->when($request->filled('failure_category'), fn ($q) => $q->where('failure_category', $request->query('failure_category')))
+            ->when($request->filled('search'), function ($query) use ($request): void {
+                $search = mb_substr((string) $request->query('search'), 0, 100);
+                $query->where(fn ($query) => $query
+                    ->where('event_uuid', 'like', "%{$search}%")
+                    ->orWhere('aggregate_number', 'like', "%{$search}%")
+                    ->orWhere('failure_code', 'like', "%{$search}%"));
+            })
             ->when($request->filled('from'), fn ($q) => $q->whereDate('occurred_at', '>=', $request->query('from')))
             ->when($request->filled('to'), fn ($q) => $q->whereDate('occurred_at', '<=', $request->query('to')))
             ->orderByDesc('id');
@@ -311,10 +322,82 @@ class IntegrationController extends ApiController
 
     public function event(int $event): JsonResponse
     {
-        return $this->success(IntegrationOutboxEvent::query()->findOrFail($event));
+        $row = IntegrationOutboxEvent::query()->findOrFail($event);
+        $workflow = DB::connection('tenant')->table('integration_document_lifecycle_mappings')
+            ->where('solastock_organization_id', $this->context->idOrFail())
+            ->where('source_document_id', (string) $row->aggregate_id)
+            ->orderByDesc('id')
+            ->first([
+                'mapping_uuid', 'source_document_type', 'destination_document_type',
+                'destination_document_id', 'lifecycle_status', 'matching_state',
+                'conflict_code', 'last_verified_at',
+            ]);
+        $transitions = DB::connection('tenant')->table('integration_outbox_transition_audits')
+            ->where('organization_id', $this->context->idOrFail())
+            ->where('event_id', $row->id)
+            ->orderBy('state_version')
+            ->get(['from_status', 'to_status', 'state_version', 'reason_code', 'actor_type', 'created_at']);
+        $reviews = DB::connection('tenant')->table('integration_dead_letter_reviews')
+            ->where('organization_id', $this->context->idOrFail())
+            ->where('event_id', $row->id)->orderBy('reviewed_at')
+            ->get(['action', 'required_recovery_action', 'reviewer_user_id', 'review_note', 'reviewed_at']);
+
+        return $this->success([
+            'event' => $row,
+            'workflow' => $workflow,
+            'transition_history' => $transitions,
+            'review_history' => $reviews,
+        ]);
     }
 
-    public function retry(int $event): JsonResponse
+    public function deadLetters(Request $request): JsonResponse
+    {
+        $perPage = min((int) $request->query('per_page', 50), 100);
+        $page = IntegrationOutboxEvent::query()
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->where('status', 'dead_letter')
+            ->when($request->filled('failure_category'), fn ($q) => $q->where('failure_category', $request->query('failure_category')))
+            ->when($request->filled('search'), function ($query) use ($request): void {
+                $search = mb_substr((string) $request->query('search'), 0, 100);
+                $query->where(fn ($query) => $query
+                    ->where('event_uuid', 'like', "%{$search}%")
+                    ->orWhere('aggregate_number', 'like', "%{$search}%")
+                    ->orWhere('failure_code', 'like', "%{$search}%"));
+            })
+            ->orderByDesc('dead_lettered_at')->paginate($perPage)->withQueryString();
+
+        return $this->paginated($page);
+    }
+
+    public function reviewDeadLetter(
+        Request $request,
+        int $event,
+        DeadLetterReviewService $reviews,
+    ): JsonResponse {
+        if (! $this->safety->deliveryEnabled()) {
+            return $this->error('integration_safety_hold', $this->safety->message(), 423, [
+                'reason' => $this->safety->reason(),
+            ]);
+        }
+        $data = $request->validate([
+            'note' => ['required', 'string', 'max:500'],
+            'retry' => ['required', 'boolean'],
+        ]);
+        try {
+            $result = $reviews->review(
+                IntegrationOutboxEvent::query()->findOrFail($event),
+                (int) auth()->id(),
+                $data['note'],
+                (bool) $data['retry'],
+            );
+        } catch (\Throwable $e) {
+            return $this->error('dead_letter_review_rejected', $e->getMessage(), 422);
+        }
+
+        return $this->success($result);
+    }
+
+    public function retry(int $event, ?DurableOutboxTransportService $transport = null): JsonResponse
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
 
@@ -326,7 +409,9 @@ class IntegrationController extends ApiController
         }
 
         try {
-            return $this->success($this->delivery->deliver($event, manual: true)->fresh());
+            $transport ??= app(DurableOutboxTransportService::class);
+
+            return $this->success($transport->queueReviewedRetry($event, (int) auth()->id()));
         } catch (\Throwable $e) {
             return $this->error('delivery_failed', $e->getMessage(), 422, [
                 'event_uuid' => $event->event_uuid,
@@ -336,7 +421,7 @@ class IntegrationController extends ApiController
 
     public function retryPlaceholder(int $event): JsonResponse
     {
-        return $this->retry($event);
+        return $this->retry($event, app(DurableOutboxTransportService::class));
     }
 
     /** Mark an event ignored (local-only state change; no external call). */

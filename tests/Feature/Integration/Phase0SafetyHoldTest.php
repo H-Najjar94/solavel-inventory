@@ -5,6 +5,7 @@ namespace Tests\Feature\Integration;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -101,6 +102,33 @@ class Phase0SafetyHoldTest extends TestCase
         app()->setLocale('ar');
         $this->assertStringContainsString('عقد العملات', __('inventory.integration.safety_hold'));
         $this->assertStringContainsString('dir="{{ $dir }}"', file_get_contents(resource_path('views/solastock-app.blade.php')));
+    }
+
+    #[Test]
+    public function dedicated_worker_claim_cannot_bypass_the_delivery_hold(): void
+    {
+        config()->set('integration_transport.worker_enabled', true);
+        $event = $this->event('ready');
+        $event->update([
+            'contract_version' => 'solastock-journal.v2',
+            'transport_eligible_at' => now(),
+            'ordering_key' => 'StockAdjustment:'.$event->aggregate_id,
+        ]);
+        $before = $event->fresh()->only([
+            'status', 'attempts', 'lease_owner', 'lease_token',
+            'claimed_at', 'lease_expires_at', 'state_version',
+        ]);
+
+        try {
+            app(DurableOutboxTransportService::class)->claim(TenantTestManager::ORG_A, 'blocked-worker');
+            $this->fail('The dedicated worker must fail before claiming.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('currency-contract', $exception->getMessage());
+        }
+
+        $this->assertSame($before, $event->fresh()->only(array_keys($before)));
+        $this->assertDatabaseCount('integration_outbox_transition_audits', 0, 'tenant');
+        Http::assertNothingSent();
     }
 
     private function event(string $status): IntegrationOutboxEvent

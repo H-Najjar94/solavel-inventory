@@ -126,6 +126,25 @@ export default function IntegrationSettingsPage() {
                         </div>
                         <p className="muted">{tr('integration.workflow.ownership')}</p>
                     </div>
+                    <div className="panel" role="status">
+                        <h2>{tr('integration.transport.title')}</h2>
+                        <p>{tr('integration.transport.description')}</p>
+                        <div className="widget-grid">
+                            {['ready', 'processing', 'retry_scheduled', 'failed', 'dead_letter', 'blocked_mapping'].map((state) =>
+                                <div className="widget-card" key={state}>
+                                    <div className="widget-card-label">{tr(`integration.status.${state}`)}</div>
+                                    <div className="widget-card-value">{s.transport?.counts?.[state] ?? 0}</div>
+                                </div>)}
+                        </div>
+                        <dl className="kv">
+                            <dt>{tr('integration.transport.worker')}</dt><dd>{tr(s.transport?.worker_enabled && s.transport?.worker_running ? 'integration.transport.running' : 'integration.transport.disabled')}</dd>
+                            <dt>{tr('integration.transport.receiver')}</dt><dd>{tr(s.transport?.receiver_enabled ? 'integration.details.yes' : 'integration.details.no')}</dd>
+                            <dt>{tr('integration.transport.queue')}</dt><dd>{s.transport?.queue ?? '—'}</dd>
+                            <dt>{tr('integration.transport.oldest')}</dt><dd>{s.transport?.oldest_actionable_at ?? '—'}</dd>
+                            <dt>{tr('integration.transport.expired')}</dt><dd>{s.transport?.expired_leases ?? 0}</dd>
+                            <dt>{tr('integration.transport.reconciliation')}</dt><dd>{s.transport?.last_reconciliation_at ?? tr('integration.transport.notScheduled')}</dd>
+                        </dl>
+                    </div>
                     <div className="panel">
                         <dl className="kv">
                             <dt>{tr('integration.details.linkedOrg')}</dt><dd>{s.solabooks_organization_id ? `#${s.solabooks_organization_id}` : tr('integration.details.notLinked')}</dd>
