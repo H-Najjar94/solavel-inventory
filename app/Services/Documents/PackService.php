@@ -6,6 +6,7 @@ use App\Models\Tenant\Pack;
 use App\Models\Tenant\PickList;
 use App\Models\Tenant\SalesOrder;
 use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ class PackService
     public function __construct(
         private OrganizationContext $context,
         private IntegrationOutboxService $outbox,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function conn(): string
@@ -113,6 +115,7 @@ class PackService
             if ($pack->status === 'cancelled') {
                 throw new RuntimeException("Cancelled pack {$pack->id} cannot be marked packed.");
             }
+            $this->workflowValidation->assertOperationalDocumentReady($pack, 'pack.packed');
             $pack->status = 'packed';
             $pack->save();
 

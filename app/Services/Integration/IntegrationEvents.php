@@ -14,6 +14,7 @@ final class IntegrationEvents
 
     /** event_type => [aggregate_type, suggested_debit, suggested_credit] */
     public const TYPES = [
+        'purchase_order.approved' => ['PurchaseOrder', null, null],
         'opening_stock.posted' => ['OpeningStockEntry', 'inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['OpeningStockEntry', 'opening_offset', 'inventory_asset'],
         'adjustment.posted' => ['StockAdjustment', 'inventory_asset', 'adjustment_gain'], // direction-dependent; see builder

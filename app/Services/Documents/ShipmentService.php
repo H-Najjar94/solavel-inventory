@@ -7,6 +7,7 @@ use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\Shipment;
 use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\StockReservationService;
@@ -30,6 +31,7 @@ class ShipmentService
         private StockLedgerService $ledger,
         private StockReservationService $reservations,
         private IntegrationOutboxService $outbox,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function conn(): string
@@ -150,6 +152,7 @@ class ShipmentService
                 throw new RuntimeException("Shipment {$s->id} cannot be posted from status '{$s->status}'.");
             }
 
+            $this->workflowValidation->assertOperationalDocumentReady($s, 'shipment.posted');
             $this->validateReservedSerials($s);
 
             // Release the SO reservation first so the OUT does not trip the

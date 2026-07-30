@@ -19,6 +19,7 @@ class IntegrationOutboxService
     public function __construct(
         private OrganizationContext $context,
         private EventPayloadBuilder $payloads,
+        private WorkflowDocumentMappingService $workflowDocuments,
     ) {}
 
     /**
@@ -56,7 +57,7 @@ class IntegrationOutboxService
                 : 'operational_event_no_journal';
         }
 
-        return IntegrationOutboxEvent::create([
+        $event = IntegrationOutboxEvent::create([
             'organization_id' => $orgId,
             'event_uuid' => (string) Str::uuid(),
             'integration' => IntegrationEvents::INTEGRATION,
@@ -71,6 +72,10 @@ class IntegrationOutboxService
             'attempts' => 0,
             'idempotency_key' => $idem,
         ]);
+        $this->workflowDocuments->recordForEvent($event, $document);
+        $this->workflowDocuments->recordReservationsForSalesOrder($event, $document);
+
+        return $event;
     }
 
     private function mode(int $orgId): string

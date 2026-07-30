@@ -6,6 +6,7 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Purchasing\PurchaseOrderBackorderService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -30,6 +31,7 @@ class GoodsReceiptService
         private \App\Services\Traceability\SerialService $serials,
         private UnitConversionResolver $conversions,
         private PurchaseOrderBackorderService $backorders,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     protected function lotService(): \App\Services\Traceability\LotService
@@ -190,6 +192,7 @@ class GoodsReceiptService
             }
 
             $grn->loadMissing('lines');
+            $this->workflowValidation->assertOperationalDocumentReady($grn, 'grn.posted');
 
             // Over-receipt guard: a line tied to a PO line cannot accept more than
             // the PO line's remaining (ordered − already received). No tolerance

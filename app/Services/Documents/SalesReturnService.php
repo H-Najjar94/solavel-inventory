@@ -9,6 +9,7 @@ use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\Shipment;
 use App\Models\Tenant\StockLedger;
 use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -43,6 +44,7 @@ class SalesReturnService
         private StockLedgerService $ledger,
         private IntegrationOutboxService $outbox,
         private SerialService $serials,
+        private WorkflowValidationService $workflowValidation,
     ) {}
 
     private function conn(): string
@@ -131,6 +133,7 @@ class SalesReturnService
                 throw new RuntimeException("Sales return {$r->id} cannot be posted from status '{$r->status}'.");
             }
 
+            $this->workflowValidation->assertOperationalDocumentReady($r, 'sales_return.posted');
             $movements = [];
             foreach ($r->lines as $line) {
                 if (! in_array($line->condition, self::STOCKABLE, true)) {

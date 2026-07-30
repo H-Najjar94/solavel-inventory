@@ -13,7 +13,7 @@ class StoreSalesOrderRequest extends FormRequest
         if (in_array($this->input('order_number'), ['', null], true)) {
             $patch['order_number'] = null;
         }
-        foreach (['order_date', 'requested_ship_date'] as $f) {
+        foreach (['order_date', 'requested_ship_date', 'currency_code'] as $f) {
             if ($this->input($f) === '') {
                 $patch[$f] = null;
             }
@@ -33,6 +33,7 @@ class StoreSalesOrderRequest extends FormRequest
             'customer_external_id' => ['nullable','string','max:100'],
             'order_date' => ['nullable','date'],
             'requested_ship_date' => ['nullable','date'],
+            'currency_code' => ['nullable','string','size:3','regex:/^[A-Z]{3}$/'],
             'warehouse_id' => ['required','integer'],
             'notes' => ['nullable','string'],
             'lines' => ['required','array','min:1'],

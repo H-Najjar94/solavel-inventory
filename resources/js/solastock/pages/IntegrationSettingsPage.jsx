@@ -113,6 +113,19 @@ export default function IntegrationSettingsPage() {
                             <dt>{tr('integration.authority.v2Scope')}</dt><dd>{s.organization_mapping?.v2_key_scope_status ?? tr('integration.details.notConfigured')}</dd>
                         </dl>
                     </div>
+                    <div className="panel" role="status">
+                        <h2>{tr('integration.workflow.title')}</h2>
+                        <p>{tr('integration.workflow.description')}</p>
+                        <div className="widget-grid">
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.workflow.purchasing')}</div><div className="widget-card-value">{s.workflow_lifecycle?.purchasing ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.workflow.sales')}</div><div className="widget-card-value">{s.workflow_lifecycle?.sales ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.workflow.matched')}</div><div className="widget-card-value">{s.workflow_lifecycle?.matched ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.workflow.pending')}</div><div className="widget-card-value">{s.workflow_lifecycle?.pending ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.workflow.conflicting')}</div><div className="widget-card-value">{s.workflow_lifecycle?.conflicting ?? 0}</div></div>
+                            <div className="widget-card"><div className="widget-card-label">{tr('integration.workflow.review')}</div><div className="widget-card-value">{s.workflow_lifecycle?.review_required ?? 0}</div></div>
+                        </div>
+                        <p className="muted">{tr('integration.workflow.ownership')}</p>
+                    </div>
                     <div className="panel">
                         <dl className="kv">
                             <dt>{tr('integration.details.linkedOrg')}</dt><dd>{s.solabooks_organization_id ? `#${s.solabooks_organization_id}` : tr('integration.details.notLinked')}</dd>

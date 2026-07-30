@@ -14,6 +14,8 @@ use App\Services\Stock\Support\Decimal;
  */
 class EventPayloadBuilder
 {
+    public function __construct(private readonly WorkflowCurrencyResolver $currencies) {}
+
     /**
      * @param  object  $document  the posted document (has id, number, date)
      */
@@ -52,6 +54,8 @@ class EventPayloadBuilder
 
         $suggested = IntegrationEvents::suggestedAccounts($eventType);
 
+        $currency = $this->currencies->resolve($document, $documentType, $date);
+
         return array_merge([
             'source_app' => 'solastock',
             'event_type' => $eventType,
@@ -60,7 +64,7 @@ class EventPayloadBuilder
             'document_id' => (int) $document->id,
             'document_number' => $number,
             'document_date' => $date,
-            'currency' => null, // placeholder until multi-currency
+            'currency' => $currency,
             'total_inventory_value_change' => Decimal::money($totalChange),
             'lines' => $lines,
             'original_source' => $this->originalSource($document),

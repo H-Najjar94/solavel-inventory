@@ -6,6 +6,7 @@ use App\Models\Landlord\Organization as CentralOrganization;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -143,6 +144,19 @@ final class SolaStockJournalContractBuilder
             return $result;
         }, $this->journals->build($event, $orgId));
         $lines = $this->balanceBaseLines($lines, $moneyScale, (int) ($meta['finance_rounding_account_id'] ?? 0));
+        $documentMapping = IntegrationDocumentLifecycleMapping::query()
+            ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+            ->where('source_application', 'solastock')
+            ->where('source_document_type', $this->canonicalDocumentType(
+                (string) $event->aggregate_type,
+                (string) $event->event_type,
+            ))
+            ->where('source_document_id', (string) $event->aggregate_id)
+            ->where('accounting_source_key', (string) $event->idempotency_key)
+            ->first();
+        if (! $documentMapping) {
+            throw new RuntimeException(__('inventory.integration.workflow_document_mapping_required'));
+        }
 
         $original = $eventPayload['original_source'] ?? null;
         $reversal = null;
@@ -176,6 +190,7 @@ final class SolaStockJournalContractBuilder
                 'event_type' => (string) $event->event_type,
                 'document_type' => (string) $event->aggregate_type,
                 'document_id' => (int) $event->aggregate_id,
+                'document_mapping_uuid' => (string) $documentMapping->mapping_uuid,
                 'document_number' => $event->aggregate_number,
                 'transaction_date' => $date,
                 'reversal' => $reversal,
@@ -192,6 +207,18 @@ final class SolaStockJournalContractBuilder
             ],
             'lines' => $lines,
         ];
+    }
+
+    private function canonicalDocumentType(string $aggregateType, string $eventType): string
+    {
+        return match (class_basename($aggregateType)) {
+            'GoodsReceipt' => 'goods_receipt',
+            'InventoryReversal' => $eventType === 'grn.reversed'
+                ? 'supplier_return' : 'inventory_reversal',
+            'Shipment' => 'shipment',
+            'SalesReturn' => 'sales_return',
+            default => \Illuminate\Support\Str::snake(class_basename($aggregateType)),
+        };
     }
 
     private function balanceBaseLines(array $lines, int $scale, int $roundingAccountId): array

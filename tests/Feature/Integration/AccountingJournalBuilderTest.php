@@ -49,7 +49,7 @@ class AccountingJournalBuilderTest extends TestCase
     }
 
     #[Test]
-    public function grn_journal_includes_inventory_input_vat_and_grni(): void
+    public function grn_journal_contains_only_inventory_and_grni(): void
     {
         $this->useTenantA();
         $this->mappings();
@@ -79,15 +79,15 @@ class AccountingJournalBuilderTest extends TestCase
 
         $lines = app(AccountingJournalBuilder::class)->build($this->event('grn.posted', 'GoodsReceipt', $grn->id, 'GRN-ACC'), TenantTestManager::ORG_A);
 
-        $this->assertSame([100, 647, 200], array_column($lines, 'account_id'));
-        $this->assertSame(['50.00', '8.00', '0.00'], array_column($lines, 'debit'));
-        $this->assertSame('58.00', $lines[2]['credit']);
-        $this->assertSame(7, $lines[1]['tax_rate_id']);
-        $this->assertSame('50.00', $lines[1]['taxable_base_amount']);
+        $this->assertSame([100, 200], array_column($lines, 'account_id'));
+        $this->assertSame(['inventory_asset', 'grni'], array_column($lines, 'account_role'));
+        $this->assertSame(['50.00', '0.00'], array_column($lines, 'debit'));
+        $this->assertSame(['0.00', '50.00'], array_column($lines, 'credit'));
+        $this->assertNotContains(647, array_column($lines, 'account_id'));
     }
 
     #[Test]
-    public function shipment_journal_separates_revenue_output_vat_and_fifo_cogs(): void
+    public function shipment_journal_contains_only_fifo_cogs_and_inventory(): void
     {
         $this->useTenantA();
         $this->mappings();
@@ -120,13 +120,13 @@ class AccountingJournalBuilderTest extends TestCase
 
         $lines = app(AccountingJournalBuilder::class)->build($this->event('shipment.posted', 'Shipment', $shipment->id, 'SHIP-ACC'), TenantTestManager::ORG_A);
 
-        $this->assertSame([300, 400, 648, 500, 100], array_column($lines, 'account_id'));
-        $this->assertSame('52.20', $lines[0]['debit']);
-        $this->assertSame('45.00', $lines[1]['credit']);
-        $this->assertSame('7.20', $lines[2]['credit']);
-        $this->assertSame('45.00', $lines[2]['taxable_base_amount']);
-        $this->assertSame('30.00', $lines[3]['debit']);
-        $this->assertSame('30.00', $lines[4]['credit']);
+        $this->assertSame([500, 100], array_column($lines, 'account_id'));
+        $this->assertSame(['cogs', 'inventory_asset'], array_column($lines, 'account_role'));
+        $this->assertSame(['30.00', '0.00'], array_column($lines, 'debit'));
+        $this->assertSame(['0.00', '30.00'], array_column($lines, 'credit'));
+        $this->assertNotContains(300, array_column($lines, 'account_id'));
+        $this->assertNotContains(400, array_column($lines, 'account_id'));
+        $this->assertNotContains(648, array_column($lines, 'account_id'));
     }
 
     #[Test]
