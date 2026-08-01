@@ -103,8 +103,9 @@ class IntegrationOutboxService
 
     private function transportEnabled(int $orgId, string $eventType): bool
     {
-        if (! app(IntegrationSafetyHold::class)->deliveryEnabled()
-            || ! config('integration_transport.worker_enabled', false)) {
+        $safety = app(IntegrationSafetyHold::class);
+        if (! $safety->deliveryEnabledFor($orgId)
+            || ! $safety->workerEnabledFor($orgId)) {
             return false;
         }
         $setting = IntegrationSetting::query()

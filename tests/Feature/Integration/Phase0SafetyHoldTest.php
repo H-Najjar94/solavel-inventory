@@ -131,12 +131,41 @@ class Phase0SafetyHoldTest extends TestCase
         Http::assertNothingSent();
     }
 
-    private function event(string $status): IntegrationOutboxEvent
+    #[Test]
+    public function phase6a_exception_is_exactly_scoped_to_the_uat_database_and_organization(): void
+    {
+        $database = (string) config('database.connections.tenant.database');
+        config()->set('integration_transport.worker_enabled', false);
+        config()->set('integration_safety.phase6a_uat', [
+            'enabled' => true,
+            'tenant_database' => $database,
+            'organization_id' => TenantTestManager::ORG_A,
+        ]);
+
+        $safety = app(\App\Services\Integration\IntegrationSafetyHold::class);
+        $this->assertTrue($safety->deliveryEnabledFor(TenantTestManager::ORG_A, $database));
+        $this->assertTrue($safety->workerEnabledFor(TenantTestManager::ORG_A, $database));
+        $this->assertFalse($safety->deliveryEnabledFor(TenantTestManager::ORG_B, $database));
+        $this->assertFalse($safety->workerEnabledFor(TenantTestManager::ORG_B, $database));
+        $this->assertFalse($safety->deliveryEnabledFor(TenantTestManager::ORG_A, $database.'_other'));
+
+        try {
+            app(DurableOutboxTransportService::class)->claim(TenantTestManager::ORG_B, 'wrong-org-worker');
+            $this->fail('A non-UAT organization must remain behind the global hold.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('currency-contract', $exception->getMessage());
+        }
+
+        $this->assertDatabaseCount('integration_outbox_transition_audits', 0, 'tenant');
+        Http::assertNothingSent();
+    }
+
+    private function event(string $status, int $organizationId = TenantTestManager::ORG_A): IntegrationOutboxEvent
     {
         $id = random_int(100000, 999999);
 
         return IntegrationOutboxEvent::query()->create([
-            'organization_id' => TenantTestManager::ORG_A,
+            'organization_id' => $organizationId,
             'event_uuid' => 'phase0-'.uniqid(),
             'integration' => 'solabooks',
             'event_type' => 'adjustment.posted',

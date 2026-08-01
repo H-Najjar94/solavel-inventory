@@ -374,7 +374,7 @@ class IntegrationController extends ApiController
         int $event,
         DeadLetterReviewService $reviews,
     ): JsonResponse {
-        if (! $this->safety->deliveryEnabled()) {
+        if (! $this->safety->deliveryEnabledFor($this->context->idOrFail())) {
             return $this->error('integration_safety_hold', $this->safety->message(), 423, [
                 'reason' => $this->safety->reason(),
             ]);
@@ -401,7 +401,7 @@ class IntegrationController extends ApiController
     {
         $event = IntegrationOutboxEvent::query()->findOrFail($event);
 
-        if (! $this->safety->deliveryEnabled()) {
+        if (! $this->safety->deliveryEnabledFor((int) $event->organization_id)) {
             return $this->error('integration_safety_hold', $this->safety->message(), 423, [
                 'reason' => $this->safety->reason(),
                 'event_uuid' => $event->event_uuid,

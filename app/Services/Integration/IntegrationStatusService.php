@@ -149,8 +149,10 @@ class IntegrationStatusService
             $authoritativeState = 'unavailable';
         }
 
+        $deliveryEnabled = $safety->deliveryEnabledFor($orgId);
+        $workerEnabled = $safety->workerEnabledFor($orgId);
         $health = match (true) {
-            ! $safety->deliveryEnabled() => 'maintenance_hold',
+            ! $deliveryEnabled => 'maintenance_hold',
             $mode === 'disconnected' => 'disconnected',
             $failed > 0 => 'error',
             $incompleteMapping > 0 => 'needs_mapping',
@@ -202,22 +204,22 @@ class IntegrationStatusService
                 'purchasing' => (int) ($workflowCoverage->purchasing ?? 0),
                 'sales' => (int) ($workflowCoverage->sales ?? 0),
                 'execution_enabled' => false,
-                'delivery_enabled' => $safety->deliveryEnabled(),
+                'delivery_enabled' => $deliveryEnabled,
             ],
             'delivery_configured' => (bool) (($settings->apiKey() || config('services.solabooks.api_key'))
                 && ($settings->meta['client_id'] ?? config('services.solabooks.client_id'))
                 && ($settings->solabooks_organization_id || config('services.solabooks.organization_id'))),
-            'delivery_enabled' => $safety->deliveryEnabled(),
-            'delivery_disabled_reason' => $safety->deliveryEnabled() ? null : $safety->reason(),
-            'delivery_disabled_message' => $safety->deliveryEnabled() ? null : $safety->message(),
+            'delivery_enabled' => $deliveryEnabled,
+            'delivery_disabled_reason' => $deliveryEnabled ? null : $safety->reason(),
+            'delivery_disabled_message' => $deliveryEnabled ? null : $safety->message(),
             'last_successful_delivery_at' => $lastSuccessfulDeliveryAt,
             'transport' => [
                 'queue' => (string) config('integration_transport.worker.queue'),
-                'worker_enabled' => (bool) config('integration_transport.worker_enabled', false),
+                'worker_enabled' => $workerEnabled,
                 'worker_running' => $workerRunning,
                 'worker_last_seen_at' => $workerHeartbeat?->last_seen_at,
                 'worker_served_commit' => $workerHeartbeat?->served_commit,
-                'receiver_enabled' => $safety->deliveryEnabled(),
+                'receiver_enabled' => $deliveryEnabled,
                 'schedule_enabled' => (bool) config('integration_transport.reconciliation_schedule_enabled', false),
                 'counts' => collect([
                     'pending', 'review_required', 'blocked_mapping', 'blocked_contract',

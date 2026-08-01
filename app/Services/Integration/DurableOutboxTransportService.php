@@ -25,7 +25,7 @@ final class DurableOutboxTransportService
     {
         // No lock or mutation may occur before both independent worker/delivery
         // controls pass.
-        $this->assertExecutionEnabled();
+        $this->assertExecutionEnabled($organizationId);
 
         return $this->organizations->runFor($organizationId, function () use ($organizationId, $workerId) {
             $enabledWorkflows = $this->assertOrganizationEnabled($organizationId);
@@ -90,7 +90,7 @@ final class DurableOutboxTransportService
 
     public function processClaim(IntegrationOutboxEvent $claimed): array
     {
-        $this->assertExecutionEnabled();
+        $this->assertExecutionEnabled((int) $claimed->organization_id);
         $organizationId = (int) $claimed->organization_id;
         $token = (string) $claimed->lease_token;
 
@@ -136,7 +136,7 @@ final class DurableOutboxTransportService
 
     public function recoverExpiredLeases(int $organizationId): int
     {
-        $this->assertExecutionEnabled();
+        $this->assertExecutionEnabled($organizationId);
 
         return $this->organizations->runFor($organizationId, function () use ($organizationId): int {
             return DB::connection('tenant')->transaction(function () use ($organizationId): int {
@@ -224,10 +224,10 @@ final class DurableOutboxTransportService
         });
     }
 
-    private function assertExecutionEnabled(): void
+    private function assertExecutionEnabled(int $organizationId): void
     {
-        $this->safety->assertDeliveryEnabled();
-        if (! config('integration_transport.worker_enabled', false)) {
+        $this->safety->assertDeliveryEnabledFor($organizationId);
+        if (! $this->safety->workerEnabledFor($organizationId)) {
             throw new RuntimeException('Dedicated SolaStock Finance v2 worker is disabled.');
         }
         if (config('integration_transport.contract_version') !== SolaStockJournalContract::VERSION) {
@@ -297,7 +297,7 @@ final class DurableOutboxTransportService
 
     public function queueReviewedRetry(IntegrationOutboxEvent $event, int $reviewerId): IntegrationOutboxEvent
     {
-        $this->assertExecutionEnabled();
+        $this->assertExecutionEnabled((int) $event->organization_id);
         if ($event->mapping_status !== 'complete'
             || $event->failure_category === 'business_permanent'
             || ! in_array($event->status, ['failed', 'retry_scheduled', 'review_required'], true)) {

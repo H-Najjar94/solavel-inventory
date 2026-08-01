@@ -34,8 +34,12 @@ final class WorkSolaBooksTransport extends Command
             throw new RuntimeException('An explicit tenant_XXXXXX database is required.');
         }
         // Fail before tenant switching, querying, claiming, attempts, or HTTP.
-        $safety->assertDeliveryEnabled();
-        if (! config('integration_transport.worker_enabled', false)) {
+        $safety->assertUatDatabaseEnabled($database);
+        if (! config('integration_transport.worker_enabled', false)
+            && ! $safety->workerEnabledFor(
+                (int) config('integration_safety.phase6a_uat.organization_id', 0),
+                $database,
+            )) {
             throw new RuntimeException('Dedicated transport worker is disabled.');
         }
         $tenants->switchToDatabase($database);
