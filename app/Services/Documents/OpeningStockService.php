@@ -4,9 +4,14 @@ namespace App\Services\Documents;
 
 use App\Models\Tenant\OpeningStockEntry;
 use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Documents\Concerns\CapturesTraceability;
+use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
+use App\Services\Traceability\LotService;
+use App\Services\Traceability\SerialService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -23,23 +28,23 @@ use RuntimeException;
  */
 class OpeningStockService
 {
-    use \App\Services\Documents\Concerns\CapturesTraceability;
+    use CapturesTraceability;
 
     public function __construct(
         private OrganizationContext $context,
         private StockLedgerService $ledger,
-        private \App\Services\Integration\IntegrationOutboxService $outbox,
-        private \App\Services\Traceability\LotService $lots,
-        private \App\Services\Traceability\SerialService $serials,
+        private IntegrationOutboxService $outbox,
+        private LotService $lots,
+        private SerialService $serials,
         private UnitConversionResolver $conversions,
     ) {}
 
-    protected function lotService(): \App\Services\Traceability\LotService
+    protected function lotService(): LotService
     {
         return $this->lots;
     }
 
-    protected function serialService(): \App\Services\Traceability\SerialService
+    protected function serialService(): SerialService
     {
         return $this->serials;
     }
@@ -69,7 +74,7 @@ class OpeningStockService
             // Server-issued document number when none was supplied (users don't
             // type technical numbers). Generated inside the transaction.
             if (empty($attributes['entry_number'])) {
-                $attributes['entry_number'] = \App\Services\Documents\Support\DocumentNumber::next(
+                $attributes['entry_number'] = DocumentNumber::next(
                     'OS', OpeningStockEntry::class, 'entry_number', $orgId, $this->connection()
                 );
             }
@@ -122,6 +127,13 @@ class OpeningStockService
             $cap = $this->resolveCapture($line, $orgId, OpeningStockEntry::class, (int) $entry->id);
             if ($cap['serial_ids'] === []) {
                 $line = $this->conversions->normalizeLine($line, 'quantity');
+            } else {
+                if (! empty($line['entered_unit_id'])) {
+                    throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+                }
+                $line = $this->conversions->normalizeLine(array_merge($line, [
+                    'quantity' => '1', 'entered_qty' => '1',
+                ]), 'quantity');
             }
             $unitCost = $this->baseUnitCost((string) ($line['unit_cost'] ?? '0'), $line['unit_conversion_factor'] ?? null);
 
@@ -139,7 +151,13 @@ class OpeningStockService
                         'quantity' => '1.0000',
                         'entered_qty' => $line['entered_qty'] ?? null,
                         'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                        'base_unit_id' => $line['base_unit_id'] ?? null,
+                        'unit_conversion_id' => $line['unit_conversion_id'] ?? null,
                         'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
+                        'unit_conversion_version' => $line['unit_conversion_version'] ?? null,
+                        'unit_conversion_hash' => $line['unit_conversion_hash'] ?? null,
+                        'unit_conversion_precision' => $line['unit_conversion_precision'] ?? null,
+                        'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'] ?? null,
                         'unit_cost' => $unitCost,
                         'total_cost' => Decimal::money($unitCost),
                         'notes' => $line['notes'] ?? null,
@@ -165,7 +183,13 @@ class OpeningStockService
                 'quantity' => $qty,
                 'entered_qty' => $line['entered_qty'] ?? null,
                 'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'base_unit_id' => $line['base_unit_id'] ?? null,
+                'unit_conversion_id' => $line['unit_conversion_id'] ?? null,
                 'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
+                'unit_conversion_version' => $line['unit_conversion_version'] ?? null,
+                'unit_conversion_hash' => $line['unit_conversion_hash'] ?? null,
+                'unit_conversion_precision' => $line['unit_conversion_precision'] ?? null,
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'] ?? null,
                 'unit_cost' => $unitCost,
                 'total_cost' => $lineTotal,
                 'notes' => $line['notes'] ?? null,
@@ -192,7 +216,7 @@ class OpeningStockService
     {
         $orgId = $this->context->idOrFail();
 
-        return DB::connection($this->connection())->transaction(function () use ($entry, $orgId) {
+        return DB::connection($this->connection())->transaction(function () use ($entry) {
             $entry = OpeningStockEntry::query()->lockForUpdate()->findOrFail($entry->id);
 
             if ($entry->isPosted()) {

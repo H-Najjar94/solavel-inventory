@@ -2,10 +2,12 @@
 
 namespace App\Services\Integration;
 
+use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\StockLedger;
 use App\Services\Stock\Support\Decimal;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Builds the integration event payload for a posted/reversed document from its
@@ -33,7 +35,8 @@ class EventPayloadBuilder
 
         $totalChange = '0';
         $lines = [];
-        foreach ($ledger as $row) {
+        $originalConversionLines = $this->originalConversionLines($document);
+        foreach ($ledger as $index => $row) {
             $signed = $row->direction === 'in' ? (string) $row->total_cost : '-'.$row->total_cost;
             $totalChange = Decimal::add($totalChange, $signed);
             $lines[] = [
@@ -49,6 +52,7 @@ class EventPayloadBuilder
                 'costing_method' => $row->costing_method,
                 'lot_id' => $row->lot_id ? (int) $row->lot_id : null,
                 'serial_id' => $row->serial_id ? (int) $row->serial_id : null,
+                'unit_conversion' => $originalConversionLines[$index] ?? $this->conversionForLedger($row),
             ];
         }
 
@@ -72,6 +76,59 @@ class EventPayloadBuilder
             'mapping_status' => $mappingComplete ? 'complete' : 'incomplete',
             'requires_review' => ! $mappingComplete,
         ]);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function originalConversionLines(object $document): array
+    {
+        $original = $this->originalSource($document);
+        if (! $original || empty($original['event_uuid'])) {
+            return [];
+        }
+        $payload = IntegrationOutboxEvent::query()
+            ->where('event_uuid', $original['event_uuid'])->value('payload');
+        $payload = is_string($payload) ? json_decode($payload, true) : $payload;
+
+        return collect((array) data_get($payload, 'lines', []))
+            ->pluck('unit_conversion')->filter(fn ($snapshot) => is_array($snapshot))->values()->all();
+    }
+
+    /** @return array<string,mixed>|null */
+    private function conversionForLedger(StockLedger $row): ?array
+    {
+        if (! $row->source_line_id) {
+            return null;
+        }
+        $table = match (class_basename((string) $row->source_type)) {
+            'GoodsReceipt' => 'goods_receipt_lines',
+            'OpeningStockEntry' => 'opening_stock_entry_lines',
+            'Shipment' => 'shipment_lines',
+            'SalesReturn' => 'sales_return_lines',
+            'StockAdjustment' => 'stock_adjustment_lines',
+            'StockTransfer' => 'stock_transfer_lines',
+            default => null,
+        };
+        if ($table === null) {
+            return null;
+        }
+        $line = DB::connection('tenant')->table($table)->where('id', $row->source_line_id)->first();
+        if (! $line || empty($line->unit_conversion_hash)) {
+            return null;
+        }
+
+        return [
+            'item_id' => (int) $row->item_id,
+            'source_quantity' => Decimal::qty(Decimal::div((string) $row->quantity, (string) $line->unit_conversion_factor)),
+            'source_unit_id' => (int) $line->entered_unit_id,
+            'base_quantity' => (string) $row->quantity,
+            'base_unit_id' => (int) $line->base_unit_id,
+            'conversion_id' => $line->unit_conversion_id === null ? null : (int) $line->unit_conversion_id,
+            'factor' => (string) $line->unit_conversion_factor,
+            'version' => (string) $line->unit_conversion_version,
+            'hash' => (string) $line->unit_conversion_hash,
+            'precision' => (int) $line->unit_conversion_precision,
+            'rounding_mode' => (string) $line->unit_conversion_rounding_mode,
+        ];
     }
 
     private function originalSource(object $document): ?array

@@ -22,6 +22,7 @@ class GoodsReceiptLine extends Model
         'unit_cost' => 'decimal:4',
         'entered_qty' => 'decimal:4',
         'unit_conversion_factor' => 'decimal:8',
+        'unit_conversion_precision' => 'integer',
     ];
 
     /** The item this line is for — used to surface names, not raw IDs. */

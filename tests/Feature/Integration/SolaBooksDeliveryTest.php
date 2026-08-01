@@ -5,6 +5,7 @@ namespace Tests\Feature\Integration;
 use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
+use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
@@ -27,6 +28,8 @@ use Tests\Traits\TenantAware;
 class SolaBooksDeliveryTest extends TestCase
 {
     use TenantAware;
+
+    private array $quantityMappings = [];
 
     private function bootActiveIntegration(): void
     {
@@ -58,7 +61,7 @@ class SolaBooksDeliveryTest extends TestCase
                 ],
             ]
         );
-        IntegrationOrganizationMapping::query()->firstOrCreate(
+        $organizationMapping = IntegrationOrganizationMapping::query()->firstOrCreate(
             [
                 'tenant_database_identity' => (string) DB::connection('tenant')->getDatabaseName(),
                 'solastock_organization_id' => TenantTestManager::ORG_A,
@@ -76,6 +79,17 @@ class SolaBooksDeliveryTest extends TestCase
                 'verified_at' => now(),
             ]
         );
+        foreach (['item' => ['item', '501', '501'], 'source' => ['unit', '8', '801'], 'base' => ['unit', '7', '701']] as $role => [$type, $stock, $books]) {
+            $this->quantityMappings[$role] = (string) Str::uuid();
+            IntegrationMasterDataMapping::query()->create([
+                'mapping_uuid' => $this->quantityMappings[$role],
+                'organization_mapping_uuid' => $organizationMapping->mapping_uuid,
+                'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A,
+                'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A,
+                'entity_type' => $type, 'solastock_record_id' => $stock, 'solabooks_record_id' => $books,
+                'status' => 'verified', 'contract_source_version' => 'phase2.v1',
+            ]);
+        }
 
         foreach ([
             'inventory_asset' => 101,
@@ -103,6 +117,35 @@ class SolaBooksDeliveryTest extends TestCase
         $aggregateId = $overrides['aggregate_id'] ?? random_int(100000, 999999);
         $aggregateNumber = $overrides['aggregate_number'] ?? 'ADJ-'.$aggregateId;
 
+        $defaultPayload = [
+            'document_date' => now()->toDateString(),
+            'document_number' => $aggregateNumber,
+            'currency' => ['code' => 'JOD'],
+            'total_inventory_value_change' => '25.00',
+            'suggested_debit_account_mapping' => 'inventory_asset',
+            'suggested_credit_account_mapping' => 'grni',
+            'lines' => [],
+        ];
+        $payload = $overrides['payload'] ?? $defaultPayload;
+        if (empty($payload['lines'])) {
+            $hashInput = [
+                'organization_id' => TenantTestManager::ORG_A, 'item_id' => 501,
+                'source_unit_id' => 8, 'base_unit_id' => 7, 'conversion_id' => 3,
+                'factor' => '10.00000000', 'version' => 'solastock-unit-conversion.v1',
+                'precision' => 4, 'rounding_mode' => 'HALF_UP',
+            ];
+            $payload['lines'] = [[
+                'ledger_entry_ids' => [1],
+                'unit_conversion' => [
+                    'item_id' => 501, 'source_quantity' => '1.0000', 'source_unit_id' => 8,
+                    'base_quantity' => '10.0000', 'base_unit_id' => 7, 'conversion_id' => 3,
+                    'factor' => '10.00000000', 'version' => 'solastock-unit-conversion.v1',
+                    'hash' => hash('sha256', json_encode($hashInput, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION)),
+                    'precision' => 4, 'rounding_mode' => 'HALF_UP',
+                ],
+            ]];
+        }
+        $overrides['payload'] = $payload;
         $event = IntegrationOutboxEvent::query()->create(array_merge([
             'organization_id' => TenantTestManager::ORG_A,
             'event_uuid' => 'evt-'.uniqid(),
@@ -112,15 +155,7 @@ class SolaBooksDeliveryTest extends TestCase
             'aggregate_id' => $aggregateId,
             'aggregate_number' => $aggregateNumber,
             'occurred_at' => now(),
-            'payload' => [
-                'document_date' => now()->toDateString(),
-                'document_number' => $aggregateNumber,
-                'currency' => ['code' => 'JOD'],
-                'total_inventory_value_change' => '25.00',
-                'suggested_debit_account_mapping' => 'inventory_asset',
-                'suggested_credit_account_mapping' => 'grni',
-                'lines' => [],
-            ],
+            'payload' => $defaultPayload,
             'status' => 'pending',
             'mapping_status' => 'complete',
             'attempts' => 0,
