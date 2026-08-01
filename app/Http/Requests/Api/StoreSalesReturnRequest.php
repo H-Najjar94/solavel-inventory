@@ -28,6 +28,8 @@ class StoreSalesReturnRequest extends FormRequest
             'lines.*.warehouse_id' => ['nullable', 'integer'],
             'lines.*.bin_id' => ['nullable', 'integer'],
             'lines.*.returned_qty' => ['required', 'numeric', 'gt:0'],
+            'lines.*.entered_qty' => ['nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_unit_id' => ['nullable', 'integer'],
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.condition' => ['nullable', 'in:resellable,damaged,quarantine,retired'],
             'lines.*.inspection_status' => ['nullable', 'in:pending,accepted,rejected,quarantine,damaged,retired'],

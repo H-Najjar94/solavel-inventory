@@ -3,8 +3,8 @@
 namespace App\Models\Tenant;
 
 use App\Tenancy\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SalesReturnLine extends Model
 {
@@ -17,6 +17,9 @@ class SalesReturnLine extends Model
     protected $casts = [
         'returned_qty' => 'decimal:4',
         'unit_cost' => 'decimal:4',
+        'entered_qty' => 'decimal:4',
+        'unit_conversion_factor' => 'decimal:8',
+        'unit_conversion_precision' => 'integer',
     ];
 
     public function item(): BelongsTo

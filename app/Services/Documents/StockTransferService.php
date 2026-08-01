@@ -2,7 +2,13 @@
 
 namespace App\Services\Documents;
 
+use App\Models\Tenant\CostLayerConsumption;
+use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\StockTransfer;
+use App\Models\Tenant\StockTransferLine;
+use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -21,7 +27,8 @@ class StockTransferService
     public function __construct(
         private OrganizationContext $context,
         private StockLedgerService $ledger,
-        private \App\Services\Integration\IntegrationOutboxService $outbox,
+        private IntegrationOutboxService $outbox,
+        private UnitConversionResolver $conversions,
     ) {}
 
     private function connection(): string
@@ -57,7 +64,7 @@ class StockTransferService
             // Server-issued transfer number when none was supplied (users don't type it).
             $attributes['transfer_number'] = ! empty($attributes['transfer_number'])
                 ? $attributes['transfer_number']
-                : \App\Services\Documents\Support\DocumentNumber::next('TRF', StockTransfer::class, 'transfer_number', $orgId, $this->connection());
+                : DocumentNumber::next('TRF', StockTransfer::class, 'transfer_number', $orgId, $this->connection());
 
             // Default a missing/blank date (transfer_date is a NOT NULL column). Done
             // here rather than only in array_merge so a null in $attributes can't win.
@@ -74,11 +81,21 @@ class StockTransferService
             $t->save();
 
             foreach ($lines as $line) {
+                $line = $this->conversions->normalizeLine($line, 'quantity');
                 $t->lines()->create([
                     'organization_id' => $orgId,
                     'item_id' => $line['item_id'],
                     'variant_id' => $line['variant_id'] ?? null,
                     'quantity' => Decimal::qty((string) $line['quantity']),
+                    'entered_qty' => $line['entered_qty'],
+                    'entered_unit_id' => $line['entered_unit_id'],
+                    'base_unit_id' => $line['base_unit_id'],
+                    'unit_conversion_id' => $line['unit_conversion_id'],
+                    'unit_conversion_factor' => $line['unit_conversion_factor'],
+                    'unit_conversion_version' => $line['unit_conversion_version'],
+                    'unit_conversion_hash' => $line['unit_conversion_hash'],
+                    'unit_conversion_precision' => $line['unit_conversion_precision'],
+                    'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'],
                     'lot_id' => $line['lot_id'] ?? null,
                     'serial_id' => $line['serial_id'] ?? null,
                     'from_bin_id' => $line['from_bin_id'] ?? null,
@@ -107,11 +124,21 @@ class StockTransferService
             $t->fill(collect($attributes)->only(['transfer_number', 'transfer_date', 'from_warehouse_id', 'to_warehouse_id', 'notes'])->toArray());
             $t->lines()->delete();
             foreach ($lines as $line) {
+                $line = $this->conversions->normalizeLine($line, 'quantity');
                 $t->lines()->create([
                     'organization_id' => $orgId,
                     'item_id' => $line['item_id'],
                     'variant_id' => $line['variant_id'] ?? null,
                     'quantity' => Decimal::qty((string) $line['quantity']),
+                    'entered_qty' => $line['entered_qty'],
+                    'entered_unit_id' => $line['entered_unit_id'],
+                    'base_unit_id' => $line['base_unit_id'],
+                    'unit_conversion_id' => $line['unit_conversion_id'],
+                    'unit_conversion_factor' => $line['unit_conversion_factor'],
+                    'unit_conversion_version' => $line['unit_conversion_version'],
+                    'unit_conversion_hash' => $line['unit_conversion_hash'],
+                    'unit_conversion_precision' => $line['unit_conversion_precision'],
+                    'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'],
                     'lot_id' => $line['lot_id'] ?? null,
                     'serial_id' => $line['serial_id'] ?? null,
                     'from_bin_id' => $line['from_bin_id'] ?? null,
@@ -201,7 +228,7 @@ class StockTransferService
                 // layer structure rather than collapsing to one blended layer.
                 // Average (or no layers): a single IN at the outbound cost.
                 $consumed = $outRow
-                    ? \App\Models\Tenant\CostLayerConsumption::query()->where('ledger_id', $outRow->id)->orderBy('id')->get()
+                    ? CostLayerConsumption::query()->where('ledger_id', $outRow->id)->orderBy('id')->get()
                     : collect();
 
                 if ($consumed->isNotEmpty()) {
@@ -290,7 +317,7 @@ class StockTransferService
 
             $t->loadMissing('lines');
             foreach ($t->lines as $line) {
-                $outRows = \App\Models\Tenant\StockLedger::query()
+                $outRows = StockLedger::query()
                     ->where('source_type', StockTransfer::class)
                     ->where('source_id', $t->id)
                     ->where('source_line_id', $line->id)
@@ -303,7 +330,7 @@ class StockTransferService
                 }
 
                 foreach ($outRows as $outIndex => $outRow) {
-                    $consumed = \App\Models\Tenant\CostLayerConsumption::query()
+                    $consumed = CostLayerConsumption::query()
                         ->where('ledger_id', $outRow->id)
                         ->orderBy('id')
                         ->get();
@@ -339,7 +366,7 @@ class StockTransferService
         });
     }
 
-    private function inMovement(StockTransfer $t, \App\Models\Tenant\StockTransferLine $line, string $qty, string $unitCost): StockMovement
+    private function inMovement(StockTransfer $t, StockTransferLine $line, string $qty, string $unitCost): StockMovement
     {
         return new StockMovement(
             direction: 'in',

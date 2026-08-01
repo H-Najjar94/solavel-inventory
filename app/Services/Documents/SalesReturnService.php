@@ -7,7 +7,9 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\Shipment;
+use App\Models\Tenant\ShipmentLine;
 use App\Models\Tenant\StockLedger;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockLedgerService;
@@ -45,6 +47,7 @@ class SalesReturnService
         private IntegrationOutboxService $outbox,
         private SerialService $serials,
         private WorkflowValidationService $workflowValidation,
+        private UnitConversionResolver $conversions,
     ) {}
 
     private function conn(): string
@@ -273,6 +276,7 @@ class SalesReturnService
     private function syncLines(SalesReturn $r, array $lines, int $orgId): void
     {
         foreach ($lines as $line) {
+            $line = $this->conversions->normalizeLine($line, 'returned_qty');
             $r->lines()->create([
                 'organization_id' => $orgId,
                 'item_id' => $line['item_id'],
@@ -280,6 +284,15 @@ class SalesReturnService
                 'warehouse_id' => $line['warehouse_id'] ?? $r->warehouse_id,
                 'bin_id' => $line['bin_id'] ?? null,
                 'returned_qty' => Decimal::qty((string) $line['returned_qty']),
+                'entered_qty' => $line['entered_qty'],
+                'entered_unit_id' => $line['entered_unit_id'],
+                'base_unit_id' => $line['base_unit_id'],
+                'unit_conversion_id' => $line['unit_conversion_id'],
+                'unit_conversion_factor' => $line['unit_conversion_factor'],
+                'unit_conversion_version' => $line['unit_conversion_version'],
+                'unit_conversion_hash' => $line['unit_conversion_hash'],
+                'unit_conversion_precision' => $line['unit_conversion_precision'],
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'],
                 'unit_cost' => Decimal::cost((string) ($line['unit_cost'] ?? '0')),
                 'condition' => $line['condition'] ?? 'resellable',
                 'inspection_status' => $line['inspection_status'] ?? 'pending',
@@ -309,6 +322,7 @@ class SalesReturnService
         }
 
         foreach ($ledger as $row) {
+            $shipmentLine = ShipmentLine::query()->find($row->source_line_id);
             $return->lines()->create([
                 'organization_id' => $orgId,
                 'item_id' => $row->item_id,
@@ -316,6 +330,15 @@ class SalesReturnService
                 'warehouse_id' => $row->warehouse_id,
                 'bin_id' => $row->bin_id,
                 'returned_qty' => $row->quantity,
+                'entered_qty' => $shipmentLine?->entered_qty ?? $row->quantity,
+                'entered_unit_id' => $shipmentLine?->entered_unit_id,
+                'base_unit_id' => $shipmentLine?->base_unit_id,
+                'unit_conversion_id' => $shipmentLine?->unit_conversion_id,
+                'unit_conversion_factor' => $shipmentLine?->unit_conversion_factor,
+                'unit_conversion_version' => $shipmentLine?->unit_conversion_version,
+                'unit_conversion_hash' => $shipmentLine?->unit_conversion_hash,
+                'unit_conversion_precision' => $shipmentLine?->unit_conversion_precision,
+                'unit_conversion_rounding_mode' => $shipmentLine?->unit_conversion_rounding_mode,
                 'unit_cost' => $row->unit_cost,
                 'condition' => 'resellable',
                 'inspection_status' => 'pending',

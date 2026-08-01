@@ -6,6 +6,7 @@ use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\Shipment;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\StockLedgerService;
@@ -32,6 +33,7 @@ class ShipmentService
         private StockReservationService $reservations,
         private IntegrationOutboxService $outbox,
         private WorkflowValidationService $workflowValidation,
+        private UnitConversionResolver $conversions,
     ) {}
 
     private function conn(): string
@@ -270,6 +272,7 @@ class ShipmentService
     private function syncLines(Shipment $s, array $lines, int $orgId): void
     {
         foreach ($lines as $line) {
+            $line = $this->conversions->normalizeLine($line, 'quantity');
             $s->lines()->create([
                 'organization_id' => $orgId,
                 'sales_order_line_id' => $line['sales_order_line_id'] ?? null,
@@ -278,6 +281,15 @@ class ShipmentService
                 'warehouse_id' => $line['warehouse_id'] ?? $s->warehouse_id,
                 'bin_id' => $line['bin_id'] ?? null,
                 'quantity' => Decimal::qty((string) $line['quantity']),
+                'entered_qty' => $line['entered_qty'],
+                'entered_unit_id' => $line['entered_unit_id'],
+                'base_unit_id' => $line['base_unit_id'],
+                'unit_conversion_id' => $line['unit_conversion_id'],
+                'unit_conversion_factor' => $line['unit_conversion_factor'],
+                'unit_conversion_version' => $line['unit_conversion_version'],
+                'unit_conversion_hash' => $line['unit_conversion_hash'],
+                'unit_conversion_precision' => $line['unit_conversion_precision'],
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'],
                 'lot_id' => $line['lot_id'] ?? null,
                 'serial_id' => $line['serial_id'] ?? null,
             ]);

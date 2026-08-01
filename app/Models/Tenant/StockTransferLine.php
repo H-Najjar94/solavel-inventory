@@ -14,7 +14,10 @@ class StockTransferLine extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['quantity'=>'decimal:4','received_qty'=>'decimal:4'];
+    protected $casts = [
+        'quantity' => 'decimal:4', 'received_qty' => 'decimal:4', 'entered_qty' => 'decimal:4',
+        'unit_conversion_factor' => 'decimal:8', 'unit_conversion_precision' => 'integer',
+    ];
 
     /** The item this line is for — used to surface names, not raw IDs. */
     public function item(): BelongsTo

@@ -4,6 +4,8 @@ namespace App\Services\Integration;
 
 use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Stock\Support\Decimal;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +61,7 @@ final class Phase2MappingDiscoveryService
             ->values()
             ->map(function (array $row): array {
                 $row['fingerprint'] = $this->fingerprint($row);
+
                 return $row;
             });
 
@@ -250,12 +253,10 @@ final class Phase2MappingDiscoveryService
             return [$this->result($entityType, 'missing_finance_table', [], [], ['table' => $definition['books_table']])];
         }
 
-        $keys = collect($definition['keys'])->filter(fn ($pair) =>
-            Schema::connection('tenant')->hasColumn($definition['stock_table'], $pair[0])
+        $keys = collect($definition['keys'])->filter(fn ($pair) => Schema::connection('tenant')->hasColumn($definition['stock_table'], $pair[0])
             && Schema::connection('tenant')->hasColumn($definition['books_table'], $pair[1])
         )->values()->all();
-        $strongKeys = collect($definition['strong_keys'] ?? [])->filter(fn ($pair) =>
-            in_array($pair, $keys, true)
+        $strongKeys = collect($definition['strong_keys'] ?? [])->filter(fn ($pair) => in_array($pair, $keys, true)
         )->values()->all();
         if ($keys === []) {
             return [$this->result($entityType, 'incompatible_schema', [], [], [])];
@@ -276,26 +277,28 @@ final class Phase2MappingDiscoveryService
             )->values();
             $candidateBasis = $strongCandidates->isNotEmpty() ? 'stable_candidate_key' : 'descriptive_candidate_only';
 
-            $existingForStock = $existing->first(fn ($row) =>
-                $row->entity_type === $entityType
+            $existingForStock = $existing->first(fn ($row) => $row->entity_type === $entityType
                 && (string) $row->solastock_record_id === (string) $stockRow['id']
             );
             if ($existingForStock && ! $candidates->pluck('id')->map(fn ($id) => (string) $id)->contains((string) $existingForStock->solabooks_record_id)) {
                 $results[] = $this->result($entityType, 'conflicting_mapping', [$stockRow['id']], [$existingForStock->solabooks_record_id], [
                     'reason' => 'existing_mapping_differs_from_discovery',
                 ]);
+
                 continue;
             }
             if ($candidates->isEmpty()) {
                 $results[] = $this->result($entityType, 'missing_finance_record', [$stockRow['id']], [], [
                     'solastock_archived' => $stockRow['archived'],
                 ]);
+
                 continue;
             }
             if ($candidates->count() !== 1) {
                 $results[] = $this->result($entityType, 'ambiguous_match', [$stockRow['id']], $candidates->pluck('id')->all(), [
                     'candidate_count' => $candidates->count(),
                 ]);
+
                 continue;
             }
 
@@ -308,6 +311,7 @@ final class Phase2MappingDiscoveryService
                 $results[] = $this->result($entityType, 'ambiguous_match', [$stockRow['id']], [$book['id']], [
                     'reverse_candidate_count' => $reverseCount,
                 ]);
+
                 continue;
             }
 
@@ -328,8 +332,7 @@ final class Phase2MappingDiscoveryService
         }
 
         foreach ($books->whereNotIn('id', $matchedBookIds) as $bookRow) {
-            $alreadyCandidate = collect($results)->contains(fn ($result) =>
-                in_array((string) $bookRow['id'], array_map('strval', $result['solabooks_record_ids']), true)
+            $alreadyCandidate = collect($results)->contains(fn ($result) => in_array((string) $bookRow['id'], array_map('strval', $result['solabooks_record_ids']), true)
             );
             if (! $alreadyCandidate) {
                 $results[] = $this->result($entityType, 'missing_solastock_record', [], [$bookRow['id']], [
@@ -347,6 +350,7 @@ final class Phase2MappingDiscoveryService
         if (! Schema::connection('tenant')->hasTable('integration_account_mappings')) {
             return [$this->result('account_role', 'missing_solastock_table', [], [], ['table' => 'integration_account_mappings'])];
         }
+
         return DB::connection('tenant')->table('integration_account_mappings')
             ->where('organization_id', $mapping->solastock_organization_id)
             ->where('integration', 'solabooks')
@@ -376,11 +380,11 @@ final class Phase2MappingDiscoveryService
                         'postable' => (bool) ($account->is_postable ?? true),
                     ]);
                 }
-                $conflict = $existing->first(fn ($current) =>
-                    $current->entity_type === 'account_role'
+                $conflict = $existing->first(fn ($current) => $current->entity_type === 'account_role'
                     && (string) $current->solastock_record_id === $stockMappingId
                     && (string) $current->solabooks_record_id !== $accountId
                 );
+
                 return $this->result(
                     'account_role',
                     $conflict ? 'conflicting_mapping' : 'exact_match',
@@ -401,6 +405,7 @@ final class Phase2MappingDiscoveryService
         if (! Schema::connection('tenant')->hasTable('integration_tax_mappings')) {
             return [$this->result('tax', 'missing_solastock_table', [], [], ['table' => 'integration_tax_mappings'])];
         }
+
         return DB::connection('tenant')->table('integration_tax_mappings')
             ->where('organization_id', $mapping->solastock_organization_id)
             ->where('integration', 'solabooks')
@@ -429,11 +434,11 @@ final class Phase2MappingDiscoveryService
                         'active' => false,
                     ]);
                 }
-                $conflict = $existing->first(fn ($current) =>
-                    $current->entity_type === 'tax'
+                $conflict = $existing->first(fn ($current) => $current->entity_type === 'tax'
                     && (string) $current->solastock_record_id === $stockMappingId
                     && (string) $current->solabooks_record_id !== $taxId
                 );
+
                 return $this->result('tax', $conflict ? 'conflicting_mapping' : 'exact_match', [$stockMappingId], [$taxId], [
                     'tax_code' => (string) $row->tax_code,
                     'active' => (bool) ($tax->is_active ?? true),
@@ -448,25 +453,66 @@ final class Phase2MappingDiscoveryService
             return [$this->result('unit_conversion', 'missing_solastock_table', [], [], ['table' => 'unit_conversions'])];
         }
 
-        $financeSupportsConversions = Schema::connection('tenant')->hasTable('inventory_unit_conversions');
-
         return DB::connection('tenant')->table('unit_conversions')
             ->where('organization_id', $mapping->solastock_organization_id)
             ->orderBy('id')
             ->get(['id', 'item_id', 'from_unit_id', 'to_unit_id', 'factor'])
-            ->map(fn ($row): array => $this->result(
-                'unit_conversion',
-                $financeSupportsConversions ? 'review_required' : 'unit_conversion_incompatible',
-                [(string) $row->id],
-                [],
-                [
-                    'item_scoped' => $row->item_id !== null,
-                    'from_unit_id' => (string) $row->from_unit_id,
-                    'to_unit_id' => (string) $row->to_unit_id,
-                    'factor' => (string) $row->factor,
-                    'finance_conversion_schema_present' => $financeSupportsConversions,
-                ]
-            ))->all();
+            ->map(function ($row) use ($mapping): array {
+                $units = DB::connection('tenant')->table('units')->whereIn('id', [$row->from_unit_id, $row->to_unit_id])
+                    ->where('organization_id', $mapping->solastock_organization_id)
+                    ->where('is_active', true)->whereNull('deleted_at')->get()->keyBy('id');
+                $mappedUnits = IntegrationMasterDataMapping::query()
+                    ->where('organization_mapping_uuid', $mapping->mapping_uuid)
+                    ->where('entity_type', 'unit')
+                    ->whereIn('solastock_record_id', [(string) $row->from_unit_id, (string) $row->to_unit_id])
+                    ->whereIn('status', ['mapped', 'verified'])->get()->keyBy('solastock_record_id');
+                $item = $row->item_id === null ? null : DB::connection('tenant')->table('items')
+                    ->where('id', $row->item_id)->where('organization_id', $mapping->solastock_organization_id)
+                    ->where('is_active', true)->whereNull('deleted_at')->first();
+                $itemMapped = $row->item_id === null || IntegrationMasterDataMapping::query()
+                    ->where('organization_mapping_uuid', $mapping->mapping_uuid)
+                    ->where('entity_type', 'item')->where('solastock_record_id', (string) $row->item_id)
+                    ->whereIn('status', ['mapped', 'verified'])->exists();
+                $factor = (string) $row->factor;
+                $validFactor = preg_match('/^\d+(?:\.\d+)?$/', $factor) === 1 && Decimal::cmp($factor, '0') > 0;
+                $compatible = $row->item_id !== null && $units->count() === 2 && $mappedUnits->count() === 2 && $itemMapped
+                    && $item && (int) $item->base_unit_id === (int) $row->to_unit_id
+                    && $validFactor;
+                $snapshot = [
+                    'organization_id' => (int) $mapping->solastock_organization_id,
+                    'item_id' => $row->item_id === null ? null : (int) $row->item_id,
+                    'source_unit_id' => (int) $row->from_unit_id,
+                    'base_unit_id' => (int) $row->to_unit_id,
+                    'conversion_id' => (int) $row->id,
+                    'factor' => $validFactor ? Decimal::round($factor, 8) : $factor,
+                    'version' => UnitConversionResolver::CONTRACT_VERSION,
+                    'precision' => UnitConversionResolver::PRECISION,
+                    'rounding_mode' => UnitConversionResolver::ROUNDING_MODE,
+                ];
+
+                return $this->result(
+                    'unit_conversion',
+                    $compatible ? 'solastock_authoritative_conversion' : 'unit_conversion_incompatible',
+                    [(string) $row->id],
+                    [],
+                    [
+                        'authority' => 'solastock',
+                        'finance_applies_conversion' => false,
+                        'item_scoped' => $row->item_id !== null,
+                        'item_id' => $row->item_id === null ? null : (string) $row->item_id,
+                        'from_unit_id' => (string) $row->from_unit_id,
+                        'to_unit_id' => (string) $row->to_unit_id,
+                        'factor' => $snapshot['factor'],
+                        'conversion_version' => UnitConversionResolver::CONTRACT_VERSION,
+                        'conversion_hash' => hash('sha256', $this->canonicalJson($snapshot)),
+                        'precision' => UnitConversionResolver::PRECISION,
+                        'rounding_mode' => UnitConversionResolver::ROUNDING_MODE,
+                        'source_unit_mapping_uuid' => $mappedUnits->get((string) $row->from_unit_id)?->mapping_uuid,
+                        'base_unit_mapping_uuid' => $mappedUnits->get((string) $row->to_unit_id)?->mapping_uuid,
+                        'reason' => $compatible ? null : 'conversion_scope_factor_or_immutable_mapping_invalid',
+                    ]
+                );
+            })->all();
     }
 
     private function upsertExactMapping(
@@ -486,13 +532,13 @@ final class Phase2MappingDiscoveryService
             ->lockForUpdate()
             ->get();
         if ($existing->isNotEmpty()) {
-            $matching = $existing->first(fn ($row) =>
-                (string) $row->solastock_record_id === $stockId
+            $matching = $existing->first(fn ($row) => (string) $row->solastock_record_id === $stockId
                 && (string) $row->solabooks_record_id === $booksId
             );
             if (! $matching || $existing->count() !== 1) {
                 $this->fail('master_mapping_conflict');
             }
+
             return [$matching, false];
         }
 
@@ -553,6 +599,7 @@ final class Phase2MappingDiscoveryService
                 }
                 $data['id'] = (string) $data['id'];
                 $data['archived'] = $hasDeleted && $data['deleted_at'] !== null;
+
                 return $data;
             });
     }
@@ -583,6 +630,7 @@ final class Phase2MappingDiscoveryService
             return null;
         }
         $normalized = mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $value)));
+
         return $normalized === '' ? null : $normalized;
     }
 
@@ -615,6 +663,7 @@ final class Phase2MappingDiscoveryService
     private function fingerprint(array $row): string
     {
         unset($row['fingerprint']);
+
         return hash('sha256', $this->canonicalJson($row));
     }
 
@@ -646,8 +695,10 @@ final class Phase2MappingDiscoveryService
                 return array_map($sort, $node);
             }
             ksort($node, SORT_STRING);
+
             return array_map($sort, $node);
         };
+
         return json_encode($sort($value), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 

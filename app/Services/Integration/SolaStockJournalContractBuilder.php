@@ -3,13 +3,15 @@
 namespace App\Services\Integration;
 
 use App\Models\Landlord\Organization as CentralOrganization;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
+use App\Models\Tenant\IntegrationMasterDataMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
-use App\Models\Tenant\IntegrationOrganizationMapping;
-use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 final class SolaStockJournalContractBuilder
@@ -157,6 +159,7 @@ final class SolaStockJournalContractBuilder
         if (! $documentMapping) {
             throw new RuntimeException(__('inventory.integration.workflow_document_mapping_required'));
         }
+        $inventoryQuantities = $this->inventoryQuantities($eventPayload, $organizationMapping);
 
         $original = $eventPayload['original_source'] ?? null;
         $reversal = null;
@@ -205,8 +208,66 @@ final class SolaStockJournalContractBuilder
                 'rate_scale' => (int) $finance['rate_scale'],
                 'rounding_mode' => 'HALF_UP',
             ],
+            'inventory_quantities' => $inventoryQuantities,
             'lines' => $lines,
         ];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function inventoryQuantities(array $eventPayload, IntegrationOrganizationMapping $organizationMapping): array
+    {
+        $result = [];
+        foreach ((array) ($eventPayload['lines'] ?? []) as $index => $eventLine) {
+            $snapshot = $eventLine['unit_conversion'] ?? null;
+            if (! is_array($snapshot)) {
+                throw new RuntimeException("Missing immutable unit-conversion snapshot for inventory line {$index}.");
+            }
+            $mappings = [];
+            foreach ([
+                'item' => (string) ($snapshot['item_id'] ?? ''),
+                'source_unit' => (string) ($snapshot['source_unit_id'] ?? ''),
+                'base_unit' => (string) ($snapshot['base_unit_id'] ?? ''),
+            ] as $role => $recordId) {
+                $entityType = $role === 'item' ? 'item' : 'unit';
+                $mapped = IntegrationMasterDataMapping::query()
+                    ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+                    ->where('entity_type', $entityType)
+                    ->where('solastock_record_id', $recordId)
+                    ->whereIn('status', ['mapped', 'verified'])
+                    ->whereNull('conflict_code')->first();
+                if (! $mapped) {
+                    throw new RuntimeException("Immutable {$entityType} mapping is required for inventory line {$index}.");
+                }
+                $mappings[$role] = $mapped;
+            }
+            $result[] = [
+                'ledger_entry_ids' => array_values(array_map('intval', (array) ($eventLine['ledger_entry_ids'] ?? []))),
+                'inventory_item_id' => (int) $snapshot['item_id'],
+                'finance_item_id' => (int) $mappings['item']->solabooks_record_id,
+                'item_mapping_uuid' => (string) $mappings['item']->mapping_uuid,
+                'source_quantity' => (string) $snapshot['source_quantity'],
+                'inventory_source_unit_id' => (int) $snapshot['source_unit_id'],
+                'finance_source_unit_id' => (int) $mappings['source_unit']->solabooks_record_id,
+                'source_unit_mapping_uuid' => (string) $mappings['source_unit']->mapping_uuid,
+                'base_quantity' => (string) $snapshot['base_quantity'],
+                'inventory_base_unit_id' => (int) $snapshot['base_unit_id'],
+                'finance_base_unit_id' => (int) $mappings['base_unit']->solabooks_record_id,
+                'base_unit_mapping_uuid' => (string) $mappings['base_unit']->mapping_uuid,
+                'conversion_id' => $snapshot['conversion_id'] === null ? null : (int) $snapshot['conversion_id'],
+                'conversion_factor' => (string) $snapshot['factor'],
+                'conversion_version' => (string) $snapshot['version'],
+                'conversion_hash' => (string) $snapshot['hash'],
+                'quantity_precision' => (int) $snapshot['precision'],
+                'rounding_mode' => (string) $snapshot['rounding_mode'],
+                'authority' => 'solastock',
+                'finance_conversion_applied' => false,
+            ];
+        }
+        if ($result === []) {
+            throw new RuntimeException('At least one immutable inventory quantity is required.');
+        }
+
+        return $result;
     }
 
     private function canonicalDocumentType(string $aggregateType, string $eventType): string
@@ -217,7 +278,7 @@ final class SolaStockJournalContractBuilder
                 ? 'supplier_return' : 'inventory_reversal',
             'Shipment' => 'shipment',
             'SalesReturn' => 'sales_return',
-            default => \Illuminate\Support\Str::snake(class_basename($aggregateType)),
+            default => Str::snake(class_basename($aggregateType)),
         };
     }
 

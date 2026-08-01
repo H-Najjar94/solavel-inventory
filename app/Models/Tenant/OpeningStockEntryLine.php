@@ -20,6 +20,7 @@ class OpeningStockEntryLine extends Model
         'total_cost' => 'decimal:2',
         'entered_qty' => 'decimal:4',
         'unit_conversion_factor' => 'decimal:8',
+        'unit_conversion_precision' => 'integer',
     ];
 
     public function entry(): BelongsTo

@@ -12,11 +12,11 @@ use App\Models\Tenant\PurchaseOrderBackorder;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
 use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Stock\Support\Decimal;
 use App\Services\Tax\InventoryTaxService;
-use App\Services\Integration\IntegrationOutboxService;
-use App\Services\Integration\WorkflowValidationService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -237,7 +237,13 @@ class PurchaseOrderController extends ApiController
                 'ordered_qty' => Decimal::qty((string) $line['ordered_qty']),
                 'entered_qty' => $line['entered_qty'] ?? null,
                 'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'base_unit_id' => $line['base_unit_id'] ?? null,
+                'unit_conversion_id' => $line['unit_conversion_id'] ?? null,
                 'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
+                'unit_conversion_version' => $line['unit_conversion_version'] ?? null,
+                'unit_conversion_hash' => $line['unit_conversion_hash'] ?? null,
+                'unit_conversion_precision' => $line['unit_conversion_precision'] ?? null,
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'] ?? null,
                 'unit_price' => $unitPrice,
                 'tax_code' => $tax['code'],
                 'expected_date' => $line['expected_date'] ?? null,
