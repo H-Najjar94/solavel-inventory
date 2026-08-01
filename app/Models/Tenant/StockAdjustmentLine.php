@@ -17,6 +17,9 @@ class StockAdjustmentLine extends Model
     protected $casts = [
         'quantity' => 'decimal:4',
         'unit_cost' => 'decimal:4',
+        'entered_qty' => 'decimal:4',
+        'unit_conversion_factor' => 'decimal:8',
+        'unit_conversion_precision' => 'integer',
     ];
 
     public function adjustment(): BelongsTo
