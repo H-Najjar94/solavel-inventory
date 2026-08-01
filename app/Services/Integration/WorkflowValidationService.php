@@ -5,6 +5,8 @@ namespace App\Services\Integration;
 use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationSetting;
+use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -76,9 +78,9 @@ final class WorkflowValidationService
             if ($line->item_id) {
                 $required->push(['item', (string) $line->item_id]);
             }
-            if ($line->entered_unit_id ?? null) {
-                $required->push(['unit', (string) $line->entered_unit_id]);
-            }
+            $this->assertConversionSnapshot($line, $orgId, $eventType);
+            $required->push(['unit', (string) $line->entered_unit_id]);
+            $required->push(['unit', (string) $line->base_unit_id]);
         }
         if ($document->warehouse_id ?? null) {
             $required->push(['warehouse', (string) $document->warehouse_id]);
@@ -136,6 +138,64 @@ final class WorkflowValidationService
                 ], JSON_UNESCAPED_SLASHES)],
             ]);
         }
+    }
+
+    private function assertConversionSnapshot(object $line, int $organizationId, string $eventType): void
+    {
+        foreach (['item_id', 'entered_qty', 'entered_unit_id', 'base_unit_id', 'unit_conversion_factor',
+            'unit_conversion_version', 'unit_conversion_hash', 'unit_conversion_precision', 'unit_conversion_rounding_mode'] as $field) {
+            if ($line->{$field} === null || $line->{$field} === '') {
+                $this->conversionFailure($eventType, 'unit_conversion_snapshot_missing', $field);
+            }
+        }
+        $factor = (string) $line->unit_conversion_factor;
+        if (! preg_match('/^\d+(?:\.\d+)?$/', $factor) || Decimal::cmp($factor, '0') <= 0
+            || (string) $line->unit_conversion_version !== UnitConversionResolver::CONTRACT_VERSION
+            || (int) $line->unit_conversion_precision !== UnitConversionResolver::PRECISION
+            || (string) $line->unit_conversion_rounding_mode !== UnitConversionResolver::ROUNDING_MODE) {
+            $this->conversionFailure($eventType, 'unit_conversion_snapshot_invalid');
+        }
+        $item = DB::connection('tenant')->table('items')->where('id', $line->item_id)
+            ->where('organization_id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->first();
+        $units = DB::connection('tenant')->table('units')->whereIn('id', [$line->entered_unit_id, $line->base_unit_id])
+            ->where('organization_id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->count();
+        if (! $item || (int) $item->base_unit_id !== (int) $line->base_unit_id || $units !== 2) {
+            $this->conversionFailure($eventType, 'unit_conversion_scope_invalid');
+        }
+        if ($line->unit_conversion_id === null) {
+            if ((int) $line->entered_unit_id !== (int) $line->base_unit_id || Decimal::cmp($factor, '1', 8) !== 0) {
+                $this->conversionFailure($eventType, 'unit_conversion_identity_invalid');
+            }
+        } else {
+            $valid = DB::connection('tenant')->table('unit_conversions')
+                ->where('id', $line->unit_conversion_id)->where('organization_id', $organizationId)
+                ->where('item_id', $line->item_id)->where('from_unit_id', $line->entered_unit_id)
+                ->where('to_unit_id', $line->base_unit_id)->where('factor', $factor)->exists();
+            if (! $valid) {
+                $this->conversionFailure($eventType, 'unit_conversion_item_scope_invalid');
+            }
+        }
+        $expectedQty = Decimal::qty(Decimal::mul((string) $line->entered_qty, $factor));
+        $baseQty = (string) ($line->quantity ?? $line->ordered_qty ?? $line->received_qty ?? $line->returned_qty ?? $line->accepted_qty ?? '');
+        $snapshot = [
+            'organization_id' => $organizationId, 'item_id' => (int) $line->item_id,
+            'source_unit_id' => (int) $line->entered_unit_id, 'base_unit_id' => (int) $line->base_unit_id,
+            'conversion_id' => $line->unit_conversion_id === null ? null : (int) $line->unit_conversion_id,
+            'factor' => Decimal::round($factor, 8), 'version' => UnitConversionResolver::CONTRACT_VERSION,
+            'precision' => UnitConversionResolver::PRECISION, 'rounding_mode' => UnitConversionResolver::ROUNDING_MODE,
+        ];
+        if (Decimal::cmp($expectedQty, $baseQty, UnitConversionResolver::PRECISION) !== 0
+            || ! hash_equals((string) $line->unit_conversion_hash, hash('sha256', json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION)))) {
+            $this->conversionFailure($eventType, 'unit_conversion_arithmetic_or_hash_invalid');
+        }
+    }
+
+    private function conversionFailure(string $eventType, string $code, ?string $field = null): never
+    {
+        throw ValidationException::withMessages(['workflow' => [json_encode([
+            'code' => 'blocked_contract', 'event_type' => $eventType,
+            'conversion_error' => $code, 'field' => $field,
+        ], JSON_UNESCAPED_SLASHES)]]);
     }
 
     private function mapped(string $organizationMappingUuid, string $entityType, string $solastockRecordId): bool

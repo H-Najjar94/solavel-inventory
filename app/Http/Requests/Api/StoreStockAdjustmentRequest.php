@@ -44,6 +44,8 @@ class StoreStockAdjustmentRequest extends FormRequest
             'lines.*.variant_id' => ['nullable', 'integer'],
             'lines.*.direction' => ['required', Rule::in(['increase', 'decrease'])],
             'lines.*.quantity' => ['required_without:lines.*.serials', 'nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_qty' => ['nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_unit_id' => ['nullable', 'integer'],
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.lot_id' => ['nullable', 'integer'],
             'lines.*.lot_code' => ['nullable', 'string', 'max:100'],

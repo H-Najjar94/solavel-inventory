@@ -3,13 +3,21 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\Lot;
 use App\Models\Tenant\PurchaseOrder;
+use App\Models\Tenant\PurchaseOrderLine;
+use App\Models\Tenant\SerialNumber;
 use App\Services\Catalog\UnitConversionResolver;
-use App\Services\Purchasing\PurchaseOrderBackorderService;
+use App\Services\Documents\Concerns\CapturesTraceability;
+use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
+use App\Services\Purchasing\PurchaseOrderBackorderService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
+use App\Services\Traceability\LotService;
+use App\Services\Traceability\SerialService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -21,25 +29,25 @@ use RuntimeException;
  */
 class GoodsReceiptService
 {
-    use \App\Services\Documents\Concerns\CapturesTraceability;
+    use CapturesTraceability;
 
     public function __construct(
         private OrganizationContext $context,
         private StockLedgerService $ledger,
-        private \App\Services\Integration\IntegrationOutboxService $outbox,
-        private \App\Services\Traceability\LotService $lots,
-        private \App\Services\Traceability\SerialService $serials,
+        private IntegrationOutboxService $outbox,
+        private LotService $lots,
+        private SerialService $serials,
         private UnitConversionResolver $conversions,
         private PurchaseOrderBackorderService $backorders,
         private WorkflowValidationService $workflowValidation,
     ) {}
 
-    protected function lotService(): \App\Services\Traceability\LotService
+    protected function lotService(): LotService
     {
         return $this->lots;
     }
 
-    protected function serialService(): \App\Services\Traceability\SerialService
+    protected function serialService(): SerialService
     {
         return $this->serials;
     }
@@ -62,7 +70,7 @@ class GoodsReceiptService
             // Server-issued GRN number when none was supplied (users don't type it).
             $attributes['grn_number'] = ! empty($attributes['grn_number'])
                 ? $attributes['grn_number']
-                : \App\Services\Documents\Support\DocumentNumber::next('GRN', GoodsReceipt::class, 'grn_number', $orgId, $this->connection());
+                : DocumentNumber::next('GRN', GoodsReceipt::class, 'grn_number', $orgId, $this->connection());
 
             // Default a missing/blank date (receipt_date is a NOT NULL column). Done
             // here rather than only in array_merge so a null in $attributes can't win.
@@ -130,6 +138,13 @@ class GoodsReceiptService
                 if ($originalQuarantine !== null && ! empty($line['entered_unit_id'])) {
                     $line['quarantine_qty'] = Decimal::qty(Decimal::mul((string) $originalQuarantine, (string) $line['unit_conversion_factor']));
                 }
+            } else {
+                if (! empty($line['entered_unit_id'])) {
+                    throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+                }
+                $line = $this->conversions->normalizeLine(array_merge($line, [
+                    'received_qty' => '1', 'accepted_qty' => '1', 'entered_qty' => '1',
+                ]), 'received_qty');
             }
 
             $base = [
@@ -144,7 +159,13 @@ class GoodsReceiptService
                 'unit_cost' => $this->baseUnitCost((string) ($line['unit_cost'] ?? '0'), $line['unit_conversion_factor'] ?? null),
                 'entered_qty' => $line['entered_qty'] ?? null,
                 'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'base_unit_id' => $line['base_unit_id'] ?? null,
+                'unit_conversion_id' => $line['unit_conversion_id'] ?? null,
                 'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
+                'unit_conversion_version' => $line['unit_conversion_version'] ?? null,
+                'unit_conversion_hash' => $line['unit_conversion_hash'] ?? null,
+                'unit_conversion_precision' => $line['unit_conversion_precision'] ?? null,
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'] ?? null,
                 'lot_id' => $cap['lot_id'],
                 'bin_id' => $line['bin_id'] ?? null,
                 'expiry_date' => $cap['expiry_date'],
@@ -199,7 +220,7 @@ class GoodsReceiptService
             // setting yet, so over-receipt is blocked.
             foreach ($grn->lines as $line) {
                 if ($line->purchase_order_line_id) {
-                    $poLine = \App\Models\Tenant\PurchaseOrderLine::query()->find($line->purchase_order_line_id);
+                    $poLine = PurchaseOrderLine::query()->find($line->purchase_order_line_id);
                     if ($poLine) {
                         $remaining = Decimal::sub((string) $poLine->ordered_qty, (string) $poLine->received_qty);
                         if (Decimal::gt((string) $line->accepted_qty, $remaining)) {
@@ -310,10 +331,10 @@ class GoodsReceiptService
             }
 
             if ($line->lot_id) {
-                $this->lots->setStatus(\App\Models\Tenant\Lot::query()->findOrFail($line->lot_id), 'quarantined');
+                $this->lots->setStatus(Lot::query()->findOrFail($line->lot_id), 'quarantined');
             }
             if ($line->serial_id) {
-                $this->serials->setStatus(\App\Models\Tenant\SerialNumber::query()->findOrFail($line->serial_id), 'quarantined');
+                $this->serials->setStatus(SerialNumber::query()->findOrFail($line->serial_id), 'quarantined');
             }
         }
     }

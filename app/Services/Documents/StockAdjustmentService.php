@@ -3,6 +3,7 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\StockAdjustment;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\Concerns\CapturesTraceability;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
@@ -32,6 +33,7 @@ class StockAdjustmentService
         private IntegrationOutboxService $outbox,
         private LotService $lots,
         private SerialService $serials,
+        private UnitConversionResolver $conversions,
     ) {}
 
     protected function lotService(): LotService
@@ -131,6 +133,9 @@ class StockAdjustmentService
             if (! in_array($direction, ['increase', 'decrease'], true)) {
                 throw new RuntimeException(__('inventory.stock.adjustment_direction'));
             }
+            if (! empty($line['serials']) && ! empty($line['entered_unit_id'])) {
+                throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+            }
             $unitCost = Decimal::cost((string) ($line['unit_cost'] ?? '0'));
 
             // Increase + serial capture → one qty-1 line per captured serial.
@@ -138,12 +143,17 @@ class StockAdjustmentService
                 $cap = $this->resolveCapture($line, $orgId, StockAdjustment::class, (int) $adj->id);
                 if ($cap['serial_ids'] !== []) {
                     foreach ($cap['serial_ids'] as $sid) {
+                        $serialLine = $this->conversions->normalizeLine(
+                            array_merge($line, ['quantity' => '1', 'entered_qty' => '1']),
+                            'quantity'
+                        );
                         $totalInc = Decimal::add($totalInc, $unitCost);
-                        $this->createLine($adj, $orgId, $line, 'increase', '1.0000', $unitCost, $cap['lot_id'], $sid);
+                        $this->createLine($adj, $orgId, $serialLine, 'increase', '1.0000', $unitCost, $cap['lot_id'], $sid);
                     }
 
                     continue;
                 }
+                $line = $this->conversions->normalizeLine($line, 'quantity');
                 $qty = $this->requirePositiveQty($line);
                 $totalInc = Decimal::add($totalInc, Decimal::money(Decimal::mul($qty, $unitCost)));
                 $this->createLine($adj, $orgId, $line, 'increase', $qty, $unitCost, $cap['lot_id'], $line['serial_id'] ?? null);
@@ -152,6 +162,7 @@ class StockAdjustmentService
             }
 
             // Decrease → lot/serial already selected from availability.
+            $line = $this->conversions->normalizeLine($line, 'quantity');
             $qty = $this->requirePositiveQty($line);
             $totalDec = Decimal::add($totalDec, Decimal::money(Decimal::mul($qty, $unitCost)));
             $this->createLine($adj, $orgId, $line, 'decrease', $qty, $unitCost, $line['lot_id'] ?? null, $line['serial_id'] ?? null);
@@ -178,6 +189,15 @@ class StockAdjustmentService
             'variant_id' => $line['variant_id'] ?? null,
             'direction' => $direction,
             'quantity' => $qty,
+            'entered_qty' => $line['entered_qty'],
+            'entered_unit_id' => $line['entered_unit_id'],
+            'base_unit_id' => $line['base_unit_id'],
+            'unit_conversion_id' => $line['unit_conversion_id'],
+            'unit_conversion_factor' => $line['unit_conversion_factor'],
+            'unit_conversion_version' => $line['unit_conversion_version'],
+            'unit_conversion_hash' => $line['unit_conversion_hash'],
+            'unit_conversion_precision' => $line['unit_conversion_precision'],
+            'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'],
             'unit_cost' => $unitCost,
             'lot_id' => $lotId,
             'serial_id' => $serialId,
