@@ -19,8 +19,8 @@ final class DeadLetterReviewService
         string $note,
         bool $retry,
     ): IntegrationOutboxEvent {
-        $this->safety->assertDeliveryEnabled();
-        if (! config('integration_transport.worker_enabled', false)) {
+        $this->safety->assertDeliveryEnabledFor((int) $event->organization_id);
+        if (! $this->safety->workerEnabledFor((int) $event->organization_id)) {
             throw new RuntimeException('Durable transport remains disabled.');
         }
         if ($event->status !== 'dead_letter') {

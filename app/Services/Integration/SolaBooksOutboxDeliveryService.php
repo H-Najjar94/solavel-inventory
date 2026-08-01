@@ -26,7 +26,7 @@ class SolaBooksOutboxDeliveryService
     {
         // This must remain the first operation: a blocked request must not lock
         // or mutate an event, increment attempts, mint a nonce, or call Finance.
-        $this->safety->assertDeliveryEnabled();
+        $this->safety->assertDeliveryEnabledFor($this->context->idOrFail());
         if (! app()->environment('testing')) {
             throw new RuntimeException('Direct delivery is disabled; use the dedicated leased v2 worker.');
         }
@@ -353,7 +353,7 @@ class SolaBooksOutboxDeliveryService
      */
     public function sendClaimed(IntegrationOutboxEvent $event): array
     {
-        $this->safety->assertDeliveryEnabled();
+        $this->safety->assertDeliveryEnabledFor((int) $event->organization_id);
         if ($event->status !== 'processing' || ! $event->lease_token) {
             throw new RuntimeException('A current processing lease is required.');
         }
