@@ -25,6 +25,32 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
+    public function dual_product_readiness_is_visible_before_mapping_but_mutable_wizard_fails_closed(): void
+    {
+        DB::connection('tenant')->table('organizations')->insert([
+            'id' => 14, 'central_org_id' => TenantTestManager::ORG_A,
+        ]);
+        Item::query()->create([
+            'organization_id' => TenantTestManager::ORG_A,
+            'sku' => 'PREMAP-1', 'name' => 'Pre-map candidate', 'item_type' => 'inventory',
+            'tracking_type' => 'none', 'purchase_price' => 0, 'sales_price' => 0, 'is_active' => true,
+        ]);
+
+        $wizard = app(ConnectionWizardService::class);
+        $before = $this->mutationCounters();
+        $readiness = $wizard->discover(TenantTestManager::ORG_A);
+
+        $this->assertSame('setup_required', $readiness['connection_state']);
+        $this->assertTrue($readiness['read_only']);
+        $this->assertFalse($readiness['activation_available']);
+        $this->assertContains('verified_immutable_mapping_required', $readiness['blockers']);
+        $this->assertSame($before, $this->mutationCounters());
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $wizard->start(TenantTestManager::ORG_A, 7001);
+    }
+
+    #[Test]
     public function discovery_decisions_and_approval_are_immutable_audited_and_do_not_activate_delivery(): void
     {
         [$mapping, $item] = $this->seedConnectionFixture();
@@ -217,6 +243,23 @@ final class ConnectionWizardTest extends TestCase
     private function seedConnectionFixture(): array
     {
         DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A]);
+        $unitId = DB::connection('tenant')->table('units')->insertGetId([
+            'organization_id' => TenantTestManager::ORG_A, 'code' => 'EA', 'name' => 'Each',
+            'symbol' => 'ea', 'kind' => 'count', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $categoryId = DB::connection('tenant')->table('item_categories')->insertGetId([
+            'organization_id' => TenantTestManager::ORG_A, 'name' => 'Reviewed goods',
+            'level' => 0, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::connection('tenant')->table('warehouses')->insert([
+            'organization_id' => TenantTestManager::ORG_A, 'code' => 'OWNER-MAIN',
+            'name' => 'Owner selected warehouse', 'type' => 'warehouse', 'is_active' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::connection('tenant')->table('inventory_settings')->insert([
+            'organization_id' => TenantTestManager::ORG_A, 'default_costing_method' => 'average',
+            'allow_negative_stock' => 0, 'created_at' => now(), 'updated_at' => now(),
+        ]);
         DB::connection('tenant')->table('accounts')->insert([
             'id' => 9001, 'organization_id' => 14, 'code' => 'UAT-CTRL', 'name' => 'UAT control', 'is_active' => 1, 'is_postable' => 1,
         ]);
@@ -224,6 +267,7 @@ final class ConnectionWizardTest extends TestCase
             'organization_id' => TenantTestManager::ORG_A,
             'sku' => 'WIZARD-ITEM', 'name' => 'Wizard item', 'item_type' => 'inventory',
             'tracking_type' => 'none', 'costing_method' => 'average',
+            'base_unit_id' => $unitId, 'category_id' => $categoryId,
             'purchase_price' => 0, 'sales_price' => 0, 'is_active' => true,
         ]);
         IntegrationSetting::query()->create([

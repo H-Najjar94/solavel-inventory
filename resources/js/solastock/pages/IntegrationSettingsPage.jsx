@@ -293,10 +293,20 @@ function ConnectionWizard({ gate, toast, tr }) {
             <p>{tr('integration.wizard.authority')}</p>
             <p className="muted">{tr('integration.wizard.noMerge')}</p>
             <div className="doc-actions">
-                {!runUuid && <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={start}>{saving ? tr('integration.wizard.starting') : tr('integration.wizard.freezeStart')}</button>}
+                {!runUuid && <button className="btn btn--primary" disabled={!gate.allowed || saving || !view.organization_mapping_uuid} onClick={start}>{saving ? tr('integration.wizard.starting') : tr('integration.wizard.freezeStart')}</button>}
                 <button className="btn" onClick={exportComparison}>{tr('integration.wizard.export')}</button>
             </div>
         </div>
+
+        {view.blockers?.length > 0 && <div className="panel" role="status">
+            <h3>{tr('integration.wizard.setupBlockers')}</h3>
+            <ul>{view.blockers.map((blocker) => <li key={blocker}>{tr(`integration.wizard.block.${blocker}`, {}, blocker)}</li>)}</ul>
+            {!view.organization_mapping_uuid && <p className="muted">{tr('integration.wizard.readinessOnly')}</p>}
+        </div>}
+
+        {view.readiness && <div className="widget-grid" aria-label={tr('integration.wizard.masterReadiness')}>
+            {Object.entries(view.readiness).map(([key, value]) => <div className="widget-card" key={key}><div className="widget-card-label">{tr(`integration.wizard.readiness.${key}`, {}, key)}</div><div className="widget-card-value">{value}</div></div>)}
+        </div>}
 
         <ol className="wizard__steps" aria-label={tr('integration.wizard.progress')}>
             {['subscription', 'discovery', 'review', 'accounting', 'preview', 'approval', 'connected'].map((step, index) => <li key={step} className={index <= (runUuid ? 4 : 1) ? 'is-current' : ''}>{tr(`integration.wizard.step.${step}`)}</li>)}
@@ -317,11 +327,11 @@ function ConnectionWizard({ gate, toast, tr }) {
         <div className="panel wizard__table-wrap">
             <h3>{tr('integration.wizard.comparison')}</h3>
             <table className="data-table wizard__comparison">
-                <thead><tr><th>{tr('integration.wizard.entity')}</th><th>SolaStock</th><th>SolaBooks</th><th>{tr('integration.wizard.quantity')}</th><th>{tr('integration.wizard.value')}</th><th>{tr('integration.wizard.evidence')}</th><th>{tr('integration.wizard.decision')}</th></tr></thead>
+                <thead><tr><th>{tr('integration.wizard.entity')}</th><th>{tr('integration.wizard.solastock')}</th><th>{tr('integration.wizard.solabooks')}</th><th>{tr('integration.wizard.quantity')}</th><th>{tr('integration.wizard.value')}</th><th>{tr('integration.wizard.evidence')}</th><th>{tr('integration.wizard.decision')}</th></tr></thead>
                 <tbody>{rows.map((row) => <tr key={row.fingerprint} className={row.blocking_reason ? 'is-blocked' : ''}>
                     <td data-label={tr('integration.wizard.entity')}><strong>{tr(`integration.wizard.entity.${row.entity_type}`, {}, row.entity_type)}</strong><br /><span className="muted">{tr(`integration.wizard.classification.${row.classification}`, {}, row.classification)}</span></td>
-                    <td data-label="SolaStock">{row.solastock ? <><strong>{row.solastock.name}</strong><br />{row.solastock.sku || row.solastock.code || `#${row.solastock.id}`}<br /><span className="muted">{row.solastock.barcode || '—'}</span></> : '—'}</td>
-                    <td data-label="SolaBooks">{row.solabooks ? <><strong>{row.solabooks.name}</strong><br />{row.solabooks.sku || row.solabooks.code || `#${row.solabooks.id}`}<br /><span className="muted">{row.solabooks.barcode || '—'}</span></> : '—'}</td>
+                    <td data-label={tr('integration.wizard.solastock')}>{row.solastock ? <><strong>{row.solastock.name}</strong><br />{row.solastock.sku || row.solastock.code || `#${row.solastock.id}`}<br /><span className="muted">{row.solastock.barcode || '—'}</span></> : '—'}</td>
+                    <td data-label={tr('integration.wizard.solabooks')}>{row.solabooks ? <><strong>{row.solabooks.name}</strong><br />{row.solabooks.sku || row.solabooks.code || `#${row.solabooks.id}`}<br /><span className="muted">{row.solabooks.barcode || '—'}</span></> : '—'}</td>
                     <td data-label={tr('integration.wizard.quantity')}>{row.solastock?.quantity ?? '—'} / {row.solabooks?.quantity ?? '—'}<br /><strong>{row.quantity_difference}</strong></td>
                     <td data-label={tr('integration.wizard.value')}>{row.solastock?.inventory_value ?? '—'} / {row.solabooks?.inventory_value ?? '—'}<br /><strong>{row.value_difference}</strong></td>
                     <td data-label={tr('integration.wizard.evidence')}>{tr(`integration.wizard.confidence.${row.mapping_confidence}`)}<br /><span className="muted">{row.blocking_reason ? tr(`integration.wizard.block.${row.blocking_reason}`, {}, row.blocking_reason) : tr('integration.wizard.noBlock')}</span></td>
@@ -336,6 +346,12 @@ function ConnectionWizard({ gate, toast, tr }) {
             <div className="wizard__account-grid">{(accounting.accounts || []).map((account) => <div className={`widget-card ${account.valid ? '' : 'is-blocked'}`} key={account.role}><div className="widget-card-label">{tr(`integration.mapping.${account.role}`, {}, account.role)}</div><div>{account.account_code || '—'} {account.account_name || ''}</div><small>{account.valid ? tr('integration.wizard.valid') : tr('integration.wizard.accountBlocked')}</small></div>)}</div>
             {totals.proposed_accounting_effect?.amount && <div className="panel" role="alert"><strong>{tr('integration.wizard.separateApproval')}</strong><p>{totals.proposed_accounting_effect.debit} / {totals.proposed_accounting_effect.credit}: {totals.proposed_accounting_effect.amount} {accounting.base_currency}</p></div>}
         </div>
+
+        {view.master_data && <div className="panel">
+            <h3>{tr('integration.wizard.masterReadiness')}</h3>
+            <div className="widget-grid">{['units', 'categories', 'warehouses', 'inventory_items'].map((key) => <div className="widget-card" key={key}><div className="widget-card-label">{tr(`integration.wizard.readiness.${key}`, {}, key)}</div><div className="widget-card-value">{view.master_data[key] ?? 0}</div></div>)}</div>
+            <p className="muted">{view.master_data.complete ? tr('integration.wizard.masterComplete') : tr('integration.wizard.masterBlocked')}</p>
+        </div>}
 
         {runUuid && <div className="panel">
             <h3>{tr('integration.wizard.finalApproval')}</h3>

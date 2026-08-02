@@ -11,6 +11,7 @@ use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 final class ConnectionWizardService
@@ -37,13 +38,17 @@ final class ConnectionWizardService
     /** Read-only. No discovery run, counter, nonce, event, or audit is written. */
     public function discover(int $organizationId): array
     {
-        $mapping = $this->mapping($organizationId);
+        $mapping = $this->mappingOrNull($organizationId);
+        if (! $mapping) {
+            return $this->preMappingReadiness($organizationId);
+        }
         $report = $this->discovery->discover($mapping->mapping_uuid);
         $comparison = collect($report['results'])->map(
             fn (array $candidate): array => $this->comparisonRow($mapping, $candidate)
         )->all();
         $totals = $this->totals($comparison);
         $accounting = $this->accountingSetup($mapping);
+        $masterData = $this->masterDataSetup($mapping);
         $core = [
             'version' => self::VERSION,
             'organization_mapping_uuid' => $mapping->mapping_uuid,
@@ -53,18 +58,23 @@ final class ConnectionWizardService
             'comparison' => $comparison,
             'totals' => $totals,
             'accounting' => $accounting,
+            'master_data' => $masterData,
         ];
 
         return $core + [
             'read_only' => true,
             'generated_at' => now()->utc()->toIso8601String(),
             'snapshot_hash' => $this->hash($core),
-            'connection_state' => $this->state($comparison, $accounting),
+            'connection_state' => $this->state($comparison, $accounting, $masterData),
         ];
     }
 
     public function start(int $organizationId, int $actorUserId): array
     {
+        // Readiness is available before mapping, but a mutable approval run is
+        // not. This prevents a subscription row or guessed local identity from
+        // becoming a connection identity.
+        $this->mapping($organizationId);
         $preview = $this->discover($organizationId);
         $cutoff = now()->utc();
         $runUuid = (string) Str::uuid();
@@ -92,6 +102,7 @@ final class ConnectionWizardService
                     'comparison' => $preview['comparison'],
                     'totals' => $preview['totals'],
                     'accounting' => $preview['accounting'],
+                    'master_data' => $preview['master_data'],
                 ]),
                 'created_by_user_id' => $actorUserId,
                 'created_at' => now(),
@@ -259,12 +270,14 @@ final class ConnectionWizardService
         ];
         $approvalHash = $this->hash($approvalCore);
         $ready = $blocking->isEmpty() && $preview['accounting']['complete'];
+        $ready = $ready && $preview['master_data']['complete'];
         return $approvalCore + [
             'approval_payload_hash' => $approvalHash,
             'state' => $ready ? 'ready_for_approval' : 'review_required',
             'comparison' => $preview['comparison'],
             'totals' => $preview['totals'],
             'accounting' => $preview['accounting'],
+            'master_data' => $preview['master_data'],
             'blocking' => $blocking->all(),
             'rollback_behavior' => 'Before activation, reverse decisions and regenerate the snapshot. After activation, pause delivery; operational and accounting reversals remain separate and preserve evidence.',
         ];
@@ -789,16 +802,80 @@ final class ConnectionWizardService
         ];
     }
 
-    private function state(array $comparison, array $accounting): string
+    private function state(array $comparison, array $accounting, array $masterData): string
     {
-        if (! $accounting['complete']) {
+        if (! $accounting['complete'] || ! $masterData['complete']) {
             return 'setup_required';
         }
         return collect($comparison)->every(fn (array $row) => $row['blocking_reason'] === null)
             ? 'ready_for_approval' : 'review_required';
     }
 
+    /** @return array<string,mixed> */
+    private function masterDataSetup(IntegrationOrganizationMapping $mapping): array
+    {
+        $org = (int) $mapping->solastock_organization_id;
+        $activeCount = function (string $table) use ($org): int {
+            if (! Schema::connection('tenant')->hasTable($table)) {
+                return 0;
+            }
+            $query = DB::connection('tenant')->table($table)->where('organization_id', $org);
+            if (Schema::connection('tenant')->hasColumn($table, 'is_active')) {
+                $query->where('is_active', true);
+            }
+            if (Schema::connection('tenant')->hasColumn($table, 'deleted_at')) {
+                $query->whereNull('deleted_at');
+            }
+            return (int) $query->count();
+        };
+        $settings = Schema::connection('tenant')->hasTable('inventory_settings')
+            ? DB::connection('tenant')->table('inventory_settings')->where('organization_id', $org)->first() : null;
+        $inventoryItems = Item::query()->where('organization_id', $org)->where('item_type', 'inventory')->get();
+        $missingUnit = $inventoryItems->whereNull('base_unit_id')->count();
+        $missingCategory = $inventoryItems->whereNull('category_id')->count();
+        $invalidTracking = $inventoryItems->reject(fn (Item $item) => in_array(
+            (string) $item->tracking_type, ['none', 'lot', 'serial', 'lot_serial'], true
+        ))->count();
+        $valuation = (string) ($settings->default_costing_method ?? '');
+        $units = $activeCount('units');
+        $categories = $activeCount('item_categories');
+        $warehouses = $activeCount('warehouses');
+        $blockers = array_values(array_filter([
+            $units > 0 ? null : 'owner_unit_setup_required',
+            $categories > 0 ? null : 'owner_category_setup_required',
+            $warehouses > 0 ? null : 'owner_warehouse_setup_required',
+            in_array($valuation, ['fifo', 'average'], true) ? null : 'owner_valuation_method_required',
+            $missingUnit === 0 ? null : 'inventory_items_missing_authoritative_unit',
+            $missingCategory === 0 ? null : 'inventory_items_missing_category',
+            $invalidTracking === 0 ? null : 'invalid_tracking_policy',
+        ]));
+
+        return [
+            'complete' => $blockers === [],
+            'units' => $units,
+            'categories' => $categories,
+            'warehouses' => $warehouses,
+            'valuation_method' => $valuation ?: null,
+            'inventory_items' => $inventoryItems->count(),
+            'items_missing_unit' => $missingUnit,
+            'items_missing_category' => $missingCategory,
+            'item_identity_policy' => 'stable_mapping_uuid_sku_barcode_discovery_only',
+            'tracking_policy_valid' => $invalidTracking === 0,
+            'blockers' => $blockers,
+            'decision_class' => $blockers === [] ? 'safe_deterministic_preparation' : 'owner_decision',
+        ];
+    }
+
     private function mapping(int $organizationId): IntegrationOrganizationMapping
+    {
+        $mapping = $this->mappingOrNull($organizationId);
+        if (! $mapping) {
+            $this->fail('verified_immutable_mapping_required');
+        }
+        return $mapping;
+    }
+
+    private function mappingOrNull(int $organizationId): ?IntegrationOrganizationMapping
     {
         $mapping = IntegrationOrganizationMapping::query()
             ->where('solastock_organization_id', $organizationId)
@@ -807,9 +884,173 @@ final class ConnectionWizardService
             ->whereIn('status', ['verified_hold', 'verified'])
             ->first();
         if (! $mapping || (int) $mapping->central_organization_id !== $organizationId) {
-            $this->fail('verified_immutable_mapping_required');
+            return null;
         }
         return $mapping;
+    }
+
+    /**
+     * Read-only upgrade readiness for dual-subscribed organizations which do
+     * not yet have an immutable v2 mapping. Candidate discovery is informative
+     * only: SKU is never persisted as identity and ambiguous rows stay blocked.
+     */
+    private function preMappingReadiness(int $organizationId): array
+    {
+        $tenant = (string) DB::connection('tenant')->getDatabaseName();
+        $financeOrg = Schema::connection('tenant')->hasTable('organizations')
+            ? DB::connection('tenant')->table('organizations')->where('central_org_id', $organizationId)->first()
+            : null;
+        $financeOrgId = (int) ($financeOrg->id ?? 0);
+        $stockItems = Schema::connection('tenant')->hasTable('items')
+            ? DB::connection('tenant')->table('items')->where('organization_id', $organizationId)->whereNull('deleted_at')->get()
+            : collect();
+        $financeItems = $financeOrgId > 0 && Schema::connection('tenant')->hasTable('inventory_items')
+            ? DB::connection('tenant')->table('inventory_items')->where('organization_id', $financeOrgId)->get()
+            : collect();
+
+        $comparison = [];
+        $seenFinance = [];
+        foreach ($stockItems as $stock) {
+            $matches = $financeItems->filter(fn ($item) => strtoupper(trim((string) ($item->sku ?? ''))) !== ''
+                && strtoupper(trim((string) ($item->sku ?? ''))) === strtoupper(trim((string) ($stock->sku ?? ''))));
+            foreach ($matches as $match) {
+                $seenFinance[(int) $match->id] = true;
+            }
+            $classification = $matches->count() === 1 ? 'exact_candidate_requires_owner_review'
+                : ($matches->count() > 1 ? 'ambiguous' : 'missing_solabooks_record');
+            $comparison[] = $this->preMappingItemRow($stock, $matches->values(), $classification);
+        }
+        foreach ($financeItems as $finance) {
+            if (! isset($seenFinance[(int) $finance->id])) {
+                $comparison[] = $this->preMappingItemRow(null, collect([$finance]), 'missing_solastock_record');
+            }
+        }
+
+        $counts = fn (string $table, int $org, string $column = 'organization_id'): int =>
+            Schema::connection('tenant')->hasTable($table)
+                ? (int) DB::connection('tenant')->table($table)->where($column, $org)->count()
+                : 0;
+        $blockers = array_values(array_filter([
+            'verified_immutable_mapping_required',
+            $financeOrgId > 0 ? null : 'finance_organization_identity_missing',
+            $stockItems->isEmpty() ? 'owner_master_data_setup_required' : null,
+            collect($comparison)->contains(fn (array $row) => $row['blocking_reason'] !== null)
+                ? 'item_mapping_review_required' : null,
+            'accountant_account_role_approval_required',
+            'frozen_cutoff_and_zero_variance_required',
+        ]));
+        $core = [
+            'version' => self::VERSION,
+            'organization_mapping_uuid' => null,
+            'identity' => [
+                'central_organization_id' => $organizationId,
+                'tenant_database_identity' => $tenant,
+                'finance_organization_id' => $financeOrgId ?: null,
+                'solastock_organization_id' => $organizationId,
+                'integration_mapping_uuid' => null,
+                'contract_version' => 'solastock-journal.v2',
+            ],
+            'comparison' => $comparison,
+            'totals' => [
+                'exact_candidates' => collect($comparison)->where('classification', 'exact_candidate_requires_owner_review')->count(),
+                'exact_matches' => 0,
+                'review_required' => collect($comparison)->whereNotNull('blocking_reason')->count(),
+                'missing_solastock' => collect($comparison)->where('classification', 'missing_solastock_record')->count(),
+                'missing_in_solastock' => collect($comparison)->where('classification', 'missing_solastock_record')->count(),
+                'missing_solabooks' => collect($comparison)->where('classification', 'missing_solabooks_record')->count(),
+                'missing_in_solabooks' => collect($comparison)->where('classification', 'missing_solabooks_record')->count(),
+                'ambiguous' => collect($comparison)->where('classification', 'ambiguous')->count(),
+                'blocked' => collect($comparison)->whereNotNull('blocking_reason')->count(),
+                'total_quantity_difference' => Decimal::qty(collect($comparison)->reduce(
+                    fn (string $carry, array $row) => Decimal::add($carry, $row['quantity_difference'], 4), '0'
+                )),
+                'total_valuation_difference' => Decimal::money(collect($comparison)->reduce(
+                    fn (string $carry, array $row) => Decimal::add($carry, $row['value_difference'], 2), '0'
+                )),
+            ],
+            'readiness' => [
+                'units' => $counts('units', $organizationId),
+                'unit_conversions' => $counts('unit_conversions', $organizationId),
+                'categories' => $counts('item_categories', $organizationId),
+                'warehouses' => $counts('warehouses', $organizationId),
+                'customers' => $counts('inventory_customers', $organizationId),
+                'suppliers' => $counts('inventory_suppliers', $organizationId),
+                'tax_mappings' => $counts('integration_tax_mappings', $organizationId),
+                'account_mappings' => $counts('integration_account_mappings', $organizationId),
+            ],
+            'decision_classes' => [
+                'safe_deterministic_preparation', 'owner_decision', 'accountant_decision',
+                'subscription_owner_decision', 'physical_count_requirement',
+                'historical_review_requirement', 'permanently_blocked_excluded',
+            ],
+            'blockers' => $blockers,
+        ];
+
+        return $core + [
+            'read_only' => true,
+            'generated_at' => now()->utc()->toIso8601String(),
+            'snapshot_hash' => $this->hash($core),
+            'connection_state' => 'setup_required',
+            'activation_available' => false,
+            'legacy_fallback' => false,
+        ];
+    }
+
+    private function preMappingItemRow(?object $stock, Collection $financeMatches, string $classification): array
+    {
+        $finance = $financeMatches->count() === 1 ? $financeMatches->first() : null;
+        $stockQty = (string) ($stock && Schema::connection('tenant')->hasTable('stock_balances')
+            ? DB::connection('tenant')->table('stock_balances')->where('organization_id', $stock->organization_id)
+                ->where('item_id', $stock->id)->sum('on_hand_qty') : '0');
+        $stockValue = (string) ($stock && Schema::connection('tenant')->hasTable('stock_balances')
+            ? DB::connection('tenant')->table('stock_balances')->where('organization_id', $stock->organization_id)
+                ->where('item_id', $stock->id)->sum('total_value') : '0');
+        $financeQty = (string) ($finance->qty_on_hand ?? '0');
+        $financeValue = $finance
+            ? Decimal::money(Decimal::mul($financeQty, (string) ($finance->average_cost ?? '0'), 6))
+            : '0.00';
+        $blocking = match ($classification) {
+            'exact_candidate_requires_owner_review' => 'candidate_identity_requires_owner_confirmation',
+            'ambiguous' => 'ambiguous_identity_requires_owner_review',
+            'missing_solastock_record' => 'owner_must_create_or_exclude_solastock_record',
+            default => 'missing_finance_record_requires_owner_review',
+        };
+
+        return [
+            'fingerprint' => $this->hash([
+                'stock_id' => $stock?->id,
+                'finance_ids' => $financeMatches->pluck('id')->map('strval')->sort()->values()->all(),
+                'classification' => $classification,
+            ]),
+            'entity_type' => 'item',
+            'classification' => $classification,
+            'sku' => (string) ($stock->sku ?? $finance->sku ?? ''),
+            'solastock_record_ids' => $stock ? [(string) $stock->id] : [],
+            'solabooks_record_ids' => $financeMatches->pluck('id')->map('strval')->values()->all(),
+            'solastock' => $stock ? [
+                'id' => (string) $stock->id,
+                'name' => (string) ($stock->name ?? ''),
+                'sku' => (string) ($stock->sku ?? ''),
+                'quantity' => Decimal::qty($stockQty),
+                'inventory_value' => Decimal::money($stockValue),
+            ] : null,
+            'solabooks' => $finance ? [
+                'id' => (string) $finance->id,
+                'name' => (string) ($finance->name ?? ''),
+                'sku' => (string) ($finance->sku ?? ''),
+                'quantity' => Decimal::qty($financeQty),
+                'inventory_value' => $financeValue,
+            ] : null,
+            'solastock_quantity' => Decimal::qty($stockQty),
+            'solabooks_quantity' => Decimal::qty($financeQty),
+            'solastock_value' => Decimal::money($stockValue),
+            'solabooks_value' => $financeValue,
+            'quantity_difference' => Decimal::qty(Decimal::sub($stockQty, $financeQty, 4)),
+            'value_difference' => Decimal::money(Decimal::sub($stockValue, $financeValue, 2)),
+            'blocking_reason' => $blocking,
+            'mapping_confidence' => $classification === 'exact_candidate_requires_owner_review' ? 'review_required' : 'review_required',
+            'decision_class' => str_contains($blocking, 'owner') ? 'owner_decision' : 'historical_review_requirement',
+        ];
     }
 
     private function run(IntegrationOrganizationMapping $mapping, string $runUuid, bool $lock = false): object
