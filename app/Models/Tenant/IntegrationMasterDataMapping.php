@@ -8,6 +8,9 @@ use Illuminate\Validation\ValidationException;
 
 final class IntegrationMasterDataMapping extends Model
 {
+    /** Stable master-data identities belong to the current tenant database. */
+    protected $connection = 'tenant';
+
     protected $table = 'integration_master_data_mappings';
 
     protected $guarded = ['id'];

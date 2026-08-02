@@ -20,6 +20,9 @@
     <php>
         <server name="TEST_DATABASE_PREFIX" value="solastock_test_"/>
         <env name="APP_ENV" value="testing"/>
+        <env name="APP_CONFIG_CACHE" value="/tmp/phase6a-stock-phpunit-config.php"/>
+        <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
+        <env name="TENANT_DERIVE_SECRET" value="phase6a-test-only-tenant-derivation-secret-000000000000000000000000"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
@@ -39,6 +42,11 @@
         <env name="TENANT_CONNECTION" value="tenant"/>
         <env name="DB_DATABASE" value="solastock_test_central"/>
         <env name="TENANT_DB_DATABASE" value="solastock_test_a"/>
+        <env name="DB_HOST" value="localhost"/>
+        <env name="DB_PORT" value="0"/>
+        <env name="DB_SOCKET" value="/home/hnajjar/staging/phase6a/run/mariadb.sock"/>
+        <env name="DB_USERNAME" value="phase6a_stock"/>
+        <env name="DB_PASSWORD" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

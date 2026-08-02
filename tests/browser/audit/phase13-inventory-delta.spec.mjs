@@ -4,7 +4,8 @@ import fs from 'node:fs';
 test.setTimeout(120_000);
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 
 function password() {
     const line = fs.readFileSync(credentialsFile, 'utf8').split(/\r?\n/)

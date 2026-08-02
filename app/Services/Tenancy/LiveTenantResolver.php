@@ -265,6 +265,16 @@ class LiveTenantResolver
     /** The shared per-client tenant DB name (tenant_{clientId padded}). */
     public function tenantDatabase(int $clientId): string
     {
+        if (app()->environment('staging')) {
+            $database = (string) (DB::connection('mysql')->table('organizations')
+                ->where('client_id', $clientId)->value('database_name') ?? '');
+            if (preg_match('/^phase6a_uat_[a-z0-9_]+$/D', $database) !== 1) {
+                abort(503, 'Isolated staging tenant identity is invalid.');
+            }
+
+            return $database;
+        }
+
         return $this->tenants->resolveDatabaseName($clientId);
     }
 

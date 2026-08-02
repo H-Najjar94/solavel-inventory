@@ -231,8 +231,8 @@ class SolaBooksOutboxDeliveryService
             ->where('central_client_id', (int) ($setting->meta['client_id'] ?? 0))
             ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
             ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold')
+            ->where('status', 'verified')
+            ->where('activation_state', 'active')
             ->firstOrFail();
         $configuredCentralOrganizationId = (int) ($setting->meta['central_organization_id'] ?? 0);
         if ($configuredCentralOrganizationId > 0

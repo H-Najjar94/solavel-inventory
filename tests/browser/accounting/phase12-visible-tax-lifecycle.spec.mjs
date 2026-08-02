@@ -3,7 +3,8 @@ import fs from 'node:fs';
 
 test.use({ trace: 'retain-on-failure', screenshot: 'only-on-failure' });
 test.setTimeout(90_000);
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const prefix = `QA-SOLASTOCK-PHASE12-${Date.now()}`;
 
 function ownerPassword() {

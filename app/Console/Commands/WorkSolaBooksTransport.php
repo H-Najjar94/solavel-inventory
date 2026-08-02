@@ -30,8 +30,11 @@ final class WorkSolaBooksTransport extends Command
         DurableOutboxTransportService $transport,
     ): int {
         $database = trim((string) $this->option('database'));
-        if (! preg_match('/^tenant_[0-9]{6}$/D', $database)) {
-            throw new RuntimeException('An explicit tenant_XXXXXX database is required.');
+        $productionIdentity = preg_match('/^tenant_[0-9]{6}$/D', $database) === 1;
+        $isolatedStagingIdentity = app()->environment('staging')
+            && preg_match('/^phase6a_uat_[a-z0-9_]+$/D', $database) === 1;
+        if (! $productionIdentity && ! $isolatedStagingIdentity) {
+            throw new RuntimeException('An explicit approved tenant database is required.');
         }
         // Fail before tenant switching, querying, claiming, attempts, or HTTP.
         $safety->assertUatDatabaseEnabled($database);
@@ -53,8 +56,8 @@ final class WorkSolaBooksTransport extends Command
             $this->heartbeat($workerId, 'running', $processed);
             $organizationIds = IntegrationOrganizationMapping::query()
                 ->where('contract_version', 'solastock-journal.v2')
-                ->where('status', 'verified_hold')
-                ->where('activation_state', 'maintenance_hold')
+                ->whereIn('status', ['verified_hold', 'verified'])
+                ->whereIn('activation_state', ['maintenance_hold', 'active'])
                 ->orderBy('solastock_organization_id')
                 ->pluck('solastock_organization_id');
             $claimedAny = false;

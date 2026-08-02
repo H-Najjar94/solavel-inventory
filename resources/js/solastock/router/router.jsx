@@ -175,7 +175,7 @@ export const router = createBrowserRouter(
             ],
         },
     ],
-    { basename: '/inventory' }
+    { basename: window.SOLASTOCK_BASE_PATH ?? '/inventory' }
 );
 
 // Navigation telemetry: report one page_view to Central per completed in-app

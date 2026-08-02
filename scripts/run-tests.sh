@@ -4,9 +4,12 @@ cd "$(dirname "$0")/.."
 
 export APP_ENV=testing
 
+[[ "${TEST_DATABASE_ENVIRONMENT:-}" == "isolated_staging" ]] || {
+  echo "REFUSING: run-tests requires an isolated staging database server." >&2; exit 2;
+}
+
 cleanup() {
   bash scripts/rebuild-test-db.sh cleanup >/dev/null || true
-  APP_ENV=production bash scripts/rebuild-production-cache.sh >/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -21,5 +24,5 @@ export SOLASTOCK_TEST_TENANT_B=solastock_test_b
 export SOLASTOCK_TEST_CENTRAL=solastock_test_central
 export INVENTORY_USE_DERIVED_TENANT_DB_USER=false
 
-APP_ENV=testing php artisan config:clear --ansi
-php artisan test --compact "$@"
+export APP_CONFIG_CACHE=/tmp/phase6a-stock-phpunit-config.php
+./vendor/bin/phpunit "$@"

@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 
 test.setTimeout(150_000);
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const prefix = `QA-SOLASTOCK-PHASE13-20260720-${Date.now()}`;
 const documentPrefix = `P13-${Date.now()}`;
 

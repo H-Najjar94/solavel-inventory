@@ -7,6 +7,9 @@ use Illuminate\Validation\ValidationException;
 
 final class IntegrationOrganizationMapping extends Model
 {
+    /** Immutable integration mappings are tenant-owned, never Central-owned. */
+    protected $connection = 'tenant';
+
     protected $table = 'integration_organization_mappings';
 
     protected $guarded = ['id'];

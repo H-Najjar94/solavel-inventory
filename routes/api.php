@@ -497,6 +497,24 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::prefix('integration/solabooks')->group(function () {
         Route::get('/status', [IntegrationController::class, 'status'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.status');
+        Route::get('/wizard/discovery', [IntegrationController::class, 'wizardDiscovery'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.discovery');
+        Route::post('/wizard/runs', [IntegrationController::class, 'startWizard'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.start');
+        Route::get('/wizard/runs/{run}', [IntegrationController::class, 'wizardRun'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.show');
+        Route::get('/wizard/runs/{run}/preview', [IntegrationController::class, 'wizardPreview'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.preview');
+        Route::put('/wizard/runs/{run}/decisions', [IntegrationController::class, 'decideWizard'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.decide');
+        Route::delete('/wizard/runs/{run}/decisions/{decision}', [IntegrationController::class, 'reverseWizardDecision'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.decisions.reverse');
+        Route::post('/wizard/runs/{run}/approve', [IntegrationController::class, 'approveWizard'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.approve');
+        Route::post('/wizard/runs/{run}/activate', [IntegrationController::class, 'activateWizard'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.activate');
+        Route::post('/wizard/runs/{run}/pause', [IntegrationController::class, 'pauseWizard'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.pause');
         Route::put('/connection', [IntegrationController::class, 'configure'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.connection.update');
         Route::post('/signing-keys/rotate', [IntegrationController::class, 'rotateSigningKey'])

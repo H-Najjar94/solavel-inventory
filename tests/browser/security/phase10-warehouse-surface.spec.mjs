@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const warehouseBName = 'QA Reserve Warehouse 100246';
 const warehouseBCode = 'QA-B-100246';
 

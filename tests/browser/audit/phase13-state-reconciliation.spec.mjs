@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const evidenceDir = '/tmp/solastock-practical-verification-20260719/17-phase13-final';
 
 function password() {

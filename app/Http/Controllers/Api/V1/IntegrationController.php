@@ -18,6 +18,7 @@ use App\Services\Integration\IntegrationEvents;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\IntegrationSafetyHold;
 use App\Services\Integration\IntegrationStatusService;
+use App\Services\Integration\ConnectionWizardService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
@@ -43,6 +44,88 @@ class IntegrationController extends ApiController
     public function status(): JsonResponse
     {
         return $this->success($this->statusService->status($this->context->idOrFail()));
+    }
+
+    public function wizardDiscovery(ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->discover($this->context->idOrFail()));
+    }
+
+    public function startWizard(ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->start($this->context->idOrFail(), (int) auth()->id()));
+    }
+
+    public function wizardRun(string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->show($this->context->idOrFail(), $run));
+    }
+
+    public function wizardPreview(string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->finalPreview($this->context->idOrFail(), $run));
+    }
+
+    public function decideWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate([
+            'candidate_fingerprint' => ['required', 'regex:/^[a-f0-9]{64}$/'],
+            'action' => ['required', 'in:'.implode(',', ConnectionWizardService::DECISIONS)],
+            'solastock_record_ids' => ['array'],
+            'solastock_record_ids.*' => ['string', 'max:80'],
+            'solabooks_record_ids' => ['array'],
+            'solabooks_record_ids.*' => ['string', 'max:80'],
+            'safe_details' => ['array'],
+        ]);
+        return $this->success($wizard->decide(
+            $this->context->idOrFail(),
+            $run,
+            $data['candidate_fingerprint'],
+            $data['action'],
+            $data['solastock_record_ids'] ?? [],
+            $data['solabooks_record_ids'] ?? [],
+            $data['safe_details'] ?? [],
+            (int) auth()->id(),
+        ));
+    }
+
+    public function reverseWizardDecision(string $run, string $decision, ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->reverseDecision(
+            $this->context->idOrFail(), $run, $decision, (int) auth()->id()
+        ));
+    }
+
+    public function approveWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate([
+            'approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
+            'confirmation' => ['required', 'string', 'max:100'],
+        ]);
+        return $this->success($wizard->approve(
+            $this->context->idOrFail(), $run, $data['approval_payload_hash'], $data['confirmation'], (int) auth()->id()
+        ));
+    }
+
+    public function activateWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate([
+            'approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
+            'activation_approval_id' => ['required', 'string', 'max:120'],
+            'confirmation' => ['required', 'string', 'max:100'],
+        ]);
+        return $this->success($wizard->activate(
+            $this->context->idOrFail(), $run, $data['approval_payload_hash'],
+            $data['activation_approval_id'], $data['confirmation'], (int) auth()->id()
+        ));
+    }
+
+    public function pauseWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate(['activation_approval_id' => ['required', 'string', 'max:120']]);
+        return $this->success($wizard->pause(
+            $this->context->idOrFail(), $run, $data['activation_approval_id'], (int) auth()->id()
+        ));
     }
 
     public function configure(Request $request): JsonResponse

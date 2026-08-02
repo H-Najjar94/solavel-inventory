@@ -8,6 +8,9 @@ use Illuminate\Validation\ValidationException;
 
 final class IntegrationDocumentLifecycleMapping extends Model
 {
+    /** Lifecycle identities are tenant-owned even in non-HTTP workers. */
+    protected $connection = 'tenant';
+
     protected $table = 'integration_document_lifecycle_mappings';
 
     protected $guarded = ['id'];
