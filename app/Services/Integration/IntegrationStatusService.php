@@ -38,8 +38,8 @@ class IntegrationStatusService
                 ->where('solastock_organization_id', $orgId)
                 ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
                 ->where('contract_version', 'solastock-journal.v2')
-                ->where('status', 'verified_hold')
-                ->where('activation_state', 'maintenance_hold')
+                ->whereIn('status', ['verified_hold', 'verified'])
+                ->whereIn('activation_state', ['maintenance_hold', 'active'])
                 ->first()
             : null;
         $sharedFinanceOrgId = $organizationMapping?->finance_organization_id;
@@ -158,6 +158,25 @@ class IntegrationStatusService
             $incompleteMapping > 0 => 'needs_mapping',
             default => 'healthy',
         };
+        $wizardRun = $organizationMapping && Schema::connection('tenant')->hasTable('integration_connection_wizard_runs')
+            ? DB::connection('tenant')->table('integration_connection_wizard_runs')
+                ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+                ->orderByDesc('created_at')->first()
+            : null;
+        $connectionState = match (true) {
+            ! $organizationMapping && ! $settings->exists => 'not_subscribed',
+            ! $organizationMapping => 'subscription_available',
+            ! $wizardRun && $mappingCompleteness < 100 => 'setup_required',
+            ! $wizardRun => 'subscription_available',
+            $wizardRun->invalidated_at !== null => 'snapshot_cutoff_validation',
+            $wizardRun->state === 'review_required' => 'review_required',
+            $wizardRun->state === 'ready_for_approval' => 'ready_for_approval',
+            $wizardRun->state === 'approved_maintenance_hold' => 'maintenance_hold',
+            $wizardRun->state === 'active' && ($incompleteMapping > 0) => 'connected_with_blocked_records',
+            $wizardRun->state === 'active' => 'connected',
+            $wizardRun->state === 'paused' => 'paused_disconnected',
+            default => (string) $wizardRun->state,
+        };
 
         return [
             'integration' => IntegrationEvents::INTEGRATION,
@@ -168,6 +187,17 @@ class IntegrationStatusService
             'last_error' => $settings->last_error,
             'require_mapping_before_post' => (bool) ($settings->require_mapping_before_post ?? false),
             'health' => $health,
+            'connection_state' => $connectionState,
+            'connection_wizard' => $wizardRun ? [
+                'run_uuid' => $wizardRun->run_uuid,
+                'state' => $wizardRun->state,
+                'cutoff_at' => $wizardRun->cutoff_at,
+                'snapshot_id' => $wizardRun->snapshot_id,
+                'snapshot_hash' => $wizardRun->snapshot_hash,
+                'approval_payload_hash' => $wizardRun->approval_payload_hash,
+                'invalidated_at' => $wizardRun->invalidated_at,
+                'activated_at' => $wizardRun->activated_at,
+            ] : null,
             'events' => compact('pending', 'failed', 'sent', 'ignored'),
             'documents_awaiting_sync' => $pending,
             'mapping_incomplete_events' => $incompleteMapping,

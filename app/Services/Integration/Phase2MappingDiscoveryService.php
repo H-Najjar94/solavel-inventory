@@ -165,11 +165,14 @@ final class Phase2MappingDiscoveryService
         $query = IntegrationOrganizationMapping::query()
             ->where('mapping_uuid', $uuid)
             ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
-            ->where('contract_version', 'solastock-journal.v2')
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold');
+            ->where('contract_version', 'solastock-journal.v2');
         if ($lock) {
-            $query->lockForUpdate();
+            $query->where('status', 'verified_hold')
+                ->where('activation_state', 'maintenance_hold')
+                ->lockForUpdate();
+        } else {
+            $query->whereIn('status', ['verified_hold', 'verified'])
+                ->whereIn('activation_state', ['maintenance_hold', 'active']);
         }
         $mapping = $query->first();
         if (! $mapping) {

@@ -10,6 +10,7 @@ use App\Services\Tenancy\TenantResolver;
 use App\Services\Access\InventoryPermissionService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -47,6 +48,10 @@ class LiveTenantResolverTest extends TestCase
         // client_id 123 → shared tenant_000123 (same convention as Finance/Projects/HR).
         // A live session carries BOTH a client and a selected org (the client id
         // is NOT used as an org — that was the wrong-org bug).
+        DB::connection('mysql')->table('organizations')->updateOrInsert(
+            ['id' => 123],
+            ['central_organization_id' => 123, 'client_id' => 123, 'name' => 'Resolver fixture', 'database_name' => 'tenant_000123', 'is_active' => 1],
+        );
         $s = app(LiveTenantResolver::class)->state($this->request(['client_id' => 123, 'selected_central_org_id' => 123]));
         $this->assertSame('tenant_000123', $s['database']);
         $this->assertSame('live', $s['mode']);
@@ -265,6 +270,10 @@ class LiveTenantResolverTest extends TestCase
     public function live_ready_carries_org_scope_and_client_db_key(): void
     {
         // org-scope (organization_id) and DB key (client_id) are distinct values.
+        DB::connection('mysql')->table('organizations')->updateOrInsert(
+            ['id' => 10],
+            ['central_organization_id' => 10, 'client_id' => 8, 'name' => 'Resolver fixture', 'database_name' => 'tenant_000008', 'is_active' => 1],
+        );
         $s = app(LiveTenantResolver::class)->state($this->request([
             'client_id' => 8, 'selected_central_org_id' => 10,
         ]));

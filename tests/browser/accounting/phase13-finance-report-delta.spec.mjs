@@ -3,7 +3,8 @@ import fs from 'node:fs';
 
 test.setTimeout(180_000);
 test.use({ trace: 'retain-on-failure', screenshot: 'only-on-failure' });
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const evidenceFile = '/tmp/solastock-practical-verification-20260719/17-phase13-final/finance-report-delta.json';
 const prefix = 'QA-SOLASTOCK-PHASE13-20260720-' + Date.now();
 const accountCodes = ['1200', '1301', '1703', '2100', '2201', '4101', '4303', '5001', '6804'];

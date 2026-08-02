@@ -34,6 +34,7 @@
             if (!t) t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
             document.documentElement.setAttribute("data-theme", t);
             window.SOLASTOCK_LOCALE = @json(['locale' => $locale, 'dir' => $dir]);
+            window.SOLASTOCK_BASE_PATH = @json(app()->environment('staging') ? '' : '/inventory');
         })();
     </script>
 

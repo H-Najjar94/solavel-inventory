@@ -20,8 +20,8 @@ final class WorkflowDocumentMappingService
             ->where('solastock_organization_id', (int) $event->organization_id)
             ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
             ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold')
+            ->whereIn('status', ['verified_hold', 'verified'])
+            ->whereIn('activation_state', ['maintenance_hold', 'active'])
             ->first();
         if (! $organization) {
             return null;
@@ -98,8 +98,8 @@ final class WorkflowDocumentMappingService
             ->where('solastock_organization_id', (int) $event->organization_id)
             ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
             ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold')
+            ->whereIn('status', ['verified_hold', 'verified'])
+            ->whereIn('activation_state', ['maintenance_hold', 'active'])
             ->first();
         if (! $organization) {
             return;

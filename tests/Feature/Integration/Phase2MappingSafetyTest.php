@@ -4,6 +4,7 @@ namespace Tests\Feature\Integration;
 
 use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\Item;
@@ -23,6 +24,13 @@ use Tests\Traits\TenantAware;
 
 final class Phase2MappingSafetyTest extends TestCase
 {
+    public function test_organization_mapping_is_always_resolved_from_the_tenant_connection(): void
+    {
+        $this->assertSame('tenant', (new IntegrationOrganizationMapping())->getConnectionName());
+        $this->assertSame('tenant', (new IntegrationDocumentLifecycleMapping())->getConnectionName());
+        $this->assertSame('tenant', (new IntegrationMasterDataMapping())->getConnectionName());
+    }
+
     use TenantAware;
 
     protected function setUp(): void
@@ -164,6 +172,7 @@ final class Phase2MappingSafetyTest extends TestCase
     public function v2_scope_preparation_backfills_only_verified_immutable_identity_metadata(): void
     {
         $mapping = $this->organizationMapping();
+        $mapping->update(['status' => 'verified', 'activation_state' => 'active']);
         $setting = IntegrationSetting::query()->create([
             'organization_id' => TenantTestManager::ORG_A,
             'integration' => 'solabooks',
@@ -220,30 +229,6 @@ final class Phase2MappingSafetyTest extends TestCase
     public function discovery_is_read_only_and_backfill_adds_only_reviewed_exact_one_to_one_matches(): void
     {
         try {
-            DB::connection('tenant')->statement(
-            'CREATE TABLE organizations (
-                id BIGINT UNSIGNED PRIMARY KEY,
-                central_org_id BIGINT UNSIGNED NOT NULL
-            )'
-            );
-            DB::connection('tenant')->statement(
-            'CREATE TABLE inventory_items (
-                id BIGINT UNSIGNED PRIMARY KEY,
-                organization_id BIGINT UNSIGNED NOT NULL,
-                sku VARCHAR(191) NULL,
-                barcode VARCHAR(191) NULL,
-                name VARCHAR(191) NULL,
-                deleted_at TIMESTAMP NULL
-            )'
-            );
-            DB::connection('tenant')->statement(
-            'CREATE TABLE accounts (
-                id BIGINT UNSIGNED PRIMARY KEY,
-                organization_id BIGINT UNSIGNED NOT NULL,
-                is_active TINYINT(1) NOT NULL,
-                is_postable TINYINT(1) NOT NULL
-            )'
-            );
             DB::connection('tenant')->table('organizations')->insert([
             'id' => 14,
             'central_org_id' => TenantTestManager::ORG_A,
@@ -350,9 +335,6 @@ final class Phase2MappingSafetyTest extends TestCase
                 ->whereIn('mapping_type', ['inventory_asset', 'cogs'])
                 ->delete();
             Item::query()->whereIn('sku', ['PH2-EXACT', 'STOCK-AMB', 'STOCK-MISSING'])->forceDelete();
-            DB::connection('tenant')->statement('DROP TABLE IF EXISTS accounts');
-            DB::connection('tenant')->statement('DROP TABLE IF EXISTS inventory_items');
-            DB::connection('tenant')->statement('DROP TABLE IF EXISTS organizations');
         }
     }
 

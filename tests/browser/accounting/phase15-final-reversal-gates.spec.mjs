@@ -5,7 +5,8 @@ test.setTimeout(420_000);
 test.describe.configure({ mode: 'serial' });
 test.use({ trace: 'retain-on-failure', screenshot: 'only-on-failure' });
 
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const evidenceFile = '/tmp/solastock-practical-verification-20260719/19-phase15-final/deployed-reversal-matrix.json';
 const run = Date.now();
 const prefix = `QA-SOLASTOCK-PHASE15-20260721-${run}`;

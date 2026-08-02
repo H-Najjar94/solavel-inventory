@@ -2,6 +2,36 @@
 
 use Illuminate\Support\Facades\Route;
 
+if (app()->environment('staging')) {
+    $assertPhase6aStaging = static function (): void {
+        $tenant = (string) config('database.connections.tenant.database');
+        $central = (string) config('database.connections.mysql.database');
+        $port = (int) \Illuminate\Support\Facades\DB::connection('tenant')->selectOne('SELECT @@port AS port')->port;
+        abort_unless(
+            preg_match('/^phase6a_uat_[a-z0-9_]+$/D', $tenant) === 1
+                && $central === 'phase6a_staging_stock_registry'
+                && $port === 0,
+            404,
+        );
+    };
+    Route::get('/__phase6a/login', function () use ($assertPhase6aStaging) {
+        $assertPhase6aStaging();
+        return view('phase6a-staging-login');
+    });
+    Route::post('/__phase6a/login', function (\Illuminate\Http\Request $request) use ($assertPhase6aStaging) {
+        $assertPhase6aStaging();
+        $credentials = $request->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
+        if (! \Illuminate\Support\Facades\Auth::attempt($credentials)) {
+            return back()->withErrors(['email' => 'Invalid isolated-staging credentials.']);
+        }
+        $request->session()->regenerate();
+        $user = $request->user();
+        $request->session()->put('selected_client_id', (int) $user->client_id);
+        $request->session()->put('selected_central_org_id', (int) $user->organization_id);
+        return redirect('/dashboard');
+    });
+}
+
 // Routes are written prefix-less. Apache aliases /inventory/* to this app's
 // public/, stripping the /inventory prefix, so Laravel sees /dashboard etc.
 // The live URLs are https://solavel.com/inventory/<path>.

@@ -27,8 +27,8 @@ final class WorkflowCurrencyResolver
             ->where('solastock_organization_id', $orgId)
             ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
             ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold')
+            ->whereIn('status', ['verified_hold', 'verified'])
+            ->whereIn('activation_state', ['maintenance_hold', 'active'])
             ->first();
         if (! $mapping) {
             return ['code' => $this->legacyDocumentCurrency($document, $documentType)];
@@ -172,7 +172,11 @@ final class WorkflowCurrencyResolver
             return $date->toDateString();
         }
 
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) ? $date : null;
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})(?: 00:00:00)?$/D', $date, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
     }
 
     private function fail(string $code, array $context = []): never

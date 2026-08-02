@@ -4,7 +4,8 @@ import fs from 'node:fs';
 test.setTimeout(420_000);
 test.use({ trace: 'retain-on-failure', screenshot: 'only-on-failure' });
 
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const evidenceFile = '/tmp/solastock-practical-verification-20260719/19-phase15-final/outbox-final.json';
 const accountingTypes = new Set([
     'opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed',

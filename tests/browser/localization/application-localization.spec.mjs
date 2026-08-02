@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import { dictionaries } from '../../../resources/js/solastock/i18n/index.js';
 
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 
 function passwordFor(email) {
     const line = fs.readFileSync(credentialsFile, 'utf8').split(/\r?\n/)

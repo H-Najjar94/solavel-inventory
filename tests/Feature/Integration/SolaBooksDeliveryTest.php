@@ -34,6 +34,10 @@ class SolaBooksDeliveryTest extends TestCase
     private function bootActiveIntegration(): void
     {
         $this->useTenantA();
+        DB::connection('tenant')->table('organizations')->updateOrInsert(
+            ['id' => 14],
+            ['central_org_id' => TenantTestManager::ORG_A]
+        );
         Organization::query()->updateOrCreate(
             ['central_organization_id' => TenantTestManager::ORG_A],
             ['name' => 'Contract Test Org', 'database_name' => 'solastock_test_a', 'base_currency' => 'JOD', 'is_active' => true]
@@ -72,8 +76,8 @@ class SolaBooksDeliveryTest extends TestCase
                 'central_organization_id' => TenantTestManager::ORG_A,
                 'finance_organization_id' => 14,
                 'contract_version' => SolaStockJournalContract::VERSION,
-                'status' => 'verified_hold',
-                'activation_state' => 'maintenance_hold',
+                'status' => 'verified',
+                'activation_state' => 'active',
                 'base_currency_code' => 'JOD',
                 'currency_verified_at' => now(),
                 'verified_at' => now(),

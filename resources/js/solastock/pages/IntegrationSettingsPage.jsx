@@ -74,7 +74,7 @@ export default function IntegrationSettingsPage() {
                 </span>}
             </header>
 
-            <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'accounts', label: tr('integration.tabs.accounts') }, { key: 'taxes', label: tr('integration.tabs.taxes') }, { key: 'items', label: tr('integration.tabs.items') }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }, { key: 'accounts', label: tr('integration.tabs.accounts') }, { key: 'taxes', label: tr('integration.tabs.taxes') }, { key: 'items', label: tr('integration.tabs.items') }]} active={tab} onChange={setTab} />
 
             {tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
                 <EmptyState
@@ -183,8 +183,175 @@ export default function IntegrationSettingsPage() {
             {tab === 'accounts' && <AccountMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'taxes' && <TaxMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'items' && <ItemMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
+            {tab === 'wizard' && <ConnectionWizard gate={gate} toast={toast} tr={tr} />}
         </section>
     );
+}
+
+function ConnectionWizard({ gate, toast, tr }) {
+    const discovery = useApiQuery(['integration-wizard-discovery'], api.integrationWizardDiscovery, { fallback: null, enabled: true });
+    const [runUuid, setRunUuid] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [confirmation, setConfirmation] = useState('');
+    const [activationApprovalId, setActivationApprovalId] = useState('');
+    const run = useApiQuery(['integration-wizard-preview', runUuid], () => api.integrationWizardPreview(runUuid), {
+        fallback: null,
+        enabled: Boolean(runUuid),
+    });
+    const view = runUuid ? run.data : discovery.data;
+
+    async function start() {
+        setSaving(true);
+        try {
+            const response = await api.startIntegrationWizard();
+            setRunUuid(response.data.run_uuid);
+            toast.push(tr('integration.wizard.started'), 'success');
+        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        finally { setSaving(false); }
+    }
+
+    async function decide(row, action) {
+        setSaving(true);
+        try {
+            await api.saveIntegrationWizardDecision(runUuid, {
+                candidate_fingerprint: row.fingerprint,
+                action,
+                solastock_record_ids: row.solastock_record_ids,
+                solabooks_record_ids: row.solabooks_record_ids,
+                safe_details: { reason: row.blocking_reason },
+            });
+            await run.refetch();
+            toast.push(tr('integration.wizard.decisionSaved'), 'success');
+        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        finally { setSaving(false); }
+    }
+
+    async function approve() {
+        setSaving(true);
+        try {
+            await api.approveIntegrationWizard(runUuid, {
+                approval_payload_hash: run.data.approval_payload_hash,
+                confirmation,
+            });
+            await run.refetch();
+            setConfirmation('');
+            toast.push(tr('integration.wizard.approvedHold'), 'success');
+        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        finally { setSaving(false); }
+    }
+
+    async function activate() {
+        setSaving(true);
+        try {
+            await api.activateIntegrationWizard(runUuid, {
+                approval_payload_hash: run.data.approval_payload_hash,
+                activation_approval_id: activationApprovalId,
+                confirmation,
+            });
+            await run.refetch();
+            toast.push(tr('integration.wizard.activated'), 'success');
+        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        finally { setSaving(false); }
+    }
+
+    async function pause() {
+        setSaving(true);
+        try {
+            await api.pauseIntegrationWizard(runUuid, { activation_approval_id: activationApprovalId });
+            await run.refetch();
+            toast.push(tr('integration.wizard.paused'), 'success');
+        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        finally { setSaving(false); }
+    }
+
+    function exportComparison() {
+        const rows = view?.comparison ?? [];
+        const headings = ['entity_type', 'classification', 'solastock_id', 'solabooks_id', 'sku_stock', 'sku_books', 'quantity_stock', 'quantity_books', 'quantity_difference', 'value_stock', 'value_books', 'value_difference', 'blocking_reason'];
+        const csv = [headings, ...rows.map((row) => [
+            row.entity_type, row.classification, row.solastock?.id, row.solabooks?.id,
+            row.solastock?.sku || row.solastock?.code, row.solabooks?.sku || row.solabooks?.code,
+            row.solastock?.quantity, row.solabooks?.quantity, row.quantity_difference,
+            row.solastock?.inventory_value, row.solabooks?.inventory_value, row.value_difference, row.blocking_reason,
+        ])].map((line) => line.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url; link.download = `solabooks-solastock-comparison-${view?.snapshot_hash?.slice(0, 12) || 'preview'}.csv`;
+        link.click(); URL.revokeObjectURL(url);
+    }
+
+    if (discovery.isLoading || (runUuid && run.isLoading)) return <Skeleton />;
+    if (discovery.isError || (runUuid && run.isError)) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
+    if (!view) return <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} />;
+
+    const totals = view.totals || {};
+    const accounting = view.accounting || {};
+    const rows = view.comparison || [];
+    return <div className="wizard" aria-live="polite">
+        <div className="panel wizard__intro">
+            <h2>{tr('integration.wizard.title')}</h2>
+            <div className="status-line" role="status"><span className="status-dot" />{tr(`integration.wizard.state.${view.state || view.connection_state || 'temporarily_unavailable'}`, {}, view.state || view.connection_state)}</div>
+            <p>{tr('integration.wizard.authority')}</p>
+            <p className="muted">{tr('integration.wizard.noMerge')}</p>
+            <div className="doc-actions">
+                {!runUuid && <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={start}>{saving ? tr('integration.wizard.starting') : tr('integration.wizard.freezeStart')}</button>}
+                <button className="btn" onClick={exportComparison}>{tr('integration.wizard.export')}</button>
+            </div>
+        </div>
+
+        <ol className="wizard__steps" aria-label={tr('integration.wizard.progress')}>
+            {['subscription', 'discovery', 'review', 'accounting', 'preview', 'approval', 'connected'].map((step, index) => <li key={step} className={index <= (runUuid ? 4 : 1) ? 'is-current' : ''}>{tr(`integration.wizard.step.${step}`)}</li>)}
+        </ol>
+
+        <div className="widget-grid">
+            {['exact_matches', 'review_required', 'missing_in_solastock', 'missing_in_solabooks', 'ambiguous', 'blocked'].map((key) => <div className="widget-card" key={key}><div className="widget-card-label">{tr(`integration.wizard.total.${key}`)}</div><div className="widget-card-value">{totals[key] ?? 0}</div></div>)}
+        </div>
+        <div className="panel">
+            <h3>{tr('integration.wizard.differences')}</h3>
+            <dl className="kv">
+                <dt>{tr('integration.wizard.quantityDifference')}</dt><dd>{totals.total_quantity_difference ?? '0.0000'}</dd>
+                <dt>{tr('integration.wizard.valueDifference')}</dt><dd>{totals.total_valuation_difference ?? '0.00'} {accounting.base_currency || ''}</dd>
+                <dt>{tr('integration.wizard.snapshot')}</dt><dd className="wizard__hash">{view.snapshot_id || tr('integration.wizard.previewOnly')} · {view.snapshot_hash}</dd>
+            </dl>
+        </div>
+
+        <div className="panel wizard__table-wrap">
+            <h3>{tr('integration.wizard.comparison')}</h3>
+            <table className="data-table wizard__comparison">
+                <thead><tr><th>{tr('integration.wizard.entity')}</th><th>SolaStock</th><th>SolaBooks</th><th>{tr('integration.wizard.quantity')}</th><th>{tr('integration.wizard.value')}</th><th>{tr('integration.wizard.evidence')}</th><th>{tr('integration.wizard.decision')}</th></tr></thead>
+                <tbody>{rows.map((row) => <tr key={row.fingerprint} className={row.blocking_reason ? 'is-blocked' : ''}>
+                    <td data-label={tr('integration.wizard.entity')}><strong>{tr(`integration.wizard.entity.${row.entity_type}`, {}, row.entity_type)}</strong><br /><span className="muted">{tr(`integration.wizard.classification.${row.classification}`, {}, row.classification)}</span></td>
+                    <td data-label="SolaStock">{row.solastock ? <><strong>{row.solastock.name}</strong><br />{row.solastock.sku || row.solastock.code || `#${row.solastock.id}`}<br /><span className="muted">{row.solastock.barcode || '—'}</span></> : '—'}</td>
+                    <td data-label="SolaBooks">{row.solabooks ? <><strong>{row.solabooks.name}</strong><br />{row.solabooks.sku || row.solabooks.code || `#${row.solabooks.id}`}<br /><span className="muted">{row.solabooks.barcode || '—'}</span></> : '—'}</td>
+                    <td data-label={tr('integration.wizard.quantity')}>{row.solastock?.quantity ?? '—'} / {row.solabooks?.quantity ?? '—'}<br /><strong>{row.quantity_difference}</strong></td>
+                    <td data-label={tr('integration.wizard.value')}>{row.solastock?.inventory_value ?? '—'} / {row.solabooks?.inventory_value ?? '—'}<br /><strong>{row.value_difference}</strong></td>
+                    <td data-label={tr('integration.wizard.evidence')}>{tr(`integration.wizard.confidence.${row.mapping_confidence}`)}<br /><span className="muted">{row.blocking_reason ? tr(`integration.wizard.block.${row.blocking_reason}`, {}, row.blocking_reason) : tr('integration.wizard.noBlock')}</span></td>
+                    <td data-label={tr('integration.wizard.decision')}>{runUuid && row.blocking_reason ? <label className="field"><span className="sr-only">{tr('integration.wizard.decision')}</span><select className="input" disabled={!gate.allowed || saving} defaultValue="" onChange={(event) => event.target.value && decide(row, event.target.value)}><option value="">{tr('integration.wizard.choose')}</option>{['bind_existing', 'create_solastock_record', 'keep_solastock_authority', 'physical_count_required', 'retain_blocked', 'exclude_initial_connection', 'select_authoritative_record', 'resolve_account_category'].map((action) => <option key={action} value={action}>{tr(`integration.wizard.action.${action}`)}</option>)}</select></label> : tr('integration.wizard.noDecision')}</td>
+                </tr>)}</tbody>
+            </table>
+        </div>
+
+        <div className="panel">
+            <h3>{tr('integration.wizard.accounting')}</h3>
+            <p>{tr('integration.wizard.inheritance', { policy: accounting.inheritance_policy || '' })}</p>
+            <div className="wizard__account-grid">{(accounting.accounts || []).map((account) => <div className={`widget-card ${account.valid ? '' : 'is-blocked'}`} key={account.role}><div className="widget-card-label">{tr(`integration.mapping.${account.role}`, {}, account.role)}</div><div>{account.account_code || '—'} {account.account_name || ''}</div><small>{account.valid ? tr('integration.wizard.valid') : tr('integration.wizard.accountBlocked')}</small></div>)}</div>
+            {totals.proposed_accounting_effect?.amount && <div className="panel" role="alert"><strong>{tr('integration.wizard.separateApproval')}</strong><p>{totals.proposed_accounting_effect.debit} / {totals.proposed_accounting_effect.credit}: {totals.proposed_accounting_effect.amount} {accounting.base_currency}</p></div>}
+        </div>
+
+        {runUuid && <div className="panel">
+            <h3>{tr('integration.wizard.finalApproval')}</h3>
+            <p>{tr('integration.wizard.readOnlyAfter')}</p>
+            <p className="wizard__hash">{run.data?.approval_payload_hash}</p>
+            {run.data?.state === 'ready_for_approval' ? <>
+                <label className="field"><span className="field-label">{tr('integration.wizard.confirmation')}</span><input className="input" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label>
+                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={approve}>{tr('integration.wizard.approve')}</button>
+            </> : <p role="status">{tr('integration.wizard.reviewRemaining', { count: run.data?.blocking?.length ?? 0 })}</p>}
+            {run.data?.activation_available && ['approved_maintenance_hold', 'connected'].includes(run.data?.state) && <div className="panel">
+                <label className="field"><span className="field-label">{tr('integration.wizard.activationApproval')}</span><input className="input" value={activationApprovalId} onChange={(event) => setActivationApprovalId(event.target.value)} autoComplete="off" /></label>
+                {run.data?.state === 'approved_maintenance_hold' && <><label className="field"><span className="field-label">{tr('integration.wizard.confirmation')}</span><input className="input" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label><button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={activate}>{tr('integration.wizard.activate')}</button></>}
+                {run.data?.state === 'connected' && <button className="btn" disabled={!gate.allowed || saving} onClick={pause}>{tr('integration.wizard.pause')}</button>}
+            </div>}
+        </div>}
+    </div>;
 }
 
 function TaxMappings({ gate, toast, qc, tr }) {

@@ -59,6 +59,10 @@ class EventPayloadBuilder
         $suggested = IntegrationEvents::suggestedAccounts($eventType);
 
         $currency = $this->currencies->resolve($document, $documentType, $date);
+        // The currency authority validates and canonicalizes the transaction
+        // date. Persist that exact YYYY-MM-DD value in the immutable event
+        // payload instead of a model-cast midnight timestamp.
+        $transactionDate = (string) ($currency['rate_date'] ?? $date ?? '');
 
         return array_merge([
             'source_app' => 'solastock',
@@ -67,7 +71,7 @@ class EventPayloadBuilder
             'document_type' => $documentType,
             'document_id' => (int) $document->id,
             'document_number' => $number,
-            'document_date' => $date,
+            'document_date' => $transactionDate,
             'currency' => $currency,
             'total_inventory_value_change' => Decimal::money($totalChange),
             'lines' => $lines,

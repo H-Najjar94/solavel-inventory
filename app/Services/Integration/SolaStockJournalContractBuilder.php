@@ -49,8 +49,8 @@ final class SolaStockJournalContractBuilder
             ->where('central_organization_id', (int) $meta['central_organization_id'])
             ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
             ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold')
+            ->whereIn('status', ['verified_hold', 'verified'])
+            ->whereIn('activation_state', ['maintenance_hold', 'active'])
             ->first();
         if (! $organizationMapping) {
             throw new RuntimeException(__('inventory.integration.contract_v2_mapping_missing'));

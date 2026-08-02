@@ -3,7 +3,8 @@ import fs from 'node:fs';
 
 test.setTimeout(300_000);
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
-const credentialsFile = '/home/hnajjar/.solavel-qa-credentials';
+const credentialsFile = process.env.SOLASTOCK_STAGING_CREDENTIALS;
+if (!credentialsFile) throw new Error('SOLASTOCK_STAGING_CREDENTIALS is required; production browser credentials are prohibited.');
 const evidenceFile = '/tmp/solastock-practical-verification-20260719/17-phase13-final/outbox-delivery-reconciliation.json';
 const stateEvidenceFile = '/tmp/solastock-practical-verification-20260719/17-phase13-final/state-reconciliation.json';
 

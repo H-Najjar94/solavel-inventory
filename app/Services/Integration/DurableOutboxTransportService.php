@@ -249,8 +249,8 @@ final class DurableOutboxTransportService
         $mapping = IntegrationOrganizationMapping::query()
             ->where('solastock_organization_id', $organizationId)
             ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified_hold')
-            ->where('activation_state', 'maintenance_hold')->first();
+            ->where('status', 'verified')
+            ->where('activation_state', 'active')->first();
         if (! $mapping) {
             throw new RuntimeException('Verified immutable organization mapping is required.');
         }

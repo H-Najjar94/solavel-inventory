@@ -2,7 +2,7 @@
 // /inventory/api/v1 (Apache serves the app beneath /inventory). The Finance-style
 // envelope is { success, data, meta? } / { success:false, error }.
 
-const BASE = '/inventory/api/v1';
+const BASE = `${window.SOLASTOCK_BASE_PATH ?? '/inventory'}/api/v1`;
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
@@ -313,6 +313,15 @@ export const api = {
     syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
     // SolaBooks integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
+    integrationWizardDiscovery: () => request('/integration/solabooks/wizard/discovery'),
+    startIntegrationWizard: () => request('/integration/solabooks/wizard/runs', { method: 'POST' }),
+    integrationWizardRun: (run) => request(`/integration/solabooks/wizard/runs/${run}`),
+    integrationWizardPreview: (run) => request(`/integration/solabooks/wizard/runs/${run}/preview`),
+    saveIntegrationWizardDecision: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/decisions`, { method: 'PUT', body }),
+    reverseIntegrationWizardDecision: (run, decision) => request(`/integration/solabooks/wizard/runs/${run}/decisions/${decision}`, { method: 'DELETE' }),
+    approveIntegrationWizard: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/approve`, { method: 'POST', body }),
+    activateIntegrationWizard: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/activate`, { method: 'POST', body }),
+    pauseIntegrationWizard: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/pause`, { method: 'POST', body }),
     configureIntegration: (body) => request('/integration/solabooks/connection', { method: 'PUT', body }),
     rotateIntegrationSigningKey: () => request('/integration/solabooks/signing-keys/rotate', { method: 'POST' }),
     revokeIntegrationSigningKey: (key_id) => request('/integration/solabooks/signing-keys/revoke', { method: 'POST', body: { key_id } }),
