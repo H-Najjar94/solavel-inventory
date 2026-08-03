@@ -116,6 +116,7 @@ final class ConnectionWizardTest extends TestCase
     public function wizard_ui_contract_has_english_arabic_rtl_responsive_and_no_legacy_fallback(): void
     {
         $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
+        $assistant = file_get_contents(resource_path('js/solastock/components/GuidedConnectionAssistant.jsx'));
         $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
         $styles = file_get_contents(resource_path('js/solastock/styles/solastock.css'));
 
@@ -146,6 +147,18 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertStringContainsString('ConnectionPhaseBadges', $page);
         $this->assertStringNotContainsString('<HealthBadge health={s.health}', $page);
+        foreach (['Automatic checks', 'Resolve exceptions', 'Review and confirm', 'Advanced details'] as $label) {
+            $this->assertStringContainsString($label, $translations);
+        }
+        foreach (['فحوصات تلقائية', 'حل الاستثناءات', 'المراجعة والتأكيد', 'تفاصيل متقدمة'] as $label) {
+            $this->assertStringContainsString($label, $translations);
+        }
+        $this->assertStringContainsString('assistant-progress', $assistant);
+        $this->assertStringContainsString('type="search"', $assistant);
+        $this->assertStringContainsString('assistant-actionbar', $assistant);
+        $this->assertStringContainsString('<details className="assistant-details">', $assistant);
+        $this->assertStringNotContainsString('source_account_id', $assistant);
+        $this->assertStringNotContainsString('signing', strtolower($assistant));
     }
 
     #[Test]
@@ -308,6 +321,57 @@ final class ConnectionWizardTest extends TestCase
         $this->assertTrue($unit['safe_details']['authoritative_unit_details_required']);
     }
 
+    #[Test]
+    public function guided_setup_auto_resolves_finance_authority_and_keeps_only_real_exceptions(): void
+    {
+        $rows = [
+            $this->guidedRow('account_role', 'candidate_requires_accountant_approval', 'account-ok', ['10'], ['role' => 'inventory_asset']),
+            $this->guidedRow('account_role', 'unresolved_account_role', 'account-missing', [], ['role' => 'grni']),
+            $this->guidedRow('tax', 'owner_review_required', 'tax-ok', ['20'], ['active' => true]),
+            $this->guidedRow('currency', 'owner_review_required', 'jod', ['30'], ['active' => true, 'configured_rate' => '1.000000'], 'JOD'),
+            $this->guidedRow('currency', 'owner_review_required', 'xts', ['31'], ['active' => true, 'configured_rate' => '1.000000'], 'XTS'),
+            $this->guidedRow('currency', 'owner_review_required', 'xxx', ['32'], ['active' => true, 'configured_rate' => '1.000000'], 'XXX'),
+        ];
+        $method = new \ReflectionMethod(ConnectionWizardService::class, 'guidedSetup');
+        $profile = $method->invoke(app(ConnectionWizardService::class), $rows, 'JOD', 0);
+
+        $this->assertSame(1, $profile['checks']['accounts_resolved']);
+        $this->assertSame(1, $profile['checks']['account_exceptions']);
+        $this->assertSame(1, $profile['checks']['taxes_resolved']);
+        $this->assertSame(['JOD'], $profile['currency_summary']['operational']);
+        $this->assertSame(2, $profile['currency_summary']['advanced_remediation_count']);
+        $this->assertSame(['XTS', 'XXX'], $profile['currency_summary']['reserved_codes']);
+        $this->assertSame(['account-missing'], $profile['exception_groups']['accounting']);
+        $this->assertCount(3, $profile['automatic_bindings']);
+        $this->assertFalse($profile['operational_mutation_allowed']);
+
+        $changed = $rows;
+        $changed[0]['solabooks_record_ids'] = ['11'];
+        $changedProfile = $method->invoke(app(ConnectionWizardService::class), $changed, 'JOD', 0);
+        $this->assertNotSame($profile['source_invalidation_hash'], $changedProfile['source_invalidation_hash']);
+    }
+
+    #[Test]
+    public function multiple_finance_account_candidates_are_an_exception_and_never_auto_selected(): void
+    {
+        $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('accounts')->insert([
+            ['id' => 9101, 'organization_id' => 14, 'code' => 'INV-A', 'name' => 'Inventory asset A', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+            ['id' => 9102, 'organization_id' => 14, 'code' => 'INV-B', 'name' => 'Inventory asset B', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+        ]);
+
+        $preview = app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A);
+        $inventoryRole = collect($preview['comparison'])->first(fn (array $row) =>
+            $row['entity_type'] === 'account_role'
+            && ($row['safe_details']['role'] ?? null) === 'inventory_asset'
+        );
+
+        $this->assertSame('ambiguous_account_role', $inventoryRole['classification']);
+        $this->assertSame(2, $inventoryRole['safe_details']['candidate_count']);
+        $this->assertSame([], $inventoryRole['solabooks_record_ids']);
+        $this->assertContains($inventoryRole['fingerprint'], $preview['guided_setup']['exception_groups']['accounting']);
+    }
+
     private function seedConnectionFixture(bool $withMapping = true): array
     {
         $this->seedCentralIdentity();
@@ -368,6 +432,26 @@ final class ConnectionWizardTest extends TestCase
         }
 
         return [$mapping, $item];
+    }
+
+    private function guidedRow(string $entityType, string $classification, string $fingerprint,
+        array $financeIds, array $details, ?string $code = null): array
+    {
+        return [
+            'fingerprint' => $fingerprint,
+            'entity_type' => $entityType,
+            'classification' => $classification,
+            'solastock_record_ids' => [],
+            'solabooks_record_ids' => $financeIds,
+            'solastock' => null,
+            'solabooks' => $financeIds === [] ? null : ['id' => $financeIds[0], 'code' => $code],
+            'quantity_difference' => '0.0000',
+            'value_difference' => '0.00',
+            'blocking_reason' => 'review_required',
+            'mapping_confidence' => 'review_required',
+            'decision_class' => $entityType === 'account_role' ? 'accountant_decision' : 'owner_decision',
+            'safe_details' => $details,
+        ];
     }
 
     private function seedCentralIdentity(): void

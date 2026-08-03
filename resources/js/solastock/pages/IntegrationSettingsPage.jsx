@@ -8,6 +8,7 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import { useTenant } from '../stores/tenant.jsx';
+import GuidedConnectionAssistant from '../components/GuidedConnectionAssistant.jsx';
 
 function ConnectionPhaseBadges({ status, setupAllowed, tr }) {
     const setup = status?.setup_status === 'available' || setupAllowed ? 'available' : 'unavailable';
@@ -81,7 +82,7 @@ export default function IntegrationSettingsPage() {
                 <ConnectionPhaseBadges status={s} setupAllowed={setupGate.allowed} tr={tr} />
             </header>
 
-            <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }, { key: 'accounts', label: tr('integration.tabs.accounts') }, { key: 'taxes', label: tr('integration.tabs.taxes') }, { key: 'items', label: tr('integration.tabs.items') }]} active={tab} onChange={setTab} />
+            <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />
 
             {tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
                 <EmptyState
@@ -187,9 +188,6 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {tab === 'accounts' && <AccountMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
-            {tab === 'taxes' && <TaxMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
-            {tab === 'items' && <ItemMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} />}
         </section>
     );
@@ -221,6 +219,8 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr }) {
     const [confirmation, setConfirmation] = useState('');
     const [bulkSelection, setBulkSelection] = useState([]);
     const [cutoffAt, setCutoffAt] = useState('');
+    const [assistantStep, setAssistantStep] = useState(1);
+    const [exceptionSearch, setExceptionSearch] = useState('');
     const run = useApiQuery(['integration-wizard-preview', runUuid], () => api.integrationWizardPreview(runUuid), {
         fallback: null,
         enabled: Boolean(runUuid),
@@ -310,6 +310,20 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr }) {
     const totals = view.totals || {};
     const accounting = view.accounting || {};
     const rows = view.comparison || [];
+    if (view.guided_setup) {
+        return <GuidedConnectionAssistant
+            view={view} runUuid={runUuid} run={run} gate={gate} accountingGate={accountingGate}
+            status={status} saving={saving} tr={tr} decisions={decisions} rows={rows}
+            totals={totals} accounting={accounting} assistantStep={assistantStep}
+            setAssistantStep={setAssistantStep} exceptionSearch={exceptionSearch}
+            setExceptionSearch={setExceptionSearch} allowedActions={allowedActions}
+            canEdit={canEdit} editableState={editableState} decide={decide} bulkSelection={bulkSelection}
+            toggleBulk={toggleBulk} bulk={bulk} exportComparison={exportComparison} start={start}
+            runAction={runAction} cutoffAt={cutoffAt} setCutoffAt={setCutoffAt}
+            confirmation={confirmation} setConfirmation={setConfirmation}
+            PhaseBadges={ConnectionPhaseBadges}
+        />;
+    }
     return <div className="wizard" aria-live="polite">
         <div className="panel wizard__intro">
             <h2>{tr('integration.wizard.title')}</h2>
