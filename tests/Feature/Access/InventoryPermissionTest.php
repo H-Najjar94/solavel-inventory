@@ -180,4 +180,17 @@ class InventoryPermissionTest extends TestCase
             $this->assertTrue($p->can($this->user(), $perm), "owner must be able to {$perm}");
         }
     }
+
+    #[Test]
+    public function accountant_can_review_only_accounting_wizard_decisions(): void
+    {
+        app(OrganizationContext::class)->set(self::ORG);
+        $p = $this->perms('accountant');
+
+        $this->assertTrue($p->can($this->user(), 'inventory.integration.view'));
+        $this->assertTrue($p->can($this->user(), 'inventory.integration.accounting_review'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.manage'));
+        $this->assertFalse($p->can($this->user(), 'inventory.manage_items'));
+        $this->assertFalse($p->can($this->user(), 'inventory.manage_adjustments'));
+    }
 }

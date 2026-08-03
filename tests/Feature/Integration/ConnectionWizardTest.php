@@ -186,6 +186,34 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame('37.0000', (string) DB::connection('tenant')->table('inventory_items')->where('id', $booksId)->value('qty_on_hand'));
     }
 
+    #[Test]
+    public function organization_switching_and_invalid_direct_actions_fail_closed(): void
+    {
+        $this->seedConnectionFixture(false);
+        $wizard = app(ConnectionWizardService::class);
+        $draft = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $candidate = collect($draft['comparison'])->first(fn (array $row) => $row['entity_type'] === 'item'
+            && $row['classification'] === 'exact_candidate_requires_owner_review');
+        $this->assertNotNull($candidate);
+
+        try {
+            $wizard->show(TenantTestManager::ORG_B, $draft['run_uuid']);
+            $this->fail('A draft must not be visible after organization switching.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertTrue(true);
+        }
+        try {
+            $wizard->decide(TenantTestManager::ORG_A, $draft['run_uuid'], $candidate['fingerprint'],
+                'select_account_role', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'], [],
+                7001, $draft['lock_version'], $candidate['candidate_before_hash'], true, false);
+            $this->fail('A direct API call must not apply an action from another candidate type.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertTrue(true);
+        }
+        $this->assertSame(0, DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $draft['run_uuid'])->count());
+    }
+
     private function seedConnectionFixture(bool $withMapping = true): array
     {
         $this->seedCentralIdentity();
