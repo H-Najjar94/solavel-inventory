@@ -377,6 +377,16 @@ final class ConnectionWizardTest extends TestCase
                 && $row['solabooks_record_ids'] === [(string) $booksId]
         );
         $this->assertNotNull($candidate);
+        try {
+            $wizard->decide(
+                TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+                'classify_inventory_item', [], [(string) $booksId], [], 7001,
+                $preview['lock_version'], $candidate['candidate_before_hash'], true, false,
+            );
+            $this->fail('The redundant internal inventory classification must not be offered or accepted.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertTrue(true);
+        }
         $wizard->decide(
             TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
             'create_solastock_record', [], [(string) $booksId], ['reason' => 'authorized_create_proposal_only'], 7001,
@@ -385,6 +395,17 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
         $this->assertFalse(Item::query()->where('sku', 'FINANCE-ONLY')->exists());
         $this->assertSame('37.0000', (string) DB::connection('tenant')->table('inventory_items')->where('id', $booksId)->value('qty_on_hand'));
+    }
+
+    #[Test]
+    public function finance_only_item_exposes_one_inventory_creation_decision_not_duplicate_internal_actions(): void
+    {
+        $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
+        $service = file_get_contents(app_path('Services/Integration/ConnectionWizardService.php'));
+        $expected = "missing_solastock_record: ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required']";
+        $this->assertStringContainsString($expected, $page);
+        $this->assertStringContainsString("'missing_solastock_record' => ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required']", $service);
+        $this->assertStringNotContainsString("missing_solastock_record: ['create_solastock_record', 'classify_inventory_item'", $page);
     }
 
     #[Test]

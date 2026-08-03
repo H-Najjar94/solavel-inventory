@@ -1723,7 +1723,7 @@ final class ConnectionWizardService
         return match ($candidate['entity_type']) {
             'item' => match ($candidate['classification']) {
                 'exact_candidate_requires_owner_review' => ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
-                'missing_solastock_record' => ['create_solastock_record', 'classify_inventory_item', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required'],
+                'missing_solastock_record' => ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required'],
                 'missing_solabooks_record' => ['keep_solastock_authority', 'exclude_initial_connection', 'physical_count_required'],
                 default => ['retain_blocked', 'physical_count_required'],
             },
