@@ -94,12 +94,36 @@ class InventoryPermissionService
         // membership must be resolved with the immutable Central user ID or
         // fail closed; otherwise an unrelated local numeric ID can be denied
         // (or, worse, inherit another Central user's role).
-        $centralUserId = (int) ($user->central_user_id ?? 0);
+        $centralUserId = $this->centralUserId($user);
         if ($centralUserId <= 0) {
             return $this->roleCache[$orgId][$userId] = null;
         }
 
         return $this->roleCache[$orgId][$userId] = $this->mapCentralRole($this->fetchCentralRole($centralUserId, $orgId));
+    }
+
+    /** Resolve the immutable Central identity without treating arbitrary local IDs as Central IDs. */
+    private function centralUserId(?object $user): int
+    {
+        $explicit = (int) ($user->central_user_id ?? 0);
+        if ($explicit > 0) {
+            return $explicit;
+        }
+
+        // SolaStock's production Authenticatable is itself stored in the Central
+        // registry. Its primary key therefore already is the immutable Central
+        // identity. Only allow this fallback when the model proves that exact
+        // connection; tenant-local models without central_user_id still fail closed.
+        try {
+            if ($user && method_exists($user, 'getConnectionName')
+                && $user->getConnectionName() === (string) config('tenancy.central_connection', 'mysql')) {
+                return (int) ($user->id ?? 0);
+            }
+        } catch (\Throwable) {
+            // An unresolvable identity is never permission-bearing.
+        }
+
+        return 0;
     }
 
     /**
