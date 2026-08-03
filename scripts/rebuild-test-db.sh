@@ -81,6 +81,21 @@ APP_ENV=testing DB_DATABASE="$CENTRAL" php artisan tinker --execute="
           \$table->timestamps();
       });
   }
+  if (!Schema::connection('mysql')->hasTable('entitlement_state_snapshots')) {
+      Schema::connection('mysql')->create('entitlement_state_snapshots', function (\$table) {
+          \$table->id();
+          \$table->unsignedBigInteger('organization_id')->unique();
+          \$table->unsignedBigInteger('subscription_id')->nullable();
+          \$table->string('underlying_subscription_state');
+          \$table->string('effective_access_state');
+          \$table->string('plan_code')->nullable();
+          \$table->char('state_hash', 64);
+          \$table->json('state_payload');
+          \$table->timestamp('evaluated_at')->nullable();
+          \$table->timestamp('last_changed_at')->nullable();
+          \$table->timestamps();
+      });
+  }
 " >/dev/null
 
 for db in "$TENANT_A" "$TENANT_B"; do

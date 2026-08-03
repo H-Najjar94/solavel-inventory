@@ -19,6 +19,7 @@ export default function IntegrationSettingsPage() {
     const tenant = useTenant();
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.integration.manage');
+    const setupGate = useCanCreate('inventory.integration.setup');
     const accountingGate = useCanCreate('inventory.integration.accounting_review');
     const [tab, setTab] = useState('status');
     const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
@@ -184,7 +185,7 @@ export default function IntegrationSettingsPage() {
             {tab === 'accounts' && <AccountMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'taxes' && <TaxMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'items' && <ItemMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
-            {tab === 'wizard' && <ConnectionWizard gate={gate} accountingGate={accountingGate} toast={toast} tr={tr} />}
+            {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} toast={toast} tr={tr} />}
         </section>
     );
 }

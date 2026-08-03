@@ -3,6 +3,7 @@
 namespace App\Services\Entitlements;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * SolaStock's commercial gate.
@@ -87,6 +88,56 @@ class InventoryCommercialEntitlementService
         }
 
         return $this->decision(false, 'feature_not_in_plan', $accessMode, $snapshot, $featureKey, $meta);
+    }
+
+    /**
+     * Authorize connection preparation independently from delivery entitlement.
+     *
+     * Central's signed/evaluated organization state is authoritative here. This
+     * deliberately does not inspect stock.finance_integration: an organization
+     * with usable Finance and Inventory access may prepare a draft while its
+     * activation/delivery capability remains false. Missing, malformed or
+     * cross-client state fails closed.
+     */
+    public function checkConnectionSetupReadiness(int $organizationId): array
+    {
+        $clientId = $this->cache->currentClientId();
+        if (! $clientId || $organizationId <= 0) {
+            return $this->decision(false, 'connection_setup_identity_missing', 'blocked', null, null);
+        }
+
+        try {
+            $row = DB::connection('mysql')->table('entitlement_state_snapshots')
+                ->where('organization_id', $organizationId)
+                ->first();
+            $payload = $row ? json_decode((string) $row->state_payload, true) : null;
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to verify connection setup readiness', [
+                'client_id' => $clientId,
+                'organization_id' => $organizationId,
+                'error_class' => $exception::class,
+            ]);
+
+            return $this->decision(false, 'entitlement_service_unavailable', 'blocked', null, null);
+        }
+
+        if (! is_array($payload)
+            || (int) ($payload['client_id'] ?? 0) !== $clientId
+            || (int) ($payload['organization_id'] ?? 0) !== $organizationId) {
+            return $this->decision(false, 'connection_setup_identity_mismatch', 'blocked', null, null);
+        }
+
+        $capabilities = (array) ($payload['integration_capabilities'] ?? []);
+        $allowed = ($capabilities['connection_setup_readiness'] ?? false) === true;
+
+        return $this->decision(
+            $allowed,
+            (string) ($capabilities['reason'] ?? ($allowed ? 'connection_setup_available' : 'finance_and_inventory_access_required')),
+            $allowed ? 'setup_only' : 'blocked',
+            null,
+            null,
+            ['evaluated_at' => $row->evaluated_at ?? null]
+        );
     }
 
     /**

@@ -35,6 +35,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString("protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view')", $router);
         $this->assertStringContainsString("Route::view('/integrations/{any?}', 'solastock-app')", $web);
         $this->assertStringContainsString("path: '/integrations/solabooks'", $navigation);
+        $this->assertStringContainsString("useCanCreate('inventory.integration.setup')", file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx')));
     }
 
     #[Test]
