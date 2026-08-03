@@ -251,7 +251,10 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
     const actionsByEntity = {
         item: {
             exact_candidate_requires_owner_review: ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
-            missing_solastock_record: ['create_solastock_record', 'classify_inventory_item', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required'],
+            // A Finance-only record cannot be classified as inventory without
+            // proposing its Stock record. Those were two internal actions for
+            // the same owner decision and produced duplicate dropdown labels.
+            missing_solastock_record: ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required'],
             missing_solabooks_record: ['keep_solastock_authority', 'exclude_initial_connection', 'physical_count_required'],
             default: ['retain_blocked', 'physical_count_required'],
         },
