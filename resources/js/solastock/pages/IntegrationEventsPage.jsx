@@ -41,7 +41,7 @@ export default function IntegrationEventsPage() {
 
     return (
         <section className="page">
-            <Breadcrumbs items={[{ label: tr('integration.title'), to: '/settings/solabooks' }, { label: tr('integration.events.breadcrumb') }]} />
+            <Breadcrumbs items={[{ label: tr('integration.title'), to: '/integrations/solabooks' }, { label: tr('integration.events.breadcrumb') }]} />
             <header className="page-head"><h1>{tr('integration.events.title')}</h1>{isMock && <span className="badge badge--warn">{tr('integration.events.sampleData')}</span>}</header>
             {status.isError && <div className="panel" role="alert"><strong>{tr('integration.loadFailed')}</strong><p>{status.error?.message || tr('settings.common.errorFallback')}</p></div>}
             {!deliveryEnabled && <div className="panel" role="status"><strong>{tr('integration.safetyHold.title')}</strong><p>{status.data?.delivery_disabled_message || tr('integration.safetyHold.message')}</p></div>}

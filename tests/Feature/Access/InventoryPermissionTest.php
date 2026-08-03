@@ -38,7 +38,31 @@ class InventoryPermissionTest extends TestCase
 
     private function user(): object
     {
-        return (object) ['id' => 4242];
+        return (object) ['id' => 4242, 'central_user_id' => 9004242];
+    }
+
+    #[Test]
+    public function central_membership_lookup_never_reuses_the_tenant_local_user_id(): void
+    {
+        app(OrganizationContext::class)->set(self::ORG);
+        $seen = (object) ['user_id' => null];
+        $service = new class(app(OrganizationContext::class), $seen) extends InventoryPermissionService
+        {
+            public function __construct(OrganizationContext $context, private object $seen)
+            {
+                parent::__construct($context);
+            }
+
+            protected function fetchCentralRole(int $userId, int $orgId): ?string
+            {
+                $this->seen->user_id = $userId;
+                return 'client_owner';
+            }
+        };
+
+        $this->assertTrue($service->can($this->user(), 'inventory.integration.view'));
+        $this->assertSame(9004242, $seen->user_id);
+        $this->assertNotSame($this->user()->id, $seen->user_id);
     }
 
     protected function tearDown(): void

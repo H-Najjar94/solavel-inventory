@@ -21,7 +21,7 @@ async function login(page) {
 }
 
 async function verifyWizard(page, locale, viewportName) {
-    await page.goto(`/settings/solabooks?locale=${locale}`);
+    await page.goto(`/integrations/solabooks?locale=${locale}`);
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
     await page.getByRole('button', { name: locale === 'ar' ? 'معالج الاتصال' : 'Connection wizard' }).click();
     await expect(page.locator('.wizard')).toBeVisible();

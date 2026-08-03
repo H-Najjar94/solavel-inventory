@@ -25,6 +25,19 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
+    public function canonical_authenticated_wizard_path_is_registered_without_weakening_permission_guard(): void
+    {
+        $router = file_get_contents(resource_path('js/solastock/router/router.jsx'));
+        $web = file_get_contents(base_path('routes/web.php'));
+        $navigation = file_get_contents(resource_path('js/solastock/router/nav.js'));
+
+        $this->assertStringContainsString("path: 'integrations/solabooks'", $router);
+        $this->assertStringContainsString("protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view')", $router);
+        $this->assertStringContainsString("Route::view('/integrations/{any?}', 'solastock-app')", $web);
+        $this->assertStringContainsString("path: '/integrations/solabooks'", $navigation);
+    }
+
+    #[Test]
     public function dual_product_readiness_is_visible_before_mapping_but_mutable_wizard_fails_closed(): void
     {
         DB::connection('tenant')->table('organizations')->insert([
