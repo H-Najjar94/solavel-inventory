@@ -25,13 +25,21 @@ export default function GuidedConnectionAssistant({
     const exceptionFingerprints = [...new Set(guided.visible_exception_fingerprints || [])];
     const completedDecisions = exceptionFingerprints.filter((fingerprint) => decisions.has(fingerprint)).length;
     const remaining = Math.max(0, exceptionFingerprints.length - completedDecisions);
-    const progress = exceptionFingerprints.length === 0 ? 100 : Math.round((completedDecisions / exceptionFingerprints.length) * 80 + 20);
+    const completedGroups = groupOrder.filter((group) => (groups[group] || []).every((fingerprint) => decisions.has(fingerprint))).length;
     const automaticChecks = [checks.organization_verified, checks.finance_connected, checks.base_currency_inherited,
-        checks.account_exceptions === 0, checks.tax_exceptions === 0].filter(Boolean).length;
+        checks.account_exceptions === 0, checks.tax_exceptions === 0, checks.item_exceptions === 0].filter(Boolean).length;
+    const approvalAvailable = ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state);
+    const formatNumber = (value, maximumFractionDigits = 2) => {
+        if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
+        return Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits });
+    };
+    const currencyCode = accounting.base_currency || guided.currency_summary?.base_currency || '';
+    const currencyLabel = currencyCode === 'JOD' ? tr('integration.assistant.jod') : currencyCode;
+    const formatMoney = (value) => `${formatNumber(value, 2)} ${currencyLabel}`.trim();
     const stepMeta = [
-        { number: 1, label: tr('integration.assistant.step1'), count: checks.account_exceptions + checks.tax_exceptions, complete: automaticChecks === 5, description: tr('integration.assistant.automaticDescription') },
-        { number: 2, label: tr('integration.assistant.step2'), count: remaining, complete: remaining === 0, description: tr('integration.assistant.exceptionsDescription') },
-        { number: 3, label: tr('integration.assistant.step3'), count: remaining, complete: view.state === 'activation_ready', description: tr('integration.assistant.reviewDescription') },
+        { number: 1, label: tr('integration.assistant.step1'), count: tr('integration.assistant.checkMetric', { done: automaticChecks, total: 6 }), complete: automaticChecks === 6, description: tr('integration.assistant.automaticDescription') },
+        { number: 2, label: tr('integration.assistant.step2'), count: tr('integration.assistant.decisionMetric', { groups: groupOrder.length, records: remaining }), complete: remaining === 0, description: tr('integration.assistant.exceptionsDescription') },
+        { number: 3, label: tr(remaining ? 'integration.assistant.previewStep' : 'integration.assistant.step3'), count: tr(remaining ? 'integration.assistant.notReady' : 'integration.assistant.readyForReview'), complete: view.state === 'activation_ready', blocked: remaining > 0, description: tr('integration.assistant.reviewDescription') },
     ];
     const checkRows = [
         [checks.organization_verified, tr('integration.assistant.organizationVerified')],
@@ -60,18 +68,18 @@ export default function GuidedConnectionAssistant({
         const decision = decisions.get(row.fingerprint);
         const source = row.solabooks || row.solastock;
         const proposed = row.solabooks && row.solastock
-            ? `${row.solastock.name || 'SolaStock'} ↔ ${row.solabooks.name || 'SolaBooks'}`
+            ? tr('integration.assistant.exactMatchProposal')
             : dynamicText('integration.assistant.proposal.', row.classification);
         return <article className="assistant-exception-row" key={row.fingerprint}>
             <div className="assistant-record">
-                <span className="assistant-row-label">{tr('integration.assistant.sourceRecord')}</span>
+                <span className="assistant-row-label">{row.solabooks ? tr('integration.assistant.financeRecord') : tr('integration.assistant.stockRecord')}</span>
                 <strong>{source?.name || dynamicText('integration.wizard.entity.', row.entity_type)}</strong>
                 <small>{[source?.sku && `${tr('integration.assistant.sku')}: ${source.sku}`, source?.code, source?.barcode].filter(Boolean).join(' · ') || tr('integration.assistant.noReference')}</small>
             </div>
             <div className="assistant-proposal">
-                <span className="assistant-row-label">{tr('integration.assistant.proposedAction')}</span>
-                <strong>{proposed}</strong>
-                <small>{dynamicText('integration.wizard.block.', row.blocking_reason)}</small>
+                <span className="assistant-row-label">{row.solastock ? tr('integration.assistant.proposedStockRecord') : tr('integration.assistant.proposedAction')}</span>
+                <strong>{row.solastock?.name || proposed}</strong>
+                <small>{row.solabooks && row.solastock ? tr('integration.assistant.matchBasisExactSku') : dynamicText('integration.wizard.block.', row.blocking_reason)}</small>
             </div>
             <label className="assistant-decision">
                 <span className="assistant-row-label">{tr('integration.wizard.decision')}</span>
@@ -86,14 +94,16 @@ export default function GuidedConnectionAssistant({
             <span className={`assistant-row-status ${decision ? 'is-resolved' : 'is-pending'}`}>
                 {tr(decision ? 'integration.assistant.resolved' : 'integration.assistant.pending')}
             </span>
+            <details className="assistant-row-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary><small>{dynamicText('integration.wizard.block.', row.blocking_reason)} · {row.fingerprint}</small></details>
         </article>;
     };
 
     const actions = <div className="assistant-actionbar">
-        <button className="btn" disabled={saving || !gate.allowed} onClick={saveDraft}>{tr('integration.assistant.saveDraft')}</button>
-        <button className="btn btn--primary" disabled={step >= 3} onClick={() => setAssistantStep(Math.min(3, step + 1))}>{tr('integration.assistant.saveContinue')}</button>
+        <span className="assistant-save-state" role="status">{tr(saving ? 'integration.assistant.saving' : 'integration.assistant.saved')}</span>
+        {step < 3 && <button className="btn" disabled={saving} onClick={() => setAssistantStep(Math.min(3, step + 1))}>{tr('integration.assistant.saveContinue')}</button>}
+        {step === 3 && remaining > 0 && <button className="btn" onClick={() => setAssistantStep(2)}>{tr('integration.assistant.completeDecisions')}</button>}
         <button className="btn" onClick={() => setAssistantStep(3)}>{tr('integration.assistant.reviewSummary')}</button>
-        <button className="btn assistant-export" onClick={exportComparison}>{tr('integration.wizard.export')}</button>
+        <details className="assistant-more"><summary>{tr('integration.assistant.moreActions')}</summary><button className="btn" onClick={exportComparison}>{tr('integration.wizard.export')}</button></details>
     </div>;
 
     return <div className="wizard assistant" aria-live="polite">
@@ -101,16 +111,16 @@ export default function GuidedConnectionAssistant({
             <div className="assistant-hero-copy">
                 <p className="assistant-kicker">{tr('integration.assistant.kicker')}</p>
                 <h1>{tr('integration.assistant.pageTitle')}</h1>
+                <span className="assistant-step-position">{tr('integration.assistant.stepPosition', { step, total: 3 })}</span>
                 <p>{tr('integration.assistant.pageIntroduction')}</p>
                 <div className="assistant-context">
                     <strong>{organizationName || tr('integration.assistant.currentOrganization')}</strong>
-                    <span>{tr('integration.assistant.overallProgress', { progress })}</span>
+                    <span>{tr('integration.assistant.groupProgress', { done: completedGroups, total: groupOrder.length })}</span>
                 </div>
             </div>
             <div className="assistant-next">
                 <span>{tr('integration.assistant.nextAction')}</span>
                 <strong>{stepMeta.find((item) => !item.complete)?.label || tr('integration.assistant.readyForReview')}</strong>
-                <button className="btn btn--primary" onClick={() => setAssistantStep(remaining ? 2 : 3)}>{tr(remaining ? 'integration.assistant.continueSetup' : 'integration.assistant.reviewSummary')}</button>
             </div>
             <div className="assistant-status-line" role="status">
                 <strong>{tr('integration.assistant.statusLine', { remaining })}</strong>
@@ -123,8 +133,10 @@ export default function GuidedConnectionAssistant({
 
         <nav className="assistant-progress" aria-label={tr('integration.assistant.progress')}>
             {stepMeta.map((item) => <button key={item.number} type="button"
-                className={`${step === item.number ? 'is-current' : ''} ${item.complete ? 'is-complete' : ''}`}
+                className={`${step === item.number ? 'is-current' : ''} ${item.complete ? 'is-complete' : ''} ${item.blocked ? 'is-blocked' : ''}`}
                 aria-current={step === item.number ? 'step' : undefined}
+                aria-label={`${item.label}. ${item.complete ? tr('integration.assistant.completed') : item.blocked ? tr('integration.assistant.blocked') : step === item.number ? tr('integration.assistant.current') : tr('integration.assistant.pending')}`}
+                disabled={item.number > step && item.number !== 3}
                 onClick={() => setAssistantStep(item.number)}>
                 <span className="assistant-step-number">{item.complete ? '✓' : item.number}</span>
                 <span className="assistant-step-copy"><strong>{item.label}</strong>{step === item.number && <small>{item.description}</small>}</span>
@@ -136,12 +148,12 @@ export default function GuidedConnectionAssistant({
             <main className="assistant-main">
                 {step === 1 && <section className="assistant-card">
                     <header><h2>{tr('integration.assistant.step1')}</h2><p>{tr('integration.assistant.automaticDescription')}</p></header>
-                    <div className="assistant-checks">
+                    <details className="assistant-checks"><summary>{tr('integration.assistant.checkMetric', { done: automaticChecks, total: 6 })}</summary>
                         {checkRows.map(([passed, label]) => <div className="assistant-check" key={label}>
                             <span className={passed ? 'check-ok' : 'check-attention'} aria-hidden="true">{passed ? '✓' : '!'}</span>
                             <span>{label}</span>
                         </div>)}
-                    </div>
+                    </details>
                     {accountingGate.allowed && <details className="assistant-details">
                         <summary>{tr('integration.assistant.accountingProfile')}</summary>
                         <div className="assistant-profile">{rows.filter((row) => row.entity_type === 'account_role' && row.classification === 'candidate_requires_accountant_approval').map((row) =>
@@ -155,7 +167,8 @@ export default function GuidedConnectionAssistant({
                     <label className="assistant-search"><span className="sr-only">{tr('integration.assistant.search')}</span>
                         <input className="input" type="search" value={exceptionSearch} onChange={(event) => setExceptionSearch(event.target.value)} placeholder={tr('integration.assistant.search')} />
                     </label>
-                    <div className="assistant-groups">{groupOrder.map((group) => {
+                    <h3 className="assistant-responsibility">{tr('integration.assistant.ownerDecisions')}</h3>
+                    <div className="assistant-groups">{groupOrder.filter((group) => group !== 'accounting').map((group) => {
                         const fingerprints = groups[group] || [];
                         const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length;
                         const groupRemaining = fingerprints.length - groupResolved;
@@ -173,9 +186,15 @@ export default function GuidedConnectionAssistant({
                                     <div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></>}
                         </details>;
                     })}</div>
+                    <h3 className="assistant-responsibility">{tr('integration.assistant.accountantDecisions')}</h3>
+                    {!accountingGate.allowed && <div className="assistant-accountant-callout">{tr('integration.assistant.assignAccountant', { count: (groups.accounting || []).length })}</div>}
+                    {groupOrder.filter((group) => group === 'accounting').map((group) => {
+                        const fingerprints = groups[group] || []; const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length; const groupRemaining = fingerprints.length - groupResolved;
+                        return <details className="assistant-group" key={group}><summary><span className={groupRemaining ? 'check-attention' : 'check-ok'}>{groupRemaining ? '!' : '✓'}</span><span className="assistant-group-title"><strong>{dynamicText('integration.assistant.group.', group)}</strong><small>{dynamicText('integration.assistant.groupNext.', group)}</small></span><span className="assistant-group-metrics"><small>{tr('integration.assistant.resolvedCount', { count: groupResolved })}</small><strong>{tr('integration.assistant.remainingCount', { count: groupRemaining })}</strong></span></summary><div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></details>;
+                    })}
                     {exactRows.length > 0 && <div className="assistant-bulk"><p>{tr('integration.assistant.exactBulk', { count: exactRows.length })}</p>
                         <button className="btn" disabled={!runUuid || saving} onClick={() => exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint))}>{tr('integration.assistant.selectExact')}</button>
-                        <button className="btn btn--primary" disabled={saving || !exactRows.every((row) => bulkSelection.includes(row.fingerprint))} onClick={() => bulk('approve_exact_sku_candidates')}>{tr('integration.wizard.bulkExact')}</button></div>}
+                        <button className="btn" disabled={saving || !exactRows.every((row) => bulkSelection.includes(row.fingerprint))} onClick={() => bulk('approve_exact_sku_candidates')}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button></div>}
                     {actions}
                 </section>}
 
@@ -187,8 +206,8 @@ export default function GuidedConnectionAssistant({
                             ['matchedItems', checks.items_exact || 0, true],
                             ['excludedServices', decisions.size ? [...decisions.values()].filter((d) => d.action === 'classify_service_non_inventory').length : 0, true],
                             ['physicalCount', groups.inventory_quantities?.length ? tr('integration.assistant.required') : tr('integration.assistant.complete'), !groups.inventory_quantities?.length],
-                            ['quantityDifference', totals.total_quantity_difference || '0.0000', totals.total_quantity_difference === '0.0000'],
-                            ['valueDifference', `${totals.total_valuation_difference || '0.00'} ${accounting.base_currency || ''}`, totals.total_valuation_difference === '0.00'],
+                            ['quantityDifference', <bdi dir="ltr">{formatNumber(totals.total_quantity_difference, 4)}</bdi>, Number(totals.total_quantity_difference) === 0],
+                            ['valueDifference', <bdi dir="ltr">{formatMoney(totals.total_valuation_difference)}</bdi>, Number(totals.total_valuation_difference) === 0],
                             ['financeGl', accounting.inventory_control_balance ?? tr('integration.assistant.pending'), false],
                             ['cutoff', view.cutoff_at || tr('integration.wizard.notFrozen'), Boolean(view.cutoff_at)],
                             ['excludedHistory', guided.historical_exclusion_count || 0, true],
@@ -196,7 +215,15 @@ export default function GuidedConnectionAssistant({
                             ['accountantApproval', run.data?.accountant_approved_at ? tr('integration.assistant.complete') : tr('integration.assistant.pending'), Boolean(run.data?.accountant_approved_at)],
                         ].map(([key, value, passed]) => <div className="assistant-review-tile" key={key}><span className={passed ? 'check-ok' : 'check-attention'}>{passed ? '✓' : '!'}</span><div><small>{dynamicText('integration.assistant.review.', key)}</small><strong>{value}</strong></div></div>)}
                     </div>
-                    {totals.proposed_accounting_effect?.amount && <div className="assistant-correction"><strong>{tr('integration.assistant.review.proposedCorrection')}</strong><span>{totals.proposed_accounting_effect.amount} {accounting.base_currency || guided.currency_summary?.base_currency}</span><p>{tr('integration.assistant.previewOnly')}</p></div>}
+                    <div className="assistant-reconciliation-wrap"><table className="assistant-reconciliation">
+                        <thead><tr><th>{tr('integration.assistant.reconciliation.measure')}</th><th>{tr('integration.assistant.reconciliation.finance')}</th><th>{tr('integration.assistant.reconciliation.stock')}</th><th>{tr('integration.assistant.reconciliation.difference')}</th><th>{tr('integration.assistant.reconciliation.action')}</th></tr></thead>
+                        <tbody>
+                            <tr><th>{tr('integration.assistant.reconciliation.quantity')}</th><td><bdi dir="ltr">{formatNumber(totals.solabooks_quantity, 4)}</bdi></td><td><bdi dir="ltr">{formatNumber(totals.solastock_quantity, 4)}</bdi></td><td><bdi dir="ltr">{formatNumber(totals.total_quantity_difference, 4)}</bdi></td><td>{Number(totals.total_quantity_difference) === 0 ? tr('integration.assistant.noAction') : tr('integration.assistant.physicalCountRequired')}</td></tr>
+                            <tr><th>{tr('integration.assistant.reconciliation.value')}</th><td><bdi dir="ltr">{formatMoney(totals.solabooks_inventory_value)}</bdi></td><td><bdi dir="ltr">{formatMoney(totals.solastock_inventory_value)}</bdi></td><td><bdi dir="ltr">{formatMoney(totals.total_valuation_difference)}</bdi></td><td>{Number(totals.total_valuation_difference) === 0 ? tr('integration.assistant.noAction') : tr('integration.assistant.accountantAndCount')}</td></tr>
+                            <tr><th>{tr('integration.assistant.reconciliation.gl')}</th><td><bdi dir="ltr">{formatMoney(accounting.inventory_control_balance)}</bdi></td><td><bdi dir="ltr">{formatMoney(totals.solastock_inventory_value)}</bdi></td><td><bdi dir="ltr">{formatMoney(Number(totals.solastock_inventory_value || 0) - Number(accounting.inventory_control_balance || 0))}</bdi></td><td>{tr('integration.assistant.accountantReview')}</td></tr>
+                        </tbody>
+                    </table></div>
+                    {totals.proposed_accounting_effect?.amount && <div className="assistant-correction"><strong>{tr('integration.assistant.review.proposedCorrection')}</strong><span><bdi dir="ltr">{formatMoney(totals.proposed_accounting_effect.amount)}</bdi></span><p>{tr('integration.assistant.previewOnly')}</p></div>}
                     {remaining > 0 && <div className="assistant-blockers"><h3>{tr('integration.assistant.blockerList')}</h3><p>{tr('integration.assistant.blockerDescription')}</p>
                         {groupOrder.filter((group) => (groups[group] || []).some((fingerprint) => !decisions.has(fingerprint))).map((group) =>
                             <button key={group} className="btn" onClick={() => setAssistantStep(2)}>{dynamicText('integration.assistant.group.', group)} · {tr('integration.assistant.remainingCount', { count: (groups[group] || []).filter((fingerprint) => !decisions.has(fingerprint)).length })}</button>)}</div>}
@@ -206,7 +233,7 @@ export default function GuidedConnectionAssistant({
                         <dt>{tr('integration.assistant.sourceHash')}</dt><dd className="wizard__hash">{guided.source_invalidation_hash}</dd>
                         <dt>{tr('integration.assistant.currencyRemediation')}</dt><dd>{guided.currency_summary?.advanced_remediation_count || 0} · {(guided.currency_summary?.reserved_codes || []).join(', ') || '—'}</dd>
                     </dl></details>
-                    {['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state) && <div className="assistant-final-approval">
+                    {approvalAvailable && <div className="assistant-final-approval">
                         <label className="field"><span className="field-label">{tr('integration.wizard.confirmation')}</span><input className="input" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
                         <button className="btn btn--primary" disabled={!gate.allowed || saving || Boolean(run.data.owner_approved_at)} onClick={() => runAction(() => api.approveIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash, confirmation }), 'integration.wizard.ownerApproved')}>{tr('integration.wizard.ownerApprove')}</button>
                         {accountingGate.allowed && <button className="btn" disabled={saving || Boolean(run.data.accountant_approved_at)} onClick={() => runAction(() => api.accountantApproveIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash }), 'integration.wizard.accountantApproved')}>{tr('integration.wizard.accountantApprove')}</button>}
@@ -216,13 +243,7 @@ export default function GuidedConnectionAssistant({
             </main>
 
             <aside className="assistant-side" aria-label={tr('integration.assistant.summary')}>
-                <div className="assistant-side-card"><div className="assistant-progress-ring" style={{ '--progress': `${progress * 3.6}deg` }}><strong>{progress}%</strong></div>
-                    <div><h2>{tr('integration.assistant.setupProgress')}</h2><p>{tr('integration.assistant.remainingDecisions', { count: remaining })}</p></div></div>
-                <div className="assistant-side-card assistant-side-list"><h3>{tr('integration.assistant.summary')}</h3>
-                    <p><span className="check-ok">✓</span>{tr('integration.assistant.completedChecks', { count: automaticChecks, total: 5 })}</p>
-                    <p><span className={remaining ? 'check-attention' : 'check-ok'}>{remaining ? '!' : '✓'}</span>{tr('integration.assistant.remainingDecisions', { count: remaining })}</p>
-                    <p><span className="check-attention">!</span>{tr('integration.assistant.activationPaused')}</p></div>
-                <div className="assistant-side-card"><h3>{tr('integration.assistant.nextRequirement')}</h3><p>{stepMeta.find((item) => !item.complete)?.description || tr('integration.assistant.readyForReview')}</p></div>
+                <div className="assistant-side-card assistant-now"><h2>{tr('integration.assistant.whatNow')}</h2><strong>{stepMeta.find((item) => !item.complete)?.label || tr('integration.assistant.readyForReview')}</strong><p>{tr('integration.assistant.groupProgress', { done: completedGroups, total: groupOrder.length })}</p><p>{tr('integration.assistant.remainingDecisions', { count: remaining })}</p>{remaining > 0 && <p className="is-blocked">{tr('integration.assistant.blockingPrerequisite')}</p>}{!approvalAvailable && <button className="btn btn--primary" onClick={() => setAssistantStep(remaining ? 2 : 3)}>{tr(remaining ? 'integration.assistant.saveContinue' : 'integration.assistant.reviewSummary')}</button>}</div>
             </aside>
         </div>
     </div>;
