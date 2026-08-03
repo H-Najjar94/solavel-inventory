@@ -1183,7 +1183,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
     .assistant-status-line { align-items:flex-start; flex-direction:column; }
     .assistant-status-line details { margin-inline-start:0; }
     .assistant-layout { grid-template-columns:1fr; }
-    .assistant-side { position:static; grid-template-columns:repeat(3,minmax(0,1fr)); order:-1; }
+    .assistant-side { position:static; grid-template-columns:repeat(3,minmax(0,1fr)); }
     .assistant-profile { grid-template-columns:1fr; }
     .assistant-exception-row { grid-template-columns:1fr 1fr; }
     .assistant-decision { grid-column:1/-1; }
