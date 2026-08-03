@@ -1317,6 +1317,15 @@ final class ConnectionWizardService
             ->selectRaw('COALESCE(SUM(line.base_debit - line.base_credit), 0) AS balance')
             ->value('balance');
         $glValue = Decimal::money((string) ($gl ?? '0'));
+        return $this->accountingEffectFromValues($accountId, $stockValue, $glValue, $baseCurrency);
+    }
+
+    private function accountingEffectFromValues(
+        int $accountId,
+        string $stockValue,
+        string $glValue,
+        string $baseCurrency,
+    ): array {
         $difference = Decimal::money(Decimal::sub($stockValue, $glValue, 2));
         if (Decimal::isZero($difference, 2)) {
             return [];
