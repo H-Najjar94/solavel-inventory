@@ -181,6 +181,7 @@ class InventoryPermissionTest extends TestCase
             $this->assertTrue($p->can($this->user(), $perm), "owner must be able to {$perm}");
         }
         $this->assertTrue($p->can($this->user(), 'inventory.integration.setup'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.accounting_review'));
     }
 
     #[Test]
