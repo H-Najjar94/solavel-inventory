@@ -9,6 +9,7 @@
         "build": "vite build",
         "dev": "vite",
         "test:localization": "node scripts/check-i18n-dictionaries.mjs && bash scripts/check-localization-coverage.sh",
+        "test:wizard-state": "node --test tests/js/wizardDraftSync.test.mjs",
         "test:browser": "playwright test"
     },
     "devDependencies": {

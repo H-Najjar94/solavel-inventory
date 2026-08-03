@@ -113,6 +113,46 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
+    public function individual_decision_returns_canonical_state_and_identical_retry_is_idempotent(): void
+    {
+        [, $item] = $this->seedConnectionFixture(false);
+        $wizard = app(ConnectionWizardService::class);
+        $beforeMutations = $this->mutationCounters();
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $candidate = collect($run['comparison'])->first(fn (array $row) => $row['entity_type'] === 'item'
+            && $row['classification'] === 'exact_candidate_requires_owner_review');
+        $beforeAuditCount = DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $run['run_uuid'])->count();
+
+        $saved = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'approve_exact_binding', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+            ['reason' => $candidate['blocking_reason']], 7001, $run['lock_version'],
+            $candidate['candidate_before_hash'], true, false);
+
+        $this->assertSame('saved', $saved['persistence_result']);
+        $this->assertSame('approve_exact_binding', $saved['canonical_decision']['action']);
+        $this->assertSame($candidate['fingerprint'], $saved['canonical_decision']['candidate_fingerprint']);
+        $this->assertSame($run['lock_version'] + 1, $saved['lock_version']);
+        $this->assertSame($beforeAuditCount + 1, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $run['run_uuid'])->count());
+
+        $again = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'approve_exact_binding', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+            ['reason' => $candidate['blocking_reason']], 7001, $saved['lock_version'],
+            $candidate['candidate_before_hash'], true, false);
+
+        $this->assertSame('already_saved', $again['persistence_result']);
+        $this->assertSame($saved['lock_version'], $again['lock_version']);
+        $this->assertSame(1, (int) DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $run['run_uuid'])->value('decision_version'));
+        $this->assertSame($beforeAuditCount + 1, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $run['run_uuid'])->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
+        $this->assertSame(0, DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->count());
+        $this->assertSame($beforeMutations, $this->mutationCounters());
+    }
+
+    #[Test]
     public function wizard_ui_contract_has_english_arabic_rtl_responsive_and_no_legacy_fallback(): void
     {
         $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
@@ -307,6 +347,11 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('completedChecks', $assistant);
         $this->assertStringContainsString('bulkReviewOpen', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
+        $this->assertStringContainsString('createSerializedMutationQueue', $page);
+        $this->assertStringContainsString('unwrapCanonicalDraft', $page);
+        $this->assertStringContainsString('confirmedDecisions', $assistant);
+        $this->assertStringContainsString('wizard_save_confirmation_mismatch', file_get_contents(app_path('Services/Integration/ConnectionWizardService.php')));
+        $this->assertStringContainsString('return array_merge($approvalCore', file_get_contents(app_path('Services/Integration/ConnectionWizardService.php')));
         $this->assertStringContainsString("saveState === 'conflict'", $assistant);
         $this->assertStringContainsString('aria-modal="true"', $assistant);
         $this->assertStringContainsString('approvalAvailable &&', $assistant);

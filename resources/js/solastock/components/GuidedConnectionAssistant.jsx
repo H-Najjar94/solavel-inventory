@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../services/api.js';
 
 export default function GuidedConnectionAssistant({
-    view, runUuid, run, gate, accountingGate, status, saving, tr, decisions, rows,
+    view, runUuid, run, gate, accountingGate, status, saving, tr, decisions, confirmedDecisions, pendingDecisions, rows,
     totals, accounting, assistantStep, setAssistantStep, exceptionSearch,
     setExceptionSearch, allowedActions, canEdit, editableState, decide,
     bulkSelection, toggleBulk, bulk, exportComparison, start, runAction,
@@ -28,9 +28,9 @@ export default function GuidedConnectionAssistant({
     const exactRows = rows.filter((row) => row.classification === 'exact_candidate_requires_owner_review');
     const step = Math.min(3, Math.max(1, assistantStep));
     const exceptionFingerprints = [...new Set(guided.visible_exception_fingerprints || [])];
-    const completedDecisions = exceptionFingerprints.filter((fingerprint) => decisions.has(fingerprint)).length;
+    const completedDecisions = exceptionFingerprints.filter((fingerprint) => confirmedDecisions.has(fingerprint)).length;
     const remaining = Math.max(0, exceptionFingerprints.length - completedDecisions);
-    const completedGroups = groupOrder.filter((group) => groupFingerprints(group).every((fingerprint) => decisions.has(fingerprint))).length;
+    const completedGroups = groupOrder.filter((group) => groupFingerprints(group).every((fingerprint) => confirmedDecisions.has(fingerprint))).length;
     const automaticChecks = [checks.organization_verified, checks.finance_connected, checks.base_currency_inherited,
         checks.account_exceptions === 0, checks.tax_exceptions === 0, checks.item_exceptions === 0].filter(Boolean).length;
     const reviewGatesComplete = remaining === 0
@@ -64,7 +64,7 @@ export default function GuidedConnectionAssistant({
     const incompleteChecks = checkRows.filter(([passed]) => !passed);
     const completedChecks = checkRows.filter(([passed]) => passed);
     const completedCheckRegression = Boolean(guided.completed_check_error);
-    const firstIncomplete = groupOrder.find((group) => groupFingerprints(group).some((fingerprint) => !decisions.has(fingerprint)));
+    const firstIncomplete = groupOrder.find((group) => groupFingerprints(group).some((fingerprint) => !confirmedDecisions.has(fingerprint)));
     const selectedEffect = (row) => {
         const action = decisions.get(row.fingerprint)?.action;
         return action ? dynamicText('integration.assistant.effect.', action) : tr('integration.assistant.effect.pending');
@@ -81,6 +81,8 @@ export default function GuidedConnectionAssistant({
 
     const renderDecisionRow = (row) => {
         const decision = decisions.get(row.fingerprint);
+        const confirmed = confirmedDecisions.get(row.fingerprint);
+        const pending = pendingDecisions.get(row.fingerprint);
         const source = row.solabooks || row.solastock;
         const namesMatch = row.solabooks?.name && row.solastock?.name
             && row.solabooks.name.trim().toLocaleLowerCase() === row.solastock.name.trim().toLocaleLowerCase();
@@ -104,7 +106,7 @@ export default function GuidedConnectionAssistant({
             </div>
             <label className="assistant-decision">
                 <span className="assistant-row-label">{tr('integration.wizard.decision')}</span>
-                <select className="input" disabled={!runUuid || !editableState || !canEdit(row) || saving}
+                <select className="input" disabled={!runUuid || !editableState || !canEdit(row)}
                     value={decision?.action || ''}
                     onChange={(event) => event.target.value && decide(row, event.target.value)}>
                     <option value="">{placeholder(row)}</option>
@@ -112,8 +114,8 @@ export default function GuidedConnectionAssistant({
                 </select>
                 <small>{selectedEffect(row)}</small>
             </label>
-            <span className={`assistant-row-status ${decision ? 'is-resolved' : 'is-pending'}`}>
-                {tr(decision ? 'integration.assistant.resolved' : 'integration.assistant.pending')}
+            <span className={`assistant-row-status ${confirmed ? 'is-resolved' : 'is-pending'}`}>
+                {tr(confirmed ? 'integration.assistant.resolved' : pending?.persistence_state === 'saving' ? 'integration.assistant.saving' : 'integration.assistant.pending')}
             </span>
             <details className="assistant-row-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary><small><bdi>{dynamicText('integration.wizard.block.', row.blocking_reason)} · {row.fingerprint}</bdi></small></details>
         </article>;
@@ -123,7 +125,7 @@ export default function GuidedConnectionAssistant({
         <span className={`assistant-save-state is-${saveState || 'idle'}`} role="status">
             {saving || saveState === 'saving' ? tr('integration.assistant.saving') : saveState === 'saved' ? tr('integration.assistant.savedAutomatically') : saveState === 'failed' ? tr('integration.assistant.saveFailed') : saveState === 'conflict' ? tr('integration.assistant.saveConflict') : ''}
             {saveState === 'failed' && <button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button>}
-            {saveState === 'conflict' && <button type="button" className="btn btn--link" onClick={reloadLatest}>{tr('integration.assistant.reloadLatest')}</button>}
+            {saveState === 'conflict' && <><button type="button" className="btn btn--link" onClick={reloadLatest}>{tr('integration.assistant.reloadLatest')}</button><button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button></>}
         </span>
         {step < 3 && <button className="btn" disabled={saving} onClick={() => setAssistantStep(Math.min(3, step + 1))}>{tr('integration.assistant.saveContinue')}</button>}
         {step === 3 && remaining > 0 && <button className="btn" onClick={() => setAssistantStep(2)}>{tr('integration.assistant.completeDecisions')}</button>}
@@ -200,7 +202,7 @@ export default function GuidedConnectionAssistant({
                     <h3 className="assistant-responsibility">{tr('integration.assistant.ownerDecisions')}</h3>
                     <div className="assistant-groups">{groupOrder.filter((group) => group !== 'accounting').map((group) => {
                         const fingerprints = groupFingerprints(group);
-                        const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length;
+                        const groupResolved = fingerprints.filter((fingerprint) => confirmedDecisions.has(fingerprint)).length;
                         const groupRemaining = fingerprints.length - groupResolved;
                         const physicalCount = group === 'inventory_quantities';
                         return <details className={`assistant-group ${groupRemaining === 0 ? 'is-complete' : ''}`} key={group} open={group === firstIncomplete}>
@@ -219,7 +221,7 @@ export default function GuidedConnectionAssistant({
                     <h3 className="assistant-responsibility">{tr('integration.assistant.accountantDecisions')}</h3>
                     {!accountingGate.allowed && <div className="assistant-accountant-callout">{tr('integration.assistant.assignAccountant', { count: (groups.accounting || []).length })}</div>}
                     {groupOrder.filter((group) => group === 'accounting').map((group) => {
-                        const fingerprints = groupFingerprints(group); const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length; const groupRemaining = fingerprints.length - groupResolved;
+                        const fingerprints = groupFingerprints(group); const groupResolved = fingerprints.filter((fingerprint) => confirmedDecisions.has(fingerprint)).length; const groupRemaining = fingerprints.length - groupResolved;
                         return <details className="assistant-group" key={group}><summary><span className={groupRemaining ? 'check-attention' : 'check-ok'}>{groupRemaining ? '!' : '✓'}</span><span className="assistant-group-title"><strong>{dynamicText('integration.assistant.group.', group)}</strong><small>{dynamicText('integration.assistant.groupNext.', group)}</small></span><span className="assistant-group-metrics"><small>{tr('integration.assistant.resolvedCount', { count: groupResolved })}</small><strong>{tr('integration.assistant.remainingCount', { count: groupRemaining })}</strong></span></summary><div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></details>;
                     })}
                     {exactRows.length > 0 && <div className="assistant-bulk"><p>{tr('integration.assistant.exactBulk', { count: exactRows.length })}</p>
@@ -246,7 +248,7 @@ export default function GuidedConnectionAssistant({
                         {[
                             ['inventoryAuthority', tr('integration.assistant.solastockAuthority'), true],
                             ['matchedItems', checks.items_exact || 0, true],
-                            ['excludedServices', decisions.size ? [...decisions.values()].filter((d) => d.action === 'classify_service_non_inventory').length : 0, true],
+                            ['excludedServices', confirmedDecisions.size ? [...confirmedDecisions.values()].filter((d) => d.action === 'classify_service_non_inventory').length : 0, true],
                             ['physicalCount', groups.inventory_quantities?.length ? tr('integration.assistant.required') : tr('integration.assistant.complete'), !groups.inventory_quantities?.length],
                             ['quantityDifference', <bdi dir="ltr">{formatNumber(totals.total_quantity_difference, 4)}</bdi>, Number(totals.total_quantity_difference) === 0],
                             ['valueDifference', <bdi dir="ltr">{formatMoney(totals.total_valuation_difference)}</bdi>, Number(totals.total_valuation_difference) === 0],
@@ -267,8 +269,8 @@ export default function GuidedConnectionAssistant({
                     </table></div>
                     {totals.proposed_accounting_effect?.amount && <div className="assistant-correction"><strong>{tr('integration.assistant.review.proposedCorrection')}</strong><span><bdi dir="ltr">{formatMoney(totals.proposed_accounting_effect.amount)}</bdi></span><p>{tr('integration.assistant.previewOnly')}</p></div>}
                     {remaining > 0 && <div className="assistant-blockers"><h3>{tr('integration.assistant.blockerList')}</h3><p>{tr('integration.assistant.blockerDescription')}</p>
-                        {groupOrder.filter((group) => groupFingerprints(group).some((fingerprint) => !decisions.has(fingerprint))).map((group) =>
-                            <button key={group} className="btn" onClick={() => setAssistantStep(2)}>{dynamicText('integration.assistant.group.', group)} · {tr('integration.assistant.remainingCount', { count: groupFingerprints(group).filter((fingerprint) => !decisions.has(fingerprint)).length })}</button>)}</div>}
+                        {groupOrder.filter((group) => groupFingerprints(group).some((fingerprint) => !confirmedDecisions.has(fingerprint))).map((group) =>
+                            <button key={group} className="btn" onClick={() => setAssistantStep(2)}>{dynamicText('integration.assistant.group.', group)} · {tr('integration.assistant.remainingCount', { count: groupFingerprints(group).filter((fingerprint) => !confirmedDecisions.has(fingerprint)).length })}</button>)}</div>}
                     <p className="assistant-rollback">{tr('integration.assistant.rollback')}</p>
                     <details className="assistant-details"><summary>{tr('integration.assistant.advanced')}</summary><dl className="kv">
                         <dt>{tr('integration.wizard.snapshot')}</dt><dd className="wizard__hash">{view.snapshot_hash}</dd>
