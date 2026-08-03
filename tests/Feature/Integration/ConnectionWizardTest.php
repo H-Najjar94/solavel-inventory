@@ -147,16 +147,27 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertStringContainsString('ConnectionPhaseBadges', $page);
         $this->assertStringNotContainsString('<HealthBadge health={s.health}', $page);
-        foreach (['Automatic checks', 'Resolve exceptions', 'Review and confirm', 'Advanced details'] as $label) {
+        foreach (['Check configuration', 'Resolve required decisions', 'Review and approve', 'Advanced details'] as $label) {
             $this->assertStringContainsString($label, $translations);
         }
-        foreach (['فحوصات تلقائية', 'حل الاستثناءات', 'المراجعة والتأكيد', 'تفاصيل متقدمة'] as $label) {
+        foreach ([
+            'التحقق من الإعدادات', 'مراجعة العناصر المطلوبة', 'المراجعة والموافقة',
+            'تفاصيل فنية متقدمة', 'البضاعة المستلمة غير المفوترة', 'أرباح تسوية المخزون',
+            'خسائر تسوية المخزون', 'تاريخ بدء الربط', 'الجرد الفعلي', 'فرق غير مفسر',
+        ] as $label) {
             $this->assertStringContainsString($label, $translations);
+        }
+        foreach (['حل الاستثناءات', 'مرشح ربط SKU', 'بصمة التحقق من مصدر Finance', 'مستندات وقت القطع'] as $forbiddenArabic) {
+            $this->assertStringNotContainsString($forbiddenArabic, $translations);
         }
         $this->assertStringContainsString('assistant-progress', $assistant);
+        $this->assertStringContainsString('assistant-layout', $assistant);
+        $this->assertStringContainsString('assistant-side', $assistant);
         $this->assertStringContainsString('type="search"', $assistant);
         $this->assertStringContainsString('assistant-actionbar', $assistant);
         $this->assertStringContainsString('<details className="assistant-details">', $assistant);
+        $this->assertStringContainsString('max-width:1440px', $styles);
+        $this->assertStringContainsString('grid-template-columns:minmax(0,1fr) minmax(250px,300px)', $styles);
         $this->assertStringNotContainsString('source_account_id', $assistant);
         $this->assertStringNotContainsString('signing', strtolower($assistant));
     }
