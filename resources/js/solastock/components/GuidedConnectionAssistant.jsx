@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { api } from '../services/api.js';
 
 export default function GuidedConnectionAssistant({
@@ -6,8 +6,9 @@ export default function GuidedConnectionAssistant({
     totals, accounting, assistantStep, setAssistantStep, exceptionSearch,
     setExceptionSearch, allowedActions, canEdit, editableState, decide,
     bulkSelection, toggleBulk, bulk, exportComparison, start, runAction,
-    confirmation, setConfirmation, organizationName,
+    confirmation, setConfirmation, organizationName, saveState, retrySave, reloadLatest,
 }) {
+    const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
     const guided = view.guided_setup;
     const checks = guided.checks || {};
     const groups = guided.exception_groups || {};
@@ -32,18 +33,24 @@ export default function GuidedConnectionAssistant({
     const completedGroups = groupOrder.filter((group) => groupFingerprints(group).every((fingerprint) => decisions.has(fingerprint))).length;
     const automaticChecks = [checks.organization_verified, checks.finance_connected, checks.base_currency_inherited,
         checks.account_exceptions === 0, checks.tax_exceptions === 0, checks.item_exceptions === 0].filter(Boolean).length;
-    const approvalAvailable = ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state);
+    const reviewGatesComplete = remaining === 0
+        && ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state)
+        && Boolean(view.cutoff_at || view.snapshot_frozen_at);
+    const approvalAvailable = reviewGatesComplete;
     const formatNumber = (value, maximumFractionDigits = 2) => {
         if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
         return Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits });
     };
     const currencyCode = accounting.base_currency || guided.currency_summary?.base_currency || '';
     const currencyLabel = currencyCode === 'JOD' ? tr('integration.assistant.jod') : currencyCode;
-    const formatMoney = (value) => `${formatNumber(value, 2)} ${currencyLabel}`.trim();
+    const formatMoney = (value) => {
+        if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
+        return `${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyLabel}`.trim();
+    };
     const stepMeta = [
         { number: 1, label: tr('integration.assistant.step1'), count: tr('integration.assistant.checkMetric', { done: automaticChecks, total: 6 }), complete: automaticChecks === 6, description: tr('integration.assistant.automaticDescription') },
         { number: 2, label: tr('integration.assistant.step2'), count: tr('integration.assistant.decisionMetric', { groups: groupOrder.length, records: remaining }), complete: remaining === 0, description: tr('integration.assistant.exceptionsDescription') },
-        { number: 3, label: tr(remaining ? 'integration.assistant.previewStep' : 'integration.assistant.step3'), count: tr(remaining ? 'integration.assistant.notReady' : 'integration.assistant.readyForReview'), complete: view.state === 'activation_ready', blocked: remaining > 0, description: tr('integration.assistant.reviewDescription') },
+        { number: 3, label: tr(reviewGatesComplete ? 'integration.assistant.step3' : 'integration.assistant.previewStep'), count: tr(reviewGatesComplete ? 'integration.assistant.readyForReview' : 'integration.assistant.notReady'), complete: view.state === 'activation_ready', blocked: !reviewGatesComplete, description: tr(reviewGatesComplete ? 'integration.assistant.reviewDescription' : 'integration.assistant.previewDescription') },
     ];
     const currentTask = remaining > 0 ? stepMeta[1] : stepMeta[2];
     const checkRows = [
@@ -54,6 +61,9 @@ export default function GuidedConnectionAssistant({
         [checks.tax_exceptions === 0, tr('integration.assistant.taxesSummary', { resolved: checks.taxes_resolved || 0, exceptions: checks.tax_exceptions || 0 })],
         [checks.item_exceptions === 0, tr('integration.assistant.itemsSummary', { exact: checks.items_exact || 0, exceptions: checks.item_exceptions || 0 })],
     ];
+    const incompleteChecks = checkRows.filter(([passed]) => !passed);
+    const completedChecks = checkRows.filter(([passed]) => passed);
+    const completedCheckRegression = Boolean(guided.completed_check_error);
     const firstIncomplete = groupOrder.find((group) => groupFingerprints(group).some((fingerprint) => !decisions.has(fingerprint)));
     const selectedEffect = (row) => {
         const action = decisions.get(row.fingerprint)?.action;
@@ -72,19 +82,25 @@ export default function GuidedConnectionAssistant({
     const renderDecisionRow = (row) => {
         const decision = decisions.get(row.fingerprint);
         const source = row.solabooks || row.solastock;
+        const namesMatch = row.solabooks?.name && row.solastock?.name
+            && row.solabooks.name.trim().toLocaleLowerCase() === row.solastock.name.trim().toLocaleLowerCase();
+        const skusMatch = row.solabooks?.sku && row.solastock?.sku
+            && row.solabooks.sku.trim().toLocaleLowerCase() === row.solastock.sku.trim().toLocaleLowerCase();
+        const hasDifference = Number(row.quantity_difference || 0) !== 0 || Number(row.value_difference || 0) !== 0;
         const proposed = row.solabooks && row.solastock
             ? tr('integration.assistant.exactMatchProposal')
             : dynamicText('integration.assistant.proposal.', row.classification);
         return <article className="assistant-exception-row" key={row.fingerprint}>
             <div className="assistant-record">
-                <span className="assistant-row-label">{row.solabooks ? tr('integration.assistant.financeRecord') : tr('integration.assistant.stockRecord')}</span>
-                <strong>{source?.name || dynamicText('integration.wizard.entity.', row.entity_type)}</strong>
-                <small>{[source?.sku && `${tr('integration.assistant.sku')}: ${source.sku}`, source?.code, source?.barcode].filter(Boolean).join(' · ') || tr('integration.assistant.noReference')}</small>
+                <span className="assistant-row-label">{row.solabooks ? tr('integration.assistant.financeItem') : tr('integration.assistant.stockRecord')}</span>
+                <strong><bdi>{source?.name || dynamicText('integration.wizard.entity.', row.entity_type)}</bdi></strong>
+                <small>{source?.sku ? <><span>{tr('integration.assistant.sku')}: </span><bdi>{source.sku}</bdi></> : tr('integration.assistant.noReference')}</small>
             </div>
             <div className="assistant-proposal">
-                <span className="assistant-row-label">{row.solastock ? tr('integration.assistant.proposedStockRecord') : tr('integration.assistant.proposedAction')}</span>
-                <strong>{row.solastock?.name || proposed}</strong>
-                <small>{row.solabooks && row.solastock ? tr('integration.assistant.matchBasisExactSku') : dynamicText('integration.wizard.block.', row.blocking_reason)}</small>
+                <span className="assistant-row-label">{row.solastock ? tr('integration.assistant.proposedStockItem') : tr('integration.assistant.proposedAction')}</span>
+                <strong><bdi>{row.solastock?.name || proposed}</bdi></strong>
+                <small>{namesMatch && skusMatch ? tr('integration.assistant.identicalNameSku') : row.solabooks && row.solastock ? tr('integration.assistant.matchBasisExactSku') : dynamicText('integration.wizard.block.', row.blocking_reason)}</small>
+                {hasDifference && <strong className="assistant-difference">{tr('integration.assistant.meaningfulDifference', { quantity: formatNumber(row.quantity_difference, 4), value: formatMoney(row.value_difference) })}</strong>}
             </div>
             <label className="assistant-decision">
                 <span className="assistant-row-label">{tr('integration.wizard.decision')}</span>
@@ -99,12 +115,16 @@ export default function GuidedConnectionAssistant({
             <span className={`assistant-row-status ${decision ? 'is-resolved' : 'is-pending'}`}>
                 {tr(decision ? 'integration.assistant.resolved' : 'integration.assistant.pending')}
             </span>
-            <details className="assistant-row-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary><small>{dynamicText('integration.wizard.block.', row.blocking_reason)} · {row.fingerprint}</small></details>
+            <details className="assistant-row-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary><small><bdi>{dynamicText('integration.wizard.block.', row.blocking_reason)} · {row.fingerprint}</bdi></small></details>
         </article>;
     };
 
     const actions = <div className="assistant-actionbar">
-        <span className="assistant-save-state" role="status">{tr(saving ? 'integration.assistant.saving' : 'integration.assistant.saved')}</span>
+        <span className={`assistant-save-state is-${saveState || 'idle'}`} role="status">
+            {saving || saveState === 'saving' ? tr('integration.assistant.saving') : saveState === 'saved' ? tr('integration.assistant.savedAutomatically') : saveState === 'failed' ? tr('integration.assistant.saveFailed') : saveState === 'conflict' ? tr('integration.assistant.saveConflict') : ''}
+            {saveState === 'failed' && <button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button>}
+            {saveState === 'conflict' && <button type="button" className="btn btn--link" onClick={reloadLatest}>{tr('integration.assistant.reloadLatest')}</button>}
+        </span>
         {step < 3 && <button className="btn" disabled={saving} onClick={() => setAssistantStep(Math.min(3, step + 1))}>{tr('integration.assistant.saveContinue')}</button>}
         {step === 3 && remaining > 0 && <button className="btn" onClick={() => setAssistantStep(2)}>{tr('integration.assistant.completeDecisions')}</button>}
         <button className="btn" onClick={() => setAssistantStep(3)}>{tr('integration.assistant.reviewSummary')}</button>
@@ -128,7 +148,6 @@ export default function GuidedConnectionAssistant({
                 <strong>{currentTask.label}</strong>
             </div>
             <div className="assistant-status-line" role="status">
-                <strong>{tr('integration.assistant.statusLine', { remaining })}</strong>
                 <span>{tr('integration.assistant.safePause')}</span>
                 <details><summary>{tr('integration.assistant.statusDetails')}</summary>
                     <p>{tr('integration.assistant.statusDetailsText', { activation: status?.activation_status || 'safely_paused' })}</p>
@@ -153,10 +172,16 @@ export default function GuidedConnectionAssistant({
             <main className="assistant-main">
                 {step === 1 && <section className="assistant-card">
                     <header><h2>{tr('integration.assistant.step1')}</h2><p>{tr('integration.assistant.automaticDescription')}</p></header>
-                    <details className="assistant-checks"><summary>{tr('integration.assistant.checkMetric', { done: automaticChecks, total: 6 })}</summary>
-                        {checkRows.map(([passed, label]) => <div className="assistant-check" key={label}>
-                            <span className={passed ? 'check-ok' : 'check-attention'} aria-hidden="true">{passed ? '✓' : '!'}</span>
-                            <span>{label}</span>
+                    <div className="assistant-checks assistant-checks--incomplete" aria-label={tr('integration.assistant.incompleteChecks')}>
+                        {incompleteChecks.map(([, label]) => <div className="assistant-check" key={label} role="status">
+                            <span className="check-attention" aria-hidden="true">!</span>
+                            <span>{label}<span className="sr-only"> · {tr('integration.assistant.needsAttention')}</span></span>
+                        </div>)}
+                    </div>
+                    <details className="assistant-checks assistant-checks--completed" open={completedCheckRegression}>
+                        <summary>{tr('integration.assistant.completedChecks', { count: completedChecks.length })}</summary>
+                        {completedChecks.map(([, label]) => <div className="assistant-check" key={label} role="status">
+                            <span className="check-ok" aria-hidden="true">✓</span><span>{label}<span className="sr-only"> · {tr('integration.assistant.completed')}</span></span>
                         </div>)}
                     </details>
                     {accountingGate.allowed && <details className="assistant-details">
@@ -198,13 +223,25 @@ export default function GuidedConnectionAssistant({
                         return <details className="assistant-group" key={group}><summary><span className={groupRemaining ? 'check-attention' : 'check-ok'}>{groupRemaining ? '!' : '✓'}</span><span className="assistant-group-title"><strong>{dynamicText('integration.assistant.group.', group)}</strong><small>{dynamicText('integration.assistant.groupNext.', group)}</small></span><span className="assistant-group-metrics"><small>{tr('integration.assistant.resolvedCount', { count: groupResolved })}</small><strong>{tr('integration.assistant.remainingCount', { count: groupRemaining })}</strong></span></summary><div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></details>;
                     })}
                     {exactRows.length > 0 && <div className="assistant-bulk"><p>{tr('integration.assistant.exactBulk', { count: exactRows.length })}</p>
-                        <button className="btn" disabled={!runUuid || saving} onClick={() => exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint))}>{tr('integration.assistant.selectExact')}</button>
-                        <button className="btn" disabled={saving || !exactRows.every((row) => bulkSelection.includes(row.fingerprint))} onClick={() => bulk('approve_exact_sku_candidates')}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button></div>}
+                        <button className="btn" disabled={!runUuid || saving || !editableState} onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button></div>}
+                    {bulkReviewOpen && <div className="assistant-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-review-title">
+                        <div className="assistant-bulk-dialog__content"><h3 id="bulk-review-title">{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</h3>
+                            <p>{tr('integration.assistant.bulkDraftOnly')}</p>
+                            <div className="assistant-bulk-pairs">{exactRows.map((row) => <label key={row.fingerprint}>
+                                <input type="checkbox" checked={bulkSelection.includes(row.fingerprint)} onChange={() => toggleBulk(row.fingerprint)} />
+                                <span><bdi>{row.solabooks?.name}</bdi> → <bdi>{row.solastock?.name}</bdi><small>{tr('integration.assistant.matchBasisExactSku')} · <bdi>{row.solabooks?.sku}</bdi></small>
+                                    {(Number(row.quantity_difference || 0) !== 0 || Number(row.value_difference || 0) !== 0) && <small className="assistant-difference">{tr('integration.assistant.meaningfulDifference', { quantity: formatNumber(row.quantity_difference, 4), value: formatMoney(row.value_difference) })}</small>}
+                                </span>
+                            </label>)}</div>
+                            <div className="doc-actions"><button className="btn" onClick={() => setBulkReviewOpen(false)}>{tr('settings.common.cancel')}</button>
+                                <button className="btn" disabled={saving || bulkSelection.length === 0} onClick={async () => { if (await bulk('approve_exact_sku_candidates')) setBulkReviewOpen(false); }}>{tr('integration.assistant.confirmSelectedMatches', { count: bulkSelection.length })}</button></div>
+                        </div>
+                    </div>}
                     {actions}
                 </section>}
 
                 {step === 3 && <section className="assistant-card">
-                    <header><h2>{tr('integration.assistant.step3')}</h2><p>{tr('integration.assistant.reviewDescription')}</p></header>
+                    <header><h2>{tr(reviewGatesComplete ? 'integration.assistant.step3' : 'integration.assistant.previewStep')}</h2><p>{tr(reviewGatesComplete ? 'integration.assistant.reviewDescription' : 'integration.assistant.previewDescription')}</p></header>
                     <div className="assistant-review-dashboard">
                         {[
                             ['inventoryAuthority', tr('integration.assistant.solastockAuthority'), true],

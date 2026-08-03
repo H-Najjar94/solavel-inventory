@@ -23,6 +23,54 @@ function ConnectionPhaseBadges({ status, setupAllowed, tr }) {
     </div>;
 }
 
+function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) {
+    const wizard = status.connection_wizard || {};
+    const remaining = wizard.decisions_remaining;
+    const setupInProgress = status.draft_status === 'in_progress';
+    return <div className="connection-business-status">
+        <header className="assistant-hero connection-status-hero">
+            <div className="assistant-hero-copy">
+                <p className="assistant-kicker">{tr('integration.assistant.kicker')}</p>
+                <h1>{tr('integration.assistant.pageTitle')}</h1>
+                <p>{tr('integration.assistant.pageIntroduction')}</p>
+                <div className="assistant-context"><strong>{organizationName}</strong></div>
+            </div>
+            <div className="assistant-next">
+                <span>{tr('integration.assistant.nextAction')}</span>
+                <strong>{tr('integration.assistant.continueSetup')}</strong>
+                <button type="button" className="btn btn--primary" onClick={onContinue}>{tr('integration.assistant.continueSetup')}</button>
+            </div>
+            <div className="assistant-status-line" role="status">
+                <span>{tr('integration.assistant.safePause')}</span>
+                <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>
+            </div>
+        </header>
+        <section className="connection-status-card" aria-labelledby="connection-status-heading">
+            <h2 id="connection-status-heading">{tr('integration.businessStatus.title')}</h2>
+            <div className="connection-status-list">
+                <div><span>{tr('integration.businessStatus.setup')}</span><strong>{tr(setupInProgress ? 'integration.businessStatus.inProgress' : 'integration.phase.available')}</strong></div>
+                <div><span>{tr('integration.businessStatus.currentStep')}</span><strong>{tr(`integration.businessStatus.step.${wizard.current_step || 'automatic_checks'}`)}</strong></div>
+                {remaining !== null && remaining !== undefined && <div><span>{tr('integration.businessStatus.remaining')}</span><strong><bdi>{tr('integration.assistant.remainingRecords', { count: remaining })}</bdi></strong></div>}
+                <div><span>{tr('integration.businessStatus.inventoryAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solastock')}</bdi></strong></div>
+                <div><span>{tr('integration.businessStatus.accountingAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solabooks')}</bdi></strong></div>
+                <div><span>{tr('integration.phase.activation')}</span><strong>{tr('integration.phase.safely_paused')}</strong></div>
+                <div><span>{tr('integration.phase.delivery')}</span><strong>{tr('integration.phase.disabled')}</strong></div>
+            </div>
+            <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
+                <dl className="kv">
+                    <dt>{tr('integration.transport.worker')}</dt><dd>{tr(status.transport?.worker_enabled && status.transport?.worker_running ? 'integration.transport.running' : 'integration.transport.disabled')}</dd>
+                    <dt>{tr('integration.transport.receiver')}</dt><dd>{tr(status.transport?.receiver_enabled ? 'integration.details.yes' : 'integration.details.no')}</dd>
+                    <dt>{tr('integration.details.lastSync')}</dt><dd><bdi>{status.last_sync_at || '—'}</bdi></dd>
+                    <dt>{tr('integration.authority.lastRead')}</dt><dd><bdi>{status.inventory_authority?.last_successful_read_at || '—'}</bdi></dd>
+                    <dt>{tr('integration.metrics.pending')}</dt><dd><bdi>{status.events?.pending ?? 0}</bdi></dd>
+                    <dt>{tr('integration.metrics.failed')}</dt><dd><bdi>{status.events?.failed ?? 0}</bdi></dd>
+                    <dt>{tr('integration.metrics.ignored')}</dt><dd><bdi>{status.events?.ignored ?? 0}</bdi></dd>
+                </dl>
+            </details>
+        </section>
+    </div>;
+}
+
 export default function IntegrationSettingsPage() {
     const tr = useSettingsTranslation();
     const tenant = useTenant();
@@ -31,6 +79,7 @@ export default function IntegrationSettingsPage() {
     const setupGate = useCanCreate('inventory.integration.setup');
     const accountingGate = useCanCreate('inventory.integration.accounting_review');
     const [tab, setTab] = useState('status');
+    const [wizardResumeStep, setWizardResumeStep] = useState(1);
     const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
     const [savingConnection, setSavingConnection] = useState(false);
     const [rotatingKey, setRotatingKey] = useState(false);
@@ -75,11 +124,10 @@ export default function IntegrationSettingsPage() {
     }
 
     return (
-        <section className={`page ${tab === 'wizard' ? 'page--connection-assistant' : ''}`}>
+        <section className="page page--connection-assistant">
             <Breadcrumbs items={[{ label: tr('integration.settingsBreadcrumb'), to: '/settings' }, { label: tr('integration.title') }]} />
             <header className="page-head">
                 <h1>{tr('integration.title')}</h1>
-                <ConnectionPhaseBadges status={s} setupAllowed={setupGate.allowed} tr={tr} />
             </header>
 
             <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />
@@ -92,6 +140,9 @@ export default function IntegrationSettingsPage() {
                 />
             ) : !s ? <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} /> : (
                 <>
+                    <CompactIntegrationStatus status={s} tr={tr} organizationName={tenant.organization_name}
+                        onContinue={() => { setWizardResumeStep(2); setTab('wizard'); }} />
+                    <div hidden aria-hidden="true">
                     {!s.delivery_enabled && <div className="panel" role="status" style={{ borderInlineStart: '4px solid var(--warning, #b7791f)' }}>
                         <h2>{tr('integration.phase.activationPaused')}</h2>
                         <p>{tr('integration.phase.setupWhilePaused')}</p>
@@ -185,15 +236,16 @@ export default function IntegrationSettingsPage() {
                         <button className="btn" style={{ marginInlineStart: 8 }} disabled={!gate.allowed || rotatingKey || !s?.delivery_configured || !s.delivery_enabled} onClick={rotateSigningKey}>{rotatingKey ? tr('integration.connection.rotating') : (s?.signing?.configured ? tr('integration.connection.rotate') : tr('integration.connection.generate'))}</button>
                         <p className="muted">{tr('integration.connection.signingDescription')}</p>
                     </div>
+                    </div>
                 </>
             ))}
 
-            {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {tab === 'wizard' && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizationName }) {
+function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
     const actionsByEntity = {
         item: {
             exact_candidate_requires_owner_review: ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
@@ -216,10 +268,13 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
     const discovery = useApiQuery(['integration-wizard-discovery'], api.integrationWizardDiscovery, { fallback: null, enabled: true });
     const [runUuid, setRunUuid] = useState('');
     const [saving, setSaving] = useState(false);
+    const [saveState, setSaveState] = useState('idle');
+    const [pendingDecisions, setPendingDecisions] = useState(new Map());
+    const [failedDecision, setFailedDecision] = useState(null);
     const [confirmation, setConfirmation] = useState('');
     const [bulkSelection, setBulkSelection] = useState([]);
     const [cutoffAt, setCutoffAt] = useState('');
-    const [assistantStep, setAssistantStep] = useState(1);
+    const [assistantStep, setAssistantStep] = useState(initialAssistantStep);
     const [exceptionSearch, setExceptionSearch] = useState('');
     const run = useApiQuery(['integration-wizard-preview', runUuid], () => api.integrationWizardPreview(runUuid), {
         fallback: null,
@@ -243,6 +298,8 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
 
     async function decide(row, action) {
         setSaving(true);
+        setSaveState('saving');
+        setPendingDecisions((current) => new Map(current).set(row.fingerprint, { candidate_fingerprint: row.fingerprint, action }));
         try {
             await api.saveIntegrationWizardDecision(runUuid, {
                 candidate_fingerprint: row.fingerprint,
@@ -254,8 +311,15 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
                 expected_before_hash: row.candidate_before_hash,
             });
             await run.refetch();
-            toast.push(tr('integration.wizard.decisionSaved'), 'success');
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+            setPendingDecisions((current) => { const next = new Map(current); next.delete(row.fingerprint); return next; });
+            setFailedDecision(null);
+            setSaveState('saved');
+        } catch (error) {
+            const conflict = String(error.message || '').includes('draft_optimistic_lock_conflict');
+            setFailedDecision({ row, action });
+            setSaveState(conflict ? 'conflict' : 'failed');
+            toast.push(error.message || tr('settings.common.errorFallback'), 'error');
+        }
         finally { setSaving(false); }
     }
 
@@ -266,11 +330,13 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             await run.refetch();
             setConfirmation('');
             toast.push(tr(successKey), 'success');
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+            return true;
+        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); return false; }
         finally { setSaving(false); }
     }
 
     const decisions = new Map((run.data?.decisions || []).map((decision) => [decision.candidate_fingerprint, decision]));
+    pendingDecisions.forEach((decision, fingerprint) => decisions.set(fingerprint, decision));
     const allowedActions = (row) => {
         const configured = actionsByEntity[row.entity_type] || ['retain_blocked'];
         return Array.isArray(configured) ? configured : (configured[row.classification] || configured.default);
@@ -280,12 +346,16 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
     const toggleBulk = (fingerprint) => setBulkSelection((current) => current.includes(fingerprint)
         ? current.filter((value) => value !== fingerprint) : [...current, fingerprint]);
     async function bulk(action) {
-        await runAction(() => api.bulkIntegrationWizardDecision(runUuid, {
+        setSaveState('saving');
+        const saved = await runAction(() => api.bulkIntegrationWizardDecision(runUuid, {
             bulk_action: action,
             candidate_fingerprints: bulkSelection,
             confirmation: `CONFIRM ${bulkSelection.length} RECORDS`,
+            expected_lock_version: run.data.lock_version,
         }), 'integration.wizard.bulkSaved');
-        setBulkSelection([]);
+        setSaveState(saved ? 'saved' : 'failed');
+        if (saved) setBulkSelection([]);
+        return saved;
     }
 
     function exportComparison() {
@@ -321,6 +391,9 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             toggleBulk={toggleBulk} bulk={bulk} exportComparison={exportComparison} start={start}
             runAction={runAction} cutoffAt={cutoffAt} setCutoffAt={setCutoffAt}
             confirmation={confirmation} setConfirmation={setConfirmation}
+            saveState={saveState}
+            retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action)}
+            reloadLatest={async () => { await run.refetch(); setSaveState('idle'); }}
             organizationName={organizationName}
         />;
     }

@@ -104,10 +104,11 @@ class IntegrationController extends ApiController
             'candidate_fingerprints' => ['required', 'array', 'min:1', 'max:500'],
             'candidate_fingerprints.*' => ['required', 'regex:/^[a-f0-9]{64}$/'],
             'confirmation' => ['required', 'string', 'max:80'],
+            'expected_lock_version' => ['required', 'integer', 'min:1'],
         ]);
         return $this->success($wizard->bulkDecide(
             $this->context->idOrFail(), $run, $data['bulk_action'], $data['candidate_fingerprints'],
-            $data['confirmation'], (int) auth()->id(),
+            $data['confirmation'], (int) auth()->id(), (int) $data['expected_lock_version'],
             $this->permissions->can(auth()->user(), 'inventory.integration.setup'),
         ));
     }

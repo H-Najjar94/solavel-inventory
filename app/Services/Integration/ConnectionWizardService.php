@@ -364,7 +364,7 @@ final class ConnectionWizardService
     }
 
     public function bulkDecide(int $organizationId, string $runUuid, string $bulkAction, array $fingerprints,
-        string $confirmation, int $actorUserId, bool $canOwnerReview): array
+        string $confirmation, int $actorUserId, int $expectedLockVersion, bool $canOwnerReview): array
     {
         if (! $canOwnerReview || ! in_array($bulkAction, self::BULK_ACTIONS, true)) {
             $this->fail('wizard_bulk_action_forbidden');
@@ -372,6 +372,10 @@ final class ConnectionWizardService
         $fingerprints = array_values(array_unique(array_map('strval', $fingerprints)));
         if ($fingerprints === [] || ! hash_equals('CONFIRM '.count($fingerprints).' RECORDS', $confirmation)) {
             $this->fail('wizard_bulk_confirmation_mismatch');
+        }
+        $run = $this->runForOrganization($organizationId, $runUuid);
+        if ((int) $run->lock_version !== $expectedLockVersion) {
+            $this->fail('draft_optimistic_lock_conflict');
         }
         $preview = $this->finalPreview($organizationId, $runUuid);
         $candidates = collect($preview['comparison'])->whereIn('fingerprint', $fingerprints)->values();
@@ -394,8 +398,20 @@ final class ConnectionWizardService
         };
         if (! $eligible) $this->fail('wizard_bulk_candidates_not_homogeneous');
 
-        return DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $candidates, $action, $actorUserId): array {
-            foreach ($candidates as $candidate) {
+        return DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $candidates, $action, $actorUserId, $expectedLockVersion): array {
+            $lockedRun = $this->runForOrganization($organizationId, $runUuid, true);
+            if ((int) $lockedRun->lock_version !== $expectedLockVersion) {
+                $this->fail('draft_optimistic_lock_conflict');
+            }
+            $alreadySelected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                ->where('run_uuid', $runUuid)->where('status', 'selected')
+                ->whereIn('candidate_fingerprint', $candidates->pluck('fingerprint')->all())
+                ->where('action', $action)->pluck('candidate_fingerprint')->all();
+            $pending = $candidates->reject(fn (array $candidate) => in_array($candidate['fingerprint'], $alreadySelected, true))->values();
+            if ($pending->isEmpty()) {
+                return $this->finalPreview($organizationId, $runUuid) + ['bulk_result' => 'already_saved'];
+            }
+            foreach ($pending as $candidate) {
                 $current = $this->runForOrganization($organizationId, $runUuid);
                 $this->decide($organizationId, $runUuid, $candidate['fingerprint'], $action,
                     $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
@@ -403,7 +419,7 @@ final class ConnectionWizardService
                     (int) $current->lock_version, $candidate['candidate_before_hash'], true, false);
             }
             $this->audit($runUuid, null, 'confirmed_bulk_decision', null, [
-                'action' => $action, 'fingerprints' => $candidates->pluck('fingerprint')->all(),
+                'action' => $action, 'fingerprints' => $pending->pluck('fingerprint')->all(),
             ], $actorUserId);
             return $this->finalPreview($organizationId, $runUuid);
         });
