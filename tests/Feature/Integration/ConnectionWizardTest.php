@@ -217,11 +217,6 @@ final class ConnectionWizardTest extends TestCase
             'base_unit_id' => $unitId, 'category_id' => $categoryId,
             'purchase_price' => 0, 'sales_price' => 0, 'is_active' => true,
         ]);
-        DB::connection('tenant')->table('inventory_items')->insert([
-            'organization_id' => 14, 'sku' => 'WIZARD-ITEM', 'name' => 'Wizard item',
-            'unit_id' => $unitId, 'qty_on_hand' => '0.0000', 'average_cost' => '0.000000',
-            'valuation_method' => 'average', 'tracking_type' => 'none',
-        ]);
         IntegrationSetting::query()->create([
             'organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks',
             'mode' => 'paused', 'solabooks_organization_id' => 14,
