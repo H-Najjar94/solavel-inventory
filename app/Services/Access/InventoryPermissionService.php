@@ -47,6 +47,14 @@ class InventoryPermissionService
 
         $granted = $this->permissionsForRole($role);
 
+        // Accounting approval is deliberately segregated from organization
+        // ownership. The owner approves operational/master-data choices; an
+        // accountant (or a custom role explicitly granted this permission)
+        // reviews the financial roles and correction preview.
+        if ($permission === 'inventory.integration.accounting_review' && $role === 'inventory_admin') {
+            return false;
+        }
+
         return $granted === ['*'] || in_array($permission, $granted, true);
     }
 
@@ -59,7 +67,16 @@ class InventoryPermissionService
         }
         $granted = $this->permissionsForRole($role);
 
-        return $granted === ['*'] ? $this->all() : $granted;
+        if ($granted === ['*']) {
+            $permissions = $this->all();
+            if ($role === 'inventory_admin') {
+                $permissions = array_values(array_diff($permissions, ['inventory.integration.accounting_review']));
+            }
+
+            return $permissions;
+        }
+
+        return $granted;
     }
 
     /**
