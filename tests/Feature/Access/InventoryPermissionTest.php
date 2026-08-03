@@ -166,6 +166,7 @@ class InventoryPermissionTest extends TestCase
         $this->assertTrue($p->can($this->user(), 'inventory.manage_sales_orders'));
         $this->assertTrue($p->can($this->user(), 'inventory.manage_shipments'));
         $this->assertTrue($p->can($this->user(), 'inventory.integration.view'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.setup'));
         $this->assertFalse($p->can($this->user(), 'inventory.manage_settings'));
         $this->assertFalse($p->can($this->user(), 'inventory.integration.manage'));
         $this->assertFalse($p->can($this->user(), 'inventory.integration.retry'));
@@ -179,6 +180,7 @@ class InventoryPermissionTest extends TestCase
         foreach (array_merge(self::WRITE_ACTIONS, ['inventory.view_items', 'inventory.manage_settings']) as $perm) {
             $this->assertTrue($p->can($this->user(), $perm), "owner must be able to {$perm}");
         }
+        $this->assertTrue($p->can($this->user(), 'inventory.integration.setup'));
     }
 
     #[Test]
@@ -189,6 +191,7 @@ class InventoryPermissionTest extends TestCase
 
         $this->assertTrue($p->can($this->user(), 'inventory.integration.view'));
         $this->assertTrue($p->can($this->user(), 'inventory.integration.accounting_review'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.setup'));
         $this->assertFalse($p->can($this->user(), 'inventory.integration.manage'));
         $this->assertFalse($p->can($this->user(), 'inventory.manage_items'));
         $this->assertFalse($p->can($this->user(), 'inventory.manage_adjustments'));

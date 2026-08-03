@@ -87,6 +87,45 @@ class InventoryCommercialEntitlementTest extends TestCase
     }
 
     #[Test]
+    public function setup_readiness_is_granted_without_delivery_entitlement_and_is_organization_scoped(): void
+    {
+        $organizationId = 990099;
+        DB::connection('mysql')->table('entitlement_state_snapshots')->updateOrInsert(
+            ['organization_id' => $organizationId],
+            [
+                'subscription_id' => null,
+                'underlying_subscription_state' => 'paid_active',
+                'effective_access_state' => 'paid_active',
+                'state_hash' => hash('sha256', 'setup-only'),
+                'state_payload' => json_encode([
+                    'client_id' => 990010,
+                    'organization_id' => $organizationId,
+                    'integration_capabilities' => [
+                        'connection_setup_readiness' => true,
+                        'connection_activation_delivery_entitled' => false,
+                        'reason' => 'setup_available_delivery_not_entitled',
+                    ],
+                ], JSON_UNESCAPED_SLASHES),
+                'evaluated_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        try {
+            $decision = $this->service(null)->checkConnectionSetupReadiness($organizationId);
+            $this->assertTrue($decision['allowed']);
+            $this->assertSame('setup_only', $decision['access_mode']);
+            $this->assertSame('setup_available_delivery_not_entitled', $decision['reason_code']);
+
+            $crossOrganization = $this->service(null)->checkConnectionSetupReadiness($organizationId + 1);
+            $this->assertFalse($crossOrganization['allowed']);
+        } finally {
+            DB::connection('mysql')->table('entitlement_state_snapshots')->where('organization_id', $organizationId)->delete();
+        }
+    }
+
+    #[Test]
     public function stale_snapshot_within_maximum_uses_lkg_without_false_expiry(): void
     {
         $decision = $this->service([

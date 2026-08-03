@@ -92,7 +92,7 @@ class IntegrationController extends ApiController
             (int) auth()->id(),
             (int) $data['expected_lock_version'],
             (string) $data['expected_before_hash'],
-            $this->permissions->can(auth()->user(), 'inventory.integration.manage'),
+            $this->permissions->can(auth()->user(), 'inventory.integration.setup'),
             $this->permissions->can(auth()->user(), 'inventory.integration.accounting_review'),
         ));
     }
@@ -108,7 +108,7 @@ class IntegrationController extends ApiController
         return $this->success($wizard->bulkDecide(
             $this->context->idOrFail(), $run, $data['bulk_action'], $data['candidate_fingerprints'],
             $data['confirmation'], (int) auth()->id(),
-            $this->permissions->can(auth()->user(), 'inventory.integration.manage'),
+            $this->permissions->can(auth()->user(), 'inventory.integration.setup'),
         ));
     }
 
@@ -169,7 +169,7 @@ class IntegrationController extends ApiController
         ]);
         return $this->success($wizard->approveRole(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'owner', (int) auth()->id(),
-            $this->permissions->can(auth()->user(), 'inventory.integration.manage')
+            $this->permissions->can(auth()->user(), 'inventory.integration.setup')
         ));
     }
 

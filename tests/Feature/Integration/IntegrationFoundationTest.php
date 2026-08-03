@@ -80,5 +80,8 @@ class IntegrationFoundationTest extends TestCase
         $this->assertContains('perm:inventory.integration.manage', $manage);
         $retry = $routes->getByName('api.v1.integration.events.retry')->gatherMiddleware();
         $this->assertContains('perm:inventory.integration.retry', $retry);
+        $start = $routes->getByName('api.v1.integration.wizard.start')->gatherMiddleware();
+        $this->assertContains('perm:inventory.integration.setup', $start);
+        $this->assertContains('integration.setup', $start);
     }
 }

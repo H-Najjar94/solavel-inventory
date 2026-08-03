@@ -91,6 +91,9 @@ return [
         'warehouse_scope' => 'Every assigned warehouse must belong to the active organization.',
     ],
     'integration' => [
+        'wizard' => [
+            'setupUnavailable' => 'Connection setup requires active Finance and Inventory access for this organization.',
+        ],
         'ignored_delivery' => 'Ignored integration events cannot be delivered.',
         'safety_hold' => 'SolaBooks delivery is temporarily paused for currency-contract maintenance. Existing events are preserved and no delivery was attempted.',
         'journal_rejected' => 'SolaBooks rejected the journal event.',

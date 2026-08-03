@@ -25,6 +25,7 @@ return [
         'inventory.view_settings' => 'View inventory settings',
         'inventory.manage_settings' => 'Manage inventory settings',
         'inventory.integration.view' => 'View SolaBooks integration status & events',
+        'inventory.integration.setup' => 'Prepare reviewed SolaBooks connection decisions',
         'inventory.integration.manage' => 'Manage integration mappings & settings',
         'inventory.integration.accounting_review' => 'Review connection accounting-role draft decisions',
         'inventory.integration.retry' => 'Retry / ignore integration events',

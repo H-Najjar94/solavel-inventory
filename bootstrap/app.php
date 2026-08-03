@@ -4,6 +4,7 @@ use App\Http\Middleware\AuthenticateFromInventoryHandoff;
 use App\Http\Middleware\BounceToParentForSso;
 use App\Http\Middleware\EnsureInventoryFeature;
 use App\Http\Middleware\EnsureInventoryPermission;
+use App\Http\Middleware\EnsureIntegrationSetupCapability;
 use App\Http\Middleware\ResolveInventoryTenant;
 use App\Http\Middleware\SetInventoryLocale;
 use App\Http\Middleware\VerifySolavelSyncSignature;
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // SolaStock middleware aliases (mirrors Finance naming).
         $middleware->alias([
             'perm' => EnsureInventoryPermission::class,
+            'integration.setup' => EnsureIntegrationSetupCapability::class,
             'feature' => EnsureInventoryFeature::class,
             'inv.tenant' => ResolveInventoryTenant::class,
             'sync.signature' => VerifySolavelSyncSignature::class,
@@ -92,6 +94,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ResolveInventoryTenant::class,
             SubstituteBindings::class,
             EnsureInventoryPermission::class,
+            EnsureIntegrationSetupCapability::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
