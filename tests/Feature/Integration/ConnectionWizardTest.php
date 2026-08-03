@@ -230,6 +230,27 @@ final class ConnectionWizardTest extends TestCase
         $this->assertFalse($effect['automatic_posting']);
     }
 
+    #[Test]
+    public function dangling_finance_unit_identity_is_visible_and_remains_an_owner_blocker(): void
+    {
+        $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('inventory_items')->insert([
+            'organization_id' => 14, 'sku' => 'UNIT-REVIEW', 'name' => 'Unit review item',
+            'unit_id' => 4242, 'qty_on_hand' => 0, 'average_cost' => 0,
+            'valuation_method' => 'average', 'tracking_type' => 'none',
+        ]);
+
+        $preview = app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A);
+        $unit = collect($preview['comparison'])->first(fn (array $row) =>
+            $row['entity_type'] === 'unit'
+            && ($row['safe_details']['source'] ?? null) === 'dangling_finance_item_unit_reference'
+        );
+        $this->assertNotNull($unit);
+        $this->assertSame(['4242'], $unit['solabooks_record_ids']);
+        $this->assertSame('owner_unit_selection_required', $unit['blocking_reason']);
+        $this->assertTrue($unit['safe_details']['authoritative_unit_details_required']);
+    }
+
     private function seedConnectionFixture(bool $withMapping = true): array
     {
         $this->seedCentralIdentity();
