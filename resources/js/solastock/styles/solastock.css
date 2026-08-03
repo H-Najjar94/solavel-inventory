@@ -1193,7 +1193,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .assistant-blockers h3,.assistant-blockers p { margin:0 0 8px; }
 .assistant-blockers .btn { margin:4px 4px 0 0; }
 .assistant-rollback { color:var(--muted); font-size:12px; }
-.assistant-actionbar { position:sticky; bottom:0; z-index:10; display:flex; justify-content:flex-end; gap:8px; margin:16px -16px -16px; padding:12px 16px; background:var(--surface,#fff); border-top:1px solid var(--line-soft,#e5e1da); border-radius:0 0 12px 12px; }
+.assistant-actionbar { position:static; display:flex; justify-content:flex-end; gap:8px; margin:16px -16px -16px; padding:12px 16px; background:var(--surface,#fff); border-top:1px solid var(--line-soft,#e5e1da); border-radius:0 0 12px 12px; }
 .assistant-actionbar .assistant-export { margin-inline-start:auto; }
 .assistant-final-approval { display:flex; align-items:end; gap:8px; flex-wrap:wrap; margin-top:12px; }
 

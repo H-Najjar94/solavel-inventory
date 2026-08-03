@@ -41,6 +41,7 @@ export default function GuidedConnectionAssistant({
         { number: 2, label: tr('integration.assistant.step2'), count: tr('integration.assistant.decisionMetric', { groups: groupOrder.length, records: remaining }), complete: remaining === 0, description: tr('integration.assistant.exceptionsDescription') },
         { number: 3, label: tr(remaining ? 'integration.assistant.previewStep' : 'integration.assistant.step3'), count: tr(remaining ? 'integration.assistant.notReady' : 'integration.assistant.readyForReview'), complete: view.state === 'activation_ready', blocked: remaining > 0, description: tr('integration.assistant.reviewDescription') },
     ];
+    const currentTask = remaining > 0 ? stepMeta[1] : stepMeta[2];
     const checkRows = [
         [checks.organization_verified, tr('integration.assistant.organizationVerified')],
         [checks.finance_connected, tr('integration.assistant.financeConnected')],
@@ -120,7 +121,7 @@ export default function GuidedConnectionAssistant({
             </div>
             <div className="assistant-next">
                 <span>{tr('integration.assistant.nextAction')}</span>
-                <strong>{stepMeta.find((item) => !item.complete)?.label || tr('integration.assistant.readyForReview')}</strong>
+                <strong>{currentTask.label}</strong>
             </div>
             <div className="assistant-status-line" role="status">
                 <strong>{tr('integration.assistant.statusLine', { remaining })}</strong>
@@ -243,7 +244,7 @@ export default function GuidedConnectionAssistant({
             </main>
 
             <aside className="assistant-side" aria-label={tr('integration.assistant.summary')}>
-                <div className="assistant-side-card assistant-now"><h2>{tr('integration.assistant.whatNow')}</h2><strong>{stepMeta.find((item) => !item.complete)?.label || tr('integration.assistant.readyForReview')}</strong><p>{tr('integration.assistant.groupProgress', { done: completedGroups, total: groupOrder.length })}</p><p>{tr('integration.assistant.remainingDecisions', { count: remaining })}</p>{remaining > 0 && <p className="is-blocked">{tr('integration.assistant.blockingPrerequisite')}</p>}{!approvalAvailable && <button className="btn btn--primary" onClick={() => setAssistantStep(remaining ? 2 : 3)}>{tr(remaining ? 'integration.assistant.saveContinue' : 'integration.assistant.reviewSummary')}</button>}</div>
+                <div className="assistant-side-card assistant-now"><h2>{tr('integration.assistant.whatNow')}</h2><strong>{currentTask.label}</strong><p>{tr('integration.assistant.groupProgress', { done: completedGroups, total: groupOrder.length })}</p><p>{tr('integration.assistant.remainingDecisions', { count: remaining })}</p>{remaining > 0 && <p className="is-blocked">{tr('integration.assistant.blockingPrerequisite')}</p>}{!approvalAvailable && <button className="btn btn--primary" onClick={() => setAssistantStep(remaining ? 2 : 3)}>{tr(remaining ? 'integration.assistant.saveContinue' : 'integration.assistant.reviewSummary')}</button>}</div>
             </aside>
         </div>
     </div>;
