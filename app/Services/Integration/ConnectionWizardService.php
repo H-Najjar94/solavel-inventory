@@ -82,6 +82,7 @@ final class ConnectionWizardService
             'totals' => $totals,
             'accounting' => $accounting,
             'master_data' => $masterData,
+            'guided_setup' => $this->guidedSetup($comparison, (string) ($accounting['base_currency'] ?? ''), (int) $mapping->finance_organization_id),
         ];
 
         return $core + [
@@ -233,7 +234,10 @@ final class ConnectionWizardService
             $this->audit($runUuid, $decisionUuid, $current ? 'decision_revised' : 'decision_selected', $before, $after, $actorUserId);
             $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
                 ->where('run_uuid', $runUuid)->where('status', 'selected')->pluck('candidate_fingerprint')->all();
-            $required = collect($preview['comparison'])->whereNotNull('blocking_reason')->pluck('fingerprint')->all();
+            $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])->pluck('fingerprint')->all();
+            $required = collect($preview['comparison'])->whereNotNull('blocking_reason')
+                ->reject(fn (array $candidate) => in_array($candidate['fingerprint'], $automatic, true))
+                ->pluck('fingerprint')->all();
             $complete = count(array_diff($required, $selected)) === 0;
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)
                 ->update([
@@ -289,8 +293,12 @@ final class ConnectionWizardService
 
         $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
             ->where('run_uuid', $runUuid)->where('status', 'selected')->get()->keyBy('candidate_fingerprint');
-        $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($decisions): bool {
+        $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])->pluck('fingerprint');
+        $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($decisions, $automatic): bool {
             if ($candidate['blocking_reason'] === null) {
+                return false;
+            }
+            if ($automatic->contains($candidate['fingerprint'])) {
                 return false;
             }
             $decision = $decisions->get($candidate['fingerprint']);
@@ -314,6 +322,7 @@ final class ConnectionWizardService
             'authority' => ['inventory' => 'solastock', 'accounting' => 'solabooks'],
             'legacy_finance_inventory_becomes_read_only' => true,
             'proposed_accounting_effect' => $preview['totals']['proposed_accounting_effect'] ?? [],
+            'automatic_configuration_hash' => $preview['guided_setup']['source_invalidation_hash'] ?? null,
             'blocked_fingerprints' => $blocking->pluck('fingerprint')->all(),
         ];
         $approvalHash = $this->hash($approvalCore);
@@ -343,6 +352,7 @@ final class ConnectionWizardService
             'accounting' => $preview['accounting'] ?? ['accounts' => [], 'complete' => false],
             'master_data' => $preview['master_data'] ?? null,
             'readiness' => $preview['readiness'] ?? null,
+            'guided_setup' => $preview['guided_setup'] ?? null,
             'blockers' => $preview['blockers'] ?? [],
             'blocking' => $blocking->all(),
             'snapshot_frozen_at' => $run->snapshot_frozen_at,
@@ -1258,6 +1268,7 @@ final class ConnectionWizardService
                 'historical_review_requirement', 'permanently_blocked_excluded',
             ],
             'blockers' => $blockers,
+            'guided_setup' => $this->guidedSetup($comparison, $baseCurrency, $financeOrgId),
         ];
 
         return $core + [
@@ -1269,6 +1280,136 @@ final class ConnectionWizardService
             'activation_available' => false,
             'legacy_fallback' => false,
         ];
+    }
+
+    /**
+     * Compact presentation contract for the customer-facing assistant.
+     *
+     * Deterministic Finance identities are source-hashed into the versioned
+     * draft/snapshot, but never materialized as operational mappings here.
+     * Only exceptions which require a human decision remain editable.
+     */
+    private function guidedSetup(array $comparison, string $baseCurrency, int $financeOrgId): array
+    {
+        $rows = collect($comparison);
+        $accountRows = $rows->where('entity_type', 'account_role');
+        $resolvedAccounts = $accountRows->where('classification', 'candidate_requires_accountant_approval');
+        $accountExceptions = $accountRows->reject(fn (array $row) =>
+            $row['classification'] === 'candidate_requires_accountant_approval'
+        );
+        $taxRows = $rows->where('entity_type', 'tax');
+        $resolvedTaxes = $taxRows->filter(fn (array $row) =>
+            count($row['solabooks_record_ids'] ?? []) === 1
+            && ($row['safe_details']['active'] ?? true) === true
+        );
+        $taxExceptions = $taxRows->reject(fn (array $row) =>
+            count($row['solabooks_record_ids'] ?? []) === 1
+            && ($row['safe_details']['active'] ?? true) === true
+        );
+
+        $base = strtoupper($baseCurrency);
+        $usedCodes = $this->financeUsedCurrencyCodes($financeOrgId)->push($base)->filter()->unique();
+        $currencyRows = $rows->where('entity_type', 'currency');
+        $reservedCodes = ['XTS', 'XXX'];
+        $operationalCurrencies = $currencyRows->filter(fn (array $row) =>
+            $usedCodes->contains(strtoupper((string) ($row['solabooks']['code'] ?? '')))
+        );
+        $currencyExceptions = $operationalCurrencies->filter(function (array $row) use ($base): bool {
+            $code = strtoupper((string) ($row['solabooks']['code'] ?? ''));
+            $rate = (string) ($row['safe_details']['configured_rate'] ?? '');
+            return ($row['safe_details']['active'] ?? false) !== true
+                || ($code !== $base && (! is_numeric($rate) || (float) $rate <= 0));
+        });
+        $advancedCurrencies = $currencyRows->reject(fn (array $row) =>
+            $operationalCurrencies->contains('fingerprint', $row['fingerprint'])
+        );
+
+        $visible = $rows->reject(function (array $row) use ($resolvedAccounts, $resolvedTaxes): bool {
+            if ($resolvedAccounts->contains('fingerprint', $row['fingerprint'])
+                || $resolvedTaxes->contains('fingerprint', $row['fingerprint'])) return true;
+            if ($row['entity_type'] === 'currency' || $row['entity_type'] === 'historical_event') return true;
+            // SolaStock warehouses are already authoritative and need no Finance
+            // recreation unless a real conflict is discovered.
+            return $row['entity_type'] === 'warehouse'
+                && ($row['safe_details']['source'] ?? null) === 'existing_solastock_record';
+        });
+        $exceptionGroups = [
+            'items' => $visible->where('entity_type', 'item')->pluck('fingerprint')->values()->all(),
+            'inventory_quantities' => $visible->where('entity_type', 'item')
+                ->filter(fn (array $row) => Decimal::cmp((string) $row['quantity_difference'], '0') !== 0)
+                ->pluck('fingerprint')->values()->all(),
+            'units' => $visible->whereIn('entity_type', ['unit', 'category'])->pluck('fingerprint')->values()->all(),
+            'warehouses' => $visible->where('entity_type', 'warehouse')->pluck('fingerprint')->values()->all(),
+            'parties' => $visible->whereIn('entity_type', ['customer', 'supplier'])->pluck('fingerprint')->values()->all(),
+            'accounting' => $accountExceptions->merge($taxExceptions)->pluck('fingerprint')->values()->all(),
+            'currencies' => $currencyExceptions->pluck('fingerprint')->values()->all(),
+            'cutoff_documents' => $visible->where('entity_type', 'cutoff_document')->pluck('fingerprint')->values()->all(),
+        ];
+        $automatic = $resolvedAccounts->merge($resolvedTaxes)->merge($operationalCurrencies)
+            ->map(fn (array $row) => [
+                'entity_type' => $row['entity_type'],
+                'fingerprint' => $row['fingerprint'],
+                'finance_record_ids' => $row['solabooks_record_ids'],
+                'source_hash' => $this->hash($row),
+                'status' => 'deterministic_draft_binding',
+            ])->values();
+
+        return [
+            'version' => 'connection-assistant.v1',
+            'automatic_bindings' => $automatic->all(),
+            'automatic_bindings_hash' => $this->hash($automatic->all()),
+            'checks' => [
+                'organization_verified' => $financeOrgId > 0,
+                'finance_connected' => $financeOrgId > 0,
+                'base_currency_inherited' => $base !== '',
+                'accounts_resolved' => $resolvedAccounts->count(),
+                'account_exceptions' => $accountExceptions->count(),
+                'taxes_resolved' => $resolvedTaxes->count(),
+                'tax_exceptions' => $taxExceptions->count(),
+                'items_exact' => $rows->where('classification', 'exact_candidate_requires_owner_review')->count(),
+                'item_exceptions' => $rows->where('entity_type', 'item')->whereNotNull('blocking_reason')->count(),
+            ],
+            'currency_summary' => [
+                'base_currency' => $base ?: null,
+                'operational' => $operationalCurrencies->map(fn (array $row) => $row['solabooks']['code'])->filter()->unique()->values()->all(),
+                'missing_rate_count' => $currencyExceptions->count(),
+                'advanced_remediation_count' => $advancedCurrencies->count(),
+                'reserved_codes' => $advancedCurrencies->map(fn (array $row) => strtoupper((string) ($row['solabooks']['code'] ?? '')))
+                    ->filter(fn (string $code) => in_array($code, $reservedCodes, true))->unique()->values()->all(),
+            ],
+            'exception_groups' => $exceptionGroups,
+            'visible_exception_fingerprints' => collect($exceptionGroups)->flatten()->unique()->values()->all(),
+            'historical_exclusion_count' => $rows->where('entity_type', 'historical_event')->count(),
+            'source_invalidation_hash' => $this->hash([
+                'automatic' => $automatic->all(),
+                'exceptions' => $exceptionGroups,
+                'currency' => $operationalCurrencies->pluck('fingerprint')->values()->all(),
+            ]),
+            'operational_mutation_allowed' => false,
+        ];
+    }
+
+    private function financeUsedCurrencyCodes(int $financeOrgId): Collection
+    {
+        if ($financeOrgId <= 0) return collect();
+        $codes = collect();
+        foreach ([
+            'journal_entry_lines' => ['organization_id', ['transaction_currency_code', 'currency_code']],
+            'journal_entries' => ['organization_id', ['transaction_currency_code', 'currency_code']],
+            'bills' => ['organization_id', ['currency_code']],
+            'invoices' => ['organization_id', ['currency_code']],
+        ] as $table => [$organizationColumn, $currencyColumns]) {
+            if (! Schema::connection('tenant')->hasTable($table)
+                || ! Schema::connection('tenant')->hasColumn($table, $organizationColumn)) continue;
+            foreach ($currencyColumns as $currencyColumn) {
+                if (! Schema::connection('tenant')->hasColumn($table, $currencyColumn)) continue;
+                $codes = $codes->merge(DB::connection('tenant')->table($table)
+                    ->where($organizationColumn, $financeOrgId)->whereNotNull($currencyColumn)
+                    ->distinct()->pluck($currencyColumn));
+            }
+        }
+        return $codes->map(fn ($code) => strtoupper(trim((string) $code)))
+            ->filter(fn (string $code) => preg_match('/^[A-Z]{3}$/', $code) === 1)->unique()->values();
     }
 
     /**
@@ -1403,6 +1544,8 @@ final class ConnectionWizardService
                 $rows[] = $this->draftCandidate('tax', 'owner_review_required', null, $tax,
                     'owner_tax_selection_required', 'owner_decision', [
                         'rate' => (string) ($tax->rate ?? ''), 'classification' => $tax->classification ?? null,
+                        'active' => (bool) ($tax->is_active ?? true),
+                        'finance_authoritative' => true,
                     ]);
             }
         }
@@ -1471,18 +1614,23 @@ final class ConnectionWizardService
             ->where('is_active', true)->where('is_postable', true)->orderBy('code')->orderBy('id')->get();
         $rows = [];
         foreach ($definitions as $role => [$type, $keywords, $workflows]) {
-            $candidate = $accounts->first(function ($account) use ($type, $keywords): bool {
+            $matches = $accounts->filter(function ($account) use ($type, $keywords): bool {
                 if (strtolower((string) ($account->type ?? '')) !== $type) return false;
                 $name = strtolower((string) ($account->name ?? '').' '.(string) ($account->code ?? ''));
                 return collect($keywords)->contains(fn (string $keyword) => str_contains($name, $keyword));
-            });
-            $rows[] = $this->draftCandidate('account_role', $candidate ? 'candidate_requires_accountant_approval' : 'unresolved_account_role',
+            })->values();
+            $candidate = $matches->count() === 1 ? $matches->first() : null;
+            $classification = $candidate ? 'candidate_requires_accountant_approval'
+                : ($matches->count() > 1 ? 'ambiguous_account_role' : 'unresolved_account_role');
+            $rows[] = $this->draftCandidate('account_role', $classification,
                 null, $candidate, 'account_role_requires_explicit_accountant_selection', 'accountant_decision', [
                     'role' => $role, 'account_type' => $candidate->type ?? $type,
                     'active' => $candidate ? (bool) $candidate->is_active : null,
                     'postable' => $candidate ? (bool) $candidate->is_postable : null,
                     'organization_id' => $financeOrgId,
-                    'candidate_reason' => $candidate ? 'active_postable_owned_type_and_documented_purpose_match' : 'no_unambiguous_owned_candidate',
+                    'candidate_reason' => $candidate ? 'active_postable_owned_type_and_documented_purpose_match'
+                        : ($matches->count() > 1 ? 'multiple_owned_candidates_require_finance_review' : 'no_unambiguous_owned_candidate'),
+                    'candidate_count' => $matches->count(),
                     'affected_workflows' => $workflows,
                 ]);
         }
