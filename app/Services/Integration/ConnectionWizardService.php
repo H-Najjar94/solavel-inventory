@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 final class ConnectionWizardService
 {
-    public const VERSION = 'solabooks-solastock.connection-wizard.v1';
+    public const VERSION = 'solabooks-solastock.connection-wizard.v2';
 
     public const DECISIONS = [
         'bind_existing',
@@ -27,6 +27,29 @@ final class ConnectionWizardService
         'exclude_initial_connection',
         'select_authoritative_record',
         'resolve_account_category',
+        'approve_exact_binding',
+        'reject_exact_binding',
+        'classify_inventory_item',
+        'classify_service_non_inventory',
+        'select_unit',
+        'define_unit_conversion',
+        'select_category',
+        'propose_category_creation',
+        'select_warehouse',
+        'select_party',
+        'select_tax',
+        'retain_currency',
+        'exclude_currency',
+        'retain_historical_exclusion',
+        'review_cutoff_document',
+        'select_account_role',
+        'retain_account_role_unresolved',
+    ];
+
+    public const BULK_ACTIONS = [
+        'approve_exact_sku_candidates',
+        'retain_historical_exclusions',
+        'exclude_service_non_inventory_records',
     ];
 
     public function __construct(
@@ -66,35 +89,52 @@ final class ConnectionWizardService
             'generated_at' => now()->utc()->toIso8601String(),
             'snapshot_hash' => $this->hash($core),
             'connection_state' => $this->state($comparison, $accounting, $masterData),
+            'active_draft' => $this->activeDraftSummary($organizationId),
+            'activation_available' => false,
         ];
     }
 
     public function start(int $organizationId, int $actorUserId): array
     {
-        // Readiness is available before mapping, but a mutable approval run is
-        // not. This prevents a subscription row or guessed local identity from
-        // becoming a connection identity.
-        $this->mapping($organizationId);
         $preview = $this->discover($organizationId);
-        $cutoff = now()->utc();
-        $runUuid = (string) Str::uuid();
-        $snapshotId = 'CONNECTION-'.$organizationId.'-'.$cutoff->format('Ymd\THis\Z').'-'.strtoupper(substr($runUuid, 0, 8));
-        $state = $preview['connection_state'] === 'ready_for_approval' ? 'ready_for_approval' : 'review_required';
+        $identity = $preview['identity'];
+        if ((int) ($identity['central_client_id'] ?? 0) <= 0
+            || (int) ($identity['finance_organization_id'] ?? 0) <= 0
+            || (int) ($identity['central_organization_id'] ?? 0) !== $organizationId) {
+            $this->fail('authoritative_setup_identity_required');
+        }
 
-        DB::connection('tenant')->transaction(function () use ($preview, $cutoff, $runUuid, $snapshotId, $state, $actorUserId): void {
+        $existing = DB::connection('tenant')->table('integration_connection_wizard_runs')
+            ->where('solastock_organization_id', $organizationId)
+            ->whereIn('state', ['draft_decisions', 'decisions_complete', 'snapshot_required', 'cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'])
+            ->whereNull('discarded_at')->latest('id')->first();
+        if ($existing) {
+            return $this->finalPreview($organizationId, (string) $existing->run_uuid);
+        }
+
+        $createdAt = now()->utc();
+        $runUuid = (string) Str::uuid();
+        $draftId = 'DRAFT-'.$organizationId.'-'.$createdAt->format('Ymd\THis\Z').'-'.strtoupper(substr($runUuid, 0, 8));
+        $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
+        $beforeImageHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
+
+        DB::connection('tenant')->transaction(function () use ($preview, $identity, $createdAt, $runUuid, $draftId, $manifestHash, $beforeImageHash, $actorUserId): void {
             DB::connection('tenant')->table('integration_connection_wizard_runs')->insert([
                 'run_uuid' => $runUuid,
-                'organization_mapping_uuid' => $preview['organization_mapping_uuid'],
-                'central_client_id' => $preview['identity']['central_client_id'],
-                'central_organization_id' => $preview['identity']['central_organization_id'],
-                'finance_organization_id' => $preview['identity']['finance_organization_id'],
-                'solastock_organization_id' => $preview['identity']['solastock_organization_id'],
-                'state' => $state,
-                'cutoff_at' => $cutoff,
-                'snapshot_id' => $snapshotId,
+                'organization_mapping_uuid' => $preview['organization_mapping_uuid'] ?: null,
+                'central_client_id' => $identity['central_client_id'],
+                'central_organization_id' => $identity['central_organization_id'],
+                'tenant_database_identity' => (string) $identity['tenant_database_identity'],
+                'finance_organization_id' => $identity['finance_organization_id'],
+                'solastock_organization_id' => $identity['solastock_organization_id'],
+                'state' => 'draft_decisions',
+                'draft_version' => 1,
+                'lock_version' => 1,
+                'cutoff_at' => null,
+                'snapshot_id' => $draftId,
                 'snapshot_hash' => $preview['snapshot_hash'],
-                'discovery_manifest_hash' => $preview['discovery_manifest_hash'],
-                'discovery_before_image_hash' => $preview['discovery_before_image_hash'],
+                'discovery_manifest_hash' => $manifestHash,
+                'discovery_before_image_hash' => $beforeImageHash,
                 'authority_choices' => json_encode(['inventory' => 'solastock', 'accounting' => 'solabooks']),
                 'workflow_allowlist' => json_encode(config('integration_connection_wizard.allowed_workflows', [])),
                 'comparison_totals' => json_encode($preview['totals']),
@@ -105,52 +145,22 @@ final class ConnectionWizardService
                     'master_data' => $preview['master_data'],
                 ]),
                 'created_by_user_id' => $actorUserId,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => $createdAt,
+                'updated_at' => $createdAt,
             ]);
-            $this->audit($runUuid, null, 'wizard_started', null, [
-                'snapshot_id' => $snapshotId,
-                'snapshot_hash' => $preview['snapshot_hash'],
-                'state' => $state,
+            $this->audit($runUuid, null, 'draft_started', null, [
+                'draft_id' => $draftId,
+                'draft_discovery_hash' => $preview['snapshot_hash'],
+                'state' => 'draft_decisions',
             ], $actorUserId);
         });
 
-        return $this->show($organizationId, $runUuid);
+        return $this->finalPreview($organizationId, $runUuid);
     }
 
     public function show(int $organizationId, string $runUuid): array
     {
-        $mapping = $this->mapping($organizationId);
-        $run = $this->run($mapping, $runUuid);
-        $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
-            ->where('run_uuid', $runUuid)->orderBy('candidate_fingerprint')->get()->map(fn ($row) => [
-                'decision_uuid' => $row->decision_uuid,
-                'candidate_fingerprint' => $row->candidate_fingerprint,
-                'entity_type' => $row->entity_type,
-                'action' => $row->action,
-                'solastock_record_ids' => json_decode($row->solastock_record_ids ?: '[]', true),
-                'solabooks_record_ids' => json_decode($row->solabooks_record_ids ?: '[]', true),
-                'safe_details' => json_decode($row->safe_details ?: '{}', true),
-                'status' => $row->status,
-                'updated_at' => $row->updated_at,
-            ])->all();
-
-        return [
-            'version' => self::VERSION,
-            'run_uuid' => $run->run_uuid,
-            'state' => $run->state,
-            'cutoff_at' => $run->cutoff_at,
-            'snapshot_id' => $run->snapshot_id,
-            'snapshot_hash' => $run->snapshot_hash,
-            'approval_payload_hash' => $run->approval_payload_hash,
-            'identity' => $this->identity($mapping),
-            'decisions' => $decisions,
-            'approved_at' => $run->approved_at,
-            'invalidated_at' => $run->invalidated_at,
-            'invalidation_reason' => $run->invalidation_reason,
-            'activated_at' => $run->activated_at,
-            'activation_available' => $this->activationGateReady($organizationId),
-        ];
+        return $this->finalPreview($organizationId, $runUuid);
     }
 
     public function decide(
@@ -162,23 +172,39 @@ final class ConnectionWizardService
         array $booksIds,
         array $safeDetails,
         int $actorUserId,
+        int $expectedLockVersion = 0,
+        string $expectedBeforeHash = '',
+        bool $canOwnerReview = true,
+        bool $canAccountingReview = false,
     ): array {
         if (! in_array($action, self::DECISIONS, true)) {
             $this->fail('unsupported_mapping_decision');
         }
-        $mapping = $this->mapping($organizationId);
-
-        DB::connection('tenant')->transaction(function () use ($mapping, $runUuid, $fingerprint, $action, $stockIds, $booksIds, $safeDetails, $actorUserId): void {
-            $run = $this->run($mapping, $runUuid, true);
-            if (! in_array($run->state, ['review_required', 'ready_for_approval'], true) || $run->invalidated_at) {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $fingerprint, $action, $stockIds, $booksIds, $safeDetails, $actorUserId, $expectedLockVersion, $expectedBeforeHash, $canOwnerReview, $canAccountingReview): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if (! in_array($run->state, ['draft_decisions', 'decisions_complete', 'snapshot_required'], true) || $run->invalidated_at || $run->discarded_at) {
                 $this->fail('wizard_run_not_editable');
             }
-            $preview = $this->discover((int) $mapping->solastock_organization_id);
+            if ($expectedLockVersion > 0 && (int) $run->lock_version !== $expectedLockVersion) {
+                $this->fail('draft_optimistic_lock_conflict');
+            }
+            $preview = $this->discover($organizationId);
             $candidate = collect($preview['comparison'])->firstWhere('fingerprint', $fingerprint);
             if (! $candidate) {
                 $this->fail('candidate_before_image_changed');
             }
             $beforeHash = $this->hash($candidate);
+            if ($expectedBeforeHash !== '' && ! hash_equals($beforeHash, $expectedBeforeHash)) {
+                $this->fail('candidate_before_image_changed');
+            }
+            $reviewerRole = $candidate['decision_class'] === 'accountant_decision' ? 'accountant' : 'owner';
+            if (! in_array($action, $this->allowedActionsForCandidate($candidate), true)) {
+                $this->fail('wizard_decision_not_valid_for_candidate');
+            }
+            if (($reviewerRole === 'accountant' && ! $canAccountingReview)
+                || ($reviewerRole === 'owner' && ! $canOwnerReview)) {
+                $this->fail('wizard_decision_role_forbidden');
+            }
             $current = DB::connection('tenant')->table('integration_connection_wizard_decisions')
                 ->where('run_uuid', $runUuid)->where('candidate_fingerprint', $fingerprint)->lockForUpdate()->first();
             $decisionUuid = $current?->decision_uuid ?? (string) Str::uuid();
@@ -188,6 +214,8 @@ final class ConnectionWizardService
                 [
                     'decision_uuid' => $decisionUuid,
                     'entity_type' => $candidate['entity_type'],
+                    'reviewer_role' => $reviewerRole,
+                    'decision_version' => (int) ($current?->decision_version ?? 0) + 1,
                     'action' => $action,
                     'solastock_record_ids' => json_encode(array_values(array_map('strval', $stockIds))),
                     'solabooks_record_ids' => json_encode(array_values(array_map('strval', $booksIds))),
@@ -195,14 +223,28 @@ final class ConnectionWizardService
                     'safe_details' => json_encode($this->safeDecisionDetails($safeDetails)),
                     'status' => 'selected',
                     'actor_user_id' => $actorUserId,
+                    'reviewed_by_user_id' => $actorUserId,
+                    'reviewed_at' => now(),
                     'created_at' => $current?->created_at ?? now(),
                     'updated_at' => now(),
                 ]
             );
             $after = compact('fingerprint', 'action', 'stockIds', 'booksIds', 'beforeHash');
             $this->audit($runUuid, $decisionUuid, $current ? 'decision_revised' : 'decision_selected', $before, $after, $actorUserId);
+            $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                ->where('run_uuid', $runUuid)->where('status', 'selected')->pluck('candidate_fingerprint')->all();
+            $required = collect($preview['comparison'])->whereNotNull('blocking_reason')->pluck('fingerprint')->all();
+            $complete = count(array_diff($required, $selected)) === 0;
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)
-                ->update(['state' => 'review_required', 'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null, 'updated_at' => now()]);
+                ->update([
+                    'state' => $complete ? 'decisions_complete' : 'draft_decisions',
+                    'lock_version' => DB::raw('lock_version + 1'),
+                    'decisions_completed_at' => $complete ? now() : null,
+                    'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null,
+                    'owner_approved_by_user_id' => null, 'owner_approved_at' => null, 'owner_approval_hash' => null,
+                    'accountant_approved_by_user_id' => null, 'accountant_approved_at' => null, 'accountant_approval_hash' => null,
+                    'updated_at' => now(),
+                ]);
         });
 
         return $this->finalPreview($organizationId, $runUuid);
@@ -210,9 +252,11 @@ final class ConnectionWizardService
 
     public function reverseDecision(int $organizationId, string $runUuid, string $decisionUuid, int $actorUserId): array
     {
-        $mapping = $this->mapping($organizationId);
-        DB::connection('tenant')->transaction(function () use ($mapping, $runUuid, $decisionUuid, $actorUserId): void {
-            $this->run($mapping, $runUuid, true);
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $decisionUuid, $actorUserId): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if (! in_array($run->state, ['draft_decisions', 'decisions_complete', 'snapshot_required'], true)) {
+                $this->fail('wizard_run_not_editable');
+            }
             $decision = DB::connection('tenant')->table('integration_connection_wizard_decisions')
                 ->where('run_uuid', $runUuid)->where('decision_uuid', $decisionUuid)->lockForUpdate()->first();
             if (! $decision || $decision->status === 'reversed') {
@@ -222,7 +266,9 @@ final class ConnectionWizardService
                 ->update(['status' => 'reversed', 'actor_user_id' => $actorUserId, 'updated_at' => now()]);
             $this->audit($runUuid, $decisionUuid, 'decision_reversed', (array) $decision, ['status' => 'reversed'], $actorUserId);
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)
-                ->update(['state' => 'review_required', 'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null, 'updated_at' => now()]);
+                ->update(['state' => 'draft_decisions', 'lock_version' => DB::raw('lock_version + 1'),
+                    'decisions_completed_at' => null, 'approval_payload_hash' => null,
+                    'approved_by_user_id' => null, 'approved_at' => null, 'updated_at' => now()]);
         });
 
         return $this->finalPreview($organizationId, $runUuid);
@@ -230,12 +276,14 @@ final class ConnectionWizardService
 
     public function finalPreview(int $organizationId, string $runUuid): array
     {
-        $mapping = $this->mapping($organizationId);
-        $run = $this->run($mapping, $runUuid);
+        $run = $this->runForOrganization($organizationId, $runUuid);
         $preview = $this->discover($organizationId);
-        if (! hash_equals($run->discovery_manifest_hash, $preview['discovery_manifest_hash'])
-            || ! hash_equals($run->discovery_before_image_hash, $preview['discovery_before_image_hash'])
-            || ! hash_equals($run->snapshot_hash, $preview['snapshot_hash'])) {
+        $frozen = $run->snapshot_frozen_at !== null;
+        $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
+        $beforeImageHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
+        if ($frozen && (! hash_equals((string) $run->discovery_manifest_hash, $manifestHash)
+            || ! hash_equals((string) $run->discovery_before_image_hash, $beforeImageHash)
+            || ! hash_equals((string) $run->snapshot_hash, (string) $preview['snapshot_hash']))) {
             $this->fail('snapshot_or_before_image_changed');
         }
 
@@ -251,8 +299,8 @@ final class ConnectionWizardService
         $approvalCore = [
             'version' => self::VERSION,
             'run_uuid' => $runUuid,
-            'identity' => $this->identity($mapping),
-            'cutoff_at' => (string) $run->cutoff_at,
+            'identity' => $preview['identity'],
+            'cutoff_at' => $run->cutoff_at ? (string) $run->cutoff_at : null,
             'snapshot_id' => $run->snapshot_id,
             'snapshot_hash' => $run->snapshot_hash,
             'decisions' => $decisions->sortKeys()->map(fn ($row) => [
@@ -265,22 +313,216 @@ final class ConnectionWizardService
             'workflows' => json_decode($run->workflow_allowlist ?: '[]', true),
             'authority' => ['inventory' => 'solastock', 'accounting' => 'solabooks'],
             'legacy_finance_inventory_becomes_read_only' => true,
-            'proposed_accounting_effect' => $preview['totals']['proposed_accounting_effect'],
+            'proposed_accounting_effect' => $preview['totals']['proposed_accounting_effect'] ?? [],
             'blocked_fingerprints' => $blocking->pluck('fingerprint')->all(),
         ];
         $approvalHash = $this->hash($approvalCore);
-        $ready = $blocking->isEmpty() && $preview['accounting']['complete'];
-        $ready = $ready && $preview['master_data']['complete'];
+        $ready = $blocking->isEmpty() && $frozen && $run->cutoff_reviewed_at !== null;
+        $decisionsList = $decisions->sortKeys()->map(fn ($row) => [
+            'decision_uuid' => $row->decision_uuid,
+            'candidate_fingerprint' => $row->candidate_fingerprint,
+            'entity_type' => $row->entity_type,
+            'reviewer_role' => $row->reviewer_role ?? 'owner',
+            'decision_version' => (int) ($row->decision_version ?? 1),
+            'action' => $row->action,
+            'solastock_record_ids' => json_decode($row->solastock_record_ids ?: '[]', true),
+            'solabooks_record_ids' => json_decode($row->solabooks_record_ids ?: '[]', true),
+            'safe_details' => json_decode($row->safe_details ?: '{}', true),
+            'candidate_before_hash' => $row->candidate_before_hash,
+            'reviewed_by_user_id' => $row->reviewed_by_user_id ?? $row->actor_user_id,
+            'reviewed_at' => $row->reviewed_at ?? $row->updated_at,
+        ])->values()->all();
         return $approvalCore + [
             'approval_payload_hash' => $approvalHash,
-            'state' => $ready ? 'ready_for_approval' : 'review_required',
-            'comparison' => $preview['comparison'],
+            'state' => $ready && $run->state === 'cutoff_review' ? 'preview_ready' : (string) $run->state,
+            'lock_version' => (int) $run->lock_version,
+            'draft_version' => (int) $run->draft_version,
+            'decisions' => $decisionsList,
+            'comparison' => collect($preview['comparison'])->map(fn (array $row) => $row + ['candidate_before_hash' => $this->hash($row)])->all(),
             'totals' => $preview['totals'],
-            'accounting' => $preview['accounting'],
-            'master_data' => $preview['master_data'],
+            'accounting' => $preview['accounting'] ?? ['accounts' => [], 'complete' => false],
+            'master_data' => $preview['master_data'] ?? null,
+            'readiness' => $preview['readiness'] ?? null,
+            'blockers' => $preview['blockers'] ?? [],
             'blocking' => $blocking->all(),
+            'snapshot_frozen_at' => $run->snapshot_frozen_at,
+            'owner_approved_at' => $run->owner_approved_at ?? null,
+            'accountant_approved_at' => $run->accountant_approved_at ?? null,
+            'activation_available' => false,
             'rollback_behavior' => 'Before activation, reverse decisions and regenerate the snapshot. After activation, pause delivery; operational and accounting reversals remain separate and preserve evidence.',
         ];
+    }
+
+    public function bulkDecide(int $organizationId, string $runUuid, string $bulkAction, array $fingerprints,
+        string $confirmation, int $actorUserId, bool $canOwnerReview): array
+    {
+        if (! $canOwnerReview || ! in_array($bulkAction, self::BULK_ACTIONS, true)) {
+            $this->fail('wizard_bulk_action_forbidden');
+        }
+        $fingerprints = array_values(array_unique(array_map('strval', $fingerprints)));
+        if ($fingerprints === [] || ! hash_equals('CONFIRM '.count($fingerprints).' RECORDS', $confirmation)) {
+            $this->fail('wizard_bulk_confirmation_mismatch');
+        }
+        $preview = $this->finalPreview($organizationId, $runUuid);
+        $candidates = collect($preview['comparison'])->whereIn('fingerprint', $fingerprints)->values();
+        if ($candidates->count() !== count($fingerprints)) $this->fail('wizard_bulk_scope_mismatch');
+        [$eligible, $action] = match ($bulkAction) {
+            'approve_exact_sku_candidates' => [
+                $candidates->every(fn (array $row) => $row['entity_type'] === 'item' && $row['classification'] === 'exact_candidate_requires_owner_review'),
+                'approve_exact_binding',
+            ],
+            'retain_historical_exclusions' => [
+                $candidates->every(fn (array $row) => $row['entity_type'] === 'historical_event'),
+                'retain_historical_exclusion',
+            ],
+            'exclude_service_non_inventory_records' => [
+                $candidates->every(fn (array $row) => $row['entity_type'] === 'item'
+                    && $row['classification'] === 'missing_solastock_record'
+                    && ($row['safe_details']['owner_classification'] ?? null) === 'service_non_inventory'),
+                'classify_service_non_inventory',
+            ],
+        };
+        if (! $eligible) $this->fail('wizard_bulk_candidates_not_homogeneous');
+
+        return DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $candidates, $action, $actorUserId): array {
+            foreach ($candidates as $candidate) {
+                $current = $this->runForOrganization($organizationId, $runUuid);
+                $this->decide($organizationId, $runUuid, $candidate['fingerprint'], $action,
+                    $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+                    ['reason' => 'confirmed_homogeneous_bulk_decision'], $actorUserId,
+                    (int) $current->lock_version, $candidate['candidate_before_hash'], true, false);
+            }
+            $this->audit($runUuid, null, 'confirmed_bulk_decision', null, [
+                'action' => $action, 'fingerprints' => $candidates->pluck('fingerprint')->all(),
+            ], $actorUserId);
+            return $this->finalPreview($organizationId, $runUuid);
+        });
+    }
+
+    public function requestSnapshot(int $organizationId, string $runUuid, int $expectedLockVersion, int $actorUserId): array
+    {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $expectedLockVersion, $actorUserId): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->state !== 'decisions_complete' || (int) $run->lock_version !== $expectedLockVersion) {
+                $this->fail('decisions_complete_lock_required');
+            }
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                'state' => 'snapshot_required', 'lock_version' => DB::raw('lock_version + 1'), 'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'snapshot_requested', null, ['draft_version' => (int) $run->draft_version], $actorUserId);
+        });
+        return $this->finalPreview($organizationId, $runUuid);
+    }
+
+    public function freezeSnapshot(int $organizationId, string $runUuid, int $expectedLockVersion, int $actorUserId): array
+    {
+        $preview = $this->discover($organizationId);
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $expectedLockVersion, $actorUserId, $preview): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->state !== 'snapshot_required' || (int) $run->lock_version !== $expectedLockVersion) {
+                $this->fail('snapshot_required_lock_mismatch');
+            }
+            $frozenAt = now()->utc();
+            $snapshotId = 'CONNECTION-'.$organizationId.'-'.$frozenAt->format('Ymd\THis\Z').'-'.strtoupper(substr($runUuid, 0, 8));
+            $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
+            $beforeHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                'state' => 'cutoff_review', 'snapshot_id' => $snapshotId, 'snapshot_hash' => $preview['snapshot_hash'],
+                'discovery_manifest_hash' => $manifestHash, 'discovery_before_image_hash' => $beforeHash,
+                'snapshot_payload' => $this->canonicalJson($preview), 'snapshot_frozen_at' => $frozenAt,
+                'lock_version' => DB::raw('lock_version + 1'), 'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'snapshot_frozen', null, [
+                'snapshot_id' => $snapshotId, 'snapshot_hash' => $preview['snapshot_hash'],
+            ], $actorUserId);
+        });
+        return $this->finalPreview($organizationId, $runUuid);
+    }
+
+    public function reviewCutoff(int $organizationId, string $runUuid, string $cutoffAt, array $physicalCounts,
+        string $unexplainedVariance, int $expectedLockVersion, int $actorUserId): array
+    {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $cutoffAt, $physicalCounts, $unexplainedVariance, $expectedLockVersion, $actorUserId): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->state !== 'cutoff_review' || (int) $run->lock_version !== $expectedLockVersion || $run->snapshot_frozen_at === null) {
+                $this->fail('frozen_snapshot_cutoff_review_required');
+            }
+            $variance = Decimal::money($unexplainedVariance);
+            $choices = json_decode($run->authority_choices ?: '{}', true);
+            $choices['physical_counts'] = collect($physicalCounts)->map(fn ($row) => collect((array) $row)
+                ->only(['item_id', 'warehouse_id', 'quantity', 'counted_at', 'reference'])->all())->values()->all();
+            $choices['unexplained_variance'] = $variance;
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                'cutoff_at' => $cutoffAt, 'cutoff_reviewed_at' => now(),
+                'authority_choices' => json_encode($choices),
+                'state' => Decimal::isZero($variance, 2) ? 'preview_ready' : 'cutoff_review',
+                'lock_version' => DB::raw('lock_version + 1'), 'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'cutoff_reviewed', null, [
+                'cutoff_at' => $cutoffAt, 'physical_count_rows' => count($physicalCounts),
+                'unexplained_variance' => $variance,
+            ], $actorUserId);
+        });
+        return $this->finalPreview($organizationId, $runUuid);
+    }
+
+    public function approveRole(int $organizationId, string $runUuid, string $approvalHash, string $reviewerRole,
+        int $actorUserId, bool $authorized): array
+    {
+        if (! $authorized || ! in_array($reviewerRole, ['owner', 'accountant'], true)) $this->fail('wizard_approval_role_forbidden');
+        $preview = $this->finalPreview($organizationId, $runUuid);
+        if ($preview['state'] !== 'preview_ready' || ! hash_equals($preview['approval_payload_hash'], $approvalHash)) {
+            $this->fail('approval_payload_changed');
+        }
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $approvalHash, $reviewerRole, $actorUserId): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if (! in_array($run->state, ['preview_ready', 'owner_approved', 'accountant_approved'], true)) $this->fail('preview_ready_required');
+            $prefix = $reviewerRole === 'owner' ? 'owner' : 'accountant';
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                $prefix.'_approved_by_user_id' => $actorUserId,
+                $prefix.'_approved_at' => now(), $prefix.'_approval_hash' => $approvalHash,
+                'state' => ($reviewerRole === 'owner' ? $run->accountant_approved_at : $run->owner_approved_at)
+                    ? 'activation_ready' : $prefix.'_approved',
+                'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, $prefix.'_approved', null, ['approval_payload_hash' => $approvalHash], $actorUserId);
+        });
+        return $this->finalPreview($organizationId, $runUuid);
+    }
+
+    public function resetDraft(int $organizationId, string $runUuid, int $actorUserId): array
+    {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $actorUserId): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->state === 'connected') $this->fail('connected_run_cannot_be_reset');
+            DB::connection('tenant')->table('integration_connection_wizard_decisions')->where('run_uuid', $runUuid)
+                ->where('status', 'selected')->update(['status' => 'reversed', 'actor_user_id' => $actorUserId, 'updated_at' => now()]);
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                'state' => 'draft_decisions', 'draft_version' => DB::raw('draft_version + 1'),
+                'lock_version' => DB::raw('lock_version + 1'), 'cutoff_at' => null,
+                'snapshot_frozen_at' => null, 'cutoff_reviewed_at' => null, 'decisions_completed_at' => null,
+                'owner_approved_by_user_id' => null, 'owner_approved_at' => null, 'owner_approval_hash' => null,
+                'accountant_approved_by_user_id' => null, 'accountant_approved_at' => null, 'accountant_approval_hash' => null,
+                'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'draft_reset', null, ['next_draft_version' => (int) $run->draft_version + 1], $actorUserId);
+        });
+        return $this->finalPreview($organizationId, $runUuid);
+    }
+
+    public function discardDraft(int $organizationId, string $runUuid, int $actorUserId): array
+    {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $actorUserId): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->state === 'connected') $this->fail('connected_run_cannot_be_discarded');
+            DB::connection('tenant')->table('integration_connection_wizard_decisions')->where('run_uuid', $runUuid)
+                ->where('status', 'selected')->update(['status' => 'discarded', 'actor_user_id' => $actorUserId, 'updated_at' => now()]);
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                'state' => 'discarded', 'discarded_by_user_id' => $actorUserId, 'discarded_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'draft_discarded', null, ['draft_version' => (int) $run->draft_version], $actorUserId);
+        });
+        return ['run_uuid' => $runUuid, 'state' => 'discarded', 'activation_available' => false];
     }
 
     public function approve(int $organizationId, string $runUuid, string $approvalHash, string $confirmation, int $actorUserId): array
@@ -897,6 +1139,9 @@ final class ConnectionWizardService
     private function preMappingReadiness(int $organizationId): array
     {
         $tenant = (string) DB::connection('tenant')->getDatabaseName();
+        $centralOrganization = DB::connection('mysql')->table('organizations')
+            ->where('id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->first();
+        $centralClientId = (int) ($centralOrganization->client_id ?? 0);
         $financeOrg = Schema::connection('tenant')->hasTable('organizations')
             ? DB::connection('tenant')->table('organizations')->where('central_org_id', $organizationId)->first()
             : null;
@@ -925,13 +1170,16 @@ final class ConnectionWizardService
                 $comparison[] = $this->preMappingItemRow(null, collect([$finance]), 'missing_solastock_record');
             }
         }
+        $comparison = array_merge($comparison, $this->preMappingSetupDecisionRows(
+            $organizationId, $financeOrgId, $financeItems
+        ));
 
         $counts = fn (string $table, int $org, string $column = 'organization_id'): int =>
             Schema::connection('tenant')->hasTable($table)
                 ? (int) DB::connection('tenant')->table($table)->where($column, $org)->count()
                 : 0;
         $blockers = array_values(array_filter([
-            'verified_immutable_mapping_required',
+            $centralClientId > 0 ? null : 'central_client_identity_missing',
             $financeOrgId > 0 ? null : 'finance_organization_identity_missing',
             $stockItems->isEmpty() ? 'owner_master_data_setup_required' : null,
             collect($comparison)->contains(fn (array $row) => $row['blocking_reason'] !== null)
@@ -939,10 +1187,17 @@ final class ConnectionWizardService
             'accountant_account_role_approval_required',
             'frozen_cutoff_and_zero_variance_required',
         ]));
+        $quantityDifference = Decimal::qty(collect($comparison)->reduce(
+            fn (string $carry, array $row) => Decimal::add($carry, $row['quantity_difference'], 4), '0'
+        ));
+        $valuationDifference = Decimal::money(collect($comparison)->reduce(
+            fn (string $carry, array $row) => Decimal::add($carry, $row['value_difference'], 2), '0'
+        ));
         $core = [
             'version' => self::VERSION,
             'organization_mapping_uuid' => null,
             'identity' => [
+                'central_client_id' => $centralClientId ?: null,
                 'central_organization_id' => $organizationId,
                 'tenant_database_identity' => $tenant,
                 'finance_organization_id' => $financeOrgId ?: null,
@@ -961,12 +1216,17 @@ final class ConnectionWizardService
                 'missing_in_solabooks' => collect($comparison)->where('classification', 'missing_solabooks_record')->count(),
                 'ambiguous' => collect($comparison)->where('classification', 'ambiguous')->count(),
                 'blocked' => collect($comparison)->whereNotNull('blocking_reason')->count(),
-                'total_quantity_difference' => Decimal::qty(collect($comparison)->reduce(
-                    fn (string $carry, array $row) => Decimal::add($carry, $row['quantity_difference'], 4), '0'
-                )),
-                'total_valuation_difference' => Decimal::money(collect($comparison)->reduce(
-                    fn (string $carry, array $row) => Decimal::add($carry, $row['value_difference'], 2), '0'
-                )),
+                'total_quantity_difference' => $quantityDifference,
+                'total_valuation_difference' => $valuationDifference,
+                'proposed_accounting_effect' => Decimal::isZero($valuationDifference, 2) ? [] : [
+                    'requires_separate_accounting_approval' => true,
+                    'debit' => Decimal::cmp($valuationDifference, '0') > 0 ? 'inventory_asset' : 'opening_offset',
+                    'credit' => Decimal::cmp($valuationDifference, '0') > 0 ? 'opening_offset' : 'inventory_asset',
+                    'amount' => ltrim(Decimal::money(Decimal::cmp($valuationDifference, '0') < 0
+                        ? substr($valuationDifference, 1) : $valuationDifference), '-'),
+                    'currency' => $this->financeBaseCurrency($financeOrg),
+                    'automatic_posting' => false,
+                ],
             ],
             'readiness' => [
                 'units' => $counts('units', $organizationId),
@@ -977,6 +1237,24 @@ final class ConnectionWizardService
                 'suppliers' => $counts('inventory_suppliers', $organizationId),
                 'tax_mappings' => $counts('integration_tax_mappings', $organizationId),
                 'account_mappings' => $counts('integration_account_mappings', $organizationId),
+            ],
+            'accounting' => [
+                'base_currency' => $this->financeBaseCurrency($financeOrg),
+                'accounts' => collect($comparison)->where('entity_type', 'account_role')->map(fn (array $row) => [
+                    'role' => $row['safe_details']['role'] ?? null,
+                    'account_id' => $row['solabooks']['id'] ?? null,
+                    'account_code' => $row['solabooks']['code'] ?? null,
+                    'account_name' => $row['solabooks']['name'] ?? null,
+                    'account_type' => $row['safe_details']['account_type'] ?? null,
+                    'active' => $row['safe_details']['active'] ?? null,
+                    'postable' => $row['safe_details']['postable'] ?? null,
+                    'candidate_reason' => $row['safe_details']['candidate_reason'] ?? null,
+                    'affected_workflows' => $row['safe_details']['affected_workflows'] ?? [],
+                    'valid' => false,
+                    'blocking_reason' => $row['blocking_reason'],
+                ])->values()->all(),
+                'complete' => false,
+                'inheritance_policy' => 'item_override_then_category_then_organization',
             ],
             'decision_classes' => [
                 'safe_deterministic_preparation', 'owner_decision', 'accountant_decision',
@@ -990,10 +1268,228 @@ final class ConnectionWizardService
             'read_only' => true,
             'generated_at' => now()->utc()->toIso8601String(),
             'snapshot_hash' => $this->hash($core),
-            'connection_state' => 'setup_required',
+            'connection_state' => 'setup_available',
+            'active_draft' => $this->activeDraftSummary($organizationId),
             'activation_available' => false,
             'legacy_fallback' => false,
         ];
+    }
+
+    /** Draft-only candidates. Nothing returned here is an operational mapping. */
+    private function preMappingSetupDecisionRows(int $stockOrgId, int $financeOrgId, Collection $financeItems): array
+    {
+        if ($financeOrgId <= 0) {
+            return [];
+        }
+        $rows = [];
+
+        $referencedUnits = $financeItems->pluck('unit_id')->filter()->unique()->sort()->values();
+        if (Schema::connection('tenant')->hasTable('units')) {
+            foreach (DB::connection('tenant')->table('units')->whereIn('id', $referencedUnits)->orderBy('id')->get() as $unit) {
+                $rows[] = $this->draftCandidate('unit', 'owner_review_required', null, $unit,
+                    'owner_unit_selection_required', 'owner_decision', ['source' => 'finance_item_reference']);
+            }
+        }
+
+        $referencedCategories = $financeItems->pluck('category_id')->filter()->unique()->sort()->values();
+        if (Schema::connection('tenant')->hasTable('inventory_categories')) {
+            foreach (DB::connection('tenant')->table('inventory_categories')->where('organization_id', $financeOrgId)
+                ->whereIn('id', $referencedCategories)->orderBy('id')->get() as $category) {
+                $rows[] = $this->draftCandidate('category', 'owner_review_required', null, $category,
+                    'owner_category_selection_required', 'owner_decision', ['source' => 'finance_item_reference']);
+            }
+        }
+
+        foreach (['warehouses' => 'warehouse', 'inventory_customers' => 'customer', 'inventory_suppliers' => 'supplier'] as $table => $entity) {
+            if (! Schema::connection('tenant')->hasTable($table)) continue;
+            $org = $table === 'warehouses' ? $stockOrgId : $stockOrgId;
+            foreach (DB::connection('tenant')->table($table)->where('organization_id', $org)->orderBy('id')->get() as $record) {
+                $rows[] = $this->draftCandidate($entity, 'owner_review_required', $record, null,
+                    'owner_authoritative_record_selection_required', 'owner_decision', ['source' => 'existing_solastock_record']);
+            }
+        }
+        foreach (['customers' => 'customer', 'suppliers' => 'supplier'] as $table => $entity) {
+            if (! Schema::connection('tenant')->hasTable($table)) continue;
+            foreach (DB::connection('tenant')->table($table)->where('organization_id', $financeOrgId)->orderBy('id')->get() as $record) {
+                $rows[] = $this->draftCandidate($entity, 'owner_review_required', null, $record,
+                    'owner_authoritative_record_selection_required', 'owner_decision', ['source' => 'existing_finance_record']);
+            }
+        }
+        if (Schema::connection('tenant')->hasTable('taxes')) {
+            foreach (DB::connection('tenant')->table('taxes')->where('organization_id', $financeOrgId)->orderBy('id')->get() as $tax) {
+                $rows[] = $this->draftCandidate('tax', 'owner_review_required', null, $tax,
+                    'owner_tax_selection_required', 'owner_decision', [
+                        'rate' => (string) ($tax->rate ?? ''), 'classification' => $tax->classification ?? null,
+                    ]);
+            }
+        }
+        if (Schema::connection('tenant')->hasTable('organization_currencies') && Schema::connection('tenant')->hasTable('currencies')) {
+            foreach (DB::connection('tenant')->table('organization_currencies as oc')->join('currencies as c', 'c.id', '=', 'oc.currency_id')
+                ->where('oc.organization_id', $financeOrgId)->where('oc.is_enabled', true)
+                ->orderBy('c.code')->get(['c.id', 'c.code', 'c.name', 'c.is_active', 'oc.default_exchange_rate']) as $currency) {
+                $rows[] = $this->draftCandidate('currency', 'owner_review_required', null, $currency,
+                    'operational_currency_review_required', 'owner_decision', [
+                        'active' => (bool) $currency->is_active, 'configured_rate' => (string) $currency->default_exchange_rate,
+                    ]);
+            }
+        }
+
+        foreach ($this->accountRoleCandidates($financeOrgId) as $candidate) {
+            $rows[] = $candidate;
+        }
+
+        if (Schema::connection('tenant')->hasTable('integration_outbox_events')) {
+            foreach (DB::connection('tenant')->table('integration_outbox_events')->where('organization_id', $stockOrgId)
+                ->where('status', 'ignored')->orderBy('id')->get() as $event) {
+                $rows[] = $this->draftCandidate('historical_event', 'historical_exclusion_review', $event, null,
+                    'historical_event_must_remain_excluded', 'owner_decision', [
+                        'event_type' => $event->event_type ?? null,
+                        'source_key' => $event->idempotency_key ?? $event->event_uuid ?? null,
+                    ]);
+            }
+        }
+        foreach ([
+            'goods_receipts' => ['posted'],
+            'bills' => ['draft', 'unpaid'],
+            'invoices' => ['draft', 'unpaid'],
+        ] as $table => $statuses) {
+            if (! Schema::connection('tenant')->hasTable($table)) continue;
+            foreach (DB::connection('tenant')->table($table)->where('organization_id', $table === 'goods_receipts' ? $stockOrgId : $financeOrgId)
+                ->whereIn('status', $statuses)->orderBy('id')->get() as $document) {
+                $rows[] = $this->draftCandidate('cutoff_document', 'cutoff_review_required', $table === 'goods_receipts' ? $document : null,
+                    $table === 'goods_receipts' ? null : $document, 'open_or_posted_document_cutoff_review_required', 'owner_decision', [
+                        'document_type' => $table, 'status' => $document->status ?? null,
+                    ]);
+            }
+        }
+
+        return $rows;
+    }
+
+    private function accountRoleCandidates(int $financeOrgId): array
+    {
+        if (! Schema::connection('tenant')->hasTable('accounts')) return [];
+        $definitions = [
+            'inventory_asset' => ['asset', ['inventory'], ['receipt', 'shipment', 'adjustment', 'opening']],
+            'cogs' => ['expense', ['cogs', 'cost of goods'], ['shipment', 'return']],
+            'grni' => ['liability', ['grni', 'received not invoiced'], ['goods_receipt', 'supplier_bill']],
+            'opening_offset' => ['equity', ['opening'], ['opening_stock']],
+            'adjustment_gain' => ['revenue', ['adjustment gain'], ['positive_adjustment']],
+            'adjustment_loss' => ['expense', ['adjustment loss', 'shrinkage'], ['negative_adjustment']],
+            'landed_cost_clearing' => ['asset', ['landed', 'clearing'], ['landed_cost']],
+            'transfer_clearing' => ['asset', ['transfer', 'clearing'], ['cross_entity_transfer']],
+            'accounts_receivable' => ['asset', ['receivable'], ['customer_invoice']],
+            'accounts_payable' => ['liability', ['payable'], ['supplier_bill']],
+            'input_tax' => ['asset', ['input', 'tax'], ['supplier_bill']],
+            'output_tax' => ['liability', ['output', 'tax'], ['customer_invoice']],
+            'rounding' => ['expense', ['rounding', 'cutoff'], ['currency_rounding', 'cutoff_correction']],
+        ];
+        $accounts = DB::connection('tenant')->table('accounts')->where('organization_id', $financeOrgId)
+            ->where('is_active', true)->where('is_postable', true)->orderBy('code')->orderBy('id')->get();
+        $rows = [];
+        foreach ($definitions as $role => [$type, $keywords, $workflows]) {
+            $candidate = $accounts->first(function ($account) use ($type, $keywords): bool {
+                if (strtolower((string) ($account->type ?? '')) !== $type) return false;
+                $name = strtolower((string) ($account->name ?? '').' '.(string) ($account->code ?? ''));
+                return collect($keywords)->contains(fn (string $keyword) => str_contains($name, $keyword));
+            });
+            $rows[] = $this->draftCandidate('account_role', $candidate ? 'candidate_requires_accountant_approval' : 'unresolved_account_role',
+                null, $candidate, 'account_role_requires_explicit_accountant_selection', 'accountant_decision', [
+                    'role' => $role, 'account_type' => $candidate->type ?? $type,
+                    'active' => $candidate ? (bool) $candidate->is_active : null,
+                    'postable' => $candidate ? (bool) $candidate->is_postable : null,
+                    'organization_id' => $financeOrgId,
+                    'candidate_reason' => $candidate ? 'active_postable_owned_type_and_documented_purpose_match' : 'no_unambiguous_owned_candidate',
+                    'affected_workflows' => $workflows,
+                ]);
+        }
+        return $rows;
+    }
+
+    private function draftCandidate(string $entityType, string $classification, ?object $stock, ?object $books,
+        string $blocking, string $decisionClass, array $details = []): array
+    {
+        $record = fn (?object $value): ?array => $value ? array_filter([
+            'id' => (string) ($value->id ?? ''),
+            'name' => is_string($value->name ?? null) ? (string) $value->name : (string) ($value->code ?? $value->id ?? ''),
+            'code' => $value->code ?? $value->sku ?? $value->event_uuid ?? null,
+            'sku' => $value->sku ?? null,
+            'quantity' => '0.0000', 'inventory_value' => '0.00',
+        ], fn ($item) => $item !== null) : null;
+        $stockRecord = $record($stock);
+        $booksRecord = $record($books);
+        $identity = [
+            'entity_type' => $entityType, 'classification' => $classification,
+            'stock_id' => $stockRecord['id'] ?? null, 'books_id' => $booksRecord['id'] ?? null,
+            'role' => $details['role'] ?? null, 'document_type' => $details['document_type'] ?? null,
+        ];
+        return [
+            'fingerprint' => $this->hash($identity), 'entity_type' => $entityType,
+            'classification' => $classification,
+            'solastock_record_ids' => isset($stockRecord['id']) ? [$stockRecord['id']] : [],
+            'solabooks_record_ids' => isset($booksRecord['id']) ? [$booksRecord['id']] : [],
+            'solastock' => $stockRecord, 'solabooks' => $booksRecord,
+            'quantity_difference' => '0.0000', 'value_difference' => '0.00',
+            'blocking_reason' => $blocking, 'mapping_confidence' => 'review_required',
+            'decision_class' => $decisionClass, 'safe_details' => $details,
+        ];
+    }
+
+    /**
+     * The wizard API never accepts a free-form action for a candidate type. This
+     * keeps draft writes expressive without allowing them to become operational
+     * master-data commands through a direct request.
+     */
+    private function allowedActionsForCandidate(array $candidate): array
+    {
+        return match ($candidate['entity_type']) {
+            'item' => match ($candidate['classification']) {
+                'exact_candidate_requires_owner_review' => ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
+                'missing_solastock_record' => ['create_solastock_record', 'classify_inventory_item', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required'],
+                'missing_solabooks_record' => ['keep_solastock_authority', 'exclude_initial_connection', 'physical_count_required'],
+                default => ['retain_blocked', 'physical_count_required'],
+            },
+            'unit' => ['select_unit', 'define_unit_conversion', 'retain_blocked'],
+            'category' => ['select_category', 'propose_category_creation', 'retain_blocked'],
+            'warehouse' => ['select_warehouse', 'retain_blocked'],
+            'customer', 'supplier' => ['select_party', 'retain_blocked'],
+            'tax' => ['select_tax', 'retain_blocked'],
+            'currency' => ['retain_currency', 'exclude_currency', 'retain_blocked'],
+            'historical_event' => ['retain_historical_exclusion'],
+            'cutoff_document' => ['review_cutoff_document', 'retain_blocked'],
+            'account_role' => ['select_account_role', 'retain_account_role_unresolved'],
+            default => ['retain_blocked'],
+        };
+    }
+
+    private function activeDraftSummary(int $organizationId): ?array
+    {
+        if (! Schema::connection('tenant')->hasTable('integration_connection_wizard_runs')
+            || ! Schema::connection('tenant')->hasColumn('integration_connection_wizard_runs', 'tenant_database_identity')) {
+            return null;
+        }
+        $run = DB::connection('tenant')->table('integration_connection_wizard_runs')
+            ->where('central_organization_id', $organizationId)
+            ->where('solastock_organization_id', $organizationId)
+            ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName())
+            ->whereIn('state', [
+                'draft_decisions', 'decisions_complete', 'snapshot_required', 'cutoff_review',
+                'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready',
+            ])->whereNull('discarded_at')->latest('id')->first();
+
+        return $run ? [
+            'run_uuid' => (string) $run->run_uuid,
+            'state' => (string) $run->state,
+            'draft_version' => (int) $run->draft_version,
+            'lock_version' => (int) $run->lock_version,
+            'updated_at' => (string) $run->updated_at,
+        ] : null;
+    }
+
+    private function financeBaseCurrency(?object $financeOrg): ?string
+    {
+        if (! $financeOrg || ! isset($financeOrg->base_currency_id) || ! Schema::connection('tenant')->hasTable('currencies')) return null;
+        return DB::connection('tenant')->table('currencies')->where('id', $financeOrg->base_currency_id)->value('code');
     }
 
     private function preMappingItemRow(?object $stock, Collection $financeMatches, string $classification): array
@@ -1068,6 +1564,19 @@ final class ConnectionWizardService
         if (! $run) {
             $this->fail('wizard_run_scope_mismatch');
         }
+        return $run;
+    }
+
+    private function runForOrganization(int $organizationId, string $runUuid, bool $lock = false): object
+    {
+        $query = DB::connection('tenant')->table('integration_connection_wizard_runs')
+            ->where('run_uuid', $runUuid)
+            ->where('solastock_organization_id', $organizationId)
+            ->where('central_organization_id', $organizationId)
+            ->where('tenant_database_identity', (string) DB::connection('tenant')->getDatabaseName());
+        if ($lock) $query->lockForUpdate();
+        $run = $query->first();
+        if (! $run) $this->fail('wizard_run_scope_mismatch');
         return $run;
     }
 

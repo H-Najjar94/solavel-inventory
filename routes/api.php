@@ -506,11 +506,25 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         Route::get('/wizard/runs/{run}/preview', [IntegrationController::class, 'wizardPreview'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.preview');
         Route::put('/wizard/runs/{run}/decisions', [IntegrationController::class, 'decideWizard'])
-            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.decide');
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.decide');
+        Route::post('/wizard/runs/{run}/bulk-decisions', [IntegrationController::class, 'bulkDecideWizard'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.bulk-decide');
         Route::delete('/wizard/runs/{run}/decisions/{decision}', [IntegrationController::class, 'reverseWizardDecision'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.decisions.reverse');
+        Route::post('/wizard/runs/{run}/snapshot/request', [IntegrationController::class, 'requestWizardSnapshot'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.snapshot.request');
+        Route::post('/wizard/runs/{run}/snapshot/freeze', [IntegrationController::class, 'freezeWizardSnapshot'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.snapshot.freeze');
+        Route::post('/wizard/runs/{run}/cutoff-review', [IntegrationController::class, 'reviewWizardCutoff'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.cutoff-review');
+        Route::post('/wizard/runs/{run}/reset', [IntegrationController::class, 'resetWizardDraft'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.reset');
+        Route::delete('/wizard/runs/{run}', [IntegrationController::class, 'discardWizardDraft'])
+            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.discard');
         Route::post('/wizard/runs/{run}/approve', [IntegrationController::class, 'approveWizard'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.approve');
+        Route::post('/wizard/runs/{run}/accountant-approve', [IntegrationController::class, 'accountantApproveWizard'])
+            ->middleware('perm:inventory.integration.accounting_review')->name('api.v1.integration.wizard.accountant-approve');
         Route::post('/wizard/runs/{run}/activate', [IntegrationController::class, 'activateWizard'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.activate');
         Route::post('/wizard/runs/{run}/pause', [IntegrationController::class, 'pauseWizard'])

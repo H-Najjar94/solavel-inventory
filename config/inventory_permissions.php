@@ -26,6 +26,7 @@ return [
         'inventory.manage_settings' => 'Manage inventory settings',
         'inventory.integration.view' => 'View SolaBooks integration status & events',
         'inventory.integration.manage' => 'Manage integration mappings & settings',
+        'inventory.integration.accounting_review' => 'Review connection accounting-role draft decisions',
         'inventory.integration.retry' => 'Retry / ignore integration events',
         'inventory.integration.export_events' => 'Export integration events',
 
@@ -67,6 +68,11 @@ return [
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.view_warehouses',
             'inventory.view_stock', 'inventory.view_ledger', 'inventory.view_reports',
             'inventory.view_settings', 'inventory.view_sales', 'inventory.view_traceability',
+        ],
+        'inventory_accountant' => [
+            'inventory.view_dashboard', 'inventory.view_items', 'inventory.view_stock',
+            'inventory.view_ledger', 'inventory.view_reports', 'inventory.view_settings',
+            'inventory.integration.view', 'inventory.integration.accounting_review',
         ],
     ],
 ];

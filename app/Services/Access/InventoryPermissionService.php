@@ -162,6 +162,7 @@ class InventoryPermissionService
     {
         return match ($centralRole) {
             'client_owner' => 'inventory_admin',
+            'accountant', 'finance_accountant' => 'inventory_accountant',
             'client_manager', 'client_member' => 'inventory_manager',
             null, '' => null,
             default => 'inventory_viewer',
