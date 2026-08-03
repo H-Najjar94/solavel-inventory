@@ -171,6 +171,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('integration.assistant.notReady', $assistant);
         $this->assertStringContainsString('integration.assistant.ownerDecisions', $assistant);
         $this->assertStringContainsString('integration.assistant.accountantDecisions', $assistant);
+        $this->assertStringContainsString("group === 'units' ? (groups.warehouses || [])", $assistant);
         $this->assertStringContainsString('assistant-reconciliation', $assistant);
         $this->assertStringContainsString('<bdi dir="ltr">', $assistant);
         $this->assertStringContainsString('These are different items', $translations);
