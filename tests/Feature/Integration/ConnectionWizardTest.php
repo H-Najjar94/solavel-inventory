@@ -166,7 +166,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('type="search"', $assistant);
         $this->assertStringContainsString('assistant-actionbar', $assistant);
         $this->assertStringContainsString('<details className="assistant-details">', $assistant);
-        $this->assertStringContainsString('<details className="assistant-checks">', $assistant);
+        $this->assertStringContainsString('assistant-checks--completed', $assistant);
         $this->assertStringContainsString('automaticChecks === 6', $assistant);
         $this->assertStringContainsString('integration.assistant.notReady', $assistant);
         $this->assertStringContainsString('integration.assistant.ownerDecisions', $assistant);
@@ -249,6 +249,69 @@ final class ConnectionWizardTest extends TestCase
             7001, $preview['lock_version'], $candidate['candidate_before_hash'], true, false);
         $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
         $this->assertSame(0, DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->count());
+    }
+
+    #[Test]
+    public function deterministic_bulk_confirmation_is_versioned_audited_optimistically_locked_and_idempotent(): void
+    {
+        [, $item] = $this->seedConnectionFixture(false);
+        $wizard = app(ConnectionWizardService::class);
+        $before = $this->mutationCounters();
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $preview = $wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid']);
+        $candidate = collect($preview['comparison'])->first(fn (array $row) => $row['entity_type'] === 'item'
+            && $row['classification'] === 'exact_candidate_requires_owner_review');
+        $this->assertNotNull($candidate);
+
+        $result = $wizard->bulkDecide(TenantTestManager::ORG_A, $run['run_uuid'],
+            'approve_exact_sku_candidates', [$candidate['fingerprint']], 'CONFIRM 1 RECORDS', 7001,
+            $preview['lock_version'], true);
+        $auditCount = DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $run['run_uuid'])->count();
+        $decision = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $run['run_uuid'])->where('candidate_fingerprint', $candidate['fingerprint'])->first();
+        $this->assertSame('approve_exact_binding', $decision->action);
+        $this->assertSame(1, (int) $decision->decision_version);
+        $this->assertSame(1, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $run['run_uuid'])->where('action', 'confirmed_bulk_decision')->count());
+
+        $again = $wizard->bulkDecide(TenantTestManager::ORG_A, $run['run_uuid'],
+            'approve_exact_sku_candidates', [$candidate['fingerprint']], 'CONFIRM 1 RECORDS', 7001,
+            $result['lock_version'], true);
+        $this->assertSame('already_saved', $again['bulk_result']);
+        $this->assertSame($auditCount, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $run['run_uuid'])->count());
+        $this->assertSame(1, (int) DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $run['run_uuid'])->value('decision_version'));
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
+        $this->assertSame(0, DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->count());
+        $this->assertSame($before, $this->mutationCounters());
+    }
+
+    #[Test]
+    public function final_polish_ui_contract_keeps_status_setup_and_draft_actions_safe(): void
+    {
+        $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
+        $assistant = file_get_contents(resource_path('js/solastock/components/GuidedConnectionAssistant.jsx'));
+        $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
+
+        foreach (['CompactIntegrationStatus', 'firstIncomplete', 'wizardResumeStep', 'connection-status-list'] as $needle) {
+            $this->assertStringContainsString($needle, $page.$assistant.$translations);
+        }
+        foreach (['Result preview', 'معاينة نتيجة الربط', 'Saved automatically', 'تم الحفظ تلقائياً',
+            'Item in SolaBooks', 'الصنف في SolaBooks', 'Proposed match in SolaStock',
+            'المطابقة المقترحة في SolaStock', 'The item name and SKU match in both systems.',
+            'الاسم ورمز الصنف متطابقان في النظامين.'] as $copy) {
+            $this->assertStringContainsString($copy, $translations);
+        }
+        $this->assertStringContainsString('completedChecks', $assistant);
+        $this->assertStringContainsString('bulkReviewOpen', $assistant);
+        $this->assertStringContainsString('expected_lock_version', $page);
+        $this->assertStringContainsString("saveState === 'conflict'", $assistant);
+        $this->assertStringContainsString('aria-modal="true"', $assistant);
+        $this->assertStringContainsString('approvalAvailable &&', $assistant);
+        $this->assertStringNotContainsString('btn btn--primary', substr($assistant,
+            strpos($assistant, 'const actions ='), strpos($assistant, 'return <div') - strpos($assistant, 'const actions =')));
     }
 
     #[Test]

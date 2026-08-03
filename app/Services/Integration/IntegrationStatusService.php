@@ -176,6 +176,23 @@ class IntegrationStatusService
             'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready',
         ], true);
         $draftStatus = $draftInProgress ? 'in_progress' : ($wizardRun ? 'completed' : 'not_started');
+        $wizardRemaining = null;
+        $wizardCurrentStep = $wizardRun ? 'automatic_checks' : 'setup_available';
+        if ($wizardRun && $draftInProgress) {
+            try {
+                $discovery = app(ConnectionWizardService::class)->discover($orgId);
+                $required = collect($discovery['guided_setup']['visible_exception_fingerprints'] ?? [])->unique();
+                $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                    ->where('run_uuid', $wizardRun->run_uuid)->where('status', 'selected')
+                    ->pluck('candidate_fingerprint')->unique();
+                $wizardRemaining = $required->diff($selected)->count();
+                $wizardCurrentStep = $wizardRemaining > 0 ? 'required_decisions' : 'result_preview';
+            } catch (\Throwable) {
+                // Status remains truthful but unavailable rather than reporting a
+                // successful zero when read-only discovery cannot be completed.
+                $wizardCurrentStep = 'temporarily_unavailable';
+            }
+        }
         $connectionState = match (true) {
             ! $organizationMapping && ! $settings->exists => 'not_subscribed',
             ! $organizationMapping => 'subscription_available',
@@ -215,6 +232,8 @@ class IntegrationStatusService
                 'approval_payload_hash' => $wizardRun->approval_payload_hash,
                 'invalidated_at' => $wizardRun->invalidated_at,
                 'activated_at' => $wizardRun->activated_at,
+                'decisions_remaining' => $wizardRemaining,
+                'current_step' => $wizardCurrentStep,
             ] : null,
             'events' => compact('pending', 'failed', 'sent', 'ignored'),
             'documents_awaiting_sync' => $pending,
