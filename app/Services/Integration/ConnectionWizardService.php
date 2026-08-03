@@ -142,7 +142,7 @@ final class ConnectionWizardService
                     'comparison' => $preview['comparison'],
                     'totals' => $preview['totals'],
                     'accounting' => $preview['accounting'],
-                    'master_data' => $preview['master_data'],
+                    'master_data' => $preview['master_data'] ?? $preview['readiness'] ?? null,
                 ]),
                 'created_by_user_id' => $actorUserId,
                 'created_at' => $createdAt,
