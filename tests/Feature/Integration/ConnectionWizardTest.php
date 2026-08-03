@@ -152,6 +152,8 @@ final class ConnectionWizardTest extends TestCase
     public function status_reports_setup_and_draft_independently_from_activation_and_delivery_holds(): void
     {
         $this->seedConnectionFixture(false);
+        config()->set('integration_safety.solabooks_delivery_enabled', false);
+        config()->set('integration_connection_wizard.activation_enabled', false);
         request()->attributes->set('tenant_state', ['client_id' => 860001]);
         DB::connection('mysql')->table('entitlement_state_snapshots')->updateOrInsert(
             ['organization_id' => TenantTestManager::ORG_A],
