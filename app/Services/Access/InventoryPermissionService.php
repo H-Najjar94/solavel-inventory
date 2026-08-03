@@ -90,7 +90,16 @@ class InventoryPermissionService
             return $this->roleCache[$orgId][$userId] = 'inventory_admin';
         }
 
-        return $this->roleCache[$orgId][$userId] = $this->mapCentralRole($this->fetchCentralRole($userId, $orgId));
+        // Tenant-local user IDs are not Central identities. Organization
+        // membership must be resolved with the immutable Central user ID or
+        // fail closed; otherwise an unrelated local numeric ID can be denied
+        // (or, worse, inherit another Central user's role).
+        $centralUserId = (int) ($user->central_user_id ?? 0);
+        if ($centralUserId <= 0) {
+            return $this->roleCache[$orgId][$userId] = null;
+        }
+
+        return $this->roleCache[$orgId][$userId] = $this->mapCentralRole($this->fetchCentralRole($centralUserId, $orgId));
     }
 
     /**

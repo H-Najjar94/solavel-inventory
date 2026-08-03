@@ -211,7 +211,7 @@ export default function DashboardPage() {
             </div>
         ),
         integration: canViewIntegration && si && (
-            <Link to="/settings/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
+            <Link to="/integrations/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
                 <h2 style={{ fontSize: 14 }}>
                     <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginInlineEnd: 6 }} />
                     {t('dashboard.solabooksSync')} <span className={`badge ${si.health === 'healthy' ? 'badge--live' : si.health === 'disconnected' ? 'badge--muted' : 'badge--warn'}`}>{['healthy', 'disconnected', 'needs_mapping', 'error'].includes(si.health) ? t(`status.${si.health}`) : t('status.unknown', undefined, { value: si.health })}</span>

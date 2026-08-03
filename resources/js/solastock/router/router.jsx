@@ -168,6 +168,7 @@ export const router = createBrowserRouter(
                 { path: 'recalls/:id', element: <RecallDetailPage /> },
                 { path: 'reports', element: <ReportsPage /> },
                 { path: 'settings', element: protectedElement(<SettingsPage />, 'inventory.manage_settings') },
+                { path: 'integrations/solabooks', element: protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view') },
                 { path: 'settings/solabooks', element: protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view') },
                 { path: 'integrations/solabooks/events', element: protectedElement(<IntegrationEventsPage />, 'inventory.integration.view') },
                 { path: 'ledger', element: <LedgerPage /> },
