@@ -13,9 +13,13 @@ export default function GuidedConnectionAssistant({
     const groups = guided.exception_groups || {};
     const byFingerprint = new Map(rows.map((row) => [row.fingerprint, row]));
     const groupOrder = ['items', 'units', 'parties', 'accounting', 'currencies', 'cutoff_documents', 'inventory_quantities'];
+    const groupFingerprints = (group) => [...new Set([
+        ...(groups[group] || []),
+        ...(group === 'units' ? (groups.warehouses || []) : []),
+    ])];
     const query = exceptionSearch.trim().toLowerCase();
     const dynamicText = (prefix, value, fallback) => tr([prefix, value].join(''), {}, fallback ?? value);
-    const groupRows = (group) => (groups[group] || [])
+    const groupRows = (group) => groupFingerprints(group)
         .map((fingerprint) => byFingerprint.get(fingerprint))
         .filter(Boolean)
         .filter((row) => !query || [row.solastock?.name, row.solabooks?.name, row.solastock?.sku,
@@ -25,7 +29,7 @@ export default function GuidedConnectionAssistant({
     const exceptionFingerprints = [...new Set(guided.visible_exception_fingerprints || [])];
     const completedDecisions = exceptionFingerprints.filter((fingerprint) => decisions.has(fingerprint)).length;
     const remaining = Math.max(0, exceptionFingerprints.length - completedDecisions);
-    const completedGroups = groupOrder.filter((group) => (groups[group] || []).every((fingerprint) => decisions.has(fingerprint))).length;
+    const completedGroups = groupOrder.filter((group) => groupFingerprints(group).every((fingerprint) => decisions.has(fingerprint))).length;
     const automaticChecks = [checks.organization_verified, checks.finance_connected, checks.base_currency_inherited,
         checks.account_exceptions === 0, checks.tax_exceptions === 0, checks.item_exceptions === 0].filter(Boolean).length;
     const approvalAvailable = ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state);
@@ -50,7 +54,7 @@ export default function GuidedConnectionAssistant({
         [checks.tax_exceptions === 0, tr('integration.assistant.taxesSummary', { resolved: checks.taxes_resolved || 0, exceptions: checks.tax_exceptions || 0 })],
         [checks.item_exceptions === 0, tr('integration.assistant.itemsSummary', { exact: checks.items_exact || 0, exceptions: checks.item_exceptions || 0 })],
     ];
-    const firstIncomplete = groupOrder.find((group) => (groups[group] || []).some((fingerprint) => !decisions.has(fingerprint)));
+    const firstIncomplete = groupOrder.find((group) => groupFingerprints(group).some((fingerprint) => !decisions.has(fingerprint)));
     const selectedEffect = (row) => {
         const action = decisions.get(row.fingerprint)?.action;
         return action ? dynamicText('integration.assistant.effect.', action) : tr('integration.assistant.effect.pending');
@@ -170,7 +174,7 @@ export default function GuidedConnectionAssistant({
                     </label>
                     <h3 className="assistant-responsibility">{tr('integration.assistant.ownerDecisions')}</h3>
                     <div className="assistant-groups">{groupOrder.filter((group) => group !== 'accounting').map((group) => {
-                        const fingerprints = groups[group] || [];
+                        const fingerprints = groupFingerprints(group);
                         const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length;
                         const groupRemaining = fingerprints.length - groupResolved;
                         const physicalCount = group === 'inventory_quantities';
@@ -190,7 +194,7 @@ export default function GuidedConnectionAssistant({
                     <h3 className="assistant-responsibility">{tr('integration.assistant.accountantDecisions')}</h3>
                     {!accountingGate.allowed && <div className="assistant-accountant-callout">{tr('integration.assistant.assignAccountant', { count: (groups.accounting || []).length })}</div>}
                     {groupOrder.filter((group) => group === 'accounting').map((group) => {
-                        const fingerprints = groups[group] || []; const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length; const groupRemaining = fingerprints.length - groupResolved;
+                        const fingerprints = groupFingerprints(group); const groupResolved = fingerprints.filter((fingerprint) => decisions.has(fingerprint)).length; const groupRemaining = fingerprints.length - groupResolved;
                         return <details className="assistant-group" key={group}><summary><span className={groupRemaining ? 'check-attention' : 'check-ok'}>{groupRemaining ? '!' : '✓'}</span><span className="assistant-group-title"><strong>{dynamicText('integration.assistant.group.', group)}</strong><small>{dynamicText('integration.assistant.groupNext.', group)}</small></span><span className="assistant-group-metrics"><small>{tr('integration.assistant.resolvedCount', { count: groupResolved })}</small><strong>{tr('integration.assistant.remainingCount', { count: groupRemaining })}</strong></span></summary><div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></details>;
                     })}
                     {exactRows.length > 0 && <div className="assistant-bulk"><p>{tr('integration.assistant.exactBulk', { count: exactRows.length })}</p>
@@ -226,8 +230,8 @@ export default function GuidedConnectionAssistant({
                     </table></div>
                     {totals.proposed_accounting_effect?.amount && <div className="assistant-correction"><strong>{tr('integration.assistant.review.proposedCorrection')}</strong><span><bdi dir="ltr">{formatMoney(totals.proposed_accounting_effect.amount)}</bdi></span><p>{tr('integration.assistant.previewOnly')}</p></div>}
                     {remaining > 0 && <div className="assistant-blockers"><h3>{tr('integration.assistant.blockerList')}</h3><p>{tr('integration.assistant.blockerDescription')}</p>
-                        {groupOrder.filter((group) => (groups[group] || []).some((fingerprint) => !decisions.has(fingerprint))).map((group) =>
-                            <button key={group} className="btn" onClick={() => setAssistantStep(2)}>{dynamicText('integration.assistant.group.', group)} · {tr('integration.assistant.remainingCount', { count: (groups[group] || []).filter((fingerprint) => !decisions.has(fingerprint)).length })}</button>)}</div>}
+                        {groupOrder.filter((group) => groupFingerprints(group).some((fingerprint) => !decisions.has(fingerprint))).map((group) =>
+                            <button key={group} className="btn" onClick={() => setAssistantStep(2)}>{dynamicText('integration.assistant.group.', group)} · {tr('integration.assistant.remainingCount', { count: groupFingerprints(group).filter((fingerprint) => !decisions.has(fingerprint)).length })}</button>)}</div>}
                     <p className="assistant-rollback">{tr('integration.assistant.rollback')}</p>
                     <details className="assistant-details"><summary>{tr('integration.assistant.advanced')}</summary><dl className="kv">
                         <dt>{tr('integration.wizard.snapshot')}</dt><dd className="wizard__hash">{view.snapshot_hash}</dd>
