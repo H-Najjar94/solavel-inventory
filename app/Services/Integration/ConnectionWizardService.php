@@ -1193,7 +1193,7 @@ final class ConnectionWizardService
         $valuationDifference = Decimal::money(collect($comparison)->reduce(
             fn (string $carry, array $row) => Decimal::add($carry, $row['value_difference'], 2), '0'
         ));
-        $baseCurrency = $this->financeBaseCurrency($financeOrg);
+        $baseCurrency = (string) ($this->financeBaseCurrency($financeOrg) ?? '');
         $accountingEffect = $this->preMappingAccountingEffect(
             $organizationId, $financeOrgId, $comparison, $baseCurrency
         );
