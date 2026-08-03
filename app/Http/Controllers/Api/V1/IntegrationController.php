@@ -19,6 +19,7 @@ use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\IntegrationSafetyHold;
 use App\Services\Integration\IntegrationStatusService;
 use App\Services\Integration\ConnectionWizardService;
+use App\Services\Access\InventoryPermissionService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +40,7 @@ class IntegrationController extends ApiController
         private SolaBooksOutboxDeliveryService $delivery,
         private IntegrationOutboxService $outbox,
         private IntegrationSafetyHold $safety,
+        private InventoryPermissionService $permissions,
     ) {}
 
     public function status(): JsonResponse
@@ -76,6 +78,8 @@ class IntegrationController extends ApiController
             'solabooks_record_ids' => ['array'],
             'solabooks_record_ids.*' => ['string', 'max:80'],
             'safe_details' => ['array'],
+            'expected_lock_version' => ['required', 'integer', 'min:1'],
+            'expected_before_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
         ]);
         return $this->success($wizard->decide(
             $this->context->idOrFail(),
@@ -86,7 +90,68 @@ class IntegrationController extends ApiController
             $data['solabooks_record_ids'] ?? [],
             $data['safe_details'] ?? [],
             (int) auth()->id(),
+            (int) $data['expected_lock_version'],
+            (string) $data['expected_before_hash'],
+            $this->permissions->can(auth()->user(), 'inventory.integration.manage'),
+            $this->permissions->can(auth()->user(), 'inventory.integration.accounting_review'),
         ));
+    }
+
+    public function bulkDecideWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate([
+            'bulk_action' => ['required', 'in:'.implode(',', ConnectionWizardService::BULK_ACTIONS)],
+            'candidate_fingerprints' => ['required', 'array', 'min:1', 'max:500'],
+            'candidate_fingerprints.*' => ['required', 'regex:/^[a-f0-9]{64}$/'],
+            'confirmation' => ['required', 'string', 'max:80'],
+        ]);
+        return $this->success($wizard->bulkDecide(
+            $this->context->idOrFail(), $run, $data['bulk_action'], $data['candidate_fingerprints'],
+            $data['confirmation'], (int) auth()->id(),
+            $this->permissions->can(auth()->user(), 'inventory.integration.manage'),
+        ));
+    }
+
+    public function requestWizardSnapshot(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate(['expected_lock_version' => ['required', 'integer', 'min:1']]);
+        return $this->success($wizard->requestSnapshot($this->context->idOrFail(), $run,
+            (int) $data['expected_lock_version'], (int) auth()->id()));
+    }
+
+    public function freezeWizardSnapshot(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate(['expected_lock_version' => ['required', 'integer', 'min:1']]);
+        return $this->success($wizard->freezeSnapshot($this->context->idOrFail(), $run,
+            (int) $data['expected_lock_version'], (int) auth()->id()));
+    }
+
+    public function reviewWizardCutoff(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate([
+            'cutoff_at' => ['required', 'date'],
+            'physical_counts' => ['array', 'max:1000'],
+            'physical_counts.*.item_id' => ['required', 'string', 'max:80'],
+            'physical_counts.*.warehouse_id' => ['nullable', 'string', 'max:80'],
+            'physical_counts.*.quantity' => ['required', 'regex:/^-?\d+(\.\d{1,4})?$/'],
+            'physical_counts.*.counted_at' => ['required', 'date'],
+            'physical_counts.*.reference' => ['nullable', 'string', 'max:120'],
+            'unexplained_variance' => ['required', 'regex:/^-?\d+(\.\d{1,2})?$/'],
+            'expected_lock_version' => ['required', 'integer', 'min:1'],
+        ]);
+        return $this->success($wizard->reviewCutoff($this->context->idOrFail(), $run,
+            $data['cutoff_at'], $data['physical_counts'] ?? [], $data['unexplained_variance'],
+            (int) $data['expected_lock_version'], (int) auth()->id()));
+    }
+
+    public function resetWizardDraft(string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->resetDraft($this->context->idOrFail(), $run, (int) auth()->id()));
+    }
+
+    public function discardWizardDraft(string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->discardDraft($this->context->idOrFail(), $run, (int) auth()->id()));
     }
 
     public function reverseWizardDecision(string $run, string $decision, ConnectionWizardService $wizard): JsonResponse
@@ -102,8 +167,18 @@ class IntegrationController extends ApiController
             'approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
             'confirmation' => ['required', 'string', 'max:100'],
         ]);
-        return $this->success($wizard->approve(
-            $this->context->idOrFail(), $run, $data['approval_payload_hash'], $data['confirmation'], (int) auth()->id()
+        return $this->success($wizard->approveRole(
+            $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'owner', (int) auth()->id(),
+            $this->permissions->can(auth()->user(), 'inventory.integration.manage')
+        ));
+    }
+
+    public function accountantApproveWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate(['approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/']]);
+        return $this->success($wizard->approveRole(
+            $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'accountant', (int) auth()->id(),
+            $this->permissions->can(auth()->user(), 'inventory.integration.accounting_review')
         ));
     }
 
