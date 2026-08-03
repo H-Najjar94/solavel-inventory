@@ -189,6 +189,7 @@ export default function IntegrationSettingsPage() {
 }
 
 function ConnectionWizard({ gate, toast, tr }) {
+    const decisionActions = ['bind_existing', 'create_solastock_record', 'keep_solastock_authority', 'physical_count_required', 'retain_blocked', 'exclude_initial_connection', 'select_authoritative_record', 'resolve_account_category'];
     const discovery = useApiQuery(['integration-wizard-discovery'], api.integrationWizardDiscovery, { fallback: null, enabled: true });
     const [runUuid, setRunUuid] = useState('');
     const [saving, setSaving] = useState(false);
@@ -335,7 +336,7 @@ function ConnectionWizard({ gate, toast, tr }) {
                     <td data-label={tr('integration.wizard.quantity')}>{row.solastock?.quantity ?? '—'} / {row.solabooks?.quantity ?? '—'}<br /><strong>{row.quantity_difference}</strong></td>
                     <td data-label={tr('integration.wizard.value')}>{row.solastock?.inventory_value ?? '—'} / {row.solabooks?.inventory_value ?? '—'}<br /><strong>{row.value_difference}</strong></td>
                     <td data-label={tr('integration.wizard.evidence')}>{tr(`integration.wizard.confidence.${row.mapping_confidence}`)}<br /><span className="muted">{row.blocking_reason ? tr(`integration.wizard.block.${row.blocking_reason}`, {}, row.blocking_reason) : tr('integration.wizard.noBlock')}</span></td>
-                    <td data-label={tr('integration.wizard.decision')}>{runUuid && row.blocking_reason ? <label className="field"><span className="sr-only">{tr('integration.wizard.decision')}</span><select className="input" disabled={!gate.allowed || saving} defaultValue="" onChange={(event) => event.target.value && decide(row, event.target.value)}><option value="">{tr('integration.wizard.choose')}</option>{['bind_existing', 'create_solastock_record', 'keep_solastock_authority', 'physical_count_required', 'retain_blocked', 'exclude_initial_connection', 'select_authoritative_record', 'resolve_account_category'].map((action) => <option key={action} value={action}>{tr(`integration.wizard.action.${action}`)}</option>)}</select></label> : tr('integration.wizard.noDecision')}</td>
+                    <td data-label={tr('integration.wizard.decision')}>{row.blocking_reason ? <label className="field"><span className="sr-only">{tr('integration.wizard.decision')}</span><select className="input" disabled={!runUuid || !gate.allowed || saving} defaultValue="" onChange={(event) => event.target.value && decide(row, event.target.value)}><option value="">{tr(runUuid ? 'integration.wizard.choose' : 'integration.wizard.pendingDecision')}</option>{decisionActions.map((action) => <option key={action} value={action}>{tr(`integration.wizard.action.${action}`)}</option>)}</select></label> : tr('integration.wizard.noDecision')}</td>
                 </tr>)}</tbody>
             </table>
         </div>
