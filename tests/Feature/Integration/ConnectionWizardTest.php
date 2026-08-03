@@ -38,8 +38,9 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
-    public function dual_product_readiness_is_visible_before_mapping_but_mutable_wizard_fails_closed(): void
+    public function dual_product_readiness_allows_an_audited_draft_before_mapping_or_cutoff(): void
     {
+        $this->seedCentralIdentity();
         DB::connection('tenant')->table('organizations')->insert([
             'id' => 14, 'central_org_id' => TenantTestManager::ORG_A,
         ]);
@@ -53,81 +54,59 @@ final class ConnectionWizardTest extends TestCase
         $before = $this->mutationCounters();
         $readiness = $wizard->discover(TenantTestManager::ORG_A);
 
-        $this->assertSame('setup_required', $readiness['connection_state']);
+        $this->assertSame('setup_available', $readiness['connection_state']);
         $this->assertTrue($readiness['read_only']);
         $this->assertFalse($readiness['activation_available']);
-        $this->assertContains('verified_immutable_mapping_required', $readiness['blockers']);
+        $this->assertNull($readiness['organization_mapping_uuid']);
         $this->assertSame($before, $this->mutationCounters());
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $wizard->start(TenantTestManager::ORG_A, 7001);
+        $draft = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $this->assertSame('draft_decisions', $draft['state']);
+        $this->assertNull(DB::connection('tenant')->table('integration_connection_wizard_runs')
+            ->where('run_uuid', $draft['run_uuid'])->value('cutoff_at'));
+        $this->assertNull(DB::connection('tenant')->table('integration_connection_wizard_runs')
+            ->where('run_uuid', $draft['run_uuid'])->value('organization_mapping_uuid'));
+        $this->assertSame(1, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $draft['run_uuid'])->where('action', 'draft_started')->count());
+        $this->assertSame($before, $this->mutationCounters());
     }
 
     #[Test]
-    public function discovery_decisions_and_approval_are_immutable_audited_and_do_not_activate_delivery(): void
+    public function owner_and_accountant_draft_decisions_are_role_scoped_versioned_and_optimistically_locked(): void
     {
-        [$mapping, $item] = $this->seedConnectionFixture();
+        [, $item] = $this->seedConnectionFixture(false);
         $wizard = app(ConnectionWizardService::class);
         $before = $this->mutationCounters();
-
-        $discovery = $wizard->discover(TenantTestManager::ORG_A);
-        $this->assertTrue($discovery['read_only']);
-        $this->assertSame('0.0000', $discovery['totals']['total_quantity_difference']);
-        $this->assertSame('0.00', $discovery['totals']['total_valuation_difference']);
-        $this->assertSame($before, $this->mutationCounters());
-
         $run = $wizard->start(TenantTestManager::ORG_A, 7001);
         $preview = $wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid']);
-        foreach ($preview['blocking'] as $candidate) {
-            $preview = $wizard->decide(
-                TenantTestManager::ORG_A,
-                $run['run_uuid'],
-                $candidate['fingerprint'],
-                'exclude_initial_connection',
-                $candidate['solastock_record_ids'],
-                $candidate['solabooks_record_ids'],
-                ['reason' => 'explicit_fixture_review'],
-                7001,
-            );
-        }
+        $candidate = collect($preview['comparison'])->first(fn (array $row) => $row['entity_type'] === 'item'
+            && $row['classification'] === 'exact_candidate_requires_owner_review');
+        $this->assertNotNull($candidate);
+        $preview = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'approve_exact_binding', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+            ['reason' => 'owner_exact_sku_review'], 7001, $preview['lock_version'], $candidate['candidate_before_hash'], true, false);
+        $decision = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $run['run_uuid'])->where('candidate_fingerprint', $candidate['fingerprint'])->first();
+        $this->assertSame('owner', $decision->reviewer_role);
+        $this->assertSame(1, (int) $decision->decision_version);
 
-        $this->assertSame('ready_for_approval', $preview['state']);
-        $approved = $wizard->approve(
-            TenantTestManager::ORG_A,
-            $run['run_uuid'],
-            $preview['approval_payload_hash'],
-            'CONNECT SOLASTOCK AS INVENTORY AUTHORITY',
-            7001,
-        );
-        $this->assertSame('approved_maintenance_hold', $approved['state']);
-        $this->assertNull($approved['activated_at']);
-        $this->assertSame('maintenance_hold', $mapping->fresh()->activation_state);
-        $this->assertGreaterThanOrEqual(2, DB::connection('tenant')->table('integration_connection_wizard_audits')->where('run_uuid', $run['run_uuid'])->count());
-        $this->assertSame($before, $this->mutationCounters());
-
+        $account = collect($preview['comparison'])->firstWhere('entity_type', 'account_role');
+        $this->assertNotNull($account);
         try {
-            $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
-            $this->fail('The default safety hold must block activation.');
+            $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $account['fingerprint'],
+                'retain_account_role_unresolved', [], $account['solabooks_record_ids'], [], 7001,
+                $preview['lock_version'], $account['candidate_before_hash'], true, false);
+            $this->fail('An owner must not write an accountant decision.');
         } catch (\Illuminate\Validation\ValidationException) {
             $this->assertTrue(true);
         }
-
-        config()->set('integration_connection_wizard.activation_enabled', true);
-        config()->set('integration_connection_wizard.activation_organization_allowlist', [TenantTestManager::ORG_A]);
-        config()->set('integration_connection_wizard.activation_approval_id', 'STAGING-UAT-APPROVAL');
-        config()->set('integration_connection_wizard.receiver_confirmed_enabled', true);
-        config()->set('integration_safety.solabooks_delivery_enabled', true);
-        config()->set('integration_safety.legacy_journal_contract_enabled', false);
-        config()->set('integration_safety.historical_repair_enabled', false);
-        config()->set('integration_safety.pending_event_replay_enabled', false);
-        $active = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
-        $this->assertSame('connected', $active['state']);
-        $this->assertTrue((bool) IntegrationSetting::query()->where('organization_id', TenantTestManager::ORG_A)->first()->meta['transport_enabled']);
-        $auditCount = DB::connection('tenant')->table('integration_connection_wizard_audits')->where('run_uuid', $run['run_uuid'])->count();
-        $this->assertSame('connected', $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001)['state']);
-        $this->assertSame($auditCount, DB::connection('tenant')->table('integration_connection_wizard_audits')->where('run_uuid', $run['run_uuid'])->count());
-        $this->assertSame('paused', $wizard->pause(TenantTestManager::ORG_A, $run['run_uuid'], 'STAGING-UAT-APPROVAL', 7001)['state']);
-        $this->assertFalse((bool) IntegrationSetting::query()->where('organization_id', TenantTestManager::ORG_A)->first()->meta['transport_enabled']);
+        $preview = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $account['fingerprint'],
+            'retain_account_role_unresolved', [], $account['solabooks_record_ids'], [], 7002,
+            $preview['lock_version'], $account['candidate_before_hash'], false, true);
+        $this->assertSame('accountant', DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $run['run_uuid'])->where('candidate_fingerprint', $account['fingerprint'])->value('reviewer_role'));
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
+        $this->assertSame((string) $item->id, (string) Item::query()->firstOrFail()->id);
         $this->assertSame($before, $this->mutationCounters());
     }
 
@@ -163,56 +142,26 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
-    public function approved_bind_decision_materializes_one_stable_mapping_without_stock_quantity_mutation(): void
+    public function exact_binding_draft_never_materializes_a_mapping_or_stock_mutation(): void
     {
-        [$mapping, $item] = $this->seedConnectionFixture();
+        [, $item] = $this->seedConnectionFixture(false);
         $wizard = app(ConnectionWizardService::class);
         $run = $wizard->start(TenantTestManager::ORG_A, 7001);
-        $candidate = collect($wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid'])['comparison'])
-            ->first(fn (array $row) => $row['entity_type'] === 'item' && $row['classification'] === 'exact_match');
+        $preview = $wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid']);
+        $candidate = collect($preview['comparison'])->first(fn (array $row) => $row['entity_type'] === 'item'
+            && $row['classification'] === 'exact_candidate_requires_owner_review');
         $this->assertNotNull($candidate);
-        $preview = $wizard->decide(
-            TenantTestManager::ORG_A,
-            $run['run_uuid'],
-            $candidate['fingerprint'],
-            'bind_existing',
-            $candidate['solastock_record_ids'],
-            $candidate['solabooks_record_ids'],
-            ['reason' => 'authorized_exact_identity_review'],
-            7001,
-        );
-        foreach ($preview['blocking'] as $blocked) {
-            if ($blocked['fingerprint'] === $candidate['fingerprint']) {
-                continue;
-            }
-            $preview = $wizard->decide(
-                TenantTestManager::ORG_A,
-                $run['run_uuid'],
-                $blocked['fingerprint'],
-                'exclude_initial_connection',
-                $blocked['solastock_record_ids'],
-                $blocked['solabooks_record_ids'],
-                ['reason' => 'explicit_fixture_review'],
-                7001,
-            );
-        }
-        $wizard->approve(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
-        $this->openActivationGate();
-
-        $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
-
-        $stable = IntegrationMasterDataMapping::query()->where('organization_mapping_uuid', $mapping->mapping_uuid)
-            ->where('entity_type', 'item')->first();
-        $this->assertNotNull($stable);
-        $this->assertSame((string) $item->id, (string) $stable->solastock_record_id);
-        $this->assertSame((string) $candidate['solabooks_record_ids'][0], (string) $stable->solabooks_record_id);
+        $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'approve_exact_binding', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'], [],
+            7001, $preview['lock_version'], $candidate['candidate_before_hash'], true, false);
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
         $this->assertSame(0, DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->count());
     }
 
     #[Test]
-    public function approved_create_decision_creates_zero_stock_record_and_never_imports_finance_quantity(): void
+    public function create_record_draft_does_not_create_stock_or_import_finance_quantity(): void
     {
-        [$mapping] = $this->seedConnectionFixture();
+        $this->seedConnectionFixture(false);
         $booksId = DB::connection('tenant')->table('inventory_items')->insertGetId([
             'organization_id' => 14, 'sku' => 'FINANCE-ONLY', 'name' => 'Finance-only item',
             'qty_on_hand' => '37.0000', 'average_cost' => '12.500000', 'valuation_method' => 'fifo',
@@ -227,34 +176,19 @@ final class ConnectionWizardTest extends TestCase
                 && $row['solabooks_record_ids'] === [(string) $booksId]
         );
         $this->assertNotNull($candidate);
-        $preview = $wizard->decide(
+        $wizard->decide(
             TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
-            'create_solastock_record', [], [(string) $booksId], ['reason' => 'authorized_create_without_stock_import'], 7001,
+            'create_solastock_record', [], [(string) $booksId], ['reason' => 'authorized_create_proposal_only'], 7001,
+            $preview['lock_version'], $candidate['candidate_before_hash'], true, false,
         );
-        foreach ($preview['blocking'] as $blocked) {
-            if ($blocked['fingerprint'] === $candidate['fingerprint']) {
-                continue;
-            }
-            $preview = $wizard->decide(
-                TenantTestManager::ORG_A, $run['run_uuid'], $blocked['fingerprint'],
-                'exclude_initial_connection', $blocked['solastock_record_ids'], $blocked['solabooks_record_ids'],
-                ['reason' => 'explicit_fixture_review'], 7001,
-            );
-        }
-        $wizard->approve(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
-        $this->openActivationGate();
-        $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $preview['approval_payload_hash'], 'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
-
-        $stable = IntegrationMasterDataMapping::query()->where('organization_mapping_uuid', $mapping->mapping_uuid)
-            ->where('entity_type', 'item')->where('solabooks_record_id', (string) $booksId)->first();
-        $this->assertNotNull($stable);
-        $created = Item::query()->where('id', $stable->solastock_record_id)->firstOrFail();
-        $this->assertSame('FINANCE-ONLY', $created->sku);
-        $this->assertSame(0, DB::connection('tenant')->table('stock_balances')->where('item_id', $created->id)->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
+        $this->assertFalse(Item::query()->where('sku', 'FINANCE-ONLY')->exists());
+        $this->assertSame('37.0000', (string) DB::connection('tenant')->table('inventory_items')->where('id', $booksId)->value('qty_on_hand'));
     }
 
-    private function seedConnectionFixture(): array
+    private function seedConnectionFixture(bool $withMapping = true): array
     {
+        $this->seedCentralIdentity();
         DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A]);
         $unitId = DB::connection('tenant')->table('units')->insertGetId([
             'organization_id' => TenantTestManager::ORG_A, 'code' => 'EA', 'name' => 'Each',
@@ -283,11 +217,16 @@ final class ConnectionWizardTest extends TestCase
             'base_unit_id' => $unitId, 'category_id' => $categoryId,
             'purchase_price' => 0, 'sales_price' => 0, 'is_active' => true,
         ]);
+        DB::connection('tenant')->table('inventory_items')->insert([
+            'organization_id' => 14, 'sku' => 'WIZARD-ITEM', 'name' => 'Wizard item',
+            'unit_id' => $unitId, 'qty_on_hand' => '0.0000', 'average_cost' => '0.000000',
+            'valuation_method' => 'average', 'tracking_type' => 'none',
+        ]);
         IntegrationSetting::query()->create([
             'organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks',
             'mode' => 'paused', 'solabooks_organization_id' => 14,
         ]);
-        $mapping = IntegrationOrganizationMapping::query()->create([
+        $mapping = $withMapping ? IntegrationOrganizationMapping::query()->create([
             'mapping_uuid' => (string) Str::uuid(), 'central_client_id' => 860001,
             'central_organization_id' => TenantTestManager::ORG_A,
             'tenant_database_identity' => (string) DB::connection('tenant')->getDatabaseName(),
@@ -296,7 +235,7 @@ final class ConnectionWizardTest extends TestCase
             'activation_state' => 'maintenance_hold', 'base_currency_code' => 'JOD',
             'v2_key_scope_status' => 'provisioned_held', 'current_v2_signing_key_id' => 6001,
             'currency_verified_at' => now(), 'verified_at' => now(),
-        ]);
+        ]) : null;
         $roles = [
             'inventory_asset', 'cogs', 'grni', 'opening_offset', 'adjustment_gain', 'adjustment_loss',
             'landed_cost_clearing', 'transfer_clearing', 'accounts_receivable', 'accounts_payable',
@@ -312,6 +251,16 @@ final class ConnectionWizardTest extends TestCase
         }
 
         return [$mapping, $item];
+    }
+
+    private function seedCentralIdentity(): void
+    {
+        DB::connection('mysql')->table('organizations')->updateOrInsert(
+            ['id' => TenantTestManager::ORG_A],
+            ['central_organization_id' => TenantTestManager::ORG_A, 'client_id' => 860001,
+                'name' => 'Disposable wizard organization', 'database_name' => 'solastock_test_a',
+                'base_currency' => 'JOD', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]
+        );
     }
 
     private function openActivationGate(): void
