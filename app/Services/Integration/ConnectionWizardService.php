@@ -985,6 +985,8 @@ final class ConnectionWizardService
         $totals = [
             'exact_matches' => 0, 'review_required' => 0, 'missing_in_solastock' => 0,
             'missing_in_solabooks' => 0, 'ambiguous' => 0, 'blocked' => 0,
+            'solabooks_quantity' => '0.0000', 'solastock_quantity' => '0.0000',
+            'solabooks_inventory_value' => '0.00', 'solastock_inventory_value' => '0.00',
             'total_quantity_difference' => '0.0000', 'total_valuation_difference' => '0.00',
         ];
         foreach ($comparison as $row) {
@@ -998,6 +1000,10 @@ final class ConnectionWizardService
             if ($row['blocking_reason']) {
                 $totals['blocked']++;
             }
+            $totals['solabooks_quantity'] = Decimal::qty(Decimal::add($totals['solabooks_quantity'], $row['solabooks']['quantity'] ?? '0'));
+            $totals['solastock_quantity'] = Decimal::qty(Decimal::add($totals['solastock_quantity'], $row['solastock']['quantity'] ?? '0'));
+            $totals['solabooks_inventory_value'] = Decimal::money(Decimal::add($totals['solabooks_inventory_value'], $row['solabooks']['inventory_value'] ?? '0'));
+            $totals['solastock_inventory_value'] = Decimal::money(Decimal::add($totals['solastock_inventory_value'], $row['solastock']['inventory_value'] ?? '0'));
             $totals['total_quantity_difference'] = Decimal::qty(Decimal::add($totals['total_quantity_difference'], $row['quantity_difference']));
             $totals['total_valuation_difference'] = Decimal::money(Decimal::add($totals['total_valuation_difference'], $row['value_difference']));
         }

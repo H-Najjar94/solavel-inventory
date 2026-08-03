@@ -147,7 +147,7 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertStringContainsString('ConnectionPhaseBadges', $page);
         $this->assertStringNotContainsString('<HealthBadge health={s.health}', $page);
-        foreach (['Check configuration', 'Resolve required decisions', 'Review and approve', 'Advanced details'] as $label) {
+        foreach (['Check configuration', 'Complete required decisions', 'Review and approve', 'Advanced details'] as $label) {
             $this->assertStringContainsString($label, $translations);
         }
         foreach ([
@@ -166,6 +166,16 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('type="search"', $assistant);
         $this->assertStringContainsString('assistant-actionbar', $assistant);
         $this->assertStringContainsString('<details className="assistant-details">', $assistant);
+        $this->assertStringContainsString('<details className="assistant-checks">', $assistant);
+        $this->assertStringContainsString('automaticChecks === 6', $assistant);
+        $this->assertStringContainsString('integration.assistant.notReady', $assistant);
+        $this->assertStringContainsString('integration.assistant.ownerDecisions', $assistant);
+        $this->assertStringContainsString('integration.assistant.accountantDecisions', $assistant);
+        $this->assertStringContainsString('assistant-reconciliation', $assistant);
+        $this->assertStringContainsString('<bdi dir="ltr">', $assistant);
+        $this->assertStringContainsString('These are different items', $translations);
+        $this->assertStringContainsString('هذان صنفان مختلفان', $translations);
+        $this->assertStringContainsString('عيّن محاسباً لمراجعة :count قرارات محاسبية', $translations);
         $this->assertStringContainsString('max-width:1440px', $styles);
         $this->assertStringContainsString('grid-template-columns:minmax(0,1fr) minmax(250px,300px)', $styles);
         $this->assertStringNotContainsString('source_account_id', $assistant);
