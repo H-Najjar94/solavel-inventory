@@ -1356,15 +1356,27 @@ final class ConnectionWizardService
 
         $referencedUnits = $financeItems->pluck('unit_id')->filter()->unique()->sort()->values();
         if (Schema::connection('tenant')->hasTable('units')) {
+            $resolvedUnitIds = [];
             foreach (DB::connection('tenant')->table('units')->whereIn('id', $referencedUnits)->orderBy('id')->get() as $unit) {
+                $resolvedUnitIds[] = (int) $unit->id;
                 $rows[] = $this->draftCandidate('unit', 'owner_review_required', null, $unit,
                     'owner_unit_selection_required', 'owner_decision', ['source' => 'finance_item_reference']);
+            }
+            foreach ($referencedUnits->reject(fn ($id) => in_array((int) $id, $resolvedUnitIds, true)) as $missingUnitId) {
+                $rows[] = $this->draftCandidate('unit', 'owner_review_required', null,
+                    (object) ['id' => (int) $missingUnitId, 'name' => ''],
+                    'owner_unit_selection_required', 'owner_decision', [
+                        'source' => 'dangling_finance_item_unit_reference',
+                        'authoritative_unit_details_required' => true,
+                    ]);
             }
         }
 
         $referencedCategories = $financeItems->pluck('category_id')->filter()->unique()->sort()->values();
         if (Schema::connection('tenant')->hasTable('inventory_categories')) {
-            foreach (DB::connection('tenant')->table('inventory_categories')->where('organization_id', $financeOrgId)
+            foreach (DB::connection('tenant')->table('inventory_categories')->where(function ($query) use ($financeOrgId): void {
+                    $query->where('organization_id', $financeOrgId)->orWhereNull('organization_id');
+                })
                 ->whereIn('id', $referencedCategories)->orderBy('id')->get() as $category) {
                 $rows[] = $this->draftCandidate('category', 'owner_review_required', null, $category,
                     'owner_category_selection_required', 'owner_decision', ['source' => 'finance_item_reference']);
