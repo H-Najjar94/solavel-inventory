@@ -8,6 +8,7 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\IntegrationTaxMapping;
 use App\Models\Tenant\InventorySetting;
+use App\Services\Entitlements\InventoryCommercialEntitlementService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -158,11 +159,23 @@ class IntegrationStatusService
             $incompleteMapping > 0 => 'needs_mapping',
             default => 'healthy',
         };
-        $wizardRun = $organizationMapping && Schema::connection('tenant')->hasTable('integration_connection_wizard_runs')
+        // Draft setup deliberately precedes immutable operational mapping. Find
+        // it by the tenant-scoped SolaStock organization, otherwise the status
+        // endpoint makes a valid draft disappear until a later-stage mapping is
+        // created and incorrectly conflates setup with activation readiness.
+        $wizardRun = Schema::connection('tenant')->hasTable('integration_connection_wizard_runs')
             ? DB::connection('tenant')->table('integration_connection_wizard_runs')
-                ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)
+                ->where('solastock_organization_id', $orgId)
+                ->whereNull('discarded_at')
                 ->orderByDesc('created_at')->first()
             : null;
+        $setupDecision = app(InventoryCommercialEntitlementService::class)
+            ->checkConnectionSetupReadiness($orgId);
+        $draftInProgress = $wizardRun && in_array((string) $wizardRun->state, [
+            'draft_decisions', 'decisions_complete', 'snapshot_required', 'cutoff_review',
+            'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready',
+        ], true);
+        $draftStatus = $draftInProgress ? 'in_progress' : ($wizardRun ? 'completed' : 'not_started');
         $connectionState = match (true) {
             ! $organizationMapping && ! $settings->exists => 'not_subscribed',
             ! $organizationMapping => 'subscription_available',
@@ -187,6 +200,11 @@ class IntegrationStatusService
             'last_error' => $settings->last_error,
             'require_mapping_before_post' => (bool) ($settings->require_mapping_before_post ?? false),
             'health' => $health,
+            'setup_status' => $setupDecision['allowed'] ? 'available' : 'unavailable',
+            'setup_status_reason' => $setupDecision['reason_code'],
+            'draft_status' => $draftStatus,
+            'activation_status' => 'safely_paused',
+            'delivery_status' => $deliveryEnabled ? 'enabled' : 'disabled',
             'connection_state' => $connectionState,
             'connection_wizard' => $wizardRun ? [
                 'run_uuid' => $wizardRun->run_uuid,
