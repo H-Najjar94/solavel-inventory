@@ -1115,6 +1115,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .assistant-progress-ring::before { content:""; position:absolute; inset:6px; border-radius:50%; background:var(--surface,#fff); }
 .assistant-progress-ring strong { position:relative; font-size:13px; }
 .assistant-card { background:var(--surface,#fff); border:1px solid var(--line-soft,#e5e1da); border-radius:12px; padding:16px; }
+.assistant .btn,.assistant .input { min-height:40px; }
+.assistant summary { min-height:40px; }
 .assistant-card > header { margin-bottom:12px; }
 .assistant-card h2 { margin:0 0 4px; font-size:19px; }
 .assistant-card header p { margin:0; color:var(--muted); font-size:13px; }
@@ -1200,6 +1202,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 @media (max-width: 480px) {
     .connection-phase-badges .badge { flex-basis:100%; justify-content:flex-start; }
     .assistant-hero { padding:14px; }
+    .assistant .btn,.assistant .input { min-height:44px; }
     .assistant-progress { grid-template-columns:1fr; gap:5px; }
     .assistant-progress button { min-height:48px; }
     .assistant-side { grid-template-columns:1fr; }
