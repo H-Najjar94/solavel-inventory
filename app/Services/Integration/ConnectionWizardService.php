@@ -181,7 +181,8 @@ final class ConnectionWizardService
         if (! in_array($action, self::DECISIONS, true)) {
             $this->fail('unsupported_mapping_decision');
         }
-        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $fingerprint, $action, $stockIds, $booksIds, $safeDetails, $actorUserId, $expectedLockVersion, $expectedBeforeHash, $canOwnerReview, $canAccountingReview): void {
+        $persistenceResult = 'saved';
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $fingerprint, $action, $stockIds, $booksIds, $safeDetails, $actorUserId, $expectedLockVersion, $expectedBeforeHash, $canOwnerReview, $canAccountingReview, &$persistenceResult): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
             if (! in_array($run->state, ['draft_decisions', 'decisions_complete', 'snapshot_required'], true) || $run->invalidated_at || $run->discarded_at) {
                 $this->fail('wizard_run_not_editable');
@@ -208,6 +209,18 @@ final class ConnectionWizardService
             }
             $current = DB::connection('tenant')->table('integration_connection_wizard_decisions')
                 ->where('run_uuid', $runUuid)->where('candidate_fingerprint', $fingerprint)->lockForUpdate()->first();
+            $normalizedStockIds = array_values(array_map('strval', $stockIds));
+            $normalizedBooksIds = array_values(array_map('strval', $booksIds));
+            $normalizedSafeDetails = $this->safeDecisionDetails($safeDetails);
+            if ($current && $current->status === 'selected'
+                && hash_equals((string) $current->candidate_before_hash, $beforeHash)
+                && (string) $current->action === $action
+                && json_decode($current->solastock_record_ids ?: '[]', true) === $normalizedStockIds
+                && json_decode($current->solabooks_record_ids ?: '[]', true) === $normalizedBooksIds
+                && json_decode($current->safe_details ?: '{}', true) === $normalizedSafeDetails) {
+                $persistenceResult = 'already_saved';
+                return;
+            }
             $decisionUuid = $current?->decision_uuid ?? (string) Str::uuid();
             $before = $current ? (array) $current : null;
             DB::connection('tenant')->table('integration_connection_wizard_decisions')->updateOrInsert(
@@ -218,10 +231,10 @@ final class ConnectionWizardService
                     'reviewer_role' => $reviewerRole,
                     'decision_version' => (int) ($current?->decision_version ?? 0) + 1,
                     'action' => $action,
-                    'solastock_record_ids' => json_encode(array_values(array_map('strval', $stockIds))),
-                    'solabooks_record_ids' => json_encode(array_values(array_map('strval', $booksIds))),
+                    'solastock_record_ids' => json_encode($normalizedStockIds),
+                    'solabooks_record_ids' => json_encode($normalizedBooksIds),
                     'candidate_before_hash' => $beforeHash,
-                    'safe_details' => json_encode($this->safeDecisionDetails($safeDetails)),
+                    'safe_details' => json_encode($normalizedSafeDetails),
                     'status' => 'selected',
                     'actor_user_id' => $actorUserId,
                     'reviewed_by_user_id' => $actorUserId,
@@ -251,7 +264,15 @@ final class ConnectionWizardService
                 ]);
         });
 
-        return $this->finalPreview($organizationId, $runUuid);
+        $result = $this->finalPreview($organizationId, $runUuid);
+        $canonical = collect($result['decisions'])->firstWhere('candidate_fingerprint', $fingerprint);
+        if (! $canonical || (string) $canonical['action'] !== $action) {
+            $this->fail('wizard_save_confirmation_mismatch');
+        }
+        return $result + [
+            'persistence_result' => $persistenceResult,
+            'canonical_decision' => $canonical,
+        ];
     }
 
     public function reverseDecision(int $organizationId, string $runUuid, string $decisionUuid, int $actorUserId): array
@@ -341,7 +362,11 @@ final class ConnectionWizardService
             'reviewed_by_user_id' => $row->reviewed_by_user_id ?? $row->actor_user_id,
             'reviewed_at' => $row->reviewed_at ?? $row->updated_at,
         ])->values()->all();
-        return $approvalCore + [
+        // `decisions` in the approval core intentionally has a compact hash
+        // shape. The API response must replace it with the canonical decision
+        // contract below; PHP's array-union operator would silently retain the
+        // compact list and omit candidate_fingerprint/decision_version.
+        return array_merge($approvalCore, [
             'approval_payload_hash' => $approvalHash,
             'state' => $ready && $run->state === 'cutoff_review' ? 'preview_ready' : (string) $run->state,
             'lock_version' => (int) $run->lock_version,
@@ -360,7 +385,7 @@ final class ConnectionWizardService
             'accountant_approved_at' => $run->accountant_approved_at ?? null,
             'activation_available' => false,
             'rollback_behavior' => 'Before activation, reverse decisions and regenerate the snapshot. After activation, pause delivery; operational and accounting reversals remain separate and preserve evidence.',
-        ];
+        ]);
     }
 
     public function bulkDecide(int $organizationId, string $runUuid, string $bulkAction, array $fingerprints,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -9,6 +9,7 @@ import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import { useTenant } from '../stores/tenant.jsx';
 import GuidedConnectionAssistant from '../components/GuidedConnectionAssistant.jsx';
+import { canonicalDecision, createSerializedMutationQueue, mayAcceptCanonicalDraft, unwrapCanonicalDraft } from '../services/wizardDraftSync.js';
 
 function ConnectionPhaseBadges({ status, setupAllowed, tr }) {
     const setup = status?.setup_status === 'available' || setupAllowed ? 'available' : 'unavailable';
@@ -246,6 +247,7 @@ export default function IntegrationSettingsPage() {
 }
 
 function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
+    const queryClient = useQueryClient();
     const actionsByEntity = {
         item: {
             exact_candidate_requires_owner_review: ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
@@ -271,6 +273,9 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
     const [saveState, setSaveState] = useState('idle');
     const [pendingDecisions, setPendingDecisions] = useState(new Map());
     const [failedDecision, setFailedDecision] = useState(null);
+    const [canonicalRun, setCanonicalRun] = useState(null);
+    const canonicalRunRef = useRef(null);
+    const saveQueueRef = useRef(createSerializedMutationQueue());
     const [confirmation, setConfirmation] = useState('');
     const [bulkSelection, setBulkSelection] = useState([]);
     const [cutoffAt, setCutoffAt] = useState('');
@@ -280,7 +285,26 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
         fallback: null,
         enabled: Boolean(runUuid),
     });
-    const view = runUuid ? run.data : discovery.data;
+    const acceptCanonicalRun = (incoming) => {
+        if (!mayAcceptCanonicalDraft(canonicalRunRef.current, incoming, runUuid)) return false;
+        canonicalRunRef.current = incoming;
+        setCanonicalRun(incoming);
+        queryClient.setQueryData(['integration-wizard-preview', runUuid], incoming);
+        return true;
+    };
+    useEffect(() => {
+        canonicalRunRef.current = null;
+        setCanonicalRun(null);
+        setPendingDecisions(new Map());
+        setFailedDecision(null);
+        setSaveState('idle');
+    }, [runUuid]);
+    useEffect(() => {
+        if (runUuid && run.data) acceptCanonicalRun(run.data);
+    }, [runUuid, run.data]);
+    const runView = canonicalRun || run.data;
+    const runHandle = { ...run, data: runView };
+    const view = runUuid ? runView : discovery.data;
     useEffect(() => {
         const resumable = discovery.data?.active_draft?.run_uuid;
         if (!runUuid && resumable) setRunUuid(resumable);
@@ -296,38 +320,75 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
         finally { setSaving(false); }
     }
 
-    async function decide(row, action) {
-        setSaving(true);
+    function decide(row, action) {
         setSaveState('saving');
-        setPendingDecisions((current) => new Map(current).set(row.fingerprint, { candidate_fingerprint: row.fingerprint, action }));
-        try {
-            await api.saveIntegrationWizardDecision(runUuid, {
+        setPendingDecisions((current) => new Map(current).set(row.fingerprint, {
+            candidate_fingerprint: row.fingerprint, action, persistence_state: 'saving',
+        }));
+        const selectedRunUuid = runUuid;
+        const selectedIdentity = runView?.identity;
+        return saveQueueRef.current.enqueue(async (mutationSequence) => {
+          setSaving(true);
+          try {
+            const currentDraft = canonicalRunRef.current;
+            if (!currentDraft || currentDraft.run_uuid !== selectedRunUuid) throw new Error('wizard_draft_context_changed');
+            const existing = canonicalDecision(currentDraft, row.fingerprint);
+            if (existing?.action === action) {
+                setPendingDecisions((current) => { const next = new Map(current); next.delete(row.fingerprint); return next; });
+                setSaveState('saved');
+                return currentDraft;
+            }
+            const response = await api.saveIntegrationWizardDecision(selectedRunUuid, {
                 candidate_fingerprint: row.fingerprint,
                 action,
                 solastock_record_ids: row.solastock_record_ids,
                 solabooks_record_ids: row.solabooks_record_ids,
                 safe_details: { reason: row.blocking_reason, decision_class: row.decision_class },
-                expected_lock_version: run.data.lock_version,
+                expected_lock_version: currentDraft.lock_version,
                 expected_before_hash: row.candidate_before_hash,
             });
-            await run.refetch();
+            const confirmed = unwrapCanonicalDraft(response);
+            const decision = canonicalDecision(confirmed, row.fingerprint);
+            if (confirmed.run_uuid !== selectedRunUuid
+                || String(confirmed.identity?.central_organization_id ?? '') !== String(selectedIdentity?.central_organization_id ?? '')
+                || !decision || decision.action !== action) {
+                throw new Error('wizard_save_confirmation_mismatch');
+            }
+            if (!acceptCanonicalRun(confirmed)) throw new Error('wizard_stale_save_response');
             setPendingDecisions((current) => { const next = new Map(current); next.delete(row.fingerprint); return next; });
             setFailedDecision(null);
             setSaveState('saved');
-        } catch (error) {
-            const conflict = String(error.message || '').includes('draft_optimistic_lock_conflict');
-            setFailedDecision({ row, action });
+            return confirmed;
+          } catch (error) {
+            const conflict = error?.status === 409 || error?.code === 'draft_optimistic_lock_conflict'
+                || String(error.message || '').includes('draft_optimistic_lock_conflict');
+            setPendingDecisions((current) => new Map(current).set(row.fingerprint, {
+                candidate_fingerprint: row.fingerprint, action, persistence_state: conflict ? 'conflict' : 'failed',
+            }));
+            setFailedDecision({ row, action, mutationSequence });
             setSaveState(conflict ? 'conflict' : 'failed');
             toast.push(error.message || tr('settings.common.errorFallback'), 'error');
+            throw error;
+          } finally { setSaving(false); }
+        }).catch(() => null);
+    }
+
+    async function reconcileLatest({ discardUnsaved = false } = {}) {
+        const result = await run.refetch({ cancelRefetch: true });
+        const incoming = result?.data;
+        if (incoming) acceptCanonicalRun(incoming);
+        if (discardUnsaved) {
+            setPendingDecisions(new Map());
+            setFailedDecision(null);
+            setSaveState('idle');
         }
-        finally { setSaving(false); }
     }
 
     async function runAction(callback, successKey) {
         setSaving(true);
         try {
             await callback();
-            await run.refetch();
+            await reconcileLatest();
             setConfirmation('');
             toast.push(tr(successKey), 'success');
             return true;
@@ -335,14 +396,15 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
         finally { setSaving(false); }
     }
 
-    const decisions = new Map((run.data?.decisions || []).map((decision) => [decision.candidate_fingerprint, decision]));
-    pendingDecisions.forEach((decision, fingerprint) => decisions.set(fingerprint, decision));
+    const decisions = new Map((runView?.decisions || []).map((decision) => [decision.candidate_fingerprint, decision]));
+    const displayDecisions = new Map(decisions);
+    pendingDecisions.forEach((decision, fingerprint) => displayDecisions.set(fingerprint, decision));
     const allowedActions = (row) => {
         const configured = actionsByEntity[row.entity_type] || ['retain_blocked'];
         return Array.isArray(configured) ? configured : (configured[row.classification] || configured.default);
     };
     const canEdit = (row) => row.decision_class === 'accountant_decision' ? accountingGate.allowed : gate.allowed;
-    const editableState = ['draft_decisions', 'decisions_complete', 'snapshot_required'].includes(run.data?.state);
+    const editableState = ['draft_decisions', 'decisions_complete', 'snapshot_required'].includes(runView?.state);
     const toggleBulk = (fingerprint) => setBulkSelection((current) => current.includes(fingerprint)
         ? current.filter((value) => value !== fingerprint) : [...current, fingerprint]);
     async function bulk(action) {
@@ -351,7 +413,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             bulk_action: action,
             candidate_fingerprints: bulkSelection,
             confirmation: `CONFIRM ${bulkSelection.length} RECORDS`,
-            expected_lock_version: run.data.lock_version,
+            expected_lock_version: runView.lock_version,
         }), 'integration.wizard.bulkSaved');
         setSaveState(saved ? 'saved' : 'failed');
         if (saved) setBulkSelection([]);
@@ -382,8 +444,8 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
     const rows = view.comparison || [];
     if (view.guided_setup) {
         return <GuidedConnectionAssistant
-            view={view} runUuid={runUuid} run={run} gate={gate} accountingGate={accountingGate}
-            status={status} saving={saving} tr={tr} decisions={decisions} rows={rows}
+            view={view} runUuid={runUuid} run={runHandle} gate={gate} accountingGate={accountingGate}
+            status={status} saving={saving} tr={tr} decisions={displayDecisions} confirmedDecisions={decisions} pendingDecisions={pendingDecisions} rows={rows}
             totals={totals} accounting={accounting} assistantStep={assistantStep}
             setAssistantStep={setAssistantStep} exceptionSearch={exceptionSearch}
             setExceptionSearch={setExceptionSearch} allowedActions={allowedActions}
@@ -393,7 +455,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             confirmation={confirmation} setConfirmation={setConfirmation}
             saveState={saveState}
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action)}
-            reloadLatest={async () => { await run.refetch(); setSaveState('idle'); }}
+            reloadLatest={() => reconcileLatest()}
             organizationName={organizationName}
         />;
     }
