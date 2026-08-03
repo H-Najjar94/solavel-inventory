@@ -65,6 +65,34 @@ class InventoryPermissionTest extends TestCase
         $this->assertNotSame($this->user()->id, $seen->user_id);
     }
 
+    #[Test]
+    public function central_backed_auth_model_uses_its_primary_key_as_the_membership_identity(): void
+    {
+        app(OrganizationContext::class)->set(self::ORG);
+        $seen = (object) ['user_id' => null];
+        $service = new class(app(OrganizationContext::class), $seen) extends InventoryPermissionService
+        {
+            public function __construct(OrganizationContext $context, private object $seen)
+            {
+                parent::__construct($context);
+            }
+
+            protected function fetchCentralRole(int $userId, int $orgId): ?string
+            {
+                $this->seen->user_id = $userId;
+                return 'client_owner';
+            }
+        };
+        $user = new class
+        {
+            public int $id = 3;
+            public function getConnectionName(): string { return 'mysql'; }
+        };
+
+        $this->assertTrue($service->can($user, 'inventory.integration.view'));
+        $this->assertSame(3, $seen->user_id);
+    }
+
     protected function tearDown(): void
     {
         app(OrganizationContext::class)->forget();
