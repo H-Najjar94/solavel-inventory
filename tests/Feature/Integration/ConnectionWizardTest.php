@@ -7,6 +7,7 @@ use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\Item;
 use App\Services\Integration\ConnectionWizardService;
+use App\Services\Integration\IntegrationStatusService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -129,6 +130,62 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('approval_payload_hash', $page);
         $this->assertStringContainsString('@media (max-width: 820px)', $styles);
         $this->assertStringContainsString('html[dir="rtl"]', $styles);
+        foreach ([
+            'Setup', 'Draft', 'Activation', 'Delivery', 'Available', 'In progress',
+            'Safely paused', 'Disabled',
+            'You can complete connection setup. Activation and delivery remain safely paused until review and approval are complete.',
+        ] as $label) {
+            $this->assertStringContainsString($label, $translations);
+        }
+        foreach ([
+            'الإعداد', 'المسودة', 'التفعيل', 'الإرسال', 'متاح', 'قيد الإعداد',
+            'متوقف بأمان', 'معطل',
+            'يمكنك إكمال إعداد الربط. التفعيل والإرسال متوقفان بأمان حتى اكتمال المراجعة والموافقة.',
+        ] as $label) {
+            $this->assertStringContainsString($label, $translations);
+        }
+        $this->assertStringContainsString('ConnectionPhaseBadges', $page);
+        $this->assertStringNotContainsString('<HealthBadge health={s.health}', $page);
+    }
+
+    #[Test]
+    public function status_reports_setup_and_draft_independently_from_activation_and_delivery_holds(): void
+    {
+        $this->seedConnectionFixture(false);
+        config()->set('integration_safety.solabooks_delivery_enabled', false);
+        config()->set('integration_connection_wizard.activation_enabled', false);
+        request()->attributes->set('tenant_state', ['client_id' => 860001]);
+        DB::connection('mysql')->table('entitlement_state_snapshots')->updateOrInsert(
+            ['organization_id' => TenantTestManager::ORG_A],
+            [
+                'subscription_id' => null,
+                'underlying_subscription_state' => 'paid_active',
+                'effective_access_state' => 'paid_active',
+                'state_hash' => hash('sha256', 'wizard-status-setup-only'),
+                'state_payload' => json_encode([
+                    'client_id' => 860001,
+                    'organization_id' => TenantTestManager::ORG_A,
+                    'integration_capabilities' => [
+                        'connection_setup_readiness' => true,
+                        'connection_activation_delivery_entitled' => false,
+                        'reason' => 'setup_available_delivery_not_entitled',
+                    ],
+                ], JSON_UNESCAPED_SLASHES),
+                'evaluated_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+        app(ConnectionWizardService::class)->start(TenantTestManager::ORG_A, 7001);
+
+        $status = app(IntegrationStatusService::class)->status(TenantTestManager::ORG_A);
+
+        $this->assertSame('available', $status['setup_status']);
+        $this->assertSame('in_progress', $status['draft_status']);
+        $this->assertSame('safely_paused', $status['activation_status']);
+        $this->assertSame('disabled', $status['delivery_status']);
+        $this->assertFalse($status['delivery_enabled']);
+        $this->assertSame('draft_decisions', $status['connection_wizard']['state']);
     }
 
     #[Test]
