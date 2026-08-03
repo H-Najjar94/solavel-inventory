@@ -150,7 +150,7 @@ class MovementConsumedLayersTest extends TestCase
                 return $this->forced;
             }
         };
-        $user = (object) ['id' => 4242];
+        $user = (object) ['id' => 4242, 'central_user_id' => 9004242];
 
         // The consumed-layers route is gated by inventory.view_ledger — a viewer has it.
         $this->assertTrue($perms->can($user, 'inventory.view_ledger'), 'viewer can read the ledger');

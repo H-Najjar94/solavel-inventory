@@ -145,7 +145,7 @@ class WarehouseImageTest extends TestCase
                 return $this->forced;
             }
         };
-        $user = (object) ['id' => 4242];
+        $user = (object) ['id' => 4242, 'central_user_id' => 9004242];
 
         $this->assertTrue($perms->can($user, 'inventory.view_warehouses'), 'viewer can view warehouse images');
         $this->assertFalse($perms->can($user, 'inventory.manage_warehouses'), 'viewer cannot mutate warehouse images');
