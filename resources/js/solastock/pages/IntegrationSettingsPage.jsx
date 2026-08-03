@@ -9,9 +9,17 @@ import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import { useTenant } from '../stores/tenant.jsx';
 
-function HealthBadge({ health, tr }) {
-    const map = { healthy: 'badge--live', needs_mapping: 'badge--demo', error: 'badge--warn', disconnected: 'badge--muted', maintenance_hold: 'badge--warn' };
-    return <span className={`badge ${map[health] ?? 'badge--muted'}`}>{tr(`integration.health.${health ?? 'unknown'}`, {}, health ?? tr('integration.health.unknown'))}</span>;
+function ConnectionPhaseBadges({ status, setupAllowed, tr }) {
+    const setup = status?.setup_status === 'available' || setupAllowed ? 'available' : 'unavailable';
+    const draft = status?.draft_status === 'in_progress' ? 'in_progress' : 'not_started';
+    const activation = status?.activation_status || 'safely_paused';
+    const delivery = status?.delivery_status || (status?.delivery_enabled ? 'enabled' : 'disabled');
+    return <div className="connection-phase-badges" role="status" aria-label={tr('integration.phase.summary')}>
+        <span className={`badge ${setup === 'available' ? 'badge--live' : 'badge--muted'}`}><strong>{tr('integration.phase.setup')}:</strong> {tr(`integration.phase.${setup}`)}</span>
+        <span className={`badge ${draft === 'in_progress' ? 'badge--demo' : 'badge--muted'}`}><strong>{tr('integration.phase.draft')}:</strong> {tr(`integration.phase.${draft}`)}</span>
+        <span className="badge badge--warn"><strong>{tr('integration.phase.activation')}:</strong> {tr(`integration.phase.${activation}`)}</span>
+        <span className={`badge ${delivery === 'enabled' ? 'badge--live' : 'badge--warn'}`}><strong>{tr('integration.phase.delivery')}:</strong> {tr(`integration.phase.${delivery}`)}</span>
+    </div>;
 }
 
 export default function IntegrationSettingsPage() {
@@ -70,10 +78,7 @@ export default function IntegrationSettingsPage() {
             <Breadcrumbs items={[{ label: tr('integration.settingsBreadcrumb'), to: '/settings' }, { label: tr('integration.title') }]} />
             <header className="page-head">
                 <h1>{tr('integration.title')}</h1>
-                {s && <HealthBadge health={s.health} tr={tr} />}
-                {s && <span className={`badge ${s.delivery_configured ? 'badge--live' : 'badge--muted'}`}>
-                    {tr(s.delivery_configured ? 'integration.delivery.configured' : 'integration.delivery.notConfigured')}
-                </span>}
+                <ConnectionPhaseBadges status={s} setupAllowed={setupGate.allowed} tr={tr} />
             </header>
 
             <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }, { key: 'accounts', label: tr('integration.tabs.accounts') }, { key: 'taxes', label: tr('integration.tabs.taxes') }, { key: 'items', label: tr('integration.tabs.items') }]} active={tab} onChange={setTab} />
@@ -87,8 +92,8 @@ export default function IntegrationSettingsPage() {
             ) : !s ? <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} /> : (
                 <>
                     {!s.delivery_enabled && <div className="panel" role="status" style={{ borderInlineStart: '4px solid var(--warning, #b7791f)' }}>
-                        <h2>{tr('integration.safetyHold.title')}</h2>
-                        <p>{s.delivery_disabled_message || tr('integration.safetyHold.message')}</p>
+                        <h2>{tr('integration.phase.activationPaused')}</h2>
+                        <p>{tr('integration.phase.setupWhilePaused')}</p>
                     </div>}
                     <div className="widget-grid">
                         <div className="widget-card"><div className="widget-card-label">{tr('integration.metrics.mode')}</div><div className="widget-card-value" style={{ fontSize: 18 }}>{tr(`integration.connection.${s.mode === 'connected_readonly' ? 'readOnly' : s.mode === 'connected_pending_mapping' ? 'pendingMappings' : s.mode}`, {}, s.mode)}</div></div>
@@ -185,12 +190,12 @@ export default function IntegrationSettingsPage() {
             {tab === 'accounts' && <AccountMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'taxes' && <TaxMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
             {tab === 'items' && <ItemMappings gate={gate} toast={toast} qc={qc} tr={tr} />}
-            {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} toast={toast} tr={tr} />}
+            {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, toast, tr }) {
+function ConnectionWizard({ gate, accountingGate, status, toast, tr }) {
     const actionsByEntity = {
         item: {
             exact_candidate_requires_owner_review: ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
@@ -309,6 +314,8 @@ function ConnectionWizard({ gate, accountingGate, toast, tr }) {
         <div className="panel wizard__intro">
             <h2>{tr('integration.wizard.title')}</h2>
             <div className="status-line" role="status"><span className="status-dot" />{tr(`integration.wizard.state.${view.state || view.connection_state || 'temporarily_unavailable'}`, {}, view.state || view.connection_state)}</div>
+            <ConnectionPhaseBadges status={status} setupAllowed={gate.allowed} tr={tr} />
+            <p className="wizard__safe-setup-message" role="status">{tr('integration.phase.setupWhilePaused')}</p>
             <p>{tr('integration.wizard.authority')}</p>
             <p className="muted">{tr('integration.wizard.noMerge')}</p>
             <div className="doc-actions">
