@@ -75,7 +75,7 @@ export default function IntegrationSettingsPage() {
     }
 
     return (
-        <section className="page">
+        <section className={`page ${tab === 'wizard' ? 'page--connection-assistant' : ''}`}>
             <Breadcrumbs items={[{ label: tr('integration.settingsBreadcrumb'), to: '/settings' }, { label: tr('integration.title') }]} />
             <header className="page-head">
                 <h1>{tr('integration.title')}</h1>
@@ -188,12 +188,12 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} />}
+            {tab === 'wizard' && <ConnectionWizard gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, status, toast, tr }) {
+function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizationName }) {
     const actionsByEntity = {
         item: {
             exact_candidate_requires_owner_review: ['approve_exact_binding', 'reject_exact_binding', 'physical_count_required'],
@@ -321,7 +321,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr }) {
             toggleBulk={toggleBulk} bulk={bulk} exportComparison={exportComparison} start={start}
             runAction={runAction} cutoffAt={cutoffAt} setCutoffAt={setCutoffAt}
             confirmation={confirmation} setConfirmation={setConfirmation}
-            PhaseBadges={ConnectionPhaseBadges}
+            organizationName={organizationName}
         />;
     }
     return <div className="wizard" aria-live="polite">
