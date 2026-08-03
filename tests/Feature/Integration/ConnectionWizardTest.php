@@ -215,6 +215,43 @@ final class ConnectionWizardTest extends TestCase
             ->where('run_uuid', $draft['run_uuid'])->count());
     }
 
+    #[Test]
+    public function correction_preview_reconciles_stock_authority_to_inventory_control_gl_not_legacy_item_value(): void
+    {
+        [, $item] = $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('accounts')->insert([
+            'id' => 9002, 'organization_id' => 14, 'code' => '1301',
+            'name' => 'Inventory Control', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1,
+        ]);
+        $warehouseId = DB::connection('tenant')->table('warehouses')->where('organization_id', TenantTestManager::ORG_A)->value('id');
+        DB::connection('tenant')->table('stock_balances')->insert([
+            'organization_id' => TenantTestManager::ORG_A, 'item_id' => $item->id,
+            'warehouse_id' => $warehouseId, 'on_hand_qty' => 1, 'reserved_qty' => 0,
+            'average_cost' => 777, 'total_value' => 777, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $journalId = DB::connection('tenant')->table('journal_entries')->insertGetId([
+            'organization_id' => 14, 'status' => 'posted',
+        ]);
+        DB::connection('tenant')->table('journal_entry_lines')->insert([
+            'organization_id' => 14, 'journal_entry_id' => $journalId, 'account_id' => 9002,
+            'base_debit' => 5385, 'base_credit' => 0,
+        ]);
+        DB::connection('tenant')->table('inventory_items')->insert([
+            'organization_id' => 14, 'sku' => 'LEGACY-ONLY', 'name' => 'Legacy only',
+            'qty_on_hand' => 1, 'average_cost' => 20000, 'valuation_method' => 'average', 'tracking_type' => 'none',
+        ]);
+
+        $preview = app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A);
+        $effect = $preview['totals']['proposed_accounting_effect'];
+        $this->assertSame('4608.00', $effect['amount']);
+        $this->assertSame('5385.00', $effect['inventory_control_current']);
+        $this->assertSame('777.00', $effect['authoritative_stock_target']);
+        $this->assertSame('inventory_asset_candidate', $effect['credit']);
+        $this->assertSame('accountant_selected_cutoff_offset', $effect['debit']);
+        $this->assertFalse($effect['automatic_posting']);
+        $this->assertNotSame($preview['totals']['total_valuation_difference'], '-4608.00');
+    }
+
     private function seedConnectionFixture(bool $withMapping = true): array
     {
         $this->seedCentralIdentity();

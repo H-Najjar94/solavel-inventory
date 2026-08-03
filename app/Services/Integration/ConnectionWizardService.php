@@ -1193,6 +1193,10 @@ final class ConnectionWizardService
         $valuationDifference = Decimal::money(collect($comparison)->reduce(
             fn (string $carry, array $row) => Decimal::add($carry, $row['value_difference'], 2), '0'
         ));
+        $baseCurrency = $this->financeBaseCurrency($financeOrg);
+        $accountingEffect = $this->preMappingAccountingEffect(
+            $organizationId, $financeOrgId, $comparison, $baseCurrency
+        );
         $core = [
             'version' => self::VERSION,
             'organization_mapping_uuid' => null,
@@ -1218,15 +1222,7 @@ final class ConnectionWizardService
                 'blocked' => collect($comparison)->whereNotNull('blocking_reason')->count(),
                 'total_quantity_difference' => $quantityDifference,
                 'total_valuation_difference' => $valuationDifference,
-                'proposed_accounting_effect' => Decimal::isZero($valuationDifference, 2) ? [] : [
-                    'requires_separate_accounting_approval' => true,
-                    'debit' => Decimal::cmp($valuationDifference, '0') > 0 ? 'inventory_asset' : 'opening_offset',
-                    'credit' => Decimal::cmp($valuationDifference, '0') > 0 ? 'opening_offset' : 'inventory_asset',
-                    'amount' => ltrim(Decimal::money(Decimal::cmp($valuationDifference, '0') < 0
-                        ? substr($valuationDifference, 1) : $valuationDifference), '-'),
-                    'currency' => $this->financeBaseCurrency($financeOrg),
-                    'automatic_posting' => false,
-                ],
+                'proposed_accounting_effect' => $accountingEffect,
             ],
             'readiness' => [
                 'units' => $counts('units', $organizationId),
@@ -1239,7 +1235,7 @@ final class ConnectionWizardService
                 'account_mappings' => $counts('integration_account_mappings', $organizationId),
             ],
             'accounting' => [
-                'base_currency' => $this->financeBaseCurrency($financeOrg),
+                'base_currency' => $baseCurrency,
                 'accounts' => collect($comparison)->where('entity_type', 'account_role')->map(fn (array $row) => [
                     'role' => $row['safe_details']['role'] ?? null,
                     'account_id' => $row['solabooks']['id'] ?? null,
@@ -1272,6 +1268,72 @@ final class ConnectionWizardService
             'active_draft' => $this->activeDraftSummary($organizationId),
             'activation_available' => false,
             'legacy_fallback' => false,
+        ];
+    }
+
+    /**
+     * Preview the GL-to-authoritative-stock correction, never the legacy-item
+     * subledger difference. The candidate account remains unapproved and the
+     * offset remains an explicit accountant decision.
+     */
+    private function preMappingAccountingEffect(
+        int $stockOrganizationId,
+        int $financeOrganizationId,
+        array $comparison,
+        string $baseCurrency,
+    ): array {
+        $inventoryCandidate = collect($comparison)->first(fn (array $row) =>
+            $row['entity_type'] === 'account_role'
+            && ($row['safe_details']['role'] ?? null) === 'inventory_asset'
+            && count($row['solabooks_record_ids'] ?? []) === 1
+        );
+        $accountId = (int) ($inventoryCandidate['solabooks_record_ids'][0] ?? 0);
+        foreach (['stock_balances', 'journal_entry_lines', 'journal_entries'] as $table) {
+            if (! Schema::connection('tenant')->hasTable($table)) {
+                return [
+                    'status' => 'accounting_preview_requires_snapshot',
+                    'requires_separate_accounting_approval' => true,
+                    'automatic_posting' => false,
+                ];
+            }
+        }
+        if ($accountId <= 0) {
+            return [
+                'status' => 'inventory_control_account_selection_required',
+                'requires_separate_accounting_approval' => true,
+                'automatic_posting' => false,
+            ];
+        }
+
+        $db = DB::connection('tenant');
+        $stockValue = Decimal::money((string) $db->table('stock_balances')
+            ->where('organization_id', $stockOrganizationId)->sum('total_value'));
+        $gl = $db->table('journal_entry_lines as line')
+            ->join('journal_entries as journal', 'journal.id', '=', 'line.journal_entry_id')
+            ->where('line.organization_id', $financeOrganizationId)
+            ->where('line.account_id', $accountId)
+            ->where('journal.status', 'posted')
+            ->whereNull('line.deleted_at')->whereNull('journal.deleted_at')
+            ->selectRaw('COALESCE(SUM(line.base_debit - line.base_credit), 0) AS balance')
+            ->value('balance');
+        $glValue = Decimal::money((string) ($gl ?? '0'));
+        $difference = Decimal::money(Decimal::sub($stockValue, $glValue, 2));
+        if (Decimal::isZero($difference, 2)) {
+            return [];
+        }
+
+        $increase = Decimal::cmp($difference, '0') > 0;
+        return [
+            'status' => 'preview_only_unapproved_account_candidate',
+            'requires_separate_accounting_approval' => true,
+            'inventory_control_account_candidate_id' => (string) $accountId,
+            'inventory_control_current' => $glValue,
+            'authoritative_stock_target' => $stockValue,
+            'debit' => $increase ? 'inventory_asset_candidate' : 'accountant_selected_cutoff_offset',
+            'credit' => $increase ? 'accountant_selected_cutoff_offset' : 'inventory_asset_candidate',
+            'amount' => ltrim(Decimal::money($increase ? $difference : substr($difference, 1)), '-'),
+            'currency' => $baseCurrency,
+            'automatic_posting' => false,
         ];
     }
 
