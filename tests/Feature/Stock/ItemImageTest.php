@@ -181,7 +181,7 @@ class ItemImageTest extends TestCase
                 return $this->forced;
             }
         };
-        $user = (object) ['id' => 4242];
+        $user = (object) ['id' => 4242, 'central_user_id' => 9004242];
 
         // Serve/list is gated by view_items; mutations by manage_items.
         $this->assertTrue($perms->can($user, 'inventory.view_items'), 'viewer can view images');
