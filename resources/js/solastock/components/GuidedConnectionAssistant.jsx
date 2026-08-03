@@ -179,7 +179,7 @@ export default function GuidedConnectionAssistant({
                         </div>)}
                     </div>
                     <details className="assistant-checks assistant-checks--completed" open={completedCheckRegression}>
-                        <summary>{tr('integration.assistant.completedChecks', { count: completedChecks.length })}</summary>
+                        <summary>{tr('integration.assistant.completedChecksCompact', { count: completedChecks.length })}</summary>
                         {completedChecks.map(([, label]) => <div className="assistant-check" key={label} role="status">
                             <span className="check-ok" aria-hidden="true">✓</span><span>{label}<span className="sr-only"> · {tr('integration.assistant.completed')}</span></span>
                         </div>)}
