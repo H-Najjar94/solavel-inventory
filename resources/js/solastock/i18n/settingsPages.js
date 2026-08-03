@@ -736,7 +736,7 @@ export const ar = {
     'integration.wizard.block.item_mapping_review_required': 'يجب على المالك مراجعة مرشحي الأصناف؛ رمز الصنف ليس هوية دائمة.',
     'integration.wizard.block.accountant_account_role_approval_required': 'يجب على المحاسب اعتماد أدوار الحسابات المطلوبة.',
     'integration.wizard.block.frozen_cutoff_and_zero_variance_required': 'يلزم تاريخ قطع مجمد وفارق غير مفسر يساوي صفراً.',
-    'integration.wizard.block.candidate_identity_requires_owner_confirmation': 'يتطلب مرشح رمز الصنف تأكيد المالك قبل إنشاء ربط ثابت.',
+    'integration.wizard.block.candidate_identity_requires_owner_confirmation': 'وجد النظام صنفاً مطابقاً في SolaBooks وSolaStock. تأكد أن السجلين للصنف نفسه.',
     'integration.wizard.block.ambiguous_identity_requires_owner_review': 'توجد عدة هويات مرشحة ولن يتم التخمين.',
     'integration.wizard.block.owner_must_create_or_exclude_solastock_record': 'يجب على المالك إنشاء سجل في SolaStock أو استبعاده صراحة.',
     'integration.wizard.block.missing_finance_record_requires_owner_review': 'يتطلب سجل المالية المفقود قراراً صريحاً من المالك.',
