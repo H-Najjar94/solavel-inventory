@@ -387,6 +387,8 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString("'affected_items' => \$affected", $service);
         $this->assertStringContainsString('integration.focus.missingFinanceUnit', $assistant.$translations);
         $this->assertStringContainsString('integration.focus.proposeCategoryCreation', $assistant.$translations);
+        $this->assertStringContainsString('wizard_selected_record_required', $service);
+        $this->assertStringContainsString('valid_for_current_candidate', $service.$page);
         $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
