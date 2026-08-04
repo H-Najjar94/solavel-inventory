@@ -369,7 +369,8 @@ final class ConnectionWizardTest extends TestCase
             $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
         }
         $this->assertStringContainsString('focus-section-list', $assistant);
-        $this->assertStringContainsString('defaultOpen={section === firstIncompleteSection}', $assistant);
+        $this->assertStringContainsString('open={openOwnerSection === section}', $assistant);
+        $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
         $this->assertStringContainsString('createSerializedMutationQueue', $page);
         $this->assertStringContainsString('unwrapCanonicalDraft', $page);
