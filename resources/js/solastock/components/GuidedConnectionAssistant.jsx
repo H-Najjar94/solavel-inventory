@@ -22,6 +22,7 @@ export default function GuidedConnectionAssistant({
     const [physicalValues, setPhysicalValues] = useState({});
     const [lastSaved, setLastSaved] = useState(null);
     const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
+    const [openOwnerSection, setOpenOwnerSection] = useState(undefined);
     const headingRef = useRef(null);
     const resumedRunRef = useRef(null);
 
@@ -63,6 +64,12 @@ export default function GuidedConnectionAssistant({
     ].filter(([, sectionRows]) => sectionRows.length > 0);
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
+
+    useEffect(() => {
+        if (task === 2 && firstIncompleteSection && openOwnerSection === undefined) {
+            setOpenOwnerSection(firstIncompleteSection);
+        }
+    }, [task, firstIncompleteSection, openOwnerSection]);
 
     useEffect(() => {
         if (!runUuid || resumedRunRef.current === runUuid) return;
@@ -224,7 +231,8 @@ export default function GuidedConnectionAssistant({
             {exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
             <div className="focus-section-list">{ownerSections.length ? ownerSections.map(([section, sectionRows]) => {
                 const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
-                return <details className="focus-list-section" key={section} defaultOpen={section === firstIncompleteSection}>
+                return <details className="focus-list-section" key={section} open={openOwnerSection === section}
+                    onToggle={(event) => setOpenOwnerSection(event.currentTarget.open ? section : null)}>
                     <summary><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></summary>
                     <div className="focus-decision-list">{sectionRows.map(compactDecisionRow)}</div>
                 </details>;
