@@ -23,6 +23,7 @@ export default function GuidedConnectionAssistant({
     const [lastSaved, setLastSaved] = useState(null);
     const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
     const [openOwnerSection, setOpenOwnerSection] = useState(undefined);
+    const [itemFilter, setItemFilter] = useState('all');
     const headingRef = useRef(null);
     const resumedRunRef = useRef(null);
 
@@ -54,13 +55,21 @@ export default function GuidedConnectionAssistant({
     const resolvedOwner = ownerRows.length - ownerPending.length;
     const resolvedCounts = physicalRows.length - physicalPending.length;
     const resolvedAccounting = accountingRows.length - accountingPending.length;
+    const itemRows = ownerRows.filter((row) => row.entity_type === 'item');
+    const itemCounts = {
+        solabooks: itemRows.filter((row) => row.solabooks).length,
+        solastock: itemRows.filter((row) => row.solastock).length,
+        both: itemRows.filter((row) => row.solabooks && row.solastock).length,
+        solabooksOnly: itemRows.filter((row) => row.solabooks && !row.solastock).length,
+        solastockOnly: itemRows.filter((row) => !row.solabooks && row.solastock).length,
+    };
     const ownerSections = [
         ['unitsCategories', ownerRows.filter((row) => ['unit', 'category'].includes(row.entity_type))],
         ['customers', ownerRows.filter((row) => row.entity_type === 'customer')],
         ['suppliers', ownerRows.filter((row) => row.entity_type === 'supplier')],
         ['warehouses', ownerRows.filter((row) => row.entity_type === 'warehouse')],
         ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
-        ['items', ownerRows.filter((row) => row.entity_type === 'item')],
+        ['items', itemRows],
     ].filter(([, sectionRows]) => sectionRows.length > 0);
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
@@ -258,9 +267,32 @@ export default function GuidedConnectionAssistant({
             <div className="focus-active-section">{activeOwnerSection ? (() => {
                 const [section, sectionRows] = activeOwnerSection;
                 const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
+                const visibleSectionRows = section !== 'items' ? sectionRows : sectionRows.filter((row) => {
+                    if (itemFilter === 'both') return row.solabooks && row.solastock;
+                    if (itemFilter === 'solabooksOnly') return row.solabooks && !row.solastock;
+                    if (itemFilter === 'solastockOnly') return !row.solabooks && row.solastock;
+                    return true;
+                });
                 return <section className="focus-list-section" key={section}>
                     <header><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></header>
-                    <div className="focus-decision-list">{sectionRows.map(compactDecisionRow)}</div>
+                    {section === 'items' && <div className="focus-item-catalog-summary" aria-label={tr('integration.focus.itemCatalogSummary')}>
+                        <div><span>SolaBooks</span><strong><bdi>{itemCounts.solabooks}</bdi></strong></div>
+                        <div><span>SolaStock</span><strong><bdi>{itemCounts.solastock}</bdi></strong></div>
+                        <div><span>{tr('integration.focus.itemsInBoth')}</span><strong><bdi>{itemCounts.both}</bdi></strong></div>
+                        <div><span>{tr('integration.focus.itemsBooksOnly')}</span><strong><bdi>{itemCounts.solabooksOnly}</bdi></strong></div>
+                        <div><span>{tr('integration.focus.itemsStockOnly')}</span><strong><bdi>{itemCounts.solastockOnly}</bdi></strong></div>
+                    </div>}
+                    {section === 'items' && <nav className="focus-item-filters" aria-label={tr('integration.focus.itemFilters')}>
+                        {[
+                            ['all', tr('integration.focus.filterAll'), itemRows.length],
+                            ['both', tr('integration.focus.itemsInBoth'), itemCounts.both],
+                            ['solabooksOnly', tr('integration.focus.itemsBooksOnly'), itemCounts.solabooksOnly],
+                            ['solastockOnly', tr('integration.focus.itemsStockOnly'), itemCounts.solastockOnly],
+                        ].map(([filter, label, count]) => <button type="button" key={filter} className={itemFilter === filter ? 'is-active' : ''}
+                            aria-pressed={itemFilter === filter} onClick={() => setItemFilter(filter)}>{label} <bdi>{count}</bdi></button>)}
+                    </nav>}
+                    <div className="focus-decision-list">{visibleSectionRows.length ? visibleSectionRows.map(compactDecisionRow)
+                        : <p className="focus-empty-filter">{tr('integration.focus.noItemsInFilter')}</p>}</div>
                 </section>;
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}

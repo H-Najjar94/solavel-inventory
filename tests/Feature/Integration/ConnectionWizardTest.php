@@ -369,7 +369,7 @@ final class ConnectionWizardTest extends TestCase
             $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
         }
         $this->assertLessThan(
-            strpos($assistant, "['items', ownerRows.filter"),
+            strpos($assistant, "['items', itemRows]"),
             strpos($assistant, "['unitsCategories', ownerRows.filter"),
             'Units and categories must appear before items in the review order.'
         );
@@ -378,6 +378,10 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('focus-item-comparison', $assistant);
         $this->assertStringContainsString('integration.assistant.originalFinanceItem', $assistant.$translations);
         $this->assertStringContainsString('integration.assistant.proposedStockItem', $assistant.$translations);
+        $this->assertStringContainsString('focus-item-catalog-summary', $assistant);
+        $this->assertStringContainsString('integration.focus.itemsInBoth', $assistant.$translations);
+        $this->assertStringContainsString('integration.focus.itemsBooksOnly', $assistant.$translations);
+        $this->assertStringContainsString('integration.focus.itemsStockOnly', $assistant.$translations);
         $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
