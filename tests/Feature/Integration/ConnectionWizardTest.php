@@ -368,6 +368,11 @@ final class ConnectionWizardTest extends TestCase
         foreach (['items', 'unitsCategories', 'customers', 'suppliers', 'warehouses', 'currencies'] as $section) {
             $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
         }
+        $this->assertLessThan(
+            strpos($assistant, "['items', ownerRows.filter"),
+            strpos($assistant, "['unitsCategories', ownerRows.filter"),
+            'Units and categories must appear before items in the review order.'
+        );
         $this->assertStringContainsString('focus-category-nav', $assistant);
         $this->assertStringContainsString('focus-active-section', $assistant);
         $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);

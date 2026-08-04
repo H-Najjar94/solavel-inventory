@@ -55,12 +55,12 @@ export default function GuidedConnectionAssistant({
     const resolvedCounts = physicalRows.length - physicalPending.length;
     const resolvedAccounting = accountingRows.length - accountingPending.length;
     const ownerSections = [
-        ['items', ownerRows.filter((row) => row.entity_type === 'item')],
         ['unitsCategories', ownerRows.filter((row) => ['unit', 'category'].includes(row.entity_type))],
         ['customers', ownerRows.filter((row) => row.entity_type === 'customer')],
         ['suppliers', ownerRows.filter((row) => row.entity_type === 'supplier')],
         ['warehouses', ownerRows.filter((row) => row.entity_type === 'warehouse')],
         ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
+        ['items', ownerRows.filter((row) => row.entity_type === 'item')],
     ].filter(([, sectionRows]) => sectionRows.length > 0);
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
