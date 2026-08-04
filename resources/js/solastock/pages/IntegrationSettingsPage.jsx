@@ -418,7 +418,8 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
         finally { setSaving(false); }
     }
 
-    const decisions = new Map((runView?.decisions || []).map((decision) => [decision.candidate_fingerprint, decision]));
+    const decisions = new Map((runView?.decisions || []).filter((decision) => decision.valid_for_current_candidate !== false)
+        .map((decision) => [decision.candidate_fingerprint, decision]));
     const displayDecisions = new Map(decisions);
     pendingDecisions.forEach((decision, fingerprint) => displayDecisions.set(fingerprint, decision));
     const allowedActions = (row) => {

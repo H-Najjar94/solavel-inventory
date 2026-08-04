@@ -204,6 +204,16 @@ final class ConnectionWizardService
             if (! in_array($action, $this->allowedActionsForCandidate($candidate), true)) {
                 $this->fail('wizard_decision_not_valid_for_candidate');
             }
+            $candidateStockIds = array_values(array_map('strval', $candidate['solastock_record_ids'] ?? []));
+            $selectedRecordId = (string) ($safeDetails['selected_record_id'] ?? '');
+            if (in_array($action, ['select_unit', 'select_category'], true)
+                && ($selectedRecordId === '' || ! in_array($selectedRecordId, $candidateStockIds, true))) {
+                $this->fail('wizard_selected_record_required');
+            }
+            if (in_array($action, ['propose_unit_creation', 'propose_category_creation'], true)
+                && (empty($candidate['solabooks']['name']) || ! empty($candidateStockIds))) {
+                $this->fail('wizard_creation_proposal_not_valid');
+            }
             if (($reviewerRole === 'accountant' && ! $canAccountingReview)
                 || ($reviewerRole === 'owner' && ! $canOwnerReview)) {
                 $this->fail('wizard_decision_role_forbidden');
@@ -315,15 +325,19 @@ final class ConnectionWizardService
 
         $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
             ->where('run_uuid', $runUuid)->where('status', 'selected')->get()->keyBy('candidate_fingerprint');
+        $candidatesByFingerprint = collect($preview['comparison'])->keyBy('fingerprint');
+        $validDecisions = $decisions->filter(fn ($decision, $fingerprint) => $this->decisionMatchesCandidate(
+            $decision, $candidatesByFingerprint->get($fingerprint)
+        ));
         $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])->pluck('fingerprint');
-        $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($decisions, $automatic): bool {
+        $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($validDecisions, $automatic): bool {
             if ($candidate['blocking_reason'] === null) {
                 return false;
             }
             if ($automatic->contains($candidate['fingerprint'])) {
                 return false;
             }
-            $decision = $decisions->get($candidate['fingerprint']);
+            $decision = $validDecisions->get($candidate['fingerprint']);
             return ! $decision || in_array($decision->action, ['physical_count_required', 'retain_blocked'], true);
         })->values();
         $approvalCore = [
@@ -362,6 +376,7 @@ final class ConnectionWizardService
             'candidate_before_hash' => $row->candidate_before_hash,
             'reviewed_by_user_id' => $row->reviewed_by_user_id ?? $row->actor_user_id,
             'reviewed_at' => $row->reviewed_at ?? $row->updated_at,
+            'valid_for_current_candidate' => $validDecisions->has($row->candidate_fingerprint),
         ])->values()->all();
         // `decisions` in the approval core intentionally has a compact hash
         // shape. The API response must replace it with the canonical decision
@@ -1783,6 +1798,24 @@ final class ConnectionWizardService
             'account_role' => ['select_account_role', 'retain_account_role_unresolved'],
             default => ['retain_blocked'],
         };
+    }
+
+    private function decisionMatchesCandidate(object $decision, ?array $candidate): bool
+    {
+        if (! $candidate || ! in_array((string) $decision->action, $this->allowedActionsForCandidate($candidate), true)) {
+            return false;
+        }
+        $action = (string) $decision->action;
+        $details = json_decode($decision->safe_details ?: '{}', true) ?: [];
+        $stockIds = array_values(array_map('strval', $candidate['solastock_record_ids'] ?? []));
+        if (in_array($action, ['select_unit', 'select_category'], true)) {
+            return isset($details['selected_record_id'])
+                && in_array((string) $details['selected_record_id'], $stockIds, true);
+        }
+        if (in_array($action, ['propose_unit_creation', 'propose_category_creation'], true)) {
+            return ! empty($candidate['solabooks']['name']) && empty($stockIds);
+        }
+        return true;
     }
 
     private function activeDraftSummary(int $organizationId): ?array
