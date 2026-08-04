@@ -153,6 +153,28 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
+    public function physical_count_is_versioned_draft_metadata_and_never_mutates_stock(): void
+    {
+        [, $item] = $this->seedConnectionFixture(false);
+        $wizard = app(ConnectionWizardService::class);
+        $before = $this->mutationCounters();
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $candidate = collect($run['comparison'])->first(fn (array $row) => $row['entity_type'] === 'item'
+            && $row['classification'] === 'exact_candidate_requires_owner_review');
+
+        $saved = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'approve_exact_binding', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+            ['reason' => $candidate['blocking_reason'], 'physical_quantity' => '17.2500',
+                'physical_count_reference' => 'wizard_draft'], 7001, $run['lock_version'],
+            $candidate['candidate_before_hash'], true, false);
+
+        $this->assertSame('17.2500', $saved['canonical_decision']['safe_details']['physical_quantity']);
+        $this->assertSame(0, DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
+        $this->assertSame($before, $this->mutationCounters());
+    }
+
+    #[Test]
     public function wizard_ui_contract_has_english_arabic_rtl_responsive_and_no_legacy_fallback(): void
     {
         $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
@@ -200,25 +222,22 @@ final class ConnectionWizardTest extends TestCase
         foreach (['حل الاستثناءات', 'مرشح ربط SKU', 'بصمة التحقق من مصدر Finance', 'مستندات وقت القطع'] as $forbiddenArabic) {
             $this->assertStringNotContainsString($forbiddenArabic, $translations);
         }
-        $this->assertStringContainsString('assistant-progress', $assistant);
-        $this->assertStringContainsString('assistant-layout', $assistant);
-        $this->assertStringContainsString('assistant-side', $assistant);
-        $this->assertStringContainsString('type="search"', $assistant);
-        $this->assertStringContainsString('assistant-actionbar', $assistant);
-        $this->assertStringContainsString('<details className="assistant-details">', $assistant);
-        $this->assertStringContainsString('assistant-checks--completed', $assistant);
-        $this->assertStringContainsString('automaticChecks === 6', $assistant);
-        $this->assertStringContainsString('integration.assistant.notReady', $assistant);
-        $this->assertStringContainsString('integration.assistant.ownerDecisions', $assistant);
-        $this->assertStringContainsString('integration.assistant.accountantDecisions', $assistant);
-        $this->assertStringContainsString("group === 'units' ? (groups.warehouses || [])", $assistant);
-        $this->assertStringContainsString('assistant-reconciliation', $assistant);
-        $this->assertStringContainsString('<bdi dir="ltr">', $assistant);
-        $this->assertStringContainsString('These are different items', $translations);
-        $this->assertStringContainsString('هذان صنفان مختلفان', $translations);
-        $this->assertStringContainsString('عيّن محاسباً لمراجعة :count قرارات محاسبية', $translations);
-        $this->assertStringContainsString('max-width:1440px', $styles);
-        $this->assertStringContainsString('grid-template-columns:minmax(0,1fr) minmax(250px,300px)', $styles);
+        foreach (['focus-header', 'focus-stage', 'focus-question', 'focus-choices', 'focus-footer',
+            'integration.focus.steps.business', 'integration.focus.steps.count',
+            'integration.focus.steps.accountant', 'integration.focus.steps.startDate'] as $needle) {
+            $this->assertStringContainsString($needle, $assistant);
+        }
+        $this->assertStringContainsString('const [task, setTask]', $assistant);
+        $this->assertStringContainsString('physical_quantity', $assistant);
+        $this->assertStringContainsString('undoDecision', $assistant);
+        $this->assertStringContainsString('connectionActivated && <Tabs', $page);
+        $this->assertStringContainsString("(!connectionActivated || tab === 'wizard')", $page);
+        $this->assertStringContainsString('<bdi>', $assistant);
+        $this->assertStringContainsString('No, they are different items', $translations);
+        $this->assertStringContainsString('لا، هما صنفان مختلفان', $translations);
+        $this->assertStringContainsString('تنتظر محاسباً مخولاً', $translations);
+        $this->assertStringContainsString('max-width:1120px', $styles);
+        $this->assertStringContainsString('grid-template-columns:1fr 1fr', $styles);
         $this->assertStringNotContainsString('source_account_id', $assistant);
         $this->assertStringNotContainsString('signing', strtolower($assistant));
     }
@@ -335,16 +354,16 @@ final class ConnectionWizardTest extends TestCase
         $assistant = file_get_contents(resource_path('js/solastock/components/GuidedConnectionAssistant.jsx'));
         $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
 
-        foreach (['CompactIntegrationStatus', 'firstIncomplete', 'wizardResumeStep', 'connection-status-list'] as $needle) {
+        foreach (['CompactIntegrationStatus', 'wizardResumeStep', 'connection-status-list', 'connectionActivated'] as $needle) {
             $this->assertStringContainsString($needle, $page.$assistant.$translations);
         }
-        foreach (['Result preview', 'معاينة نتيجة الربط', 'Saved automatically', 'تم الحفظ تلقائياً',
+        foreach (['Result preview', 'معاينة نتيجة الربط', 'Saved automatically', 'تم الحفظ',
             'Item in SolaBooks', 'الصنف في SolaBooks', 'Proposed match in SolaStock',
             'المطابقة المقترحة في SolaStock', 'The item name and SKU match in both systems.',
             'الاسم ورمز الصنف متطابقان في النظامين.'] as $copy) {
             $this->assertStringContainsString($copy, $translations);
         }
-        $this->assertStringContainsString('completedChecks', $assistant);
+        $this->assertStringContainsString('focus-check-list', $assistant);
         $this->assertStringContainsString('bulkReviewOpen', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
         $this->assertStringContainsString('createSerializedMutationQueue', $page);
@@ -354,9 +373,8 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('return array_merge($approvalCore', file_get_contents(app_path('Services/Integration/ConnectionWizardService.php')));
         $this->assertStringContainsString("saveState === 'conflict'", $assistant);
         $this->assertStringContainsString('aria-modal="true"', $assistant);
-        $this->assertStringContainsString('approvalAvailable &&', $assistant);
-        $this->assertStringNotContainsString('btn btn--primary', substr($assistant,
-            strpos($assistant, 'const actions ='), strpos($assistant, 'return <div') - strpos($assistant, 'const actions =')));
+        $this->assertStringNotContainsString('approvalAvailable &&', $assistant);
+        $this->assertStringNotContainsString('activateIntegration', $assistant);
     }
 
     #[Test]
@@ -494,12 +512,34 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame(['XTS', 'XXX'], $profile['currency_summary']['reserved_codes']);
         $this->assertSame(['account-missing'], $profile['exception_groups']['accounting']);
         $this->assertCount(3, $profile['automatic_bindings']);
+        $this->assertSame('new_both', $profile['customer_scenario']);
         $this->assertFalse($profile['operational_mutation_allowed']);
 
         $changed = $rows;
         $changed[0]['solabooks_record_ids'] = ['11'];
         $changedProfile = $method->invoke(app(ConnectionWizardService::class), $changed, 'JOD', 0);
         $this->assertNotSame($profile['source_invalidation_hash'], $changedProfile['source_invalidation_hash']);
+    }
+
+    #[Test]
+    public function guided_setup_detects_each_customer_history_scenario_without_mutation(): void
+    {
+        $method = new \ReflectionMethod(ConnectionWizardService::class, 'guidedSetup');
+        $base = $this->guidedRow('item', 'owner_review_required', 'scenario', [], []);
+
+        $finance = $base;
+        $finance['solabooks_record_ids'] = ['10'];
+        $finance['solabooks'] = ['id' => '10', 'quantity' => '2.0000', 'inventory_value' => '5.00'];
+        $this->assertSame('finance_first', $method->invoke(app(ConnectionWizardService::class), [$finance], 'JOD', 0)['customer_scenario']);
+
+        $stock = $base;
+        $stock['solastock_record_ids'] = ['20'];
+        $stock['solastock'] = ['id' => '20', 'quantity' => '2.0000', 'inventory_value' => '5.00'];
+        $this->assertSame('stock_first', $method->invoke(app(ConnectionWizardService::class), [$stock], 'JOD', 0)['customer_scenario']);
+
+        $both = array_replace($finance, ['solastock_record_ids' => ['20'], 'solastock' => $stock['solastock']]);
+        $this->assertSame('previously_separate', $method->invoke(app(ConnectionWizardService::class), [$both], 'JOD', 0)['customer_scenario']);
+        $this->assertSame('new_both', $method->invoke(app(ConnectionWizardService::class), [$base], 'JOD', 0)['customer_scenario']);
     }
 
     #[Test]
