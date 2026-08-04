@@ -1401,8 +1401,22 @@ final class ConnectionWizardService
                 'status' => 'deterministic_draft_binding',
             ])->values();
 
+        $financeOperational = $rows->contains(fn (array $row): bool =>
+            ! empty($row['solabooks_record_ids'])
+            && (Decimal::cmp((string) ($row['solabooks']['quantity'] ?? '0'), '0') !== 0
+                || Decimal::cmp((string) ($row['solabooks']['inventory_value'] ?? '0'), '0') !== 0)
+        );
+        $stockOperational = $rows->contains(fn (array $row): bool =>
+            ! empty($row['solastock_record_ids'])
+            && (Decimal::cmp((string) ($row['solastock']['quantity'] ?? '0'), '0') !== 0
+                || Decimal::cmp((string) ($row['solastock']['inventory_value'] ?? '0'), '0') !== 0)
+        );
+        $customerScenario = $financeOperational && $stockOperational ? 'previously_separate'
+            : ($financeOperational ? 'finance_first' : ($stockOperational ? 'stock_first' : 'new_both'));
+
         return [
             'version' => 'connection-assistant.v1',
+            'customer_scenario' => $customerScenario,
             'automatic_bindings' => $automatic->all(),
             'automatic_bindings_hash' => $this->hash($automatic->all()),
             'checks' => [
@@ -1937,8 +1951,18 @@ final class ConnectionWizardService
 
     private function safeDecisionDetails(array $details): array
     {
+        if (array_key_exists('physical_quantity', $details)) {
+            $quantity = trim((string) $details['physical_quantity']);
+            if (! preg_match('/^\d{1,12}(?:\.\d{1,6})?$/', $quantity)) {
+                throw ValidationException::withMessages([
+                    'safe_details.physical_quantity' => ['wizard_physical_quantity_invalid'],
+                ]);
+            }
+            $details['physical_quantity'] = $quantity;
+        }
         return collect($details)->only([
-            'reason', 'selected_record_id', 'physical_count_reference', 'accounting_approval_required', 'note',
+            'reason', 'selected_record_id', 'physical_count_reference', 'physical_quantity',
+            'accounting_approval_required', 'note',
         ])->map(fn ($value) => is_string($value) ? mb_substr($value, 0, 500) : $value)->all();
     }
 

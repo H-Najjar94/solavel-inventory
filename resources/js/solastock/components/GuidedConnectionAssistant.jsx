@@ -1,294 +1,251 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../services/api.js';
 
+const unique = (values) => [...new Set(values || [])];
+
 export default function GuidedConnectionAssistant({
-    view, runUuid, run, gate, accountingGate, status, saving, tr, decisions, confirmedDecisions, pendingDecisions, rows,
-    totals, accounting, assistantStep, setAssistantStep, exceptionSearch,
-    setExceptionSearch, allowedActions, canEdit, editableState, decide,
-    bulkSelection, toggleBulk, bulk, exportComparison, start, runAction,
-    confirmation, setConfirmation, organizationName, saveState, retrySave, reloadLatest,
+    view, runUuid, run, gate, accountingGate, status, saving, tr, decisions,
+    confirmedDecisions, pendingDecisions, rows, totals, accounting,
+    assistantStep, setAssistantStep, allowedActions, canEdit, editableState,
+    decide, undoDecision, bulkSelection, toggleBulk, bulk, exportComparison,
+    start, runAction, cutoffAt, setCutoffAt, saveState, retrySave, reloadLatest,
+    organizationName,
 }) {
-    const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
-    const guided = view.guided_setup;
+    const guided = view.guided_setup || {};
     const checks = guided.checks || {};
     const groups = guided.exception_groups || {};
-    const byFingerprint = new Map(rows.map((row) => [row.fingerprint, row]));
-    const groupOrder = ['items', 'units', 'parties', 'accounting', 'currencies', 'cutoff_documents', 'inventory_quantities'];
-    const groupFingerprints = (group) => [...new Set([
-        ...(groups[group] || []),
-        ...(group === 'units' ? (groups.warehouses || []) : []),
-    ])];
-    const query = exceptionSearch.trim().toLowerCase();
-    const dynamicText = (prefix, value, fallback) => tr([prefix, value].join(''), {}, fallback ?? value);
-    const groupRows = (group) => groupFingerprints(group)
-        .map((fingerprint) => byFingerprint.get(fingerprint))
-        .filter(Boolean)
-        .filter((row) => !query || [row.solastock?.name, row.solabooks?.name, row.solastock?.sku,
-            row.solabooks?.sku, row.safe_details?.role].filter(Boolean).join(' ').toLowerCase().includes(query));
-    const exactRows = rows.filter((row) => row.classification === 'exact_candidate_requires_owner_review');
-    const step = Math.min(3, Math.max(1, assistantStep));
-    const exceptionFingerprints = [...new Set(guided.visible_exception_fingerprints || [])];
-    const completedDecisions = exceptionFingerprints.filter((fingerprint) => confirmedDecisions.has(fingerprint)).length;
-    const remaining = Math.max(0, exceptionFingerprints.length - completedDecisions);
-    const completedGroups = groupOrder.filter((group) => groupFingerprints(group).every((fingerprint) => confirmedDecisions.has(fingerprint))).length;
-    const automaticChecks = [checks.organization_verified, checks.finance_connected, checks.base_currency_inherited,
-        checks.account_exceptions === 0, checks.tax_exceptions === 0, checks.item_exceptions === 0].filter(Boolean).length;
-    const reviewGatesComplete = remaining === 0
-        && ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state)
-        && Boolean(view.cutoff_at || view.snapshot_frozen_at);
-    const approvalAvailable = reviewGatesComplete;
-    const formatNumber = (value, maximumFractionDigits = 2) => {
-        if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
-        return Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits });
-    };
-    const currencyCode = accounting.base_currency || guided.currency_summary?.base_currency || '';
-    const currencyLabel = currencyCode === 'JOD' ? tr('integration.assistant.jod') : currencyCode;
-    const formatMoney = (value) => {
-        if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
-        return `${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyLabel}`.trim();
-    };
-    const stepMeta = [
-        { number: 1, label: tr('integration.assistant.step1'), count: tr('integration.assistant.checkMetric', { done: automaticChecks, total: 6 }), complete: automaticChecks === 6, description: tr('integration.assistant.automaticDescription') },
-        { number: 2, label: tr('integration.assistant.step2'), count: tr('integration.assistant.decisionMetric', { groups: groupOrder.length, records: remaining }), complete: remaining === 0, description: tr('integration.assistant.exceptionsDescription') },
-        { number: 3, label: tr(reviewGatesComplete ? 'integration.assistant.step3' : 'integration.assistant.previewStep'), count: tr(reviewGatesComplete ? 'integration.assistant.readyForReview' : 'integration.assistant.notReady'), complete: view.state === 'activation_ready', blocked: !reviewGatesComplete, description: tr(reviewGatesComplete ? 'integration.assistant.reviewDescription' : 'integration.assistant.previewDescription') },
+    const byFingerprint = useMemo(() => new Map(rows.map((row) => [row.fingerprint, row])), [rows]);
+    const [task, setTask] = useState(Math.min(6, Math.max(1, assistantStep || 1)));
+    const [ownerCursor, setOwnerCursor] = useState(0);
+    const [accountCursor, setAccountCursor] = useState(0);
+    const [countCursor, setCountCursor] = useState(0);
+    const [physicalValues, setPhysicalValues] = useState({});
+    const [lastSaved, setLastSaved] = useState(null);
+    const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
+    const headingRef = useRef(null);
+    const resumedRunRef = useRef(null);
+
+    const rowsFor = (...names) => unique(names.flatMap((name) => groups[name] || []))
+        .map((fingerprint) => byFingerprint.get(fingerprint)).filter(Boolean);
+    const ownerRows = rowsFor('items', 'units', 'warehouses', 'parties', 'currencies')
+        .filter((row) => row.decision_class !== 'accountant_decision');
+    const ownerPending = ownerRows.filter((row) => !confirmedDecisions.has(row.fingerprint));
+    const accountingRows = rowsFor('accounting').filter((row) => row.decision_class === 'accountant_decision');
+    const accountingPending = accountingRows.filter((row) => !confirmedDecisions.has(row.fingerprint));
+    const physicalRows = rowsFor('inventory_quantities').filter((row) => {
+        const action = confirmedDecisions.get(row.fingerprint)?.action;
+        return !['classify_service_non_inventory', 'exclude_initial_connection'].includes(action);
+    });
+    const physicalPending = physicalRows.filter((row) => {
+        const value = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity;
+        return value === undefined || value === null || value === '';
+    });
+    const cutoffRows = rowsFor('cutoff_documents');
+    const exactRows = ownerRows.filter((row) => row.classification === 'exact_candidate_requires_owner_review'
+        && !confirmedDecisions.has(row.fingerprint));
+    const currentOwner = ownerPending[Math.min(ownerCursor, Math.max(0, ownerPending.length - 1))];
+    const currentAccount = accountingPending[Math.min(accountCursor, Math.max(0, accountingPending.length - 1))];
+    const currentCount = physicalPending[Math.min(countCursor, Math.max(0, physicalPending.length - 1))];
+    const scenario = guided.customer_scenario || 'previously_separate';
+    const scenarioText = tr(`integration.focus.scenario.${scenario}`);
+    const totalSteps = 6;
+
+    useEffect(() => {
+        if (!runUuid || resumedRunRef.current === runUuid) return;
+        resumedRunRef.current = runUuid;
+        if (confirmedDecisions.size === 0) return;
+        if (ownerPending.length > 0) setTask(2);
+        else if (physicalPending.length > 0) setTask(3);
+        else if (accountingPending.length > 0) setTask(4);
+        else if (!view.cutoff_at) setTask(5);
+        else setTask(6);
+    }, [runUuid, confirmedDecisions.size]);
+
+    useEffect(() => {
+        setAssistantStep(task);
+        requestAnimationFrame(() => headingRef.current?.focus());
+    }, [task]);
+
+    const go = (next) => setTask(Math.min(totalSteps, Math.max(1, next)));
+    const formatNumber = (value, digits = 2) => Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
+    const baseCurrency = accounting.base_currency || guided.currency_summary?.base_currency || '';
+    const formatMoney = (value) => `${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${baseCurrency === 'JOD' ? tr('integration.assistant.jod') : baseCurrency}`;
+    const taskLabels = [
+        tr('integration.focus.steps.prepare'), tr('integration.focus.steps.business'),
+        tr('integration.focus.steps.count'), tr('integration.focus.steps.accountant'),
+        tr('integration.focus.steps.startDate'), tr('integration.focus.steps.final'),
     ];
-    const currentTask = remaining > 0 ? stepMeta[1] : stepMeta[2];
-    const checkRows = [
-        [checks.organization_verified, tr('integration.assistant.organizationVerified')],
-        [checks.finance_connected, tr('integration.assistant.financeConnected')],
-        [checks.base_currency_inherited, tr('integration.assistant.baseCurrencyInherited', { currency: guided.currency_summary?.base_currency || '—' })],
-        [checks.account_exceptions === 0, tr('integration.assistant.accountsSummary', { resolved: checks.accounts_resolved || 0, exceptions: checks.account_exceptions || 0 })],
-        [checks.tax_exceptions === 0, tr('integration.assistant.taxesSummary', { resolved: checks.taxes_resolved || 0, exceptions: checks.tax_exceptions || 0 })],
-        [checks.item_exceptions === 0, tr('integration.assistant.itemsSummary', { exact: checks.items_exact || 0, exceptions: checks.item_exceptions || 0 })],
-    ];
-    const incompleteChecks = checkRows.filter(([passed]) => !passed);
-    const completedChecks = checkRows.filter(([passed]) => passed);
-    const completedCheckRegression = Boolean(guided.completed_check_error);
-    const firstIncomplete = groupOrder.find((group) => groupFingerprints(group).some((fingerprint) => !confirmedDecisions.has(fingerprint)));
-    const selectedEffect = (row) => {
-        const action = decisions.get(row.fingerprint)?.action;
-        return action ? dynamicText('integration.assistant.effect.', action) : tr('integration.assistant.effect.pending');
-    };
-    const placeholder = (row) => row.classification === 'exact_candidate_requires_owner_review'
-        ? tr('integration.assistant.chooseMatch')
-        : row.entity_type === 'item'
-            ? tr('integration.assistant.chooseItemTreatment')
-            : tr('integration.assistant.chooseRequiredAction');
-    const saveDraft = async () => {
-        if (!runUuid) return start();
-        await run.refetch();
+
+    const saveIndicator = <span className={`focus-save is-${saveState || 'idle'}`} role="status" aria-live="polite">
+        {saving || saveState === 'saving' ? tr('integration.assistant.saving')
+            : saveState === 'saved' ? tr('integration.focus.saved')
+                : saveState === 'failed' ? tr('integration.assistant.saveFailed')
+                    : saveState === 'conflict' ? tr('integration.assistant.saveConflict') : ''}
+        {saveState === 'failed' && <button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button>}
+        {saveState === 'conflict' && <><button type="button" className="btn btn--link" onClick={reloadLatest}>{tr('integration.assistant.reloadLatest')}</button><button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button></>}
+    </span>;
+
+    const choose = async (row, action, details = {}) => {
+        const saved = await decide(row, action, details);
+        if (!saved) return;
+        const canonical = saved.canonical_decision
+            || (saved.decisions || []).find((decision) => decision.candidate_fingerprint === row.fingerprint)
+            || confirmedDecisions.get(row.fingerprint);
+        setLastSaved({ row, decision: canonical });
+        if (task === 2) setOwnerCursor(0);
+        if (task === 3) setCountCursor(0);
+        if (task === 4) setAccountCursor(0);
     };
 
-    const renderDecisionRow = (row) => {
-        const decision = decisions.get(row.fingerprint);
-        const confirmed = confirmedDecisions.get(row.fingerprint);
-        const pending = pendingDecisions.get(row.fingerprint);
-        const source = row.solabooks || row.solastock;
-        const namesMatch = row.solabooks?.name && row.solastock?.name
-            && row.solabooks.name.trim().toLocaleLowerCase() === row.solastock.name.trim().toLocaleLowerCase();
-        const skusMatch = row.solabooks?.sku && row.solastock?.sku
-            && row.solabooks.sku.trim().toLocaleLowerCase() === row.solastock.sku.trim().toLocaleLowerCase();
-        const hasDifference = Number(row.quantity_difference || 0) !== 0 || Number(row.value_difference || 0) !== 0;
-        const proposed = row.solabooks && row.solastock
-            ? tr('integration.assistant.exactMatchProposal')
-            : dynamicText('integration.assistant.proposal.', row.classification);
-        return <article className="assistant-exception-row" key={row.fingerprint}>
-            <div className="assistant-record">
-                <span className="assistant-row-label">{row.solabooks ? tr('integration.assistant.financeItem') : tr('integration.assistant.stockRecord')}</span>
-                <strong><bdi>{source?.name || dynamicText('integration.wizard.entity.', row.entity_type)}</bdi></strong>
-                <small>{source?.sku ? <><span>{tr('integration.assistant.sku')}: </span><bdi>{source.sku}</bdi></> : tr('integration.assistant.noReference')}</small>
-            </div>
-            <div className="assistant-proposal">
-                <span className="assistant-row-label">{row.solastock ? tr('integration.assistant.proposedStockItem') : tr('integration.assistant.proposedAction')}</span>
-                <strong><bdi>{row.solastock?.name || proposed}</bdi></strong>
-                <small>{namesMatch && skusMatch ? tr('integration.assistant.identicalNameSku') : row.solabooks && row.solastock ? tr('integration.assistant.matchBasisExactSku') : dynamicText('integration.wizard.block.', row.blocking_reason)}</small>
-                {hasDifference && <strong className="assistant-difference">{tr('integration.assistant.meaningfulDifference', { quantity: formatNumber(row.quantity_difference, 4), value: formatMoney(row.value_difference) })}</strong>}
-            </div>
-            <label className="assistant-decision">
-                <span className="assistant-row-label">{tr('integration.wizard.decision')}</span>
-                <select className="input" disabled={!runUuid || !editableState || !canEdit(row)}
-                    value={decision?.action || ''}
-                    onChange={(event) => event.target.value && decide(row, event.target.value)}>
-                    <option value="">{placeholder(row)}</option>
-                    {allowedActions(row).map((action) => <option key={action} value={action}>{dynamicText('integration.wizard.action.', action)}</option>)}
-                </select>
-                <small>{selectedEffect(row)}</small>
-            </label>
-            <span className={`assistant-row-status ${confirmed ? 'is-resolved' : 'is-pending'}`}>
-                {tr(confirmed ? 'integration.assistant.resolved' : pending?.persistence_state === 'saving' ? 'integration.assistant.saving' : 'integration.assistant.pending')}
-            </span>
-            <details className="assistant-row-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary><small><bdi>{dynamicText('integration.wizard.block.', row.blocking_reason)} · {row.fingerprint}</bdi></small></details>
-        </article>;
+    const undo = async () => {
+        if (!lastSaved?.decision?.decision_uuid) return;
+        if (await undoDecision(lastSaved.decision.decision_uuid)) {
+            setLastSaved(null);
+            if (task === 2) setOwnerCursor(0);
+            if (task === 3) setCountCursor(0);
+            if (task === 4) setAccountCursor(0);
+        }
     };
 
-    const actions = <div className="assistant-actionbar">
-        <span className={`assistant-save-state is-${saveState || 'idle'}`} role="status">
-            {saving || saveState === 'saving' ? tr('integration.assistant.saving') : saveState === 'saved' ? tr('integration.assistant.savedAutomatically') : saveState === 'failed' ? tr('integration.assistant.saveFailed') : saveState === 'conflict' ? tr('integration.assistant.saveConflict') : ''}
-            {saveState === 'failed' && <button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button>}
-            {saveState === 'conflict' && <><button type="button" className="btn btn--link" onClick={reloadLatest}>{tr('integration.assistant.reloadLatest')}</button><button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button></>}
-        </span>
-        {step < 3 && <button className="btn" disabled={saving} onClick={() => setAssistantStep(Math.min(3, step + 1))}>{tr('integration.assistant.saveContinue')}</button>}
-        {step === 3 && remaining > 0 && <button className="btn" onClick={() => setAssistantStep(2)}>{tr('integration.assistant.completeDecisions')}</button>}
-        <button className="btn" onClick={() => setAssistantStep(3)}>{tr('integration.assistant.reviewSummary')}</button>
-        <details className="assistant-more"><summary>{tr('integration.assistant.moreActions')}</summary><button className="btn" onClick={exportComparison}>{tr('integration.wizard.export')}</button></details>
-    </div>;
+    const choiceCopy = (row) => {
+        if (row.classification === 'exact_candidate_requires_owner_review') return [
+            ['approve_exact_binding', tr('integration.focus.sameItem'), tr('integration.focus.sameItemEffect')],
+            ['reject_exact_binding', tr('integration.focus.differentItems'), tr('integration.focus.differentItemsEffect')],
+            ['physical_count_required', tr('integration.focus.notSure'), tr('integration.focus.notSureEffect')],
+        ];
+        if (row.entity_type === 'item' && row.classification === 'missing_solastock_record') return [
+            ['create_solastock_record', tr('integration.focus.createStockItem'), tr('integration.focus.createStockItemEffect')],
+            ['classify_service_non_inventory', tr('integration.focus.keepService'), tr('integration.focus.keepServiceEffect')],
+            ['exclude_initial_connection', tr('integration.focus.exclude'), tr('integration.focus.excludeEffect')],
+            [null, tr('integration.focus.reviewLater'), tr('integration.focus.reviewLaterEffect')],
+        ];
+        return allowedActions(row).map((action) => [action, tr(`integration.wizard.action.${action}`), tr(`integration.assistant.effect.${action}`)]);
+    };
 
-    return <div className="wizard assistant" aria-live="polite">
-        <header className="assistant-hero">
-            <div className="assistant-hero-copy">
-                <p className="assistant-kicker">{tr('integration.assistant.kicker')}</p>
-                <h1>{tr('integration.assistant.pageTitle')}</h1>
-                <span className="assistant-step-position">{tr('integration.assistant.stepPosition', { step, total: 3 })}</span>
-                <p>{tr('integration.assistant.pageIntroduction')}</p>
-                <div className="assistant-context">
-                    <strong>{organizationName || tr('integration.assistant.currentOrganization')}</strong>
-                    <span>{tr('integration.assistant.groupProgress', { done: completedGroups, total: groupOrder.length })}</span>
-                </div>
+    const recordCard = (row, role = 'owner') => {
+        const exact = row.classification === 'exact_candidate_requires_owner_review';
+        const currentNumber = role === 'accountant' ? accountingRows.indexOf(row) + 1 : ownerRows.indexOf(row) + 1;
+        const total = role === 'accountant' ? accountingRows.length : ownerRows.length;
+        return <div className="focus-question" key={row.fingerprint}>
+            <div className="focus-question-count">{tr('integration.focus.recordPosition', { current: currentNumber, total })}</div>
+            <h2 ref={headingRef} tabIndex="-1">{exact ? tr('integration.focus.sameQuestion') : row.entity_type === 'item' ? tr('integration.focus.itemQuestion') : tr(`integration.focus.question.${row.entity_type}`)}</h2>
+            <p>{exact ? tr('integration.focus.sameExplanation') : tr('integration.focus.draftOnly')}</p>
+            <div className="focus-record-pair">
+                <div><span>SolaBooks</span><strong><bdi>{row.solabooks?.name || '—'}</bdi></strong><small><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi></small></div>
+                {row.solastock && <div><span>SolaStock</span><strong><bdi>{row.solastock.name}</bdi></strong><small><bdi>{row.solastock.sku || row.solastock.code || '—'}</bdi></small></div>}
             </div>
-            <div className="assistant-next">
-                <span>{tr('integration.assistant.nextAction')}</span>
-                <strong>{currentTask.label}</strong>
+            {exact && <p className="focus-system-note">✓ {tr('integration.assistant.identicalNameSku')}</p>}
+            <div className="focus-choices" role="group" aria-label={tr('integration.focus.availableChoices')}>
+                {choiceCopy(row).map(([action, label, effect]) => <button type="button" key={action || 'later'} className="focus-choice"
+                    disabled={!runUuid || !editableState || !canEdit(row) || saving}
+                    onClick={() => action ? choose(row, action) : setOwnerCursor((value) => value + 1)}>
+                    <strong>{label}</strong><span>{effect}</span>
+                </button>)}
             </div>
-            <div className="assistant-status-line" role="status">
-                <span>{tr('integration.assistant.safePause')}</span>
-                <details><summary>{tr('integration.assistant.statusDetails')}</summary>
-                    <p>{tr('integration.assistant.statusDetailsText', { activation: status?.activation_status || 'safely_paused' })}</p>
-                </details>
-            </div>
+        </div>;
+    };
+
+    const footer = (primaryLabel, onPrimary, { disabled = false, hideBack = false } = {}) => <footer className="focus-footer">
+        <div>{!hideBack && task > 1 && <button type="button" className="btn btn--link" onClick={() => go(task - 1)}>{tr('integration.focus.back')}</button>}{saveIndicator}</div>
+        <div><button type="button" className="btn btn--link" onClick={() => window.location.assign('/inventory/dashboard')}>{tr('integration.focus.saveExit')}</button>
+            <button type="button" className="btn btn--primary" disabled={disabled} onClick={onPrimary}>{primaryLabel}</button></div>
+    </footer>;
+
+    const technical = <details className="focus-details"><summary>{tr('integration.assistant.statusDetails')}</summary>
+        <p>{tr('integration.focus.fullSafety')}</p><p><bdi>{view.run_uuid}</bdi></p>
+        <button type="button" className="btn btn--link" onClick={exportComparison}>{tr('integration.wizard.export')}</button>
+    </details>;
+
+    const taskContent = () => {
+        if (!runUuid) return <section className="focus-card focus-landing">
+            <h1 ref={headingRef} tabIndex="-1">{tr('integration.focus.title')}</h1>
+            <p className="focus-lead">{tr('integration.focus.subtitle')}</p>
+            <p className="focus-scenario">{scenarioText}</p>
+            <details><summary>{tr('integration.focus.whatHappens')}</summary><p>{tr('integration.focus.whatHappensText')}</p></details>
+            {footer(tr('integration.focus.continueSetup'), start, { hideBack: true, disabled: !gate.allowed || saving })}
+        </section>;
+
+        if (task === 1) return <section className="focus-card focus-prepared">
+            <h1 ref={headingRef} tabIndex="-1">{tr('integration.focus.preparedTitle')}</h1>
+            <p>{tr('integration.focus.preparedIntro')}</p>
+            <ul className="focus-check-list">
+                <li>✓ {tr('integration.focus.organizationReady')}</li>
+                <li>✓ {tr('integration.focus.baseCurrency', { currency: guided.currency_summary?.base_currency || '—' })}</li>
+                <li>✓ {tr('integration.focus.taxesReady')}</li>
+                <li>✓ {tr('integration.focus.accountsReady')}</li>
+            </ul>
+            <div className="focus-attention"><strong>{tr('integration.focus.needsReview', { count: 2 })}</strong><p>{tr('integration.focus.needsReviewText')}</p></div>
+            <details><summary>{tr('integration.focus.showDetails')}</summary><p>{tr('integration.focus.automaticDetails', { accounts: checks.accounts_resolved || 0, taxes: checks.taxes_resolved || 0 })}</p></details>
+            {footer(tr('integration.focus.startReview'), () => go(2), { hideBack: true })}
+        </section>;
+
+        if (task === 2) return <section className="focus-card">
+            {currentOwner ? recordCard(currentOwner) : <div className="focus-complete"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessComplete')}</h2><p>{tr('integration.focus.businessCompleteText')}</p></div>}
+            {exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
+            {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
+            {footer(tr('integration.focus.continue'), () => go(3), { disabled: ownerPending.length > 0 })}
+        </section>;
+
+        if (task === 3) return <section className="focus-card">
+            {currentCount ? <div className="focus-question">
+                <div className="focus-question-count">{tr('integration.focus.recordPosition', { current: physicalRows.indexOf(currentCount) + 1, total: physicalRows.length })}</div>
+                <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.physicalTitle')}</h2>
+                <p>{tr('integration.focus.physicalExplanation')}</p>
+                <strong className="focus-item-name"><bdi>{currentCount.solabooks?.name || currentCount.solastock?.name}</bdi></strong>
+                <div className="focus-quantity-compare"><div><span>SolaBooks</span><bdi>{formatNumber(currentCount.solabooks?.quantity, 4)}</bdi></div><div><span>SolaStock</span><bdi>{formatNumber(currentCount.solastock?.quantity, 4)}</bdi></div></div>
+                <label className="field"><span className="field-label">{tr('integration.focus.actualQuantity')}</span><input className="input" inputMode="decimal" value={physicalValues[currentCount.fingerprint] || ''} onChange={(event) => setPhysicalValues((values) => ({ ...values, [currentCount.fingerprint]: event.target.value }))} /></label>
+                <p className="focus-draft-note">{tr('integration.focus.physicalDraftNote')}</p>
+            </div> : <div className="focus-complete"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.countComplete')}</h2><p>{tr('integration.focus.countCompleteText')}</p></div>}
+            {footer(currentCount ? tr('integration.focus.saveNext') : tr('integration.focus.continue'), currentCount
+                ? () => choose(currentCount, confirmedDecisions.get(currentCount.fingerprint)?.action || 'physical_count_required', { physical_quantity: physicalValues[currentCount.fingerprint], physical_count_reference: 'wizard_draft' })
+                : () => go(4), { disabled: Boolean(currentCount && !/^\d+(\.\d+)?$/.test(physicalValues[currentCount.fingerprint] || '')) })}
+        </section>;
+
+        if (task === 4) return <section className="focus-card">
+            {!accountingGate.allowed ? <div className="focus-accountant-card"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2><p>{tr('integration.focus.accountantRequiredText', { count: accountingPending.length })}</p><a className="btn" href="/settings/users">{tr('integration.focus.assignAccountant')}</a></div>
+                : currentAccount ? recordCard(currentAccount, 'accountant')
+                    : <div className="focus-complete"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingComplete')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div>}
+            {footer(tr('integration.focus.continue'), () => go(5), { disabled: accountingGate.allowed && accountingPending.length > 0 })}
+        </section>;
+
+        if (task === 5) return <section className="focus-card">
+            <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.startDateTitle')}</h2>
+            <p>{tr('integration.focus.startDateExplanation')}</p>
+            <div className="focus-attention"><strong>{tr('integration.focus.openDocuments', { count: cutoffRows.length })}</strong><p>{tr('integration.focus.openDocumentsText')}</p></div>
+            <label className="field"><span className="field-label">{tr('integration.focus.startDateLabel')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label>
+            {run.data?.state !== 'cutoff_review' && <p className="focus-draft-note">{tr('integration.focus.startDatePrerequisites')}</p>}
+            {footer(run.data?.state === 'cutoff_review' ? tr('integration.focus.saveStartDate') : tr('integration.focus.continue'), async () => {
+                if (run.data?.state === 'decisions_complete') return runAction(() => api.requestIntegrationWizardSnapshot(runUuid, { expected_lock_version: run.data.lock_version }), 'integration.wizard.snapshotRequested');
+                if (run.data?.state === 'snapshot_required') return runAction(() => api.freezeIntegrationWizardSnapshot(runUuid, { expected_lock_version: run.data.lock_version }), 'integration.wizard.snapshotFrozen');
+                if (run.data?.state === 'cutoff_review' && cutoffAt) return runAction(() => api.reviewIntegrationWizardCutoff(runUuid, { cutoff_at: cutoffAt, physical_counts: [], unexplained_variance: '0.00', expected_lock_version: run.data.lock_version }), 'integration.wizard.cutoffReviewed');
+                return go(6);
+            }, { disabled: run.data?.state === 'cutoff_review' && !cutoffAt })}
+        </section>;
+
+        const blockers = [
+            physicalPending.length && tr('integration.focus.blocker.count'),
+            accountingPending.length && tr('integration.focus.blocker.accounting', { count: accountingPending.length }),
+            cutoffRows.length && !view.cutoff_at && tr('integration.focus.blocker.documents'),
+            Number(totals.total_valuation_difference || 0) !== 0 && tr('integration.focus.blocker.value'),
+            (!view.owner_approved_at || !view.accountant_approved_at) && tr('integration.focus.blocker.approvals'),
+        ].filter(Boolean);
+        const ready = blockers.length === 0 && Number(totals.total_quantity_difference || 0) === 0;
+        return <section className="focus-card focus-result">
+            <div className={`focus-outcome ${ready ? 'is-ready' : 'is-warning'}`}><h2 ref={headingRef} tabIndex="-1">{tr(ready ? 'integration.focus.ready' : 'integration.focus.notReady')}</h2><p>{tr(ready ? 'integration.focus.readyText' : 'integration.focus.notReadyText')}</p></div>
+            {!ready && <ol className="focus-blockers">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ol>}
+            <div className="focus-result-summary"><div><span>{tr('integration.focus.quantityDifference')}</span><strong><bdi>{formatNumber(totals.total_quantity_difference, 4)}</bdi></strong></div><div><span>{tr('integration.focus.valueDifference')}</span><strong><bdi>{formatMoney(totals.total_valuation_difference)}</bdi></strong></div><div><span>{tr('integration.focus.startDateLabel')}</span><strong><bdi>{view.cutoff_at || '—'}</bdi></strong></div></div>
+            {footer(tr('integration.focus.backToTasks'), () => go(blockers[0] === tr('integration.focus.blocker.count') ? 3 : 2), { disabled: false })}
+        </section>;
+    };
+
+    return <div className="wizard focus-wizard" aria-live="polite">
+        <header className="focus-header">
+            <div><span>{tr('integration.focus.stepOf', { current: task, total: totalSteps })}</span><strong>{taskLabels[task - 1]}</strong></div>
+            <span>{tr('integration.focus.stepsRemaining', { count: totalSteps - task })}</span>
+            <details className="focus-all-steps"><summary>{tr('integration.focus.allSteps')}</summary><ol>{taskLabels.map((label, index) => <li key={label}><button type="button" onClick={() => go(index + 1)} disabled={index + 1 > task}>{label}</button></li>)}</ol></details>
         </header>
-
-        <nav className="assistant-progress" aria-label={tr('integration.assistant.progress')}>
-            {stepMeta.map((item) => <button key={item.number} type="button"
-                className={`${step === item.number ? 'is-current' : ''} ${item.complete ? 'is-complete' : ''} ${item.blocked ? 'is-blocked' : ''}`}
-                aria-current={step === item.number ? 'step' : undefined}
-                aria-label={`${item.label}. ${item.complete ? tr('integration.assistant.completed') : item.blocked ? tr('integration.assistant.blocked') : step === item.number ? tr('integration.assistant.current') : tr('integration.assistant.pending')}`}
-                disabled={item.number > step && item.number !== 3}
-                onClick={() => setAssistantStep(item.number)}>
-                <span className="assistant-step-number">{item.complete ? '✓' : item.number}</span>
-                <span className="assistant-step-copy"><strong>{item.label}</strong>{step === item.number && <small>{item.description}</small>}</span>
-                <span className="assistant-step-count">{item.count}</span>
-            </button>)}
-        </nav>
-
-        <div className="assistant-layout">
-            <main className="assistant-main">
-                {step === 1 && <section className="assistant-card">
-                    <header><h2>{tr('integration.assistant.step1')}</h2><p>{tr('integration.assistant.automaticDescription')}</p></header>
-                    <div className="assistant-checks assistant-checks--incomplete" aria-label={tr('integration.assistant.incompleteChecks')}>
-                        {incompleteChecks.map(([, label]) => <div className="assistant-check" key={label} role="status">
-                            <span className="check-attention" aria-hidden="true">!</span>
-                            <span>{label}<span className="sr-only"> · {tr('integration.assistant.needsAttention')}</span></span>
-                        </div>)}
-                    </div>
-                    <details className="assistant-checks assistant-checks--completed" open={completedCheckRegression}>
-                        <summary>{tr('integration.assistant.completedChecksCompact', { count: completedChecks.length })}</summary>
-                        {completedChecks.map(([, label]) => <div className="assistant-check" key={label} role="status">
-                            <span className="check-ok" aria-hidden="true">✓</span><span>{label}<span className="sr-only"> · {tr('integration.assistant.completed')}</span></span>
-                        </div>)}
-                    </details>
-                    {accountingGate.allowed && <details className="assistant-details">
-                        <summary>{tr('integration.assistant.accountingProfile')}</summary>
-                        <div className="assistant-profile">{rows.filter((row) => row.entity_type === 'account_role' && row.classification === 'candidate_requires_accountant_approval').map((row) =>
-                            <div key={row.fingerprint}><strong>{dynamicText('integration.mapping.', row.safe_details?.role)}</strong><span>{row.solabooks?.code} · {row.solabooks?.name}</span></div>)}</div>
-                    </details>}
-                    {actions}
-                </section>}
-
-                {step === 2 && <section className="assistant-card">
-                    <header><h2>{tr('integration.assistant.exceptionsHeading')}</h2><p>{tr('integration.assistant.exceptionsDescription')}</p></header>
-                    <label className="assistant-search"><span className="sr-only">{tr('integration.assistant.search')}</span>
-                        <input className="input" type="search" value={exceptionSearch} onChange={(event) => setExceptionSearch(event.target.value)} placeholder={tr('integration.assistant.search')} />
-                    </label>
-                    <h3 className="assistant-responsibility">{tr('integration.assistant.ownerDecisions')}</h3>
-                    <div className="assistant-groups">{groupOrder.filter((group) => group !== 'accounting').map((group) => {
-                        const fingerprints = groupFingerprints(group);
-                        const groupResolved = fingerprints.filter((fingerprint) => confirmedDecisions.has(fingerprint)).length;
-                        const groupRemaining = fingerprints.length - groupResolved;
-                        const physicalCount = group === 'inventory_quantities';
-                        return <details className={`assistant-group ${groupRemaining === 0 ? 'is-complete' : ''}`} key={group} open={group === firstIncomplete}>
-                            <summary>
-                                <span className={groupRemaining ? 'check-attention' : 'check-ok'}>{groupRemaining ? '!' : '✓'}</span>
-                                <span className="assistant-group-title"><strong>{dynamicText('integration.assistant.group.', group)}</strong>
-                                    <small>{groupRemaining ? dynamicText('integration.assistant.groupNext.', group) : tr('integration.assistant.noExceptions')}</small></span>
-                                <span className="assistant-group-metrics"><small>{tr('integration.assistant.resolvedCount', { count: groupResolved })}</small><strong>{tr('integration.assistant.remainingCount', { count: groupRemaining })}</strong></span>
-                            </summary>
-                            {groupRemaining === 0 ? <p>{tr('integration.assistant.emptySection')}</p> : physicalCount
-                                ? <div className="assistant-physical-warning">{tr('integration.assistant.physicalCountWarning')}</div>
-                                : <>{group === 'accounting' && <a className="btn btn--sm" href="/finance/accounts" target="_blank" rel="noreferrer">{tr('integration.assistant.openFinanceSettings')}</a>}
-                                    <div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></>}
-                        </details>;
-                    })}</div>
-                    <h3 className="assistant-responsibility">{tr('integration.assistant.accountantDecisions')}</h3>
-                    {!accountingGate.allowed && <div className="assistant-accountant-callout">{tr('integration.assistant.assignAccountant', { count: (groups.accounting || []).length })}</div>}
-                    {groupOrder.filter((group) => group === 'accounting').map((group) => {
-                        const fingerprints = groupFingerprints(group); const groupResolved = fingerprints.filter((fingerprint) => confirmedDecisions.has(fingerprint)).length; const groupRemaining = fingerprints.length - groupResolved;
-                        return <details className="assistant-group" key={group}><summary><span className={groupRemaining ? 'check-attention' : 'check-ok'}>{groupRemaining ? '!' : '✓'}</span><span className="assistant-group-title"><strong>{dynamicText('integration.assistant.group.', group)}</strong><small>{dynamicText('integration.assistant.groupNext.', group)}</small></span><span className="assistant-group-metrics"><small>{tr('integration.assistant.resolvedCount', { count: groupResolved })}</small><strong>{tr('integration.assistant.remainingCount', { count: groupRemaining })}</strong></span></summary><div className="assistant-exceptions">{groupRows(group).map(renderDecisionRow)}</div></details>;
-                    })}
-                    {exactRows.length > 0 && <div className="assistant-bulk"><p>{tr('integration.assistant.exactBulk', { count: exactRows.length })}</p>
-                        <button className="btn" disabled={!runUuid || saving || !editableState} onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button></div>}
-                    {bulkReviewOpen && <div className="assistant-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-review-title">
-                        <div className="assistant-bulk-dialog__content"><h3 id="bulk-review-title">{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</h3>
-                            <p>{tr('integration.assistant.bulkDraftOnly')}</p>
-                            <div className="assistant-bulk-pairs">{exactRows.map((row) => <label key={row.fingerprint}>
-                                <input type="checkbox" checked={bulkSelection.includes(row.fingerprint)} onChange={() => toggleBulk(row.fingerprint)} />
-                                <span><bdi>{row.solabooks?.name}</bdi> → <bdi>{row.solastock?.name}</bdi><small>{tr('integration.assistant.matchBasisExactSku')} · <bdi>{row.solabooks?.sku}</bdi></small>
-                                    {(Number(row.quantity_difference || 0) !== 0 || Number(row.value_difference || 0) !== 0) && <small className="assistant-difference">{tr('integration.assistant.meaningfulDifference', { quantity: formatNumber(row.quantity_difference, 4), value: formatMoney(row.value_difference) })}</small>}
-                                </span>
-                            </label>)}</div>
-                            <div className="doc-actions"><button className="btn" onClick={() => setBulkReviewOpen(false)}>{tr('settings.common.cancel')}</button>
-                                <button className="btn" disabled={saving || bulkSelection.length === 0} onClick={async () => { if (await bulk('approve_exact_sku_candidates')) setBulkReviewOpen(false); }}>{tr('integration.assistant.confirmSelectedMatches', { count: bulkSelection.length })}</button></div>
-                        </div>
-                    </div>}
-                    {actions}
-                </section>}
-
-                {step === 3 && <section className="assistant-card">
-                    <header><h2>{tr(reviewGatesComplete ? 'integration.assistant.step3' : 'integration.assistant.previewStep')}</h2><p>{tr(reviewGatesComplete ? 'integration.assistant.reviewDescription' : 'integration.assistant.previewDescription')}</p></header>
-                    <div className="assistant-review-dashboard">
-                        {[
-                            ['inventoryAuthority', tr('integration.assistant.solastockAuthority'), true],
-                            ['matchedItems', checks.items_exact || 0, true],
-                            ['excludedServices', confirmedDecisions.size ? [...confirmedDecisions.values()].filter((d) => d.action === 'classify_service_non_inventory').length : 0, true],
-                            ['physicalCount', groups.inventory_quantities?.length ? tr('integration.assistant.required') : tr('integration.assistant.complete'), !groups.inventory_quantities?.length],
-                            ['quantityDifference', <bdi dir="ltr">{formatNumber(totals.total_quantity_difference, 4)}</bdi>, Number(totals.total_quantity_difference) === 0],
-                            ['valueDifference', <bdi dir="ltr">{formatMoney(totals.total_valuation_difference)}</bdi>, Number(totals.total_valuation_difference) === 0],
-                            ['financeGl', accounting.inventory_control_balance ?? tr('integration.assistant.pending'), false],
-                            ['cutoff', view.cutoff_at || tr('integration.wizard.notFrozen'), Boolean(view.cutoff_at)],
-                            ['excludedHistory', guided.historical_exclusion_count || 0, true],
-                            ['ownerApproval', run.data?.owner_approved_at ? tr('integration.assistant.complete') : tr('integration.assistant.pending'), Boolean(run.data?.owner_approved_at)],
-                            ['accountantApproval', run.data?.accountant_approved_at ? tr('integration.assistant.complete') : tr('integration.assistant.pending'), Boolean(run.data?.accountant_approved_at)],
-                        ].map(([key, value, passed]) => <div className="assistant-review-tile" key={key}><span className={passed ? 'check-ok' : 'check-attention'}>{passed ? '✓' : '!'}</span><div><small>{dynamicText('integration.assistant.review.', key)}</small><strong>{value}</strong></div></div>)}
-                    </div>
-                    <div className="assistant-reconciliation-wrap"><table className="assistant-reconciliation">
-                        <thead><tr><th>{tr('integration.assistant.reconciliation.measure')}</th><th>{tr('integration.assistant.reconciliation.finance')}</th><th>{tr('integration.assistant.reconciliation.stock')}</th><th>{tr('integration.assistant.reconciliation.difference')}</th><th>{tr('integration.assistant.reconciliation.action')}</th></tr></thead>
-                        <tbody>
-                            <tr><th>{tr('integration.assistant.reconciliation.quantity')}</th><td><bdi dir="ltr">{formatNumber(totals.solabooks_quantity, 4)}</bdi></td><td><bdi dir="ltr">{formatNumber(totals.solastock_quantity, 4)}</bdi></td><td><bdi dir="ltr">{formatNumber(totals.total_quantity_difference, 4)}</bdi></td><td>{Number(totals.total_quantity_difference) === 0 ? tr('integration.assistant.noAction') : tr('integration.assistant.physicalCountRequired')}</td></tr>
-                            <tr><th>{tr('integration.assistant.reconciliation.value')}</th><td><bdi dir="ltr">{formatMoney(totals.solabooks_inventory_value)}</bdi></td><td><bdi dir="ltr">{formatMoney(totals.solastock_inventory_value)}</bdi></td><td><bdi dir="ltr">{formatMoney(totals.total_valuation_difference)}</bdi></td><td>{Number(totals.total_valuation_difference) === 0 ? tr('integration.assistant.noAction') : tr('integration.assistant.accountantAndCount')}</td></tr>
-                            <tr><th>{tr('integration.assistant.reconciliation.gl')}</th><td><bdi dir="ltr">{formatMoney(accounting.inventory_control_balance)}</bdi></td><td><bdi dir="ltr">{formatMoney(totals.solastock_inventory_value)}</bdi></td><td><bdi dir="ltr">{formatMoney(Number(totals.solastock_inventory_value || 0) - Number(accounting.inventory_control_balance || 0))}</bdi></td><td>{tr('integration.assistant.accountantReview')}</td></tr>
-                        </tbody>
-                    </table></div>
-                    {totals.proposed_accounting_effect?.amount && <div className="assistant-correction"><strong>{tr('integration.assistant.review.proposedCorrection')}</strong><span><bdi dir="ltr">{formatMoney(totals.proposed_accounting_effect.amount)}</bdi></span><p>{tr('integration.assistant.previewOnly')}</p></div>}
-                    {remaining > 0 && <div className="assistant-blockers"><h3>{tr('integration.assistant.blockerList')}</h3><p>{tr('integration.assistant.blockerDescription')}</p>
-                        {groupOrder.filter((group) => groupFingerprints(group).some((fingerprint) => !confirmedDecisions.has(fingerprint))).map((group) =>
-                            <button key={group} className="btn" onClick={() => setAssistantStep(2)}>{dynamicText('integration.assistant.group.', group)} · {tr('integration.assistant.remainingCount', { count: groupFingerprints(group).filter((fingerprint) => !confirmedDecisions.has(fingerprint)).length })}</button>)}</div>}
-                    <p className="assistant-rollback">{tr('integration.assistant.rollback')}</p>
-                    <details className="assistant-details"><summary>{tr('integration.assistant.advanced')}</summary><dl className="kv">
-                        <dt>{tr('integration.wizard.snapshot')}</dt><dd className="wizard__hash">{view.snapshot_hash}</dd>
-                        <dt>{tr('integration.assistant.sourceHash')}</dt><dd className="wizard__hash">{guided.source_invalidation_hash}</dd>
-                        <dt>{tr('integration.assistant.currencyRemediation')}</dt><dd>{guided.currency_summary?.advanced_remediation_count || 0} · {(guided.currency_summary?.reserved_codes || []).join(', ') || '—'}</dd>
-                    </dl></details>
-                    {approvalAvailable && <div className="assistant-final-approval">
-                        <label className="field"><span className="field-label">{tr('integration.wizard.confirmation')}</span><input className="input" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
-                        <button className="btn btn--primary" disabled={!gate.allowed || saving || Boolean(run.data.owner_approved_at)} onClick={() => runAction(() => api.approveIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash, confirmation }), 'integration.wizard.ownerApproved')}>{tr('integration.wizard.ownerApprove')}</button>
-                        {accountingGate.allowed && <button className="btn" disabled={saving || Boolean(run.data.accountant_approved_at)} onClick={() => runAction(() => api.accountantApproveIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash }), 'integration.wizard.accountantApproved')}>{tr('integration.wizard.accountantApprove')}</button>}
-                    </div>}
-                    {actions}
-                </section>}
-            </main>
-
-            <aside className="assistant-side" aria-label={tr('integration.assistant.summary')}>
-                <div className="assistant-side-card assistant-now"><h2>{tr('integration.assistant.whatNow')}</h2><strong>{currentTask.label}</strong><p>{tr('integration.assistant.groupProgress', { done: completedGroups, total: groupOrder.length })}</p><p>{tr('integration.assistant.remainingDecisions', { count: remaining })}</p>{remaining > 0 && <p className="is-blocked">{tr('integration.assistant.blockingPrerequisite')}</p>}{!approvalAvailable && <button className="btn btn--primary" onClick={() => setAssistantStep(remaining ? 2 : 3)}>{tr(remaining ? 'integration.assistant.saveContinue' : 'integration.assistant.reviewSummary')}</button>}</div>
-            </aside>
-        </div>
+        <div className="focus-safety-bar">{tr('integration.focus.safety')} {technical}</div>
+        <main className="focus-stage">{taskContent()}</main>
+        {bulkReviewOpen && <div className="assistant-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-title"><div className="assistant-bulk-dialog__content"><h2 id="bulk-title">{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</h2><p>{tr('integration.assistant.bulkDraftOnly')}</p>{exactRows.map((row) => <label key={row.fingerprint}><input type="checkbox" checked={bulkSelection.includes(row.fingerprint)} onChange={() => toggleBulk(row.fingerprint)} /><span><bdi>{row.solabooks?.name}</bdi> → <bdi>{row.solastock?.name}</bdi></span></label>)}<div className="doc-actions"><button className="btn" onClick={() => setBulkReviewOpen(false)}>{tr('settings.common.cancel')}</button><button className="btn btn--primary" onClick={async () => { if (await bulk('approve_exact_sku_candidates')) setBulkReviewOpen(false); }}>{tr('integration.assistant.confirmSelectedMatches', { count: bulkSelection.length })}</button></div></div></div>}
     </div>;
 }

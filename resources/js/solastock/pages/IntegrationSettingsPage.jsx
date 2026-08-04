@@ -92,6 +92,7 @@ export default function IntegrationSettingsPage() {
         refetchInterval: 15_000,
     });
     const s = status.data;
+    const connectionActivated = Boolean(s && (s.mode === 'active' || s.connection_wizard?.state === 'connected'));
     useEffect(() => {
         if (s || tenant.client_id) {
             setConnection((current) => ({
@@ -131,9 +132,9 @@ export default function IntegrationSettingsPage() {
                 <h1>{tr('integration.title')}</h1>
             </header>
 
-            <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />
+            {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
-            {tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
+            {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
                 <EmptyState
                     title={tr('integration.loadFailed')}
                     hint={status.error?.message || tr('settings.common.errorFallback')}
@@ -241,7 +242,7 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {tab === 'wizard' && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
@@ -323,7 +324,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
         finally { setSaving(false); }
     }
 
-    function decide(row, action) {
+    function decide(row, action, extraSafeDetails = {}) {
         setSaveState('saving');
         setPendingDecisions((current) => new Map(current).set(row.fingerprint, {
             candidate_fingerprint: row.fingerprint, action, persistence_state: 'saving',
@@ -336,7 +337,9 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             const currentDraft = canonicalRunRef.current;
             if (!currentDraft || currentDraft.run_uuid !== selectedRunUuid) throw new Error('wizard_draft_context_changed');
             const existing = canonicalDecision(currentDraft, row.fingerprint);
-            if (existing?.action === action) {
+            const requestedDetailsAlreadySaved = Object.entries(extraSafeDetails).every(([key, value]) =>
+                String(existing?.safe_details?.[key] ?? '') === String(value ?? ''));
+            if (existing?.action === action && requestedDetailsAlreadySaved) {
                 setPendingDecisions((current) => { const next = new Map(current); next.delete(row.fingerprint); return next; });
                 setSaveState('saved');
                 return currentDraft;
@@ -346,7 +349,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
                 action,
                 solastock_record_ids: row.solastock_record_ids,
                 solabooks_record_ids: row.solabooks_record_ids,
-                safe_details: { reason: row.blocking_reason, decision_class: row.decision_class },
+                safe_details: { reason: row.blocking_reason, decision_class: row.decision_class, ...extraSafeDetails },
                 expected_lock_version: currentDraft.lock_version,
                 expected_before_hash: row.candidate_before_hash,
             });
@@ -368,7 +371,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             setPendingDecisions((current) => new Map(current).set(row.fingerprint, {
                 candidate_fingerprint: row.fingerprint, action, persistence_state: conflict ? 'conflict' : 'failed',
             }));
-            setFailedDecision({ row, action, mutationSequence });
+            setFailedDecision({ row, action, extraSafeDetails, mutationSequence });
             setSaveState(conflict ? 'conflict' : 'failed');
             toast.push(error.message || tr('settings.common.errorFallback'), 'error');
             throw error;
@@ -385,6 +388,22 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             setFailedDecision(null);
             setSaveState('idle');
         }
+    }
+
+    async function undoDecision(decisionUuid) {
+        if (!decisionUuid || !runUuid) return false;
+        setSaving(true);
+        try {
+            const response = await api.reverseIntegrationWizardDecision(runUuid, decisionUuid);
+            const confirmed = unwrapCanonicalDraft(response);
+            if (!acceptCanonicalRun(confirmed)) throw new Error('wizard_stale_reverse_response');
+            setSaveState('saved');
+            return true;
+        } catch (error) {
+            setSaveState('failed');
+            toast.push(error.message || tr('settings.common.errorFallback'), 'error');
+            return false;
+        } finally { setSaving(false); }
     }
 
     async function runAction(callback, successKey) {
@@ -452,12 +471,12 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             totals={totals} accounting={accounting} assistantStep={assistantStep}
             setAssistantStep={setAssistantStep} exceptionSearch={exceptionSearch}
             setExceptionSearch={setExceptionSearch} allowedActions={allowedActions}
-            canEdit={canEdit} editableState={editableState} decide={decide} bulkSelection={bulkSelection}
+            canEdit={canEdit} editableState={editableState} decide={decide} undoDecision={undoDecision} bulkSelection={bulkSelection}
             toggleBulk={toggleBulk} bulk={bulk} exportComparison={exportComparison} start={start}
             runAction={runAction} cutoffAt={cutoffAt} setCutoffAt={setCutoffAt}
             confirmation={confirmation} setConfirmation={setConfirmation}
             saveState={saveState}
-            retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action)}
+            retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
             organizationName={organizationName}
         />;
