@@ -172,10 +172,25 @@ export default function GuidedConnectionAssistant({
         const current = decisions.get(row.fingerprint);
         const choices = choiceCopy(row).filter(([action]) => action);
         return <div className="focus-list-row" key={row.fingerprint}>
-            <div className="focus-list-record">
-                <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
-                <span><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi>{row.solastock?.name && <> · {tr('integration.focus.proposedMatch')}: <bdi>{row.solastock.name}</bdi></>}</span>
-                <small>{exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>
+            <div className={`focus-list-record ${row.entity_type === 'item' ? 'focus-item-comparison' : ''}`}>
+                {row.entity_type === 'item' ? <>
+                    <div className="focus-app-record is-original">
+                        <span>{tr('integration.assistant.originalFinanceItem')}</span>
+                        <strong><bdi>{row.solabooks?.name || '—'}</bdi></strong>
+                        <small>{tr('integration.assistant.sku')}: <bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi></small>
+                    </div>
+                    <span className="focus-compare-mark" aria-hidden="true">⇄</span>
+                    <div className="focus-app-record is-proposed">
+                        <span>{tr('integration.assistant.proposedStockItem')}</span>
+                        <strong><bdi>{row.solastock?.name || tr('integration.assistant.noProposedStockItem')}</bdi></strong>
+                        <small>{tr('integration.assistant.sku')}: <bdi>{row.solastock?.sku || row.solastock?.code || '—'}</bdi></small>
+                    </div>
+                    <small className="focus-match-reason">{exact ? tr('integration.assistant.identicalNameSku') : tr('integration.focus.question.item')}</small>
+                </> : <>
+                    <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
+                    <span><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi>{row.solastock?.name && <> · {tr('integration.focus.proposedMatch')}: <bdi>{row.solastock.name}</bdi></>}</span>
+                    <small>{tr(`integration.focus.question.${row.entity_type}`)}</small>
+                </>}
             </div>
             <label className="focus-list-decision">
                 <span className="sr-only">{tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}</span>

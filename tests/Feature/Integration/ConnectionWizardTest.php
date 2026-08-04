@@ -375,6 +375,9 @@ final class ConnectionWizardTest extends TestCase
         );
         $this->assertStringContainsString('focus-category-nav', $assistant);
         $this->assertStringContainsString('focus-active-section', $assistant);
+        $this->assertStringContainsString('focus-item-comparison', $assistant);
+        $this->assertStringContainsString('integration.assistant.originalFinanceItem', $assistant.$translations);
+        $this->assertStringContainsString('integration.assistant.proposedStockItem', $assistant.$translations);
         $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
