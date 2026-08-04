@@ -365,6 +365,11 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertStringContainsString('focus-check-list', $assistant);
         $this->assertStringContainsString('bulkReviewOpen', $assistant);
+        foreach (['items', 'unitsCategories', 'customers', 'suppliers', 'warehouses', 'currencies'] as $section) {
+            $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
+        }
+        $this->assertStringContainsString('focus-section-list', $assistant);
+        $this->assertStringContainsString('defaultOpen={section === firstIncompleteSection}', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
         $this->assertStringContainsString('createSerializedMutationQueue', $page);
         $this->assertStringContainsString('unwrapCanonicalDraft', $page);

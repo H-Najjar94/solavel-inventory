@@ -53,6 +53,16 @@ export default function GuidedConnectionAssistant({
     const resolvedOwner = ownerRows.length - ownerPending.length;
     const resolvedCounts = physicalRows.length - physicalPending.length;
     const resolvedAccounting = accountingRows.length - accountingPending.length;
+    const ownerSections = [
+        ['items', ownerRows.filter((row) => row.entity_type === 'item')],
+        ['unitsCategories', ownerRows.filter((row) => ['unit', 'category'].includes(row.entity_type))],
+        ['customers', ownerRows.filter((row) => row.entity_type === 'customer')],
+        ['suppliers', ownerRows.filter((row) => row.entity_type === 'supplier')],
+        ['warehouses', ownerRows.filter((row) => row.entity_type === 'warehouse')],
+        ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
+    ].filter(([, sectionRows]) => sectionRows.length > 0);
+    const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
+        sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
 
     useEffect(() => {
         if (!runUuid || resumedRunRef.current === runUuid) return;
@@ -212,7 +222,13 @@ export default function GuidedConnectionAssistant({
         if (task === 2) return <section className="focus-card focus-list-card">
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessListTitle')}</h2><p>{tr('integration.focus.businessListText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: ownerPending.length })}</bdi></strong></div>
             {exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
-            <div className="focus-decision-list">{ownerRows.length ? ownerRows.map(compactDecisionRow) : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
+            <div className="focus-section-list">{ownerSections.length ? ownerSections.map(([section, sectionRows]) => {
+                const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
+                return <details className="focus-list-section" key={section} defaultOpen={section === firstIncompleteSection}>
+                    <summary><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></summary>
+                    <div className="focus-decision-list">{sectionRows.map(compactDecisionRow)}</div>
+                </details>;
+            }) : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
             {footer(tr('integration.focus.continue'), () => go(3), { disabled: ownerPending.length > 0 })}
         </section>;
