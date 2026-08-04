@@ -64,6 +64,7 @@ export default function GuidedConnectionAssistant({
     ].filter(([, sectionRows]) => sectionRows.length > 0);
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
+    const activeOwnerSection = ownerSections.find(([section]) => section === openOwnerSection) || ownerSections[0];
 
     useEffect(() => {
         if (task === 2 && firstIncompleteSection && openOwnerSection === undefined) {
@@ -228,15 +229,25 @@ export default function GuidedConnectionAssistant({
 
         if (task === 2) return <section className="focus-card focus-list-card">
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessListTitle')}</h2><p>{tr('integration.focus.businessListText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: ownerPending.length })}</bdi></strong></div>
-            {exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
-            <div className="focus-section-list">{ownerSections.length ? ownerSections.map(([section, sectionRows]) => {
+            <nav className="focus-category-nav" aria-label={tr('integration.focus.businessSections')}>
+                {ownerSections.map(([section, sectionRows]) => {
+                    const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
+                    return <button type="button" key={section} className={activeOwnerSection?.[0] === section ? 'is-active' : remaining === 0 ? 'is-complete' : ''}
+                        aria-current={activeOwnerSection?.[0] === section ? 'page' : undefined} onClick={() => setOpenOwnerSection(section)}>
+                        <span>{tr(`integration.focus.section.${section}`)}</span>
+                        <bdi>{remaining === 0 ? '✓' : remaining}</bdi>
+                    </button>;
+                })}
+            </nav>
+            {activeOwnerSection?.[0] === 'items' && exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
+            <div className="focus-active-section">{activeOwnerSection ? (() => {
+                const [section, sectionRows] = activeOwnerSection;
                 const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
-                return <details className="focus-list-section" key={section} open={openOwnerSection === section}
-                    onToggle={(event) => setOpenOwnerSection(event.currentTarget.open ? section : null)}>
-                    <summary><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></summary>
+                return <section className="focus-list-section" key={section}>
+                    <header><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></header>
                     <div className="focus-decision-list">{sectionRows.map(compactDecisionRow)}</div>
-                </details>;
-            }) : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
+                </section>;
+            })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
             {footer(tr('integration.focus.continue'), () => go(3), { disabled: ownerPending.length > 0 })}
         </section>;

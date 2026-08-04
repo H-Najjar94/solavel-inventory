@@ -236,7 +236,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('No, they are different items', $translations);
         $this->assertStringContainsString('لا، هما صنفان مختلفان', $translations);
         $this->assertStringContainsString('تنتظر محاسباً مخولاً', $translations);
-        $this->assertStringContainsString('max-width:1120px', $styles);
+        $this->assertStringContainsString('max-width:1440px', $styles);
         $this->assertStringContainsString('grid-template-columns:1fr 1fr', $styles);
         $this->assertStringNotContainsString('source_account_id', $assistant);
         $this->assertStringNotContainsString('signing', strtolower($assistant));
@@ -368,8 +368,9 @@ final class ConnectionWizardTest extends TestCase
         foreach (['items', 'unitsCategories', 'customers', 'suppliers', 'warehouses', 'currencies'] as $section) {
             $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
         }
-        $this->assertStringContainsString('focus-section-list', $assistant);
-        $this->assertStringContainsString('open={openOwnerSection === section}', $assistant);
+        $this->assertStringContainsString('focus-category-nav', $assistant);
+        $this->assertStringContainsString('focus-active-section', $assistant);
+        $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
         $this->assertStringContainsString('createSerializedMutationQueue', $page);
