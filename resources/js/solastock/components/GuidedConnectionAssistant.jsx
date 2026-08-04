@@ -49,6 +49,10 @@ export default function GuidedConnectionAssistant({
     const scenario = guided.customer_scenario || 'previously_separate';
     const scenarioText = tr(`integration.focus.scenario.${scenario}`);
     const totalSteps = 6;
+    const phase = task === 1 ? 1 : task === 6 ? 3 : 2;
+    const resolvedOwner = ownerRows.length - ownerPending.length;
+    const resolvedCounts = physicalRows.length - physicalPending.length;
+    const resolvedAccounting = accountingRows.length - accountingPending.length;
 
     useEffect(() => {
         if (!runUuid || resumedRunRef.current === runUuid) return;
@@ -239,13 +243,40 @@ export default function GuidedConnectionAssistant({
     };
 
     return <div className="wizard focus-wizard" aria-live="polite">
+        <section className="focus-overview">
+            <div><span className="focus-overview-kicker">{tr('integration.focus.overviewKicker')}</span><h1>{tr('integration.focus.title')}</h1><p>{tr('integration.focus.subtitle')}</p></div>
+            <div className="focus-overview-context"><span>{tr('integration.focus.organization')}</span><strong><bdi>{organizationName}</bdi></strong><small>{scenarioText}</small></div>
+        </section>
+        <nav className="focus-phase-stepper" aria-label={tr('integration.focus.setupProgress')}>
+            {[
+                [1, tr('integration.focus.phase.prepare'), 1],
+                [2, tr('integration.focus.phase.decisions'), 2],
+                [3, tr('integration.focus.phase.review'), 6],
+            ].map(([number, label, destination]) => <button type="button" key={number} className={phase === number ? 'is-current' : phase > number ? 'is-complete' : ''}
+                aria-current={phase === number ? 'step' : undefined} disabled={number > phase} onClick={() => go(destination)}>
+                <span>{phase > number ? '✓' : number}</span><strong>{label}</strong>
+            </button>)}
+        </nav>
         <header className="focus-header">
             <div><span>{tr('integration.focus.stepOf', { current: task, total: totalSteps })}</span><strong>{taskLabels[task - 1]}</strong></div>
             <span>{tr('integration.focus.stepsRemaining', { count: totalSteps - task })}</span>
             <details className="focus-all-steps"><summary>{tr('integration.focus.allSteps')}</summary><ol>{taskLabels.map((label, index) => <li key={label}><button type="button" onClick={() => go(index + 1)} disabled={index + 1 > task}>{label}</button></li>)}</ol></details>
         </header>
         <div className="focus-safety-bar">{tr('integration.focus.safety')} {technical}</div>
-        <main className="focus-stage">{taskContent()}</main>
+        <div className="focus-workspace">
+            <main className="focus-stage">{taskContent()}</main>
+            <aside className="focus-summary" aria-labelledby="focus-summary-title">
+                <h2 id="focus-summary-title">{tr('integration.focus.summaryTitle')}</h2>
+                <p>{tr('integration.focus.summaryText')}</p>
+                <div className="focus-summary-list">
+                    <button type="button" onClick={() => go(2)}><span>{tr('integration.focus.summary.business')}</span><strong><bdi>{resolvedOwner}/{ownerRows.length}</bdi></strong></button>
+                    <button type="button" onClick={() => go(3)}><span>{tr('integration.focus.summary.count')}</span><strong><bdi>{resolvedCounts}/{physicalRows.length}</bdi></strong></button>
+                    <button type="button" onClick={() => go(4)}><span>{tr('integration.focus.summary.accounting')}</span><strong><bdi>{resolvedAccounting}/{accountingRows.length}</bdi></strong></button>
+                    <button type="button" onClick={() => go(5)}><span>{tr('integration.focus.summary.documents')}</span><strong><bdi>{cutoffRows.length}</bdi></strong></button>
+                </div>
+                <div className="focus-authority"><p><span>{tr('integration.focus.inventoryAuthority')}</span><strong>SolaStock</strong></p><p><span>{tr('integration.focus.accountingAuthority')}</span><strong>SolaBooks</strong></p></div>
+            </aside>
+        </div>
         {bulkReviewOpen && <div className="assistant-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-title"><div className="assistant-bulk-dialog__content"><h2 id="bulk-title">{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</h2><p>{tr('integration.assistant.bulkDraftOnly')}</p>{exactRows.map((row) => <label key={row.fingerprint}><input type="checkbox" checked={bulkSelection.includes(row.fingerprint)} onChange={() => toggleBulk(row.fingerprint)} /><span><bdi>{row.solabooks?.name}</bdi> → <bdi>{row.solastock?.name}</bdi></span></label>)}<div className="doc-actions"><button className="btn" onClick={() => setBulkReviewOpen(false)}>{tr('settings.common.cancel')}</button><button className="btn btn--primary" onClick={async () => { if (await bulk('approve_exact_sku_candidates')) setBulkReviewOpen(false); }}>{tr('integration.assistant.confirmSelectedMatches', { count: bulkSelection.length })}</button></div></div></div>}
     </div>;
 }
