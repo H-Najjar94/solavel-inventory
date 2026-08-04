@@ -149,6 +149,32 @@ export default function GuidedConnectionAssistant({
         </div>;
     };
 
+    const compactDecisionRow = (row) => {
+        const exact = row.classification === 'exact_candidate_requires_owner_review';
+        const current = decisions.get(row.fingerprint);
+        const choices = choiceCopy(row).filter(([action]) => action);
+        return <div className="focus-list-row" key={row.fingerprint}>
+            <div className="focus-list-record">
+                <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
+                <span><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi>{row.solastock?.name && <> · {tr('integration.focus.proposedMatch')}: <bdi>{row.solastock.name}</bdi></>}</span>
+                <small>{exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>
+            </div>
+            <label className="focus-list-decision">
+                <span className="sr-only">{tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}</span>
+                <select className="input" value={current?.action || ''} disabled={!runUuid || !editableState || !canEdit(row) || saving}
+                    onChange={(event) => event.target.value && choose(row, event.target.value)}>
+                    <option value="">{tr('integration.focus.chooseDecision')}</option>
+                    {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
+                </select>
+                <small className={current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}>
+                    {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
+                        : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
+                            : current?.action ? tr('integration.focus.saved') : tr('integration.focus.awaitingDecision')}
+                </small>
+            </label>
+        </div>;
+    };
+
     const footer = (primaryLabel, onPrimary, { disabled = false, hideBack = false } = {}) => <footer className="focus-footer">
         <div>{!hideBack && task > 1 && <button type="button" className="btn btn--link" onClick={() => go(task - 1)}>{tr('integration.focus.back')}</button>}{saveIndicator}</div>
         <div><button type="button" className="btn btn--link" onClick={() => window.location.assign('/inventory/dashboard')}>{tr('integration.focus.saveExit')}</button>
@@ -183,32 +209,33 @@ export default function GuidedConnectionAssistant({
             {footer(tr('integration.focus.startReview'), () => go(2), { hideBack: true })}
         </section>;
 
-        if (task === 2) return <section className="focus-card">
-            {currentOwner ? recordCard(currentOwner) : <div className="focus-complete"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessComplete')}</h2><p>{tr('integration.focus.businessCompleteText')}</p></div>}
+        if (task === 2) return <section className="focus-card focus-list-card">
+            <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessListTitle')}</h2><p>{tr('integration.focus.businessListText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: ownerPending.length })}</bdi></strong></div>
             {exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
+            <div className="focus-decision-list">{ownerRows.length ? ownerRows.map(compactDecisionRow) : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
             {footer(tr('integration.focus.continue'), () => go(3), { disabled: ownerPending.length > 0 })}
         </section>;
 
-        if (task === 3) return <section className="focus-card">
-            {currentCount ? <div className="focus-question">
-                <div className="focus-question-count">{tr('integration.focus.recordPosition', { current: physicalRows.indexOf(currentCount) + 1, total: physicalRows.length })}</div>
-                <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.physicalTitle')}</h2>
-                <p>{tr('integration.focus.physicalExplanation')}</p>
-                <strong className="focus-item-name"><bdi>{currentCount.solabooks?.name || currentCount.solastock?.name}</bdi></strong>
-                <div className="focus-quantity-compare"><div><span>SolaBooks</span><bdi>{formatNumber(currentCount.solabooks?.quantity, 4)}</bdi></div><div><span>SolaStock</span><bdi>{formatNumber(currentCount.solastock?.quantity, 4)}</bdi></div></div>
-                <label className="field"><span className="field-label">{tr('integration.focus.actualQuantity')}</span><input className="input" inputMode="decimal" value={physicalValues[currentCount.fingerprint] || ''} onChange={(event) => setPhysicalValues((values) => ({ ...values, [currentCount.fingerprint]: event.target.value }))} /></label>
-                <p className="focus-draft-note">{tr('integration.focus.physicalDraftNote')}</p>
-            </div> : <div className="focus-complete"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.countComplete')}</h2><p>{tr('integration.focus.countCompleteText')}</p></div>}
-            {footer(currentCount ? tr('integration.focus.saveNext') : tr('integration.focus.continue'), currentCount
-                ? () => choose(currentCount, confirmedDecisions.get(currentCount.fingerprint)?.action || 'physical_count_required', { physical_quantity: physicalValues[currentCount.fingerprint], physical_count_reference: 'wizard_draft' })
-                : () => go(4), { disabled: Boolean(currentCount && !/^\d+(\.\d+)?$/.test(physicalValues[currentCount.fingerprint] || '')) })}
+        if (task === 3) return <section className="focus-card focus-list-card">
+            <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.physicalTitle')}</h2><p>{tr('integration.focus.physicalExplanation')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: physicalPending.length })}</bdi></strong></div>
+            <div className="focus-count-list">{physicalRows.map((row) => {
+                const savedQuantity = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity ?? '';
+                const value = physicalValues[row.fingerprint] ?? savedQuantity;
+                return <div className="focus-count-row" key={row.fingerprint}>
+                    <div><strong><bdi>{row.solabooks?.name || row.solastock?.name}</bdi></strong><small>SolaBooks: <bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi> · SolaStock: <bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></small></div>
+                    <label><span>{tr('integration.focus.actualQuantity')}</span><input className="input" inputMode="decimal" value={value} onChange={(event) => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: event.target.value }))} /></label>
+                    <button type="button" className="btn" disabled={!/^\d+(\.\d+)?$/.test(value) || String(value) === String(savedQuantity) || saving}
+                        onClick={() => choose(row, confirmedDecisions.get(row.fingerprint)?.action || 'physical_count_required', { physical_quantity: value, physical_count_reference: 'wizard_draft' })}>{tr('integration.focus.saveCount')}</button>
+                </div>;
+            })}</div>
+            {!physicalRows.length && <div className="focus-complete"><h2>{tr('integration.focus.countComplete')}</h2><p>{tr('integration.focus.countCompleteText')}</p></div>}
+            {footer(tr('integration.focus.continue'), () => go(4), { disabled: physicalPending.length > 0 })}
         </section>;
 
         if (task === 4) return <section className="focus-card">
             {!accountingGate.allowed ? <div className="focus-accountant-card"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2><p>{tr('integration.focus.accountantRequiredText', { count: accountingPending.length })}</p><a className="btn" href="/settings/users">{tr('integration.focus.assignAccountant')}</a></div>
-                : currentAccount ? recordCard(currentAccount, 'accountant')
-                    : <div className="focus-complete"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingComplete')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div>}
+                : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}
             {footer(tr('integration.focus.continue'), () => go(5), { disabled: accountingGate.allowed && accountingPending.length > 0 })}
         </section>;
 
