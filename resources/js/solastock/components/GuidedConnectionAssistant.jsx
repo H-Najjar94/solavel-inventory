@@ -150,6 +150,25 @@ export default function GuidedConnectionAssistant({
             ['exclude_initial_connection', tr('integration.focus.exclude'), tr('integration.focus.excludeEffect')],
             [null, tr('integration.focus.reviewLater'), tr('integration.focus.reviewLaterEffect')],
         ];
+        if (row.entity_type === 'unit') {
+            if (row.solastock) return [
+                ['select_unit', tr('integration.focus.useStockUnit'), tr('integration.focus.useStockUnitEffect')],
+                ['define_unit_conversion', tr('integration.focus.defineConversion'), tr('integration.focus.defineConversionEffect')],
+                ['retain_blocked', tr('integration.focus.keepUnitBlocked'), tr('integration.focus.keepUnitBlockedEffect')],
+            ];
+            if (row.solabooks?.name) return [
+                ['propose_unit_creation', tr('integration.focus.proposeUnitCreation'), tr('integration.focus.proposeUnitCreationEffect')],
+                ['retain_blocked', tr('integration.focus.keepUnitBlocked'), tr('integration.focus.keepUnitBlockedEffect')],
+            ];
+            return [['retain_blocked', tr('integration.focus.keepBrokenUnitBlocked'), tr('integration.focus.keepBrokenUnitBlockedEffect')]];
+        }
+        if (row.entity_type === 'category') return row.solastock ? [
+            ['select_category', tr('integration.focus.useStockCategory'), tr('integration.focus.useStockCategoryEffect')],
+            ['retain_blocked', tr('integration.focus.keepCategoryBlocked'), tr('integration.focus.keepCategoryBlockedEffect')],
+        ] : [
+            ['propose_category_creation', tr('integration.focus.proposeCategoryCreation'), tr('integration.focus.proposeCategoryCreationEffect')],
+            ['retain_blocked', tr('integration.focus.keepCategoryBlocked'), tr('integration.focus.keepCategoryBlockedEffect')],
+        ];
         return allowedActions(row).map((action) => [action, tr(`integration.wizard.action.${action}`), tr(`integration.assistant.effect.${action}`)]);
     };
 
@@ -180,21 +199,33 @@ export default function GuidedConnectionAssistant({
         const exact = row.classification === 'exact_candidate_requires_owner_review';
         const current = decisions.get(row.fingerprint);
         const choices = choiceCopy(row).filter(([action]) => action);
+        const comparedMaster = ['item', 'unit', 'category'].includes(row.entity_type);
+        const sourceLabel = row.entity_type === 'item' ? tr('integration.assistant.originalFinanceItem')
+            : row.entity_type === 'unit' ? tr('integration.focus.originalFinanceUnit') : tr('integration.focus.originalFinanceCategory');
+        const proposedLabel = row.entity_type === 'item' ? tr('integration.assistant.proposedStockItem')
+            : row.entity_type === 'unit' ? tr('integration.focus.proposedStockUnit') : tr('integration.focus.proposedStockCategory');
+        const missingSource = row.entity_type === 'unit' && !row.solabooks?.name
+            ? tr('integration.focus.missingFinanceUnit', { id: row.safe_details?.finance_reference_id || row.solabooks?.id || '—' }) : '—';
+        const missingStock = row.entity_type === 'unit' ? tr('integration.focus.noStockUnit')
+            : row.entity_type === 'category' ? tr('integration.focus.noStockCategory') : tr('integration.assistant.noProposedStockItem');
+        const identityLabel = row.entity_type === 'item' ? tr('integration.assistant.sku') : tr('integration.focus.codeOrReference');
+        const affected = (row.safe_details?.affected_items || []).map((item) => item.name || item.sku).filter(Boolean).join('، ');
         return <div className="focus-list-row" key={row.fingerprint}>
-            <div className={`focus-list-record ${row.entity_type === 'item' ? 'focus-item-comparison' : ''}`}>
-                {row.entity_type === 'item' ? <>
+            <div className={`focus-list-record ${comparedMaster ? 'focus-item-comparison' : ''}`}>
+                {comparedMaster ? <>
                     <div className="focus-app-record is-original">
-                        <span>{tr('integration.assistant.originalFinanceItem')}</span>
-                        <strong><bdi>{row.solabooks?.name || '—'}</bdi></strong>
-                        <small>{tr('integration.assistant.sku')}: <bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi></small>
+                        <span>{sourceLabel}</span>
+                        <strong><bdi>{row.solabooks?.name || missingSource}</bdi></strong>
+                        <small>{identityLabel}: <bdi>{row.solabooks?.sku || row.solabooks?.code || row.solabooks?.id || '—'}</bdi></small>
                     </div>
                     <span className="focus-compare-mark" aria-hidden="true">⇄</span>
                     <div className="focus-app-record is-proposed">
-                        <span>{tr('integration.assistant.proposedStockItem')}</span>
-                        <strong><bdi>{row.solastock?.name || tr('integration.assistant.noProposedStockItem')}</bdi></strong>
-                        <small>{tr('integration.assistant.sku')}: <bdi>{row.solastock?.sku || row.solastock?.code || '—'}</bdi></small>
+                        <span>{proposedLabel}</span>
+                        <strong><bdi>{row.solastock?.name || missingStock}</bdi></strong>
+                        <small>{identityLabel}: <bdi>{row.solastock?.sku || row.solastock?.code || row.solastock?.id || '—'}</bdi></small>
                     </div>
-                    <small className="focus-match-reason">{exact ? tr('integration.assistant.identicalNameSku') : tr('integration.focus.question.item')}</small>
+                    <small className="focus-match-reason">{affected ? tr('integration.focus.usedByItems', { items: affected })
+                        : exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>
                 </> : <>
                     <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
                     <span><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi>{row.solastock?.name && <> · {tr('integration.focus.proposedMatch')}: <bdi>{row.solastock.name}</bdi></>}</span>
@@ -204,7 +235,8 @@ export default function GuidedConnectionAssistant({
             <label className="focus-list-decision">
                 <span className="sr-only">{tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}</span>
                 <select className="input" value={current?.action || ''} disabled={!runUuid || !editableState || !canEdit(row) || saving}
-                    onChange={(event) => event.target.value && choose(row, event.target.value)}>
+                    onChange={(event) => event.target.value && choose(row, event.target.value,
+                        ['select_unit', 'select_category'].includes(event.target.value) && row.solastock?.id ? { selected_record_id: row.solastock.id } : {})}>
                     <option value="">{tr('integration.focus.chooseDecision')}</option>
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
                 </select>
