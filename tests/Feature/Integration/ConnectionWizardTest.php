@@ -382,6 +382,11 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('integration.focus.itemsInBoth', $assistant.$translations);
         $this->assertStringContainsString('integration.focus.itemsBooksOnly', $assistant.$translations);
         $this->assertStringContainsString('integration.focus.itemsStockOnly', $assistant.$translations);
+        $service = file_get_contents(app_path('Services/Integration/ConnectionWizardService.php'));
+        $this->assertStringContainsString("'propose_unit_creation'", $service);
+        $this->assertStringContainsString("'affected_items' => \$affected", $service);
+        $this->assertStringContainsString('integration.focus.missingFinanceUnit', $assistant.$translations);
+        $this->assertStringContainsString('integration.focus.proposeCategoryCreation', $assistant.$translations);
         $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);

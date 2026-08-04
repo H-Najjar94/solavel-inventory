@@ -32,6 +32,7 @@ final class ConnectionWizardService
         'classify_inventory_item',
         'classify_service_non_inventory',
         'select_unit',
+        'propose_unit_creation',
         'define_unit_conversion',
         'select_category',
         'propose_category_creation',
@@ -1555,33 +1556,63 @@ final class ConnectionWizardService
             return [];
         }
         $rows = [];
+        $normal = static fn (mixed $value): string => mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $value)));
 
         $referencedUnits = $financeItems->pluck('unit_id')->filter()->unique()->sort()->values();
         if (Schema::connection('tenant')->hasTable('units')) {
+            $stockUnits = DB::connection('tenant')->table('units')->where('organization_id', $stockOrgId)
+                ->where('is_active', true)->whereNull('deleted_at')->orderBy('id')->get();
             $resolvedUnitIds = [];
             foreach (DB::connection('tenant')->table('units')->whereIn('id', $referencedUnits)->orderBy('id')->get() as $unit) {
                 $resolvedUnitIds[] = (int) $unit->id;
-                $rows[] = $this->draftCandidate('unit', 'owner_review_required', null, $unit,
-                    'owner_unit_selection_required', 'owner_decision', ['source' => 'finance_item_reference']);
+                $matches = $stockUnits->filter(fn ($stock) => $normal($stock->name ?? '') !== ''
+                    && ($normal($stock->name ?? '') === $normal($unit->name ?? '')
+                        || ($normal($stock->symbol ?? '') !== '' && $normal($stock->symbol ?? '') === $normal($unit->symbol ?? ''))));
+                $affected = $financeItems->where('unit_id', (int) $unit->id)->map(fn ($item) => [
+                    'name' => (string) ($item->name ?? ''), 'sku' => (string) ($item->sku ?? ''),
+                ])->values()->all();
+                $rows[] = $this->draftCandidate('unit', 'owner_review_required', $matches->count() === 1 ? $matches->first() : null, $unit,
+                    'owner_unit_selection_required', 'owner_decision', [
+                        'source' => 'finance_item_reference', 'affected_items' => $affected,
+                        'solastock_candidate_count' => $matches->count(),
+                    ]);
             }
             foreach ($referencedUnits->reject(fn ($id) => in_array((int) $id, $resolvedUnitIds, true)) as $missingUnitId) {
+                $affected = $financeItems->where('unit_id', (int) $missingUnitId)->map(fn ($item) => [
+                    'name' => (string) ($item->name ?? ''), 'sku' => (string) ($item->sku ?? ''),
+                ])->values()->all();
                 $rows[] = $this->draftCandidate('unit', 'owner_review_required', null,
                     (object) ['id' => (int) $missingUnitId, 'name' => ''],
                     'owner_unit_selection_required', 'owner_decision', [
                         'source' => 'dangling_finance_item_unit_reference',
                         'authoritative_unit_details_required' => true,
+                        'finance_reference_id' => (string) $missingUnitId,
+                        'affected_items' => $affected,
+                        'solastock_candidate_count' => 0,
                     ]);
             }
         }
 
         $referencedCategories = $financeItems->pluck('category_id')->filter()->unique()->sort()->values();
         if (Schema::connection('tenant')->hasTable('inventory_categories')) {
+            $stockCategories = Schema::connection('tenant')->hasTable('item_categories')
+                ? DB::connection('tenant')->table('item_categories')->where('organization_id', $stockOrgId)
+                    ->whereNull('deleted_at')->orderBy('id')->get()
+                : collect();
             foreach (DB::connection('tenant')->table('inventory_categories')->where(function ($query) use ($financeOrgId): void {
                     $query->where('organization_id', $financeOrgId)->orWhereNull('organization_id');
                 })
                 ->whereIn('id', $referencedCategories)->orderBy('id')->get() as $category) {
-                $rows[] = $this->draftCandidate('category', 'owner_review_required', null, $category,
-                    'owner_category_selection_required', 'owner_decision', ['source' => 'finance_item_reference']);
+                $matches = $stockCategories->filter(fn ($stock) => $normal($stock->name ?? '') !== ''
+                    && $normal($stock->name ?? '') === $normal($category->name ?? ''));
+                $affected = $financeItems->where('category_id', (int) $category->id)->map(fn ($item) => [
+                    'name' => (string) ($item->name ?? ''), 'sku' => (string) ($item->sku ?? ''),
+                ])->values()->all();
+                $rows[] = $this->draftCandidate('category', 'owner_review_required', $matches->count() === 1 ? $matches->first() : null, $category,
+                    'owner_category_selection_required', 'owner_decision', [
+                        'source' => 'finance_item_reference', 'affected_items' => $affected,
+                        'solastock_candidate_count' => $matches->count(),
+                    ]);
             }
         }
 
@@ -1741,7 +1772,7 @@ final class ConnectionWizardService
                 'missing_solabooks_record' => ['keep_solastock_authority', 'exclude_initial_connection', 'physical_count_required'],
                 default => ['retain_blocked', 'physical_count_required'],
             },
-            'unit' => ['select_unit', 'define_unit_conversion', 'retain_blocked'],
+            'unit' => ['select_unit', 'propose_unit_creation', 'define_unit_conversion', 'retain_blocked'],
             'category' => ['select_category', 'propose_category_creation', 'retain_blocked'],
             'warehouse' => ['select_warehouse', 'retain_blocked'],
             'customer', 'supplier' => ['select_party', 'retain_blocked'],
