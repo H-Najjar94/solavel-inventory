@@ -27,6 +27,7 @@ export default function GuidedConnectionAssistant({
     const [expandedAffectedRows, setExpandedAffectedRows] = useState(() => new Set());
     const [pendingActions, setPendingActions] = useState({});
     const [conversionDrafts, setConversionDrafts] = useState({});
+    const [partyDrafts, setPartyDrafts] = useState({});
     const [manualChoiceRows, setManualChoiceRows] = useState(() => new Set());
     const [excludedRecommendations, setExcludedRecommendations] = useState(() => new Set());
     const headingRef = useRef(null);
@@ -181,8 +182,11 @@ export default function GuidedConnectionAssistant({
             ['propose_category_creation', tr('integration.focus.proposeCategoryCreation'), tr('integration.focus.proposeCategoryCreationEffect')],
             ['retain_blocked', tr('integration.focus.keepCategoryBlocked'), tr('integration.focus.keepCategoryBlockedEffect')],
         ];
-        if (['customer', 'supplier'].includes(row.entity_type) && row.solabooks) return [
-            ['select_party', tr(row.entity_type === 'customer' ? 'integration.focus.useFinanceCustomer' : 'integration.focus.useFinanceSupplier'), tr('integration.focus.useFinancePartyEffect')],
+        if (['customer', 'supplier'].includes(row.entity_type)) return [
+            ['select_party', tr(row.solabooks
+                ? (row.entity_type === 'customer' ? 'integration.focus.useFinanceCustomer' : 'integration.focus.useFinanceSupplier')
+                : (row.entity_type === 'customer' ? 'integration.focus.matchFinanceCustomer' : 'integration.focus.matchFinanceSupplier')),
+            tr(row.solabooks ? 'integration.focus.useFinancePartyEffect' : 'integration.focus.matchFinancePartyEffect')],
             ['retain_blocked', tr('integration.focus.reviewPartyLater'), tr('integration.focus.reviewPartyLaterEffect')],
         ];
         return allowedActions(row).map((action) => [action, tr(`integration.wizard.action.${action}`), tr(`integration.assistant.effect.${action}`)]);
@@ -280,6 +284,10 @@ export default function GuidedConnectionAssistant({
         const selectedAction = pendingActions[row.fingerprint] ?? current?.action ?? '';
         const selectedChoice = choices.find(([action]) => action === selectedAction);
         const conversionOpen = row.entity_type === 'unit' && pendingActions[row.fingerprint] === 'define_unit_conversion';
+        const partyMatchOpen = ['customer', 'supplier'].includes(row.entity_type) && !row.solabooks
+            && pendingActions[row.fingerprint] === 'select_party';
+        const availableFinanceParties = row.safe_details?.available_finance_parties || [];
+        const partyTargetId = partyDrafts[row.fingerprint]?.targetId ?? '';
         const availableStockUnits = row.safe_details?.available_stock_units || [];
         const defaultTargetId = current?.safe_details?.selected_record_id || row.solastock?.id || '';
         const conversionTargetId = conversionDrafts[row.fingerprint]?.targetId ?? defaultTargetId;
@@ -289,15 +297,24 @@ export default function GuidedConnectionAssistant({
         const conversionValid = /^(?:0*[1-9]\d{0,11})(?:\.\d{1,6})?$|^0\.\d{0,5}[1-9]$/.test(String(conversionFactor).trim());
         const decisionId = `wizard-decision-${row.fingerprint.slice(0, 12)}`;
         const factorId = `wizard-conversion-${row.fingerprint.slice(0, 12)}`;
-        const comparedMaster = ['item', 'unit', 'category'].includes(row.entity_type);
+        const comparedMaster = ['item', 'unit', 'category', 'customer', 'supplier'].includes(row.entity_type);
         const sourceLabel = row.entity_type === 'item' ? tr('integration.assistant.originalFinanceItem')
-            : row.entity_type === 'unit' ? tr('integration.focus.originalFinanceUnit') : tr('integration.focus.originalFinanceCategory');
+            : row.entity_type === 'unit' ? tr('integration.focus.originalFinanceUnit')
+                : row.entity_type === 'category' ? tr('integration.focus.originalFinanceCategory')
+                    : tr(row.entity_type === 'customer' ? 'integration.focus.originalFinanceCustomer' : 'integration.focus.originalFinanceSupplier');
         const proposedLabel = row.entity_type === 'item' ? tr('integration.assistant.proposedStockItem')
-            : row.entity_type === 'unit' ? tr('integration.focus.proposedStockUnit') : tr('integration.focus.proposedStockCategory');
+            : row.entity_type === 'unit' ? tr('integration.focus.proposedStockUnit')
+                : row.entity_type === 'category' ? tr('integration.focus.proposedStockCategory')
+                    : tr(row.entity_type === 'customer' ? 'integration.focus.proposedStockCustomer' : 'integration.focus.proposedStockSupplier');
         const missingSource = row.entity_type === 'unit' && !row.solabooks?.name
-            ? tr('integration.focus.missingFinanceUnit', { id: row.safe_details?.finance_reference_id || row.solabooks?.id || '—' }) : '—';
+            ? tr('integration.focus.missingFinanceUnit', { id: row.safe_details?.finance_reference_id || row.solabooks?.id || '—' })
+            : ['customer', 'supplier'].includes(row.entity_type) && !row.solabooks
+                ? tr(row.entity_type === 'customer' ? 'integration.focus.noFinanceCustomer' : 'integration.focus.noFinanceSupplier') : '—';
         const missingStock = row.entity_type === 'unit' ? tr('integration.focus.noStockUnit')
-            : row.entity_type === 'category' ? tr('integration.focus.noStockCategory') : tr('integration.assistant.noProposedStockItem');
+            : row.entity_type === 'category' ? tr('integration.focus.noStockCategory')
+                : ['customer', 'supplier'].includes(row.entity_type)
+                    ? tr(row.entity_type === 'customer' ? 'integration.focus.noStockCustomer' : 'integration.focus.noStockSupplier')
+                    : tr('integration.assistant.noProposedStockItem');
         const identityLabel = row.entity_type === 'item' ? tr('integration.assistant.sku') : tr('integration.focus.codeOrReference');
         const affectedItems = row.safe_details?.affected_items || [];
         const affectedExpanded = expandedAffectedRows.has(row.fingerprint);
@@ -383,13 +400,44 @@ export default function GuidedConnectionAssistant({
                             } }));
                             return;
                         }
+                        if (action === 'select_party' && !row.solabooks) {
+                            setPendingActions((values) => ({ ...values, [row.fingerprint]: action }));
+                            setPartyDrafts((values) => ({ ...values, [row.fingerprint]: {
+                                targetId: values[row.fingerprint]?.targetId ?? '',
+                            } }));
+                            return;
+                        }
                         setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
                         choose(row, action, ['select_unit', 'select_category'].includes(action) && row.solastock?.id
-                            ? { selected_record_id: row.solastock.id } : {});
+                            ? { selected_record_id: row.solastock.id }
+                            : action === 'select_party' && row.solabooks?.id ? { selected_record_id: row.solabooks.id } : {});
                     }}>
                     <option value="">{tr('integration.focus.chooseDecision')}</option>
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
                 </select>}
+                {partyMatchOpen && <div className="focus-party-match" role="group">
+                    <label htmlFor={`${decisionId}-party`}>{tr(row.entity_type === 'customer'
+                        ? 'integration.focus.chooseFinanceCustomer' : 'integration.focus.chooseFinanceSupplier')}</label>
+                    <select id={`${decisionId}-party`} className="input" value={partyTargetId}
+                        onChange={(event) => setPartyDrafts((values) => ({ ...values, [row.fingerprint]: { targetId: event.target.value } }))}>
+                        <option value="">{tr(row.entity_type === 'customer'
+                            ? 'integration.focus.chooseFinanceCustomer' : 'integration.focus.chooseFinanceSupplier')}</option>
+                        {availableFinanceParties.map((party) => <option value={party.id} key={party.id}>
+                            {party.name}{party.code ? ` (${party.code})` : ''}
+                        </option>)}
+                    </select>
+                    <small>{tr('integration.focus.partyMatchDraftOnly')}</small>
+                    <div className="focus-party-match-actions">
+                        <button type="button" className="btn" disabled={!partyTargetId || saving} onClick={async () => {
+                            const saved = await choose(row, 'select_party', { selected_record_id: partyTargetId });
+                            if (saved) setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                        }}>{tr('integration.focus.savePartyMatch')}</button>
+                        <button type="button" className="btn btn--link" disabled={saving} onClick={() => {
+                            setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                            setPartyDrafts((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                        }}>{tr('integration.focus.cancelConversion')}</button>
+                    </div>
+                </div>}
                 {conversionOpen && <div className="focus-conversion" role="group" aria-labelledby={`${factorId}-title`}>
                     <strong id={`${factorId}-title`}>{tr('integration.focus.conversionTitle')}</strong>
                     <label htmlFor={`${factorId}-target`}>{tr('integration.focus.conversionTarget')}</label>

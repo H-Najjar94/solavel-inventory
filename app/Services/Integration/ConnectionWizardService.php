@@ -218,8 +218,9 @@ final class ConnectionWizardService
                 $this->fail('wizard_selected_record_required');
             }
             if ($action === 'select_party') {
-                $partyIds = array_values(array_unique(array_merge($candidateStockIds,
-                    array_map('strval', $candidate['solabooks_record_ids'] ?? []))));
+                $partyIds = ! empty($candidate['solabooks_record_ids'])
+                    ? array_map('strval', $candidate['solabooks_record_ids'])
+                    : collect($candidate['safe_details']['available_finance_parties'] ?? [])->pluck('id')->map('strval')->all();
                 if (! in_array($candidate['entity_type'], ['customer', 'supplier'], true)
                     || $selectedRecordId === '' || ! in_array($selectedRecordId, $partyIds, true)) {
                     $this->fail('wizard_selected_record_required');
@@ -1688,17 +1689,31 @@ final class ConnectionWizardService
             }
         }
 
+        $financeParties = [];
+        foreach (['customers' => 'customer', 'suppliers' => 'supplier'] as $table => $entity) {
+            $financeParties[$entity] = Schema::connection('tenant')->hasTable($table)
+                ? DB::connection('tenant')->table($table)->where('organization_id', $financeOrgId)->orderBy('id')->get()
+                : collect();
+        }
         foreach (['warehouses' => 'warehouse', 'inventory_customers' => 'customer', 'inventory_suppliers' => 'supplier'] as $table => $entity) {
             if (! Schema::connection('tenant')->hasTable($table)) continue;
             $org = $table === 'warehouses' ? $stockOrgId : $stockOrgId;
             foreach (DB::connection('tenant')->table($table)->where('organization_id', $org)->orderBy('id')->get() as $record) {
-                $rows[] = $this->draftCandidate($entity, 'owner_review_required', $record, null,
-                    'owner_authoritative_record_selection_required', 'owner_decision', ['source' => 'existing_solastock_record']);
+                $details = ['source' => 'existing_solastock_record'];
+                if (in_array($entity, ['customer', 'supplier'], true)) {
+                    $details['available_finance_parties'] = ($financeParties[$entity] ?? collect())->map(fn ($party) => [
+                        'id' => (string) $party->id,
+                        'name' => (string) ($party->name ?? ''),
+                        'code' => (string) ($party->code ?? $party->customer_code ?? $party->supplier_code ?? ''),
+                    ])->values()->all();
+                }
+                $rows[] = $this->draftCandidate($entity,
+                    in_array($entity, ['customer', 'supplier'], true) ? 'missing_solabooks_record' : 'owner_review_required',
+                    $record, null, 'owner_authoritative_record_selection_required', 'owner_decision', $details);
             }
         }
         foreach (['customers' => 'customer', 'suppliers' => 'supplier'] as $table => $entity) {
-            if (! Schema::connection('tenant')->hasTable($table)) continue;
-            foreach (DB::connection('tenant')->table($table)->where('organization_id', $financeOrgId)->orderBy('id')->get() as $record) {
+            foreach ($financeParties[$entity] ?? collect() as $record) {
                 $rows[] = $this->draftCandidate($entity, 'owner_review_required', null, $record,
                     'owner_authoritative_record_selection_required', 'owner_decision', ['source' => 'existing_finance_record']);
             }
@@ -1876,10 +1891,11 @@ final class ConnectionWizardService
                 && in_array((string) $details['selected_record_id'], $stockIds, true);
         }
         if (in_array($action, ['select_party', 'select_account_role'], true)) {
-            $eligibleIds = array_values(array_unique(array_merge(
-                array_map('strval', $candidate['solastock_record_ids'] ?? []),
-                array_map('strval', $candidate['solabooks_record_ids'] ?? []),
-            )));
+            $eligibleIds = $action === 'select_party'
+                ? (! empty($candidate['solabooks_record_ids'])
+                    ? array_map('strval', $candidate['solabooks_record_ids'])
+                    : collect($candidate['safe_details']['available_finance_parties'] ?? [])->pluck('id')->map('strval')->all())
+                : array_map('strval', $candidate['solabooks_record_ids'] ?? []);
             return isset($details['selected_record_id'])
                 && in_array((string) $details['selected_record_id'], $eligibleIds, true);
         }
