@@ -1997,6 +1997,7 @@ final class ConnectionWizardService
                 'id' => (string) $finance->id,
                 'name' => (string) ($finance->name ?? ''),
                 'sku' => (string) ($finance->sku ?? ''),
+                'item_type' => (string) ($finance->item_type ?? $finance->type ?? ''),
                 'quantity' => Decimal::qty($financeQty),
                 'inventory_value' => $financeValue,
             ] : null,
