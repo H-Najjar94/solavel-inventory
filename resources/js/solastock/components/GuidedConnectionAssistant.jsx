@@ -203,10 +203,14 @@ export default function GuidedConnectionAssistant({
                                 : row.entity_type === 'currency' ? 'retain_blocked'
                                     : ['customer', 'supplier', 'warehouse', 'unit'].includes(row.entity_type) ? 'retain_blocked'
                                         : row.entity_type === 'account_role' ? 'retain_account_role_unresolved'
-                                            : null;
+                                            : row.entity_type === 'item' ? 'retain_blocked' : null;
         const choice = recommendedAction ? choices.find(([action]) => action === recommendedAction) : null;
         return choice ? [...choice, ['retain_blocked', 'retain_account_role_unresolved'].includes(recommendedAction) ? 'hold' : 'recommended'] : null;
     };
+
+    const selectedOwnerRecommendations = ownerPending.filter((row) => recommendedChoice(row)
+        && !manualChoiceRows.has(row.fingerprint)
+        && !excludedRecommendations.has(row.fingerprint));
 
     const recommendationDetails = (row, action) => (
         ['select_unit', 'select_category', 'select_party', 'select_account_role'].includes(action)
@@ -215,9 +219,7 @@ export default function GuidedConnectionAssistant({
     );
 
     const saveRecommendationsAndContinue = async () => {
-        const selected = ownerPending.filter((row) => recommendedChoice(row)
-            && !manualChoiceRows.has(row.fingerprint)
-            && !excludedRecommendations.has(row.fingerprint));
+        const selected = selectedOwnerRecommendations;
         for (const row of selected) {
             const action = recommendedChoice(row)?.[0];
             if (!action || !await choose(row, action, recommendationDetails(row, action))) return;
@@ -491,6 +493,10 @@ export default function GuidedConnectionAssistant({
                     </button>;
                 })}
             </nav>
+            {selectedOwnerRecommendations.length > 0 && <div className="focus-defaults-summary" role="status">
+                <strong>{tr('integration.focus.defaultsReady', { count: selectedOwnerRecommendations.length })}</strong>
+                <span>{tr('integration.focus.defaultsAcrossSections')}</span>
+            </div>}
             {activeOwnerSection?.[0] === 'items' && exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
             <div className="focus-active-section">{activeOwnerSection ? (() => {
                 const [section, sectionRows] = activeOwnerSection;
@@ -525,7 +531,9 @@ export default function GuidedConnectionAssistant({
                 </section>;
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
-            {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
+            {footer(selectedOwnerRecommendations.length > 0
+                ? tr('integration.focus.saveDefaultsContinue', { count: selectedOwnerRecommendations.length })
+                : tr('integration.focus.continue'), saveRecommendationsAndContinue, {
                 disabled: ownerPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))
