@@ -245,7 +245,8 @@ class TenantController extends ApiController
      * Finance/Projects tables. If the shared DB doesn't exist or this process
      * lacks privileges, it returns the exact command for a server admin to run.
      */
-    public function provision(Request $request, \App\Services\Tenancy\SecureTenantProvisioner $provisioner): JsonResponse
+    public function provision(Request $request, \App\Services\Tenancy\SecureTenantProvisioner $provisioner,
+        ?\App\Services\Catalog\FinanceReferenceDefaultsService $referenceDefaults = null): JsonResponse
     {
         $s = $this->live->state($request);
 
@@ -274,6 +275,9 @@ class TenantController extends ApiController
         try {
             // DB key is the client id, not the org id.
             $result = $provisioner->provisionInventory((int) ($s['client_id'] ?? $s['organization_id']), $db);
+            $result['finance_reference_defaults'] = ($referenceDefaults
+                ?? app(\App\Services\Catalog\FinanceReferenceDefaultsService::class))
+                ->sync((int) $s['organization_id'], true);
         } catch (\Throwable $e) {
             // Most likely: this process cannot CREATE DATABASE / migrate (no privs).
             return $this->success([
