@@ -349,12 +349,16 @@ export default function GuidedConnectionAssistant({
                 {showManualChoice ? <label className="focus-action-prompt" htmlFor={decisionId}>{decisionPrompt}</label>
                     : <span className="focus-action-prompt">{decisionPrompt}</span>}
                 {recommendation && !showManualChoice && <div className={`focus-recommendation is-${recommendationKind} ${recommendationSelected ? 'is-selected' : ''}`}>
-                    <label><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
-                        const next = new Set(currentValues);
-                        if (next.has(row.fingerprint)) next.delete(row.fingerprint); else next.add(row.fingerprint);
-                        return next;
-                    })} /><span><small>{tr(recommendationKind === 'hold' ? 'integration.focus.safeDefault' : 'integration.focus.recommended')}</small><strong>{recommendation[1]}</strong><em>{recommendation[2]}</em></span></label>
-                    <button type="button" className="focus-change-action" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
+                    <div className="focus-recommendation-top">
+                        <label><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
+                            const next = new Set(currentValues);
+                            if (next.has(row.fingerprint)) next.delete(row.fingerprint); else next.add(row.fingerprint);
+                            return next;
+                        })} /><small>{tr(recommendationKind === 'hold' ? 'integration.focus.safeDefault' : 'integration.focus.recommended')}</small></label>
+                        <button type="button" className="focus-change-action" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
+                    </div>
+                    <strong>{recommendation[1]}</strong>
+                    <em>{recommendation[2]}</em>
                 </div>}
                 {current?.action && !showManualChoice && <div className="focus-current-choice">
                     <span><small>{tr('integration.focus.savedDecision')}</small><strong>{choices.find(([action]) => action === current.action)?.[1] || current.action}</strong></span>
