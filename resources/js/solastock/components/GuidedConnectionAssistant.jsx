@@ -210,6 +210,8 @@ export default function GuidedConnectionAssistant({
             : row.entity_type === 'category' ? tr('integration.focus.noStockCategory') : tr('integration.assistant.noProposedStockItem');
         const identityLabel = row.entity_type === 'item' ? tr('integration.assistant.sku') : tr('integration.focus.codeOrReference');
         const affectedItems = row.safe_details?.affected_items || [];
+        const brokenFinanceUnit = row.entity_type === 'unit'
+            && row.safe_details?.source === 'dangling_finance_item_unit_reference';
         return <div className="focus-list-row" key={row.fingerprint}>
             <div className={`focus-list-record ${comparedMaster ? 'focus-item-comparison' : ''}`}>
                 {comparedMaster ? <>
@@ -229,8 +231,11 @@ export default function GuidedConnectionAssistant({
                             <button type="button" className="btn btn--link" onClick={() => setOpenOwnerSection('items')}>{tr('integration.focus.reviewAffectedItems')}</button></div>
                         <ul>{affectedItems.map((item) => <li key={item.id || item.sku || item.name}>
                             <strong><bdi>{item.name || '—'}</bdi></strong>{item.sku && <small><bdi>{item.sku}</bdi></small>}
+                            {item.item_type === 'inventory' && <small>{tr('integration.focus.inventoryQuantity', { quantity: formatNumber(item.quantity, 4) })}</small>}
                         </li>)}</ul>
-                        {row.entity_type === 'unit' && <small>{tr('integration.focus.unitDependsOnItemType')}</small>}
+                        {row.entity_type === 'unit' && <small className={brokenFinanceUnit ? 'is-error' : ''}>
+                            {tr(brokenFinanceUnit ? 'integration.focus.missingUnitInventoryWarning' : 'integration.focus.unitDependsOnItemType')}
+                        </small>}
                     </div> : <small className="focus-match-reason">{exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>}
                 </> : <>
                     <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
