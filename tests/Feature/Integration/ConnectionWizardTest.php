@@ -460,9 +460,9 @@ final class ConnectionWizardTest extends TestCase
     {
         $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
         $service = file_get_contents(app_path('Services/Integration/ConnectionWizardService.php'));
-        $expected = "missing_solastock_record: ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required']";
+        $expected = "missing_solastock_record: ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required', 'retain_blocked']";
         $this->assertStringContainsString($expected, $page);
-        $this->assertStringContainsString("'missing_solastock_record' => ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required']", $service);
+        $this->assertStringContainsString("'missing_solastock_record' => ['create_solastock_record', 'classify_service_non_inventory', 'exclude_initial_connection', 'physical_count_required', 'retain_blocked']", $service);
         $this->assertStringNotContainsString("missing_solastock_record: ['create_solastock_record', 'classify_inventory_item'", $page);
     }
 
