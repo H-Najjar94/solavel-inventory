@@ -183,6 +183,11 @@ export default function GuidedConnectionAssistant({
             ['retain_blocked', tr('integration.focus.keepCategoryBlocked'), tr('integration.focus.keepCategoryBlockedEffect')],
         ];
         if (['customer', 'supplier'].includes(row.entity_type)) return [
+            ...(!row.solabooks ? [[
+                'propose_finance_party_creation',
+                tr(row.entity_type === 'customer' ? 'integration.focus.addCustomerToFinancePlan' : 'integration.focus.addSupplierToFinancePlan'),
+                tr('integration.focus.addPartyToFinancePlanEffect'),
+            ]] : []),
             ['select_party', tr(row.solabooks
                 ? (row.entity_type === 'customer' ? 'integration.focus.useFinanceCustomer' : 'integration.focus.useFinanceSupplier')
                 : (row.entity_type === 'customer' ? 'integration.focus.matchFinanceCustomer' : 'integration.focus.matchFinanceSupplier')),
@@ -207,6 +212,7 @@ export default function GuidedConnectionAssistant({
                 : row.entity_type === 'category' && row.solastock ? 'select_category'
                     : row.entity_type === 'category' && row.solabooks?.name ? 'propose_category_creation'
                         : ['customer', 'supplier'].includes(row.entity_type) && row.solabooks ? 'select_party'
+                            : ['customer', 'supplier'].includes(row.entity_type) && row.solastock ? 'propose_finance_party_creation'
                             : row.entity_type === 'account_role' && row.classification === 'candidate_requires_accountant_approval' ? 'select_account_role'
                                 : null;
         const choice = recommendedAction ? choices.find(([action]) => action === recommendedAction) : null;
