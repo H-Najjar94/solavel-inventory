@@ -1424,7 +1424,7 @@ final class ConnectionWizardService
             && ($row['safe_details']['active'] ?? true) === true
         );
         $resolvedReferences = $rows->filter(fn (array $row) =>
-            in_array($row['entity_type'], ['unit', 'category'], true)
+            $row['entity_type'] === 'unit'
             && ($row['safe_details']['deterministic_reference_match'] ?? false) === true
         );
 
