@@ -19,18 +19,10 @@ final class FinanceReferenceDefaultsService
         ['Byte', 'B', 'count'], ['Kilobyte', 'KB', 'count'], ['Megabyte', 'MB', 'count'], ['Gigabyte', 'GB', 'count'], ['Terabyte', 'TB', 'count'],
     ];
 
-    private const CATEGORIES = [
-        ['Electrical', ['Switches', 'Cables']],
-        ['Plumbing', ['Valves', 'Pipes']],
-        ['Mechanical', ['Bearings', 'Bolts']],
-    ];
-
     public function sync(int $organizationId, bool $apply = false): array
     {
         if ($organizationId <= 0 || ! Schema::connection('tenant')->hasTable('inventory_units')
-            || ! Schema::connection('tenant')->hasTable('inventory_categories')
-            || ! Schema::connection('tenant')->hasTable('units')
-            || ! Schema::connection('tenant')->hasTable('item_categories')) {
+            || ! Schema::connection('tenant')->hasTable('units')) {
             return ['version' => self::VERSION, 'organization_id' => $organizationId,
                 'status' => 'reference_tables_unavailable', 'units' => ['created' => 0, 'existing' => 0],
                 'categories' => ['created' => 0, 'existing' => 0]];
@@ -39,13 +31,11 @@ final class FinanceReferenceDefaultsService
         $financeUnits = DB::connection('tenant')->table('inventory_units')->get()->keyBy(
             fn ($unit) => mb_strtolower(trim((string) ($unit->symbol ?? '')))
         );
-        $financeCategoryNames = DB::connection('tenant')->table('inventory_categories')
-            ->pluck('name')->map(fn ($name) => mb_strtolower(trim((string) $name)))->unique()->flip();
         $result = ['version' => self::VERSION, 'organization_id' => $organizationId,
             'units' => ['created' => 0, 'existing' => 0, 'missing_in_finance' => []],
-            'categories' => ['created' => 0, 'existing' => 0, 'missing_in_finance' => []]];
+            'categories' => ['created' => 0, 'existing' => 0, 'policy' => 'organization_owned_not_seeded']];
 
-        DB::connection('tenant')->transaction(function () use ($organizationId, $apply, $financeUnits, $financeCategoryNames, &$result): void {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $apply, $financeUnits, &$result): void {
             foreach (self::UNITS as [$name, $symbol, $kind]) {
                 if (! $financeUnits->has(mb_strtolower($symbol))) {
                     $result['units']['missing_in_finance'][] = $symbol;
@@ -64,40 +54,6 @@ final class FinanceReferenceDefaultsService
                 }
             }
 
-            foreach (self::CATEGORIES as [$parentName, $children]) {
-                if (! $financeCategoryNames->has(mb_strtolower($parentName))) {
-                    $result['categories']['missing_in_finance'][] = $parentName;
-                    continue;
-                }
-                $parent = DB::connection('tenant')->table('item_categories')->where('organization_id', $organizationId)
-                    ->whereNull('parent_id')->where('name', $parentName)->first();
-                if ($parent) {
-                    $result['categories']['existing']++;
-                } elseif ($apply) {
-                    $parentId = DB::connection('tenant')->table('item_categories')->insertGetId([
-                        'organization_id' => $organizationId, 'parent_id' => null, 'name' => $parentName,
-                        'level' => 0, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
-                    ]);
-                    $parent = (object) ['id' => $parentId];
-                    $result['categories']['created']++;
-                }
-                foreach ($children as $childName) {
-                    if (! $financeCategoryNames->has(mb_strtolower($childName))) {
-                        $result['categories']['missing_in_finance'][] = $childName;
-                        continue;
-                    }
-                    $child = $parent ? DB::connection('tenant')->table('item_categories')->where('organization_id', $organizationId)
-                        ->where('parent_id', $parent->id)->where('name', $childName)->first() : null;
-                    if ($child) {
-                        $result['categories']['existing']++;
-                    } elseif ($apply && $parent) {
-                        DB::connection('tenant')->table('item_categories')->insert(['organization_id' => $organizationId,
-                            'parent_id' => $parent->id, 'name' => $childName, 'level' => 1, 'is_active' => true,
-                            'created_at' => now(), 'updated_at' => now()]);
-                        $result['categories']['created']++;
-                    }
-                }
-            }
         });
 
         return $result;
