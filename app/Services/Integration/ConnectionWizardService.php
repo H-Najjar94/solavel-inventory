@@ -1416,6 +1416,10 @@ final class ConnectionWizardService
             count($row['solabooks_record_ids'] ?? []) === 1
             && ($row['safe_details']['active'] ?? true) === true
         );
+        $resolvedReferences = $rows->filter(fn (array $row) =>
+            in_array($row['entity_type'], ['unit', 'category'], true)
+            && ($row['safe_details']['deterministic_reference_match'] ?? false) === true
+        );
 
         $base = strtoupper($baseCurrency);
         $usedCodes = $this->financeUsedCurrencyCodes($financeOrgId)->push($base)->filter()->unique();
@@ -1434,9 +1438,10 @@ final class ConnectionWizardService
             $operationalCurrencies->contains('fingerprint', $row['fingerprint'])
         );
 
-        $visible = $rows->reject(function (array $row) use ($resolvedAccounts, $resolvedTaxes): bool {
+        $visible = $rows->reject(function (array $row) use ($resolvedAccounts, $resolvedTaxes, $resolvedReferences): bool {
             if ($resolvedAccounts->contains('fingerprint', $row['fingerprint'])
-                || $resolvedTaxes->contains('fingerprint', $row['fingerprint'])) return true;
+                || $resolvedTaxes->contains('fingerprint', $row['fingerprint'])
+                || $resolvedReferences->contains('fingerprint', $row['fingerprint'])) return true;
             if ($row['entity_type'] === 'currency' || $row['entity_type'] === 'historical_event') return true;
             // SolaStock warehouses are already authoritative and need no Finance
             // recreation unless a real conflict is discovered.
@@ -1455,7 +1460,7 @@ final class ConnectionWizardService
             'currencies' => $currencyExceptions->pluck('fingerprint')->values()->all(),
             'cutoff_documents' => $visible->where('entity_type', 'cutoff_document')->pluck('fingerprint')->values()->all(),
         ];
-        $automatic = $resolvedAccounts->merge($resolvedTaxes)->merge($operationalCurrencies)
+        $automatic = $resolvedAccounts->merge($resolvedTaxes)->merge($resolvedReferences)->merge($operationalCurrencies)
             ->map(fn (array $row) => [
                 'entity_type' => $row['entity_type'],
                 'fingerprint' => $row['fingerprint'],
@@ -1646,6 +1651,7 @@ final class ConnectionWizardService
                     'owner_unit_selection_required', 'owner_decision', [
                         'source' => 'finance_item_reference', 'affected_items' => $affected,
                         'solastock_candidate_count' => $matches->count(),
+                        'deterministic_reference_match' => $matches->count() === 1,
                         'available_stock_units' => $availableStockUnits,
                     ]);
             }
@@ -1691,6 +1697,7 @@ final class ConnectionWizardService
                     'owner_category_selection_required', 'owner_decision', [
                         'source' => 'finance_item_reference', 'affected_items' => $affected,
                         'solastock_candidate_count' => $matches->count(),
+                        'deterministic_reference_match' => $matches->count() === 1,
                     ]);
             }
         }
