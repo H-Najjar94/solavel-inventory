@@ -1586,6 +1586,8 @@ final class ConnectionWizardService
                 $affected = $financeItems->where('unit_id', (int) $unit->id)->map(fn ($item) => [
                     'id' => (string) ($item->id ?? ''), 'name' => (string) ($item->name ?? ''),
                     'sku' => (string) ($item->sku ?? ''),
+                    'item_type' => (string) ($item->item_type ?? $item->type ?? ''),
+                    'quantity' => Decimal::qty((string) ($item->qty_on_hand ?? '0')),
                 ])->values()->all();
                 $rows[] = $this->draftCandidate('unit', 'owner_review_required', $matches->count() === 1 ? $matches->first() : null, $unit,
                     'owner_unit_selection_required', 'owner_decision', [
@@ -1597,6 +1599,8 @@ final class ConnectionWizardService
                 $affected = $financeItems->where('unit_id', (int) $missingUnitId)->map(fn ($item) => [
                     'id' => (string) ($item->id ?? ''), 'name' => (string) ($item->name ?? ''),
                     'sku' => (string) ($item->sku ?? ''),
+                    'item_type' => (string) ($item->item_type ?? $item->type ?? ''),
+                    'quantity' => Decimal::qty((string) ($item->qty_on_hand ?? '0')),
                 ])->values()->all();
                 $rows[] = $this->draftCandidate('unit', 'owner_review_required', null,
                     (object) ['id' => (int) $missingUnitId, 'name' => ''],
@@ -1625,6 +1629,8 @@ final class ConnectionWizardService
                 $affected = $financeItems->where('category_id', (int) $category->id)->map(fn ($item) => [
                     'id' => (string) ($item->id ?? ''), 'name' => (string) ($item->name ?? ''),
                     'sku' => (string) ($item->sku ?? ''),
+                    'item_type' => (string) ($item->item_type ?? $item->type ?? ''),
+                    'quantity' => Decimal::qty((string) ($item->qty_on_hand ?? '0')),
                 ])->values()->all();
                 $rows[] = $this->draftCandidate('category', 'owner_review_required', $matches->count() === 1 ? $matches->first() : null, $category,
                     'owner_category_selection_required', 'owner_decision', [

@@ -391,6 +391,8 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('valid_for_current_candidate', $service.$page);
         $this->assertStringContainsString('focus-affected-items', $assistant);
         $this->assertStringContainsString('integration.focus.reviewAffectedItems', $assistant.$translations);
+        $this->assertStringContainsString('dangling_finance_item_unit_reference', $service.$assistant);
+        $this->assertStringContainsString('integration.focus.missingUnitInventoryWarning', $assistant.$translations);
         $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
