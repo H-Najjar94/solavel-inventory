@@ -275,12 +275,6 @@ export default function GuidedConnectionAssistant({
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
                 </select>
                 <small className="focus-action-effect">{decisionEffect}</small>
-                <details className="focus-choice-explanations">
-                    <summary>{tr('integration.focus.explainChoices')}</summary>
-                    <ul>{choices.map(([action, label, effect]) => <li key={action} className={current?.action === action ? 'is-selected' : ''}>
-                        <strong>{label}</strong><span>{effect}</span>
-                    </li>)}</ul>
-                </details>
                 <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}`}>
                     {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
                         : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
