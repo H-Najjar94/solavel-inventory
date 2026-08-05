@@ -200,6 +200,7 @@ export default function GuidedConnectionAssistant({
         const exact = row.classification === 'exact_candidate_requires_owner_review';
         const current = decisions.get(row.fingerprint);
         const choices = choiceCopy(row).filter(([action]) => action);
+        const selectedChoice = choices.find(([action]) => action === current?.action);
         const comparedMaster = ['item', 'unit', 'category'].includes(row.entity_type);
         const sourceLabel = row.entity_type === 'item' ? tr('integration.assistant.originalFinanceItem')
             : row.entity_type === 'unit' ? tr('integration.focus.originalFinanceUnit') : tr('integration.focus.originalFinanceCategory');
@@ -220,6 +221,10 @@ export default function GuidedConnectionAssistant({
             else next.add(row.fingerprint);
             return next;
         });
+        const decisionPrompt = row.entity_type === 'item'
+            ? tr(exact ? 'integration.focus.decisionPrompt.exactItem' : 'integration.focus.decisionPrompt.item')
+            : tr(`integration.focus.decisionPrompt.${row.entity_type}`, {}, tr('integration.focus.decisionPrompt.record'));
+        const decisionEffect = selectedChoice?.[2] || tr('integration.focus.decisionNotApplied');
         const brokenFinanceUnit = row.entity_type === 'unit'
             && row.safe_details?.source === 'dangling_finance_item_unit_reference';
         return <div className="focus-list-row" key={row.fingerprint}>
@@ -257,7 +262,9 @@ export default function GuidedConnectionAssistant({
                     <small>{tr(`integration.focus.question.${row.entity_type}`)}</small>
                 </>}
             </div>
-            <label className="focus-list-decision">
+            <label className={`focus-list-decision ${current?.action ? 'is-decided' : ''}`}>
+                <span className="focus-action-title">{tr('integration.focus.yourDecision')}</span>
+                <span className="focus-action-prompt">{decisionPrompt}</span>
                 <span className="sr-only">{tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}</span>
                 <select className="input" value={current?.action || ''} disabled={!runUuid || !editableState || !canEdit(row) || saving}
                     onChange={(event) => event.target.value && choose(row, event.target.value,
@@ -265,7 +272,8 @@ export default function GuidedConnectionAssistant({
                     <option value="">{tr('integration.focus.chooseDecision')}</option>
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
                 </select>
-                <small className={current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}>
+                <small className="focus-action-effect">{decisionEffect}</small>
+                <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}`}>
                     {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
                         : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
                             : current?.action ? tr('integration.focus.saved') : tr('integration.focus.awaitingDecision')}
@@ -332,6 +340,7 @@ export default function GuidedConnectionAssistant({
                 });
                 return <section className="focus-list-section" key={section}>
                     <header><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></header>
+                    <div className="focus-list-columns" aria-hidden="true"><span>{tr('integration.focus.comparisonColumn')}</span><span>{tr('integration.focus.decisionColumn')}</span></div>
                     {section === 'items' && <div className="focus-item-catalog-summary" aria-label={tr('integration.focus.itemCatalogSummary')}>
                         <div><span>SolaBooks</span><strong><bdi>{itemCounts.solabooks}</bdi></strong></div>
                         <div><span>SolaStock</span><strong><bdi>{itemCounts.solastock}</bdi></strong></div>
