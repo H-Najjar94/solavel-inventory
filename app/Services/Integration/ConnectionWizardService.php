@@ -38,6 +38,7 @@ final class ConnectionWizardService
         'propose_category_creation',
         'select_warehouse',
         'select_party',
+        'propose_finance_party_creation',
         'select_tax',
         'retain_currency',
         'exclude_currency',
@@ -246,6 +247,11 @@ final class ConnectionWizardService
             }
             if (in_array($action, ['propose_unit_creation', 'propose_category_creation'], true)
                 && (empty($candidate['solabooks']['name']) || ! empty($candidateStockIds))) {
+                $this->fail('wizard_creation_proposal_not_valid');
+            }
+            if ($action === 'propose_finance_party_creation'
+                && (! in_array($candidate['entity_type'], ['customer', 'supplier'], true)
+                    || empty($candidate['solastock']['name']) || ! empty($candidate['solabooks_record_ids']))) {
                 $this->fail('wizard_creation_proposal_not_valid');
             }
             if (($reviewerRole === 'accountant' && ! $canAccountingReview)
@@ -1868,7 +1874,9 @@ final class ConnectionWizardService
                 ])),
             'category' => ['select_category', 'propose_category_creation', 'retain_blocked'],
             'warehouse' => ['select_warehouse', 'retain_blocked'],
-            'customer', 'supplier' => ['select_party', 'retain_blocked'],
+            'customer', 'supplier' => ! empty($candidate['solabooks'])
+                ? ['select_party', 'retain_blocked']
+                : ['propose_finance_party_creation', 'select_party', 'retain_blocked'],
             'tax' => ['select_tax', 'retain_blocked'],
             'currency' => ['retain_currency', 'exclude_currency', 'retain_blocked'],
             'historical_event' => ['retain_historical_exclusion'],
@@ -1908,6 +1916,11 @@ final class ConnectionWizardService
         }
         if (in_array($action, ['propose_unit_creation', 'propose_category_creation'], true)) {
             return ! empty($candidate['solabooks']['name']) && empty($stockIds);
+        }
+        if ($action === 'propose_finance_party_creation') {
+            return in_array($candidate['entity_type'], ['customer', 'supplier'], true)
+                && ! empty($candidate['solastock']['name'])
+                && empty($candidate['solabooks_record_ids']);
         }
         return true;
     }
