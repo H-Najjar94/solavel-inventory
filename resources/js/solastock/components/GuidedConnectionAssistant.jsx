@@ -209,7 +209,7 @@ export default function GuidedConnectionAssistant({
         const missingStock = row.entity_type === 'unit' ? tr('integration.focus.noStockUnit')
             : row.entity_type === 'category' ? tr('integration.focus.noStockCategory') : tr('integration.assistant.noProposedStockItem');
         const identityLabel = row.entity_type === 'item' ? tr('integration.assistant.sku') : tr('integration.focus.codeOrReference');
-        const affected = (row.safe_details?.affected_items || []).map((item) => item.name || item.sku).filter(Boolean).join('، ');
+        const affectedItems = row.safe_details?.affected_items || [];
         return <div className="focus-list-row" key={row.fingerprint}>
             <div className={`focus-list-record ${comparedMaster ? 'focus-item-comparison' : ''}`}>
                 {comparedMaster ? <>
@@ -224,8 +224,14 @@ export default function GuidedConnectionAssistant({
                         <strong><bdi>{row.solastock?.name || missingStock}</bdi></strong>
                         <small>{identityLabel}: <bdi>{row.solastock?.sku || row.solastock?.code || row.solastock?.id || '—'}</bdi></small>
                     </div>
-                    <small className="focus-match-reason">{affected ? tr('integration.focus.usedByItems', { items: affected })
-                        : exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>
+                    {row.entity_type !== 'item' && affectedItems.length > 0 ? <div className="focus-affected-items">
+                        <div><strong>{tr('integration.focus.affectedItems', { count: affectedItems.length })}</strong>
+                            <button type="button" className="btn btn--link" onClick={() => setOpenOwnerSection('items')}>{tr('integration.focus.reviewAffectedItems')}</button></div>
+                        <ul>{affectedItems.map((item) => <li key={item.id || item.sku || item.name}>
+                            <strong><bdi>{item.name || '—'}</bdi></strong>{item.sku && <small><bdi>{item.sku}</bdi></small>}
+                        </li>)}</ul>
+                        {row.entity_type === 'unit' && <small>{tr('integration.focus.unitDependsOnItemType')}</small>}
+                    </div> : <small className="focus-match-reason">{exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>}
                 </> : <>
                     <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
                     <span><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi>{row.solastock?.name && <> · {tr('integration.focus.proposedMatch')}: <bdi>{row.solastock.name}</bdi></>}</span>
