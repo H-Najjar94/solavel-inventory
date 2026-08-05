@@ -209,7 +209,9 @@ export default function GuidedConnectionAssistant({
         return choice ? [...choice, ['retain_blocked', 'retain_account_role_unresolved'].includes(recommendedAction) ? 'hold' : 'recommended'] : null;
     };
 
-    const selectedOwnerRecommendations = ownerPending.filter((row) => recommendedChoice(row)
+    const activeSectionRows = activeOwnerSection?.[1] || [];
+    const activeSectionPending = activeSectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint));
+    const selectedOwnerRecommendations = activeSectionPending.filter((row) => recommendedChoice(row)
         && !manualChoiceRows.has(row.fingerprint)
         && !excludedRecommendations.has(row.fingerprint));
 
@@ -225,11 +227,12 @@ export default function GuidedConnectionAssistant({
             const action = recommendedChoice(row)?.[0];
             if (!action || !await choose(row, action, recommendationDetails(row, action))) return;
         }
-        const unresolved = ownerPending.filter((row) => !selected.some((saved) => saved.fingerprint === row.fingerprint));
-        if (unresolved.length === 0) return go(3);
-        const section = ownerSections.find(([, sectionRows]) => sectionRows.some((row) =>
-            unresolved.some((pending) => pending.fingerprint === row.fingerprint)))?.[0];
-        if (section) setOpenOwnerSection(section);
+        const unresolved = activeSectionPending.filter((row) => !selected.some((saved) => saved.fingerprint === row.fingerprint));
+        if (unresolved.length > 0) return;
+        const currentIndex = ownerSections.findIndex(([section]) => section === activeOwnerSection?.[0]);
+        const nextSection = ownerSections[currentIndex + 1]?.[0];
+        if (nextSection) return setOpenOwnerSection(nextSection);
+        go(3);
     };
 
     const saveAccountingRecommendationsAndContinue = async () => {
@@ -494,7 +497,7 @@ export default function GuidedConnectionAssistant({
                 })}
             </nav>
             {selectedOwnerRecommendations.length > 0 && <div className="focus-defaults-summary" role="status">
-                <span>{tr('integration.focus.defaultsAcrossSections')}</span>
+                <span>{tr('integration.focus.defaultsInSection')}</span>
             </div>}
             {activeOwnerSection?.[0] === 'items' && exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
             <div className="focus-active-section">{activeOwnerSection ? (() => {
@@ -531,10 +534,10 @@ export default function GuidedConnectionAssistant({
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
             {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
-                disabled: ownerPending.some((row) => !recommendedChoice(row)
+                disabled: activeSectionPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))
-                    && !ownerPending.some((row) => recommendedChoice(row)
+                    && !activeSectionPending.some((row) => recommendedChoice(row)
                         && !manualChoiceRows.has(row.fingerprint)
                         && !excludedRecommendations.has(row.fingerprint)),
             })}
