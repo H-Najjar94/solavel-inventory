@@ -449,8 +449,7 @@ export default function GuidedConnectionAssistant({
 
     const footer = (primaryLabel, onPrimary, { disabled = false, hideBack = false } = {}) => <footer className="focus-footer">
         <div>{!hideBack && task > 1 && <button type="button" className="btn btn--link" onClick={() => go(task - 1)}>{tr('integration.focus.back')}</button>}{saveIndicator}</div>
-        <div><button type="button" className="btn btn--link" onClick={() => window.location.assign('/inventory/dashboard')}>{tr('integration.focus.saveExit')}</button>
-            <button type="button" className="btn btn--primary" disabled={disabled} onClick={onPrimary}>{primaryLabel}</button></div>
+        <div><button type="button" className="btn btn--primary" disabled={disabled} onClick={onPrimary}>{primaryLabel}</button></div>
     </footer>;
 
     const technical = <details className="focus-details"><summary>{tr('integration.assistant.statusDetails')}</summary>
@@ -495,7 +494,6 @@ export default function GuidedConnectionAssistant({
                 })}
             </nav>
             {selectedOwnerRecommendations.length > 0 && <div className="focus-defaults-summary" role="status">
-                <strong>{tr('integration.focus.defaultsReady', { count: selectedOwnerRecommendations.length })}</strong>
                 <span>{tr('integration.focus.defaultsAcrossSections')}</span>
             </div>}
             {activeOwnerSection?.[0] === 'items' && exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
@@ -532,9 +530,7 @@ export default function GuidedConnectionAssistant({
                 </section>;
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
-            {footer(selectedOwnerRecommendations.length > 0
-                ? tr('integration.focus.saveDefaultsContinue', { count: selectedOwnerRecommendations.length })
-                : tr('integration.focus.continue'), saveRecommendationsAndContinue, {
+            {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
                 disabled: ownerPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))

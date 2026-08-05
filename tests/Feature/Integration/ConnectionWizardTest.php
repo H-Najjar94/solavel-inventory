@@ -196,6 +196,7 @@ final class ConnectionWizardTest extends TestCase
         foreach (['recommendedChoice', 'saveRecommendationsAndContinue', 'saveAccountingRecommendationsAndContinue', 'recommendationWillSave', 'type="checkbox"'] as $contract) {
             $this->assertStringContainsString($contract, $assistant.$translations);
         }
+        $this->assertStringNotContainsString("window.location.assign('/inventory/dashboard')", $assistant);
         $this->assertStringContainsString('Add this category to the connection plan', $translations);
         $this->assertStringContainsString('إضافة التصنيف إلى خطة الربط', $translations);
         foreach ([
