@@ -181,6 +181,10 @@ export default function GuidedConnectionAssistant({
             ['propose_category_creation', tr('integration.focus.proposeCategoryCreation'), tr('integration.focus.proposeCategoryCreationEffect')],
             ['retain_blocked', tr('integration.focus.keepCategoryBlocked'), tr('integration.focus.keepCategoryBlockedEffect')],
         ];
+        if (['customer', 'supplier'].includes(row.entity_type) && row.solabooks) return [
+            ['select_party', tr(row.entity_type === 'customer' ? 'integration.focus.useFinanceCustomer' : 'integration.focus.useFinanceSupplier'), tr('integration.focus.useFinancePartyEffect')],
+            ['retain_blocked', tr('integration.focus.reviewPartyLater'), tr('integration.focus.reviewPartyLaterEffect')],
+        ];
         return allowedActions(row).map((action) => [action, tr(`integration.wizard.action.${action}`), tr(`integration.assistant.effect.${action}`)]);
     };
 
@@ -198,12 +202,9 @@ export default function GuidedConnectionAssistant({
                 : row.entity_type === 'unit' && row.solabooks?.name ? 'propose_unit_creation'
                 : row.entity_type === 'category' && row.solastock ? 'select_category'
                     : row.entity_type === 'category' && row.solabooks?.name ? 'propose_category_creation'
-                        : ['customer', 'supplier'].includes(row.entity_type) && row.solastock && row.solabooks ? 'select_party'
+                        : ['customer', 'supplier'].includes(row.entity_type) && row.solabooks ? 'select_party'
                             : row.entity_type === 'account_role' && row.classification === 'candidate_requires_accountant_approval' ? 'select_account_role'
-                                : row.entity_type === 'currency' ? 'retain_blocked'
-                                    : ['customer', 'supplier', 'warehouse', 'unit'].includes(row.entity_type) ? 'retain_blocked'
-                                        : row.entity_type === 'account_role' ? 'retain_account_role_unresolved'
-                                            : row.entity_type === 'item' ? 'retain_blocked' : null;
+                                : null;
         const choice = recommendedAction ? choices.find(([action]) => action === recommendedAction) : null;
         return choice ? [...choice, ['retain_blocked', 'retain_account_role_unresolved'].includes(recommendedAction) ? 'hold' : 'recommended'] : null;
     };

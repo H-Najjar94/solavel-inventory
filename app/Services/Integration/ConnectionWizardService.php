@@ -217,6 +217,21 @@ final class ConnectionWizardService
                 && ($selectedRecordId === '' || ! in_array($selectedRecordId, $conversionTargetIds, true))) {
                 $this->fail('wizard_selected_record_required');
             }
+            if ($action === 'select_party') {
+                $partyIds = array_values(array_unique(array_merge($candidateStockIds,
+                    array_map('strval', $candidate['solabooks_record_ids'] ?? []))));
+                if (! in_array($candidate['entity_type'], ['customer', 'supplier'], true)
+                    || $selectedRecordId === '' || ! in_array($selectedRecordId, $partyIds, true)) {
+                    $this->fail('wizard_selected_record_required');
+                }
+            }
+            if ($action === 'select_account_role') {
+                $accountIds = array_values(array_map('strval', $candidate['solabooks_record_ids'] ?? []));
+                if ($candidate['entity_type'] !== 'account_role'
+                    || $selectedRecordId === '' || ! in_array($selectedRecordId, $accountIds, true)) {
+                    $this->fail('wizard_selected_record_required');
+                }
+            }
             if ($action === 'define_unit_conversion') {
                 $factor = trim((string) ($safeDetails['conversion_factor'] ?? ''));
                 if ($candidate['entity_type'] !== 'unit'
@@ -1859,6 +1874,14 @@ final class ConnectionWizardService
         if (in_array($action, ['select_unit', 'select_category'], true)) {
             return isset($details['selected_record_id'])
                 && in_array((string) $details['selected_record_id'], $stockIds, true);
+        }
+        if (in_array($action, ['select_party', 'select_account_role'], true)) {
+            $eligibleIds = array_values(array_unique(array_merge(
+                array_map('strval', $candidate['solastock_record_ids'] ?? []),
+                array_map('strval', $candidate['solabooks_record_ids'] ?? []),
+            )));
+            return isset($details['selected_record_id'])
+                && in_array((string) $details['selected_record_id'], $eligibleIds, true);
         }
         if ($action === 'define_unit_conversion') {
             $availableIds = collect($candidate['safe_details']['available_stock_units'] ?? [])
