@@ -526,6 +526,77 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
+    public function unit_conversion_requires_a_complete_equation_and_remains_an_idempotent_draft_only_decision(): void
+    {
+        $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('units')->insert([
+            'id' => 7001, 'organization_id' => 14, 'code' => 'BOX', 'name' => 'Box',
+            'symbol' => 'box', 'kind' => 'count', 'is_active' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::connection('tenant')->table('inventory_items')->insert([
+            'organization_id' => 14, 'sku' => 'BOXED-ITEM', 'name' => 'Boxed item',
+            'unit_id' => 7001, 'qty_on_hand' => 0, 'average_cost' => 0,
+            'valuation_method' => 'average', 'tracking_type' => 'none',
+        ]);
+
+        $wizard = app(ConnectionWizardService::class);
+        $before = $this->mutationCounters();
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $candidate = collect($run['comparison'])->first(fn (array $row) =>
+            $row['entity_type'] === 'unit' && (string) ($row['solabooks']['id'] ?? '') === '7001'
+        );
+        $this->assertNotNull($candidate);
+        $target = collect($candidate['safe_details']['available_stock_units'])->firstWhere('name', 'Each');
+        $this->assertNotNull($target);
+        $this->assertContains('define_unit_conversion', (new \ReflectionMethod($wizard, 'allowedActionsForCandidate'))->invoke($wizard, $candidate));
+
+        foreach (['', '0', '-2'] as $invalidFactor) {
+            try {
+                $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+                    'define_unit_conversion', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+                    ['selected_record_id' => (string) $target['id'], 'conversion_factor' => $invalidFactor],
+                    7001, $run['lock_version'], $candidate['candidate_before_hash'], true, false);
+                $this->fail('An incomplete or invalid conversion must not be saved.');
+            } catch (\Illuminate\Validation\ValidationException) {
+                $this->assertTrue(true);
+            }
+        }
+
+        $saved = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'define_unit_conversion', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+            ['selected_record_id' => (string) $target['id'], 'conversion_factor' => '12'],
+            7001, $run['lock_version'], $candidate['candidate_before_hash'], true, false);
+        $this->assertSame('12', $saved['canonical_decision']['safe_details']['conversion_factor']);
+        $this->assertSame('Each', $saved['canonical_decision']['safe_details']['target_unit_name']);
+        $this->assertSame('solabooks_to_solastock', $saved['canonical_decision']['safe_details']['conversion_direction']);
+
+        $again = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+            'define_unit_conversion', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+            ['selected_record_id' => (string) $target['id'], 'conversion_factor' => '12'],
+            7001, $saved['lock_version'], $candidate['candidate_before_hash'], true, false);
+        $this->assertSame('already_saved', $again['persistence_result']);
+        $this->assertSame(1, DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $run['run_uuid'])->where('candidate_fingerprint', $candidate['fingerprint'])->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->count());
+        $this->assertSame($before, $this->mutationCounters());
+    }
+
+    #[Test]
+    public function an_exact_unit_match_does_not_offer_a_redundant_conversion(): void
+    {
+        $wizard = app(ConnectionWizardService::class);
+        $candidate = [
+            'entity_type' => 'unit',
+            'solastock' => ['id' => '1', 'name' => 'Each'],
+            'safe_details' => ['available_stock_units' => [['id' => '1', 'name' => 'Each']]],
+        ];
+        $actions = (new \ReflectionMethod($wizard, 'allowedActionsForCandidate'))->invoke($wizard, $candidate);
+        $this->assertSame(['select_unit', 'retain_blocked'], $actions);
+        $this->assertNotContains('define_unit_conversion', $actions);
+    }
+
+    #[Test]
     public function guided_setup_auto_resolves_finance_authority_and_keeps_only_real_exceptions(): void
     {
         $rows = [

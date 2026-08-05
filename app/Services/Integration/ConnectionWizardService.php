@@ -204,11 +204,29 @@ final class ConnectionWizardService
             if (! in_array($action, $this->allowedActionsForCandidate($candidate), true)) {
                 $this->fail('wizard_decision_not_valid_for_candidate');
             }
+            $availableStockUnits = collect($candidate['safe_details']['available_stock_units'] ?? [])
+                ->keyBy(fn (array $unit) => (string) ($unit['id'] ?? ''));
             $candidateStockIds = array_values(array_map('strval', $candidate['solastock_record_ids'] ?? []));
+            $conversionTargetIds = $availableStockUnits->keys()->filter()->map('strval')->all();
             $selectedRecordId = (string) ($safeDetails['selected_record_id'] ?? '');
             if (in_array($action, ['select_unit', 'select_category'], true)
                 && ($selectedRecordId === '' || ! in_array($selectedRecordId, $candidateStockIds, true))) {
                 $this->fail('wizard_selected_record_required');
+            }
+            if ($action === 'define_unit_conversion'
+                && ($selectedRecordId === '' || ! in_array($selectedRecordId, $conversionTargetIds, true))) {
+                $this->fail('wizard_selected_record_required');
+            }
+            if ($action === 'define_unit_conversion') {
+                $factor = trim((string) ($safeDetails['conversion_factor'] ?? ''));
+                if ($candidate['entity_type'] !== 'unit'
+                    || empty($candidate['solabooks']['id'])
+                    || ! $availableStockUnits->has($selectedRecordId)
+                    || ! preg_match('/^(?:0*[1-9]\d{0,11})(?:\.\d{1,6})?$|^0\.\d{0,5}[1-9]$/', $factor)) {
+                    throw ValidationException::withMessages([
+                        'safe_details.conversion_factor' => ['wizard_unit_conversion_invalid'],
+                    ]);
+                }
             }
             if (in_array($action, ['propose_unit_creation', 'propose_category_creation'], true)
                 && (empty($candidate['solabooks']['name']) || ! empty($candidateStockIds))) {
@@ -222,7 +240,7 @@ final class ConnectionWizardService
                 ->where('run_uuid', $runUuid)->where('candidate_fingerprint', $fingerprint)->lockForUpdate()->first();
             $normalizedStockIds = array_values(array_map('strval', $stockIds));
             $normalizedBooksIds = array_values(array_map('strval', $booksIds));
-            $normalizedSafeDetails = $this->safeDecisionDetails($safeDetails);
+            $normalizedSafeDetails = $this->safeDecisionDetails($safeDetails, $action, $candidate, $availableStockUnits->all());
             if ($current && $current->status === 'selected'
                 && hash_equals((string) $current->candidate_before_hash, $beforeHash)
                 && (string) $current->action === $action
@@ -1583,6 +1601,12 @@ final class ConnectionWizardService
         if (Schema::connection('tenant')->hasTable('units')) {
             $stockUnits = DB::connection('tenant')->table('units')->where('organization_id', $stockOrgId)
                 ->where('is_active', true)->whereNull('deleted_at')->orderBy('id')->get();
+            $availableStockUnits = $stockUnits->map(fn ($unit) => [
+                'id' => (string) $unit->id,
+                'name' => (string) ($unit->name ?? ''),
+                'code' => (string) ($unit->code ?? ''),
+                'symbol' => (string) ($unit->symbol ?? ''),
+            ])->values()->all();
             $resolvedUnitIds = [];
             foreach (DB::connection('tenant')->table('units')->whereIn('id', $referencedUnits)->orderBy('id')->get() as $unit) {
                 $resolvedUnitIds[] = (int) $unit->id;
@@ -1599,6 +1623,7 @@ final class ConnectionWizardService
                     'owner_unit_selection_required', 'owner_decision', [
                         'source' => 'finance_item_reference', 'affected_items' => $affected,
                         'solastock_candidate_count' => $matches->count(),
+                        'available_stock_units' => $availableStockUnits,
                     ]);
             }
             foreach ($referencedUnits->reject(fn ($id) => in_array((int) $id, $resolvedUnitIds, true)) as $missingUnitId) {
@@ -1616,6 +1641,7 @@ final class ConnectionWizardService
                         'finance_reference_id' => (string) $missingUnitId,
                         'affected_items' => $affected,
                         'solastock_candidate_count' => 0,
+                        'available_stock_units' => $availableStockUnits,
                     ]);
             }
         }
@@ -1802,7 +1828,13 @@ final class ConnectionWizardService
                 'missing_solabooks_record' => ['keep_solastock_authority', 'exclude_initial_connection', 'physical_count_required'],
                 default => ['retain_blocked', 'physical_count_required'],
             },
-            'unit' => ['select_unit', 'propose_unit_creation', 'define_unit_conversion', 'retain_blocked'],
+            'unit' => ! empty($candidate['solastock'])
+                ? ['select_unit', 'retain_blocked']
+                : array_values(array_filter([
+                    'propose_unit_creation',
+                    ! empty($candidate['safe_details']['available_stock_units']) ? 'define_unit_conversion' : null,
+                    'retain_blocked',
+                ])),
             'category' => ['select_category', 'propose_category_creation', 'retain_blocked'],
             'warehouse' => ['select_warehouse', 'retain_blocked'],
             'customer', 'supplier' => ['select_party', 'retain_blocked'],
@@ -1826,6 +1858,13 @@ final class ConnectionWizardService
         if (in_array($action, ['select_unit', 'select_category'], true)) {
             return isset($details['selected_record_id'])
                 && in_array((string) $details['selected_record_id'], $stockIds, true);
+        }
+        if ($action === 'define_unit_conversion') {
+            $availableIds = collect($candidate['safe_details']['available_stock_units'] ?? [])
+                ->pluck('id')->map('strval')->all();
+            return isset($details['selected_record_id'], $details['conversion_factor'])
+                && in_array((string) $details['selected_record_id'], $availableIds, true)
+                && (string) ($details['conversion_direction'] ?? '') === 'solabooks_to_solastock';
         }
         if (in_array($action, ['propose_unit_creation', 'propose_category_creation'], true)) {
             return ! empty($candidate['solabooks']['name']) && empty($stockIds);
@@ -2028,7 +2067,7 @@ final class ConnectionWizardService
         ];
     }
 
-    private function safeDecisionDetails(array $details): array
+    private function safeDecisionDetails(array $details, string $action = '', array $candidate = [], array $availableStockUnits = []): array
     {
         if (array_key_exists('physical_quantity', $details)) {
             $quantity = trim((string) $details['physical_quantity']);
@@ -2039,9 +2078,20 @@ final class ConnectionWizardService
             }
             $details['physical_quantity'] = $quantity;
         }
+        if ($action === 'define_unit_conversion') {
+            $selectedId = (string) $details['selected_record_id'];
+            $selectedUnit = $availableStockUnits[$selectedId] ?? null;
+            $details['conversion_factor'] = trim((string) $details['conversion_factor']);
+            $details['selected_record_id'] = $selectedId;
+            $details['source_record_id'] = (string) $candidate['solabooks']['id'];
+            $details['conversion_direction'] = 'solabooks_to_solastock';
+            $details['target_unit_name'] = (string) ($selectedUnit['name'] ?? '');
+            $details['target_unit_code'] = (string) ($selectedUnit['code'] ?? '');
+        }
         return collect($details)->only([
             'reason', 'selected_record_id', 'physical_count_reference', 'physical_quantity',
-            'accounting_approval_required', 'note',
+            'accounting_approval_required', 'note', 'conversion_factor', 'source_record_id',
+            'conversion_direction', 'target_unit_name', 'target_unit_code',
         ])->map(fn ($value) => is_string($value) ? mb_substr($value, 0, 500) : $value)->all();
     }
 
