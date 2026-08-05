@@ -65,13 +65,15 @@ export default function GuidedConnectionAssistant({
         solastockOnly: itemRows.filter((row) => !row.solabooks && row.solastock).length,
     };
     const ownerSections = [
-        ['unitsCategories', ownerRows.filter((row) => ['unit', 'category'].includes(row.entity_type))],
+        ['units', ownerRows.filter((row) => row.entity_type === 'unit')],
+        ['categories', ownerRows.filter((row) => row.entity_type === 'category')],
         ['customers', ownerRows.filter((row) => row.entity_type === 'customer')],
         ['suppliers', ownerRows.filter((row) => row.entity_type === 'supplier')],
         ['warehouses', ownerRows.filter((row) => row.entity_type === 'warehouse')],
         ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
         ['items', itemRows],
     ].filter(([, sectionRows]) => sectionRows.length > 0);
+    const sectionIcons = { units: '↔', categories: '▦', customers: '♙', suppliers: '◆', warehouses: '▤', currencies: '$', items: '□' };
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
     const activeOwnerSection = ownerSections.find(([section]) => section === openOwnerSection) || ownerSections[0];
@@ -321,8 +323,9 @@ export default function GuidedConnectionAssistant({
             <nav className="focus-category-nav" aria-label={tr('integration.focus.businessSections')}>
                 {ownerSections.map(([section, sectionRows]) => {
                     const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
-                    return <button type="button" key={section} className={activeOwnerSection?.[0] === section ? 'is-active' : remaining === 0 ? 'is-complete' : ''}
+                    return <button type="button" key={section} data-section={section} className={activeOwnerSection?.[0] === section ? 'is-active' : remaining === 0 ? 'is-complete' : ''}
                         aria-current={activeOwnerSection?.[0] === section ? 'page' : undefined} onClick={() => setOpenOwnerSection(section)}>
+                        <i className="focus-section-icon" aria-hidden="true">{sectionIcons[section]}</i>
                         <span>{tr(`integration.focus.section.${section}`)}</span>
                         <bdi>{remaining === 0 ? '✓' : remaining}</bdi>
                     </button>;
