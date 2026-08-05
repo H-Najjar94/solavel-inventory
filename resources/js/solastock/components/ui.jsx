@@ -83,7 +83,7 @@ export function ConfirmModal({ open, title, message, confirmLabel = t('confirm')
 }
 
 // ── Quick-create select: a dropdown with an inline "+ create" option ──
-export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = t('none'), createLabel = t('create'), error }) {
+export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = t('none'), createLabel = t('create'), error, required = false }) {
     const [creating, setCreating] = useState(false);
     const [text, setText] = useState('');
 
@@ -96,7 +96,7 @@ export function QuickCreateSelect({ label, value, onChange, options, onCreate, p
     }
 
     return (
-        <Field label={label} error={error}>
+        <Field label={label} error={error} required={required}>
             {creating ? (
                 <div className="quick-create">
                     <input className="input" autoFocus value={text} placeholder={t('common.newValue', 'New :label…', { label })}
@@ -106,7 +106,7 @@ export function QuickCreateSelect({ label, value, onChange, options, onCreate, p
                 </div>
             ) : (
                 <div className="quick-create">
-                    <select className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+                    <select className="input" value={value ?? ''} required={required} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
                         <option value="">{placeholder}</option>
                         {(options ?? []).map((o) => <option key={o.id} value={o.id}>{o.name ?? o.code}</option>)}
                     </select>

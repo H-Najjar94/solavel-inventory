@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api\Concerns;
 
 use App\Models\Tenant\Item;
 use App\Models\Tenant\StockBalance;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
@@ -88,6 +89,19 @@ trait ValidatesItem
             $barcode = $this->input('barcode');
             $type = $this->input('item_type');
             $tracking = $this->input('tracking_type', 'none');
+            $current = $id && $orgId
+                ? Item::on($conn)->where('organization_id', $orgId)->find($id)
+                : null;
+            $effectiveType = (string) ($this->input('item_type', $current?->item_type ?? ''));
+            $effectiveCategory = $this->has('category_id') ? $this->input('category_id') : $current?->category_id;
+            $effectiveUnit = $this->has('base_unit_id') ? $this->input('base_unit_id') : $current?->base_unit_id;
+
+            if (empty($effectiveCategory)) {
+                $v->errors()->add('category_id', __('inventory.validation.category_required'));
+            }
+            if ($effectiveType === 'inventory' && empty($effectiveUnit)) {
+                $v->errors()->add('base_unit_id', __('inventory.validation.unit_required_for_inventory'));
+            }
 
             // org-scoped SKU uniqueness
             if ($sku && $orgId) {
@@ -122,7 +136,6 @@ trait ValidatesItem
                 $hasStock = StockBalance::on($conn)->where('organization_id', $orgId)
                     ->where('item_id', $id)->where('on_hand_qty', '>', 0)->exists();
                 if ($hasStock) {
-                    $current = Item::on($conn)->where('organization_id', $orgId)->find($id);
                     if ($current) {
                         if ($this->filled('costing_method') && $this->input('costing_method') !== $current->costing_method) {
                             $v->errors()->add('costing_method', __('inventory.validation.costing_locked'));
@@ -139,6 +152,10 @@ trait ValidatesItem
     protected function baseItemRules(bool $partial = false): array
     {
         $req = $partial ? 'sometimes' : 'required';
+        $orgId = app(\App\Tenancy\OrganizationContext::class)->id();
+        $activeForOrg = static fn (string $table) => Rule::exists($table, 'id')->where(
+            fn ($query) => $query->where('organization_id', $orgId)->where('is_active', true)->whereNull('deleted_at')
+        );
 
         return [
             'sku' => [$req, 'string', 'max:191'],
@@ -151,9 +168,9 @@ trait ValidatesItem
             'track_lot' => ['boolean'],
             'track_serial' => ['boolean'],
             'track_expiry' => ['boolean'],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => [$partial ? 'sometimes' : 'required', 'integer', $activeForOrg('item_categories')],
             'brand_id' => ['nullable', 'integer'],
-            'base_unit_id' => ['nullable', 'integer'],
+            'base_unit_id' => [$partial ? 'sometimes' : 'nullable', 'integer', $activeForOrg('units')],
             'preferred_supplier_id' => ['nullable', 'integer'],
             'costing_method' => ['nullable', \Illuminate\Validation\Rule::in(['average', 'fifo', 'standard'])],
             'reorder_point' => ['nullable', 'numeric', 'min:0'],

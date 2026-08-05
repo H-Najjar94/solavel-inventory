@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '../stores/tenant.jsx';
 import { useToast } from '../stores/toast.jsx';
+import { useMeta } from '../stores/meta.jsx';
 import { api } from '../services/api.js';
-import { Breadcrumbs } from '../components/ui.jsx';
+import { Breadcrumbs, QuickCreateSelect } from '../components/ui.jsx';
 import { t } from '../i18n/index.js';
 
 /**
@@ -25,13 +26,14 @@ export default function OnboardingPage() {
     const tenant = useTenant();
     const nav = useNavigate();
     const toast = useToast();
+    const meta = useMeta();
     const qc = useQueryClient();
 
     const [step, setStep] = useState(1);
     const [busy, setBusy] = useState(false);
     const [provisionResult, setProvisionResult] = useState(null);
     const [wh, setWh] = useState({ id: null, code: '', name: '' });
-    const [item, setItem] = useState({ id: null, sku: '', name: '' });
+    const [item, setItem] = useState({ id: null, sku: '', name: '', category_id: null, base_unit_id: null });
     const ready = tenant.dataState === 'real';
 
     async function provision() {
@@ -58,11 +60,19 @@ export default function OnboardingPage() {
     async function createItem() {
         setBusy(true);
         try {
-            const res = await api.createItem({ sku: item.sku || 'ITEM-001', name: item.name || 'First Item', item_type: 'inventory', tracking_type: 'none', is_active: true });
+            const res = await api.createItem({ ...item, item_type: 'inventory', tracking_type: 'none', costing_method: 'average', is_active: true });
             setItem({ ...item, id: res?.data?.id });
             toast.push(t('onboarding.itemCreated'), 'success'); setStep(7);
         } catch (e) { toast.push(e.message, 'error'); }
         finally { setBusy(false); }
+    }
+
+    async function quickCreate(kind, name) {
+        try {
+            const res = await (kind === 'unit' ? api.createUnit(name) : api.createCategory(name));
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            return res?.data ?? res;
+        } catch (e) { toast.push(e.message, 'error'); return null; }
     }
 
     function finish() {
@@ -122,8 +132,14 @@ export default function OnboardingPage() {
                     <div className="form-grid">
                         <input className="input" placeholder={t('onboarding.itemSku')} value={item.sku} onChange={(e) => setItem({ ...item, sku: e.target.value })} />
                         <input className="input" placeholder={t('onboarding.name')} value={item.name} onChange={(e) => setItem({ ...item, name: e.target.value })} />
+                        <QuickCreateSelect label={t('category')} required value={item.category_id}
+                            onChange={(value) => setItem({ ...item, category_id: value })} options={meta.lookups?.categories ?? []}
+                            onCreate={(name) => quickCreate('category', name)} />
+                        <QuickCreateSelect label={t('unit')} required value={item.base_unit_id}
+                            onChange={(value) => setItem({ ...item, base_unit_id: value })} options={meta.lookups?.units ?? []}
+                            onCreate={(name) => quickCreate('unit', name)} />
                     </div>
-                    <button className="btn btn--primary" disabled={busy} onClick={createItem}>{t(busy ? 'onboarding.creating' : 'onboarding.createItem')}</button>
+                    <button className="btn btn--primary" disabled={busy || !item.name || !item.sku || !item.category_id || !item.base_unit_id} onClick={createItem}>{t(busy ? 'onboarding.creating' : 'onboarding.createItem')}</button>
                     <button className="btn" onClick={() => setStep(7)}>{t('onboarding.skip')}</button>
                 </Step>
 

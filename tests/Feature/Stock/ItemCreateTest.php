@@ -4,8 +4,12 @@ namespace Tests\Feature\Stock;
 
 use App\Http\Controllers\Api\V1\ItemController;
 use App\Http\Requests\Api\StoreItemRequest;
+use App\Http\Requests\Api\UpdateItemRequest;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemBarcode;
+use App\Models\Tenant\ItemCategory;
+use App\Models\Tenant\Unit;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 use Tests\Traits\TenantAware;
@@ -24,11 +28,70 @@ class ItemCreateTest extends TestCase
     /** Run the form payload through the real Store request + controller. */
     private function createViaRequest(array $payload): array
     {
+        $payload['category_id'] ??= ItemCategory::query()->firstOrCreate(
+            ['name' => 'General'], ['level' => 0, 'is_active' => true]
+        )->id;
+        if (($payload['item_type'] ?? 'inventory') === 'inventory') {
+            $payload['base_unit_id'] ??= Unit::query()->firstOrCreate(
+                ['code' => 'EA'], ['name' => 'Each', 'symbol' => 'ea', 'is_active' => true]
+            )->id;
+        }
         $req = StoreItemRequest::create('/api/v1/items', 'POST', $payload);
         $req->setContainer(app())->setRedirector(app('redirect'));
         $req->validateResolved(); // prepareForValidation + rules + domain rules
 
         return app(ItemController::class)->store($req)->getData(true);
+    }
+
+    #[Test]
+    public function category_is_required_for_every_item_and_unit_is_required_for_inventory(): void
+    {
+        $this->useTenantA();
+        $request = StoreItemRequest::create('/api/v1/items', 'POST', $this->formPayload());
+        $request->setContainer(app())->setRedirector(app('redirect'));
+        try {
+            $request->validateResolved();
+            $this->fail('Incomplete inventory item should not validate.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('category_id', $e->errors());
+            $this->assertArrayHasKey('base_unit_id', $e->errors());
+        }
+
+        $service = StoreItemRequest::create('/api/v1/items', 'POST', $this->formPayload([
+            'item_type' => 'service', 'category_id' => null, 'base_unit_id' => null,
+        ]));
+        $service->setContainer(app())->setRedirector(app('redirect'));
+        try {
+            $service->validateResolved();
+            $this->fail('Service without category should not validate.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('category_id', $e->errors());
+            $this->assertArrayNotHasKey('base_unit_id', $e->errors());
+        }
+    }
+
+    #[Test]
+    public function editing_a_legacy_incomplete_inventory_item_requires_category_and_unit(): void
+    {
+        $this->useTenantA();
+        $item = Item::query()->create([
+            'sku' => 'LEGACY-INCOMPLETE', 'name' => 'Legacy incomplete', 'item_type' => 'inventory',
+            'tracking_type' => 'none', 'costing_method' => 'average', 'is_active' => true,
+        ]);
+        $request = UpdateItemRequest::create('/api/v1/items/'.$item->id, 'PUT', ['name' => 'Still incomplete']);
+        $request->setRouteResolver(fn () => new class($item) {
+            public function __construct(private Item $item) {}
+            public function parameter(string $key): mixed { return $key === 'item' ? $this->item : null; }
+        });
+        $request->setContainer(app())->setRedirector(app('redirect'));
+
+        try {
+            $request->validateResolved();
+            $this->fail('Editing an incomplete inventory item should require repair.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('category_id', $e->errors());
+            $this->assertArrayHasKey('base_unit_id', $e->errors());
+        }
     }
 
     private function formPayload(array $over = []): array

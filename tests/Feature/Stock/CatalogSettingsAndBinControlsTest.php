@@ -47,6 +47,12 @@ class CatalogSettingsAndBinControlsTest extends TestCase
 
     private function createItem(array $payload): Item
     {
+        $categoryId = ItemCategory::query()->firstOrCreate(
+            ['name' => 'Test category'], ['level' => 0, 'is_active' => true]
+        )->id;
+        $unitId = Unit::query()->firstOrCreate(
+            ['code' => 'EA'], ['name' => 'Each', 'symbol' => 'ea', 'is_active' => true]
+        )->id;
         $req = StoreItemRequest::create('/api/v1/items', 'POST', array_merge([
             'sku' => 'CAT-'.uniqid(),
             'name' => 'Catalog item',
@@ -56,6 +62,8 @@ class CatalogSettingsAndBinControlsTest extends TestCase
             'purchase_price' => '',
             'sales_price' => '',
             'is_active' => true,
+            'category_id' => $categoryId,
+            'base_unit_id' => $unitId,
         ], $payload));
         $req->setContainer(app())->setRedirector(app('redirect'));
         $req->validateResolved();
