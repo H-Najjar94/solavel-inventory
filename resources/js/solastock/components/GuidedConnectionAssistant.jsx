@@ -27,6 +27,8 @@ export default function GuidedConnectionAssistant({
     const [expandedAffectedRows, setExpandedAffectedRows] = useState(() => new Set());
     const [pendingActions, setPendingActions] = useState({});
     const [conversionDrafts, setConversionDrafts] = useState({});
+    const [manualChoiceRows, setManualChoiceRows] = useState(() => new Set());
+    const [excludedRecommendations, setExcludedRecommendations] = useState(() => new Set());
     const headingRef = useRef(null);
     const resumedRunRef = useRef(null);
 
@@ -131,6 +133,10 @@ export default function GuidedConnectionAssistant({
         if (task === 2) setOwnerCursor(0);
         if (task === 3) setCountCursor(0);
         if (task === 4) setAccountCursor(0);
+        setManualChoiceRows((currentValues) => {
+            if (!currentValues.has(row.fingerprint)) return currentValues;
+            const next = new Set(currentValues); next.delete(row.fingerprint); return next;
+        });
         return saved;
     };
 
@@ -178,6 +184,37 @@ export default function GuidedConnectionAssistant({
         return allowedActions(row).map((action) => [action, tr(`integration.wizard.action.${action}`), tr(`integration.assistant.effect.${action}`)]);
     };
 
+    const recommendedChoice = (row) => {
+        const choices = choiceCopy(row);
+        const recommendedAction = row.classification === 'exact_candidate_requires_owner_review'
+            ? 'approve_exact_binding'
+            : row.entity_type === 'unit' && row.solastock ? 'select_unit'
+                : row.entity_type === 'category' && row.solastock ? 'select_category'
+                    : row.entity_type === 'category' && row.solabooks?.name ? 'propose_category_creation'
+                        : null;
+        return recommendedAction ? choices.find(([action]) => action === recommendedAction) : null;
+    };
+
+    const recommendationDetails = (row, action) => (
+        ['select_unit', 'select_category'].includes(action) && row.solastock?.id
+            ? { selected_record_id: row.solastock.id } : {}
+    );
+
+    const saveRecommendationsAndContinue = async () => {
+        const selected = ownerPending.filter((row) => recommendedChoice(row)
+            && !manualChoiceRows.has(row.fingerprint)
+            && !excludedRecommendations.has(row.fingerprint));
+        for (const row of selected) {
+            const action = recommendedChoice(row)?.[0];
+            if (!action || !await choose(row, action, recommendationDetails(row, action))) return;
+        }
+        const unresolved = ownerPending.filter((row) => !selected.some((saved) => saved.fingerprint === row.fingerprint));
+        if (unresolved.length === 0) return go(3);
+        const section = ownerSections.find(([, sectionRows]) => sectionRows.some((row) =>
+            unresolved.some((pending) => pending.fingerprint === row.fingerprint)))?.[0];
+        if (section) setOpenOwnerSection(section);
+    };
+
     const recordCard = (row, role = 'owner') => {
         const exact = row.classification === 'exact_candidate_requires_owner_review';
         const currentNumber = role === 'accountant' ? accountingRows.indexOf(row) + 1 : ownerRows.indexOf(row) + 1;
@@ -205,6 +242,9 @@ export default function GuidedConnectionAssistant({
         const exact = row.classification === 'exact_candidate_requires_owner_review';
         const current = decisions.get(row.fingerprint);
         const choices = choiceCopy(row).filter(([action]) => action);
+        const recommendation = !current?.action ? recommendedChoice(row) : null;
+        const recommendationSelected = recommendation && !excludedRecommendations.has(row.fingerprint);
+        const showManualChoice = manualChoiceRows.has(row.fingerprint) || (!recommendation && !current?.action);
         const selectedAction = pendingActions[row.fingerprint] ?? current?.action ?? '';
         const selectedChoice = choices.find(([action]) => action === selectedAction);
         const conversionOpen = row.entity_type === 'unit' && pendingActions[row.fingerprint] === 'define_unit_conversion';
@@ -280,8 +320,21 @@ export default function GuidedConnectionAssistant({
             </div>
             <div className={`focus-list-decision ${current?.action ? 'is-decided' : ''}`}>
                 <span className="focus-action-title">{tr('integration.focus.yourDecision')}</span>
-                <label className="focus-action-prompt" htmlFor={decisionId}>{decisionPrompt}</label>
-                <select id={decisionId} aria-label={tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}
+                {showManualChoice ? <label className="focus-action-prompt" htmlFor={decisionId}>{decisionPrompt}</label>
+                    : <span className="focus-action-prompt">{decisionPrompt}</span>}
+                {recommendation && !showManualChoice && <div className={`focus-recommendation ${recommendationSelected ? 'is-selected' : ''}`}>
+                    <label><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
+                        const next = new Set(currentValues);
+                        if (next.has(row.fingerprint)) next.delete(row.fingerprint); else next.add(row.fingerprint);
+                        return next;
+                    })} /><span><small>{tr('integration.focus.recommended')}</small><strong>{recommendation[1]}</strong><em>{recommendation[2]}</em></span></label>
+                    <button type="button" className="btn btn--link" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.chooseDifferentAction')}</button>
+                </div>}
+                {current?.action && !showManualChoice && <div className="focus-current-choice">
+                    <span><small>{tr('integration.focus.savedDecision')}</small><strong>{choices.find(([action]) => action === current.action)?.[1] || current.action}</strong></span>
+                    <button type="button" className="btn btn--link" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
+                </div>}
+                {showManualChoice && <select id={decisionId} aria-label={tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}
                     className="input" value={selectedAction} disabled={!runUuid || !editableState || !canEdit(row) || saving}
                     onChange={(event) => {
                         const action = event.target.value;
@@ -300,7 +353,7 @@ export default function GuidedConnectionAssistant({
                     }}>
                     <option value="">{tr('integration.focus.chooseDecision')}</option>
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
-                </select>
+                </select>}
                 {conversionOpen && <div className="focus-conversion" role="group" aria-labelledby={`${factorId}-title`}>
                     <strong id={`${factorId}-title`}>{tr('integration.focus.conversionTitle')}</strong>
                     <label htmlFor={`${factorId}-target`}>{tr('integration.focus.conversionTarget')}</label>
@@ -349,12 +402,14 @@ export default function GuidedConnectionAssistant({
                         } }));
                     }}>{tr('integration.focus.editConversion')}</button>
                 </div>}
-                <small className="focus-action-effect">{decisionEffect}</small>
-                <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}`}>
-                    {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
-                        : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
-                            : current?.action ? tr('integration.focus.saved') : tr('integration.focus.awaitingDecision')}
-                </small>
+                {(showManualChoice || current?.action) && <><small className="focus-action-effect">{decisionEffect}</small>
+                    <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}`}>
+                        {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
+                            : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
+                                : current?.action ? tr('integration.focus.saved') : tr('integration.focus.awaitingDecision')}
+                    </small></>}
+                {recommendation && !showManualChoice && <small className="focus-recommendation-note">{tr(recommendationSelected
+                    ? 'integration.focus.recommendationWillSave' : 'integration.focus.recommendationExcluded')}</small>}
             </div>
         </div>;
     };
@@ -440,7 +495,14 @@ export default function GuidedConnectionAssistant({
                 </section>;
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
-            {footer(tr('integration.focus.continue'), () => go(3), { disabled: ownerPending.length > 0 })}
+            {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
+                disabled: ownerPending.some((row) => !recommendedChoice(row)
+                    || manualChoiceRows.has(row.fingerprint)
+                    || excludedRecommendations.has(row.fingerprint))
+                    && !ownerPending.some((row) => recommendedChoice(row)
+                        && !manualChoiceRows.has(row.fingerprint)
+                        && !excludedRecommendations.has(row.fingerprint)),
+            })}
         </section>;
 
         if (task === 3) return <section className="focus-card focus-list-card">
