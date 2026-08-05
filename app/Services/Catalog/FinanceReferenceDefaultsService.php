@@ -4,7 +4,6 @@ namespace App\Services\Catalog;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 final class FinanceReferenceDefaultsService
 {
@@ -32,7 +31,9 @@ final class FinanceReferenceDefaultsService
             || ! Schema::connection('tenant')->hasTable('inventory_categories')
             || ! Schema::connection('tenant')->hasTable('units')
             || ! Schema::connection('tenant')->hasTable('item_categories')) {
-            throw new RuntimeException('Finance and SolaStock reference tables are required.');
+            return ['version' => self::VERSION, 'organization_id' => $organizationId,
+                'status' => 'reference_tables_unavailable', 'units' => ['created' => 0, 'existing' => 0],
+                'categories' => ['created' => 0, 'existing' => 0]];
         }
 
         $financeUnits = DB::connection('tenant')->table('inventory_units')->get()->keyBy(
