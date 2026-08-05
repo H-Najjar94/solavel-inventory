@@ -2,6 +2,7 @@
 
 namespace App\Services\Integration;
 
+use App\Services\Catalog\FinanceReferenceDefaultsService;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationSetting;
@@ -58,6 +59,7 @@ final class ConnectionWizardService
         private readonly Phase2MappingDiscoveryService $discovery,
         private readonly IntegrationSafetyHold $safety,
         private readonly SolaBooksItemCatalogBridge $catalogBridge,
+        private readonly FinanceReferenceDefaultsService $referenceDefaults,
     ) {}
 
     /** Read-only. No discovery run, counter, nonce, event, or audit is written. */
@@ -99,6 +101,11 @@ final class ConnectionWizardService
 
     public function start(int $organizationId, int $actorUserId): array
     {
+        // Starting setup is the explicit, organization-scoped upgrade boundary:
+        // install only canonical Finance seed references before discovery so
+        // every existing organization receives the same behavior as a newly
+        // provisioned organization. Custom units/categories are never copied.
+        $this->referenceDefaults->sync($organizationId, true);
         $preview = $this->discover($organizationId);
         $identity = $preview['identity'];
         if ((int) ($identity['central_client_id'] ?? 0) <= 0
