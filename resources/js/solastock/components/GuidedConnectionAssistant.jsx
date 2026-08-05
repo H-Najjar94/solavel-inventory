@@ -284,8 +284,8 @@ export default function GuidedConnectionAssistant({
         const selectedAction = pendingActions[row.fingerprint] ?? current?.action ?? '';
         const selectedChoice = choices.find(([action]) => action === selectedAction);
         const conversionOpen = row.entity_type === 'unit' && pendingActions[row.fingerprint] === 'define_unit_conversion';
-        const partyMatchOpen = ['customer', 'supplier'].includes(row.entity_type) && !row.solabooks
-            && pendingActions[row.fingerprint] === 'select_party';
+        const partyNeedsManualMatch = ['customer', 'supplier'].includes(row.entity_type) && !row.solabooks;
+        const partyMatchOpen = partyNeedsManualMatch && showManualChoice;
         const availableFinanceParties = row.safe_details?.available_finance_parties || [];
         const partyTargetId = partyDrafts[row.fingerprint]?.targetId ?? '';
         const availableStockUnits = row.safe_details?.available_stock_units || [];
@@ -387,7 +387,7 @@ export default function GuidedConnectionAssistant({
                     <span><small>{tr('integration.focus.savedDecision')}</small><strong>{choices.find(([action]) => action === current.action)?.[1] || current.action}</strong></span>
                     <button type="button" className="btn btn--link" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
                 </div>}
-                {showManualChoice && <select id={decisionId} aria-label={tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}
+                {showManualChoice && !partyMatchOpen && <select id={decisionId} aria-label={tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}
                     className="input" value={selectedAction} disabled={!runUuid || !editableState || !canEdit(row) || saving}
                     onChange={(event) => {
                         const action = event.target.value;
@@ -416,6 +416,8 @@ export default function GuidedConnectionAssistant({
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
                 </select>}
                 {partyMatchOpen && <div className="focus-party-match" role="group">
+                    <strong>{tr('integration.focus.manualPartyMatchRequired')}</strong>
+                    <small>{tr('integration.focus.noSafePartyDefault')}</small>
                     <label htmlFor={`${decisionId}-party`}>{tr(row.entity_type === 'customer'
                         ? 'integration.focus.chooseFinanceCustomer' : 'integration.focus.chooseFinanceSupplier')}</label>
                     <select id={`${decisionId}-party`} className="input" value={partyTargetId}
@@ -433,9 +435,8 @@ export default function GuidedConnectionAssistant({
                             if (saved) setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
                         }}>{tr('integration.focus.savePartyMatch')}</button>
                         <button type="button" className="btn btn--link" disabled={saving} onClick={() => {
-                            setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
-                            setPartyDrafts((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
-                        }}>{tr('integration.focus.cancelConversion')}</button>
+                            choose(row, 'retain_blocked');
+                        }}>{tr('integration.focus.reviewPartyLater')}</button>
                     </div>
                 </div>}
                 {conversionOpen && <div className="focus-conversion" role="group" aria-labelledby={`${factorId}-title`}>
