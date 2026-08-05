@@ -365,13 +365,18 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertStringContainsString('focus-check-list', $assistant);
         $this->assertStringContainsString('bulkReviewOpen', $assistant);
-        foreach (['items', 'unitsCategories', 'customers', 'suppliers', 'warehouses', 'currencies'] as $section) {
+        foreach (['items', 'units', 'categories', 'customers', 'suppliers', 'warehouses', 'currencies'] as $section) {
             $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
         }
         $this->assertLessThan(
             strpos($assistant, "['items', itemRows]"),
-            strpos($assistant, "['unitsCategories', ownerRows.filter"),
-            'Units and categories must appear before items in the review order.'
+            strpos($assistant, "['units', ownerRows.filter"),
+            'Units must appear before items in the review order.'
+        );
+        $this->assertLessThan(
+            strpos($assistant, "['items', itemRows]"),
+            strpos($assistant, "['categories', ownerRows.filter"),
+            'Categories must appear before items in the review order.'
         );
         $this->assertStringContainsString('focus-category-nav', $assistant);
         $this->assertStringContainsString('focus-active-section', $assistant);
