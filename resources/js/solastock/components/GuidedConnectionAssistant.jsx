@@ -25,6 +25,8 @@ export default function GuidedConnectionAssistant({
     const [openOwnerSection, setOpenOwnerSection] = useState(undefined);
     const [itemFilter, setItemFilter] = useState('all');
     const [expandedAffectedRows, setExpandedAffectedRows] = useState(() => new Set());
+    const [pendingActions, setPendingActions] = useState({});
+    const [conversionDrafts, setConversionDrafts] = useState({});
     const headingRef = useRef(null);
     const resumedRunRef = useRef(null);
 
@@ -121,7 +123,7 @@ export default function GuidedConnectionAssistant({
 
     const choose = async (row, action, details = {}) => {
         const saved = await decide(row, action, details);
-        if (!saved) return;
+        if (!saved) return null;
         const canonical = saved.canonical_decision
             || (saved.decisions || []).find((decision) => decision.candidate_fingerprint === row.fingerprint)
             || confirmedDecisions.get(row.fingerprint);
@@ -129,6 +131,7 @@ export default function GuidedConnectionAssistant({
         if (task === 2) setOwnerCursor(0);
         if (task === 3) setCountCursor(0);
         if (task === 4) setAccountCursor(0);
+        return saved;
     };
 
     const undo = async () => {
@@ -156,11 +159,11 @@ export default function GuidedConnectionAssistant({
         if (row.entity_type === 'unit') {
             if (row.solastock) return [
                 ['select_unit', tr('integration.focus.useStockUnit'), tr('integration.focus.useStockUnitEffect')],
-                ['define_unit_conversion', tr('integration.focus.defineConversion'), tr('integration.focus.defineConversionEffect')],
                 ['retain_blocked', tr('integration.focus.keepUnitBlocked'), tr('integration.focus.keepUnitBlockedEffect')],
             ];
             if (row.solabooks?.name) return [
                 ['propose_unit_creation', tr('integration.focus.proposeUnitCreation'), tr('integration.focus.proposeUnitCreationEffect')],
+                ...(row.safe_details?.available_stock_units?.length ? [['define_unit_conversion', tr('integration.focus.defineConversion'), tr('integration.focus.defineConversionEffect')]] : []),
                 ['retain_blocked', tr('integration.focus.keepUnitBlocked'), tr('integration.focus.keepUnitBlockedEffect')],
             ];
             return [['retain_blocked', tr('integration.focus.keepBrokenUnitBlocked'), tr('integration.focus.keepBrokenUnitBlockedEffect')]];
@@ -202,7 +205,18 @@ export default function GuidedConnectionAssistant({
         const exact = row.classification === 'exact_candidate_requires_owner_review';
         const current = decisions.get(row.fingerprint);
         const choices = choiceCopy(row).filter(([action]) => action);
-        const selectedChoice = choices.find(([action]) => action === current?.action);
+        const selectedAction = pendingActions[row.fingerprint] ?? current?.action ?? '';
+        const selectedChoice = choices.find(([action]) => action === selectedAction);
+        const conversionOpen = row.entity_type === 'unit' && pendingActions[row.fingerprint] === 'define_unit_conversion';
+        const availableStockUnits = row.safe_details?.available_stock_units || [];
+        const defaultTargetId = current?.safe_details?.selected_record_id || row.solastock?.id || '';
+        const conversionTargetId = conversionDrafts[row.fingerprint]?.targetId ?? defaultTargetId;
+        const conversionFactor = conversionDrafts[row.fingerprint]
+            ?.factor ?? current?.safe_details?.conversion_factor ?? '';
+        const conversionTarget = availableStockUnits.find((unit) => String(unit.id) === String(conversionTargetId));
+        const conversionValid = /^(?:0*[1-9]\d{0,11})(?:\.\d{1,6})?$|^0\.\d{0,5}[1-9]$/.test(String(conversionFactor).trim());
+        const decisionId = `wizard-decision-${row.fingerprint.slice(0, 12)}`;
+        const factorId = `wizard-conversion-${row.fingerprint.slice(0, 12)}`;
         const comparedMaster = ['item', 'unit', 'category'].includes(row.entity_type);
         const sourceLabel = row.entity_type === 'item' ? tr('integration.assistant.originalFinanceItem')
             : row.entity_type === 'unit' ? tr('integration.focus.originalFinanceUnit') : tr('integration.focus.originalFinanceCategory');
@@ -264,23 +278,84 @@ export default function GuidedConnectionAssistant({
                     <small>{tr(`integration.focus.question.${row.entity_type}`)}</small>
                 </>}
             </div>
-            <label className={`focus-list-decision ${current?.action ? 'is-decided' : ''}`}>
+            <div className={`focus-list-decision ${current?.action ? 'is-decided' : ''}`}>
                 <span className="focus-action-title">{tr('integration.focus.yourDecision')}</span>
-                <span className="focus-action-prompt">{decisionPrompt}</span>
-                <span className="sr-only">{tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}</span>
-                <select className="input" value={current?.action || ''} disabled={!runUuid || !editableState || !canEdit(row) || saving}
-                    onChange={(event) => event.target.value && choose(row, event.target.value,
-                        ['select_unit', 'select_category'].includes(event.target.value) && row.solastock?.id ? { selected_record_id: row.solastock.id } : {})}>
+                <label className="focus-action-prompt" htmlFor={decisionId}>{decisionPrompt}</label>
+                <select id={decisionId} aria-label={tr('integration.focus.decisionFor', { name: row.solabooks?.name || row.solastock?.name || '' })}
+                    className="input" value={selectedAction} disabled={!runUuid || !editableState || !canEdit(row) || saving}
+                    onChange={(event) => {
+                        const action = event.target.value;
+                        if (!action) return;
+                        if (action === 'define_unit_conversion') {
+                            setPendingActions((values) => ({ ...values, [row.fingerprint]: action }));
+                            setConversionDrafts((values) => ({ ...values, [row.fingerprint]: {
+                                targetId: values[row.fingerprint]?.targetId ?? defaultTargetId,
+                                factor: values[row.fingerprint]?.factor ?? current?.safe_details?.conversion_factor ?? '',
+                            } }));
+                            return;
+                        }
+                        setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                        choose(row, action, ['select_unit', 'select_category'].includes(action) && row.solastock?.id
+                            ? { selected_record_id: row.solastock.id } : {});
+                    }}>
                     <option value="">{tr('integration.focus.chooseDecision')}</option>
                     {choices.map(([action, label]) => <option value={action} key={action}>{label}</option>)}
                 </select>
+                {conversionOpen && <div className="focus-conversion" role="group" aria-labelledby={`${factorId}-title`}>
+                    <strong id={`${factorId}-title`}>{tr('integration.focus.conversionTitle')}</strong>
+                    <label htmlFor={`${factorId}-target`}>{tr('integration.focus.conversionTarget')}</label>
+                    <select id={`${factorId}-target`} className="input" value={conversionTargetId}
+                        onChange={(event) => setConversionDrafts((values) => ({ ...values, [row.fingerprint]: {
+                            targetId: event.target.value, factor: values[row.fingerprint]?.factor ?? '',
+                        } }))}>
+                        <option value="">{tr('integration.focus.chooseTargetUnit')}</option>
+                        {availableStockUnits.map((unit) => <option value={unit.id} key={unit.id}>{unit.name}{unit.code ? ` (${unit.code})` : ''}</option>)}
+                    </select>
+                    <div className="focus-conversion-equation">
+                        <span><bdi>1 {row.solabooks?.name || '—'}</bdi></span>
+                        <span aria-hidden="true">=</span>
+                        <label htmlFor={factorId} className="sr-only">{tr('integration.focus.conversionFactor', { unit: row.solastock?.name || '' })}</label>
+                        <input id={factorId} className="input" type="text" inputMode="decimal" autoComplete="off"
+                            value={conversionFactor} placeholder="12" aria-invalid={conversionFactor !== '' && !conversionValid}
+                            onChange={(event) => setConversionDrafts((values) => ({ ...values, [row.fingerprint]: {
+                                targetId: values[row.fingerprint]?.targetId ?? defaultTargetId, factor: event.target.value,
+                            } }))} />
+                        <span><bdi>{conversionTarget?.name || '—'}</bdi></span>
+                    </div>
+                    <small>{tr('integration.focus.conversionExample', { source: row.solabooks?.name || '—', target: conversionTarget?.name || '—' })}</small>
+                    {conversionFactor !== '' && !conversionValid && <small className="is-error" role="alert">{tr('integration.focus.conversionInvalid')}</small>}
+                    <small>{tr('integration.focus.conversionDraftOnly')}</small>
+                    <div className="focus-conversion-actions">
+                        <button type="button" className="btn" disabled={!conversionTargetId || !conversionValid || saving} onClick={async () => {
+                            const saved = await choose(row, 'define_unit_conversion', {
+                                selected_record_id: conversionTargetId,
+                                conversion_factor: String(conversionFactor).trim(),
+                            });
+                            if (saved) setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                        }}>{tr('integration.focus.saveConversion')}</button>
+                        <button type="button" className="btn btn--link" disabled={saving} onClick={() => {
+                            setPendingActions((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                            setConversionDrafts((values) => { const next = { ...values }; delete next[row.fingerprint]; return next; });
+                        }}>{tr('integration.focus.cancelConversion')}</button>
+                    </div>
+                </div>}
+                {!conversionOpen && current?.action === 'define_unit_conversion' && <div className="focus-conversion-saved">
+                    <span>{tr('integration.focus.savedConversion')}</span>
+                    <strong><bdi>1 {row.solabooks?.name || '—'} = {current.safe_details?.conversion_factor} {current.safe_details?.target_unit_name || '—'}</bdi></strong>
+                    <button type="button" className="btn btn--link" disabled={saving} onClick={() => {
+                        setPendingActions((values) => ({ ...values, [row.fingerprint]: 'define_unit_conversion' }));
+                        setConversionDrafts((values) => ({ ...values, [row.fingerprint]: {
+                            targetId: current.safe_details?.selected_record_id || '', factor: current.safe_details?.conversion_factor || '',
+                        } }));
+                    }}>{tr('integration.focus.editConversion')}</button>
+                </div>}
                 <small className="focus-action-effect">{decisionEffect}</small>
                 <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}`}>
                     {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
                         : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
                             : current?.action ? tr('integration.focus.saved') : tr('integration.focus.awaitingDecision')}
                 </small>
-            </label>
+            </div>
         </div>;
     };
 
