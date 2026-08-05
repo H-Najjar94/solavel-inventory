@@ -136,6 +136,16 @@ class OpeningStockController extends ApiController
 
             $item = Item::query()->where('sku', $sku)->first();
             if (! $item) {
+                $categoryId = filter_var($row['category_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+                $unitId = filter_var($row['base_unit_id'] ?? $row['unit_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+                $validCategory = $categoryId && \App\Models\Tenant\ItemCategory::query()
+                    ->whereKey($categoryId)->where('is_active', true)->whereNull('deleted_at')->exists();
+                $validUnit = $unitId && \App\Models\Tenant\Unit::query()
+                    ->whereKey($unitId)->where('is_active', true)->whereNull('deleted_at')->exists();
+                if (! $validCategory || ! $validUnit) {
+                    return $this->error('invalid_import_master_data',
+                        'Each new inventory item needs a valid category_id and base_unit_id. Row '.($index + 2).'.', 422);
+                }
                 // Grandfathered ceiling: block the import at the plan limit (existing
                 // + created so far), exactly like a single create. Existing items are
                 // untouched; only NEW rows past the limit are refused (402).
@@ -147,6 +157,8 @@ class OpeningStockController extends ApiController
                     'item_type' => $row['item_type'] ?? 'inventory',
                     'tracking_type' => $row['tracking_type'] ?? 'none',
                     'costing_method' => $row['costing_method'] ?? 'average',
+                    'category_id' => $categoryId,
+                    'base_unit_id' => $unitId,
                     'purchase_price' => $row['purchase_price'] ?? $row['unit_cost'] ?? 0,
                     'sales_price' => $row['sales_price'] ?? 0,
                     'is_active' => true,

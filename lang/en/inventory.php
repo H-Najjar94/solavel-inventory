@@ -15,6 +15,8 @@ return [
         'sku_unique' => 'SKU must be unique within the organization.',
         'barcode_unique' => 'Barcode must be unique within the organization.',
         'service_tracking' => 'Service items cannot have stock tracking enabled.',
+        'category_required' => 'A category is required for every item type.',
+        'unit_required_for_inventory' => 'A unit is required for inventory items.',
         'expiry_requires_lot' => 'Expiry tracking requires lot tracking.',
         'costing_locked' => 'Costing method cannot change after stock exists.',
         'item_type_locked' => 'Item type cannot change after stock exists.',

@@ -64,6 +64,7 @@ export default function ItemFormPage() {
     function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
     const isService = form.item_type === 'service';
+    const isInventory = form.item_type === 'inventory';
     const unitName = useMemo(() => lookups.units?.find((u) => u.id === form.base_unit_id)?.code ?? '—', [lookups, form.base_unit_id]);
 
     // Setup checklist signals.
@@ -71,7 +72,7 @@ export default function ItemFormPage() {
         basic: !!form.name && !!form.sku,
         inventory: !!form.item_type && (isService || !!form.costing_method),
         pricing: form.purchase_price !== '' || form.sales_price !== '' || true, // optional → always ok
-        ready: !!form.name && !!form.sku,
+        ready: !!form.name && !!form.sku && !!form.category_id && (!isInventory || !!form.base_unit_id),
     };
 
     async function quickCreate(kind, name) {
@@ -167,9 +168,9 @@ export default function ItemFormPage() {
                             <Field label={t('barcode')} error={errors.barcode}>
                                 <input className="input" value={form.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} placeholder={t('items.optional')} />
                             </Field>
-                            <QuickCreateSelect label={t('unit')} value={form.base_unit_id} onChange={(v) => set('base_unit_id', v)}
+                            <QuickCreateSelect label={t('unit')} value={form.base_unit_id} onChange={(v) => set('base_unit_id', v)} required={isInventory}
                                 options={lookups.units} onCreate={(n) => quickCreate('unit', n)} error={errors.base_unit_id} />
-                            <QuickCreateSelect label={t('category')} value={form.category_id} onChange={(v) => set('category_id', v)}
+                            <QuickCreateSelect label={t('category')} value={form.category_id} onChange={(v) => set('category_id', v)} required
                                 options={lookups.categories} onCreate={(n) => quickCreate('category', n)} error={errors.category_id} />
                             <QuickCreateSelect label={t('brand', 'Brand')} value={form.brand_id} onChange={(v) => set('brand_id', v)}
                                 options={lookups.brands} onCreate={(n) => quickCreate('brand', n)} error={errors.brand_id} />

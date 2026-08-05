@@ -774,6 +774,12 @@ final class ConnectionWizardService
 
         $categoryId = $this->mappedStockIdentity($mapping, 'category', $books->category_id);
         $unitId = $this->mappedStockIdentity($mapping, 'unit', $books->unit_id);
+        if (! $categoryId) {
+            $this->fail('category_mapping_required_before_item_creation');
+        }
+        if (! $unitId) {
+            $this->fail('unit_mapping_required_before_inventory_item_creation');
+        }
         $item = Item::query()->create([
             'organization_id' => $mapping->solastock_organization_id,
             'sku' => $books->sku,
