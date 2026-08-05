@@ -188,16 +188,30 @@ export default function GuidedConnectionAssistant({
         const choices = choiceCopy(row);
         const recommendedAction = row.classification === 'exact_candidate_requires_owner_review'
             ? 'approve_exact_binding'
+            : row.entity_type === 'item' && row.classification === 'missing_solastock_record'
+                && row.solabooks?.item_type === 'inventory' ? 'create_solastock_record'
+                : row.entity_type === 'item' && row.classification === 'missing_solastock_record'
+                    && ['service', 'non_inventory'].includes(row.solabooks?.item_type) ? 'classify_service_non_inventory'
+                    : row.entity_type === 'item' && row.classification === 'missing_solabooks_record'
+                        ? 'keep_solastock_authority'
             : row.entity_type === 'unit' && row.solastock ? 'select_unit'
+                : row.entity_type === 'unit' && row.solabooks?.name ? 'propose_unit_creation'
                 : row.entity_type === 'category' && row.solastock ? 'select_category'
                     : row.entity_type === 'category' && row.solabooks?.name ? 'propose_category_creation'
-                        : null;
-        return recommendedAction ? choices.find(([action]) => action === recommendedAction) : null;
+                        : ['customer', 'supplier'].includes(row.entity_type) && row.solastock && row.solabooks ? 'select_party'
+                            : row.entity_type === 'account_role' && row.classification === 'candidate_requires_accountant_approval' ? 'select_account_role'
+                                : row.entity_type === 'currency' ? 'retain_blocked'
+                                    : ['customer', 'supplier', 'warehouse', 'unit'].includes(row.entity_type) ? 'retain_blocked'
+                                        : row.entity_type === 'account_role' ? 'retain_account_role_unresolved'
+                                            : null;
+        const choice = recommendedAction ? choices.find(([action]) => action === recommendedAction) : null;
+        return choice ? [...choice, ['retain_blocked', 'retain_account_role_unresolved'].includes(recommendedAction) ? 'hold' : 'recommended'] : null;
     };
 
     const recommendationDetails = (row, action) => (
-        ['select_unit', 'select_category'].includes(action) && row.solastock?.id
-            ? { selected_record_id: row.solastock.id } : {}
+        ['select_unit', 'select_category', 'select_party', 'select_account_role'].includes(action)
+            && (row.solastock?.id || row.solabooks?.id)
+            ? { selected_record_id: row.solastock?.id || row.solabooks?.id } : {}
     );
 
     const saveRecommendationsAndContinue = async () => {
@@ -213,6 +227,17 @@ export default function GuidedConnectionAssistant({
         const section = ownerSections.find(([, sectionRows]) => sectionRows.some((row) =>
             unresolved.some((pending) => pending.fingerprint === row.fingerprint)))?.[0];
         if (section) setOpenOwnerSection(section);
+    };
+
+    const saveAccountingRecommendationsAndContinue = async () => {
+        const selected = accountingPending.filter((row) => recommendedChoice(row)
+            && !manualChoiceRows.has(row.fingerprint)
+            && !excludedRecommendations.has(row.fingerprint));
+        for (const row of selected) {
+            const action = recommendedChoice(row)?.[0];
+            if (!action || !await choose(row, action, recommendationDetails(row, action))) return;
+        }
+        if (accountingPending.length === selected.length) go(5);
     };
 
     const recordCard = (row, role = 'owner') => {
@@ -243,6 +268,7 @@ export default function GuidedConnectionAssistant({
         const current = decisions.get(row.fingerprint);
         const choices = choiceCopy(row).filter(([action]) => action);
         const recommendation = !current?.action ? recommendedChoice(row) : null;
+        const recommendationKind = recommendation?.[3] || 'recommended';
         const recommendationSelected = recommendation && !excludedRecommendations.has(row.fingerprint);
         const showManualChoice = manualChoiceRows.has(row.fingerprint) || (!recommendation && !current?.action);
         const selectedAction = pendingActions[row.fingerprint] ?? current?.action ?? '';
@@ -318,17 +344,17 @@ export default function GuidedConnectionAssistant({
                     <small>{tr(`integration.focus.question.${row.entity_type}`)}</small>
                 </>}
             </div>
-            <div className={`focus-list-decision ${current?.action ? 'is-decided' : ''}`}>
-                <span className="focus-action-title">{tr('integration.focus.yourDecision')}</span>
+            <div className={`focus-list-decision ${current?.action ? 'is-decided' : ''} ${recommendation && !showManualChoice ? 'has-default' : ''}`}>
+                {showManualChoice && <span className="focus-action-title">{tr('integration.focus.yourDecision')}</span>}
                 {showManualChoice ? <label className="focus-action-prompt" htmlFor={decisionId}>{decisionPrompt}</label>
                     : <span className="focus-action-prompt">{decisionPrompt}</span>}
-                {recommendation && !showManualChoice && <div className={`focus-recommendation ${recommendationSelected ? 'is-selected' : ''}`}>
+                {recommendation && !showManualChoice && <div className={`focus-recommendation is-${recommendationKind} ${recommendationSelected ? 'is-selected' : ''}`}>
                     <label><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
                         const next = new Set(currentValues);
                         if (next.has(row.fingerprint)) next.delete(row.fingerprint); else next.add(row.fingerprint);
                         return next;
-                    })} /><span><small>{tr('integration.focus.recommended')}</small><strong>{recommendation[1]}</strong><em>{recommendation[2]}</em></span></label>
-                    <button type="button" className="btn btn--link" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.chooseDifferentAction')}</button>
+                    })} /><span><small>{tr(recommendationKind === 'hold' ? 'integration.focus.safeDefault' : 'integration.focus.recommended')}</small><strong>{recommendation[1]}</strong><em>{recommendation[2]}</em></span></label>
+                    <button type="button" className="focus-change-action" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
                 </div>}
                 {current?.action && !showManualChoice && <div className="focus-current-choice">
                     <span><small>{tr('integration.focus.savedDecision')}</small><strong>{choices.find(([action]) => action === current.action)?.[1] || current.action}</strong></span>
@@ -524,7 +550,14 @@ export default function GuidedConnectionAssistant({
         if (task === 4) return <section className="focus-card">
             {!accountingGate.allowed ? <div className="focus-accountant-card"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2><p>{tr('integration.focus.accountantRequiredText', { count: accountingPending.length })}</p><a className="btn" href="/settings/users">{tr('integration.focus.assignAccountant')}</a></div>
                 : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}
-            {footer(tr('integration.focus.continue'), () => go(5), { disabled: accountingGate.allowed && accountingPending.length > 0 })}
+            {footer(tr('integration.focus.continue'), saveAccountingRecommendationsAndContinue, {
+                disabled: !accountingGate.allowed || (accountingPending.some((row) => !recommendedChoice(row)
+                    || manualChoiceRows.has(row.fingerprint)
+                    || excludedRecommendations.has(row.fingerprint))
+                    && !accountingPending.some((row) => recommendedChoice(row)
+                        && !manualChoiceRows.has(row.fingerprint)
+                        && !excludedRecommendations.has(row.fingerprint))),
+            })}
         </section>;
 
         if (task === 5) return <section className="focus-card">

@@ -1043,6 +1043,7 @@ final class ConnectionWizardService
             'inventory_value' => $booksValue,
             'valuation_method' => $books->valuation_method,
             'tracking_type' => $books->tracking_type,
+            'item_type' => (string) ($books->item_type ?? $books->type ?? ''),
             'account_override' => [
                 'inventory_asset' => $books->inventory_asset_account_id ? (string) $books->inventory_asset_account_id : null,
                 'cogs' => $books->cogs_account_id ? (string) $books->cogs_account_id : null,
