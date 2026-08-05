@@ -193,7 +193,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('approval_payload_hash', $page);
         $this->assertStringContainsString('@media (max-width: 820px)', $styles);
         $this->assertStringContainsString('html[dir="rtl"]', $styles);
-        foreach (['recommendedChoice', 'saveRecommendationsAndContinue', 'recommendationWillSave', 'type="checkbox"'] as $contract) {
+        foreach (['recommendedChoice', 'saveRecommendationsAndContinue', 'saveAccountingRecommendationsAndContinue', 'recommendationWillSave', 'type="checkbox"'] as $contract) {
             $this->assertStringContainsString($contract, $assistant.$translations);
         }
         $this->assertStringContainsString('Add this category to the connection plan', $translations);
