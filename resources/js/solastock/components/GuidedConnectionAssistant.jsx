@@ -24,6 +24,7 @@ export default function GuidedConnectionAssistant({
     const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
     const [openOwnerSection, setOpenOwnerSection] = useState(undefined);
     const [itemFilter, setItemFilter] = useState('all');
+    const [expandedAffectedRows, setExpandedAffectedRows] = useState(() => new Set());
     const headingRef = useRef(null);
     const resumedRunRef = useRef(null);
 
@@ -210,6 +211,15 @@ export default function GuidedConnectionAssistant({
             : row.entity_type === 'category' ? tr('integration.focus.noStockCategory') : tr('integration.assistant.noProposedStockItem');
         const identityLabel = row.entity_type === 'item' ? tr('integration.assistant.sku') : tr('integration.focus.codeOrReference');
         const affectedItems = row.safe_details?.affected_items || [];
+        const affectedExpanded = expandedAffectedRows.has(row.fingerprint);
+        const visibleAffectedItems = affectedExpanded ? affectedItems : affectedItems.slice(0, 3);
+        const hiddenAffectedCount = Math.max(0, affectedItems.length - visibleAffectedItems.length);
+        const toggleAffectedItems = () => setExpandedAffectedRows((current) => {
+            const next = new Set(current);
+            if (next.has(row.fingerprint)) next.delete(row.fingerprint);
+            else next.add(row.fingerprint);
+            return next;
+        });
         const brokenFinanceUnit = row.entity_type === 'unit'
             && row.safe_details?.source === 'dangling_finance_item_unit_reference';
         return <div className="focus-list-row" key={row.fingerprint}>
@@ -227,12 +237,16 @@ export default function GuidedConnectionAssistant({
                         <small>{identityLabel}: <bdi>{row.solastock?.sku || row.solastock?.code || row.solastock?.id || '—'}</bdi></small>
                     </div>
                     {row.entity_type !== 'item' && affectedItems.length > 0 ? <div className="focus-affected-items">
-                        <div><strong>{tr('integration.focus.affectedItems', { count: affectedItems.length })}</strong>
-                            <button type="button" className="btn btn--link" onClick={() => setOpenOwnerSection('items')}>{tr('integration.focus.reviewAffectedItems')}</button></div>
-                        <ul>{affectedItems.map((item) => <li key={item.id || item.sku || item.name}>
+                        <div className="focus-affected-heading"><strong>{tr('integration.focus.affectedItems', { count: affectedItems.length })}</strong>
+                            <span><button type="button" className="btn btn--link" onClick={() => setOpenOwnerSection('items')}>{tr('integration.focus.reviewAffectedItems')}</button>
+                            {affectedItems.length > 3 && <button type="button" className="btn btn--link" aria-expanded={affectedExpanded} onClick={toggleAffectedItems}>
+                                {tr(affectedExpanded ? 'integration.focus.showFewerAffected' : 'integration.focus.showMoreAffected', { count: hiddenAffectedCount || affectedItems.length - 3 })}
+                            </button>}</span></div>
+                        <ul className={affectedExpanded ? 'is-expanded' : ''}>{visibleAffectedItems.map((item) => <li key={item.id || item.sku || item.name}>
                             <strong><bdi>{item.name || '—'}</bdi></strong>{item.sku && <small><bdi>{item.sku}</bdi></small>}
                             {item.item_type === 'inventory' && <small>{tr('integration.focus.inventoryQuantity', { quantity: formatNumber(item.quantity, 4) })}</small>}
                         </li>)}</ul>
+                        {!affectedExpanded && hiddenAffectedCount > 0 && <small className="focus-affected-overflow">{tr('integration.focus.moreAffectedSummary', { count: hiddenAffectedCount })}</small>}
                         {row.entity_type === 'unit' && <small className={brokenFinanceUnit ? 'is-error' : ''}>
                             {tr(brokenFinanceUnit ? 'integration.focus.missingUnitInventoryWarning' : 'integration.focus.unitDependsOnItemType')}
                         </small>}
