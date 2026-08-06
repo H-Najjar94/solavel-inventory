@@ -610,6 +610,7 @@ final class ConnectionWizardTest extends TestCase
             $this->guidedRow('account_role', 'candidate_requires_accountant_approval', 'account-ok', ['10'], ['role' => 'inventory_asset']),
             $this->guidedRow('account_role', 'unresolved_account_role', 'account-missing', [], ['role' => 'grni']),
             $this->guidedRow('tax', 'owner_review_required', 'tax-ok', ['20'], ['active' => true]),
+            $this->guidedRow('category', 'owner_review_required', 'category-ok', ['21'], ['deterministic_reference_match' => true]),
             $this->guidedRow('currency', 'owner_review_required', 'jod', ['30'], ['active' => true, 'configured_rate' => '1.000000'], 'JOD'),
             $this->guidedRow('currency', 'owner_review_required', 'xts', ['31'], ['active' => true, 'configured_rate' => '1.000000'], 'XTS'),
             $this->guidedRow('currency', 'owner_review_required', 'xxx', ['32'], ['active' => true, 'configured_rate' => '1.000000'], 'XXX'),
@@ -624,7 +625,8 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame(2, $profile['currency_summary']['advanced_remediation_count']);
         $this->assertSame(['XTS', 'XXX'], $profile['currency_summary']['reserved_codes']);
         $this->assertSame(['account-missing'], $profile['exception_groups']['accounting']);
-        $this->assertCount(3, $profile['automatic_bindings']);
+        $this->assertCount(4, $profile['automatic_bindings']);
+        $this->assertNotContains('category-ok', $profile['exception_groups']['units']);
         $this->assertSame('new_both', $profile['customer_scenario']);
         $this->assertFalse($profile['operational_mutation_allowed']);
 

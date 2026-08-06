@@ -104,7 +104,8 @@ final class ConnectionWizardService
         // Starting setup is the explicit, organization-scoped upgrade boundary:
         // install only canonical Finance seed references before discovery so
         // every existing organization receives the same behavior as a newly
-        // provisioned organization. Custom units/categories are never copied.
+        // provisioned organization. Repeated Finance seed runs are deduplicated;
+        // custom units/categories are never copied.
         $this->referenceDefaults->sync($organizationId, true);
         $preview = $this->discover($organizationId);
         $identity = $preview['identity'];
@@ -1424,7 +1425,7 @@ final class ConnectionWizardService
             && ($row['safe_details']['active'] ?? true) === true
         );
         $resolvedReferences = $rows->filter(fn (array $row) =>
-            $row['entity_type'] === 'unit'
+            in_array($row['entity_type'], ['unit', 'category'], true)
             && ($row['safe_details']['deterministic_reference_match'] ?? false) === true
         );
 
