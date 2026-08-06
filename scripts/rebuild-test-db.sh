@@ -139,6 +139,26 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   deleted_at TIMESTAMP NULL,
   KEY inventory_items_org_sku_idx (organization_id, sku)
 );
+CREATE TABLE IF NOT EXISTS inventory_units (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NULL,
+  name VARCHAR(191) NOT NULL,
+  symbol VARCHAR(32) NULL,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP NULL,
+  updated_at TIMESTAMP NULL
+);
+CREATE TABLE IF NOT EXISTS inventory_categories (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NULL,
+  name VARCHAR(191) NOT NULL,
+  parent_id BIGINT UNSIGNED NULL,
+  description TEXT NULL,
+  level INT NOT NULL DEFAULT 0,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP NULL,
+  updated_at TIMESTAMP NULL
+);
 SQL
 done
 

@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 final class SyncFinanceReferenceDefaults extends Command
 {
     protected $signature = 'inventory:sync-finance-reference-defaults {database} {organization} {--apply}';
-    protected $description = 'Dry-run or add canonical Finance units to one SolaStock organization; categories remain organization-owned';
+    protected $description = 'Dry-run or add canonical Finance units and deduplicated default categories to one SolaStock organization';
 
     public function handle(TenantManager $tenants, FinanceReferenceDefaultsService $service): int
     {
