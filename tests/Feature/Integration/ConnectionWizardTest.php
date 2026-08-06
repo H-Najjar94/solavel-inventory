@@ -360,6 +360,7 @@ final class ConnectionWizardTest extends TestCase
         $page = file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx'));
         $assistant = file_get_contents(resource_path('js/solastock/components/GuidedConnectionAssistant.jsx'));
         $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
+        $styles = file_get_contents(resource_path('js/solastock/styles/solastock.css'));
 
         foreach (['CompactIntegrationStatus', 'wizardResumeStep', 'connection-status-list', 'connectionActivated'] as $needle) {
             $this->assertStringContainsString($needle, $page.$assistant.$translations);
@@ -393,6 +394,9 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringNotContainsString("<em>{tr('integration.focus.suggested')}</em>", $assistant);
         $this->assertStringNotContainsString('<span>{tr(\'integration.focus.actualQuantity\')}</span>', $assistant);
         $this->assertStringNotContainsString(">{tr('integration.focus.saveCount')}</button>", $assistant);
+        $this->assertStringContainsString('@media(min-width:761px)', $styles);
+        $this->assertStringContainsString('grid-template-columns:86px minmax(0,1fr)', $styles);
+        $this->assertStringContainsString('.focus-list-row{min-height:56px}', $styles);
         $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
         $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
         $this->assertStringNotContainsString('className="focus-undo"', $assistant);
