@@ -378,6 +378,12 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringNotContainsString("customers: '♙'", $assistant);
         $this->assertStringNotContainsString("suppliers: '◆'", $assistant);
         $this->assertStringNotContainsString("items: '□'", $assistant);
+        $this->assertStringContainsString('physicalValueFor', $assistant);
+        $this->assertStringContainsString('row.solastock?.quantity', $assistant);
+        $this->assertStringContainsString('wizard_draft_owner_confirmed', $assistant);
+        $this->assertStringContainsString('confirmCountsContinue', $assistant.$translations);
+        $this->assertStringContainsString('stockQuantitySuggested', $assistant.$translations);
+        $this->assertStringNotContainsString(">{tr('integration.focus.saveCount')}</button>", $assistant);
         $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
         $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
         $this->assertStringNotContainsString('className="focus-undo"', $assistant);
