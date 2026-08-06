@@ -499,8 +499,8 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.status');
         Route::get('/wizard/discovery', [IntegrationController::class, 'wizardDiscovery'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.discovery');
-        Route::get('/wizard/accounting-reviewer-access', [IntegrationController::class, 'accountingReviewerAccess'])
-            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.accounting-reviewer-access');
+        Route::get('/wizard/connection-management-access', [IntegrationController::class, 'connectionManagementAccess'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.connection-management-access');
         Route::post('/wizard/runs', [IntegrationController::class, 'startWizard'])
             ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.start');
         Route::get('/wizard/runs/{run}', [IntegrationController::class, 'wizardRun'])
@@ -528,7 +528,7 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         Route::post('/wizard/runs/{run}/accountant-approve', [IntegrationController::class, 'accountantApproveWizard'])
             ->middleware(['perm:inventory.integration.accounting_review', 'integration.setup'])->name('api.v1.integration.wizard.accountant-approve');
         Route::post('/wizard/runs/{run}/activate', [IntegrationController::class, 'activateWizard'])
-            ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.activate');
+            ->middleware('perm:inventory.integration.connection_manage')->name('api.v1.integration.wizard.activate');
         Route::post('/wizard/runs/{run}/pause', [IntegrationController::class, 'pauseWizard'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.pause');
         Route::put('/connection', [IntegrationController::class, 'configure'])

@@ -13,7 +13,7 @@ use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Documents\SourceDocumentPresenter;
-use App\Services\Integration\ConnectionAccountingReviewerService;
+use App\Services\Integration\ConnectionManagementPolicy;
 use App\Services\Integration\ConnectionWizardService;
 use App\Services\Integration\DeadLetterReviewService;
 use App\Services\Integration\DurableOutboxTransportService;
@@ -54,9 +54,9 @@ class IntegrationController extends ApiController
         return $this->success($wizard->discover($this->context->idOrFail()));
     }
 
-    public function accountingReviewerAccess(ConnectionAccountingReviewerService $reviewers): JsonResponse
+    public function connectionManagementAccess(ConnectionManagementPolicy $policy): JsonResponse
     {
-        return $this->success($reviewers->status($this->context->idOrFail(), auth()->user()));
+        return $this->success($policy->status($this->context->idOrFail(), auth()->user()));
     }
 
     public function startWizard(ConnectionWizardService $wizard): JsonResponse
@@ -203,6 +203,8 @@ class IntegrationController extends ApiController
             'activation_approval_id' => ['required', 'string', 'max:120'],
             'confirmation' => ['required', 'string', 'max:100'],
         ]);
+
+        abort_unless($this->permissions->can(auth()->user(), 'inventory.integration.connection_manage'), 403);
 
         return $this->success($wizard->activate(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'],

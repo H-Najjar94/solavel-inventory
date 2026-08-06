@@ -243,7 +243,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('<bdi>', $assistant);
         $this->assertStringContainsString('No, they are different items', $translations);
         $this->assertStringContainsString('لا، هما صنفان مختلفان', $translations);
-        $this->assertStringContainsString('مراجعة محاسب مخول', $translations);
+        $this->assertStringContainsString('المتابعة إلى مراجعة الحسابات', $translations);
         $this->assertStringContainsString('max-width:1440px', $styles);
         $this->assertStringContainsString('grid-template-columns:1fr 1fr', $styles);
         $this->assertStringNotContainsString('source_account_id', $assistant);
@@ -362,7 +362,7 @@ final class ConnectionWizardTest extends TestCase
         $assistant = file_get_contents(resource_path('js/solastock/components/GuidedConnectionAssistant.jsx'));
         $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
         $styles = file_get_contents(resource_path('js/solastock/styles/solastock.css'));
-        $reviewerAccess = file_get_contents(app_path('Services/Integration/ConnectionAccountingReviewerService.php'));
+        $connectionPolicy = file_get_contents(app_path('Services/Integration/ConnectionManagementPolicy.php'));
 
         foreach (['CompactIntegrationStatus', 'wizardResumeStep', 'connection-status-list', 'connectionActivated'] as $needle) {
             $this->assertStringContainsString($needle, $page.$assistant.$translations);
@@ -400,13 +400,15 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('grid-template-columns:86px minmax(0,1fr)', $styles);
         $this->assertStringContainsString('.focus-list-row{min-height:56px}', $styles);
         $this->assertStringContainsString('focus-accountant-handoff', $assistant.$styles);
-        $this->assertStringContainsString('reviewerAccess.self_assignment_url', $assistant);
-        $this->assertStringContainsString('reviewerAccess.management_url', $assistant);
-        $this->assertStringContainsString('Assign myself as accountant and continue', $translations);
-        $this->assertStringContainsString('تعيين نفسي محاسباً والمتابعة', $translations);
+        $this->assertStringContainsString('connectionAccess?.reason', $assistant);
+        $this->assertStringContainsString('Continue to accounting review', $translations);
+        $this->assertStringContainsString('المتابعة إلى مراجعة الحسابات', $translations);
         $this->assertStringContainsString('viewResultPreview', $assistant.$translations);
-        $this->assertStringContainsString('/portal/orgs/', $reviewerAccess);
-        $this->assertStringContainsString('/application-roles', $reviewerAccess);
+        $this->assertStringNotContainsString('/portal/orgs/', $page.$assistant.$translations.$connectionPolicy);
+        $this->assertStringNotContainsString('/application-roles', $page.$assistant.$translations.$connectionPolicy);
+        $this->assertStringNotContainsString('Assign myself as accountant', $page.$assistant.$translations.$connectionPolicy);
+        $this->assertStringContainsString('can_review_accounting', $connectionPolicy);
+        $this->assertStringContainsString('can_manage_connection', $connectionPolicy);
         $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
         $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
         $this->assertStringNotContainsString('className="focus-undo"', $assistant);
