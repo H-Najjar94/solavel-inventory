@@ -3,6 +3,22 @@ import { api } from '../services/api.js';
 
 const unique = (values) => [...new Set(values || [])];
 
+function SectionIcon({ section }) {
+    const paths = {
+        units: <><path d="M4 8h14"/><path d="m15 5 3 3-3 3"/><path d="M20 16H6"/><path d="m9 13-3 3 3 3"/></>,
+        categories: <><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
+        customers: <><circle cx="12" cy="8" r="3"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></>,
+        suppliers: <><path d="M4 9h16v11H4z"/><path d="M7 9V5h10v4"/><path d="M4 13h16"/><path d="M9 13v2h6v-2"/></>,
+        warehouses: <><path d="m3 10 9-6 9 6v10H3z"/><path d="M8 20v-6h8v6"/></>,
+        currencies: <><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.7-1.7-1-3-1-1.7 0-3 .9-3 2.2 0 3.5 6 1.4 6 4.8 0 1.3-1.3 2.2-3 2.2-1.3 0-2.5-.4-3.3-1.2"/><path d="M12 5.5v13"/></>,
+        items: <><path d="m4 7 8-4 8 4-8 4z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></>,
+    };
+
+    return <svg className="focus-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {paths[section] || paths.items}
+    </svg>;
+}
+
 export default function GuidedConnectionAssistant({
     view, runUuid, run, gate, accountingGate, status, saving, tr, decisions,
     confirmedDecisions, pendingDecisions, rows, totals, accounting,
@@ -80,7 +96,6 @@ export default function GuidedConnectionAssistant({
         ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
         ['items', itemRows],
     ].filter(([, sectionRows]) => sectionRows.length > 0);
-    const sectionIcons = { units: '↔', categories: '▦', customers: '♙', suppliers: '◆', warehouses: '▤', currencies: '$', items: '□' };
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
     const activeOwnerSection = ownerSections.find(([section]) => section === openOwnerSection) || ownerSections[0];
@@ -565,7 +580,7 @@ export default function GuidedConnectionAssistant({
                     const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
                     return <button type="button" key={section} data-section={section} className={activeOwnerSection?.[0] === section ? 'is-active' : remaining === 0 ? 'is-complete' : ''}
                         aria-current={activeOwnerSection?.[0] === section ? 'page' : undefined} onClick={() => setOpenOwnerSection(section)}>
-                        <i className="focus-section-icon" aria-hidden="true">{sectionIcons[section]}</i>
+                        <SectionIcon section={section} />
                         <span>{tr(`integration.focus.section.${section}`)}</span>
                         <bdi>{remaining === 0 ? '✓' : remaining}</bdi>
                     </button>;
