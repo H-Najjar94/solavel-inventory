@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Models\Tenant\Item;
+use App\Models\Tenant\ItemCategory;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -114,6 +115,43 @@ class TenantIsolationTest extends TestCase
         $skus = Item::query()->pluck('sku')->all();
         $this->assertContains('SCOPED', $skus);
         $this->assertNotContains('OTHER-ORG', $skus);
+    }
+
+    #[Test]
+    public function finance_local_organization_identity_never_widens_solastock_catalog_reads(): void
+    {
+        $this->useTenantA();
+
+        // Reproduce the production collision: selected central org A maps to a
+        // different tenant-local Finance organization id. Records stamped with
+        // that Finance id are historical/discovery inputs, not active Stock data.
+        DB::connection('tenant')->table('organizations')->insert([
+            'id' => 770001,
+            'central_org_id' => TenantTestManager::ORG_A,
+        ]);
+        DB::connection('tenant')->table('item_categories')->insert([
+            [
+                'organization_id' => 770001,
+                'name' => 'Foreign phone catalog',
+                'level' => 0,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'organization_id' => TenantTestManager::ORG_A,
+                'name' => 'KingOS category',
+                'level' => 0,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $names = ItemCategory::query()->pluck('name')->all();
+
+        $this->assertContains('KingOS category', $names);
+        $this->assertNotContains('Foreign phone catalog', $names);
     }
 
     #[Test]

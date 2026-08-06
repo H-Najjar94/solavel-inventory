@@ -81,9 +81,13 @@ export function TenantProvider({ children }) {
         organizations: orgData?.organizations ?? [],
         async selectOrg(organizationId) {
             const res = await api.selectOrganization(organizationId);
-            // The active org/client changed → refetch EVERYTHING so the whole app
-            // reloads in the new org's context (status, data, layouts, …).
-            await qc.invalidateQueries();
+            // Cancel responses started under the previous organization, discard
+            // its inactive pages, then reset/refetch every mounted query against
+            // the newly selected session. This prevents both stale overwrites and
+            // old category/unit rows remaining visible during an org switch.
+            await qc.cancelQueries();
+            qc.removeQueries({ type: 'inactive' });
+            await qc.resetQueries();
             return res?.data ?? null;
         },
     };
