@@ -719,10 +719,19 @@ export default function GuidedConnectionAssistant({
         </section>;
 
         if (task === 4) return <section className="focus-card">
-            {!accountingGate.allowed ? <div className="focus-accountant-card"><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2><p>{tr('integration.focus.accountantRequiredText', { count: accountingPending.length })}</p><a className="btn" href="/settings/users">{tr('integration.focus.assignAccountant')}</a></div>
+            {!accountingGate.allowed ? <div className="focus-accountant-handoff">
+                <div className="focus-accountant-intro"><span className="focus-accountant-icon" aria-hidden="true"><SectionIcon section="currencies" /></span><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2><p>{tr('integration.focus.accountantRequiredText', { count: accountingPending.length })}</p></div></div>
+                <div className="focus-accountant-roles" aria-label={tr('integration.focus.accountingRolesWaiting')}>
+                    {accountingPending.map((row) => <span key={row.fingerprint}>{tr(`integration.mapping.${row.safe_details?.role}`, {}, row.safe_details?.role)}</span>)}
+                </div>
+                <div className="focus-accountant-next"><strong>{tr('integration.focus.accountantSeparationTitle')}</strong><p>{tr('integration.focus.accountantSeparationText')}</p>
+                    {gate.allowed ? <a className="btn" href={`/finance/organizations/${view.identity?.finance_organization_id}/permissions/users`}>{tr('integration.focus.assignAccountant')}</a>
+                        : <span>{tr('integration.focus.askOwnerForAccountant')}</span>}
+                </div>
+            </div>
                 : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}
-            {footer(tr('integration.focus.continue'), saveAccountingRecommendationsAndContinue, {
-                disabled: !accountingGate.allowed || (accountingPending.some((row) => !recommendedChoice(row)
+            {footer(tr(accountingGate.allowed ? 'integration.focus.continue' : 'integration.focus.viewResultPreview'), accountingGate.allowed ? saveAccountingRecommendationsAndContinue : () => go(6), {
+                disabled: accountingGate.allowed && (accountingPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))
                     && !accountingPending.some((row) => recommendedChoice(row)

@@ -242,7 +242,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('<bdi>', $assistant);
         $this->assertStringContainsString('No, they are different items', $translations);
         $this->assertStringContainsString('لا، هما صنفان مختلفان', $translations);
-        $this->assertStringContainsString('تنتظر محاسباً مخولاً', $translations);
+        $this->assertStringContainsString('مراجعة محاسب مخول', $translations);
         $this->assertStringContainsString('max-width:1440px', $styles);
         $this->assertStringContainsString('grid-template-columns:1fr 1fr', $styles);
         $this->assertStringNotContainsString('source_account_id', $assistant);
@@ -397,6 +397,10 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('@media(min-width:761px)', $styles);
         $this->assertStringContainsString('grid-template-columns:86px minmax(0,1fr)', $styles);
         $this->assertStringContainsString('.focus-list-row{min-height:56px}', $styles);
+        $this->assertStringContainsString('focus-accountant-handoff', $assistant.$styles);
+        $this->assertStringContainsString('/finance/organizations/${view.identity?.finance_organization_id}/permissions/users', $assistant);
+        $this->assertStringContainsString('viewResultPreview', $assistant.$translations);
+        $this->assertStringNotContainsString('href="/settings/users"', $assistant);
         $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
         $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
         $this->assertStringNotContainsString('className="focus-undo"', $assistant);
