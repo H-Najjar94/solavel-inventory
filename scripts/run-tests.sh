@@ -17,6 +17,8 @@ bash scripts/rebuild-test-db.sh rebuild
 export DB_CONNECTION=tenant
 export CENTRAL_CONNECTION=mysql
 export TENANT_CONNECTION=tenant
+export DB_HOST=localhost DB_PORT=0 DB_SOCKET="$TEST_DB_SOCKET"
+export DB_USERNAME="$TEST_SCHEMA_DB_USER" DB_PASSWORD="${TEST_SCHEMA_DB_PASSWORD:-}"
 export DB_DATABASE=solastock_test_central
 export TENANT_DB_DATABASE=solastock_test_a
 export SOLASTOCK_TEST_TENANT_A=solastock_test_a
