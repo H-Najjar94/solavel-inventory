@@ -666,7 +666,7 @@ export default function GuidedConnectionAssistant({
             </div>}
             <div className="focus-count-list">
                 <div className="focus-count-columns" aria-hidden="true">
-                    <span>{tr('integration.focus.countItem')}</span><span>SolaBooks</span><span>{tr('integration.focus.stockDefault')}</span><span>{tr('integration.focus.quantityToConfirm')}</span>
+                    <span>{tr('integration.focus.countItem')}</span><span className="is-primary">{tr('integration.focus.quantityToConfirm')}</span><span>{tr('integration.focus.stockDefault')}</span><span>SolaBooks</span>
                 </div>
                 {physicalRows.map((row) => {
                 const savedQuantity = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity ?? '';
@@ -674,16 +674,17 @@ export default function GuidedConnectionAssistant({
                 const isSaved = savedQuantity !== '' && String(value) === String(savedQuantity);
                 return <div className={`focus-count-row ${isSaved ? 'is-saved' : ''}`} key={row.fingerprint}>
                     <div className="focus-count-item"><strong><bdi>{row.solabooks?.name || row.solastock?.name}</bdi></strong><small><bdi>{row.solabooks?.sku || row.solastock?.sku || '—'}</bdi></small></div>
-                    <div className="focus-count-system is-books">
-                        <small className="focus-count-mobile-label">SolaBooks</small><strong><bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi></strong>
-                    </div>
+                    <label className="focus-count-input"><span className="focus-count-mobile-label">{tr('integration.focus.quantityToConfirm')}</span><input className="input" inputMode="decimal" value={value} aria-describedby={`count-note-${row.fingerprint}`}
+                        aria-label={tr('integration.focus.quantityForItem', { item: row.solabooks?.name || row.solastock?.name })}
+                        onChange={(event) => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: event.target.value }))} />
+                        <small id={`count-note-${row.fingerprint}`} className={isSaved ? 'is-confirmed' : 'sr-only'}>{isSaved ? `✓ ${tr('integration.focus.countSaved')}` : tr('integration.focus.reviewOrKeep')}</small>
+                    </label>
                     <div className="focus-count-system is-stock">
                         <small className="focus-count-mobile-label">SolaStock</small><strong><bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></strong><em>{tr('integration.focus.suggested')}</em>
                     </div>
-                    <label className="focus-count-input"><span className="sr-only">{tr('integration.focus.actualQuantity')}</span><input className="input" inputMode="decimal" value={value} aria-describedby={`count-note-${row.fingerprint}`}
-                        onChange={(event) => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: event.target.value }))} />
-                        <small id={`count-note-${row.fingerprint}`} className={isSaved ? 'is-confirmed' : ''}>{isSaved ? `✓ ${tr('integration.focus.countSaved')}` : tr('integration.focus.reviewOrKeep')}</small>
-                    </label>
+                    <div className="focus-count-system is-books">
+                        <small className="focus-count-mobile-label">SolaBooks</small><strong><bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi></strong>
+                    </div>
                 </div>;
             })}</div>
             {!physicalRows.length && <div className="focus-complete"><h2>{tr('integration.focus.countComplete')}</h2><p>{tr('integration.focus.countCompleteText')}</p></div>}
