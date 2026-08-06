@@ -8,6 +8,7 @@ use App\Models\Tenant\ItemBrand;
 use App\Models\Tenant\ItemCategory;
 use App\Models\Tenant\Unit;
 use App\Services\Access\InventoryPermissionService;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,7 +20,11 @@ class MetaController extends ApiController
 {
     public function index(Request $request, InventoryPermissionService $permissions): JsonResponse
     {
+        $organizationId = app(OrganizationContext::class)->idOrFail();
+
         return $this->success([
+            // Lets the SPA reject/cache-isolate metadata from an older org switch.
+            'organization_id' => $organizationId,
             'permissions' => $permissions->permissionsFor($request->user()),
             'tenant_mode' => $request->attributes->get('tenant_mode', 'live'), // live|demo
             'settings' => InventorySetting::query()->first(),
