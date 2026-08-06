@@ -25,7 +25,7 @@ export default function GuidedConnectionAssistant({
     assistantStep, setAssistantStep, allowedActions, canEdit, editableState,
     decide, undoDecision, bulkSelection, toggleBulk, bulk, exportComparison,
     start, runAction, cutoffAt, setCutoffAt, saveState, retrySave, reloadLatest,
-    organizationName,
+    organizationName, reviewerAccess,
 }) {
     const guided = view.guided_setup || {};
     const checks = guided.checks || {};
@@ -725,8 +725,10 @@ export default function GuidedConnectionAssistant({
                     {accountingPending.map((row) => <span key={row.fingerprint}>{tr(`integration.mapping.${row.safe_details?.role}`, {}, row.safe_details?.role)}</span>)}
                 </div>
                 <div className="focus-accountant-next"><strong>{tr('integration.focus.accountantSeparationTitle')}</strong><p>{tr('integration.focus.accountantSeparationText')}</p>
-                    {gate.allowed ? <a className="btn" href={`/finance/organizations/${view.identity?.finance_organization_id}/permissions/users`}>{tr('integration.focus.assignAccountant')}</a>
-                        : <span>{tr('integration.focus.askOwnerForAccountant')}</span>}
+                    {reviewerAccess?.current_user?.can_self_assign && <a className="btn btn--primary" href={reviewerAccess.self_assignment_url}>{tr('integration.focus.assignSelfAccountant')}</a>}
+                    {reviewerAccess?.current_user?.can_manage_roles && <a className="btn" href={reviewerAccess.management_url}>{tr('integration.focus.chooseAnotherAccountant')}</a>}
+                    {!reviewerAccess?.current_user?.can_manage_roles && <span>{tr('integration.focus.askOwnerForAccountant')}</span>}
+                    {!reviewerAccess?.finance_entitled && <span>{tr('integration.focus.financeEntitlementRequired')}</span>}
                 </div>
             </div>
                 : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}

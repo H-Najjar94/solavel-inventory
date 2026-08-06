@@ -79,6 +79,9 @@ export default function IntegrationSettingsPage() {
     const gate = useCanCreate('inventory.integration.manage');
     const setupGate = useCanCreate('inventory.integration.setup');
     const accountingGate = useCanCreate('inventory.integration.accounting_review');
+    const reviewerAccess = useApiQuery(['integration-accounting-reviewer-access', tenant.organization_id], api.integrationAccountingReviewerAccess, {
+        fallback: null, enabled: Boolean(tenant.organization_id), refetchOnMount: 'always', refetchOnWindowFocus: true,
+    });
     const [tab, setTab] = useState('status');
     const [wizardResumeStep, setWizardResumeStep] = useState(1);
     const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
@@ -242,12 +245,12 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} reviewerAccess={reviewerAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
+function ConnectionWizard({ gate, accountingGate, reviewerAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
     const queryClient = useQueryClient();
     const actionsByEntity = {
         item: {
@@ -480,6 +483,7 @@ function ConnectionWizard({ gate, accountingGate, status, toast, tr, organizatio
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
             organizationName={organizationName}
+            reviewerAccess={reviewerAccess}
         />;
     }
     return <div className="wizard" aria-live="polite">

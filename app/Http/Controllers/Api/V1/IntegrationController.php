@@ -11,15 +11,16 @@ use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\ItemIntegrationMapping;
+use App\Services\Access\InventoryPermissionService;
 use App\Services\Documents\SourceDocumentPresenter;
+use App\Services\Integration\ConnectionAccountingReviewerService;
+use App\Services\Integration\ConnectionWizardService;
 use App\Services\Integration\DeadLetterReviewService;
 use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\IntegrationEvents;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\IntegrationSafetyHold;
 use App\Services\Integration\IntegrationStatusService;
-use App\Services\Integration\ConnectionWizardService;
-use App\Services\Access\InventoryPermissionService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
@@ -53,6 +54,11 @@ class IntegrationController extends ApiController
         return $this->success($wizard->discover($this->context->idOrFail()));
     }
 
+    public function accountingReviewerAccess(ConnectionAccountingReviewerService $reviewers): JsonResponse
+    {
+        return $this->success($reviewers->status($this->context->idOrFail(), auth()->user()));
+    }
+
     public function startWizard(ConnectionWizardService $wizard): JsonResponse
     {
         return $this->success($wizard->start($this->context->idOrFail(), (int) auth()->id()));
@@ -81,6 +87,7 @@ class IntegrationController extends ApiController
             'expected_lock_version' => ['required', 'integer', 'min:1'],
             'expected_before_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
         ]);
+
         return $this->success($wizard->decide(
             $this->context->idOrFail(),
             $run,
@@ -106,6 +113,7 @@ class IntegrationController extends ApiController
             'confirmation' => ['required', 'string', 'max:80'],
             'expected_lock_version' => ['required', 'integer', 'min:1'],
         ]);
+
         return $this->success($wizard->bulkDecide(
             $this->context->idOrFail(), $run, $data['bulk_action'], $data['candidate_fingerprints'],
             $data['confirmation'], (int) auth()->id(), (int) $data['expected_lock_version'],
@@ -116,6 +124,7 @@ class IntegrationController extends ApiController
     public function requestWizardSnapshot(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
     {
         $data = $request->validate(['expected_lock_version' => ['required', 'integer', 'min:1']]);
+
         return $this->success($wizard->requestSnapshot($this->context->idOrFail(), $run,
             (int) $data['expected_lock_version'], (int) auth()->id()));
     }
@@ -123,6 +132,7 @@ class IntegrationController extends ApiController
     public function freezeWizardSnapshot(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
     {
         $data = $request->validate(['expected_lock_version' => ['required', 'integer', 'min:1']]);
+
         return $this->success($wizard->freezeSnapshot($this->context->idOrFail(), $run,
             (int) $data['expected_lock_version'], (int) auth()->id()));
     }
@@ -140,6 +150,7 @@ class IntegrationController extends ApiController
             'unexplained_variance' => ['required', 'regex:/^-?\d+(\.\d{1,2})?$/'],
             'expected_lock_version' => ['required', 'integer', 'min:1'],
         ]);
+
         return $this->success($wizard->reviewCutoff($this->context->idOrFail(), $run,
             $data['cutoff_at'], $data['physical_counts'] ?? [], $data['unexplained_variance'],
             (int) $data['expected_lock_version'], (int) auth()->id()));
@@ -168,6 +179,7 @@ class IntegrationController extends ApiController
             'approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
             'confirmation' => ['required', 'string', 'max:100'],
         ]);
+
         return $this->success($wizard->approveRole(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'owner', (int) auth()->id(),
             $this->permissions->can(auth()->user(), 'inventory.integration.setup')
@@ -177,6 +189,7 @@ class IntegrationController extends ApiController
     public function accountantApproveWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
     {
         $data = $request->validate(['approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/']]);
+
         return $this->success($wizard->approveRole(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'accountant', (int) auth()->id(),
             $this->permissions->can(auth()->user(), 'inventory.integration.accounting_review')
@@ -190,6 +203,7 @@ class IntegrationController extends ApiController
             'activation_approval_id' => ['required', 'string', 'max:120'],
             'confirmation' => ['required', 'string', 'max:100'],
         ]);
+
         return $this->success($wizard->activate(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'],
             $data['activation_approval_id'], $data['confirmation'], (int) auth()->id()
@@ -199,6 +213,7 @@ class IntegrationController extends ApiController
     public function pauseWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
     {
         $data = $request->validate(['activation_approval_id' => ['required', 'string', 'max:120']]);
+
         return $this->success($wizard->pause(
             $this->context->idOrFail(), $run, $data['activation_approval_id'], (int) auth()->id()
         ));
