@@ -39,6 +39,7 @@ class InventoryPermissionService
         if (! $this->context->has()) {
             return false; // no tenant context → deny (fail closed)
         }
+        $orgId = (int) $this->context->id();
 
         $role = $this->resolveRole($user);
         if ($role === null) {
@@ -46,6 +47,11 @@ class InventoryPermissionService
         }
 
         $granted = $this->permissionsForRole($role);
+
+        if ($permission === 'inventory.integration.accounting_review'
+            && $this->hasCanonicalFinanceAccountantRole($user, $orgId)) {
+            return true;
+        }
 
         // Accounting approval is deliberately segregated from organization
         // ownership. The owner approves operational/master-data choices; an
@@ -73,10 +79,18 @@ class InventoryPermissionService
                 $permissions = array_values(array_diff($permissions, ['inventory.integration.accounting_review']));
             }
 
-            return $permissions;
+            if ($this->hasCanonicalFinanceAccountantRole($user, (int) $this->context->id())) {
+                $permissions[] = 'inventory.integration.accounting_review';
+            }
+
+            return array_values(array_unique($permissions));
         }
 
-        return $granted;
+        if ($this->hasCanonicalFinanceAccountantRole($user, (int) $this->context->id())) {
+            $granted[] = 'inventory.integration.accounting_review';
+        }
+
+        return array_values(array_unique($granted));
     }
 
     /**
@@ -226,6 +240,30 @@ class InventoryPermissionService
             return $assignment?->role?->is_active ? $assignment->role->key : null;
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    private function hasCanonicalFinanceAccountantRole(?object $user, int $organizationId): bool
+    {
+        $centralUserId = $this->centralUserId($user);
+        if ($centralUserId <= 0 || $organizationId <= 0) {
+            return false;
+        }
+
+        try {
+            return DB::connection((string) config('tenancy.central_connection', 'mysql'))
+                ->table('app_permission_grants')
+                ->where('organization_id', $organizationId)
+                ->where('app_key', 'finance')
+                ->where('user_id', $centralUserId)
+                ->where('role_key', 'accountant')
+                ->where('permission_key', 'role.assignment')
+                ->where('effect', 'allow')
+                ->where(function ($query): void {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->exists();
+        } catch (\Throwable) {
+            return false;
         }
     }
 }

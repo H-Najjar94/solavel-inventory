@@ -499,6 +499,8 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.status');
         Route::get('/wizard/discovery', [IntegrationController::class, 'wizardDiscovery'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.discovery');
+        Route::get('/wizard/accounting-reviewer-access', [IntegrationController::class, 'accountingReviewerAccess'])
+            ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.accounting-reviewer-access');
         Route::post('/wizard/runs', [IntegrationController::class, 'startWizard'])
             ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.start');
         Route::get('/wizard/runs/{run}', [IntegrationController::class, 'wizardRun'])

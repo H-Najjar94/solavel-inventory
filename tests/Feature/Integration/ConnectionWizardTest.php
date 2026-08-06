@@ -2,14 +2,15 @@
 
 namespace Tests\Feature\Integration;
 
-use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationMasterDataMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\Item;
 use App\Services\Integration\ConnectionWizardService;
 use App\Services\Integration\IntegrationStatusService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -99,7 +100,7 @@ final class ConnectionWizardTest extends TestCase
                 'retain_account_role_unresolved', [], $account['solabooks_record_ids'], [], 7001,
                 $preview['lock_version'], $account['candidate_before_hash'], true, false);
             $this->fail('An owner must not write an accountant decision.');
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             $this->assertTrue(true);
         }
         $preview = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $account['fingerprint'],
@@ -361,6 +362,7 @@ final class ConnectionWizardTest extends TestCase
         $assistant = file_get_contents(resource_path('js/solastock/components/GuidedConnectionAssistant.jsx'));
         $translations = file_get_contents(resource_path('js/solastock/i18n/settingsPages.js'));
         $styles = file_get_contents(resource_path('js/solastock/styles/solastock.css'));
+        $reviewerAccess = file_get_contents(app_path('Services/Integration/ConnectionAccountingReviewerService.php'));
 
         foreach (['CompactIntegrationStatus', 'wizardResumeStep', 'connection-status-list', 'connectionActivated'] as $needle) {
             $this->assertStringContainsString($needle, $page.$assistant.$translations);
@@ -398,9 +400,13 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('grid-template-columns:86px minmax(0,1fr)', $styles);
         $this->assertStringContainsString('.focus-list-row{min-height:56px}', $styles);
         $this->assertStringContainsString('focus-accountant-handoff', $assistant.$styles);
-        $this->assertStringContainsString('/finance/organizations/${view.identity?.finance_organization_id}/permissions/users', $assistant);
+        $this->assertStringContainsString('reviewerAccess.self_assignment_url', $assistant);
+        $this->assertStringContainsString('reviewerAccess.management_url', $assistant);
+        $this->assertStringContainsString('Assign myself as accountant and continue', $translations);
+        $this->assertStringContainsString('تعيين نفسي محاسباً والمتابعة', $translations);
         $this->assertStringContainsString('viewResultPreview', $assistant.$translations);
-        $this->assertStringNotContainsString('href="/settings/users"', $assistant);
+        $this->assertStringContainsString('/portal/orgs/', $reviewerAccess);
+        $this->assertStringContainsString('/application-roles', $reviewerAccess);
         $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
         $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
         $this->assertStringNotContainsString('className="focus-undo"', $assistant);
@@ -439,7 +445,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('integration.focus.reviewAffectedItems', $assistant.$translations);
         $this->assertStringContainsString('dangling_finance_item_unit_reference', $service.$assistant);
         $this->assertStringContainsString('integration.focus.missingUnitInventoryWarning', $assistant.$translations);
-        $this->assertStringContainsString("setOpenOwnerSection(section)", $assistant);
+        $this->assertStringContainsString('setOpenOwnerSection(section)', $assistant);
         $this->assertStringContainsString('setOpenOwnerSection', $assistant);
         $this->assertStringContainsString('expected_lock_version', $page);
         $this->assertStringContainsString('createSerializedMutationQueue', $page);
@@ -478,7 +484,7 @@ final class ConnectionWizardTest extends TestCase
                 $preview['lock_version'], $candidate['candidate_before_hash'], true, false,
             );
             $this->fail('The redundant internal inventory classification must not be offered or accepted.');
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             $this->assertTrue(true);
         }
         $wizard->decide(
@@ -515,7 +521,7 @@ final class ConnectionWizardTest extends TestCase
         try {
             $wizard->show(TenantTestManager::ORG_B, $draft['run_uuid']);
             $this->fail('A draft must not be visible after organization switching.');
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             $this->assertTrue(true);
         }
         try {
@@ -523,7 +529,7 @@ final class ConnectionWizardTest extends TestCase
                 'select_account_role', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'], [],
                 7001, $draft['lock_version'], $candidate['candidate_before_hash'], true, false);
             $this->fail('A direct API call must not apply an action from another candidate type.');
-        } catch (\Illuminate\Validation\ValidationException) {
+        } catch (ValidationException) {
             $this->assertTrue(true);
         }
         $this->assertSame(0, DB::connection('tenant')->table('integration_connection_wizard_decisions')
@@ -556,8 +562,7 @@ final class ConnectionWizardTest extends TestCase
         ]);
 
         $preview = app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A);
-        $unit = collect($preview['comparison'])->first(fn (array $row) =>
-            $row['entity_type'] === 'unit'
+        $unit = collect($preview['comparison'])->first(fn (array $row) => $row['entity_type'] === 'unit'
             && ($row['safe_details']['source'] ?? null) === 'dangling_finance_item_unit_reference'
         );
         $this->assertNotNull($unit);
@@ -584,8 +589,7 @@ final class ConnectionWizardTest extends TestCase
         $wizard = app(ConnectionWizardService::class);
         $before = $this->mutationCounters();
         $run = $wizard->start(TenantTestManager::ORG_A, 7001);
-        $candidate = collect($run['comparison'])->first(fn (array $row) =>
-            $row['entity_type'] === 'unit' && (string) ($row['solabooks']['id'] ?? '') === '7001'
+        $candidate = collect($run['comparison'])->first(fn (array $row) => $row['entity_type'] === 'unit' && (string) ($row['solabooks']['id'] ?? '') === '7001'
         );
         $this->assertNotNull($candidate);
         $target = collect($candidate['safe_details']['available_stock_units'])->firstWhere('name', 'Each');
@@ -599,7 +603,7 @@ final class ConnectionWizardTest extends TestCase
                     ['selected_record_id' => (string) $target['id'], 'conversion_factor' => $invalidFactor],
                     7001, $run['lock_version'], $candidate['candidate_before_hash'], true, false);
                 $this->fail('An incomplete or invalid conversion must not be saved.');
-            } catch (\Illuminate\Validation\ValidationException) {
+            } catch (ValidationException) {
                 $this->assertTrue(true);
             }
         }
@@ -701,8 +705,7 @@ final class ConnectionWizardTest extends TestCase
         ]);
 
         $preview = app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A);
-        $inventoryRole = collect($preview['comparison'])->first(fn (array $row) =>
-            $row['entity_type'] === 'account_role'
+        $inventoryRole = collect($preview['comparison'])->first(fn (array $row) => $row['entity_type'] === 'account_role'
             && ($row['safe_details']['role'] ?? null) === 'inventory_asset'
         );
 
