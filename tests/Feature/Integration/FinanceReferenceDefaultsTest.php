@@ -52,20 +52,35 @@ final class FinanceReferenceDefaultsTest extends TestCase
         $service = app(FinanceReferenceDefaultsService::class);
 
         $first = $service->sync(TenantTestManager::ORG_A, true);
-        $this->assertSame(9, $first['categories']['created']);
-        $this->assertSame('canonical_finance_defaults_deduplicated', $first['categories']['policy']);
+        $this->assertSame(24, $first['categories']['created']);
+        $this->assertSame('shared_starter_catalog_plus_legacy_finance_defaults', $first['categories']['policy']);
         $this->assertSame([], $first['categories']['missing_in_finance']);
 
         $categories = DB::connection('tenant')->table('item_categories')
             ->where('organization_id', TenantTestManager::ORG_A)->orderBy('id')->get();
-        $this->assertCount(9, $categories);
-        $this->assertSame(['Electrical', 'Mechanical', 'Plumbing'], $categories->whereNull('parent_id')->pluck('name')->sort()->values()->all());
+        $this->assertCount(24, $categories);
+        $this->assertContains('General Merchandise', $categories->whereNull('parent_id')->pluck('name')->all());
+        $this->assertContains('Services & Non-Inventory', $categories->whereNull('parent_id')->pluck('name')->all());
         $this->assertFalse($categories->contains('name', 'Customer-specific category'));
 
         $second = $service->sync(TenantTestManager::ORG_A, true);
         $this->assertSame(0, $second['categories']['created']);
-        $this->assertSame(9, $second['categories']['existing']);
-        $this->assertSame(9, DB::connection('tenant')->table('item_categories')
+        $this->assertSame(24, $second['categories']['existing']);
+        $this->assertSame(24, DB::connection('tenant')->table('item_categories')
             ->where('organization_id', TenantTestManager::ORG_A)->count());
+    }
+
+    #[Test]
+    public function starter_categories_are_available_even_before_finance_categories_exist(): void
+    {
+        DB::connection('tenant')->table('inventory_categories')->delete();
+
+        $result = app(FinanceReferenceDefaultsService::class)->sync(TenantTestManager::ORG_A, true);
+
+        $this->assertSame(15, $result['categories']['created']);
+        $this->assertSame(15, DB::connection('tenant')->table('item_categories')
+            ->where('organization_id', TenantTestManager::ORG_A)->count());
+        $this->assertFalse(DB::connection('tenant')->table('item_categories')
+            ->where('organization_id', TenantTestManager::ORG_A)->where('name', 'iPhone 15')->exists());
     }
 }

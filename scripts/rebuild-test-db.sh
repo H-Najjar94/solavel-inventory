@@ -20,11 +20,17 @@ esac
 }
 TEST_SOCKET="${TEST_DB_SOCKET:-}"
 TEST_USER="${TEST_SCHEMA_DB_USER:-}"
+TEST_PASS="${TEST_SCHEMA_DB_PASSWORD:-}"
 [[ -S "$TEST_SOCKET" && -n "$TEST_USER" ]] || {
   echo "REFUSING: isolated socket and scoped schema user are required." >&2
   exit 2
 }
-[[ "$(mysql --protocol=socket --socket="$TEST_SOCKET" --user="$TEST_USER" --skip-password -N -e 'SELECT @@port')" == "0" ]] || {
+MYSQL_CNF="$(mktemp)"
+chmod 600 "$MYSQL_CNF"
+trap 'shred -u "$MYSQL_CNF" 2>/dev/null || true' EXIT
+printf '[client]\nsocket=%s\nuser=%s\npassword=%s\n' "$TEST_SOCKET" "$TEST_USER" "$TEST_PASS" > "$MYSQL_CNF"
+MYSQL=(mysql --defaults-extra-file="$MYSQL_CNF" --protocol=socket)
+[[ "$("${MYSQL[@]}" -N -e 'SELECT @@port')" == "0" ]] || {
   echo "REFUSING: disposable database server is network reachable." >&2
   exit 2
 }
@@ -42,10 +48,10 @@ manage_databases() {
   local db
   for db in "$TENANT_A" "$TENANT_B" "$CENTRAL"; do
     [[ "$db" =~ ^solastock_test_[a-z]+$ ]] || { echo "REFUSING: unsafe database identity." >&2; exit 2; }
-    mysql --protocol=socket --socket="$TEST_SOCKET" --user="$TEST_USER" --skip-password \
+    "${MYSQL[@]}" \
       -e "DROP DATABASE IF EXISTS \`${db}\`;"
     if [[ "$mode" == rebuild ]]; then
-      mysql --protocol=socket --socket="$TEST_SOCKET" --user="$TEST_USER" --skip-password \
+      "${MYSQL[@]}" \
         -e "CREATE DATABASE \`${db}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
     fi
   done
@@ -107,7 +113,7 @@ for db in "$TENANT_A" "$TENANT_B"; do
   # read-only Finance projection. Production receives these tables from the
   # paired application schema; the isolated Stock suite supplies their minimal
   # shape explicitly so no test reaches a Finance or production database.
-  mysql --protocol=socket --socket="$TEST_SOCKET" --user="$TEST_USER" --skip-password "$db" <<'SQL'
+  "${MYSQL[@]}" "$db" <<'SQL'
 CREATE TABLE IF NOT EXISTS organizations (
   id BIGINT UNSIGNED PRIMARY KEY,
   central_org_id BIGINT UNSIGNED NOT NULL

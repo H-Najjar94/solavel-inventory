@@ -2,12 +2,13 @@
 
 namespace App\Services\Catalog;
 
+use App\Support\InventoryCategoryDefaults;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 final class FinanceReferenceDefaultsService
 {
-    public const VERSION = 'solabooks-inventory-reference-defaults.v1';
+    public const VERSION = 'solabooks-inventory-reference-defaults.v2';
 
     private const UNITS = [
         ['Piece', 'pcs', 'count'], ['Box', 'bx', 'count'], ['Pack', 'pk', 'count'], ['Dozen', 'dz', 'count'], ['Unit', 'u', 'count'], ['Set', 'set', 'count'],
@@ -24,7 +25,7 @@ final class FinanceReferenceDefaultsService
      * Finance may contain repeated seed runs; this hierarchy is intentionally
      * deduplicated into one organization-owned SolaStock tree.
      */
-    private const CATEGORIES = [
+    private const LEGACY_FINANCE_CATEGORIES = [
         ['Electrical', ['Switches', 'Cables']],
         ['Plumbing', ['Valves', 'Pipes']],
         ['Mechanical', ['Bearings', 'Bolts']],
@@ -32,39 +33,41 @@ final class FinanceReferenceDefaultsService
 
     public function sync(int $organizationId, bool $apply = false): array
     {
-        if ($organizationId <= 0 || ! Schema::connection('tenant')->hasTable('inventory_units')
-            || ! Schema::connection('tenant')->hasTable('inventory_categories')
-            || ! Schema::connection('tenant')->hasTable('units')
+        if ($organizationId <= 0 || ! Schema::connection('tenant')->hasTable('units')
             || ! Schema::connection('tenant')->hasTable('item_categories')) {
             return ['version' => self::VERSION, 'organization_id' => $organizationId,
                 'status' => 'reference_tables_unavailable', 'units' => ['created' => 0, 'existing' => 0],
                 'categories' => ['created' => 0, 'existing' => 0]];
         }
 
-        $financeUnits = DB::connection('tenant')->table('inventory_units')->get()->keyBy(
-            fn ($unit) => mb_strtolower(trim((string) ($unit->symbol ?? '')))
-        );
+        $hasFinanceUnits = Schema::connection('tenant')->hasTable('inventory_units');
+        $hasFinanceCategories = Schema::connection('tenant')->hasTable('inventory_categories');
+        $financeUnits = $hasFinanceUnits
+            ? DB::connection('tenant')->table('inventory_units')->get()->keyBy(
+                fn ($unit) => mb_strtolower(trim((string) ($unit->symbol ?? '')))
+            ) : collect();
         $financeOrganizationId = Schema::connection('tenant')->hasTable('organizations')
             ? (int) (DB::connection('tenant')->table('organizations')
                 ->where('central_org_id', $organizationId)->value('id') ?? 0)
             : 0;
-        $financeCategories = DB::connection('tenant')->table('inventory_categories')
+        $financeCategories = $hasFinanceCategories ? DB::connection('tenant')->table('inventory_categories')
             ->whereNull('deleted_at')
             ->where(function ($query) use ($financeOrganizationId): void {
                 $query->whereNull('organization_id');
                 if ($financeOrganizationId > 0) {
                     $query->orWhere('organization_id', $financeOrganizationId);
                 }
-            })->get();
+            })->get() : collect();
         $result = ['version' => self::VERSION, 'organization_id' => $organizationId,
-            'units' => ['created' => 0, 'existing' => 0, 'missing_in_finance' => []],
-            'categories' => ['created' => 0, 'existing' => 0, 'missing_in_finance' => [],
-                'policy' => 'canonical_finance_defaults_deduplicated']];
+            'units' => ['created' => 0, 'would_create' => 0, 'existing' => 0, 'missing_in_finance' => []],
+            'categories' => ['created' => 0, 'would_create' => 0, 'existing' => 0, 'missing_in_finance' => [],
+                'policy' => 'shared_starter_catalog_plus_legacy_finance_defaults']];
 
-        DB::connection('tenant')->transaction(function () use ($organizationId, $apply, $financeUnits, $financeCategories, &$result): void {
+        DB::connection('tenant')->transaction(function () use ($organizationId, $apply, $hasFinanceUnits, $financeUnits, $financeCategories, &$result): void {
             foreach (self::UNITS as [$name, $symbol, $kind]) {
-                if (! $financeUnits->has(mb_strtolower($symbol))) {
+                if ($hasFinanceUnits && ! $financeUnits->has(mb_strtolower($symbol))) {
                     $result['units']['missing_in_finance'][] = $symbol;
+
                     continue;
                 }
                 $code = mb_strtoupper($symbol);
@@ -77,14 +80,40 @@ final class FinanceReferenceDefaultsService
                         'name' => $name, 'symbol' => $symbol, 'kind' => $kind, 'is_active' => true,
                         'created_at' => now(), 'updated_at' => now()]);
                     $result['units']['created']++;
+                } else {
+                    $result['units']['would_create']++;
                 }
             }
 
-            foreach (self::CATEGORIES as [$parentName, $children]) {
+            // The cross-product starter catalog is independent of subscription
+            // order. An Inventory-first organization gets the same categories
+            // as a Finance-first organization, without waiting for Finance.
+            foreach (InventoryCategoryDefaults::all() as $category) {
+                $name = $category['name'];
+                $existing = DB::connection('tenant')->table('item_categories')
+                    ->where('organization_id', $organizationId)->whereNull('parent_id')
+                    ->where('name', $name)->whereNull('deleted_at')->first();
+                if ($existing) {
+                    $result['categories']['existing']++;
+                } elseif ($apply) {
+                    DB::connection('tenant')->table('item_categories')->insert([
+                        'organization_id' => $organizationId, 'parent_id' => null, 'name' => $name,
+                        'level' => 0, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                    $result['categories']['created']++;
+                } else {
+                    $result['categories']['would_create']++;
+                }
+            }
+
+            // Preserve compatibility for tenants that already received the old
+            // Finance demo hierarchy. Never copy arbitrary customer categories.
+            foreach (self::LEGACY_FINANCE_CATEGORIES as [$parentName, $children]) {
                 $sourceParents = $financeCategories->filter(fn ($category) => $category->parent_id === null
                     && mb_strtolower(trim((string) $category->name)) === mb_strtolower($parentName));
                 if ($sourceParents->isEmpty()) {
                     $result['categories']['missing_in_finance'][] = $parentName;
+
                     continue;
                 }
 
@@ -99,6 +128,8 @@ final class FinanceReferenceDefaultsService
                         'level' => 0, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
                     ])];
                     $result['categories']['created']++;
+                } else {
+                    $result['categories']['would_create']++;
                 }
 
                 $sourceParentIds = $sourceParents->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -107,6 +138,7 @@ final class FinanceReferenceDefaultsService
                         && mb_strtolower(trim((string) $category->name)) === mb_strtolower($childName));
                     if (! $sourceChild) {
                         $result['categories']['missing_in_finance'][] = $childName;
+
                         continue;
                     }
 
@@ -121,6 +153,8 @@ final class FinanceReferenceDefaultsService
                             'level' => 1, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
                         ]);
                         $result['categories']['created']++;
+                    } elseif (! $apply && ($parent || $sourceParentIds !== [])) {
+                        $result['categories']['would_create']++;
                     }
                 }
             }
