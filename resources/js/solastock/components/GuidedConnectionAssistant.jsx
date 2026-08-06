@@ -288,6 +288,27 @@ export default function GuidedConnectionAssistant({
         if (accountingPending.length === selected.length) go(5);
     };
 
+    const physicalValueFor = (row) => {
+        const saved = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity;
+        if (physicalValues[row.fingerprint] !== undefined) return physicalValues[row.fingerprint];
+        if (saved !== undefined && saved !== null && saved !== '') return String(saved);
+        const stockQuantity = row.solastock?.quantity;
+        return stockQuantity !== undefined && stockQuantity !== null ? String(stockQuantity) : '';
+    };
+
+    const savePhysicalCountsAndContinue = async () => {
+        for (const row of physicalPending) {
+            const value = physicalValueFor(row);
+            if (!/^\d+(\.\d+)?$/.test(value)) return;
+            const saved = await choose(row, confirmedDecisions.get(row.fingerprint)?.action || 'physical_count_required', {
+                physical_quantity: value,
+                physical_count_reference: 'wizard_draft_owner_confirmed',
+            });
+            if (!saved) return;
+        }
+        go(4);
+    };
+
     const recordCard = (row, role = 'owner') => {
         const exact = row.classification === 'exact_candidate_requires_owner_review';
         const currentNumber = role === 'accountant' ? accountingRows.indexOf(row) + 1 : ownerRows.indexOf(row) + 1;
@@ -642,16 +663,24 @@ export default function GuidedConnectionAssistant({
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.physicalTitle')}</h2><p>{tr('integration.focus.physicalExplanation')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: physicalPending.length })}</bdi></strong></div>
             <div className="focus-count-list">{physicalRows.map((row) => {
                 const savedQuantity = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity ?? '';
-                const value = physicalValues[row.fingerprint] ?? savedQuantity;
-                return <div className="focus-count-row" key={row.fingerprint}>
-                    <div><strong><bdi>{row.solabooks?.name || row.solastock?.name}</bdi></strong><small>SolaBooks: <bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi> · SolaStock: <bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></small></div>
-                    <label><span>{tr('integration.focus.actualQuantity')}</span><input className="input" inputMode="decimal" value={value} onChange={(event) => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: event.target.value }))} /></label>
-                    <button type="button" className="btn" disabled={!/^\d+(\.\d+)?$/.test(value) || String(value) === String(savedQuantity) || saving}
-                        onClick={() => choose(row, confirmedDecisions.get(row.fingerprint)?.action || 'physical_count_required', { physical_quantity: value, physical_count_reference: 'wizard_draft' })}>{tr('integration.focus.saveCount')}</button>
+                const value = physicalValueFor(row);
+                const isSaved = savedQuantity !== '' && String(value) === String(savedQuantity);
+                return <div className={`focus-count-row ${isSaved ? 'is-saved' : ''}`} key={row.fingerprint}>
+                    <div className="focus-count-item"><strong><bdi>{row.solabooks?.name || row.solastock?.name}</bdi></strong><small><bdi>{row.solabooks?.sku || row.solastock?.sku || '—'}</bdi></small></div>
+                    <div className="focus-count-comparison">
+                        <span><small>SolaBooks</small><strong><bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi></strong></span>
+                        <span><small>SolaStock</small><strong><bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></strong></span>
+                    </div>
+                    <label className="focus-count-input"><span>{tr('integration.focus.actualQuantity')}</span><input className="input" inputMode="decimal" value={value} aria-describedby={`count-note-${row.fingerprint}`}
+                        onChange={(event) => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: event.target.value }))} />
+                        <small id={`count-note-${row.fingerprint}`}>{isSaved ? tr('integration.focus.countSaved') : tr('integration.focus.stockQuantitySuggested')}</small>
+                    </label>
                 </div>;
             })}</div>
             {!physicalRows.length && <div className="focus-complete"><h2>{tr('integration.focus.countComplete')}</h2><p>{tr('integration.focus.countCompleteText')}</p></div>}
-            {footer(tr('integration.focus.continue'), () => go(4), { disabled: physicalPending.length > 0 })}
+            {footer(tr('integration.focus.confirmCountsContinue'), savePhysicalCountsAndContinue, {
+                disabled: physicalPending.some((row) => !/^\d+(\.\d+)?$/.test(physicalValueFor(row))),
+            })}
         </section>;
 
         if (task === 4) return <section className="focus-card">
