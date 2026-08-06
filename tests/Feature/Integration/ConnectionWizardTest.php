@@ -383,6 +383,10 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('wizard_draft_owner_confirmed', $assistant);
         $this->assertStringContainsString('confirmCountsContinue', $assistant.$translations);
         $this->assertStringContainsString('stockQuantitySuggested', $assistant.$translations);
+        $this->assertStringContainsString('focus-count-columns', $assistant.$translations);
+        $this->assertStringContainsString('stockDefaultsReady', $assistant.$translations);
+        $this->assertStringContainsString('quantityToConfirm', $assistant.$translations);
+        $this->assertStringNotContainsString('<span>{tr(\'integration.focus.actualQuantity\')}</span>', $assistant);
         $this->assertStringNotContainsString(">{tr('integration.focus.saveCount')}</button>", $assistant);
         $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
         $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
