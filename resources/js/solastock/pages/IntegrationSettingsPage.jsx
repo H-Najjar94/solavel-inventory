@@ -79,7 +79,7 @@ export default function IntegrationSettingsPage() {
     const gate = useCanCreate('inventory.integration.manage');
     const setupGate = useCanCreate('inventory.integration.setup');
     const accountingGate = useCanCreate('inventory.integration.accounting_review');
-    const reviewerAccess = useApiQuery(['integration-accounting-reviewer-access', tenant.organization_id], api.integrationAccountingReviewerAccess, {
+    const connectionAccess = useApiQuery(['integration-connection-management-access', tenant.organization_id], api.integrationConnectionManagementAccess, {
         fallback: null, enabled: Boolean(tenant.organization_id), refetchOnMount: 'always', refetchOnWindowFocus: true,
     });
     const [tab, setTab] = useState('status');
@@ -245,12 +245,12 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} reviewerAccess={reviewerAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, reviewerAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
+function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
     const queryClient = useQueryClient();
     const actionsByEntity = {
         item: {
@@ -483,7 +483,7 @@ function ConnectionWizard({ gate, accountingGate, reviewerAccess, status, toast,
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
             organizationName={organizationName}
-            reviewerAccess={reviewerAccess}
+            connectionAccess={connectionAccess}
         />;
     }
     return <div className="wizard" aria-live="polite">

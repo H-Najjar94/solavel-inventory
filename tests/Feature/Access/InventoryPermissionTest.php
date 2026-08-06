@@ -3,6 +3,7 @@
 namespace Tests\Feature\Access;
 
 use App\Services\Access\InventoryPermissionService;
+use App\Services\Integration\ConnectionManagementPolicy;
 use App\Tenancy\OrganizationContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -22,11 +23,23 @@ class InventoryPermissionTest extends TestCase
     /** Permission service with an injectable central role (bypasses the DB). */
     private function perms(?string $centralRole): InventoryPermissionService
     {
-        return new class(app(OrganizationContext::class), $centralRole) extends InventoryPermissionService
+        $policy = new class($centralRole) extends ConnectionManagementPolicy
         {
-            public function __construct(OrganizationContext $ctx, private ?string $forcedRole)
+            public function __construct(private ?string $role) {}
+
+            public function status(int $organizationId, ?object $user): array
             {
-                parent::__construct($ctx);
+                $owner = $this->role === 'client_owner';
+
+                return ['can_manage_connection' => $owner, 'can_review_accounting' => $owner];
+            }
+        };
+
+        return new class(app(OrganizationContext::class), $policy, $centralRole) extends InventoryPermissionService
+        {
+            public function __construct(OrganizationContext $ctx, ConnectionManagementPolicy $policy, private ?string $forcedRole)
+            {
+                parent::__construct($ctx, $policy);
             }
 
             protected function fetchCentralRole(int $userId, int $orgId): ?string
@@ -46,16 +59,17 @@ class InventoryPermissionTest extends TestCase
     {
         app(OrganizationContext::class)->set(self::ORG);
         $seen = (object) ['user_id' => null];
-        $service = new class(app(OrganizationContext::class), $seen) extends InventoryPermissionService
+        $service = new class(app(OrganizationContext::class), app(ConnectionManagementPolicy::class), $seen) extends InventoryPermissionService
         {
-            public function __construct(OrganizationContext $context, private object $seen)
+            public function __construct(OrganizationContext $context, ConnectionManagementPolicy $policy, private object $seen)
             {
-                parent::__construct($context);
+                parent::__construct($context, $policy);
             }
 
             protected function fetchCentralRole(int $userId, int $orgId): ?string
             {
                 $this->seen->user_id = $userId;
+
                 return 'client_owner';
             }
         };
@@ -70,23 +84,28 @@ class InventoryPermissionTest extends TestCase
     {
         app(OrganizationContext::class)->set(self::ORG);
         $seen = (object) ['user_id' => null];
-        $service = new class(app(OrganizationContext::class), $seen) extends InventoryPermissionService
+        $service = new class(app(OrganizationContext::class), app(ConnectionManagementPolicy::class), $seen) extends InventoryPermissionService
         {
-            public function __construct(OrganizationContext $context, private object $seen)
+            public function __construct(OrganizationContext $context, ConnectionManagementPolicy $policy, private object $seen)
             {
-                parent::__construct($context);
+                parent::__construct($context, $policy);
             }
 
             protected function fetchCentralRole(int $userId, int $orgId): ?string
             {
                 $this->seen->user_id = $userId;
+
                 return 'client_owner';
             }
         };
         $user = new class
         {
             public int $id = 3;
-            public function getConnectionName(): string { return 'mysql'; }
+
+            public function getConnectionName(): string
+            {
+                return 'mysql';
+            }
         };
 
         $this->assertTrue($service->can($user, 'inventory.integration.view'));
@@ -181,17 +200,18 @@ class InventoryPermissionTest extends TestCase
             $this->assertTrue($p->can($this->user(), $perm), "owner must be able to {$perm}");
         }
         $this->assertTrue($p->can($this->user(), 'inventory.integration.setup'));
-        $this->assertFalse($p->can($this->user(), 'inventory.integration.accounting_review'));
+        $this->assertTrue($p->can($this->user(), 'inventory.integration.connection_manage'));
+        $this->assertTrue($p->can($this->user(), 'inventory.integration.accounting_review'));
     }
 
     #[Test]
-    public function accountant_can_review_only_accounting_wizard_decisions(): void
+    public function job_title_alone_does_not_grant_connection_accounting_review(): void
     {
         app(OrganizationContext::class)->set(self::ORG);
         $p = $this->perms('accountant');
 
         $this->assertTrue($p->can($this->user(), 'inventory.integration.view'));
-        $this->assertTrue($p->can($this->user(), 'inventory.integration.accounting_review'));
+        $this->assertFalse($p->can($this->user(), 'inventory.integration.accounting_review'));
         $this->assertFalse($p->can($this->user(), 'inventory.integration.setup'));
         $this->assertFalse($p->can($this->user(), 'inventory.integration.manage'));
         $this->assertFalse($p->can($this->user(), 'inventory.manage_items'));

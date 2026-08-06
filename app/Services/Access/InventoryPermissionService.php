@@ -4,6 +4,7 @@ namespace App\Services\Access;
 
 use App\Models\Tenant\InventoryCustomRole;
 use App\Models\Tenant\InventoryUserRoleAssignment;
+use App\Services\Integration\ConnectionManagementPolicy;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -22,7 +23,10 @@ class InventoryPermissionService
     /** Per-request memo: [orgId][userId] => inventory role|null. */
     private array $roleCache = [];
 
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(
+        private OrganizationContext $context,
+        private ?ConnectionManagementPolicy $connectionManagement = null,
+    ) {}
 
     /** All known permissions (from config). */
     public function all(): array
@@ -48,17 +52,16 @@ class InventoryPermissionService
 
         $granted = $this->permissionsForRole($role);
 
-        if ($permission === 'inventory.integration.accounting_review'
-            && $this->hasCanonicalFinanceAccountantRole($user, $orgId)) {
-            return true;
-        }
+        if (in_array($permission, [
+            ConnectionManagementPolicy::SETUP_PERMISSION,
+            ConnectionManagementPolicy::MANAGEMENT_PERMISSION,
+            ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION,
+        ], true)) {
+            $connection = $this->connectionPolicy()->status($orgId, $user);
 
-        // Accounting approval is deliberately segregated from organization
-        // ownership. The owner approves operational/master-data choices; an
-        // accountant (or a custom role explicitly granted this permission)
-        // reviews the financial roles and correction preview.
-        if ($permission === 'inventory.integration.accounting_review' && $role === 'inventory_admin') {
-            return false;
+            return $permission === ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION
+                ? (bool) ($connection['can_review_accounting'] ?? false)
+                : (bool) ($connection['can_manage_connection'] ?? false);
         }
 
         return $granted === ['*'] || in_array($permission, $granted, true);
@@ -73,24 +76,30 @@ class InventoryPermissionService
         }
         $granted = $this->permissionsForRole($role);
 
-        if ($granted === ['*']) {
-            $permissions = $this->all();
-            if ($role === 'inventory_admin') {
-                $permissions = array_values(array_diff($permissions, ['inventory.integration.accounting_review']));
-            }
-
-            if ($this->hasCanonicalFinanceAccountantRole($user, (int) $this->context->id())) {
-                $permissions[] = 'inventory.integration.accounting_review';
-            }
-
-            return array_values(array_unique($permissions));
+        $connectionPermissions = [
+            ConnectionManagementPolicy::SETUP_PERMISSION,
+            ConnectionManagementPolicy::MANAGEMENT_PERMISSION,
+            ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION,
+        ];
+        $granted = $granted === ['*'] ? $this->all() : $granted;
+        $granted = array_values(array_diff($granted, $connectionPermissions));
+        $connection = $this->context->has()
+            ? $this->connectionPolicy()->status((int) $this->context->id(), $user)
+            : [];
+        if ($connection['can_manage_connection'] ?? false) {
+            $granted[] = ConnectionManagementPolicy::SETUP_PERMISSION;
+            $granted[] = ConnectionManagementPolicy::MANAGEMENT_PERMISSION;
         }
-
-        if ($this->hasCanonicalFinanceAccountantRole($user, (int) $this->context->id())) {
-            $granted[] = 'inventory.integration.accounting_review';
+        if ($connection['can_review_accounting'] ?? false) {
+            $granted[] = ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION;
         }
 
         return array_values(array_unique($granted));
+    }
+
+    private function connectionPolicy(): ConnectionManagementPolicy
+    {
+        return $this->connectionManagement ??= app(ConnectionManagementPolicy::class);
     }
 
     /**
@@ -240,30 +249,6 @@ class InventoryPermissionService
             return $assignment?->role?->is_active ? $assignment->role->key : null;
         } catch (\Throwable) {
             return null;
-        }
-    }
-
-    private function hasCanonicalFinanceAccountantRole(?object $user, int $organizationId): bool
-    {
-        $centralUserId = $this->centralUserId($user);
-        if ($centralUserId <= 0 || $organizationId <= 0) {
-            return false;
-        }
-
-        try {
-            return DB::connection((string) config('tenancy.central_connection', 'mysql'))
-                ->table('app_permission_grants')
-                ->where('organization_id', $organizationId)
-                ->where('app_key', 'finance')
-                ->where('user_id', $centralUserId)
-                ->where('role_key', 'accountant')
-                ->where('permission_key', 'role.assignment')
-                ->where('effect', 'allow')
-                ->where(function ($query): void {
-                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-                })->exists();
-        } catch (\Throwable) {
-            return false;
         }
     }
 }
