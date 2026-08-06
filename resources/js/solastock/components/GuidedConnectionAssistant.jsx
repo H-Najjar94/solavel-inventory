@@ -288,10 +288,25 @@ export default function GuidedConnectionAssistant({
         if (accountingPending.length === selected.length) go(5);
     };
 
+    const comparableQuantity = (value) => {
+        const raw = String(value ?? '').trim();
+        if (!/^\d+(\.\d+)?$/.test(raw)) return null;
+        const [whole, fraction = ''] = raw.split('.');
+        const normalizedWhole = whole.replace(/^0+(?=\d)/, '');
+        const normalizedFraction = fraction.replace(/0+$/, '');
+        return normalizedFraction ? `${normalizedWhole}.${normalizedFraction}` : normalizedWhole;
+    };
+    const systemQuantitiesMatch = (row) => {
+        const books = comparableQuantity(row.solabooks?.quantity);
+        const stock = comparableQuantity(row.solastock?.quantity);
+        return books !== null && stock !== null && books === stock;
+    };
+
     const physicalValueFor = (row) => {
         const saved = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity;
         if (physicalValues[row.fingerprint] !== undefined) return physicalValues[row.fingerprint];
         if (saved !== undefined && saved !== null && saved !== '') return String(saved);
+        if (!systemQuantitiesMatch(row)) return '';
         const stockQuantity = row.solastock?.quantity;
         return stockQuantity !== undefined && stockQuantity !== null ? String(stockQuantity) : '';
     };
@@ -661,12 +676,18 @@ export default function GuidedConnectionAssistant({
 
         if (task === 3) return <section className="focus-card focus-list-card">
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.physicalTitle')}</h2><p>{tr('integration.focus.physicalExplanation')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: physicalPending.length })}</bdi></strong></div>
-            {physicalPending.length > 0 && <div className="focus-count-default-note" role="status">
-                <span aria-hidden="true">✓</span><strong>{tr('integration.focus.stockDefaultsReady', { count: physicalPending.length })}</strong>
-            </div>}
+            {physicalPending.length > 0 && (() => {
+                const differenceCount = physicalPending.filter((row) => !systemQuantitiesMatch(row)).length;
+                return <div className={`focus-count-default-note ${differenceCount ? 'is-warning' : ''}`} role="status">
+                    <span aria-hidden="true">{differenceCount ? '!' : '✓'}</span><strong>{tr(differenceCount
+                        ? 'integration.focus.differentQuantitiesNeedReview' : 'integration.focus.stockDefaultsReady', {
+                        count: differenceCount || physicalPending.length,
+                    })}</strong>
+                </div>;
+            })()}
             <div className="focus-count-list">
                 <div className="focus-count-columns" aria-hidden="true">
-                    <span>{tr('integration.focus.countItem')}</span><span className="is-primary">{tr('integration.focus.quantityToConfirm')}</span><span>{tr('integration.focus.stockDefault')}</span><span>SolaBooks</span>
+                    <span>{tr('integration.focus.countItem')}</span><span className="is-primary">{tr('integration.focus.quantityToConfirm')}</span><span>SolaStock</span><span>SolaBooks</span>
                 </div>
                 {physicalRows.map((row) => {
                 const savedQuantity = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity ?? '';
@@ -678,9 +699,13 @@ export default function GuidedConnectionAssistant({
                         aria-label={tr('integration.focus.quantityForItem', { item: row.solabooks?.name || row.solastock?.name })}
                         onChange={(event) => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: event.target.value }))} />
                         <small id={`count-note-${row.fingerprint}`} className={isSaved ? 'is-confirmed' : 'sr-only'}>{isSaved ? `✓ ${tr('integration.focus.countSaved')}` : tr('integration.focus.reviewOrKeep')}</small>
+                        {!isSaved && !systemQuantitiesMatch(row) && <span className="focus-count-quick-actions">
+                            <button type="button" onClick={() => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: String(row.solabooks?.quantity ?? '') }))}>{tr('integration.focus.useBooksQuantity', { quantity: formatNumber(row.solabooks?.quantity, 4) })}</button>
+                            <button type="button" onClick={() => setPhysicalValues((values) => ({ ...values, [row.fingerprint]: String(row.solastock?.quantity ?? '') }))}>{tr('integration.focus.useStockQuantity', { quantity: formatNumber(row.solastock?.quantity, 4) })}</button>
+                        </span>}
                     </label>
                     <div className="focus-count-system is-stock">
-                        <small className="focus-count-mobile-label">SolaStock</small><strong><bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></strong><em>{tr('integration.focus.suggested')}</em>
+                        <small className="focus-count-mobile-label">SolaStock</small><strong><bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></strong>
                     </div>
                     <div className="focus-count-system is-books">
                         <small className="focus-count-mobile-label">SolaBooks</small><strong><bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi></strong>
