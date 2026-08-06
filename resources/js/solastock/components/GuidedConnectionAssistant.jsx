@@ -21,6 +21,8 @@ export default function GuidedConnectionAssistant({
     const [countCursor, setCountCursor] = useState(0);
     const [physicalValues, setPhysicalValues] = useState({});
     const [lastSaved, setLastSaved] = useState(null);
+    const [savedFeedbackVisible, setSavedFeedbackVisible] = useState(false);
+    const [sectionSaveNotice, setSectionSaveNotice] = useState(null);
     const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
     const [openOwnerSection, setOpenOwnerSection] = useState(undefined);
     const [itemFilter, setItemFilter] = useState('all');
@@ -105,6 +107,17 @@ export default function GuidedConnectionAssistant({
         requestAnimationFrame(() => headingRef.current?.focus());
     }, [task]);
 
+    useEffect(() => {
+        if (saveState === 'idle') {
+            setSavedFeedbackVisible(false);
+            return undefined;
+        }
+        setSavedFeedbackVisible(true);
+        if (saveState !== 'saved') return undefined;
+        const timer = window.setTimeout(() => setSavedFeedbackVisible(false), 3000);
+        return () => window.clearTimeout(timer);
+    }, [saveState]);
+
     const go = (next) => setTask(Math.min(totalSteps, Math.max(1, next)));
     const formatNumber = (value, digits = 2) => Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
     const baseCurrency = accounting.base_currency || guided.currency_summary?.base_currency || '';
@@ -117,7 +130,7 @@ export default function GuidedConnectionAssistant({
 
     const saveIndicator = <span className={`focus-save is-${saveState || 'idle'}`} role="status" aria-live="polite">
         {saving || saveState === 'saving' ? tr('integration.assistant.saving')
-            : saveState === 'saved' ? tr('integration.focus.saved')
+            : saveState === 'saved' && savedFeedbackVisible ? tr('integration.focus.saved')
                 : saveState === 'failed' ? tr('integration.assistant.saveFailed')
                     : saveState === 'conflict' ? tr('integration.assistant.saveConflict') : ''}
         {saveState === 'failed' && <button type="button" className="btn btn--link" onClick={retrySave}>{tr('integration.assistant.retrySave')}</button>}
@@ -233,12 +246,16 @@ export default function GuidedConnectionAssistant({
 
     const saveRecommendationsAndContinue = async () => {
         const selected = selectedOwnerRecommendations;
+        setSectionSaveNotice(null);
         for (const row of selected) {
             const action = recommendedChoice(row)?.[0];
             if (!action || !await choose(row, action, recommendationDetails(row, action))) return;
         }
         const unresolved = activeSectionPending.filter((row) => !selected.some((saved) => saved.fingerprint === row.fingerprint));
         if (unresolved.length > 0) return;
+        if (selected.length > 0) {
+            setSectionSaveNotice({ count: selected.length, section: activeOwnerSection?.[0] });
+        }
         const currentIndex = ownerSections.findIndex(([section]) => section === activeOwnerSection?.[0]);
         const nextSection = ownerSections[currentIndex + 1]?.[0];
         if (nextSection) return setOpenOwnerSection(nextSection);
@@ -494,20 +511,23 @@ export default function GuidedConnectionAssistant({
                     }}>{tr('integration.focus.editConversion')}</button>
                 </div>}
                 {(showManualChoice || current?.action) && <><small className="focus-action-effect">{decisionEffect}</small>
-                    <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : current?.action ? 'is-saved' : ''}`}>
-                        {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
-                            : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
-                                : current?.action ? tr('integration.focus.saved') : tr('integration.focus.awaitingDecision')}
-                    </small></>}
-                {recommendation && !showManualChoice && <small className="focus-recommendation-note">{tr(recommendationSelected
-                    ? 'integration.focus.recommendationWillSave' : 'integration.focus.recommendationExcluded')}</small>}
+                    {(current?.persistence_state === 'saving' || current?.persistence_state === 'failed' || !current?.action)
+                        && <small className={`focus-action-status ${current?.persistence_state === 'failed' ? 'is-error' : ''}`}>
+                            {current?.persistence_state === 'saving' ? tr('integration.assistant.saving')
+                                : current?.persistence_state === 'failed' ? tr('integration.assistant.saveFailed')
+                                    : tr('integration.focus.awaitingDecision')}
+                        </small>}</>}
+                {recommendation && !showManualChoice && !recommendationSelected
+                    && <small className="focus-recommendation-note">{tr('integration.focus.recommendationExcluded')}</small>}
             </div>
         </div>;
     };
 
     const footer = (primaryLabel, onPrimary, { disabled = false, hideBack = false } = {}) => <footer className="focus-footer">
-        <div>{!hideBack && task > 1 && <button type="button" className="btn btn--link" onClick={() => go(task - 1)}>{tr('integration.focus.back')}</button>}{saveIndicator}</div>
-        <div><button type="button" className="btn btn--primary" disabled={disabled} onClick={onPrimary}>{primaryLabel}</button></div>
+        <div>{!hideBack && task > 1 && <button type="button" className="btn btn--link" onClick={() => go(task - 1)}>{tr('integration.focus.back')}</button>}
+            <span className="focus-footer-feedback">{saveIndicator}{lastSaved && <button type="button" className="btn btn--link focus-footer-undo" onClick={undo}>{tr('integration.focus.undo')}</button>}</span>
+        </div>
+        <div><button type="button" className="btn btn--primary" disabled={disabled || saving} onClick={onPrimary}>{primaryLabel}</button></div>
     </footer>;
 
     const technical = <details className="focus-details"><summary>{tr('integration.assistant.statusDetails')}</summary>
@@ -552,7 +572,13 @@ export default function GuidedConnectionAssistant({
                 })}
             </nav>
             {selectedOwnerRecommendations.length > 0 && <div className="focus-defaults-summary" role="status">
-                <span>{tr('integration.focus.defaultsInSection')}</span>
+                <span>{tr('integration.focus.recommendationsSelected', { count: selectedOwnerRecommendations.length })}</span>
+            </div>}
+            {sectionSaveNotice && <div className="focus-section-save-result" role="status">
+                ✓ {tr('integration.focus.recommendationsSaved', {
+                    count: sectionSaveNotice.count,
+                    section: tr(`integration.focus.section.${sectionSaveNotice.section}`),
+                })}
             </div>}
             {activeOwnerSection?.[0] === 'items' && exactRows.length > 1 && <button type="button" className="btn btn--link focus-bulk-link" onClick={() => { exactRows.forEach((row) => !bulkSelection.includes(row.fingerprint) && toggleBulk(row.fingerprint)); setBulkReviewOpen(true); }}>{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</button>}
             <div className="focus-active-section">{activeOwnerSection ? (() => {
@@ -587,7 +613,6 @@ export default function GuidedConnectionAssistant({
                         : <p className="focus-empty-filter">{tr('integration.focus.noItemsInFilter')}</p>}</div>
                 </section>;
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
-            {lastSaved && <div className="focus-undo" role="status">{tr('integration.focus.saved')} <button type="button" className="btn btn--link" onClick={undo}>{tr('integration.focus.undo')}</button></div>}
             {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
                 disabled: activeSectionPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)

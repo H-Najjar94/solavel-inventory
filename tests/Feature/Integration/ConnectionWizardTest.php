@@ -372,6 +372,12 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertStringContainsString('focus-check-list', $assistant);
         $this->assertStringContainsString('bulkReviewOpen', $assistant);
+        $this->assertStringContainsString('focus-footer-undo', $assistant);
+        $this->assertStringContainsString('recommendationsSelected', $assistant.$translations);
+        $this->assertStringContainsString('recommendationsSaved', $assistant.$translations);
+        $this->assertStringNotContainsString('className="focus-undo"', $assistant);
+        $this->assertStringNotContainsString("recommendationSelected\n                    ? 'integration.focus.recommendationWillSave'", $assistant);
+        $this->assertStringNotContainsString("current?.action ? tr('integration.focus.saved')", $assistant);
         foreach (['items', 'units', 'categories', 'customers', 'suppliers', 'warehouses', 'currencies'] as $section) {
             $this->assertStringContainsString("integration.focus.section.{$section}", $assistant.$translations);
         }
