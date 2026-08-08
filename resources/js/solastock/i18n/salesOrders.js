@@ -19,7 +19,7 @@ export const salesOrdersEn = {
     'salesOrders.common.noTax': 'No tax',
     'salesOrders.common.saveFailed': 'Save failed.',
     'salesOrders.list.new': 'New sales order',
-    'salesOrders.list.description': 'Fulfillment documents only — SolaStock reserves and ships stock. Invoices and accounting remain in SolaBooks.',
+    'salesOrders.list.description': 'Fulfillment documents only — SolaStock reserves and ships stock. Invoices and accounting remain in SolaCount.',
     'salesOrders.list.emptyTitle': 'No sales orders',
     'salesOrders.list.emptyHint': 'Create a sales order to reserve, pick, pack, and ship stock.',
     'salesOrders.list.orderNumberShort': 'Order #',
@@ -80,7 +80,7 @@ export const salesOrdersEn = {
     'salesOrders.messages.shipmentCreated': 'Draft shipment created — review it, then post it to ship.',
     'salesOrders.messages.cancelled': 'Sales order cancelled.',
     'salesOrders.detail.shippingNoticeBeforeEvent': 'Shipping posts stock OUT through the canonical ledger and records a',
-    'salesOrders.detail.shippingNoticeAfterEvent': 'outbox event for SolaBooks. No invoice or journal entry is created here.',
+    'salesOrders.detail.shippingNoticeAfterEvent': 'outbox event for SolaCount. No invoice or journal entry is created here.',
 };
 
 export const salesOrdersAr = {
@@ -104,7 +104,7 @@ export const salesOrdersAr = {
     'salesOrders.common.noTax': 'بدون ضريبة',
     'salesOrders.common.saveFailed': 'تعذر الحفظ.',
     'salesOrders.list.new': 'أمر بيع جديد',
-    'salesOrders.list.description': 'هذه مستندات تنفيذ فقط — يحجز SolaStock المخزون ويشحنه، بينما تبقى الفواتير والمحاسبة في SolaBooks.',
+    'salesOrders.list.description': 'هذه مستندات تنفيذ فقط — يحجز SolaStock المخزون ويشحنه، بينما تبقى الفواتير والمحاسبة في SolaCount.',
     'salesOrders.list.emptyTitle': 'لا توجد أوامر بيع',
     'salesOrders.list.emptyHint': 'أنشئ أمر بيع لحجز المخزون وتجهيزه وتعبئته وشحنه.',
     'salesOrders.list.orderNumberShort': 'رقم الأمر',
@@ -165,7 +165,7 @@ export const salesOrdersAr = {
     'salesOrders.messages.shipmentCreated': 'تم إنشاء مسودة الشحنة — راجعها ثم رحّلها للشحن.',
     'salesOrders.messages.cancelled': 'تم إلغاء أمر البيع.',
     'salesOrders.detail.shippingNoticeBeforeEvent': 'يؤدي ترحيل الشحنة إلى إخراج المخزون عبر سجل المخزون المعتمد، ويسجل حدث',
-    'salesOrders.detail.shippingNoticeAfterEvent': 'في صندوق الصادر الخاص بـ SolaBooks. ولا تُنشأ هنا فاتورة أو قيد يومية.',
+    'salesOrders.detail.shippingNoticeAfterEvent': 'في صندوق الصادر الخاص بـ SolaCount. ولا تُنشأ هنا فاتورة أو قيد يومية.',
 };
 
 // Conventional aliases used by the aggregate dictionary loader.

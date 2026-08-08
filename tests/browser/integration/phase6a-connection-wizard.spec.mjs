@@ -27,7 +27,7 @@ async function verifyWizard(page, locale, viewportName) {
     await expect(page.locator('.wizard')).toBeVisible();
     await expect(page.locator('.wizard__comparison')).toBeVisible();
     await expect(page.locator('.wizard')).toContainText('SolaStock');
-    await expect(page.locator('.wizard')).toContainText('SolaBooks');
+    await expect(page.locator('.wizard')).toContainText('SolaCount');
     await expect(page.locator('.wizard')).not.toContainText(/secret|signature|exception trace/i);
     await expect(page.locator('body')).not.toContainText('Error 500');
     if (evidenceDir) {

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Keeps SolaStock's operational catalog (`items`) visible in SolaBooks'
+ * Keeps SolaStock's operational catalog (`items`) visible in SolaCount'
  * accounting catalog (`inventory_items`).
  *
  * Both tables live in the same tenant database. The bridge deliberately owns
