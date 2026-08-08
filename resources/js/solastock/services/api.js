@@ -311,7 +311,7 @@ export const api = {
     warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}`),
     allWarehouseAssignments: () => request('/settings/warehouse-assignments'),
     syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
-    // SolaBooks integration (foundation)
+    // SolaCount integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
     integrationWizardDiscovery: () => request('/integration/solabooks/wizard/discovery'),
     startIntegrationWizard: () => request('/integration/solabooks/wizard/runs', { method: 'POST' }),

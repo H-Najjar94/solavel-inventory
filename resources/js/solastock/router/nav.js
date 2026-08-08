@@ -1,6 +1,6 @@
 // Permission-aware navigation config. `perm` gates visibility against the
 // current user's inventory permissions (from /meta). `icon` uses Font Awesome
-// (fa-solid), matching the SolaBooks (Finance) sidebar style. Order = sidebar order.
+// (fa-solid), matching the SolaCount (Finance) sidebar style. Order = sidebar order.
 
 export const NAV = [
     { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'fa-solid fa-gauge-high', perm: 'inventory.view_dashboard', group: 'Overview' },
@@ -27,7 +27,7 @@ export const NAV = [
     { key: 'serials', label: 'Serial Numbers', path: '/traceability/serials', icon: 'fa-solid fa-hashtag', perm: 'inventory.view_traceability', group: 'Traceability' },
     { key: 'recalls', label: 'Recalls', path: '/recalls', icon: 'fa-solid fa-triangle-exclamation', perm: 'inventory.view_traceability', group: 'Traceability' },
     { key: 'reports', label: 'Reports', path: '/reports', icon: 'fa-solid fa-chart-line', perm: 'inventory.view_reports', group: 'Insights' },
-    { key: 'integration', label: 'SolaBooks', path: '/integrations/solabooks', icon: 'fa-solid fa-book-open', perm: 'inventory.integration.view', group: 'Admin' },
+    { key: 'integration', label: 'SolaCount', path: '/integrations/solabooks', icon: 'fa-solid fa-book-open', perm: 'inventory.integration.view', group: 'Admin' },
     { key: 'settings', label: 'Settings', path: '/settings', icon: 'fa-solid fa-gear', perm: 'inventory.manage_settings', group: 'Admin' },
 ];
 

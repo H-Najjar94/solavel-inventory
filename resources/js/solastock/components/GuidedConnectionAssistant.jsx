@@ -35,6 +35,7 @@ export default function GuidedConnectionAssistant({
     const [ownerCursor, setOwnerCursor] = useState(0);
     const [accountCursor, setAccountCursor] = useState(0);
     const [countCursor, setCountCursor] = useState(0);
+    const [accountReviewStarted, setAccountReviewStarted] = useState(false);
     const [physicalValues, setPhysicalValues] = useState({});
     const [lastSaved, setLastSaved] = useState(null);
     const [savedFeedbackVisible, setSavedFeedbackVisible] = useState(false);
@@ -333,7 +334,7 @@ export default function GuidedConnectionAssistant({
             <h2 ref={headingRef} tabIndex="-1">{exact ? tr('integration.focus.sameQuestion') : row.entity_type === 'item' ? tr('integration.focus.itemQuestion') : tr(`integration.focus.question.${row.entity_type}`)}</h2>
             <p>{exact ? tr('integration.focus.sameExplanation') : tr('integration.focus.draftOnly')}</p>
             <div className="focus-record-pair">
-                <div><span>SolaBooks</span><strong><bdi>{row.solabooks?.name || '—'}</bdi></strong><small><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi></small></div>
+                <div><span>{tr('integration.businessStatus.solabooks')}</span><strong><bdi>{row.solabooks?.name || '—'}</bdi></strong><small><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi></small></div>
                 {row.solastock && <div><span>SolaStock</span><strong><bdi>{row.solastock.name}</bdi></strong><small><bdi>{row.solastock.sku || row.solastock.code || '—'}</bdi></small></div>}
             </div>
             {exact && <p className="focus-system-note">✓ {tr('integration.assistant.identicalNameSku')}</p>}
@@ -645,7 +646,7 @@ export default function GuidedConnectionAssistant({
                     <header><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></header>
                     <div className="focus-list-columns" aria-hidden="true"><span>{tr('integration.focus.comparisonColumn')}</span><span>{tr('integration.focus.decisionColumn')}</span></div>
                     {section === 'items' && <div className="focus-item-catalog-summary" aria-label={tr('integration.focus.itemCatalogSummary')}>
-                        <div><span>SolaBooks</span><strong><bdi>{itemCounts.solabooks}</bdi></strong></div>
+                        <div><span>{tr('integration.businessStatus.solabooks')}</span><strong><bdi>{itemCounts.solabooks}</bdi></strong></div>
                         <div><span>SolaStock</span><strong><bdi>{itemCounts.solastock}</bdi></strong></div>
                         <div><span>{tr('integration.focus.itemsInBoth')}</span><strong><bdi>{itemCounts.both}</bdi></strong></div>
                         <div><span>{tr('integration.focus.itemsBooksOnly')}</span><strong><bdi>{itemCounts.solabooksOnly}</bdi></strong></div>
@@ -687,7 +688,7 @@ export default function GuidedConnectionAssistant({
             })()}
             <div className="focus-count-list">
                 <div className="focus-count-columns" aria-hidden="true">
-                    <span>{tr('integration.focus.countItem')}</span><span className="is-primary">{tr('integration.focus.quantityToConfirm')}</span><span>SolaStock</span><span>SolaBooks</span>
+                    <span>{tr('integration.focus.countItem')}</span><span className="is-primary">{tr('integration.focus.quantityToConfirm')}</span><span>SolaStock</span><span>{tr('integration.businessStatus.solabooks')}</span>
                 </div>
                 {physicalRows.map((row) => {
                 const savedQuantity = confirmedDecisions.get(row.fingerprint)?.safe_details?.physical_quantity ?? '';
@@ -708,7 +709,7 @@ export default function GuidedConnectionAssistant({
                         <small className="focus-count-mobile-label">SolaStock</small><strong><bdi>{formatNumber(row.solastock?.quantity, 4)}</bdi></strong>
                     </div>
                     <div className="focus-count-system is-books">
-                        <small className="focus-count-mobile-label">SolaBooks</small><strong><bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi></strong>
+                        <small className="focus-count-mobile-label">{tr('integration.businessStatus.solabooks')}</small><strong><bdi>{formatNumber(row.solabooks?.quantity, 4)}</bdi></strong>
                     </div>
                 </div>;
             })}</div>
@@ -727,9 +728,12 @@ export default function GuidedConnectionAssistant({
                 <div className="focus-accountant-next"><strong>{tr('integration.focus.accountingAccessBlockedTitle')}</strong>
                     <p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p>
                 </div>
-            </div>
-                : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}
-            {footer(tr(accountingGate.allowed ? 'integration.focus.continueAccountingReview' : 'integration.focus.viewResultPreview'), accountingGate.allowed ? saveAccountingRecommendationsAndContinue : () => go(6), {
+            </div> : !accountReviewStarted ? <div className="focus-complete">
+                <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2>
+                <p>{tr('integration.focus.accountReviewOwnerText', { count: accountingPending.length })}</p>
+                <button type="button" className="btn btn--primary" onClick={() => setAccountReviewStarted(true)}>{tr('integration.focus.continueAccountingReview')}</button>
+            </div> : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}
+            {(accountReviewStarted || !accountingGate.allowed) && footer(tr(accountingGate.allowed ? 'integration.focus.continue' : 'integration.focus.viewResultPreview'), accountingGate.allowed ? saveAccountingRecommendationsAndContinue : () => go(6), {
                 disabled: accountingGate.allowed && (accountingPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))
@@ -801,7 +805,7 @@ export default function GuidedConnectionAssistant({
                     <button type="button" onClick={() => go(4)}><span>{tr('integration.focus.summary.accounting')}</span><strong><bdi>{resolvedAccounting}/{accountingRows.length}</bdi></strong></button>
                     <button type="button" onClick={() => go(5)}><span>{tr('integration.focus.summary.documents')}</span><strong><bdi>{cutoffRows.length}</bdi></strong></button>
                 </div>
-                <div className="focus-authority"><p><span>{tr('integration.focus.inventoryAuthority')}</span><strong>SolaStock</strong></p><p><span>{tr('integration.focus.accountingAuthority')}</span><strong>SolaBooks</strong></p></div>
+                <div className="focus-authority"><p><span>{tr('integration.focus.inventoryAuthority')}</span><strong>SolaStock</strong></p><p><span>{tr('integration.focus.accountingAuthority')}</span><strong>{tr('integration.businessStatus.solabooks')}</strong></p></div>
             </aside>
         </div>
         {bulkReviewOpen && <div className="assistant-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-title"><div className="assistant-bulk-dialog__content"><h2 id="bulk-title">{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</h2><p>{tr('integration.assistant.bulkDraftOnly')}</p>{exactRows.map((row) => <label key={row.fingerprint}><input type="checkbox" checked={bulkSelection.includes(row.fingerprint)} onChange={() => toggleBulk(row.fingerprint)} /><span><bdi>{row.solabooks?.name}</bdi> → <bdi>{row.solastock?.name}</bdi></span></label>)}<div className="doc-actions"><button className="btn" onClick={() => setBulkReviewOpen(false)}>{tr('settings.common.cancel')}</button><button className="btn btn--primary" onClick={async () => { if (await bulk('approve_exact_sku_candidates')) setBulkReviewOpen(false); }}>{tr('integration.assistant.confirmSelectedMatches', { count: bulkSelection.length })}</button></div></div></div>}

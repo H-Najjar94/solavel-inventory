@@ -1057,7 +1057,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* ── Onboarding wizard ─────────────────────────────────────────────────────── */
 .onb-wizard { display:flex; flex-direction:column; gap:8px; max-width:640px; }
 
-/* SolaBooks connection wizard: scoped, responsive, and direction-neutral. */
+/* SolaCount connection wizard: scoped, responsive, and direction-neutral. */
 .wizard { display: grid; gap: 16px; }
 .wizard__steps { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; margin:0; padding:0; list-style:none; counter-reset:wizard-step; }
 .wizard__steps li { min-height:54px; padding:9px; border:1px solid var(--border); border-radius:8px; color:var(--muted); background:var(--surface); font-size:.78rem; }
@@ -1280,7 +1280,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .onb-step__content .form-grid { width:100%; }
 .onb-step__content .btn { margin-right:8px; }
 
-/* ── Sidebar: icons + grouped sections (SolaBooks-style) ───────────────────── */
+/* ── Sidebar: icons + grouped sections (SolaCount-style) ───────────────────── */
 .side-primary { padding-bottom:8px; margin-bottom:4px; border-bottom:1px solid var(--sidebar-line,#ffffff12); }
 .side-link--primary { font-size:14px; font-weight:750; }
 .side-group { display:flex; flex:none; flex-direction:column; gap:1px; margin-top:3px; }

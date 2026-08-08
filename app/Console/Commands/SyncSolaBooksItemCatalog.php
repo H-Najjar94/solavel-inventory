@@ -16,7 +16,7 @@ class SyncSolaBooksItemCatalog extends Command
         {--organization= : Limit reconciliation to one organization id}
         {--dry-run : Report differences without writing}';
 
-    protected $description = 'Merge SolaStock and SolaBooks item catalogs in one shared tenant database';
+    protected $description = 'Merge SolaStock and SolaCount item catalogs in one shared tenant database';
 
     public function handle(TenantManager $tenants, SolaBooksItemCatalogBridge $bridge): int
     {

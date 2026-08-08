@@ -98,12 +98,12 @@ test('QA owner creates a scoped Finance key and connects Inventory without expos
         expect(created.key).toMatch(/^solabooks_/);
 
         await page.goto('/inventory/settings/solabooks');
-        await page.getByLabel('SolaBooks organization ID').fill('5');
+        await page.getByLabel('SolaCount organization ID').fill('5');
         await page.getByLabel('Central client ID').fill('990010');
-        await page.getByLabel('SolaBooks API key').fill(created.key);
+        await page.getByLabel('SolaCount API key').fill(created.key);
         await page.getByLabel('Mode').selectOption('connected_pending_mapping');
         await page.getByRole('button', { name: 'Save connection' }).click();
-        await expect(page.getByText('SolaBooks connection saved.')).toBeVisible();
+        await expect(page.getByText('SolaCount connection saved.')).toBeVisible();
     }
 
     const after = await page.evaluate(async () => (await fetch('/inventory/api/v1/integration/solabooks/status')).json());
@@ -155,7 +155,7 @@ test('QA owner maps every required Inventory concept to visible QA Finance accou
     await page.getByRole('button', { name: 'Status' }).click();
     await page.getByLabel('Mode').selectOption('active');
     await page.getByRole('button', { name: 'Save connection' }).click();
-    await expect(page.getByText('SolaBooks connection saved.')).toBeVisible();
+    await expect(page.getByText('SolaCount connection saved.')).toBeVisible();
     const active = await page.evaluate(async () => (await fetch('/inventory/api/v1/integration/solabooks/status')).json());
     expect(active.data.mode).toBe('active');
     expect(active.data.delivery_configured).toBe(true);

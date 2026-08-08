@@ -368,7 +368,7 @@ final class ConnectionWizardTest extends TestCase
             $this->assertStringContainsString($needle, $page.$assistant.$translations);
         }
         foreach (['Result preview', 'معاينة نتيجة الربط', 'Saved automatically', 'تم الحفظ',
-            'Item in SolaBooks', 'الصنف في SolaBooks', 'Proposed match in SolaStock',
+            'Item in SolaCount', 'الصنف في SolaCount', 'Proposed match in SolaStock',
             'المطابقة المقترحة في SolaStock', 'The item name and SKU match in both systems.',
             'الاسم ورمز الصنف متطابقان في النظامين.'] as $copy) {
             $this->assertStringContainsString($copy, $translations);

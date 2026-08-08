@@ -164,7 +164,7 @@ class AccountingJournalBuilder
             ->where('mapping_type', $type)->whereIn('status', ['mapped', 'verified'])
             ->value('solabooks_account_id');
         if (! $id) {
-            throw new RuntimeException("Missing SolaBooks account mapping '{$type}'.");
+            throw new RuntimeException("Missing SolaCount account mapping '{$type}'.");
         }
 
         return (int) $id;
@@ -177,7 +177,7 @@ class AccountingJournalBuilder
             ->where('status', 'mapped')->first();
         $account = $use === 'purchase' ? $mapping?->input_tax_account_id : $mapping?->output_tax_account_id;
         if (! $mapping || ! $mapping->solabooks_tax_id || ($mapping->treatment === 'standard' && ! $account)) {
-            throw new RuntimeException("Missing active SolaBooks tax mapping '{$taxCode}'.");
+            throw new RuntimeException("Missing active SolaCount tax mapping '{$taxCode}'.");
         }
 
         return $mapping;
@@ -201,7 +201,7 @@ class AccountingJournalBuilder
                 ->orderBy('id')
                 ->value('mapping_type');
         if ($role === '') {
-            throw new RuntimeException("SolaBooks account {$accountId} has no active organization mapping role.");
+            throw new RuntimeException("SolaCount account {$accountId} has no active organization mapping role.");
         }
 
         return [
