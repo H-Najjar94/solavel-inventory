@@ -9,6 +9,7 @@ use App\Models\Tenant\StockLedger;
 use App\Services\Integration\SolaposConsumptionService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
@@ -111,5 +112,32 @@ class SolaposConsumptionReceiverTest extends TestCase
         $item = F::item();
         $this->expectException(ValidationException::class);
         app(SolaposConsumptionService::class)->apply(TenantTestManager::ORG_A, $this->payload($item->id, 999999, '1.000', 'pos_order:503:inventory_consumption'));
+    }
+
+    /**
+     * Phase 8 regression: the SolaPOS receiver route lives under the session
+     * ('web') middleware group like the rest of the JSON API. A real cross-app
+     * POST carries no browser CSRF token, so the route MUST be CSRF-exempt and
+     * authenticated ONLY by the SolaPOS HMAC signature (Phase 8 UAT found a 419).
+     */
+    #[Test]
+    public function http_route_is_csrf_exempt_and_authenticated_by_the_signature_only(): void
+    {
+        config(['solavel_sync.solapos_secret' => str_repeat('s', 40), 'solavel_sync.allowed_client_ids' => [], 'app.url' => 'http://localhost']);
+        URL::forceRootUrl('http://localhost'); // APP_URL carries the /inventory Apache alias
+        // No CSRF token, no signature → must reach the signature middleware (403 solapos_signature_invalid), never 419.
+        $r = $this->postJson('/api/v1/integration/solapos/consumptions', ['contract_version' => 1]);
+        $this->assertNotSame(419, $r->status(), 'route must be CSRF-exempt for the signed cross-app call');
+        $r->assertStatus(403)->assertJsonPath('code', 'solapos_signature_invalid');
+        // A correctly signed request passes the signature layer (it then fails later only on tenant/validation, never 419/403 signature).
+        $body = json_encode(['contract_version' => 1]);
+        $ts = (string) time();
+        $nonce = bin2hex(random_bytes(8));
+        $sig = hash_hmac('sha256', $ts.'.'.$nonce.'.'.$body, str_repeat('s', 40));
+        $r2 = $this->call('POST', '/api/v1/integration/solapos/consumptions', [], [], [], [
+            'HTTP_X_SOLAVEL_SIGNATURE' => $sig, 'HTTP_X_SOLAVEL_TIMESTAMP' => $ts, 'HTTP_X_SOLAVEL_NONCE' => $nonce,
+            'HTTP_X_SOLAVEL_CENTRAL_CLIENT_ID' => (string) TenantTestManager::ORG_A, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
+        ], $body);
+        $this->assertNotContains($r2->status(), [419, 403], 'signed request must not be rejected by CSRF or signature: '.$r2->getContent());
     }
 }

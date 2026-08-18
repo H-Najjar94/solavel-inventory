@@ -59,6 +59,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // not by the browser session CSRF token used by the same-origin SPA API.
         $middleware->validateCsrfTokens(except: [
             'api/tenancy/sync/events',
+            // SolaPOS → SolaStock retail consumption: authenticated by the SolaPOS
+            // HMAC signature middleware (Phase 6), never by a browser session.
+            'api/v1/integration/solapos/consumptions',
         ]);
 
         // SSO, the Solavel way: consume a handoff token minted by the central app
