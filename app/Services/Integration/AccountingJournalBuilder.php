@@ -2,15 +2,11 @@
 
 namespace App\Services\Integration;
 
-use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationTaxMapping;
 use App\Models\Tenant\InventoryReversal;
-use App\Models\Tenant\PurchaseOrderLine;
-use App\Models\Tenant\SalesOrderLine;
 use App\Models\Tenant\SalesReturn;
-use App\Models\Tenant\Shipment;
 use App\Models\Tenant\StockLedger;
 use App\Services\Stock\Support\Decimal;
 use RuntimeException;
@@ -22,8 +18,9 @@ class AccountingJournalBuilder
         return match ($event->event_type) {
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),
-            'shipment.posted' => $this->shipment($event, $orgId),
+            'shipment.posted', 'pos_sale.posted' => $this->shipment($event, $orgId),
             'sales_return.posted' => $this->salesReturn($event, $orgId),
+            'pos_sale_return.posted' => $this->posSaleReturn($event, $orgId),
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
             default => $this->twoLine($event, $orgId),
         };
@@ -88,6 +85,17 @@ class AccountingJournalBuilder
         return [
             $this->line($this->account($orgId, 'inventory_asset'), $inventory, '0', $event),
             $this->line($this->account($orgId, 'grni'), '0', $inventory, $event),
+        ];
+    }
+
+    /** POS return restoration: inventory asset back, COGS reduced by the ledger's restored value. */
+    private function posSaleReturn(IntegrationOutboxEvent $event, int $orgId): array
+    {
+        $value = $this->inventoryValue($event);
+
+        return [
+            $this->line($this->account($orgId, 'inventory_asset'), $value, '0', $event),
+            $this->line($this->account($orgId, 'cogs'), '0', $value, $event),
         ];
     }
 
