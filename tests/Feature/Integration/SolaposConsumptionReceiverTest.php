@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Integration;
 
+use App\Http\Controllers\Api\Integration\SolaposConsumptionController;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\PosSaleConsumption;
 use App\Models\Tenant\StockBalance;
@@ -9,6 +10,9 @@ use App\Models\Tenant\StockLedger;
 use App\Services\Integration\SolaposConsumptionService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
+use App\Services\Tenancy\TenantManager;
+use App\Tenancy\OrganizationContext;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
@@ -139,5 +143,40 @@ class SolaposConsumptionReceiverTest extends TestCase
             'HTTP_X_SOLAVEL_CENTRAL_CLIENT_ID' => (string) TenantTestManager::ORG_A, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
         ], $body);
         $this->assertNotContains($r2->status(), [419, 403], 'signed request must not be rejected by CSRF or signature: '.$r2->getContent());
+    }
+
+    /**
+     * Phase 8 regression: consuming more than SolaStock holds is a PERMANENT business-rule refusal
+     * (the stock engine forbids negative stock), so the receiver must answer 422 — not 500, which the
+     * sender would classify as a transient outage and retry until dead-letter.
+     */
+    #[Test]
+    public function insufficient_stock_is_refused_with_a_business_rule_status_not_a_server_error(): void
+    {
+        $this->useTenantA();
+        $wh = F::warehouse();
+        $item = F::item(['costing_method' => 'fifo']);
+        app(StockLedgerService::class)->post([new StockMovement('in', $item->id, $wh->id, '2.000', 'App\\Models\\Tenant\\OpeningStockEntry', 1, unitCost: '1.0000')], 'test:opening:short');
+        $payload = $this->payload($item->id, $wh->id, '5.000', 'pos_order:777:inventory_consumption');
+
+        // The stock engine refuses (never posts a partial consumption)…
+        try {
+            app(SolaposConsumptionService::class)->apply(TenantTestManager::ORG_A, $payload);
+            $this->fail('the stock engine must refuse to consume more than is on hand');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('insufficient cost layers', $e->getMessage());
+        }
+        $this->assertSame(0, StockLedger::query()->where('source_type', PosSaleConsumption::class)->where('item_id', $item->id)->count(), 'nothing posted');
+        $this->assertEquals(2, (float) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'), 'balance untouched');
+
+        // …and the receiver translates that refusal into a 422 business-rule response, not a 500.
+        $controller = app(SolaposConsumptionController::class);
+        $request = Request::create('/api/v1/integration/solapos/consumptions', 'POST', [], [], [], ['HTTP_X_SOLAVEL_CENTRAL_CLIENT_ID' => (string) TenantTestManager::ORG_A, 'CONTENT_TYPE' => 'application/json'], json_encode($payload));
+        $tenants = \Mockery::mock(TenantManager::class);
+        $tenants->shouldReceive('resolveDatabaseName')->andReturn('irrelevant');
+        $tenants->shouldReceive('switchToDatabase')->andReturnNull(); // the tenant is already active in this test
+        $response = (new SolaposConsumptionController($tenants, app(OrganizationContext::class)))($request);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('solapos_insufficient_stock', $response->getData(true)['code']);
     }
 }
