@@ -8,6 +8,7 @@ use App\Services\Tenancy\TenantManager;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * POST /api/v1/integration/solapos/consumptions — SolaStock receiver for
@@ -52,7 +53,20 @@ class SolaposConsumptionController extends Controller
         $orgId = (int) $data['solastock_organization_id'];
         $this->context->set($orgId);
 
-        $result = app(SolaposConsumptionService::class)->apply($orgId, $data);
+        try {
+            $result = app(SolaposConsumptionService::class)->apply($orgId, $data);
+        } catch (\RuntimeException $e) {
+            // Stock-engine business rules (insufficient cost layers / negative stock disabled) are a
+            // PERMANENT condition for this payload, not a transient outage: answer 422 so the sender
+            // parks the event for review instead of retrying it into a dead letter. Phase 8 UAT found
+            // this surfacing as HTTP 500 and being retried.
+            if (str_contains($e->getMessage(), 'insufficient cost layers') || str_contains($e->getMessage(), 'Negative stock is disabled')) {
+                Log::warning('SolaPOS consumption refused by the stock engine.', ['organization_id' => $orgId, 'idempotency_key' => $data['idempotency_key']]);
+
+                return response()->json(['error' => 'insufficient_stock', 'message' => $e->getMessage(), 'code' => 'solapos_insufficient_stock'], 422);
+            }
+            throw $e;
+        }
 
         return response()->json(['data' => $result['data']], $result['replayed'] ? 200 : 201);
     }
