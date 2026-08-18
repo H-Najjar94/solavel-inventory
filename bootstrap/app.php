@@ -2,11 +2,12 @@
 
 use App\Http\Middleware\AuthenticateFromInventoryHandoff;
 use App\Http\Middleware\BounceToParentForSso;
+use App\Http\Middleware\EnsureIntegrationSetupCapability;
 use App\Http\Middleware\EnsureInventoryFeature;
 use App\Http\Middleware\EnsureInventoryPermission;
-use App\Http\Middleware\EnsureIntegrationSetupCapability;
 use App\Http\Middleware\ResolveInventoryTenant;
 use App\Http\Middleware\SetInventoryLocale;
+use App\Http\Middleware\VerifySolaposSignature;
 use App\Http\Middleware\VerifySolavelSyncSignature;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -51,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature' => EnsureInventoryFeature::class,
             'inv.tenant' => ResolveInventoryTenant::class,
             'sync.signature' => VerifySolavelSyncSignature::class,
+            'solapos.signature' => VerifySolaposSignature::class,
         ]);
 
         // Central sync posts are authenticated by the HMAC signature middleware,
