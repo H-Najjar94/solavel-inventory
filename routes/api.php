@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\Integration\SolaposConsumptionController;
 use App\Http\Controllers\Api\SpaPageViewController;
 use App\Http\Controllers\Api\Tenancy\SyncEventsController;
 use App\Http\Controllers\Api\V1\CustomerController;
@@ -61,10 +60,6 @@ Route::prefix('v1/tenant')->group(function () {
     Route::get('/organizations', [TenantController::class, 'organizations'])->name('api.v1.tenant.organizations');
     Route::post('/select-org', [TenantController::class, 'selectOrganization'])->name('api.v1.tenant.select-org');
 });
-
-// Phase 6: signed SolaPOS → SolaStock retail consumption receiver (SolaStock is the writer of record).
-Route::post('/v1/integration/solapos/consumptions', SolaposConsumptionController::class)
-    ->middleware(['solapos.signature', 'throttle:120,1'])->name('api.v1.integration.solapos.consumptions');
 
 Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
     Route::post('sync/events', SyncEventsController::class)
