@@ -34,6 +34,21 @@ class SolaBooksDeliveryTest extends TestCase
     private function bootActiveIntegration(): void
     {
         $this->useTenantA();
+        DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
+            ['client_id' => 7, 'project_slug' => 'inventory'],
+            [
+                'payload' => json_encode([
+                    'accessible' => true,
+                    'commercially_entitled' => true,
+                    'entitlement_source' => 'advanced_bundle',
+                ], JSON_THROW_ON_ERROR),
+                'version' => 'test-advanced-worker-v1',
+                'synced_at' => now('UTC'),
+                'evaluated_at' => now('UTC'),
+                'pushed_at' => now('UTC'),
+                'state_hash' => hash('sha256', 'test-advanced-worker-v1'),
+            ]
+        );
         DB::connection('tenant')->table('organizations')->updateOrInsert(
             ['id' => 14],
             ['central_org_id' => TenantTestManager::ORG_A]

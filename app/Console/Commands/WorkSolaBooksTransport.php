@@ -29,6 +29,9 @@ final class WorkSolaBooksTransport extends Command
         IntegrationSafetyHold $safety,
         DurableOutboxTransportService $transport,
     ): int {
+        if (app()->environment('production')) {
+            throw new RuntimeException('Production transport must use the server-owned supervisor allowlist.');
+        }
         $database = trim((string) $this->option('database'));
         $productionIdentity = preg_match('/^tenant_[0-9]{6}$/D', $database) === 1;
         $isolatedStagingIdentity = app()->environment('staging')
