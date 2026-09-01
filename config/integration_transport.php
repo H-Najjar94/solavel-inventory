@@ -18,4 +18,10 @@ return [
         'max_jobs' => (int) env('SOLASTOCK_TRANSPORT_MAX_JOBS', 250),
         'graceful_shutdown_seconds' => 30,
     ],
+    'supervisor' => [
+        'heartbeat_path' => env(
+            'SOLASTOCK_TRANSPORT_HEARTBEAT_PATH',
+            '/var/lib/solavel/solastock-finance-v2/heartbeat.json'
+        ),
+    ],
 ];

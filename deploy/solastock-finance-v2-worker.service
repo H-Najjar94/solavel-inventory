@@ -1,0 +1,25 @@
+[Unit]
+Description=SolaStock to Finance journal-v2 allowlisted worker
+After=network.target mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=simple
+User=www-data
+Group=sharedgroup
+WorkingDirectory=/var/www/solavel-stock/current
+Environment=APP_ENV=production
+Environment=SOLASTOCK_TRANSPORT_WORKER_ENABLED=true
+ExecStart=/usr/bin/php artisan integration:transport-supervise --sleep=5 --limit=25
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/www/solavel-stock/shared/storage /var/lib/solavel/solastock-finance-v2
+
+[Install]
+WantedBy=multi-user.target

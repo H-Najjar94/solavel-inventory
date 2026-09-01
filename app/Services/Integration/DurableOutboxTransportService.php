@@ -19,6 +19,7 @@ final class DurableOutboxTransportService
         private readonly OutboxStateMachine $states,
         private readonly OutboxFailureClassifier $failures,
         private readonly SolaBooksOutboxDeliveryService $delivery,
+        private readonly ApprovedFinanceIntegrationEntitlement $commercialEntitlement,
     ) {}
 
     public function claim(int $organizationId, string $workerId): ?IntegrationOutboxEvent
@@ -233,6 +234,16 @@ final class DurableOutboxTransportService
         if (config('integration_transport.contract_version') !== SolaStockJournalContract::VERSION) {
             throw new RuntimeException('Transport contract configuration is inconsistent.');
         }
+        $mapping = IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', $organizationId)
+            ->where('contract_version', SolaStockJournalContract::VERSION)
+            ->where('status', 'verified')
+            ->where('activation_state', 'active')
+            ->first();
+        if (! $mapping) {
+            throw new RuntimeException('Verified immutable organization mapping is required.');
+        }
+        $this->commercialEntitlement->assertApproved($mapping);
     }
 
     private function assertOrganizationEnabled(int $organizationId): array
@@ -246,15 +257,6 @@ final class DurableOutboxTransportService
             || $workflows === []) {
             throw new RuntimeException('Organization transport is not explicitly enabled.');
         }
-        $mapping = IntegrationOrganizationMapping::query()
-            ->where('solastock_organization_id', $organizationId)
-            ->where('contract_version', SolaStockJournalContract::VERSION)
-            ->where('status', 'verified')
-            ->where('activation_state', 'active')->first();
-        if (! $mapping) {
-            throw new RuntimeException('Verified immutable organization mapping is required.');
-        }
-
         return $workflows;
     }
 
