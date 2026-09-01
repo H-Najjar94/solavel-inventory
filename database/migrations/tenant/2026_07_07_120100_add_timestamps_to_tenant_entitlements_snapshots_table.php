@@ -1,40 +1,21 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('tenant_entitlements_snapshots')) {
-            return;
-        }
-
-        Schema::table('tenant_entitlements_snapshots', function (Blueprint $table): void {
-            if (! Schema::hasColumn('tenant_entitlements_snapshots', 'created_at')) {
-                $table->timestamp('created_at')->nullable();
-            }
-
-            if (! Schema::hasColumn('tenant_entitlements_snapshots', 'updated_at')) {
-                $table->timestamp('updated_at')->nullable();
-            }
-        });
+        // Shared Core owns this table. Earlier SolaStock releases added Laravel
+        // timestamps that are absent from the canonical Shared Core capability.
+        // Keep the represented migration as an intentional no-op so a fresh
+        // SolaStock history produces the canonical shape and never alters a
+        // SolaCount-provisioned shared table. EntitlementsCache already treats
+        // these legacy columns as optional.
     }
 
     public function down(): void
     {
-        if (! Schema::hasTable('tenant_entitlements_snapshots')) {
-            return;
-        }
-
-        Schema::table('tenant_entitlements_snapshots', function (Blueprint $table): void {
-            foreach (['created_at', 'updated_at'] as $column) {
-                if (Schema::hasColumn('tenant_entitlements_snapshots', $column)) {
-                    $table->dropColumn($column);
-                }
-            }
-        });
+        // Shared Core columns are never removed by SolaStock.
     }
 };
