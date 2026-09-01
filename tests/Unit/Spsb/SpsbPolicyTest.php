@@ -15,13 +15,13 @@ class SpsbPolicyTest extends TestCase
     public function ownership_is_exhaustive_disjoint_and_has_frozen_counts(): void
     {
         $ownership = config('spsb.ownership');
-        $this->assertCount(62, $ownership['solastock_owned']);
+        $this->assertCount(60, $ownership['solastock_owned']);
         $this->assertCount(2, $ownership['shared_core_contributor']);
         $this->assertCount(21, $ownership['integration_contract']);
 
         $all = array_merge(...array_values($ownership));
-        $this->assertCount(85, $all);
-        $this->assertCount(85, array_unique($all));
+        $this->assertCount(83, $all);
+        $this->assertCount(83, array_unique($all));
         $this->assertContains('stock_ledger', $ownership['solastock_owned']);
         $this->assertContains('stock_balances', $ownership['solastock_owned']);
         $this->assertContains('warehouses', $ownership['solastock_owned']);
@@ -39,8 +39,12 @@ class SpsbPolicyTest extends TestCase
 
         $files = glob(base_path($group['path'].'/*.php')) ?: [];
         sort($files, SORT_STRING);
-        $this->assertCount(50, $files);
+        $this->assertCount(49, $files);
         $this->assertSame($files, array_values(array_unique($files)));
+        $this->assertStringNotContainsString(
+            '2026_08_17_130000_solastock_create_pos_sale_consumptions.php',
+            implode("\n", $files),
+        );
     }
 
     #[Test]
@@ -88,6 +92,49 @@ class SpsbPolicyTest extends TestCase
         $this->assertFalse($invariants['historical_repair_enabled']);
         $this->assertTrue($invariants['legacy_inventory_writes_blocked']);
         $this->assertSame(['pending', 'ignored', 'untrusted'], $invariants['preserved_statuses']);
+    }
+
+    #[Test]
+    public function disabled_solapos_consumption_surface_is_absent(): void
+    {
+        foreach ([
+            'app/Http/Controllers/Api/Integration/SolaposConsumptionController.php',
+            'app/Http/Middleware/VerifySolaposSignature.php',
+            'app/Models/Tenant/PosSaleConsumption.php',
+            'app/Models/Tenant/PosSaleConsumptionLine.php',
+            'app/Services/Integration/SolaposConsumptionService.php',
+            'database/migrations/tenant/2026_08_17_130000_solastock_create_pos_sale_consumptions.php',
+        ] as $path) {
+            $this->assertFileDoesNotExist(base_path($path));
+        }
+
+        $surface = implode("\n", [
+            file_get_contents(base_path('routes/api.php')),
+            file_get_contents(base_path('bootstrap/app.php')),
+            file_get_contents(base_path('config/solavel_sync.php')),
+            file_get_contents(base_path('app/Services/Integration/IntegrationEvents.php')),
+        ]);
+        $this->assertStringNotContainsString('solapos', strtolower($surface));
+        $this->assertStringNotContainsString('pos_sale.posted', $surface);
+        $this->assertStringNotContainsString('pos_sale_return.posted', $surface);
+        $this->assertSame([], array_values(array_intersect(
+            ['pos_sale_consumptions', 'pos_sale_consumption_lines'],
+            array_merge(...array_values(config('spsb.ownership'))),
+        )));
+    }
+
+    #[Test]
+    public function accounting_journal_uses_the_authoritative_inventory_models(): void
+    {
+        $builder = file_get_contents(base_path('app/Services/Integration/AccountingJournalBuilder.php'));
+        foreach ([
+            'use App\\Models\\Tenant\\GoodsReceipt;',
+            'use App\\Models\\Tenant\\PurchaseOrderLine;',
+            'use App\\Models\\Tenant\\SalesOrderLine;',
+            'use App\\Models\\Tenant\\Shipment;',
+        ] as $import) {
+            $this->assertStringContainsString($import, $builder);
+        }
     }
 
     #[Test]

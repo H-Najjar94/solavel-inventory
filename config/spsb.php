@@ -78,8 +78,6 @@ return [
             'packs',
             'pick_list_lines',
             'pick_lists',
-            'pos_sale_consumption_lines',
-            'pos_sale_consumptions',
             'purchase_order_backorders',
             'purchase_order_lines',
             'recall_actions',

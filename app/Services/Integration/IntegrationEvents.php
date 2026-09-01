@@ -33,10 +33,6 @@ final class IntegrationEvents
         'pack.packed' => ['Pack', null, null],
         'shipment.posted' => ['Shipment', 'cogs', 'inventory_asset'],
         'sales_return.posted' => ['SalesReturn', 'inventory_asset', 'cogs'],
-        // SolaPOS retail consumption / restoration (document: PosSaleConsumption). Same
-        // accounting effect as a shipment / sales return; SolaStock is the writer of record.
-        'pos_sale.posted' => ['PosSaleConsumption', 'cogs', 'inventory_asset'],
-        'pos_sale_return.posted' => ['PosSaleConsumption', 'inventory_asset', 'cogs'],
     ];
 
     public static function exists(string $type): bool
@@ -49,7 +45,7 @@ final class IntegrationEvents
         return in_array($type, [
             'opening_stock.posted', 'opening_stock.reversed',
             'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed',
-            'stock_count.posted', 'shipment.posted', 'sales_return.posted', 'pos_sale.posted', 'pos_sale_return.posted',
+            'stock_count.posted', 'shipment.posted', 'sales_return.posted',
         ], true);
     }
 
