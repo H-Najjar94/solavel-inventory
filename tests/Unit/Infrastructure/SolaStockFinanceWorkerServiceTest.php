@@ -14,6 +14,7 @@ final class SolaStockFinanceWorkerServiceTest extends TestCase
         $this->assertStringContainsString('integration:transport-supervise', $unit);
         $this->assertStringNotContainsString('TENANT_DATABASE', $unit);
         $this->assertStringNotContainsString('solapos', strtolower($unit));
+        $this->assertStringContainsString('APP_CONFIG_CACHE=/run/solastock-finance-v2-worker-config.php', $unit);
         $this->assertStringContainsString('NoNewPrivileges=true', $unit);
         $this->assertStringContainsString('ProtectSystem=full', $unit);
         $this->assertStringContainsString('/var/lib/solavel/solastock-finance-v2', $unit);
