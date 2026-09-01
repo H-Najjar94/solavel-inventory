@@ -17,8 +17,6 @@ return new class extends Migration
                     'schema_version' => fn () => $table->string('schema_version', 80)->nullable()->after('valid_until'),
                     'source_version' => fn () => $table->string('source_version', 191)->nullable()->after('schema_version'),
                     'state_hash' => fn () => $table->string('state_hash', 64)->nullable()->after('source_version'),
-                    'created_at' => fn () => $table->timestamp('created_at')->nullable(),
-                    'updated_at' => fn () => $table->timestamp('updated_at')->nullable(),
                 ] as $column => $definition) {
                     if (! Schema::hasColumn('tenant_entitlements_snapshots', $column)) {
                         $definition();
@@ -42,8 +40,6 @@ return new class extends Migration
             $table->string('schema_version', 80)->nullable();
             $table->string('source_version', 191)->nullable();
             $table->string('state_hash', 64)->nullable()->index();
-            $table->timestamps();
-
             $table->unique(['client_id', 'project_slug'], 'tenant_entitlements_snapshots_client_project_unique');
         });
     }
