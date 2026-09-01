@@ -10,6 +10,7 @@ Group=sharedgroup
 WorkingDirectory=/var/www/solavel-stock/current
 Environment=APP_ENV=production
 Environment=SOLASTOCK_TRANSPORT_WORKER_ENABLED=true
+Environment=APP_CONFIG_CACHE=/run/solastock-finance-v2-worker-config.php
 ExecStart=/usr/bin/php artisan integration:transport-supervise --sleep=5 --limit=25
 Restart=always
 RestartSec=5
