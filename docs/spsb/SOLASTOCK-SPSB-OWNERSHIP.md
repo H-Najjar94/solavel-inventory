@@ -9,15 +9,20 @@ projections. SolaCount remains authoritative for customers, suppliers,
 currencies, taxes, accounts, journals, and every other accounting table.
 
 The deterministic application group is `solastock.inventory` at order 300,
-after `shared-core` and `solacount`. It contains the 50 migration files under
+after `shared-core` and `solacount`. It contains the 49 enabled migration files under
 `database/migrations/tenant`, sorted by basename. Existing tenants are never a
 candidate-generation input and are never migrated by the SPSB runner.
+
+The SolaPOS consumption receiver is intentionally disabled. Its migration,
+tables, middleware, route, event types, and processing service are excluded
+from the canonical group. SolaStock remains inventory authority and emits the
+guarded Finance receiver-v2 contract; this does not activate a SolaPOS writer.
 
 ## Ownership counts
 
 | Class | Tables | Rule |
 |---|---:|---|
-| SolaStock-owned | 62 | Must be absent before SolaStock; created only by SolaStock |
+| SolaStock-owned | 60 | Must be absent before SolaStock; created only by SolaStock |
 | Shared Core contributor | 2 | Exact capability shape; never silently altered |
 | Integration contract | 21 | Exact shape or fail before mutation |
 | Forbidden duplicate/collision | 0 | Candidate generation stops if any remains |
