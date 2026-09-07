@@ -810,7 +810,8 @@ final class ConnectionWizardTest extends TestCase
                 $candidate['candidate_before_hash'], false, true);
         }
         $this->assertSame('decisions_complete', $run['state']);
-        $this->assertSame(14, $run['accounting_selections']['valid_saved']);
+        $this->assertSame(6, $run['accounting_selections']['valid_saved']);
+        $this->assertSame(6, $run['accounting_selections']['required']);
         $run = $wizard->requestSnapshot(TenantTestManager::ORG_A, $run['run_uuid'], $run['lock_version'], 7001);
         $run = $wizard->freezeSnapshot(TenantTestManager::ORG_A, $run['run_uuid'], $run['lock_version'], 7001);
         $run = $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], now()->toDateTimeString(), [], '0', $run['lock_version'], 7001);
@@ -821,6 +822,36 @@ final class ConnectionWizardTest extends TestCase
         $this->assertFalse($run['activation_available']);
         $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->count());
         $this->assertSame($before, $this->mutationCounters());
+    }
+
+    #[Test]
+    public function required_roles_follow_operations_and_enabling_receiving_fails_closed_without_grni(): void
+    {
+        $this->seedConnectionFixture();
+        $setting = IntegrationSetting::firstOrFail();
+        $setting->update(['meta'=>['transport_enabled_workflows'=>['transfer.posted']]]);
+        $policy = app(\App\Services\Integration\OrganizationAccountRequirements::class);
+        $this->assertSame([], $policy->roles(TenantTestManager::ORG_A));
+        $policy->assertOperationReady(TenantTestManager::ORG_A, 'transfer.posted');
+        $rows = collect(app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A)['comparison']);
+        foreach ($rows->where('entity_type','account_role') as $row) {
+            $this->assertFalse($row['safe_details']['required']);
+            $this->assertNull($row['blocking_reason']);
+        }
+        // Enabling receiving cannot make the existing fake/absent accounts valid.
+        $setting->update(['meta'=>['transport_enabled_workflows'=>['transfer.posted','grn.posted']]]);
+        $this->assertSame(['grni','inventory_asset'], $policy->roles(TenantTestManager::ORG_A));
+        $before = $this->mutationCounters();
+        try { $policy->assertOperationReady(TenantTestManager::ORG_A, 'grn.posted'); $this->fail('Missing GRNI accepted'); }
+        catch (ValidationException $e) { $this->assertStringContainsString('required_account_mappings_missing', $e->getMessage()); }
+        $this->assertSame($before, $this->mutationCounters());
+    }
+
+    #[Test]
+    public function unknown_operations_cannot_be_silently_ignored_by_readiness(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        \App\Services\Integration\AccountRolePolicy::forOperations(['cross_entity_transfer.posted']);
     }
 
     private function seedConnectionFixture(bool $withMapping = true): array

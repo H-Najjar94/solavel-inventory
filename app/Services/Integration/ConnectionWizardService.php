@@ -83,7 +83,7 @@ final class ConnectionWizardService
             $seenRoles[] = $role;
             $row['safe_details'] = $accountCandidates[$role]['safe_details'];
             $row['decision_class'] = 'accountant_decision';
-            if (! $row['safe_details']['current_mapping_valid']) $row['blocking_reason'] = 'account_role_requires_explicit_accountant_selection';
+            $row['blocking_reason'] = $row['safe_details']['required'] && ! $row['safe_details']['current_mapping_valid'] ? 'account_role_requires_explicit_accountant_selection' : null;
         }
         unset($row);
         foreach ($accountCandidates as $role => $candidate) {
@@ -163,7 +163,7 @@ final class ConnectionWizardService
                 'discovery_manifest_hash' => $manifestHash,
                 'discovery_before_image_hash' => $beforeImageHash,
                 'authority_choices' => json_encode(['inventory' => 'solastock', 'accounting' => 'solabooks']),
-                'workflow_allowlist' => json_encode(config('integration_connection_wizard.allowed_workflows', [])),
+                'workflow_allowlist' => json_encode(app(OrganizationAccountRequirements::class)->operations((int) $identity['central_organization_id'])),
                 'comparison_totals' => json_encode($preview['totals']),
                 'snapshot_payload' => $this->canonicalJson([
                     'comparison' => $preview['comparison'],
@@ -471,8 +471,8 @@ final class ConnectionWizardService
             'owner_approved_at' => $run->owner_approved_at ?? null,
             'accountant_approved_at' => $run->accountant_approved_at ?? null,
             'accounting_selections' => [
-                'required' => $candidatesByFingerprint->where('entity_type', 'account_role')->count(),
-                'valid_saved' => $candidatesByFingerprint->where('entity_type', 'account_role')->filter(fn ($candidate) =>
+                'required' => $candidatesByFingerprint->where('entity_type', 'account_role')->filter(fn ($row) => $row['safe_details']['required'] ?? true)->count(),
+                'valid_saved' => $candidatesByFingerprint->where('entity_type', 'account_role')->filter(fn ($row) => $row['safe_details']['required'] ?? true)->filter(fn ($candidate) =>
                     ($candidate['safe_details']['current_mapping_valid'] ?? false) === true
                     || ($validDecisions->has($candidate['fingerprint']) && $validDecisions[$candidate['fingerprint']]->action === 'select_account_role'))->count(),
                 'approved' => $run->accountant_approved_at !== null,
@@ -1124,12 +1124,7 @@ final class ConnectionWizardService
 
     private function accountingSetup(IntegrationOrganizationMapping $mapping): array
     {
-        $required = [
-            'inventory_asset', 'cogs', 'grni', 'opening_offset', 'adjustment_gain',
-            'adjustment_loss', 'landed_cost_clearing', 'transfer_clearing',
-            'accounts_receivable', 'accounts_payable', 'input_tax', 'output_tax', 'rounding',
-            'sales_revenue',
-        ];
+        $required = app(OrganizationAccountRequirements::class)->roles((int) $mapping->solastock_organization_id);
         $rows = DB::connection('tenant')->table('integration_account_mappings')
             ->where('organization_id', $mapping->solastock_organization_id)->where('integration', 'solabooks')
             ->whereIn('mapping_type', $required)->get()->keyBy('mapping_type');
@@ -1139,7 +1134,8 @@ final class ConnectionWizardService
                 ? DB::connection('tenant')->table('accounts')->where('organization_id', $mapping->finance_organization_id)->where('id', $row->solabooks_account_id)->first()
                 : null;
             $valid = $row && in_array($row->status, ['mapped', 'verified'], true) && $account
-                && (bool) ($account->is_active ?? true) && (bool) ($account->is_postable ?? true);
+                && (bool) ($account->is_active ?? true) && (bool) ($account->is_postable ?? true)
+                && in_array(strtolower((string) $account->type), AccountRolePolicy::ROLE_TYPES[$role] ?? [], true);
             return [
                 'role' => $role,
                 'source' => 'organization_or_category_default',
@@ -1400,7 +1396,7 @@ final class ConnectionWizardService
     private function guidedSetup(array $comparison, string $baseCurrency, int $financeOrgId): array
     {
         $rows = collect($comparison);
-        $accountRows = $rows->where('entity_type', 'account_role');
+        $accountRows = $rows->where('entity_type', 'account_role')->filter(fn ($row) => $row['safe_details']['required'] ?? true);
         $resolvedAccounts = $accountRows->filter(fn (array $row) => ($row['safe_details']['current_mapping_valid'] ?? false) === true);
         $accountExceptions = $accountRows->reject(fn (array $row) => ($row['safe_details']['current_mapping_valid'] ?? false) === true);
         $taxRows = $rows->where('entity_type', 'tax');
@@ -1838,6 +1834,8 @@ final class ConnectionWizardService
             return ['id'=>(string)$account->id, 'code'=>(string)$account->code,
                 'name'=>is_array($name) ? $name : (string)$account->name, 'type'=>(string)$account->type];
         };
+        $requiredRoles = app(OrganizationAccountRequirements::class)->roles($stockOrgId);
+        $operations = app(OrganizationAccountRequirements::class)->operations($stockOrgId);
         $rows = [];
         foreach ($definitions as $role => [$type, $keywords, $workflows]) {
             // Match Finance's account-role validation, not account-name equality.
@@ -1867,6 +1865,13 @@ final class ConnectionWizardService
             $strong = $eligible->filter(fn ($account) => in_array((string) ($account->system_key ?? ''), $keys, true)
                 || (string) ($account->account_role ?? '') === $role);
             $purposeCandidates = $strong->isNotEmpty() ? $strong : $eligible->filter(fn ($account) => in_array((string) $account->code, $codes, true));
+            if ($role === 'grni' && $strong->isEmpty()) {
+                $purposeCandidates = $purposeCandidates->filter(function ($account) {
+                    $name = strtolower((string) $account->name);
+                    return str_contains($name, 'grni') || str_contains($name, 'received not invoiced')
+                        || str_contains(json_decode((string) $account->name, true)['ar'] ?? '', 'بضاعة مستلمة غير مفوترة');
+                });
+            }
             $purposeCandidate = $purposeCandidates->count() === 1 ? $purposeCandidates->first() : null;
 
             $matches = $accounts->filter(function ($account) use ($type, $keywords): bool {
@@ -1878,13 +1883,26 @@ final class ConnectionWizardService
             $classification = $candidate ? 'candidate_requires_accountant_approval'
                 : ($matches->count() > 1 ? 'ambiguous_account_role' : 'unresolved_account_role');
             $rows[] = $this->draftCandidate('account_role', $classification,
-                null, $candidate, 'account_role_requires_explicit_accountant_selection', 'accountant_decision', [
-                    'role' => $role, 'account_type' => $candidate->type ?? $type,
+                null, $candidate, in_array($role, $requiredRoles, true) && ! $mappedValid ? 'account_role_requires_explicit_accountant_selection' : null, 'accountant_decision', [
+                    'role' => $role, 'required' => in_array($role, $requiredRoles, true),
+                    'requirement_policy' => AccountRolePolicy::VERSION,
+                    'required_for_operations' => array_values(array_filter($operations, fn ($operation) => in_array($role, AccountRolePolicy::forOperations([$operation]), true))),
+                    'account_type' => $candidate->type ?? $type,
                     'available_finance_accounts' => $eligible->map($present)->all(),
                     'current_mapping' => $present($mappedId ? $ownedAccounts->firstWhere('id', $mappedId) : null), 'current_mapping_valid' => (bool)$mappedValid,
                     'current_mapping_invalid' => $mappedId > 0 && ! $mappedValid,
                     'configured_default_id' => $defaultId ?: null,
                     'configured_default_valid' => $defaultId > 0 && $defaultAccount !== null,
+                    'finance_chart_ready' => $accounts->isNotEmpty(),
+                    'account_proposal' => $accounts->isNotEmpty() && $role === 'grni' && ! $mappedValid && ! $defaultAccount && ! $purposeCandidate
+                        && $purposeCandidates->isEmpty() ? [
+                            'kind' => $ownedAccounts->contains('code', '2150') ? 'code_conflict_requires_review' : 'proposed_new_account',
+                            'code' => '2150', 'name' => ['en' => 'Goods Received Not Invoiced (GRNI)', 'ar' => 'بضاعة مستلمة غير مفوترة'],
+                            'type' => 'liability', 'system_key' => 'grni',
+                            'purpose' => 'goods_received_awaiting_supplier_bill',
+                            'requires_explicit_account_creation_approval' => true,
+                            'created' => false, 'approved' => false,
+                        ] : null,
                     'recommended_account' => $present($mappedValid ? $mappedAccount : ($defaultId > 0 ? $defaultAccount : $purposeCandidate)),
                     'recommendation_source' => $mappedValid ? 'existing_valid_mapping' : ($defaultId > 0 ? ($defaultAccount ? 'verified_finance_default' : 'invalid_finance_default') : ($purposeCandidate ? 'canonical_role_candidate' : null)),
                     'active' => $candidate ? (bool) $candidate->is_active : null,
@@ -1900,7 +1918,7 @@ final class ConnectionWizardService
     }
 
     private function draftCandidate(string $entityType, string $classification, ?object $stock, ?object $books,
-        string $blocking, string $decisionClass, array $details = []): array
+        ?string $blocking, string $decisionClass, array $details = []): array
     {
         $record = fn (?object $value): ?array => $value ? array_filter([
             'id' => (string) ($value->id ?? ''),

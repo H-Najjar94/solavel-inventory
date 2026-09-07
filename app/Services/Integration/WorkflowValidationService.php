@@ -51,6 +51,8 @@ final class WorkflowValidationService
             ]);
         }
 
+        app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $eventType);
+
         $documentType = match ($eventType) {
             'purchase_order.approved' => 'purchase_order',
             'grn.posted' => 'goods_receipt',
@@ -230,12 +232,6 @@ final class WorkflowValidationService
     /** @return Collection<int,string> */
     private function accountRoles(string $eventType): Collection
     {
-        return collect(match ($eventType) {
-            'grn.posted' => ['inventory_asset', 'grni'],
-            'grn.reversed' => ['grni', 'inventory_asset'],
-            'shipment.posted' => ['cogs', 'inventory_asset'],
-            'sales_return.posted' => ['inventory_asset', 'cogs'],
-            default => [],
-        });
+        return collect(AccountRolePolicy::forOperations([$eventType]));
     }
 }

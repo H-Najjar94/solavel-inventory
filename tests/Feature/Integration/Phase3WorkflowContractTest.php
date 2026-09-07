@@ -335,6 +335,7 @@ final class Phase3WorkflowContractTest extends TestCase
         $item = F::fifoItem(['base_unit_id' => $unit->id]);
         $identities = [['item', (string) $item->id], ['unit', (string) $unit->id], ['warehouse', (string) $po->warehouse_id]];
         foreach (['inventory_asset' => 100, 'grni' => 200, 'cogs' => 300] as $role => $accountId) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $accountId, 'organization_id' => 14, 'code' => (string) $accountId, 'name' => $role, 'type' => ['inventory_asset'=>'asset','grni'=>'liability','cogs'=>'expense'][$role], 'is_active'=>true,'is_postable'=>true]);
             $accountMapping = \App\Models\Tenant\IntegrationAccountMapping::create(['mapping_type' => $role, 'integration' => 'solabooks',
                 'solabooks_account_id' => $accountId, 'status' => 'verified']);
             $identities[] = ['account_role', (string) $accountMapping->id];
