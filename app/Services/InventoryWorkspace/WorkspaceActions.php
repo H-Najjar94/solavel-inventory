@@ -6,8 +6,14 @@ namespace App\Services\InventoryWorkspace;
 final class WorkspaceActions
 {
     public const ALLOWED = [
-        'dashboard',
-        'dashboard.alerts',
+        'reorder-rules.index',
+        'reorder-rules.show',
+        'reorder-rules.update',
+        'workspace.dashboard',
+        'workspace.lookups',
+        'workspace.reorder',
+        'settings.reorder.calculate',
+        'settings.reorder.store',
         'items.index',
         'items.show',
         'items.store',

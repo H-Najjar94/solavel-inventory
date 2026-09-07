@@ -33,6 +33,7 @@ final class FinanceWorkspaceTest extends TestCase
         config()->set('integration_safety.solabooks_delivery_enabled', true);
         config()->set('inventory_entitlements.feature_enforcement', true);
         $this->centralFixtureSchema();
+        DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A]);
         $central = DB::connection('mysql');
         $central->beginTransaction();
         $central->table('clients')->insert(['id' => self::CLIENT, 'is_active' => true]);
@@ -160,6 +161,23 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send(array_replace($edit, ['idempotency_key' => 'zone-revision-stale-02']))->assertConflict();
     }
 
+    public function test_context_is_available_before_mapping_without_granting_operations(): void
+    {
+        IntegrationOrganizationMapping::query()->delete();
+        IntegrationSetting::query()->delete();
+        $this->send(['action' => 'workspace.context'])->assertOk()
+            ->assertJsonPath('data.mapped', false)->assertJsonPath('data.writable', false)
+            ->assertJson(fn ($json) => $json->where('data.actions', fn ($actions) => $actions['warehouses.store']['allowed'] === false)->etc());
+        $this->send(['action' => 'warehouses.index'])->assertStatus(409);
+        $this->send(['action' => 'workspace.context', 'finance_organization_id' => 999])->assertForbidden();
+    }
+
+    public function test_context_uses_real_role_and_does_not_turn_entitlement_into_permission(): void
+    {
+        DB::connection('mysql')->table('user_organizations')->where('user_id', self::ACTOR)->update(['role' => 'viewer']);
+        $this->send(['action' => 'workspace.context'])->assertOk()->assertJson(fn ($json) => $json->where('data.actions', fn ($actions) => $actions['warehouses.store']['allowed'] === false)->etc());
+    }
+
     private function send(array $input, ?string $nonce = null)
     {
         $payload = array_replace(['client_id' => self::CLIENT, 'organization_id' => TenantTestManager::ORG_A,
@@ -172,6 +190,61 @@ final class FinanceWorkspaceTest extends TestCase
             'HTTP_X_WORKSPACE_TIMESTAMP' => $timestamp, 'HTTP_X_WORKSPACE_NONCE' => $nonce,
             'HTTP_X_WORKSPACE_SIGNATURE' => WorkspaceSignature::sign($body, $timestamp, $nonce, self::SECRET),
         ], $body);
+    }
+
+    public function test_context_matches_dispatch_readiness_without_conferring_owner_permissions(): void
+    {
+        $this->send(['action' => 'workspace.context'])->assertOk()
+            ->assertJsonPath('data.ready', true)->assertJsonPath('data.can_open_stock', true)
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.index']['allowed'] === true);
+        IntegrationSetting::query()->update(['mode' => 'connected_pending_mapping']);
+        $this->send(['action' => 'workspace.context'])->assertOk()
+            ->assertJsonPath('data.ready', false)
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.index']['allowed'] === false)
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.index']['reason'] === 'workspace_connection_not_ready');
+        $this->send(['action' => 'warehouses.index'])->assertStatus(409);
+        IntegrationSetting::query()->update(['mode' => 'paused']);
+        $this->send(['action' => 'workspace.context'])->assertOk()
+            ->assertJsonPath('data.ready', true)->assertJsonPath('data.writable', false)
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.index']['allowed'] === true)
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.store']['allowed'] === false);
+        DB::connection('mysql')->table('user_organizations')->where('user_id', self::ACTOR)->update(['role' => 'viewer']);
+        $this->app->forgetInstance(\App\Services\Access\InventoryPermissionService::class);
+        $this->send(['action' => 'workspace.context'])->assertOk()
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.store']['allowed'] === false);
+    }
+
+    public function test_global_delivery_enablement_does_not_unhold_a_mapping(): void
+    {
+        IntegrationOrganizationMapping::query()->update(['status' => 'verified_hold', 'activation_state' => 'maintenance_hold']);
+        $this->send(['action' => 'workspace.context'])->assertOk()->assertJsonPath('data.writable', false);
+        $this->send(['action' => 'warehouses.index'])->assertOk();
+        $this->send(['action' => 'warehouses.store', 'data' => ['name' => 'Still held', 'code' => 'STILL-HELD', 'type' => 'warehouse'],
+            'idempotency_key' => 'held-mapping-global-enable-001'])->assertStatus(409);
+        $this->assertSame(0, Warehouse::query()->where('code', 'STILL-HELD')->count());
+    }
+
+    public function test_trace_reads_are_bounded_and_respect_selected_warehouse(): void
+    {
+        $warehouse = \Tests\Support\StockTestFactory::warehouse();
+        $other = \Tests\Support\StockTestFactory::warehouse();
+        $item = \Tests\Support\StockTestFactory::lotItem();
+        $lot = \Tests\Support\StockTestFactory::lot($item);
+        for ($i = 1; $i <= 26; $i++) {
+            app(\App\Services\Stock\StockLedgerService::class)->post([
+                new \App\Services\Stock\StockMovement(direction: 'in', itemId: $item->id,
+                    warehouseId: $warehouse->id, quantity: '1', sourceType: 'isolated_trace',
+                    sourceId: $i, lotId: $lot->id, unitCost: '2.50'),
+            ], 'workspace-trace:'.$i);
+        }
+        $this->send(['action' => 'lots.show', 'parameters' => ['lot' => $lot->id]])->assertOk()
+            ->assertJsonCount(25, 'data.movements')->assertJsonPath('data.movements_meta.total', 26);
+        $this->send(['action' => 'lots.show', 'parameters' => ['lot' => $lot->id], 'data' => ['page' => 2]])->assertOk()
+            ->assertJsonCount(1, 'data.movements');
+        $this->send(['action' => 'lots.index', 'data' => ['warehouse_id' => $warehouse->id]])->assertOk()->assertJsonCount(1, 'data');
+        $this->send(['action' => 'lots.index', 'data' => ['warehouse_id' => $other->id]])->assertOk()->assertJsonCount(0, 'data');
+        $this->send(['action' => 'warehouses.show', 'parameters' => ['warehouse' => $warehouse->id], 'data' => ['reference_only' => true]])
+            ->assertOk()->assertJsonMissingPath('data.balances')->assertJsonMissingPath('data.zones');
     }
 
     private function centralFixtureSchema(): void

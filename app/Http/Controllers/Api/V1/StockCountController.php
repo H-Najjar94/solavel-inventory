@@ -29,6 +29,8 @@ class StockCountController extends ApiController
         $query = StockCount::query()
             ->with(['warehouse:id,name,code', 'adjustment:id,adjustment_number'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
+            ->when($request->filled('search'), fn ($q) => $q->where('count_number', 'like', '%'.$request->query('search').'%'))
+            ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', $request->integer('warehouse_id')))
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
 

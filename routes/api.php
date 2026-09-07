@@ -82,6 +82,17 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     // Bootstrap data for the SPA (permissions, settings, lookups).
     Route::get('/meta', [MetaController::class, 'index'])->name('api.v1.meta');
 
+    Route::get('/finance-workspace/reorder-rules', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'rules'])->middleware('perm:inventory.view_reports')->name('api.v1.reorder-rules.index');
+    Route::get('/finance-workspace/reorder-rules/{rule}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'showRule'])->middleware('perm:inventory.view_reports')->name('api.v1.reorder-rules.show');
+    Route::put('/finance-workspace/reorder-rules/{rule}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'updateRule'])->middleware('perm:inventory.manage_settings')->name('api.v1.reorder-rules.update');
+    Route::get('/finance-workspace/lots/{lot}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'lot'])->middleware('perm:inventory.view_traceability')->name('api.v1.workspace.lot');
+    Route::get('/finance-workspace/serials/{serial}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'serial'])->middleware('perm:inventory.view_traceability')->name('api.v1.workspace.serial');
+    Route::get('/finance-workspace/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'warehouse'])->middleware('perm:inventory.view_warehouses')->name('api.v1.workspace.warehouse');
+    Route::get('/finance-workspace/dashboard', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'dashboard'])->middleware('perm:inventory.view_dashboard')->name('api.v1.workspace.dashboard');
+    Route::get('/finance-workspace/lookups', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'lookups'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.workspace.lookups');
+    Route::get('/finance-workspace/reorder', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'reorder'])
+        ->middleware('perm:inventory.view_reports')->name('api.v1.workspace.reorder');
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard');
@@ -480,7 +491,7 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         Route::post('/settings/unit-conversions', [SettingsController::class, 'storeUnitConversion']);
         Route::post('/settings/warehouse-reorder-rules/calculate', [SettingsController::class, 'calculateWarehouseReorderRule'])
             ->name('api.v1.settings.reorder.calculate');
-        Route::post('/settings/warehouse-reorder-rules', [SettingsController::class, 'storeWarehouseReorderRule']);
+        Route::post('/settings/warehouse-reorder-rules', [SettingsController::class, 'storeWarehouseReorderRule'])->name('api.v1.settings.reorder.store');
         Route::post('/settings/adjustment-reason-codes', [SettingsController::class, 'storeAdjustmentReasonCode']);
         Route::post('/settings/currency-rates', [SettingsController::class, 'storeCurrencyRate']);
         Route::post('/settings/categories', [SettingsController::class, 'storeCategory']);

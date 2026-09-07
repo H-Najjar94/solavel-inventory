@@ -24,7 +24,7 @@ final class WorkspaceDispatcher
         $action = $input['action'];
         abort_unless(in_array($action, WorkspaceActions::ALLOWED, true), 404, 'workspace_action_unknown');
         $router = app(Router::class);
-        $native = $router->getRoutes()->getByName('api.v1.'.$action);
+        $native = $router->getRoutes()->getByName('api.v1.'.(['warehouses.show' => 'workspace.warehouse', 'lots.show' => 'workspace.lot', 'serials.show' => 'workspace.serial'][$action] ?? $action));
         abort_unless($native, 503, 'workspace_action_unavailable');
         $route = clone $native;
         $write = ! in_array('GET', $route->methods(), true);
@@ -43,7 +43,7 @@ final class WorkspaceDispatcher
             abort_unless($decision['allowed'], 403, $decision['reason_code']);
         }
         if ($write) {
-            abort_unless($setting->mode === 'active', 409, 'workspace_connection_read_only');
+            abort_unless($mapping->status === 'verified' && $mapping->activation_state === 'active' && $setting->mode === 'active', 409, 'workspace_connection_read_only');
             abort_unless(app(IntegrationSafetyHold::class)->deliveryEnabledFor((int) $mapping->solastock_organization_id), 423, 'integration_safety_hold');
             abort_unless(isset($input['idempotency_key']), 422, 'workspace_idempotency_key_required');
         }
@@ -70,11 +70,12 @@ final class WorkspaceDispatcher
         $key = hash('sha256', (string) ($input['idempotency_key'] ?? ''));
         app()->instance('request', $request);
         try {
-            return DB::connection('tenant')->transaction(function () use ($router, $route, $request, $input, $mapping, $action, $write, $key, $requestHash): JsonResponse {
+            return DB::connection('tenant')->transaction(function () use ($router, $route, $request, $input, $mapping, $setting, $action, $write, $key, $requestHash): JsonResponse {
                 // The immutable mapping is an existing durable serialization point.
                 // Receipt and all owner-side mutations commit together; no schema addition.
                 if ($write) {
-                    IntegrationOrganizationMapping::query()->whereKey($mapping->id)->lockForUpdate()->firstOrFail();
+                    $lockedMapping = IntegrationOrganizationMapping::query()->whereKey($mapping->id)->lockForUpdate()->firstOrFail();
+                    abort_unless($lockedMapping->status === 'verified' && $lockedMapping->activation_state === 'active' && $setting->fresh()?->mode === 'active', 409, 'workspace_connection_read_only');
                     $receipt = InventoryAuditLog::query()->where('entity_type', 'finance_workspace_command')
                         ->where('entity_id', $mapping->id)->where('actor_user_id', $request->user()->id)
                         ->where('document_ref', $key)->first();
@@ -86,6 +87,9 @@ final class WorkspaceDispatcher
                 $router->substituteBindings($route);
                 $router->substituteImplicitBindings($route);
                 $models = [];
+                if ($action === 'settings.reorder.store') {
+                    abort_if(\App\Models\Tenant\WarehouseReorderRule::query()->where('item_id', $request->input('item_id'))->where('warehouse_id', $request->input('warehouse_id'))->exists(), 409, 'workspace_existing_rule_requires_revision');
+                }
                 foreach ($route->parameters() as $name => $value) {
                     if ($value instanceof Model) {
                         $model = $value->newQuery()->whereKey($value->getKey())->when($write, fn ($q) => $q->lockForUpdate())->firstOrFail();

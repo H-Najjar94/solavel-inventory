@@ -31,6 +31,8 @@ class StockTransferController extends ApiController
             ->with(['fromWarehouse:id,name,code', 'toWarehouse:id,name,code'])
             ->tap(fn ($q) => $this->warehouseAccess->scopeTransfer($q))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
+            ->when($request->filled('search'), fn ($q) => $q->where('transfer_number', 'like', '%'.$request->query('search').'%'))
+            ->when($request->filled('warehouse_id'), fn ($q) => $q->where(fn ($q) => $q->where('from_warehouse_id', $request->integer('warehouse_id'))->orWhere('to_warehouse_id', $request->integer('warehouse_id'))))
             ->orderByDesc('id');
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockTransfer $transfer) {
