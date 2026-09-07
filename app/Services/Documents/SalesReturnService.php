@@ -75,6 +75,7 @@ class SalesReturnService
                 if (mb_strlen(trim((string) ($attributes['reason'] ?? ''))) < 3) {
                     throw new RuntimeException('A source reversal reason of at least 3 characters is required.');
                 }
+                $this->assertFullSourceRequest($sourceShipment, $lines);
                 $existing = SalesReturn::query()
                     ->where('source_reversal_shipment_id', $sourceShipment->id)
                     ->lockForUpdate()
@@ -307,6 +308,45 @@ class SalesReturnService
                 'serial_id' => $line['serial_id'] ?? null,
             ]);
         }
+    }
+
+    /** This existing source-reversal workflow supports a full resellable reversal only. */
+    private function assertFullSourceRequest(Shipment $shipment, array $lines): void
+    {
+        // The explicit source reversal action supplies no editable lines.
+        if ($lines === []) {
+            return;
+        }
+        $expected = StockLedger::query()->where('source_type', Shipment::class)
+            ->where('source_id', $shipment->id)->where('direction', 'out')->get()
+            ->groupBy('item_id')->map(fn ($rows) => $rows->reduce(fn ($sum, $row) => Decimal::add($sum, (string) $row->quantity), '0'))->all();
+        $requested = [];
+        foreach ($lines as $line) {
+            if (($line['condition'] ?? 'resellable') !== 'resellable'
+                || ($line['disposition'] ?? 'restock') !== 'restock') {
+                $this->rejectPartialSourceReturn();
+            }
+            $line = $this->conversions->normalizeLine($line, 'returned_qty');
+            $itemId = (int) $line['item_id'];
+            $requested[$itemId] = Decimal::add($requested[$itemId] ?? '0', (string) $line['returned_qty']);
+        }
+        ksort($expected);
+        ksort($requested);
+        if (array_keys($requested) !== array_keys($expected)) {
+            $this->rejectPartialSourceReturn();
+        }
+        foreach ($expected as $itemId => $quantity) {
+            if (Decimal::cmp($requested[$itemId], $quantity) !== 0) {
+                $this->rejectPartialSourceReturn();
+            }
+        }
+    }
+
+    private function rejectPartialSourceReturn(): never
+    {
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'lines' => 'This shipment-linked workflow reverses the complete shipment as resellable stock. Partial or damaged source returns are not supported and no return was created.',
+        ]);
     }
 
     private function syncSourceLines(SalesReturn $return, Shipment $shipment, int $orgId): void

@@ -205,7 +205,7 @@ class SourceDrivenReversalTest extends TestCase
     }
 
     #[Test]
-    public function shipment_source_return_ignores_client_stock_coordinates_and_exactly_inverts_original_ledger(): void
+    public function shipment_source_return_rejects_changed_quantities_then_exactly_inverts_original_ledger(): void
     {
         $this->useTenantA();
         $warehouse = F::warehouse(['code' => 'REV-SHIP-WH']);
@@ -231,7 +231,8 @@ class SourceDrivenReversalTest extends TestCase
         ], app(ShipmentService::class)->fromSalesOrder($order));
         app(ShipmentService::class)->post($shipment);
 
-        $return = app(SalesReturnService::class)->createDraft([
+        try {
+            $return = app(SalesReturnService::class)->createDraft([
             'return_number' => 'REV-SHIP-RMA',
             'shipment_id' => $shipment->id,
             'warehouse_id' => 999999,
@@ -242,6 +243,15 @@ class SourceDrivenReversalTest extends TestCase
             'unit_cost' => '0.01',
             'condition' => 'damaged',
         ]]);
+            $this->fail('Unsupported quantities and disposition must not become a full restock.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('lines', $exception->errors());
+            $this->assertSame(0, SalesReturn::query()->count());
+        }
+        $return = app(SalesReturnService::class)->createDraft([
+            'return_number' => 'REV-SHIP-RMA', 'shipment_id' => $shipment->id,
+            'warehouse_id' => 999999, 'reason' => 'Customer order cancelled',
+        ], [['item_id' => $item->id, 'returned_qty' => '2', 'unit_cost' => '0.01', 'condition' => 'resellable']]);
 
         $this->assertTrue($return->is_source_reversal);
         $this->assertSame($warehouse->id, (int) $return->warehouse_id);
