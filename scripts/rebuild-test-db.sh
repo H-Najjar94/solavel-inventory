@@ -145,6 +145,15 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   deleted_at TIMESTAMP NULL,
   KEY inventory_items_org_sku_idx (organization_id, sku)
 );
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NOT NULL,
+  base_currency_code VARCHAR(3) NOT NULL,
+  quote_currency_code VARCHAR(3) NOT NULL,
+  rate DECIMAL(24,8) NOT NULL,
+  rate_date DATE NOT NULL,
+  source VARCHAR(30) NOT NULL
+);
 CREATE TABLE IF NOT EXISTS inventory_units (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   organization_id BIGINT UNSIGNED NULL,

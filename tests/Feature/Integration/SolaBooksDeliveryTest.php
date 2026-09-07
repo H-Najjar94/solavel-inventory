@@ -49,6 +49,21 @@ class SolaBooksDeliveryTest extends TestCase
                 'state_hash' => hash('sha256', 'test-advanced-worker-v1'),
             ]
         );
+        // Transport eligibility is Central's exact organization capability, not bundle provenance.
+        DB::connection('mysql')->table('entitlement_state_snapshots')->updateOrInsert(
+            ['organization_id' => TenantTestManager::ORG_A],
+            ['underlying_subscription_state' => 'paid_active', 'effective_access_state' => 'paid_active',
+                'state_hash' => hash('sha256', 'delivery-capability-fixture'),
+                'state_payload' => json_encode(['client_id' => 7, 'organization_id' => TenantTestManager::ORG_A,
+                    'integration_capabilities' => ['connection_activation_delivery_entitled' => true],
+                    'applications' => ['finance' => ['accessible' => true, 'commercially_entitled' => true],
+                        'inventory' => ['accessible' => true, 'commercially_entitled' => true]]])]
+        );
+        DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
+            ['client_id' => 7, 'project_slug' => 'finance'],
+            ['payload' => json_encode(['accessible' => true, 'commercially_entitled' => true]),
+                'version' => 'delivery-fixture', 'synced_at' => now('UTC')]
+        );
         DB::connection('tenant')->table('organizations')->updateOrInsert(
             ['id' => 14],
             ['central_org_id' => TenantTestManager::ORG_A]
