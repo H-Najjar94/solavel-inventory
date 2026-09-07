@@ -1769,3 +1769,20 @@ html[dir="rtl"] .fifo-total-line strong {
 .focus-wizard .focus-overview-context small, .focus-wizard .focus-overview p { white-space: normal; overflow: visible; text-overflow: initial; }
 .focus-wizard .wizard-account-row strong { font-size: .9rem; }
 .focus-wizard .wizard-account-row { padding-block: 10px; }
+
+/* The generic .wizard grid's implicit auto track takes a min-content width.
+   Constrain this workspace's track, then allow its header children to wrap. */
+.focus-wizard { grid-template-columns: minmax(0, 1fr); }
+.focus-wizard > *, .focus-wizard .focus-stage, .focus-wizard .focus-workspace,
+.focus-wizard .focus-overview > *, .focus-wizard .focus-list-heading > * { min-width: 0; }
+.focus-wizard .focus-phase-stepper { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.focus-wizard .focus-phase-stepper button { min-width: 0; overflow-wrap: anywhere; }
+.focus-wizard .focus-overview-context { flex-wrap: wrap; white-space: normal; }
+.focus-wizard .focus-overview-context strong { max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+    .focus-wizard .focus-list-heading { flex-direction: column; align-items: stretch; }
+    .focus-wizard .focus-list-heading > strong { align-self: flex-start; white-space: normal; }
+    .focus-wizard .focus-header > div { flex-wrap: wrap; }
+    .focus-wizard .focus-overview { padding: 8px 0; }
+    .focus-wizard .focus-overview-context small { max-width: none; }
+}
