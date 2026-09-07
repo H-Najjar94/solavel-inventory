@@ -54,7 +54,13 @@ final class WorkflowCurrencyResolver
         $authority = (array) data_get($setting?->meta, 'finance_currency_contract', []);
         $base = (string) ($authority['base_currency_code'] ?? '');
         $enabled = (array) ($authority['enabled_currency_codes'] ?? []);
-        $code = $this->documentCurrency($document, $documentType, true);
+        // Inventory-only documents are explicitly valued in the reviewed Finance
+        // base pool. They have no sales/purchase transaction currency to inherit.
+        // Never apply this rule to receipts, shipments or linked documents.
+        $baseValued = in_array($documentType, ['stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock'], true);
+        $code = $baseValued
+            ? (string) (app(FinanceBaseValuation::class)->contract($orgId)['base_currency_code'] ?? '')
+            : $this->documentCurrency($document, $documentType, true);
         $transactionDate = $this->normalizeDate($date);
 
         if (! preg_match('/^[A-Z]{3}$/', $base)

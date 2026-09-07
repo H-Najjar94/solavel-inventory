@@ -43,6 +43,12 @@ class TraceabilityController extends ApiController
             $query->whereIn('id', StockBalance::query()->whereIn('warehouse_id', $allowed)->where('on_hand_qty', '>', 0)->whereNotNull('lot_id')->pluck('lot_id'));
         }
 
+        if ($request->filled('warehouse_id')) {
+            $warehouse = $request->integer('warehouse_id');
+            $this->warehouseAccess->assertAllowed($warehouse);
+            $query->whereIn('id', StockBalance::query()->where('warehouse_id', $warehouse)->where('on_hand_qty', '>', 0)->whereNotNull('lot_id')->select('lot_id'));
+        }
+
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 
@@ -93,6 +99,11 @@ class TraceabilityController extends ApiController
             ->when($request->filled('q'), fn ($q) => $q->where('serial', 'like', '%'.$request->query('q').'%'))
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
+
+        if ($request->filled('warehouse_id')) {
+            $this->warehouseAccess->assertAllowed($request->integer('warehouse_id'));
+            $query->where('warehouse_id', $request->integer('warehouse_id'));
+        }
 
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }

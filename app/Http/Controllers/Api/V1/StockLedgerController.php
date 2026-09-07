@@ -26,6 +26,7 @@ class StockLedgerController extends ApiController
 
         $query = StockLedger::query()
             ->with(['warehouse:id,name,code', 'item:id,name,sku'])
+            ->when($request->filled('search'), fn ($q) => $q->whereHas('item', fn ($item) => $item->where(fn ($item) => $item->where('name', 'like', '%'.$request->query('search').'%')->orWhere('sku', 'like', '%'.$request->query('search').'%'))))
             ->when($request->filled('item_id'), fn ($q) => $q->where('item_id', (int) $request->query('item_id')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('direction'), fn ($q) => $q->where('direction', $request->query('direction')))

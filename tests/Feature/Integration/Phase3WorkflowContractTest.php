@@ -66,6 +66,26 @@ final class Phase3WorkflowContractTest extends TestCase
         ]);
     }
 
+    public function test_inventory_only_currency_requires_the_reviewed_base_valuation_contract(): void
+    {
+        $setting = IntegrationSetting::query()->firstOrFail();
+        $meta = $setting->meta;
+        $meta['finance_currency_contract']['inventory_valuation_basis'] = \App\Services\Integration\FinanceBaseValuation::BASIS;
+        $setting->update(['meta' => $meta]);
+        $document = (object) ['id' => 8800, 'organization_id' => TenantTestManager::ORG_A];
+        $resolver = app(WorkflowCurrencyResolver::class);
+        foreach (['stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock'] as $type) {
+            $currency = $resolver->resolve($document, $type, '2026-09-07');
+            $this->assertSame(['code' => 'JOD', 'exchange_rate' => '1', 'rate_date' => '2026-09-07', 'rate_source' => 'identity'], $currency);
+        }
+        try { $resolver->resolve($document, 'goods_receipt', '2026-09-07'); $this->fail('A receipt must not inherit base currency without document evidence.'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('currency', $e->errors()); }
+        unset($meta['finance_currency_contract']['inventory_valuation_basis']);
+        $setting->update(['meta' => $meta]);
+        $this->expectException(ValidationException::class);
+        $resolver->resolve($document, 'stock_adjustment', '2026-09-07');
+    }
+
     #[Test]
     public function currency_is_document_scoped_same_currency_identity_and_foreign_rate_is_dated(): void
     {

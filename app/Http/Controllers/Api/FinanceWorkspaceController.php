@@ -47,25 +47,35 @@ final class FinanceWorkspaceController
         foreach (['integration_organization_mappings', 'inventory_audit_logs', 'inventory_user_warehouses'] as $table) {
             abort_unless(Schema::connection('tenant')->hasTable($table), 409, 'workspace_schema_not_ready');
         }
+        abort_unless(DB::connection('tenant')->table('organizations')->where('id', $input['finance_organization_id'])->where('central_org_id', $org->id)->exists(), 403, 'workspace_finance_mapping_invalid');
         $mapping = IntegrationOrganizationMapping::query()->where('central_client_id', $org->client_id)
             ->where('central_organization_id', $org->id)->where('solastock_organization_id', $org->id)
             ->where('finance_organization_id', $input['finance_organization_id'])
             ->where('tenant_database_identity', $database)->where('contract_version', 'solastock-journal.v2')
             ->whereIn('status', ['verified', 'verified_hold'])->first();
-        abort_unless($mapping, 409, 'workspace_mapping_not_ready');
+
         try {
-            app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+            app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping ?? new IntegrationOrganizationMapping(['central_client_id' => $org->client_id, 'central_organization_id' => $org->id]));
         } catch (\RuntimeException $exception) {
             abort(403, 'workspace_integration_not_entitled');
         }
         $setting = IntegrationSetting::query()->where('organization_id', $org->id)->where('integration', 'solabooks')
-            ->where('solabooks_organization_id', $mapping->finance_organization_id)->first();
-        abort_unless($setting && in_array($setting->mode, ['active', 'paused', 'connected_readonly'], true), 409, 'workspace_connection_not_ready');
+            ->where('solabooks_organization_id', $input['finance_organization_id'])->first();
+
         $previous = Auth::user();
         Auth::setUser($actor);
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if ($input['action'] === 'workspace.context') {
+                return response()->json(['success' => true, 'data' => app(\App\Services\InventoryWorkspace\WorkspaceContext::class)->read($request, (int) $org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active')]);
+            }
+            if ($input['action'] === 'workspace.connection') {
+                abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can($actor, 'inventory.integration.view'), 403, 'workspace_permission_required');
+                return response()->json(['success' => true, 'data' => app(\App\Services\Integration\ConnectionWizardService::class)->discover((int) $org->id)]);
+            }
+            abort_unless($mapping, 409, 'workspace_mapping_not_ready');
+            abort_unless($setting && in_array($setting->mode, ['active', 'paused', 'connected_readonly'], true), 409, 'workspace_connection_not_ready');
             return $workspace->dispatch($request, $input, $mapping, $setting);
         } finally {
             if ($previous) {
