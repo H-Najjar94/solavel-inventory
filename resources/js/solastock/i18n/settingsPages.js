@@ -1074,6 +1074,7 @@ export const en = {
 };
 
 export const ar = {
+    ...en,
     "integration.review.record_details_unavailable_refresh_discovery": "تفاصيل السجل غير متاحة — حدّث الاستكشاف",
     "integration.review.not_configured_review_finance_settings": "غير مهيأة — راجع إعدادات SolaCount",
     "integration.review.need_review": "بحاجة للمراجعة",
@@ -1100,7 +1101,6 @@ export const ar = {
     "integration.review.accounting_review_approved": "تمت الموافقة المحاسبية",
     "integration.review.not_reviewed": "لم تتم المراجعة",
     'integration.loading': 'جارٍ تحميل إعداد الربط…',
-    ...en,
     'settings.title': 'الإعدادات',
     'integration.wizard.setupBlockers': 'عوائق الإعداد والموافقة',
     'integration.wizard.readinessOnly': 'يبقى الاكتشاف للقراءة فقط. تُحفظ مسودات القرارات داخل مساحة الإعداد المدققة فقط، ويُلزم ربط مؤسسة ثابت لاحقًا قبل تجميد اللقطة.',
