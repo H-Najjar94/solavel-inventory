@@ -10,7 +10,8 @@ use Illuminate\Support\Str;
 
 /**
  * Records SolaBooks integration events into the local outbox. It NEVER sends
- * externally inside stock transactions and NEVER blocks stock posting. Delivery
+ * externally inside stock transactions. Connected valuation contracts are validated
+ * before the physical transaction commits. Delivery
  * happens later through the retry/worker path, over the SolaBooks API only.
  * Idempotent: re-posting a document does not duplicate events.
  */
@@ -86,11 +87,18 @@ class IntegrationOutboxService
                 : null,
             'workflow_key' => $eventType,
             'ordering_key' => $aggregateType.':'.(int) $document->id,
-            'depends_on_event_uuid' => $payload['original_event_uuid'] ?? null,
+            'depends_on_event_uuid' => data_get($payload, 'original_source.event_uuid'),
             'transport_eligible_at' => $transportEligible ? now() : null,
         ]);
         $this->workflowDocuments->recordForEvent($event, $document);
         $this->workflowDocuments->recordReservationsForSalesOrder($event, $document);
+        if ($postsJournal && ($payload['inventory_valuation_basis'] ?? null) === FinanceBaseValuation::BASIS) {
+            // Pure local contract construction: no delivery or accounting write.
+            // An unrepresentable currency amount rolls back the surrounding
+            // document/physical movement transaction instead of stranding it.
+            app(SolaStockJournalContractBuilder::class)->build($event);
+        }
+
 
         return $event;
     }

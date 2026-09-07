@@ -138,6 +138,9 @@ final class WorkflowValidationService
                 ], JSON_UNESCAPED_SLASHES)],
             ]);
         }
+        if (in_array($eventType, ['grn.posted', 'shipment.posted', 'sales_return.posted', 'adjustment.posted', 'stock_count.posted'], true)) {
+            app(FinanceBaseValuation::class)->contract($orgId);
+        }
     }
 
     private function assertConversionSnapshot(object $line, int $organizationId, string $eventType): void
@@ -159,7 +162,7 @@ final class WorkflowValidationService
             ->where('organization_id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->first();
         $units = DB::connection('tenant')->table('units')->whereIn('id', [$line->entered_unit_id, $line->base_unit_id])
             ->where('organization_id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->count();
-        if (! $item || (int) $item->base_unit_id !== (int) $line->base_unit_id || $units !== 2) {
+        if (! $item || (int) $item->base_unit_id !== (int) $line->base_unit_id || $units !== count(array_unique([(int) $line->entered_unit_id, (int) $line->base_unit_id]))) {
             $this->conversionFailure($eventType, 'unit_conversion_scope_invalid');
         }
         if ($line->unit_conversion_id === null) {
@@ -202,6 +205,7 @@ final class WorkflowValidationService
     {
         if ($entityType === 'account_role') {
             $accountMappingId = DB::connection('tenant')->table('integration_account_mappings')
+                ->where('organization_id', app(\App\Tenancy\OrganizationContext::class)->idOrFail())
                 ->where('integration', IntegrationEvents::INTEGRATION)
                 ->where('mapping_type', $solastockRecordId)
                 ->whereIn('status', ['mapped', 'verified'])

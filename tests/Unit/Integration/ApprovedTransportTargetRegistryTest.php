@@ -15,7 +15,7 @@ final class ApprovedTransportTargetRegistryTest extends TestCase
     }
 
     #[DataProvider('approvedPlans')]
-    public function test_only_paid_active_advanced_or_enterprise_state_creates_a_target(string $plan): void
+    public function test_canonical_capability_determines_targets_independently_of_plan_label(string $plan): void
     {
         $targets = $this->registry()->targetsFromRows([$this->row($plan)]);
 
@@ -29,7 +29,7 @@ final class ApprovedTransportTargetRegistryTest extends TestCase
 
     public static function approvedPlans(): array
     {
-        return [['advanced'], ['enterprise']];
+        return [['advanced'], ['enterprise'], ['premium'], ['separate-subscriptions']];
     }
 
     #[DataProvider('rejectedStates')]
@@ -41,10 +41,8 @@ final class ApprovedTransportTargetRegistryTest extends TestCase
     public static function rejectedStates(): array
     {
         return [
-            [['plan_code' => 'premium']],
-            [['plan_code' => 'unknown']],
-            [['effective_access_state' => 'suspended']],
-            [['effective_access_state' => 'paid_expired']],
+            [['applications' => ['finance' => ['accessible' => false]]]],
+            [['applications' => ['inventory' => ['commercially_entitled' => false]]]],
             [['integration_capabilities' => ['connection_activation_delivery_entitled' => false]]],
             [['accessible_apps' => ['inventory']]],
         ];
@@ -52,7 +50,7 @@ final class ApprovedTransportTargetRegistryTest extends TestCase
 
     private function registry(): ApprovedTransportTargetRegistry
     {
-        $tenants = $this->createMock(TenantManager::class);
+        $tenants = $this->createStub(TenantManager::class);
         $tenants->method('resolveDatabaseName')->willReturnCallback(
             fn (int $client): string => 'tenant_'.str_pad((string) $client, 6, '0', STR_PAD_LEFT)
         );
@@ -68,6 +66,10 @@ final class ApprovedTransportTargetRegistryTest extends TestCase
             'plan_code' => $plan,
             'effective_access_state' => 'paid_active',
             'accessible_apps' => ['finance', 'inventory'],
+            'applications' => [
+                'finance' => ['accessible' => true, 'commercially_entitled' => true],
+                'inventory' => ['accessible' => true, 'commercially_entitled' => true],
+            ],
             'integration_capabilities' => ['connection_activation_delivery_entitled' => true],
         ], $overrides);
 

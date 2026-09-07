@@ -62,7 +62,11 @@ class EventPayloadBuilder
         // The currency authority validates and canonicalizes the transaction
         // date. Persist that exact YYYY-MM-DD value in the immutable event
         // payload instead of a model-cast midnight timestamp.
-        $transactionDate = (string) ($currency['rate_date'] ?? $date ?? '');
+        $transactionDate = substr((string) ($date ?? ''), 0, 10);
+        $original = $this->originalSource($document);
+        $originalPayload = $original ? (array) IntegrationOutboxEvent::query()->where('organization_id', $orgId)
+            ->where('event_uuid', $original['event_uuid'])->firstOrFail()->payload : null;
+        $valuation = $ledger->isNotEmpty() ? app(FinanceBaseValuation::class)->contract((int) $orgId) : null;
 
         return array_merge([
             'source_app' => 'solastock',
@@ -73,6 +77,8 @@ class EventPayloadBuilder
             'document_number' => $number,
             'document_date' => $transactionDate,
             'currency' => $currency,
+            'inventory_valuation_basis' => $originalPayload !== null ? ($originalPayload['inventory_valuation_basis'] ?? null) : ($valuation ? FinanceBaseValuation::BASIS : null),
+            'inventory_value_currency' => $originalPayload !== null ? ($originalPayload['inventory_value_currency'] ?? null) : ($valuation['base_currency_code'] ?? null),
             'total_inventory_value_change' => Decimal::money($totalChange),
             'lines' => $lines,
             'original_source' => $this->originalSource($document),
@@ -90,7 +96,7 @@ class EventPayloadBuilder
             return [];
         }
         $payload = IntegrationOutboxEvent::query()
-            ->where('event_uuid', $original['event_uuid'])->value('payload');
+            ->where('organization_id', $document->organization_id)->where('event_uuid', $original['event_uuid'])->value('payload');
         $payload = is_string($payload) ? json_decode($payload, true) : $payload;
 
         return collect((array) data_get($payload, 'lines', []))

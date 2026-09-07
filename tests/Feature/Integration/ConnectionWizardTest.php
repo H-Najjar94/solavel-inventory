@@ -748,6 +748,11 @@ final class ConnectionWizardTest extends TestCase
             'base_unit_id' => $unitId, 'category_id' => $categoryId,
             'purchase_price' => 0, 'sales_price' => 0, 'is_active' => true,
         ]);
+        // Independent Finance fixture: item observers no longer create cross-app records.
+        DB::connection('tenant')->table('inventory_items')->insert([
+            'organization_id' => 14, 'sku' => 'WIZARD-ITEM', 'name' => 'Wizard item',
+            'tracking_type' => 'quantity', 'valuation_method' => 'average',
+        ]);
         IntegrationSetting::query()->create([
             'organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks',
             'mode' => 'paused', 'solabooks_organization_id' => 14,

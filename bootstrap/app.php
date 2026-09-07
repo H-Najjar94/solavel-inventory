@@ -25,6 +25,8 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         using: function (): void {
+            // Server-to-server only: no browser cookies, session mutation or CSRF exemption.
+            require __DIR__.'/../routes/finance_workspace.php';
             // Web routes (session-stateful).
             Route::middleware('web')
                 ->group(__DIR__.'/../routes/web.php');

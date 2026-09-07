@@ -3,28 +3,32 @@
 namespace App\Services\Integration;
 
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Services\Entitlements\EntitlementAccessDecision;
 use App\Services\Entitlements\EntitlementsCache;
 use RuntimeException;
 
-/** Fail-closed commercial authorization for the Stock → Finance v2 worker. */
+/** Commercial authorization only; mapping, delivery holds and actor permissions remain independent. */
 final class ApprovedFinanceIntegrationEntitlement
 {
-    private const APPROVED_SOURCES = ['advanced_bundle', 'enterprise_bundle'];
-
-    public function __construct(private readonly EntitlementsCache $entitlements) {}
+    public function __construct(
+        private readonly EntitlementsCache $entitlements,
+        private readonly FinanceInventoryCapability $capability,
+        private readonly EntitlementAccessDecision $decisions,
+    ) {}
 
     public function assertApproved(IntegrationOrganizationMapping $mapping): void
     {
-        $snapshot = $this->entitlements->getProjectSnapshot(
-            (int) $mapping->central_client_id,
-            'inventory',
-        );
-
-        if (! is_array($snapshot)
-            || ($snapshot['accessible'] ?? false) !== true
-            || ($snapshot['commercially_entitled'] ?? false) !== true
-            || ! in_array((string) ($snapshot['entitlement_source'] ?? ''), self::APPROVED_SOURCES, true)) {
-            throw new RuntimeException('Stock to Finance transport requires an explicit Advanced or Enterprise entitlement.');
+        $clientId = (int) $mapping->central_client_id;
+        if (! $this->capability->allows($clientId, (int) $mapping->central_organization_id)) {
+            throw new RuntimeException('Finance and Stock integration capability is not authorized for this organization.');
+        }
+        foreach (['finance', 'inventory'] as $slug) {
+            $snapshot = $this->entitlements->getProjectSnapshot($clientId, $slug);
+            if (($snapshot['accessible'] ?? false) !== true
+                || ($snapshot['commercially_entitled'] ?? false) !== true
+                || $this->decisions->decide($snapshot, '')['reason'] !== EntitlementAccessDecision::DENY_NOT_IN_PLAN) {
+                throw new RuntimeException('Finance and Stock require current commercial access for delivery.');
+            }
         }
     }
 }

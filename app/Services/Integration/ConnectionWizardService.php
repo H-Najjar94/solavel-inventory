@@ -850,48 +850,7 @@ final class ConnectionWizardService
         object $decision,
         string $stockId,
     ): string {
-        if ($decision->entity_type !== 'item') {
-            $this->fail('keep_solastock_authority_requires_supported_entity');
-        }
-        $item = Item::query()->where('organization_id', $mapping->solastock_organization_id)
-            ->where('id', $stockId)->lockForUpdate()->first();
-        if (! $item || ! $item->is_active || $item->deleted_at !== null || trim((string) $item->sku) === '') {
-            $this->fail('solastock_source_record_inactive_or_missing');
-        }
-        if (! $this->catalogBridge->sync($item)) {
-            $this->fail('finance_catalog_projection_failed');
-        }
-        $booksIds = DB::connection('tenant')->table('inventory_items')
-            ->where('organization_id', $mapping->finance_organization_id)->where('sku', $item->sku)
-            ->whereNull('deleted_at')->lockForUpdate()->pluck('id');
-        if ($booksIds->count() !== 1) {
-            $this->fail('finance_catalog_projection_ambiguous');
-        }
-
-        $booksId = (string) $booksIds->first();
-        $categoryId = $this->mappedFinanceIdentity($mapping, 'category', $item->category_id);
-        $unitId = $this->mappedFinanceIdentity($mapping, 'unit', $item->base_unit_id);
-        $accounts = DB::connection('tenant')->table('integration_account_mappings')
-            ->where('organization_id', $mapping->solastock_organization_id)
-            ->where('integration', 'solabooks')->where('status', 'verified')
-            ->whereIn('mapping_type', ['inventory_asset', 'cogs', 'sales_revenue'])
-            ->pluck('solabooks_account_id', 'mapping_type');
-        if (! $categoryId || ! $unitId || $accounts->count() !== 3) {
-            $this->fail('finance_catalog_projection_accounting_incomplete');
-        }
-        $columns = Schema::connection('tenant')->getColumnListing('inventory_items');
-        DB::connection('tenant')->table('inventory_items')->where('organization_id', $mapping->finance_organization_id)
-            ->where('id', $booksId)->update(array_intersect_key([
-                'category_id' => $categoryId,
-                'unit_id' => $unitId,
-                'valuation_method' => $item->costing_method,
-                'inventory_asset_account_id' => (int) $accounts['inventory_asset'],
-                'cogs_account_id' => (int) $accounts['cogs'],
-                'income_account_id' => (int) $accounts['sales_revenue'],
-                'default_sales_account_id' => (int) $accounts['sales_revenue'],
-            ], array_flip($columns)));
-
-        return $booksId;
+        $this->fail('finance_catalog_owner_command_required');
     }
 
     private function mappedFinanceIdentity(
