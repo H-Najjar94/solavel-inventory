@@ -45,7 +45,7 @@ class IntegrationOutboxService
             return $existing;
         }
 
-        $mappingComplete = $this->coreMappingsComplete($orgId);
+        $mappingComplete = $this->coreMappingsComplete($orgId, $eventType);
         $payload = $this->payloads->build($eventType, $document, $documentType, $number, $date, $mappingComplete);
 
         // If integration is disconnected, still record — status reflects the mode.
@@ -128,27 +128,25 @@ class IntegrationOutboxService
 
     public function refreshMappingStatus(int $orgId): void
     {
-        IntegrationOutboxEvent::query()
-            ->where('integration', IntegrationEvents::INTEGRATION)
-            ->whereIn('status', ['pending', 'failed'])
-            ->update(['mapping_status' => $this->coreMappingsComplete($orgId) ? 'complete' : 'incomplete']);
+        IntegrationOutboxEvent::query()->where('integration', IntegrationEvents::INTEGRATION)
+            ->where('organization_id', $orgId)->whereIn('status', ['pending', 'failed'])
+            ->chunkById(200, function ($events) use ($orgId) {
+                foreach ($events as $event) {
+                    $event->update(['mapping_status' => $this->coreMappingsComplete($orgId, $event->event_type) ? 'complete' : 'incomplete']);
+                }
+            });
     }
 
-    public function eventMappingsComplete(int $orgId): bool
+    public function eventMappingsComplete(int $orgId, ?string $eventType = null): bool
     {
-        return $this->coreMappingsComplete($orgId);
+        return $this->coreMappingsComplete($orgId, $eventType);
     }
 
     /** The core account mappings needed for any posting to be "complete". */
-    private function coreMappingsComplete(int $orgId): bool
+    private function coreMappingsComplete(int $orgId, ?string $eventType = null): bool
     {
-        $required = ['inventory_asset', 'cogs', 'adjustment_gain', 'adjustment_loss', 'grni', 'opening_offset', 'accounts_receivable', 'sales_revenue'];
-        $mapped = IntegrationAccountMapping::query()
-            ->where('organization_id', $orgId)
-            ->where('integration', IntegrationEvents::INTEGRATION)
-            ->whereIn('mapping_type', $required)
-            ->whereIn('status', ['mapped', 'verified'])
-            ->pluck('mapping_type')->all();
+        $required = $eventType !== null ? AccountRolePolicy::forOperations([$eventType]) : app(OrganizationAccountRequirements::class)->roles($orgId);
+        $mapped = app(OrganizationAccountRequirements::class)->validMappedRoles($orgId);
 
         return count(array_intersect($required, $mapped)) === count($required);
     }

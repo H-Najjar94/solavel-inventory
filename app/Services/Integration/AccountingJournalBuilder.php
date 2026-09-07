@@ -19,6 +19,7 @@ class AccountingJournalBuilder
 {
     public function build(IntegrationOutboxEvent $event, int $orgId): array
     {
+        app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $event->event_type);
         return match ($event->event_type) {
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),

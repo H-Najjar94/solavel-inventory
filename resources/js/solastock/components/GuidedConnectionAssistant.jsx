@@ -62,7 +62,8 @@ export default function GuidedConnectionAssistant({
     const ownerPending = ownerRows.filter((row) => !confirmedDecisions.has(row.fingerprint));
     const accountingRows = rows.filter((row) => row.entity_type === 'account_role');
     const taxReviewRows = rowsFor('accounting').filter((row) => row.entity_type !== 'account_role');
-    const accountingPending = accountingRows.filter((row) => !savedAccount(row, confirmedDecisions));
+    const requiredAccountingRows = accountingRows.filter((row) => row.safe_details?.required !== false);
+    const accountingPending = requiredAccountingRows.filter((row) => !savedAccount(row, confirmedDecisions));
     const physicalRows = rowsFor('inventory_quantities').filter((row) => {
         const action = confirmedDecisions.get(row.fingerprint)?.action;
         return !['classify_service_non_inventory', 'exclude_initial_connection'].includes(action);
@@ -86,7 +87,7 @@ export default function GuidedConnectionAssistant({
     const phase = task === 1 ? 1 : task === 6 ? 3 : 2;
     const resolvedOwner = ownerRows.length - ownerPending.length;
     const resolvedCounts = physicalRows.length - physicalPending.length;
-    const resolvedAccounting = accountingRows.length - accountingPending.length;
+    const resolvedAccounting = requiredAccountingRows.length - accountingPending.length;
     const itemRows = ownerRows.filter((row) => row.entity_type === 'item');
     const itemCounts = {
         solabooks: itemRows.filter((row) => row.solabooks).length,
@@ -613,7 +614,7 @@ export default function GuidedConnectionAssistant({
                 <li>{checks.organization_verified ? '✓' : '!'} {tr('integration.focus.organizationReady')}</li>
                 <li>{checks.base_currency_inherited ? '✓' : '!'} {tr('integration.focus.baseCurrency', { currency: guided.currency_summary?.base_currency || tr("integration.review.not_configured_review_finance_settings") })}</li>
                 <li>{checks.tax_exceptions ? '!' : '✓'} {tr('integration.focus.taxesReady')} · {checks.tax_exceptions || 0} {tr("integration.review.need_review")}</li>
-                <li>{resolvedAccounting === accountingRows.length ? '✓' : '!'} {resolvedAccounting}/{accountingRows.length} {tr("integration.review.valid_saved_account_selections")}</li>
+                <li>{resolvedAccounting === requiredAccountingRows.length ? '✓' : '!'} {resolvedAccounting}/{requiredAccountingRows.length} {tr("integration.review.valid_saved_account_selections")}</li>
             </ul>
             {guided.setup_path === 'fresh_workspace' && <p className="wizard-account-note">{tr("integration.review.no_catalog_stock_activity_financial_documents_or")}</p>}
             <div className="focus-attention"><strong>{ownerPending.length + accountingPending.length + physicalPending.length} {tr("integration.review.choices_need_review")}</strong><p>{tr('integration.focus.needsReviewText')}</p></div>
@@ -734,9 +735,10 @@ export default function GuidedConnectionAssistant({
         if (task === 4) return <section className="focus-card">
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr("integration.review.review_finance_accounts")}</h2>
                 <p>{tr("integration.review.choose_the_finance_accounts_used_by_inventory")}</p></div>
-                <strong><bdi>{resolvedAccounting}/{accountingRows.length}</bdi> {tr("integration.review.valid_saved_selections")}</strong></div>
+                <strong><bdi>{resolvedAccounting}/{requiredAccountingRows.length}</bdi> {tr("integration.review.valid_saved_selections")}</strong></div>
             {!accountingGate.allowed && <div className="focus-accountant-handoff" role="status">{tr('integration.focus.accountingAccessBlockedTitle')}<p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p></div>}
-            <AccountingMappingTable rows={accountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
+            <AccountingMappingTable rows={requiredAccountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
+            {accountingRows.length > requiredAccountingRows.length && <details><summary>{locale === 'ar' ? 'حسابات اختيارية — غير مطلوبة للعمليات الحالية' : 'Optional accounts — not required for current operations'}</summary><AccountingMappingTable rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></details>}
             {taxReviewRows.map(compactDecisionRow)}
             {footer(tr('integration.focus.continue'), () => go(5), { disabled: accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
         </section>;
@@ -808,7 +810,7 @@ export default function GuidedConnectionAssistant({
                 <div className="focus-summary-list">
                     <button type="button" onClick={() => go(2)}><span>{tr('integration.focus.summary.business')}</span><strong><bdi>{resolvedOwner}/{ownerRows.length}</bdi></strong></button>
                     <button type="button" onClick={() => go(3)}><span>{tr('integration.focus.summary.count')}</span><strong><bdi>{resolvedCounts}/{physicalRows.length}</bdi></strong></button>
-                    <button type="button" onClick={() => go(4)}><span>{tr('integration.focus.summary.accounting')}</span><strong><bdi>{resolvedAccounting}/{accountingRows.length}</bdi></strong></button>
+                    <button type="button" onClick={() => go(4)}><span>{tr('integration.focus.summary.accounting')}</span><strong><bdi>{resolvedAccounting}/{requiredAccountingRows.length}</bdi></strong></button>
                     <button type="button" onClick={() => go(5)}><span>{tr('integration.focus.summary.documents')}</span><strong><bdi>{cutoffRows.length}</bdi></strong></button>
                 </div>
                 <div className="focus-authority"><p><span>{tr('integration.focus.inventoryAuthority')}</span><strong>SolaStock</strong></p><p><span>{tr('integration.focus.accountingAuthority')}</span><strong>{tr('integration.businessStatus.solabooks')}</strong></p></div>

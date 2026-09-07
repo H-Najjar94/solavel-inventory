@@ -21,13 +21,6 @@ class IntegrationStatusService
 {
     public const MODES = ['disconnected', 'connected_readonly', 'connected_pending_mapping', 'active', 'paused', 'error'];
 
-    public const REQUIRED_ACCOUNT_MAPPINGS = [
-        'inventory_asset', 'cogs', 'adjustment_gain', 'adjustment_loss', 'grni',
-        'landed_cost_clearing', 'transfer_clearing', 'opening_offset',
-        'sales_returns', 'purchase_returns',
-        'accounts_receivable', 'sales_revenue',
-    ];
-
     public function status(int $orgId): array
     {
         $safety = app(IntegrationSafetyHold::class);
@@ -87,7 +80,9 @@ class IntegrationStatusService
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->whereIn('status', ['mapped', 'verified'])->pluck('mapping_type')->all();
-        $mappingCompleteness = round(count(array_intersect(self::REQUIRED_ACCOUNT_MAPPINGS, $mapped)) / count(self::REQUIRED_ACCOUNT_MAPPINGS) * 100);
+        $requiredRoles = app(OrganizationAccountRequirements::class)->roles($orgId);
+        $validMappedRoles = app(OrganizationAccountRequirements::class)->validMappedRoles($orgId);
+        $mappingCompleteness = $requiredRoles === [] ? 100 : round(count(array_intersect($requiredRoles, $validMappedRoles)) / count($requiredRoles) * 100);
         $taxCodes = collect((array) (InventorySetting::query()->first()?->taxes ?? []))
             ->where('active', true)->pluck('code')->filter()->unique()->values();
         $mappedTaxCodes = IntegrationTaxMapping::query()
