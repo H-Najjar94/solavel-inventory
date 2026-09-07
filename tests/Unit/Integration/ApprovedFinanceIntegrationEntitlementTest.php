@@ -60,4 +60,24 @@ final class ApprovedFinanceIntegrationEntitlementTest extends TestCase
             'stale but paid through' => [true, ['_snapshot' => ['beyond_max_stale' => true], 'valid_until' => '2026-08-01T00:00:00Z'], true],
         ];
     }
+
+    public function test_current_production_snapshot_shape_does_not_require_redundant_access_booleans(): void
+    {
+        EntitlementClock::setTestNow(CarbonImmutable::parse('2026-09-07T00:00:00Z'));
+        $snapshot = [
+            'subscription_status' => 'active',
+            'access_eligible' => true,
+            'access_until' => '2026-10-01T00:00:00Z',
+            'flags' => ['api_integration.enabled' => true],
+        ];
+        $cache = $this->createStub(EntitlementsCache::class);
+        $cache->method('getProjectSnapshot')->willReturn($snapshot);
+        $capability = $this->createMock(FinanceInventoryCapability::class);
+        $capability->expects($this->once())->method('allows')->with(9001, 9002)->willReturn(true);
+        $mapping = new IntegrationOrganizationMapping;
+        $mapping->setRawAttributes(['central_client_id' => 9001, 'central_organization_id' => 9002]);
+
+        (new ApprovedFinanceIntegrationEntitlement($cache, $capability, new EntitlementAccessDecision))->assertApproved($mapping);
+        $this->addToAssertionCount(1);
+    }
 }

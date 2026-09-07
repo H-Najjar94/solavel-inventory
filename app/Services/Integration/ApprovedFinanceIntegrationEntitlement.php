@@ -24,9 +24,7 @@ final class ApprovedFinanceIntegrationEntitlement
         }
         foreach (['finance', 'inventory'] as $slug) {
             $snapshot = $this->entitlements->getProjectSnapshot($clientId, $slug);
-            if (($snapshot['accessible'] ?? false) !== true
-                || ($snapshot['commercially_entitled'] ?? false) !== true
-                || $this->decisions->decide($snapshot, '')['reason'] !== EntitlementAccessDecision::DENY_NOT_IN_PLAN) {
+            if ($this->decisions->decide($snapshot, '')['reason'] !== EntitlementAccessDecision::DENY_NOT_IN_PLAN) {
                 throw new RuntimeException('Finance and Stock require current commercial access for delivery.');
             }
         }
