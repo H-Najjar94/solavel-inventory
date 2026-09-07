@@ -180,12 +180,8 @@ class IntegrationStatusService
         $wizardCurrentStep = $wizardRun ? 'automatic_checks' : 'setup_available';
         if ($wizardRun && $draftInProgress) {
             try {
-                $discovery = app(ConnectionWizardService::class)->discover($orgId);
-                $required = collect($discovery['guided_setup']['visible_exception_fingerprints'] ?? [])->unique();
-                $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
-                    ->where('run_uuid', $wizardRun->run_uuid)->where('status', 'selected')
-                    ->pluck('candidate_fingerprint')->unique();
-                $wizardRemaining = $required->diff($selected)->count();
+                $preview = app(ConnectionWizardService::class)->finalPreview($orgId, (string) $wizardRun->run_uuid);
+                $wizardRemaining = count($preview['blocking']);
                 $wizardCurrentStep = $wizardRemaining > 0 ? 'required_decisions' : 'result_preview';
             } catch (\Throwable) {
                 // Status remains truthful but unavailable rather than reporting a

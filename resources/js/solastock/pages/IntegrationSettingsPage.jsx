@@ -88,7 +88,7 @@ export default function IntegrationSettingsPage() {
     const [savingConnection, setSavingConnection] = useState(false);
     const [rotatingKey, setRotatingKey] = useState(false);
 
-    const status = useApiQuery(['integration-status'], api.integrationStatus, {
+    const status = useApiQuery(['integration-status', tenant.organization_id], api.integrationStatus, {
         fallback: null,
         refetchOnMount: 'always',
         refetchOnWindowFocus: 'always',
@@ -245,12 +245,12 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
+function ConnectionWizard({ organizationId, gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
     const queryClient = useQueryClient();
     const actionsByEntity = {
         item: {
@@ -274,7 +274,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
         account_role: ['select_account_role', 'retain_account_role_unresolved'],
     };
     const stateOrder = ['setup_available', 'draft_decisions', 'decisions_complete', 'snapshot_required', 'cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready', 'connected'];
-    const discovery = useApiQuery(['integration-wizard-discovery'], api.integrationWizardDiscovery, { fallback: null, enabled: true });
+    const discovery = useApiQuery(['integration-wizard-discovery', organizationId], api.integrationWizardDiscovery, { fallback: null, enabled: true });
     const [runUuid, setRunUuid] = useState('');
     const [saving, setSaving] = useState(false);
     const [saveState, setSaveState] = useState('idle');
@@ -288,7 +288,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
     const [cutoffAt, setCutoffAt] = useState('');
     const [assistantStep, setAssistantStep] = useState(initialAssistantStep);
     const [exceptionSearch, setExceptionSearch] = useState('');
-    const run = useApiQuery(['integration-wizard-preview', runUuid], () => api.integrationWizardPreview(runUuid), {
+    const run = useApiQuery(['integration-wizard-preview', organizationId, runUuid], () => api.integrationWizardPreview(runUuid), {
         fallback: null,
         enabled: Boolean(runUuid),
     });
@@ -296,7 +296,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
         if (!mayAcceptCanonicalDraft(canonicalRunRef.current, incoming, runUuid)) return false;
         canonicalRunRef.current = incoming;
         setCanonicalRun(incoming);
-        queryClient.setQueryData(['integration-wizard-preview', runUuid], incoming);
+        queryClient.setQueryData(['integration-wizard-preview', organizationId, runUuid], incoming);
         return true;
     };
     useEffect(() => {
@@ -461,8 +461,8 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
         link.click(); URL.revokeObjectURL(url);
     }
 
-    if (discovery.isLoading || (runUuid && run.isLoading)) return <Skeleton />;
-    if (discovery.isError || (runUuid && run.isError)) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
+    if (!view && (discovery.isLoading || (runUuid && run.isLoading))) return <div className="wizard-loading" role="status" aria-busy="true"><img src={`${window.SOLASTOCK_BASE_PATH || ''}/imgs/favicon-solastock.svg`} alt="SolaStock" width="32" height="32" /><p>{tr('integration.loading')}</p><Skeleton /></div>;
+    if (!view && (discovery.isError || (runUuid && run.isError))) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
     if (!view) return <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} />;
 
     const totals = view.totals || {};
@@ -470,6 +470,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
     const rows = view.comparison || [];
     if (view.guided_setup) {
         return <GuidedConnectionAssistant
+            loadError={run.error || discovery.error} retryLoad={() => (runUuid ? run.refetch() : discovery.refetch())}
             view={view} runUuid={runUuid} run={runHandle} gate={gate} accountingGate={accountingGate}
             status={status} saving={saving} tr={tr} decisions={displayDecisions} confirmedDecisions={decisions} pendingDecisions={pendingDecisions} rows={rows}
             totals={totals} accounting={accounting} assistantStep={assistantStep}
