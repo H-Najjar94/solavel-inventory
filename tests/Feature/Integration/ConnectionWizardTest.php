@@ -822,6 +822,25 @@ final class ConnectionWizardTest extends TestCase
         $this->assertFalse($run['activation_available']);
         $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->count());
         $this->assertSame($before, $this->mutationCounters());
+
+        $mapping = IntegrationOrganizationMapping::query()->create([
+            'mapping_uuid' => (string) Str::uuid(), 'central_client_id' => 860001,
+            'central_organization_id' => TenantTestManager::ORG_A,
+            'tenant_database_identity' => (string) DB::connection('tenant')->getDatabaseName(),
+            'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A,
+            'contract_version' => 'solastock-journal.v2', 'status' => 'verified_hold',
+            'activation_state' => 'maintenance_hold', 'base_currency_code' => 'JOD',
+            'v2_key_scope_status' => 'provisioned_held', 'current_v2_signing_key_id' => 6001,
+            'currency_verified_at' => now(), 'verified_at' => now(),
+        ]);
+        $this->openActivationGate();
+        $activated = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
+            'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+        $this->assertSame('connected', $activated['state']);
+        $this->assertSame($mapping->mapping_uuid, DB::connection('tenant')->table('integration_connection_wizard_runs')
+            ->where('run_uuid', $run['run_uuid'])->value('organization_mapping_uuid'));
+        $this->assertSame(6, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
+        $this->assertSame('active', IntegrationSetting::firstOrFail()->mode);
     }
 
     #[Test]

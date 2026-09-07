@@ -380,11 +380,17 @@ final class ConnectionWizardService
     public function finalPreview(int $organizationId, string $runUuid): array
     {
         $run = $this->runForOrganization($organizationId, $runUuid);
-        $preview = $this->discover($organizationId);
+        // A reviewed pre-mapping draft remains bound to its frozen pre-mapping
+        // discovery contract while the held immutable scope is provisioned.
+        // Switching discovery modes at that boundary would invalidate the very
+        // snapshot being activated.
+        $preview = $run->organization_mapping_uuid === null
+            ? $this->preMappingReadiness($organizationId)
+            : $this->discover($organizationId);
         $frozen = $run->snapshot_frozen_at !== null;
         $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
         $beforeImageHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
-        if ($frozen && (! hash_equals((string) $run->discovery_manifest_hash, $manifestHash)
+        if ($frozen && $run->state !== 'connected' && (! hash_equals((string) $run->discovery_manifest_hash, $manifestHash)
             || ! hash_equals((string) $run->discovery_before_image_hash, $beforeImageHash)
             || ! hash_equals((string) $run->snapshot_hash, (string) $preview['snapshot_hash']))) {
             $this->fail('snapshot_or_before_image_changed');
@@ -681,7 +687,11 @@ final class ConnectionWizardService
         }
         $mapping = $this->mapping($organizationId);
         DB::connection('tenant')->transaction(function () use ($mapping, $runUuid, $approvalHash, $actorUserId, $organizationId): void {
-            $run = $this->run($mapping, $runUuid, true);
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->organization_mapping_uuid !== null
+                && ! hash_equals((string) $mapping->mapping_uuid, (string) $run->organization_mapping_uuid)) {
+                $this->fail('wizard_run_scope_mismatch');
+            }
             $current = $this->finalPreview($organizationId, $runUuid);
             if ($current['state'] !== 'ready_for_approval'
                 || ! hash_equals((string) $current['approval_payload_hash'], $approvalHash)
@@ -717,16 +727,26 @@ final class ConnectionWizardService
 
         $mapping = $this->mapping($organizationId);
         DB::connection('tenant')->transaction(function () use ($mapping, $organizationId, $runUuid, $approvalHash, $actorUserId): void {
-            $run = $this->run($mapping, $runUuid, true);
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->organization_mapping_uuid !== null
+                && ! hash_equals((string) $mapping->mapping_uuid, (string) $run->organization_mapping_uuid)) {
+                $this->fail('wizard_run_scope_mismatch');
+            }
             if ($run->state === 'connected' && hash_equals((string) $run->approval_payload_hash, $approvalHash)) {
                 return;
             }
-            if ($run->state !== 'approved_maintenance_hold'
-                || ! hash_equals((string) $run->approval_payload_hash, $approvalHash)) {
+            $dualRoleApproved = $run->state === 'activation_ready'
+                && $run->owner_approved_at !== null
+                && $run->accountant_approved_at !== null
+                && hash_equals((string) $run->owner_approval_hash, $approvalHash)
+                && hash_equals((string) $run->accountant_approval_hash, $approvalHash);
+            $legacyApproved = $run->state === 'approved_maintenance_hold'
+                && hash_equals((string) $run->approval_payload_hash, $approvalHash);
+            if (! $dualRoleApproved && ! $legacyApproved) {
                 $this->fail('approved_immutable_preview_required');
             }
             $current = $this->finalPreview($organizationId, $runUuid);
-            if ($current['state'] !== 'ready_for_approval'
+            if (! in_array($current['state'], ['ready_for_approval', 'activation_ready'], true)
                 || ! hash_equals((string) $current['approval_payload_hash'], $approvalHash)) {
                 $this->fail('activation_snapshot_changed');
             }
@@ -745,6 +765,8 @@ final class ConnectionWizardService
             $setting->update(['mode' => 'active', 'meta' => $meta, 'updated_at' => now()]);
             $mapping->update(['status' => 'verified', 'activation_state' => 'active']);
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->update([
+                'organization_mapping_uuid' => $mapping->mapping_uuid,
+                'approval_payload_hash' => $approvalHash,
                 'state' => 'connected', 'activated_at' => now(), 'updated_at' => now(),
             ]);
             $this->audit($runUuid, null, 'organization_connection_activated', null, [
@@ -762,8 +784,35 @@ final class ConnectionWizardService
     ): void {
         $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
             ->where('run_uuid', $runUuid)->where('status', 'selected')->orderBy('id')->lockForUpdate()->get();
+        $approvedRun = DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->first();
+        $snapshot = json_decode((string) ($approvedRun->snapshot_payload ?? ''), true) ?: [];
+        $approvedCandidates = collect($snapshot['comparison'] ?? [])->keyBy('fingerprint');
+        $approvedRoles = AccountRolePolicy::forOperations(json_decode($approvedRun->workflow_allowlist ?: '[]', true));
 
         foreach ($decisions as $decision) {
+            if ($decision->action === 'select_account_role') {
+                $details = json_decode($decision->safe_details ?: '{}', true);
+                $accountId = (int) ($details['selected_record_id'] ?? 0);
+                $approvedCandidate = $approvedCandidates->get($decision->candidate_fingerprint);
+                $role = $decision->entity_type === 'account_role'
+                    ? (string) ($details['account_role'] ?? $approvedCandidate['safe_details']['role'] ?? '') : '';
+                if ($role === '') $this->fail('approved_account_role_scope_invalid');
+                if (! in_array($role, $approvedRoles, true)) continue;
+                $account = DB::connection('tenant')->table('accounts')
+                    ->where('organization_id', $organizationMapping->finance_organization_id)
+                    ->where('id', $accountId)->where('is_active', true)->where('is_postable', true)->first();
+                if (! $account || ! in_array(strtolower((string) $account->type), AccountRolePolicy::ROLE_TYPES[$role] ?? [], true)) {
+                    $this->fail('approved_account_role_invalid');
+                }
+                DB::connection('tenant')->table('integration_account_mappings')->updateOrInsert(
+                    ['organization_id' => $organizationMapping->solastock_organization_id, 'integration' => 'solabooks', 'mapping_type' => $role],
+                    ['solabooks_account_id' => (string) $account->id, 'account_code' => (string) $account->code,
+                        'account_name' => (string) $account->name, 'status' => 'verified',
+                        'notes' => 'Approved connection wizard '.$runUuid, 'last_verified_at' => now(),
+                        'created_at' => now(), 'updated_at' => now()]
+                );
+                continue;
+            }
             if (! in_array($decision->action, [
                 'bind_existing', 'create_solastock_record', 'keep_solastock_authority',
                 'select_authoritative_record', 'resolve_account_category',
@@ -2244,10 +2293,13 @@ final class ConnectionWizardService
             $details['target_unit_name'] = (string) ($selectedUnit['name'] ?? '');
             $details['target_unit_code'] = (string) ($selectedUnit['code'] ?? '');
         }
+        if ($action === 'select_account_role') {
+            $details['account_role'] = (string) ($candidate['safe_details']['role'] ?? '');
+        }
         return collect($details)->only([
             'reason', 'selected_record_id', 'physical_count_reference', 'physical_quantity',
             'accounting_approval_required', 'note', 'conversion_factor', 'source_record_id',
-            'conversion_direction', 'target_unit_name', 'target_unit_code',
+            'conversion_direction', 'target_unit_name', 'target_unit_code', 'account_role',
         ])->map(fn ($value) => is_string($value) ? mb_substr($value, 0, 500) : $value)->all();
     }
 
