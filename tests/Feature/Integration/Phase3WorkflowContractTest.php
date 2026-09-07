@@ -361,6 +361,15 @@ final class Phase3WorkflowContractTest extends TestCase
         // A later full source return must reverse the original GBP snapshot;
         // no rate exists on the return date, and re-pricing would be incorrect.
         $returns = app(\App\Services\Documents\SalesReturnService::class);
+        try {
+            $returns->createDraft(['return_number' => 'FX-PARTIAL', 'shipment_id' => $shipment->id,
+                'return_date' => '2026-07-31', 'reason' => 'Requested one of two shipped units'],
+                [['item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable']]);
+            $this->fail('A partial source return must not silently become a full shipment reversal.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('lines', $exception->errors());
+            $this->assertSame(0, \App\Models\Tenant\SalesReturn::query()->where('return_number', 'FX-PARTIAL')->count());
+        }
         $return = $returns->createDraft(['return_number' => 'FX-RETURN', 'shipment_id' => $shipment->id,
             'return_date' => '2026-07-31', 'reason' => 'Isolated source reversal'], []);
         $returns->post($return);
