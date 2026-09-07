@@ -7,9 +7,14 @@ final class WorkspaceSignature
     public const VERSION = 'finance-stock-workspace.v1';
     public const PATH = '/api/internal/finance-workspace';
 
+    public static function signForPath(string $path, string $body, string $timestamp, string $nonce, string $secret): string
+    {
+        return hash_hmac('sha256', implode("\n", [self::VERSION, 'POST', $path, $timestamp, $nonce, hash('sha256', $body)]), $secret);
+    }
+
     public static function sign(string $body, string $timestamp, string $nonce, string $secret): string
     {
-        return hash_hmac('sha256', implode("\n", [self::VERSION, 'POST', self::PATH, $timestamp, $nonce, hash('sha256', $body)]), $secret);
+        return self::signForPath(self::PATH, $body, $timestamp, $nonce, $secret);
     }
 
     public static function verifies(string $body, string $timestamp, string $nonce, string $signature, string $secret, int $now): bool

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Validation\ValidationException;
 
 final class ConnectionWizardService
@@ -60,6 +61,7 @@ final class ConnectionWizardService
         private readonly IntegrationSafetyHold $safety,
         private readonly SolaBooksItemCatalogBridge $catalogBridge,
         private readonly FinanceReferenceDefaultsService $referenceDefaults,
+        private readonly FinanceConnectionClient $financeConnection,
     ) {}
 
     /** Read-only. No discovery run, counter, nonce, event, or audit is written. */
@@ -124,6 +126,26 @@ final class ConnectionWizardService
         // custom units/categories are never copied.
         $this->referenceDefaults->sync($organizationId, true);
         $preview = $this->discover($organizationId);
+        if (empty($preview['organization_mapping_uuid'])
+            && (bool) config('integration_connection_wizard.automatic_preparation_enabled')) {
+            $identity = $preview['identity'] ?? [];
+            $prepared = $this->financeConnection->command([
+                'client_id' => (int) ($identity['central_client_id'] ?? 0),
+                'organization_id' => $organizationId,
+                'finance_organization_id' => (int) ($identity['finance_organization_id'] ?? 0),
+                'actor_id' => $actorUserId, 'action' => 'connection.prepare',
+                'idempotency_key' => 'connection-prepare-'.$organizationId,
+            ]);
+            $setting = IntegrationSetting::query()->where('organization_id', $organizationId)
+                ->where('integration', 'solabooks')->firstOrFail();
+            $meta = (array) $setting->meta;
+            $meta['api_key_encrypted'] = Crypt::encryptString((string) $prepared['api_key']);
+            $meta['signing_key_id'] = (string) $prepared['signing_key_id'];
+            $meta['signing_secret_encrypted'] = Crypt::encryptString((string) $prepared['signing_secret']);
+            $meta['signing_protocol_version'] = ExternalRequestSignature::VERSION;
+            $setting->update(['mode' => 'connected_pending_mapping', 'meta' => $meta]);
+            $preview = $this->discover($organizationId);
+        }
         $identity = $preview['identity'];
         if ((int) ($identity['central_client_id'] ?? 0) <= 0
             || (int) ($identity['finance_organization_id'] ?? 0) <= 0
@@ -715,12 +737,10 @@ final class ConnectionWizardService
         int $organizationId,
         string $runUuid,
         string $approvalHash,
-        string $activationApprovalId,
         string $confirmation,
         int $actorUserId,
     ): array {
         if (! $this->activationGateReady($organizationId)
-            || ! hash_equals((string) config('integration_connection_wizard.activation_approval_id'), $activationApprovalId)
             || ! hash_equals((string) config('integration_connection_wizard.confirmation_phrase'), $confirmation)) {
             $this->fail('organization_scoped_activation_gate_closed');
         }
@@ -930,7 +950,32 @@ final class ConnectionWizardService
         object $decision,
         string $stockId,
     ): string {
-        $this->fail('finance_catalog_owner_command_required');
+        $record = $this->genericRecord($decision->entity_type, 'solastock', (int) $stockId, $mapping);
+        if (! $record) $this->fail('catalog_source_record_missing');
+        $data = ['entity_type' => $decision->entity_type, 'name' => (string) ($record['name'] ?? '')];
+        if ($decision->entity_type === 'unit') {
+            $unit = DB::connection('tenant')->table('units')->where('organization_id', $mapping->solastock_organization_id)->where('id', $stockId)->first();
+            $data['symbol'] = (string) ($unit->symbol ?? '');
+        }
+        if ($decision->entity_type === 'item') {
+            $item = Item::query()->where('organization_id', $mapping->solastock_organization_id)->findOrFail((int) $stockId);
+            $data += ['sku' => (string) $item->sku, 'tracking_type' => (string) $item->tracking_type,
+                'valuation_method' => (string) $item->costing_method,
+                'category_id' => $this->mappedFinanceIdentity($mapping, 'category', $item->category_id),
+                'unit_id' => $this->mappedFinanceIdentity($mapping, 'unit', $item->base_unit_id)];
+            foreach (['inventory_asset' => 'inventory_asset_account_id', 'cogs' => 'cogs_account_id'] as $role => $field) {
+                $data[$field] = (int) DB::connection('tenant')->table('integration_account_mappings')
+                    ->where('organization_id', $mapping->solastock_organization_id)->where('integration', 'solabooks')
+                    ->where('mapping_type', $role)->where('status', 'verified')->value('solabooks_account_id');
+            }
+        }
+        $result = $this->financeConnection->command([
+            'client_id' => $mapping->central_client_id, 'organization_id' => $mapping->central_organization_id,
+            'finance_organization_id' => $mapping->finance_organization_id,
+            'actor_id' => (int) $decision->actor_user_id, 'action' => 'catalog.create',
+            'idempotency_key' => 'catalog-'.$decision->decision_uuid, 'data' => $data,
+        ]);
+        return (string) ($result['id'] ?? $this->fail('finance_catalog_owner_response_invalid'));
     }
 
     private function mappedFinanceIdentity(
@@ -996,10 +1041,9 @@ final class ConnectionWizardService
             .'-8'.substr($hex, 17, 3).'-'.substr($hex, 20, 12);
     }
 
-    public function pause(int $organizationId, string $runUuid, string $activationApprovalId, int $actorUserId): array
+    public function pause(int $organizationId, string $runUuid, int $actorUserId): array
     {
-        if (! $this->activationGateReady($organizationId)
-            || ! hash_equals((string) config('integration_connection_wizard.activation_approval_id'), $activationApprovalId)) {
+        if (! $this->activationGateReady($organizationId)) {
             $this->fail('organization_scoped_activation_gate_closed');
         }
         $mapping = $this->mapping($organizationId);
@@ -1028,9 +1072,7 @@ final class ConnectionWizardService
 
     private function activationGateReady(int $organizationId): bool
     {
-        if (! (bool) config('integration_connection_wizard.activation_enabled')
-            || ! in_array($organizationId, config('integration_connection_wizard.activation_organization_allowlist', []), true)
-            || (string) config('integration_connection_wizard.activation_approval_id') === '') {
+        if (! (bool) config('integration_connection_wizard.activation_enabled')) {
             return false;
         }
         if (app()->environment('production') && ! (bool) config('integration_connection_wizard.production_phase6b_enabled')) {

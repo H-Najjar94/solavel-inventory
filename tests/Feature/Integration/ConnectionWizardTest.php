@@ -23,6 +23,7 @@ final class ConnectionWizardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config()->set('integration_connection_wizard.automatic_preparation_enabled', false);
         $this->useTenantA();
     }
 
@@ -458,7 +459,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString("saveState === 'conflict'", $assistant);
         $this->assertStringContainsString('aria-modal="true"', $assistant);
         $this->assertStringNotContainsString('approvalAvailable &&', $assistant);
-        $this->assertStringNotContainsString('activateIntegration', $assistant);
+        $this->assertStringContainsString('activateIntegrationWizard', $assistant);
     }
 
     #[Test]
@@ -835,7 +836,7 @@ final class ConnectionWizardTest extends TestCase
         ]);
         $this->openActivationGate();
         $activated = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
-            'STAGING-UAT-APPROVAL', 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+            'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
         $this->assertSame('connected', $activated['state']);
         $this->assertSame($mapping->mapping_uuid, DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('run_uuid', $run['run_uuid'])->value('organization_mapping_uuid'));
@@ -973,8 +974,6 @@ final class ConnectionWizardTest extends TestCase
     private function openActivationGate(): void
     {
         config()->set('integration_connection_wizard.activation_enabled', true);
-        config()->set('integration_connection_wizard.activation_organization_allowlist', [TenantTestManager::ORG_A]);
-        config()->set('integration_connection_wizard.activation_approval_id', 'STAGING-UAT-APPROVAL');
         config()->set('integration_connection_wizard.receiver_confirmed_enabled', true);
         config()->set('integration_safety.solabooks_delivery_enabled', true);
         config()->set('integration_safety.legacy_journal_contract_enabled', false);

@@ -200,7 +200,6 @@ class IntegrationController extends ApiController
     {
         $data = $request->validate([
             'approval_payload_hash' => ['required', 'regex:/^[a-f0-9]{64}$/'],
-            'activation_approval_id' => ['required', 'string', 'max:120'],
             'confirmation' => ['required', 'string', 'max:100'],
         ]);
 
@@ -208,16 +207,14 @@ class IntegrationController extends ApiController
 
         return $this->success($wizard->activate(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'],
-            $data['activation_approval_id'], $data['confirmation'], (int) auth()->id()
+            $data['confirmation'], (int) auth()->id()
         ));
     }
 
     public function pauseWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
     {
-        $data = $request->validate(['activation_approval_id' => ['required', 'string', 'max:120']]);
-
         return $this->success($wizard->pause(
-            $this->context->idOrFail(), $run, $data['activation_approval_id'], (int) auth()->id()
+            $this->context->idOrFail(), $run, (int) auth()->id()
         ));
     }
 
