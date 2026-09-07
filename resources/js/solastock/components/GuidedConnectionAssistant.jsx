@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import AccountingMappingTable, { savedAccount, recordText } from './AccountingMappingTable.jsx';
+import { useI18n } from '../i18n/context.jsx';
 import { api } from '../services/api.js';
 
 const unique = (values) => [...new Set(values || [])];
@@ -25,8 +27,9 @@ export default function GuidedConnectionAssistant({
     assistantStep, setAssistantStep, allowedActions, canEdit, editableState,
     decide, undoDecision, bulkSelection, toggleBulk, bulk, exportComparison,
     start, runAction, cutoffAt, setCutoffAt, saveState, retrySave, reloadLatest,
-    organizationName, connectionAccess,
+    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad,
 }) {
+    const { locale } = useI18n();
     const guided = view.guided_setup || {};
     const checks = guided.checks || {};
     const groups = guided.exception_groups || {};
@@ -57,8 +60,9 @@ export default function GuidedConnectionAssistant({
     const ownerRows = rowsFor('items', 'units', 'warehouses', 'parties', 'currencies')
         .filter((row) => row.decision_class !== 'accountant_decision');
     const ownerPending = ownerRows.filter((row) => !confirmedDecisions.has(row.fingerprint));
-    const accountingRows = rowsFor('accounting').filter((row) => row.decision_class === 'accountant_decision');
-    const accountingPending = accountingRows.filter((row) => !confirmedDecisions.has(row.fingerprint));
+    const accountingRows = rows.filter((row) => row.entity_type === 'account_role');
+    const taxReviewRows = rowsFor('accounting').filter((row) => row.entity_type !== 'account_role');
+    const accountingPending = accountingRows.filter((row) => !savedAccount(row, confirmedDecisions));
     const physicalRows = rowsFor('inventory_quantities').filter((row) => {
         const action = confirmedDecisions.get(row.fingerprint)?.action;
         return !['classify_service_non_inventory', 'exclude_initial_connection'].includes(action);
@@ -68,6 +72,8 @@ export default function GuidedConnectionAssistant({
         return value === undefined || value === null || value === '';
     });
     const cutoffRows = rowsFor('cutoff_documents');
+    const historyRows = rowsFor('historical_events');
+    const cutoffPending = [...cutoffRows, ...historyRows].filter(row => !confirmedDecisions.has(row.fingerprint));
     const exactRows = ownerRows.filter((row) => row.classification === 'exact_candidate_requires_owner_review'
         && !confirmedDecisions.has(row.fingerprint));
     const currentOwner = ownerPending[Math.min(ownerCursor, Math.max(0, ownerPending.length - 1))];
@@ -75,7 +81,8 @@ export default function GuidedConnectionAssistant({
     const currentCount = physicalPending[Math.min(countCursor, Math.max(0, physicalPending.length - 1))];
     const scenario = guided.customer_scenario || 'previously_separate';
     const scenarioText = tr(`integration.focus.scenario.${scenario}`);
-    const totalSteps = 6;
+    const steps = [1, ...(ownerRows.length ? [2] : []), ...(physicalRows.length ? [3] : []), 4, 5, 6];
+    const totalSteps = steps.length;
     const phase = task === 1 ? 1 : task === 6 ? 3 : 2;
     const resolvedOwner = ownerRows.length - ownerPending.length;
     const resolvedCounts = physicalRows.length - physicalPending.length;
@@ -134,7 +141,10 @@ export default function GuidedConnectionAssistant({
         return () => window.clearTimeout(timer);
     }, [saveState]);
 
-    const go = (next) => setTask(Math.min(totalSteps, Math.max(1, next)));
+    const go = (next) => {
+        const target = Math.min(6, Math.max(1, next));
+        setTask(steps.includes(target) ? target : target < task ? [...steps].reverse().find(step => step < target) || 1 : steps.find(step => step > target) || 6);
+    };
     const formatNumber = (value, digits = 2) => Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
     const baseCurrency = accounting.base_currency || guided.currency_summary?.base_currency || '';
     const formatMoney = (value) => `${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${baseCurrency === 'JOD' ? tr('integration.assistant.jod') : baseCurrency}`;
@@ -437,7 +447,7 @@ export default function GuidedConnectionAssistant({
                         </small>}
                     </div> : <small className="focus-match-reason">{exact ? tr('integration.assistant.identicalNameSku') : tr(`integration.focus.question.${row.entity_type}`)}</small>}
                 </> : <>
-                    <strong><bdi>{row.solabooks?.name || row.solastock?.name || '—'}</bdi></strong>
+                    <strong><bdi>{recordText(row.solabooks?.name || row.solastock?.name || row.solabooks?.code || row.solastock?.code, locale) || tr("integration.review.record_details_unavailable_refresh_discovery")}</bdi></strong>
                     <span><bdi>{row.solabooks?.sku || row.solabooks?.code || '—'}</bdi>{row.solastock?.name && <> · {tr('integration.focus.proposedMatch')}: <bdi>{row.solastock.name}</bdi></>}</span>
                     <small>{tr(`integration.focus.question.${row.entity_type}`)}</small>
                 </>}
@@ -600,14 +610,16 @@ export default function GuidedConnectionAssistant({
             <h1 ref={headingRef} tabIndex="-1">{tr('integration.focus.preparedTitle')}</h1>
             <p>{tr('integration.focus.preparedIntro')}</p>
             <ul className="focus-check-list">
-                <li>✓ {tr('integration.focus.organizationReady')}</li>
-                <li>✓ {tr('integration.focus.baseCurrency', { currency: guided.currency_summary?.base_currency || '—' })}</li>
-                <li>✓ {tr('integration.focus.taxesReady')}</li>
-                <li>✓ {tr('integration.focus.accountsReady')}</li>
+                <li>{checks.organization_verified ? '✓' : '!'} {tr('integration.focus.organizationReady')}</li>
+                <li>{checks.base_currency_inherited ? '✓' : '!'} {tr('integration.focus.baseCurrency', { currency: guided.currency_summary?.base_currency || tr("integration.review.not_configured_review_finance_settings") })}</li>
+                <li>{checks.tax_exceptions ? '!' : '✓'} {tr('integration.focus.taxesReady')} · {checks.tax_exceptions || 0} {tr("integration.review.need_review")}</li>
+                <li>{resolvedAccounting === accountingRows.length ? '✓' : '!'} {resolvedAccounting}/{accountingRows.length} {tr("integration.review.valid_saved_account_selections")}</li>
             </ul>
-            <div className="focus-attention"><strong>{tr('integration.focus.needsReview', { count: 2 })}</strong><p>{tr('integration.focus.needsReviewText')}</p></div>
+            {guided.setup_path === 'fresh_workspace' && <p className="wizard-account-note">{tr("integration.review.no_catalog_stock_activity_financial_documents_or")}</p>}
+            <div className="focus-attention"><strong>{ownerPending.length + accountingPending.length + physicalPending.length} {tr("integration.review.choices_need_review")}</strong><p>{tr('integration.focus.needsReviewText')}</p></div>
+            {!!guided.automatic_exclusions?.length && <p>{tr("integration.review.unused_configured_currencies_stay_outside_this_connection")}<bdi>{guided.automatic_exclusions.map(row => row.code).join(', ')}</bdi></p>}
             <details><summary>{tr('integration.focus.showDetails')}</summary><p>{tr('integration.focus.automaticDetails', { accounts: checks.accounts_resolved || 0, taxes: checks.taxes_resolved || 0 })}</p></details>
-            {footer(tr('integration.focus.startReview'), () => go(2), { hideBack: true })}
+            {footer(tr(guided.setup_path === 'fresh_workspace' ? 'integration.review.review_finance_accounts' : 'integration.focus.startReview'), () => go(2), { hideBack: true })}
         </section>;
 
         if (task === 2) return <section className="focus-card focus-list-card">
@@ -720,32 +732,19 @@ export default function GuidedConnectionAssistant({
         </section>;
 
         if (task === 4) return <section className="focus-card">
-            {!accountingGate.allowed ? <div className="focus-accountant-handoff">
-                <div className="focus-accountant-intro"><span className="focus-accountant-icon" aria-hidden="true"><SectionIcon section="currencies" /></span><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2><p>{tr('integration.focus.accountantRequiredText', { count: accountingPending.length })}</p></div></div>
-                <div className="focus-accountant-roles" aria-label={tr('integration.focus.accountingRolesWaiting')}>
-                    {accountingPending.map((row) => <span key={row.fingerprint}>{tr(`integration.mapping.${row.safe_details?.role}`, {}, row.safe_details?.role)}</span>)}
-                </div>
-                <div className="focus-accountant-next"><strong>{tr('integration.focus.accountingAccessBlockedTitle')}</strong>
-                    <p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p>
-                </div>
-            </div> : !accountReviewStarted ? <div className="focus-complete">
-                <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountantRequired')}</h2>
-                <p>{tr('integration.focus.accountReviewOwnerText', { count: accountingPending.length })}</p>
-                <button type="button" className="btn btn--primary" onClick={() => setAccountReviewStarted(true)}>{tr('integration.focus.continueAccountingReview')}</button>
-            </div> : <><div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.accountingListTitle')}</h2><p>{tr('integration.focus.accountingCompleteText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: accountingPending.length })}</bdi></strong></div><div className="focus-decision-list">{accountingRows.map(compactDecisionRow)}</div></>}
-            {(accountReviewStarted || !accountingGate.allowed) && footer(tr(accountingGate.allowed ? 'integration.focus.continue' : 'integration.focus.viewResultPreview'), accountingGate.allowed ? saveAccountingRecommendationsAndContinue : () => go(6), {
-                disabled: accountingGate.allowed && (accountingPending.some((row) => !recommendedChoice(row)
-                    || manualChoiceRows.has(row.fingerprint)
-                    || excludedRecommendations.has(row.fingerprint))
-                    && !accountingPending.some((row) => recommendedChoice(row)
-                        && !manualChoiceRows.has(row.fingerprint)
-                        && !excludedRecommendations.has(row.fingerprint))),
-            })}
+            <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr("integration.review.review_finance_accounts")}</h2>
+                <p>{tr("integration.review.choose_the_finance_accounts_used_by_inventory")}</p></div>
+                <strong><bdi>{resolvedAccounting}/{accountingRows.length}</bdi> {tr("integration.review.valid_saved_selections")}</strong></div>
+            {!accountingGate.allowed && <div className="focus-accountant-handoff" role="status">{tr('integration.focus.accountingAccessBlockedTitle')}<p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p></div>}
+            <AccountingMappingTable rows={accountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
+            {taxReviewRows.map(compactDecisionRow)}
+            {footer(tr('integration.focus.continue'), () => go(5), { disabled: accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
         </section>;
 
         if (task === 5) return <section className="focus-card">
             <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.startDateTitle')}</h2>
             <p>{tr('integration.focus.startDateExplanation')}</p>
+            {[...cutoffRows, ...historyRows].map(row => <div className="wizard-account-row" key={row.fingerprint}><div><strong>{recordText(row.solabooks?.name || row.solastock?.name || row.solabooks?.code || row.solastock?.code, locale)}</strong><small>{row.safe_details?.document_type || row.safe_details?.event_type} · {row.safe_details?.status}</small></div><p>{row.entity_type === 'historical_event' ? tr("integration.review.this_event_stays_excluded_it_will_not") : tr("integration.review.review_this_existing_document_against_the_connection")}</p><button type="button" className="btn" disabled={!gate.allowed || saving || !editableState || confirmedDecisions.has(row.fingerprint)} onClick={() => choose(row, row.entity_type === 'historical_event' ? 'retain_historical_exclusion' : 'review_cutoff_document')}>{confirmedDecisions.has(row.fingerprint) ? tr("integration.review.reviewed") : tr("integration.review.confirm_review")}</button></div>)}
             <div className="focus-attention"><strong>{tr('integration.focus.openDocuments', { count: cutoffRows.length })}</strong><p>{tr('integration.focus.openDocumentsText')}</p></div>
             <label className="field"><span className="field-label">{tr('integration.focus.startDateLabel')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label>
             {run.data?.state !== 'cutoff_review' && <p className="focus-draft-note">{tr('integration.focus.startDatePrerequisites')}</p>}
@@ -754,10 +753,13 @@ export default function GuidedConnectionAssistant({
                 if (run.data?.state === 'snapshot_required') return runAction(() => api.freezeIntegrationWizardSnapshot(runUuid, { expected_lock_version: run.data.lock_version }), 'integration.wizard.snapshotFrozen');
                 if (run.data?.state === 'cutoff_review' && cutoffAt) return runAction(() => api.reviewIntegrationWizardCutoff(runUuid, { cutoff_at: cutoffAt, physical_counts: [], unexplained_variance: '0.00', expected_lock_version: run.data.lock_version }), 'integration.wizard.cutoffReviewed');
                 return go(6);
-            }, { disabled: run.data?.state === 'cutoff_review' && !cutoffAt })}
+            }, { disabled: saving || cutoffPending.length > 0 || (run.data?.state === 'cutoff_review' && !cutoffAt) })}
         </section>;
 
         const blockers = [
+            !checks.base_currency_inherited && tr("integration.review.the_finance_base_currency_must_be_configured"),
+            ownerPending.length && tr("integration.review.business_record_decisions_remain_incomplete"),
+            !view.cutoff_at && tr("integration.review.the_start_date_requires_review"),
             physicalPending.length && tr('integration.focus.blocker.count'),
             accountingPending.length && tr('integration.focus.blocker.accounting', { count: accountingPending.length }),
             cutoffRows.length && !view.cutoff_at && tr('integration.focus.blocker.documents'),
@@ -767,13 +769,17 @@ export default function GuidedConnectionAssistant({
         const ready = blockers.length === 0 && Number(totals.total_quantity_difference || 0) === 0;
         return <section className="focus-card focus-result">
             <div className={`focus-outcome ${ready ? 'is-ready' : 'is-warning'}`}><h2 ref={headingRef} tabIndex="-1">{tr(ready ? 'integration.focus.ready' : 'integration.focus.notReady')}</h2><p>{tr(ready ? 'integration.focus.readyText' : 'integration.focus.notReadyText')}</p></div>
+            <p>{tr("integration.review.solastock_owns_quantities_and_inventory_operations_solacount")}</p>
+            <details><summary>{tr("integration.review.review_selected_accounts")}</summary><AccountingMappingTable rows={accountingRows} decisions={confirmedDecisions} choose={choose} canEdit={false} saving={saving} /></details>
+            {['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(view.state) && <section className="wizard-final-approvals"><h3>{tr("integration.review.explicit_approval")}</h3><p>{tr("integration.review.approval_records_this_review_delivery_remains_subject")}</p><label className="field"><span><input type="checkbox" checked={Boolean(confirmation)} disabled={saving || Boolean(view.owner_approved_at)} onChange={event => setConfirmation(event.target.checked ? "Reviewed inventory authority and connection scope" : "")} /> {tr("integration.review.i_reviewed_the_inventory_authority_accounts_and")}</span></label><div className="doc-actions"><button type="button" className="btn btn--primary" disabled={!gate.allowed || !view.review_ready || saving || !confirmation || Boolean(view.owner_approved_at)} onClick={() => runAction(() => api.approveIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash, confirmation }), 'integration.wizard.ownerApproved')}>{view.owner_approved_at ? tr("integration.review.owner_review_approved") : tr('integration.wizard.ownerApprove')}</button><button type="button" className="btn btn--primary" disabled={!accountingGate.allowed || !view.review_ready || saving || Boolean(view.accountant_approved_at)} onClick={() => runAction(() => api.accountantApproveIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash }), 'integration.wizard.accountantApproved')}>{view.accountant_approved_at ? tr("integration.review.accounting_review_approved") : tr('integration.wizard.accountantApprove')}</button></div></section>}
             {!ready && <ol className="focus-blockers">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ol>}
-            <div className="focus-result-summary"><div><span>{tr('integration.focus.quantityDifference')}</span><strong><bdi>{formatNumber(totals.total_quantity_difference, 4)}</bdi></strong></div><div><span>{tr('integration.focus.valueDifference')}</span><strong><bdi>{formatMoney(totals.total_valuation_difference)}</bdi></strong></div><div><span>{tr('integration.focus.startDateLabel')}</span><strong><bdi>{view.cutoff_at || '—'}</bdi></strong></div></div>
+            <div className="focus-result-summary"><div><span>{tr('integration.focus.quantityDifference')}</span><strong><bdi>{formatNumber(totals.total_quantity_difference, 4)}</bdi></strong></div><div><span>{tr('integration.focus.valueDifference')}</span><strong><bdi>{formatMoney(totals.total_valuation_difference)}</bdi></strong></div><div><span>{tr('integration.focus.startDateLabel')}</span><strong><bdi>{view.cutoff_at || tr("integration.review.not_reviewed")}</bdi></strong></div></div>
             {footer(tr('integration.focus.backToTasks'), () => go(blockers[0] === tr('integration.focus.blocker.count') ? 3 : 2), { disabled: false })}
         </section>;
     };
 
     return <div className="wizard focus-wizard" aria-live="polite">
+        {loadError && <div role="alert" className="focus-attention">{tr("integration.loadFailed")} <button type="button" className="btn" onClick={retryLoad}>{tr("integration.retry")}</button></div>}
         <section className="focus-overview">
             <div><span className="focus-overview-kicker">{tr('integration.focus.overviewKicker')}</span><h1>{tr('integration.focus.title')}</h1><p>{tr('integration.focus.subtitle')}</p></div>
             <div className="focus-overview-context"><span>{tr('integration.focus.organization')}</span><strong><bdi>{organizationName}</bdi></strong><small>{scenarioText}</small></div>
@@ -789,9 +795,9 @@ export default function GuidedConnectionAssistant({
             </button>)}
         </nav>
         <header className="focus-header">
-            <div><span>{tr('integration.focus.stepOf', { current: task, total: totalSteps })}</span><strong>{taskLabels[task - 1]}</strong></div>
-            <span>{tr('integration.focus.stepsRemaining', { count: totalSteps - task })}</span>
-            <details className="focus-all-steps"><summary>{tr('integration.focus.allSteps')}</summary><ol>{taskLabels.map((label, index) => <li key={label}><button type="button" onClick={() => go(index + 1)} disabled={index + 1 > task}>{label}</button></li>)}</ol></details>
+            <div><span>{tr('integration.focus.stepOf', { current: steps.indexOf(task) + 1, total: totalSteps })}</span><strong>{taskLabels[task - 1]}</strong></div>
+            <span>{tr('integration.focus.stepsRemaining', { count: totalSteps - steps.indexOf(task) - 1 })}</span>
+            <details className="focus-all-steps"><summary>{tr('integration.focus.allSteps')}</summary><ol>{taskLabels.map((label, index) => steps.includes(index + 1) && <li key={label}><button type="button" onClick={() => go(index + 1)} disabled={index + 1 > task}>{label}</button></li>)}</ol></details>
         </header>
         <div className="focus-safety-bar">{tr('integration.focus.safety')} {technical}</div>
         <div className="focus-workspace">

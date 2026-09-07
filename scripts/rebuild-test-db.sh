@@ -116,7 +116,8 @@ for db in "$TENANT_A" "$TENANT_B"; do
   "${MYSQL[@]}" "$db" <<'SQL'
 CREATE TABLE IF NOT EXISTS organizations (
   id BIGINT UNSIGNED PRIMARY KEY,
-  central_org_id BIGINT UNSIGNED NOT NULL
+  central_org_id BIGINT UNSIGNED NOT NULL,
+  base_currency_id BIGINT UNSIGNED NULL
 );
 CREATE TABLE IF NOT EXISTS accounts (
   id BIGINT UNSIGNED PRIMARY KEY,
@@ -126,6 +127,17 @@ CREATE TABLE IF NOT EXISTS accounts (
   type VARCHAR(32) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   is_postable TINYINT(1) NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS currencies (
+  id BIGINT UNSIGNED PRIMARY KEY,
+  code VARCHAR(3) NOT NULL,
+  name VARCHAR(191) NULL,
+  is_active TINYINT NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS org_account_defaults (
+  organization_id BIGINT UNSIGNED PRIMARY KEY,
+  inventory_asset_account_id BIGINT UNSIGNED NULL,
+  purchases_account_id BIGINT UNSIGNED NULL
 );
 CREATE TABLE IF NOT EXISTS inventory_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

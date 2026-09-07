@@ -577,9 +577,9 @@ final class ConnectionWizardTest extends TestCase
     public function unit_conversion_requires_a_complete_equation_and_remains_an_idempotent_draft_only_decision(): void
     {
         $this->seedConnectionFixture(false);
-        DB::connection('tenant')->table('units')->insert([
-            'id' => 7001, 'organization_id' => 14, 'code' => 'BOX', 'name' => 'Box',
-            'symbol' => 'box', 'kind' => 'count', 'is_active' => 1,
+        DB::connection('tenant')->table('inventory_units')->insert([
+            'id' => 7001, 'name' => 'Box',
+            'symbol' => 'box',
             'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::connection('tenant')->table('inventory_items')->insert([
@@ -647,7 +647,7 @@ final class ConnectionWizardTest extends TestCase
     public function guided_setup_auto_resolves_finance_authority_and_keeps_only_real_exceptions(): void
     {
         $rows = [
-            $this->guidedRow('account_role', 'candidate_requires_accountant_approval', 'account-ok', ['10'], ['role' => 'inventory_asset']),
+            $this->guidedRow('account_role', 'candidate_requires_accountant_approval', 'account-ok', ['10'], ['role' => 'inventory_asset', 'current_mapping_valid' => true]),
             $this->guidedRow('account_role', 'unresolved_account_role', 'account-missing', [], ['role' => 'grni']),
             $this->guidedRow('tax', 'owner_review_required', 'tax-ok', ['20'], ['active' => true]),
             $this->guidedRow('category', 'owner_review_required', 'category-ok', ['21'], ['deterministic_reference_match' => true]),
@@ -715,6 +715,112 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame(2, $inventoryRole['safe_details']['candidate_count']);
         $this->assertSame([], $inventoryRole['solabooks_record_ids']);
         $this->assertContains($inventoryRole['fingerprint'], $preview['guided_setup']['exception_groups']['accounting']);
+    }
+
+    #[Test]
+    public function account_selection_is_explicit_scoped_persistent_and_not_accounting_approval(): void
+    {
+        $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('accounts')->insert([
+            ['id' => 9101, 'organization_id' => 14, 'code' => 'INV-A', 'name' => 'Inventory A', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+            ['id' => 9102, 'organization_id' => 14, 'code' => 'INV-B', 'name' => 'Inventory B', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+            ['id' => 9103, 'organization_id' => 14, 'code' => 'EXP', 'name' => 'Expense', 'type' => 'expense', 'is_active' => 1, 'is_postable' => 1],
+            ['id' => 9104, 'organization_id' => 99, 'code' => 'OTHER', 'name' => 'Other inventory', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+        ]);
+        $beforeMappings = DB::connection('tenant')->table('integration_account_mappings')->get()->toJson();
+        $wizard = app(ConnectionWizardService::class);
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $preview = $wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid']);
+        $row = collect($preview['comparison'])->first(fn ($row) => ($row['safe_details']['role'] ?? null) === 'inventory_asset');
+        $this->assertSame(['9101', '9102'], array_column($row['safe_details']['available_finance_accounts'], 'id'));
+        $this->assertNull($row['safe_details']['recommended_account']);
+        $this->assertSame(0, $preview['accounting_selections']['valid_saved']);
+        $saved = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $row['fingerprint'], 'select_account_role', [], [],
+            ['selected_record_id' => '9102'], 7002, $preview['lock_version'], $row['candidate_before_hash'], false, true);
+        $reopened = $wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid']);
+        $this->assertSame(1, $reopened['accounting_selections']['valid_saved']);
+        $this->assertFalse($reopened['accounting_selections']['approved']);
+        $this->assertSame('9102', collect($reopened['decisions'])->first()['safe_details']['selected_record_id']);
+        $this->assertSame($beforeMappings, DB::connection('tenant')->table('integration_account_mappings')->get()->toJson());
+        $this->expectException(ValidationException::class);
+        $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $row['fingerprint'], 'select_account_role', [], [],
+            ['selected_record_id' => '9104'], 7002, $saved['lock_version'], $row['candidate_before_hash'], false, true);
+    }
+
+    #[Test]
+    public function zero_balance_catalog_still_requires_existing_business_review(): void
+    {
+        $this->seedConnectionFixture(false);
+        $preview = app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A);
+        $this->assertSame('existing_business', $preview['guided_setup']['setup_path']);
+        $this->assertSame('previously_separate', $preview['guided_setup']['customer_scenario']);
+        $this->assertTrue($preview['guided_setup']['business_record_evidence']['finance']['inventory_items']);
+    }
+
+    #[Test]
+    public function verified_defaults_are_proposals_and_valid_custom_mappings_take_priority(): void
+    {
+        $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('accounts')->insert([
+            ['id' => 9201, 'organization_id' => 14, 'code' => 'INV-DEFAULT', 'name' => 'Inventory default', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+            ['id' => 9202, 'organization_id' => 14, 'code' => 'INV-CUSTOM', 'name' => 'Inventory custom', 'type' => 'asset', 'is_active' => 1, 'is_postable' => 1],
+        ]);
+        DB::connection('tenant')->table('org_account_defaults')->insert(['organization_id' => 14, 'inventory_asset_account_id' => 9201]);
+        $wizard = app(ConnectionWizardService::class);
+        $role = fn () => collect($wizard->discover(TenantTestManager::ORG_A)['comparison'])->first(fn ($row) => ($row['safe_details']['role'] ?? null) === 'inventory_asset');
+        $this->assertSame('9201', $role()['safe_details']['recommended_account']['id']);
+        $this->assertFalse($role()['safe_details']['current_mapping_valid']);
+        DB::connection('tenant')->table('integration_account_mappings')->where('mapping_type', 'inventory_asset')->update(['solabooks_account_id' => '9202']);
+        $this->assertSame('9202', $role()['safe_details']['recommended_account']['id']);
+        $this->assertTrue($role()['safe_details']['current_mapping_valid']);
+        $this->assertSame(9201, (int) DB::connection('tenant')->table('org_account_defaults')->value('inventory_asset_account_id'));
+        DB::connection('tenant')->table('accounts')->where('id', 9202)->update(['is_active' => 0]);
+        $this->assertTrue($role()['safe_details']['current_mapping_invalid']);
+        $this->assertSame('9201', $role()['safe_details']['recommended_account']['id']);
+    }
+
+    #[Test]
+    public function empty_workspace_completes_review_without_creating_mappings_or_releasing_events(): void
+    {
+        $this->seedConnectionFixture(false);
+        DB::connection('tenant')->table('currencies')->insert(['id'=>9901,'code'=>'JOD','name'=>'Jordanian Dinar']);
+        DB::connection('tenant')->table('organizations')->where('id',14)->update(['base_currency_id'=>9901]);
+        DB::connection('tenant')->table('items')->delete();
+        DB::connection('tenant')->table('inventory_items')->delete();
+        DB::connection('tenant')->table('integration_account_mappings')->delete();
+        $types = ['inventory_asset'=>'asset','cogs'=>'expense','grni'=>'liability','opening_offset'=>'equity',
+            'adjustment_gain'=>'revenue','adjustment_loss'=>'expense','landed_cost_clearing'=>'asset',
+            'transfer_clearing'=>'asset','accounts_receivable'=>'asset','accounts_payable'=>'liability',
+            'input_tax'=>'asset','output_tax'=>'liability','rounding'=>'expense','sales_revenue'=>'revenue'];
+        $ids = [];
+        foreach ($types as $role => $type) {
+            $id = 9300 + count($ids); $ids[$role] = (string) $id;
+            DB::connection('tenant')->table('accounts')->insert(['id'=>$id,'organization_id'=>14,'code'=>(string)$id,
+                'name'=>str_replace('_',' ',$role),'type'=>$type,'is_active'=>1,'is_postable'=>1]);
+        }
+        $wizard = app(ConnectionWizardService::class);
+        $before = $this->mutationCounters();
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $this->assertSame('fresh_workspace', $run['guided_setup']['setup_path']);
+        foreach ($run['comparison'] as $candidate) {
+            if ($candidate['entity_type'] !== 'account_role') continue;
+            $run = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+                'select_account_role', $candidate['solastock_record_ids'], $candidate['solabooks_record_ids'],
+                ['selected_record_id'=>$ids[$candidate['safe_details']['role']]], 7002, $run['lock_version'],
+                $candidate['candidate_before_hash'], false, true);
+        }
+        $this->assertSame('decisions_complete', $run['state']);
+        $this->assertSame(14, $run['accounting_selections']['valid_saved']);
+        $run = $wizard->requestSnapshot(TenantTestManager::ORG_A, $run['run_uuid'], $run['lock_version'], 7001);
+        $run = $wizard->freezeSnapshot(TenantTestManager::ORG_A, $run['run_uuid'], $run['lock_version'], 7001);
+        $run = $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], now()->toDateTimeString(), [], '0', $run['lock_version'], 7001);
+        $run = $wizard->approveRole(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'], 'owner', 7001, true);
+        $this->assertSame('owner_approved', $run['state']);
+        $run = $wizard->approveRole(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'], 'accountant', 7002, true);
+        $this->assertSame('activation_ready', $run['state']);
+        $this->assertFalse($run['activation_available']);
+        $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->count());
+        $this->assertSame($before, $this->mutationCounters());
     }
 
     private function seedConnectionFixture(bool $withMapping = true): array
