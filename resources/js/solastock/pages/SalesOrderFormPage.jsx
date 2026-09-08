@@ -9,6 +9,7 @@ import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx'
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, CustomerPicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
 import { useI18n } from '../i18n/context.jsx';
+import { DocumentCurrencyPicker } from '../components/DocumentCurrencyPicker.jsx';
 
 const emptyLine = () => ({ item_id: null, ordered_qty: '', unit_price: '', discount_rate: '', tax_rate: '', tax_code: '' });
 
@@ -35,7 +36,7 @@ export default function SalesOrderFormPage() {
         if (isEdit && existing.data?.sales_order) {
             const s = existing.data.sales_order;
             if (s.status !== 'draft') { toast.push(t('salesOrders.messages.onlyDraftEditable', 'Only draft sales orders can be edited.'), 'error'); nav(`/sales-orders/${id}`); return; }
-            setHeader({ order_number: s.order_number, customer_id: s.customer_id ?? null, customer_name: s.customer_name ?? '', warehouse_id: s.warehouse_id, order_date: s.order_date?.slice(0, 10), requested_ship_date: s.requested_ship_date?.slice(0, 10) ?? '', notes: s.notes ?? '' });
+            setHeader({ order_number: s.order_number, customer_id: s.customer_id ?? null, customer_name: s.customer_name ?? '', warehouse_id: s.warehouse_id, currency_code: s.integration_currency_code ?? '', order_date: s.order_date?.slice(0, 10), requested_ship_date: s.requested_ship_date?.slice(0, 10) ?? '', notes: s.notes ?? '' });
             setLines((s.lines ?? []).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, unit_price: l.unit_price, discount_rate: l.discount_rate ?? '', tax_rate: l.tax_rate ?? '', tax_code: l.tax_code ?? '' })));
         }
     }, [isEdit, existing.data]);
@@ -85,6 +86,7 @@ export default function SalesOrderFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
+                <DocumentCurrencyPicker value={header.currency_code} onChange={currency_code => setHeader(current => ({...current, currency_code}))} error={errors.currency_code} />
                 <Field label={t('salesOrders.form.orderNumber', 'Order number')} required error={errors.order_number}><input className="input" value={header.order_number} onChange={(e) => setHeader({ ...header, order_number: e.target.value })} /></Field>
                 <Field label={t('salesOrders.common.customer', 'Customer')} error={errors.customer_id}><CustomerPicker value={header.customer_id} onChange={(v) => setHeader({ ...header, customer_id: v })} /></Field>
                 <Field label={t('salesOrders.form.customerName', 'Customer name')} error={errors.customer_name}><input className="input" value={header.customer_name} onChange={(e) => setHeader({ ...header, customer_name: e.target.value })} placeholder={t('salesOrders.form.customerNamePlaceholder', 'Optional override')} /></Field>

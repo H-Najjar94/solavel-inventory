@@ -277,6 +277,13 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.cancel');
 
     // ── Goods Receipts (GRN → stock IN via service) ──
+    Route::get('/finance-sources/suppliers', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'suppliers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.suppliers');
+    Route::get('/finance-sources/customers', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'customers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.customers');
+    Route::get('/finance-sources/receipts', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipts'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipts');
+    Route::get('/finance-sources/receipts/{goods_receipt}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipt'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipt');
+    Route::get('/finance-sources/shipments', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipments'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipments');
+    Route::get('/finance-sources/shipments/{shipment}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipment'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipment');
+
     Route::get('/goods-receipts', [GoodsReceiptController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.index');
     Route::get('/goods-receipts/{goods_receipt}', [GoodsReceiptController::class, 'show'])
