@@ -145,7 +145,14 @@ class IntegrationStatusService
             $authoritativeState = 'unavailable';
         }
 
-        $deliveryEnabled = $safety->deliveryEnabledFor($orgId);
+        $activated = $mode === 'active' && $organizationMapping?->status === 'verified'
+            && $organizationMapping?->activation_state === 'active';
+        $deliveryEnabled = $safety->deliveryEnabledFor($orgId) && $activated
+            && data_get($settings->meta, 'transport_enabled') === true;
+        if ($deliveryEnabled) {
+            try { app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($organizationMapping); }
+            catch (\Throwable) { $deliveryEnabled = false; }
+        }
         $workerEnabled = $safety->workerEnabledFor($orgId);
         $health = match (true) {
             ! $deliveryEnabled => 'maintenance_hold',
@@ -211,7 +218,7 @@ class IntegrationStatusService
             'setup_status' => $setupDecision['allowed'] ? 'available' : 'unavailable',
             'setup_status_reason' => $setupDecision['reason_code'],
             'draft_status' => $draftStatus,
-            'activation_status' => 'safely_paused',
+            'activation_status' => $activated ? 'enabled' : 'safely_paused',
             'delivery_status' => $deliveryEnabled ? 'enabled' : 'disabled',
             'connection_state' => $connectionState,
             'connection_wizard' => $wizardRun ? [
