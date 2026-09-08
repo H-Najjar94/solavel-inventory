@@ -1,4 +1,5 @@
 export const en = {
+    'documents.transactionCurrency': 'Transaction currency',
     'document.confirmPostTitle': 'Post :name?',
     'document.confirmPostMessage': 'Posting writes stock movements to the inventory ledger and locks this document. It cannot be edited afterwards.',
     'document.confirmReverseTitle': 'Reverse :name?',
@@ -35,6 +36,7 @@ export const en = {
 };
 
 export const ar = {
+    'documents.transactionCurrency': 'عملة المعاملة',
     'document.confirmPostTitle': 'ترحيل :name؟',
     'document.confirmPostMessage': 'يُنشئ الترحيل حركات في سجل المخزون ويقفل هذا المستند، ولا يمكن تعديله بعد ذلك.',
     'document.confirmReverseTitle': 'عكس :name؟',

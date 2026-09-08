@@ -6,6 +6,9 @@ namespace App\Services\InventoryWorkspace;
 final class WorkspaceActions
 {
     public const ALLOWED = [
+        'finance-sources.suppliers', 'finance-sources.customers',
+        'finance-sources.receipts', 'finance-sources.receipt',
+        'finance-sources.shipments', 'finance-sources.shipment',
         'reorder-rules.index',
         'reorder-rules.show',
         'reorder-rules.update',
