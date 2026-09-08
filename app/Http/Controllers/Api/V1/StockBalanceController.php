@@ -23,6 +23,7 @@ class StockBalanceController extends ApiController
             // Resolve item + warehouse NAMES (org-scoped by their global scope) so the
             // grid shows names, not raw #ids. Eager-loaded => no N+1 across the page.
             ->with(['item:id,name,sku', 'warehouse:id,name,code', 'bin:id,code,coords', 'lot:id,status,expiry_date', 'serial:id,status'])
+            ->when($request->filled('search'), fn ($q) => $q->whereHas('item', fn ($item) => $item->where(fn ($item) => $item->where('name', 'like', '%'.$request->query('search').'%')->orWhere('sku', 'like', '%'.$request->query('search').'%'))))
             ->when($request->filled('item_id'), fn ($q) => $q->where('item_id', (int) $request->query('item_id')))
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->when($request->filled('lot_id'), fn ($q) => $q->where('lot_id', (int) $request->query('lot_id')))

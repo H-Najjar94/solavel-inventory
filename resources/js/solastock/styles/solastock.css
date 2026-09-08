@@ -1740,3 +1740,49 @@ html[dir="rtl"] .fifo-total-line strong {
 @media(max-width:760px){.focus-count-columns{display:none}.focus-count-row{grid-template-columns:1fr 1fr;gap:7px;padding:10px}.focus-count-item,.focus-count-input{grid-column:1/-1}.focus-count-system{justify-content:space-between;padding:0 9px}.focus-count-mobile-label{display:inline;color:var(--muted,#667085);font-size:.65rem}.focus-count-input{display:grid;grid-template-columns:1fr;gap:3px}.focus-count-input .input{grid-column:auto;grid-row:auto}.focus-count-input>small{white-space:normal}}
 @media(max-width:760px){.focus-accountant-handoff{grid-template-columns:1fr}.focus-accountant-next{grid-column:auto}.focus-accountant-intro,.focus-accountant-next,.focus-accountant-roles{padding:9px}}
 @media(prefers-reduced-motion:reduce){.focus-choice{transition:none}}
+
+/* Connection review: compact, scoped, and independent of sidebar layout. */
+.focus-wizard .focus-overview { padding: 16px 20px; }
+.focus-wizard .focus-card { padding: 20px; min-height: 0; }
+.focus-wizard .focus-workspace { align-items: start; }
+.wizard-account-note { color: var(--text-muted, #59616d); font-size: .875rem; margin-block: 8px 14px; }
+.wizard-account-row { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(210px, 1.5fr) minmax(130px, .7fr); align-items: start; gap: 16px; padding-block: 12px; border-bottom: 1px solid #e5e7eb; }
+.wizard-account-row > div { min-width: 0; display: grid; gap: 6px; }
+.wizard-account-row small { display: block; color: #59616d; line-height: 1.45; }
+.wizard-account-row .btn { padding: 7px 12px; min-height: 36px; }
+.wizard-account-select { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 7px 10px; border: 1px solid #cbd0d8; background: white; color: #202730; border-radius: 7px; text-align: start; }
+.wizard-account-select > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wizard-account-select:focus-visible, .wizard-account-popover input:focus-visible { outline: 2px solid var(--brand, #e09921); outline-offset: 2px; }
+.wizard-account-select:disabled { opacity: .65; cursor: not-allowed; }
+.wizard-account-popover { z-index: 10000; display: flex; flex-direction: column; border: 1px solid #d5dae1; border-radius: 9px; background: white; color: #202730; padding: 6px; box-shadow: 0 8px 24px #17202b20; overflow: hidden; }
+.wizard-account-popover input { width: 100%; padding: 8px; border: 1px solid #d5dae1; border-radius: 5px; flex-shrink: 0; }
+.wizard-account-popover [role=listbox] { overflow: auto; overscroll-behavior: contain; }
+.wizard-account-popover [role=option] { display: flex; width: 100%; justify-content: space-between; text-align: start; padding: 8px; border: 0; border-radius: 5px; background: white; color: inherit; }
+.wizard-account-popover small { display: block; color: #59616d; }
+.wizard-account-popover .is-highlighted, .wizard-account-popover [aria-selected=true] { background: #fff4df; }
+.wizard-account-state { font-size: .8rem; line-height: 1.45; }
+.wizard-account-state.is-saved { color: #166534; }
+.wizard-account-state.is-pending { color: #805410; }
+@media (max-width: 760px) { .wizard-account-row { grid-template-columns: 1fr; gap: 8px; } .focus-wizard .focus-card { padding: 14px; } }
+
+.focus-wizard .btn:disabled { opacity: .5; cursor: not-allowed; }
+.focus-wizard .focus-overview-context small, .focus-wizard .focus-overview p { white-space: normal; overflow: visible; text-overflow: initial; }
+.focus-wizard .wizard-account-row strong { font-size: .9rem; }
+.focus-wizard .wizard-account-row { padding-block: 10px; }
+
+/* The generic .wizard grid's implicit auto track takes a min-content width.
+   Constrain this workspace's track, then allow its header children to wrap. */
+.focus-wizard { grid-template-columns: minmax(0, 1fr); }
+.focus-wizard > *, .focus-wizard .focus-stage, .focus-wizard .focus-workspace,
+.focus-wizard .focus-overview > *, .focus-wizard .focus-list-heading > * { min-width: 0; }
+.focus-wizard .focus-phase-stepper { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.focus-wizard .focus-phase-stepper button { min-width: 0; overflow-wrap: anywhere; }
+.focus-wizard .focus-overview-context { flex-wrap: wrap; white-space: normal; }
+.focus-wizard .focus-overview-context strong { max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+    .focus-wizard .focus-list-heading { flex-direction: column; align-items: stretch; }
+    .focus-wizard .focus-list-heading > strong { align-self: flex-start; white-space: normal; }
+    .focus-wizard .focus-header > div { flex-wrap: wrap; }
+    .focus-wizard .focus-overview { padding: 8px 0; }
+    .focus-wizard .focus-overview-context small { max-width: none; }
+}

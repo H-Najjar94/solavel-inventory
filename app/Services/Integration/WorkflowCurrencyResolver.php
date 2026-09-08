@@ -3,8 +3,8 @@
 namespace App\Services\Integration;
 
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
-use App\Models\Tenant\InventoryCurrencyRate;
 use App\Services\Stock\Support\Decimal;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +34,19 @@ final class WorkflowCurrencyResolver
             return ['code' => $this->legacyDocumentCurrency($document, $documentType)];
         }
 
+        // Reversals retain the immutable original FX snapshot, even on a later
+        // posting date. Never re-price the stock or the original accounting effect.
+        if (! empty($document->original_event_uuid)) {
+            $original = IntegrationOutboxEvent::query()->where('organization_id', $orgId)
+                ->where('event_uuid', $document->original_event_uuid)->first();
+            $currency = data_get($original?->payload, 'currency');
+            if (! is_array($currency) || empty($currency['code']) || empty($currency['rate_date'])) {
+                $this->fail('original_workflow_currency_missing');
+            }
+
+            return $currency;
+        }
+
         $setting = IntegrationSetting::query()
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
@@ -41,7 +54,13 @@ final class WorkflowCurrencyResolver
         $authority = (array) data_get($setting?->meta, 'finance_currency_contract', []);
         $base = (string) ($authority['base_currency_code'] ?? '');
         $enabled = (array) ($authority['enabled_currency_codes'] ?? []);
-        $code = $this->documentCurrency($document, $documentType, true);
+        // Inventory-only documents are explicitly valued in the reviewed Finance
+        // base pool. They have no sales/purchase transaction currency to inherit.
+        // Never apply this rule to receipts, shipments or linked documents.
+        $baseValued = in_array($documentType, ['stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock'], true);
+        $code = $baseValued
+            ? (string) (app(FinanceBaseValuation::class)->contract($orgId)['base_currency_code'] ?? '')
+            : $this->documentCurrency($document, $documentType, true);
         $transactionDate = $this->normalizeDate($date);
 
         if (! preg_match('/^[A-Z]{3}$/', $base)
@@ -67,12 +86,15 @@ final class WorkflowCurrencyResolver
             ];
         }
 
-        $rate = InventoryCurrencyRate::query()
-            ->where('organization_id', $orgId)
-            ->where('currency_code', $code)
-            ->whereDate('effective_date', $transactionDate)
+        // Finance owns dated FX. A manually entered Stock rate is not evidence
+        // of Finance's rate and must not commit a physical movement before rejection.
+        $rate = DB::connection('tenant')->table('exchange_rates')
+            ->where('organization_id', $mapping->finance_organization_id)
+            ->where('base_currency_code', $base)->where('quote_currency_code', $code)
+            ->whereDate('rate_date', $transactionDate)
+            ->orderByRaw("CASE source WHEN 'manual' THEN 0 WHEN 'api' THEN 1 ELSE 2 END")
             ->first();
-        if (! $rate || Decimal::cmp((string) $rate->rate_to_base, '0') <= 0) {
+        if (! $rate || Decimal::cmp((string) $rate->rate, '0') <= 0) {
             $this->fail('workflow_exchange_rate_missing_or_invalid', [
                 'transaction_currency' => $code,
                 'transaction_date' => $transactionDate,
@@ -81,9 +103,9 @@ final class WorkflowCurrencyResolver
 
         return [
             'code' => $code,
-            'exchange_rate' => (string) $rate->rate_to_base,
+            'exchange_rate' => (string) $rate->rate,
             'rate_date' => $transactionDate,
-            'rate_source' => 'solabooks_authoritative_snapshot',
+            'rate_source' => (string) $rate->source,
         ];
     }
 
@@ -111,15 +133,16 @@ final class WorkflowCurrencyResolver
             if ($parentId) {
                 if ($documentType === 'sales_return') {
                     $salesOrderId = DB::connection('tenant')->table($parentTable)
-                        ->where('id', $parentId)->value('sales_order_id');
+                        ->where('organization_id', $document->organization_id)->where('id', $parentId)->value('sales_order_id');
                     return $this->storedCurrency(
                         'inventory_sales_orders',
                         (int) $salesOrderId,
                         $strictContract,
+                        (int) $document->organization_id,
                     );
                 }
 
-                return $this->storedCurrency($parentTable, (int) $parentId, $strictContract);
+                return $this->storedCurrency($parentTable, (int) $parentId, $strictContract, (int) $document->organization_id);
             }
         }
 
@@ -127,11 +150,12 @@ final class WorkflowCurrencyResolver
             $sourceType = Str::snake(class_basename((string) ($document->source_type ?? '')));
             if ($sourceType === 'goods_receipt') {
                 $purchaseOrderId = DB::connection('tenant')->table('goods_receipts')
-                    ->where('id', $document->source_id)->value('purchase_order_id');
+                    ->where('organization_id', $document->organization_id)->where('id', $document->source_id)->value('purchase_order_id');
                 return $this->storedCurrency(
                     'inventory_purchase_orders',
                     (int) $purchaseOrderId,
                     $strictContract,
+                    (int) $document->organization_id,
                 );
             }
         }
@@ -139,18 +163,18 @@ final class WorkflowCurrencyResolver
         return '';
     }
 
-    private function storedCurrency(string $table, int $id, bool $strictContract): string
+    private function storedCurrency(string $table, int $id, bool $strictContract, int $organizationId): string
     {
         if (Schema::connection('tenant')->hasColumn($table, 'integration_currency_code')) {
             $value = (string) DB::connection('tenant')->table($table)
-                ->where('id', $id)->value('integration_currency_code');
+                ->where('organization_id', $organizationId)->where('id', $id)->value('integration_currency_code');
             if ($value !== '' || $strictContract) {
                 return $value;
             }
         }
         if (! $strictContract && Schema::connection('tenant')->hasColumn($table, 'currency_code')) {
             return (string) DB::connection('tenant')->table($table)
-                ->where('id', $id)->value('currency_code');
+                ->where('organization_id', $organizationId)->where('id', $id)->value('currency_code');
         }
 
         return '';

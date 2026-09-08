@@ -28,6 +28,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
     const wizard = status.connection_wizard || {};
     const remaining = wizard.decisions_remaining;
     const setupInProgress = status.draft_status === 'in_progress';
+    const activated = status.activation_status === 'enabled';
     return <div className="connection-business-status">
         <header className="assistant-hero connection-status-hero">
             <div className="assistant-hero-copy">
@@ -36,14 +37,14 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <p>{tr('integration.assistant.pageIntroduction')}</p>
                 <div className="assistant-context"><strong>{organizationName}</strong></div>
             </div>
-            <div className="assistant-next">
+            {!activated && <div className="assistant-next">
                 <span>{tr('integration.assistant.nextAction')}</span>
                 <strong>{tr('integration.assistant.continueSetup')}</strong>
                 <button type="button" className="btn btn--primary" onClick={onContinue}>{tr('integration.assistant.continueSetup')}</button>
-            </div>
+            </div>}
             <div className="assistant-status-line" role="status">
-                <span>{tr('integration.assistant.safePause')}</span>
-                <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>
+                <span>{tr(activated ? 'integration.connection.active' : 'integration.assistant.safePause')}</span>
+                {!activated && <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>}
             </div>
         </header>
         <section className="connection-status-card" aria-labelledby="connection-status-heading">
@@ -54,8 +55,8 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 {remaining !== null && remaining !== undefined && <div><span>{tr('integration.businessStatus.remaining')}</span><strong><bdi>{tr('integration.assistant.remainingRecords', { count: remaining })}</bdi></strong></div>}
                 <div><span>{tr('integration.businessStatus.inventoryAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solastock')}</bdi></strong></div>
                 <div><span>{tr('integration.businessStatus.accountingAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solabooks')}</bdi></strong></div>
-                <div><span>{tr('integration.phase.activation')}</span><strong>{tr('integration.phase.safely_paused')}</strong></div>
-                <div><span>{tr('integration.phase.delivery')}</span><strong>{tr('integration.phase.disabled')}</strong></div>
+                <div><span>{tr('integration.phase.activation')}</span><strong>{tr(activated ? 'integration.connection.active' : 'integration.phase.safely_paused')}</strong></div>
+                <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
             </div>
             <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
                 <dl className="kv">
@@ -88,7 +89,7 @@ export default function IntegrationSettingsPage() {
     const [savingConnection, setSavingConnection] = useState(false);
     const [rotatingKey, setRotatingKey] = useState(false);
 
-    const status = useApiQuery(['integration-status'], api.integrationStatus, {
+    const status = useApiQuery(['integration-status', tenant.organization_id], api.integrationStatus, {
         fallback: null,
         refetchOnMount: 'always',
         refetchOnWindowFocus: 'always',
@@ -245,12 +246,12 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${wizardResumeStep}`} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
 
-function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
+function ConnectionWizard({ organizationId, gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
     const queryClient = useQueryClient();
     const actionsByEntity = {
         item: {
@@ -274,7 +275,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
         account_role: ['select_account_role', 'retain_account_role_unresolved'],
     };
     const stateOrder = ['setup_available', 'draft_decisions', 'decisions_complete', 'snapshot_required', 'cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready', 'connected'];
-    const discovery = useApiQuery(['integration-wizard-discovery'], api.integrationWizardDiscovery, { fallback: null, enabled: true });
+    const discovery = useApiQuery(['integration-wizard-discovery', organizationId], api.integrationWizardDiscovery, { fallback: null, enabled: true });
     const [runUuid, setRunUuid] = useState('');
     const [saving, setSaving] = useState(false);
     const [saveState, setSaveState] = useState('idle');
@@ -288,7 +289,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
     const [cutoffAt, setCutoffAt] = useState('');
     const [assistantStep, setAssistantStep] = useState(initialAssistantStep);
     const [exceptionSearch, setExceptionSearch] = useState('');
-    const run = useApiQuery(['integration-wizard-preview', runUuid], () => api.integrationWizardPreview(runUuid), {
+    const run = useApiQuery(['integration-wizard-preview', organizationId, runUuid], () => api.integrationWizardPreview(runUuid), {
         fallback: null,
         enabled: Boolean(runUuid),
     });
@@ -296,7 +297,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
         if (!mayAcceptCanonicalDraft(canonicalRunRef.current, incoming, runUuid)) return false;
         canonicalRunRef.current = incoming;
         setCanonicalRun(incoming);
-        queryClient.setQueryData(['integration-wizard-preview', runUuid], incoming);
+        queryClient.setQueryData(['integration-wizard-preview', organizationId, runUuid], incoming);
         return true;
     };
     useEffect(() => {
@@ -461,8 +462,8 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
         link.click(); URL.revokeObjectURL(url);
     }
 
-    if (discovery.isLoading || (runUuid && run.isLoading)) return <Skeleton />;
-    if (discovery.isError || (runUuid && run.isError)) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
+    if (!view && (discovery.isLoading || (runUuid && run.isLoading))) return <div className="wizard-loading" role="status" aria-busy="true"><img src={`${window.SOLASTOCK_BASE_PATH || ''}/imgs/favicon-solastock.svg`} alt="SolaStock" width="32" height="32" /><p>{tr('integration.loading')}</p><Skeleton /></div>;
+    if (!view && (discovery.isError || (runUuid && run.isError))) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
     if (!view) return <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} />;
 
     const totals = view.totals || {};
@@ -470,6 +471,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
     const rows = view.comparison || [];
     if (view.guided_setup) {
         return <GuidedConnectionAssistant
+            loadError={run.error || discovery.error} retryLoad={() => (runUuid ? run.refetch() : discovery.refetch())}
             view={view} runUuid={runUuid} run={runHandle} gate={gate} accountingGate={accountingGate}
             status={status} saving={saving} tr={tr} decisions={displayDecisions} confirmedDecisions={decisions} pendingDecisions={pendingDecisions} rows={rows}
             totals={totals} accounting={accounting} assistantStep={assistantStep}
@@ -574,7 +576,7 @@ function ConnectionWizard({ gate, accountingGate, connectionAccess, status, toas
             {run.data?.state === 'snapshot_required' && <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => runAction(() => api.freezeIntegrationWizardSnapshot(runUuid, { expected_lock_version: run.data.lock_version }), 'integration.wizard.snapshotFrozen')}>{tr('integration.wizard.freezeSnapshot')}</button>}
             {run.data?.state === 'cutoff_review' && <><label className="field"><span className="field-label">{tr('integration.wizard.cutoff')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label><button className="btn btn--primary" disabled={!gate.allowed || saving || !cutoffAt} onClick={() => runAction(() => api.reviewIntegrationWizardCutoff(runUuid, { cutoff_at: cutoffAt, physical_counts: [], unexplained_variance: run.data?.blocking?.length ? '1.00' : '0.00', expected_lock_version: run.data.lock_version }), 'integration.wizard.cutoffReviewed')}>{tr('integration.wizard.reviewCutoff')}</button></>}
             {['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state) && <><p>{tr('integration.wizard.readOnlyAfter')}</p><p className="wizard__hash">{run.data.approval_payload_hash}</p><label className="field"><span className="field-label">{tr('integration.wizard.confirmation')}</span><input className="input" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label><div className="doc-actions"><button className="btn btn--primary" disabled={!gate.allowed || saving || Boolean(run.data.owner_approved_at)} onClick={() => runAction(() => api.approveIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash, confirmation }), 'integration.wizard.ownerApproved')}>{tr('integration.wizard.ownerApprove')}</button><button className="btn btn--primary" disabled={!accountingGate.allowed || saving || Boolean(run.data.accountant_approved_at)} onClick={() => runAction(() => api.accountantApproveIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash }), 'integration.wizard.accountantApproved')}>{tr('integration.wizard.accountantApprove')}</button></div></>}
-            {run.data?.state === 'activation_ready' && <p role="status"><strong>{tr('integration.wizard.activationHeld')}</strong></p>}
+            {run.data?.state === 'activation_ready' && <div className="doc-actions"><button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => runAction(() => api.activateIntegrationWizard(runUuid, { approval_payload_hash: run.data.approval_payload_hash, confirmation: 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY' }), 'integration.wizard.activated')}>{tr('integration.wizard.activate')}</button></div>}
             {!['decisions_complete', 'snapshot_required', 'cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(run.data?.state) && <p role="status">{tr('integration.wizard.reviewRemaining', { count: run.data?.blocking?.length ?? 0 })}</p>}
         </div>}
     </div>;

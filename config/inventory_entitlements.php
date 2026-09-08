@@ -126,6 +126,9 @@ return [
     | Key = route name, value = the stock.* feature key it requires.
     */
     'route_features' => [
+        'api.v1.workspace.reorder' => 'stock.reports',
+        'api.v1.reorder-rules.index' => 'stock.reports',
+        'api.v1.reorder-rules.show' => 'stock.reports',
         // Inter-warehouse transfers (writes ride manage_adjustments = core).
         'api.v1.transfers.store' => 'stock.transfers',
         'api.v1.transfers.update' => 'stock.transfers',

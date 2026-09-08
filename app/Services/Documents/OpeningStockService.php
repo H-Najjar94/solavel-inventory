@@ -226,6 +226,7 @@ class OpeningStockService
                 throw new RuntimeException("Opening stock {$entry->id} cannot be posted from status '{$entry->status}'.");
             }
 
+            app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady((int) $entry->organization_id, 'opening_stock.posted');
             $entry->loadMissing('lines');
             $movements = [];
             foreach ($entry->lines as $line) {

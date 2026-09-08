@@ -80,6 +80,7 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
         app(ShipmentService::class)->post($shipment);
         $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
+        try {
         $return = app(SalesReturnService::class)->createDraft([
             'return_number' => 'B5-RMA-1',
             'shipment_id' => $shipment->id,
@@ -93,9 +94,18 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
             'unit_cost' => '5.0000',
             'condition' => 'quarantine',
         ]]);
+            $this->fail('A partial quarantine request must not restock the complete shipment.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('lines', $exception->errors());
+            $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        }
+        $return = app(SalesReturnService::class)->createDraft([
+            'return_number' => 'B5-RMA-1', 'shipment_id' => $shipment->id, 'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id, 'return_date' => now()->toDateString(), 'reason' => 'Complete resellable source return',
+        ], []);
         $return = app(SalesReturnService::class)->authorizeReturn($return);
         $this->assertSame('authorized', $return->status);
-        $return = app(SalesReturnService::class)->inspect($return, 'Quarantine on receipt.');
+        $return = app(SalesReturnService::class)->inspect($return, 'Complete source return inspected.');
         $this->assertSame('inspected', $return->status);
         $this->assertSame('restock', $return->lines->first()->disposition);
         app(SalesReturnService::class)->post($return);

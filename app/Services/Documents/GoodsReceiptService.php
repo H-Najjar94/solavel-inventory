@@ -249,7 +249,7 @@ class GoodsReceiptService
                     binId: $line->bin_id ? (int) $line->bin_id : null,
                     lotId: $line->lot_id ? (int) $line->lot_id : null,
                     serialId: $line->serial_id ? (int) $line->serial_id : null,
-                    unitCost: (string) $line->unit_cost,
+                    unitCost: app(\App\Services\Integration\FinanceBaseValuation::class)->receiptUnitCost($grn, (string) $line->unit_cost),
                     movedAt: $grn->receipt_date?->toDateTimeString() ?? now()->toDateTimeString(),
                     expiryDate: $line->expiry_date ? (string) $line->expiry_date : null,
                 );

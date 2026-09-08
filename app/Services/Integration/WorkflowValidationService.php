@@ -51,6 +51,8 @@ final class WorkflowValidationService
             ]);
         }
 
+        app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $eventType);
+
         $documentType = match ($eventType) {
             'purchase_order.approved' => 'purchase_order',
             'grn.posted' => 'goods_receipt',
@@ -75,6 +77,13 @@ final class WorkflowValidationService
         $document->loadMissing('lines');
         $required = collect();
         foreach ($document->lines as $line) {
+            if ($documentType === 'sales_order') {
+                // Fulfillment orders store base-unit quantities, not a stock
+                // movement/conversion snapshot. Validate that base unit now;
+                // the shipment persists its own immutable physical snapshot.
+                $line = (object) app(\App\Services\Catalog\UnitConversionResolver::class)
+                    ->normalizeLine($line->getAttributes(), 'ordered_qty');
+            }
             if ($line->item_id) {
                 $required->push(['item', (string) $line->item_id]);
             }
@@ -138,6 +147,9 @@ final class WorkflowValidationService
                 ], JSON_UNESCAPED_SLASHES)],
             ]);
         }
+        if (in_array($eventType, ['grn.posted', 'shipment.posted', 'sales_return.posted', 'adjustment.posted', 'stock_count.posted'], true)) {
+            app(FinanceBaseValuation::class)->contract($orgId);
+        }
     }
 
     private function assertConversionSnapshot(object $line, int $organizationId, string $eventType): void
@@ -159,7 +171,7 @@ final class WorkflowValidationService
             ->where('organization_id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->first();
         $units = DB::connection('tenant')->table('units')->whereIn('id', [$line->entered_unit_id, $line->base_unit_id])
             ->where('organization_id', $organizationId)->where('is_active', true)->whereNull('deleted_at')->count();
-        if (! $item || (int) $item->base_unit_id !== (int) $line->base_unit_id || $units !== 2) {
+        if (! $item || (int) $item->base_unit_id !== (int) $line->base_unit_id || $units !== count(array_unique([(int) $line->entered_unit_id, (int) $line->base_unit_id]))) {
             $this->conversionFailure($eventType, 'unit_conversion_scope_invalid');
         }
         if ($line->unit_conversion_id === null) {
@@ -202,6 +214,7 @@ final class WorkflowValidationService
     {
         if ($entityType === 'account_role') {
             $accountMappingId = DB::connection('tenant')->table('integration_account_mappings')
+                ->where('organization_id', app(\App\Tenancy\OrganizationContext::class)->idOrFail())
                 ->where('integration', IntegrationEvents::INTEGRATION)
                 ->where('mapping_type', $solastockRecordId)
                 ->whereIn('status', ['mapped', 'verified'])
@@ -226,12 +239,6 @@ final class WorkflowValidationService
     /** @return Collection<int,string> */
     private function accountRoles(string $eventType): Collection
     {
-        return collect(match ($eventType) {
-            'grn.posted' => ['inventory_asset', 'grni'],
-            'grn.reversed' => ['grni', 'inventory_asset'],
-            'shipment.posted' => ['cogs', 'inventory_asset'],
-            'sales_return.posted' => ['inventory_asset', 'cogs'],
-            default => [],
-        });
+        return collect(AccountRolePolicy::forOperations([$eventType]));
     }
 }

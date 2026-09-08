@@ -21,13 +21,6 @@ class IntegrationStatusService
 {
     public const MODES = ['disconnected', 'connected_readonly', 'connected_pending_mapping', 'active', 'paused', 'error'];
 
-    public const REQUIRED_ACCOUNT_MAPPINGS = [
-        'inventory_asset', 'cogs', 'adjustment_gain', 'adjustment_loss', 'grni',
-        'landed_cost_clearing', 'transfer_clearing', 'opening_offset',
-        'sales_returns', 'purchase_returns',
-        'accounts_receivable', 'sales_revenue',
-    ];
-
     public function status(int $orgId): array
     {
         $safety = app(IntegrationSafetyHold::class);
@@ -87,7 +80,9 @@ class IntegrationStatusService
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
             ->whereIn('status', ['mapped', 'verified'])->pluck('mapping_type')->all();
-        $mappingCompleteness = round(count(array_intersect(self::REQUIRED_ACCOUNT_MAPPINGS, $mapped)) / count(self::REQUIRED_ACCOUNT_MAPPINGS) * 100);
+        $requiredRoles = app(OrganizationAccountRequirements::class)->roles($orgId);
+        $validMappedRoles = app(OrganizationAccountRequirements::class)->validMappedRoles($orgId);
+        $mappingCompleteness = $requiredRoles === [] ? 100 : round(count(array_intersect($requiredRoles, $validMappedRoles)) / count($requiredRoles) * 100);
         $taxCodes = collect((array) (InventorySetting::query()->first()?->taxes ?? []))
             ->where('active', true)->pluck('code')->filter()->unique()->values();
         $mappedTaxCodes = IntegrationTaxMapping::query()
@@ -150,7 +145,14 @@ class IntegrationStatusService
             $authoritativeState = 'unavailable';
         }
 
-        $deliveryEnabled = $safety->deliveryEnabledFor($orgId);
+        $activated = $mode === 'active' && $organizationMapping?->status === 'verified'
+            && $organizationMapping?->activation_state === 'active';
+        $deliveryEnabled = $safety->deliveryEnabledFor($orgId) && $activated
+            && data_get($settings->meta, 'transport_enabled') === true;
+        if ($deliveryEnabled) {
+            try { app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($organizationMapping); }
+            catch (\Throwable) { $deliveryEnabled = false; }
+        }
         $workerEnabled = $safety->workerEnabledFor($orgId);
         $health = match (true) {
             ! $deliveryEnabled => 'maintenance_hold',
@@ -180,12 +182,8 @@ class IntegrationStatusService
         $wizardCurrentStep = $wizardRun ? 'automatic_checks' : 'setup_available';
         if ($wizardRun && $draftInProgress) {
             try {
-                $discovery = app(ConnectionWizardService::class)->discover($orgId);
-                $required = collect($discovery['guided_setup']['visible_exception_fingerprints'] ?? [])->unique();
-                $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
-                    ->where('run_uuid', $wizardRun->run_uuid)->where('status', 'selected')
-                    ->pluck('candidate_fingerprint')->unique();
-                $wizardRemaining = $required->diff($selected)->count();
+                $preview = app(ConnectionWizardService::class)->finalPreview($orgId, (string) $wizardRun->run_uuid);
+                $wizardRemaining = count($preview['blocking']);
                 $wizardCurrentStep = $wizardRemaining > 0 ? 'required_decisions' : 'result_preview';
             } catch (\Throwable) {
                 // Status remains truthful but unavailable rather than reporting a
@@ -220,7 +218,7 @@ class IntegrationStatusService
             'setup_status' => $setupDecision['allowed'] ? 'available' : 'unavailable',
             'setup_status_reason' => $setupDecision['reason_code'],
             'draft_status' => $draftStatus,
-            'activation_status' => 'safely_paused',
+            'activation_status' => $activated ? 'enabled' : 'safely_paused',
             'delivery_status' => $deliveryEnabled ? 'enabled' : 'disabled',
             'connection_state' => $connectionState,
             'connection_wizard' => $wizardRun ? [

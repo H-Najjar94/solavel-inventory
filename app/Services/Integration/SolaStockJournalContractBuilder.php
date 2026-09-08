@@ -94,7 +94,7 @@ final class SolaStockJournalContractBuilder
         }
         if ($txCode === $baseCode) {
             $rate = '1';
-            $rateDate = $date;
+            $rateDate = (string) ($transaction['rate_date'] ?? $date);
             $rateSource = 'identity';
         } else {
             foreach (['exchange_rate', 'rate_date', 'rate_source'] as $field) {
@@ -105,16 +105,26 @@ final class SolaStockJournalContractBuilder
             $rate = (string) $transaction['exchange_rate'];
             $rateDate = (string) $transaction['rate_date'];
             $rateSource = (string) $transaction['rate_source'];
-            if (Decimal::cmp($rate, '0') <= 0 || $rateDate !== $date) {
+            if (Decimal::cmp($rate, '0') <= 0 || (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $rateDate)) || (empty($eventPayload['original_source']['event_uuid']) && $rateDate !== $date)) {
                 throw new RuntimeException(__('inventory.integration.contract_foreign_rate_invalid'));
             }
         }
 
+        $baseValuation = ($eventPayload['inventory_valuation_basis'] ?? null) === FinanceBaseValuation::BASIS;
+        if ($baseValuation && ($eventPayload['inventory_value_currency'] ?? null) !== $baseCode) {
+            throw new RuntimeException('Inventory valuation base currency does not match Finance.');
+        }
         $moneyScale = (int) $finance['money_scale'];
         $txScale = (int) ($finance['currency_precisions'][$txCode] ?? $moneyScale);
-        $lines = array_map(function (array $line) use ($rate, $moneyScale, $txScale, $meta): array {
-            $debit = Decimal::round((string) ($line['debit'] ?? '0'), $txScale);
-            $credit = Decimal::round((string) ($line['credit'] ?? '0'), $txScale);
+        $lines = array_map(function (array $line) use ($rate, $moneyScale, $txScale, $meta, $baseValuation): array {
+            $debitValue = (string) ($line['debit'] ?? '0');
+            $creditValue = (string) ($line['credit'] ?? '0');
+            $debit = Decimal::round($baseValuation ? Decimal::mul($debitValue, $rate) : $debitValue, $txScale);
+            $credit = Decimal::round($baseValuation ? Decimal::mul($creditValue, $rate) : $creditValue, $txScale);
+            if ($baseValuation && (Decimal::cmp(Decimal::round(Decimal::div($debit, $rate), $moneyScale), $debitValue) !== 0
+                || Decimal::cmp(Decimal::round(Decimal::div($credit, $rate), $moneyScale), $creditValue) !== 0)) {
+                throw new RuntimeException('Transaction currency precision cannot represent the original inventory base value exactly.');
+            }
             $result = [
                 'account_id' => (int) $line['account_id'],
                 'account_role' => (string) $line['account_role'],

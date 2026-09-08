@@ -227,6 +227,7 @@ class StockAdjustmentService
                 throw new RuntimeException("Adjustment {$adj->id} cannot be posted from status '{$adj->status}'.");
             }
 
+            app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady((int) $adj->organization_id, 'adjustment.posted');
             $adj->loadMissing('lines');
             $movements = [];
             foreach ($adj->lines as $line) {
