@@ -77,6 +77,13 @@ final class WorkflowValidationService
         $document->loadMissing('lines');
         $required = collect();
         foreach ($document->lines as $line) {
+            if ($documentType === 'sales_order') {
+                // Fulfillment orders store base-unit quantities, not a stock
+                // movement/conversion snapshot. Validate that base unit now;
+                // the shipment persists its own immutable physical snapshot.
+                $line = (object) app(\App\Services\Catalog\UnitConversionResolver::class)
+                    ->normalizeLine($line->getAttributes(), 'ordered_qty');
+            }
             if ($line->item_id) {
                 $required->push(['item', (string) $line->item_id]);
             }

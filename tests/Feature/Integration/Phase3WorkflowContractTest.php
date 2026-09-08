@@ -366,6 +366,12 @@ final class Phase3WorkflowContractTest extends TestCase
         $this->assertSame(['inventory_asset', 'grni'], array_column($journal['lines'], 'account_role'));
         $order = \App\Models\Tenant\SalesOrder::create(['order_number' => 'FX-SALE', 'order_date' => '2026-07-30',
             'warehouse_id' => $po->warehouse_id, 'currency_code' => 'GBP', 'integration_currency_code' => 'GBP', 'status' => 'confirmed']);
+        $order->lines()->create(['item_id' => $item->id, 'ordered_qty' => '3', 'unit_price' => '11']);
+        $physicalBefore = \App\Models\Tenant\StockLedger::query()->count();
+        app(\App\Services\Integration\WorkflowValidationService::class)
+            ->assertOperationalDocumentReady($order, 'sales_order.confirmed');
+        $this->assertSame($physicalBefore, \App\Models\Tenant\StockLedger::query()->count(),
+            'Validating a base-unit fulfillment order must not post inventory.');
         $shipments = app(\App\Services\Documents\ShipmentService::class);
         $shipment = $shipments->createDraft(['shipment_number' => 'FX-SHIPMENT', 'sales_order_id' => $order->id, 'warehouse_id' => $po->warehouse_id,
             'ship_date' => '2026-07-30'], [['item_id' => $item->id, 'quantity' => '2']]);

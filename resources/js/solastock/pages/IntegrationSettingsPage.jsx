@@ -28,6 +28,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
     const wizard = status.connection_wizard || {};
     const remaining = wizard.decisions_remaining;
     const setupInProgress = status.draft_status === 'in_progress';
+    const activated = status.activation_status === 'enabled';
     return <div className="connection-business-status">
         <header className="assistant-hero connection-status-hero">
             <div className="assistant-hero-copy">
@@ -36,14 +37,14 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <p>{tr('integration.assistant.pageIntroduction')}</p>
                 <div className="assistant-context"><strong>{organizationName}</strong></div>
             </div>
-            <div className="assistant-next">
+            {!activated && <div className="assistant-next">
                 <span>{tr('integration.assistant.nextAction')}</span>
                 <strong>{tr('integration.assistant.continueSetup')}</strong>
                 <button type="button" className="btn btn--primary" onClick={onContinue}>{tr('integration.assistant.continueSetup')}</button>
-            </div>
+            </div>}
             <div className="assistant-status-line" role="status">
-                <span>{tr('integration.assistant.safePause')}</span>
-                <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>
+                <span>{tr(activated ? 'integration.connection.active' : 'integration.assistant.safePause')}</span>
+                {!activated && <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>}
             </div>
         </header>
         <section className="connection-status-card" aria-labelledby="connection-status-heading">
@@ -54,8 +55,8 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 {remaining !== null && remaining !== undefined && <div><span>{tr('integration.businessStatus.remaining')}</span><strong><bdi>{tr('integration.assistant.remainingRecords', { count: remaining })}</bdi></strong></div>}
                 <div><span>{tr('integration.businessStatus.inventoryAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solastock')}</bdi></strong></div>
                 <div><span>{tr('integration.businessStatus.accountingAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solabooks')}</bdi></strong></div>
-                <div><span>{tr('integration.phase.activation')}</span><strong>{tr('integration.phase.safely_paused')}</strong></div>
-                <div><span>{tr('integration.phase.delivery')}</span><strong>{tr('integration.phase.disabled')}</strong></div>
+                <div><span>{tr('integration.phase.activation')}</span><strong>{tr(activated ? 'integration.connection.active' : 'integration.phase.safely_paused')}</strong></div>
+                <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
             </div>
             <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
                 <dl className="kv">

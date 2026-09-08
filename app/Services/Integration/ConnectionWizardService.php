@@ -126,9 +126,30 @@ final class ConnectionWizardService
         // custom units/categories are never copied.
         $this->referenceDefaults->sync($organizationId, true);
         $preview = $this->discover($organizationId);
-        if (empty($preview['organization_mapping_uuid'])
-            && (bool) config('integration_connection_wizard.automatic_preparation_enabled')) {
+        $setting = IntegrationSetting::query()->where('organization_id', $organizationId)
+            ->where('integration', 'solabooks')->first();
+        if ((bool) config('integration_connection_wizard.automatic_preparation_enabled')
+            && (empty($preview['organization_mapping_uuid']) || ! $setting?->apiKey() || ! $setting?->signingSecret())) {
             $identity = $preview['identity'] ?? [];
+            if ((int) ($identity['central_client_id'] ?? 0) <= 0 || (int) ($identity['finance_organization_id'] ?? 0) <= 0) {
+                $this->fail('authoritative_setup_identity_required');
+            }
+            // Stock owns this preparation row. It must exist before Finance can
+            // validate the peer identity; no delivery or approval is implied.
+            $setting = IntegrationSetting::query()->firstOrCreate([
+                'organization_id' => $organizationId, 'integration' => 'solabooks',
+            ], ['mode' => 'connected_pending_mapping', 'solabooks_organization_id' => $identity['finance_organization_id'],
+                'require_mapping_before_post' => true, 'meta' => ['client_id' => $identity['central_client_id'],
+                    'central_organization_id' => $organizationId, 'transport_enabled' => false]]);
+            if ($setting->mode === 'disconnected' && ! $setting->solabooks_organization_id) {
+                $setting->update(['mode' => 'connected_pending_mapping',
+                    'solabooks_organization_id' => $identity['finance_organization_id'],
+                    'meta' => array_merge((array) $setting->meta, ['client_id' => $identity['central_client_id'],
+                        'central_organization_id' => $organizationId, 'transport_enabled' => false])]);
+            }
+            if ((int) $setting->solabooks_organization_id !== (int) $identity['finance_organization_id']) {
+                $this->fail('solastock_connection_scope_mismatch');
+            }
             $prepared = $this->financeConnection->command([
                 'client_id' => (int) ($identity['central_client_id'] ?? 0),
                 'organization_id' => $organizationId,
@@ -409,6 +430,14 @@ final class ConnectionWizardService
         $preview = $run->organization_mapping_uuid === null
             ? $this->preMappingReadiness($organizationId)
             : $this->discover($organizationId);
+        if ($run->state === 'connected') {
+            // Completed review is immutable evidence, not a new discovery of
+            // the records the approved activation itself has just created.
+            $snapshot = json_decode((string) $run->snapshot_payload, true);
+            if (is_array($snapshot) && isset($snapshot['identity'], $snapshot['snapshot_hash'])) {
+                $preview = $snapshot;
+            }
+        }
         $frozen = $run->snapshot_frozen_at !== null;
         $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
         $beforeImageHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
@@ -458,8 +487,21 @@ final class ConnectionWizardService
             'automatic_configuration_hash' => $preview['guided_setup']['source_invalidation_hash'] ?? null,
             'blocked_fingerprints' => $blocking->pluck('fingerprint')->all(),
         ];
+        $setting = IntegrationSetting::query()->where('organization_id', $organizationId)
+            ->where('integration', 'solabooks')->first();
+        $valuation = (array) data_get($setting?->meta, 'finance_currency_contract', []);
+        if ($valuation === [] && ($preview['guided_setup']['setup_path'] ?? '') === 'fresh_workspace') {
+            $base = (string) ($preview['accounting']['base_currency'] ?? '');
+            $valuation = ['base_currency_code' => $base, 'enabled_currency_codes' => [$base],
+                'money_scale' => (int) ($preview['accounting']['money_scale'] ?? Decimal::MONEY_SCALE),
+                'rate_scale' => (int) ($preview['accounting']['rate_scale'] ?? 8),
+                'inventory_valuation_basis' => FinanceBaseValuation::BASIS];
+        }
+        $approvalCore['valuation_contract'] = $valuation;
         $approvalHash = $this->hash($approvalCore);
-        $ready = $blocking->isEmpty() && $frozen && $run->cutoff_reviewed_at !== null
+        if ($run->state === 'connected') $approvalHash = (string) $run->approval_payload_hash;
+        $precisionSupported = $valuation === [] || (int) ($valuation['money_scale'] ?? -1) === Decimal::MONEY_SCALE;
+        $ready = $precisionSupported && $blocking->isEmpty() && $frozen && $run->cutoff_reviewed_at !== null
             && ($preview['guided_setup']['checks']['base_currency_inherited'] ?? false)
             && ($preview['guided_setup']['checks']['organization_verified'] ?? false);
         $decisionsList = $decisions->sortKeys()->map(fn ($row) => [
@@ -493,7 +535,7 @@ final class ConnectionWizardService
             'master_data' => $preview['master_data'] ?? null,
             'readiness' => $preview['readiness'] ?? null,
             'guided_setup' => $preview['guided_setup'] ?? null,
-            'blockers' => $preview['blockers'] ?? [],
+            'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock currently supports Finance money precision 2; this organization requires a qualified precision upgrade before activation.']),
             'blocking' => $blocking->all(),
             'snapshot_frozen_at' => $run->snapshot_frozen_at,
             'owner_approved_at' => $run->owner_approved_at ?? null,
@@ -782,6 +824,9 @@ final class ConnectionWizardService
             $meta = (array) $setting->meta;
             $meta['transport_enabled'] = true;
             $meta['transport_enabled_workflows'] = array_values(json_decode($run->workflow_allowlist ?: '[]', true));
+            if (empty($meta['finance_currency_contract']) && ! empty($current['valuation_contract'])) {
+                $meta['finance_currency_contract'] = $current['valuation_contract'];
+            }
             $setting->update(['mode' => 'active', 'meta' => $meta, 'updated_at' => now()]);
             $mapping->update(['status' => 'verified', 'activation_state' => 'active']);
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->update([
@@ -809,6 +854,12 @@ final class ConnectionWizardService
         $approvedCandidates = collect($snapshot['comparison'] ?? [])->keyBy('fingerprint');
         $approvedRoles = AccountRolePolicy::forOperations(json_decode($approvedRun->workflow_allowlist ?: '[]', true));
 
+        // Materialize prerequisites before dependent items, irrespective of the
+        // order in which the reviewer visited the screens.
+        $decisions = $decisions->sortBy(fn ($decision) => match ($decision->entity_type) {
+            'account_role' => 0, 'unit', 'category' => 1, 'item' => 3, default => 2,
+        });
+
         foreach ($decisions as $decision) {
             if ($decision->action === 'select_account_role') {
                 $details = json_decode($decision->safe_details ?: '{}', true);
@@ -831,11 +882,20 @@ final class ConnectionWizardService
                         'notes' => 'Approved connection wizard '.$runUuid, 'last_verified_at' => now(),
                         'created_at' => now(), 'updated_at' => now()]
                 );
-                continue;
+                $accountMappingId = DB::connection('tenant')->table('integration_account_mappings')
+                    ->where('organization_id', $organizationMapping->solastock_organization_id)
+                    ->where('integration', 'solabooks')->where('mapping_type', $role)->value('id');
+                // Runtime validation consumes the same durable reviewed role
+                // identity as the catalog, not just a saved selector value.
+                $decision = clone $decision;
+                $decision->action = 'bind_existing';
+                $decision->solastock_record_ids = json_encode([(string) $accountMappingId]);
+                $decision->solabooks_record_ids = json_encode([(string) $account->id]);
             }
             if (! in_array($decision->action, [
                 'bind_existing', 'create_solastock_record', 'keep_solastock_authority',
                 'select_authoritative_record', 'resolve_account_category',
+                'approve_exact_binding', 'select_unit', 'select_category', 'select_warehouse',
             ], true)) {
                 continue;
             }
@@ -843,7 +903,8 @@ final class ConnectionWizardService
             $stockIds = array_values(json_decode($decision->solastock_record_ids ?: '[]', true));
             $booksIds = array_values(json_decode($decision->solabooks_record_ids ?: '[]', true));
             $createsStock = $decision->action === 'create_solastock_record';
-            $createsBooks = $decision->action === 'keep_solastock_authority';
+            $createsBooks = $decision->action === 'keep_solastock_authority'
+                || (in_array($decision->action, ['select_unit', 'select_category'], true) && $booksIds === []);
             if (($createsStock && (count($booksIds) !== 1 || $stockIds !== []))
                 || ($createsBooks && (count($stockIds) !== 1 || $booksIds !== []))
                 || (! $createsStock && ! $createsBooks && (count($booksIds) !== 1 || count($stockIds) !== 1))) {
@@ -1018,6 +1079,7 @@ final class ConnectionWizardService
         string $booksId,
     ): void {
         $definitions = [
+            'account_role' => ['integration_account_mappings', 'accounts'],
             'item' => ['items', 'inventory_items'],
             'customer' => ['inventory_customers', 'customers'],
             'supplier' => ['inventory_suppliers', 'suppliers'],
@@ -1028,7 +1090,10 @@ final class ConnectionWizardService
         $tables = $definitions[$entityType] ?? null;
         if (! $tables
             || ! DB::connection('tenant')->table($tables[0])->where('organization_id', $mapping->solastock_organization_id)->where('id', $stockId)->exists()
-            || ! DB::connection('tenant')->table($tables[1])->where('organization_id', $mapping->finance_organization_id)->where('id', $booksId)->exists()) {
+            // Finance may have committed this owner-created record after our
+            // review transaction began. A current read is required here; the
+            // repeatable-read snapshot must not hide the committed response.
+            || ! DB::connection('tenant')->table($tables[1])->where('organization_id', $mapping->finance_organization_id)->where('id', $booksId)->sharedLock()->first()) {
             $this->fail('mapping_record_scope_mismatch');
         }
     }
@@ -1094,6 +1159,8 @@ final class ConnectionWizardService
             'classification' => $candidate['classification'],
             'mapping_confidence' => $candidate['classification'] === 'exact_match' ? 'deterministic' : 'review_required',
             'evidence' => $candidate['safe_details'],
+            'safe_details' => $candidate['safe_details'],
+            'decision_class' => $candidate['entity_type'] === 'account_role' ? 'accountant_decision' : 'owner_decision',
             'solastock_record_ids' => array_values(array_map('strval', $candidate['solastock_record_ids'])),
             'solabooks_record_ids' => array_values(array_map('strval', $candidate['solabooks_record_ids'])),
             'solastock' => null,
@@ -1238,10 +1305,14 @@ final class ConnectionWizardService
             ];
         })->all();
         $base = strtoupper((string) $mapping->base_currency_code);
+        $financeOrg = DB::connection('tenant')->table('organizations')
+            ->where('id', $mapping->finance_organization_id)->first();
         $currencyValid = preg_match('/^[A-Z]{3}$/', $base) === 1 && $mapping->currency_verified_at !== null;
 
         return [
             'base_currency' => $base,
+            'money_scale' => (int) ($financeOrg->money_scale ?? Decimal::MONEY_SCALE),
+            'rate_scale' => (int) ($financeOrg->exchange_rate_scale ?? 8),
             'currency_verified' => $currencyValid,
             'accounts' => $accounts,
             'complete' => $currencyValid && collect($accounts)->every(fn (array $row) => $row['valid']),

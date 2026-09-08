@@ -759,6 +759,7 @@ export default function GuidedConnectionAssistant({
         </section>;
 
         const blockers = [
+            ...(view.blockers || []).filter((reason) => typeof reason === 'string'),
             !checks.base_currency_inherited && tr("integration.review.the_finance_base_currency_must_be_configured"),
             ownerPending.length && tr("integration.review.business_record_decisions_remain_incomplete"),
             !view.cutoff_at && tr("integration.review.the_start_date_requires_review"),
