@@ -1,0 +1,17 @@
+# Canonical author identities. `git log`/`git shortlog` and the Intelligence
+# Center ingester (%aN) collapse the historical variants below onto one name.
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama alkhazali <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama Alkhazali <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama Khazali <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> o.a.alkhazali <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> osamaalkhazali <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Omar Al-Khazali <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> H-Najjar94 <o.a.alkhazali@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama alkhazali <osama.khazali97@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama alkhazali <139559748+osamaalkhazali@users.noreply.github.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama <osama@solavel.local>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Osama Ali Salem Khazali <hammzanajjar@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> H-Najjar94 <hammzanajjar@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> H-Najjar94 <49653488+H-Najjar94@users.noreply.github.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Hamza Najjar <hammzanajjar@gmail.com>
+Osama Ali Salem Khazali <o.a.alkhazali@gmail.com> Finance Rescue <noreply@localhost>
