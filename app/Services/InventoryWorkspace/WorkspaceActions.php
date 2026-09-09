@@ -12,6 +12,8 @@ final class WorkspaceActions
         'finance-sources.returns', 'finance-sources.return',
         'finance-allocations.reserve', 'finance-allocations.commit',
         'finance-allocations.release', 'finance-allocations.reverse',
+        'finance-allocations.cost-adjustment.prepare', 'finance-allocations.cost-adjustment.apply',
+        'finance-allocations.cost-adjustment.reverse',
         'reorder-rules.index',
         'reorder-rules.show',
         'reorder-rules.update',

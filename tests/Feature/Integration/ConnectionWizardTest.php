@@ -790,7 +790,7 @@ final class ConnectionWizardTest extends TestCase
         DB::connection('tenant')->table('inventory_items')->delete();
         DB::connection('tenant')->table('integration_account_mappings')->delete();
         $types = ['inventory_asset'=>'asset','cogs'=>'expense','grni'=>'liability','opening_offset'=>'equity',
-            'adjustment_gain'=>'revenue','adjustment_loss'=>'expense','landed_cost_clearing'=>'asset',
+            'adjustment_gain'=>'revenue','adjustment_loss'=>'expense','purchase_price_variance'=>'expense','landed_cost_clearing'=>'asset',
             'transfer_clearing'=>'asset','accounts_receivable'=>'asset','accounts_payable'=>'liability',
             'input_tax'=>'asset','output_tax'=>'liability','rounding'=>'expense','sales_revenue'=>'revenue'];
         $ids = [];
@@ -840,7 +840,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame('connected', $activated['state']);
         $this->assertSame($mapping->mapping_uuid, DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('run_uuid', $run['run_uuid'])->value('organization_mapping_uuid'));
-        $this->assertSame(6, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
+        $this->assertSame(7, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
         $this->assertSame('active', IntegrationSetting::firstOrFail()->mode);
     }
 

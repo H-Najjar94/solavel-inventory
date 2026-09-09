@@ -490,7 +490,7 @@ final class ConnectionWizardService
         $setting = IntegrationSetting::query()->where('organization_id', $organizationId)
             ->where('integration', 'solabooks')->first();
         $valuation = (array) data_get($setting?->meta, 'finance_currency_contract', []);
-        if ($valuation === [] && ($preview['guided_setup']['setup_path'] ?? '') === 'fresh_workspace') {
+        if ($valuation === []) {
             $base = (string) ($preview['accounting']['base_currency'] ?? '');
             $valuation = ['base_currency_code' => $base, 'enabled_currency_codes' => [$base],
                 'money_scale' => (int) ($preview['accounting']['money_scale'] ?? Decimal::MONEY_SCALE),
@@ -868,7 +868,9 @@ final class ConnectionWizardService
                 $role = $decision->entity_type === 'account_role'
                     ? (string) ($details['account_role'] ?? $approvedCandidate['safe_details']['role'] ?? '') : '';
                 if ($role === '') $this->fail('approved_account_role_scope_invalid');
-                if (! in_array($role, $approvedRoles, true)) continue;
+                // PPV is an optional, explicitly reviewed rounding destination.
+                // Saving it does not expand the operational workflow allowlist.
+                if (! in_array($role, $approvedRoles, true) && $role !== 'purchase_price_variance') continue;
                 $account = DB::connection('tenant')->table('accounts')
                     ->where('organization_id', $organizationMapping->finance_organization_id)
                     ->where('id', $accountId)->where('is_active', true)->where('is_postable', true)->first();
@@ -895,7 +897,7 @@ final class ConnectionWizardService
             if (! in_array($decision->action, [
                 'bind_existing', 'create_solastock_record', 'keep_solastock_authority',
                 'select_authoritative_record', 'resolve_account_category',
-                'approve_exact_binding', 'select_unit', 'select_category', 'select_warehouse',
+                'approve_exact_binding', 'select_unit', 'select_category', 'select_warehouse', 'select_party',
             ], true)) {
                 continue;
             }
@@ -1969,6 +1971,7 @@ final class ConnectionWizardService
             'opening_offset' => ['equity', ['opening'], ['opening_stock']],
             'adjustment_gain' => ['revenue', ['adjustment gain'], ['positive_adjustment']],
             'adjustment_loss' => ['expense', ['adjustment loss', 'shrinkage'], ['negative_adjustment']],
+            'purchase_price_variance' => ['expense', ['purchase price variance', 'price variance'], ['bounded_currency_rounding']],
             'landed_cost_clearing' => ['asset', ['landed', 'clearing'], ['landed_cost']],
             'transfer_clearing' => ['asset', ['transfer', 'clearing'], ['cross_entity_transfer']],
             'accounts_receivable' => ['asset', ['receivable'], ['customer_invoice']],
@@ -1984,7 +1987,7 @@ final class ConnectionWizardService
             ? (array) DB::connection('tenant')->table('org_account_defaults')->where('organization_id', $financeOrgId)->first() : [];
         $defaultKeys = ['inventory_asset'=>'inventory_asset_account_id','cogs'=>'purchases_account_id',
             'opening_offset'=>'opening_balance_equity_account_id','adjustment_gain'=>'inventory_adjustment_gain_account_id',
-            'adjustment_loss'=>'inventory_adjustment_loss_account_id','landed_cost_clearing'=>'asset_clearing_account_id',
+            'adjustment_loss'=>'inventory_adjustment_loss_account_id','purchase_price_variance'=>'purchase_price_variance_account_id','landed_cost_clearing'=>'asset_clearing_account_id',
             'accounts_receivable'=>'ar_account_id','accounts_payable'=>'ap_account_id','input_tax'=>'vat_input_account_id',
             'output_tax'=>'vat_output_account_id','rounding'=>'rounding_account_id','sales_revenue'=>'sales_account_id'];
         $stockOrgId = (int) DB::connection('tenant')->table('organizations')->where('id', $financeOrgId)->value('central_org_id');
@@ -2017,6 +2020,7 @@ final class ConnectionWizardService
                 'inventory_asset'=>[['1301','1300'],['inventory_asset']], 'cogs'=>[['5001'],['cogs']],
                 'grni'=>[['2150','2105'],['grni']], 'opening_offset'=>[['3501'],['opening_balance_equity']],
                 'adjustment_gain'=>[['4303'],['inventory_adjustment_gain']], 'adjustment_loss'=>[['6804'],['inventory_adjustment_loss']],
+                'purchase_price_variance'=>[['5104'],['purchase_price_variance']],
                 'landed_cost_clearing'=>[['1580'],['landed_cost_clearing','asset_clearing']],
                 'transfer_clearing'=>[[],['inventory_transfer_clearing']],
                 'accounts_receivable'=>[['1200'],['accounts_receivable']], 'accounts_payable'=>[['2100'],['accounts_payable']],

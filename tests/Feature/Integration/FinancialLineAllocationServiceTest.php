@@ -8,6 +8,7 @@ use App\Models\Tenant\IntegrationFinancialLineAllocation;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\Unit;
 use App\Services\Integration\FinancialLineAllocationService;
+use App\Services\Stock\{PurchaseCostAdjustmentService, StockLedgerService, StockMovement};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -133,13 +134,90 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $this->assertSame('10.00000000', $replacement['allocations'][0]['base_quantity']);
     }
 
+    #[Test]
+    public function purchase_cost_adjustment_is_provenance_backed_idempotent_and_reversible(): void
+    {
+        $line=$this->receipt->lines()->firstOrFail();
+        app(StockLedgerService::class)->post([new StockMovement(direction:'in',itemId:(int)$line->item_id,
+            warehouseId:(int)$this->receipt->warehouse_id,quantity:'10',sourceType:GoodsReceipt::class,
+            sourceId:(int)$this->receipt->id,sourceLineId:(int)$line->id,unitCost:'4',movedAt:'2026-09-09 09:00:00')],
+            'test:purchase-cost:receipt');
+        app(FinancialLineAllocationService::class)->reserve($this->payload(9300,41,'2','10','10','5','50','0','0','50'));
+        $input=['organization_mapping_uuid'=>$this->connection->mapping_uuid,'destination_document_id'=>9300,
+            'destination_fingerprint'=>str_repeat('a',64),'currency_code'=>'JOD','base_currency_code'=>'JOD',
+            'exchange_rate'=>'1','finance_money_scale'=>3,'discount_posting_mode'=>'net'];
+        $service=app(PurchaseCostAdjustmentService::class);
+        $prepared=$service->prepare($input); $again=$service->prepare($input);
+        $this->assertSame($prepared['adjustment_uuid'],$again['adjustment_uuid']);
+        $this->assertSame('10.00000000',$prepared['exact_base_difference']);
+        $this->assertSame('inventory_asset',$prepared['components'][0]['destination_role']);
+        $this->assertSame('40.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $applied=$service->apply($input); $service->apply($input);
+        $this->assertSame('applied',$applied['state']);
+        $this->assertSame('50.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant',TenantTestManager::ORG_A)['ok']);
+        $reversed=$service->reverse($input); $service->reverse($input);
+        $this->assertSame('reversed',$reversed['state']);
+        $this->assertSame('40.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant',TenantTestManager::ORG_A)['ok']);
+        $this->assertSame(1,\App\Models\Tenant\IntegrationPurchaseCostAdjustment::query()->count());
+    }
+
+    #[Test]
+    public function lower_price_is_split_between_actual_sale_cogs_and_remaining_average_inventory(): void
+    {
+        $line=$this->receipt->lines()->firstOrFail();
+        $ledger=app(StockLedgerService::class);
+        $ledger->post([new StockMovement(direction:'in',itemId:(int)$line->item_id,warehouseId:(int)$this->receipt->warehouse_id,
+            quantity:'10',sourceType:GoodsReceipt::class,sourceId:(int)$this->receipt->id,sourceLineId:(int)$line->id,
+            unitCost:'4',movedAt:'2026-09-09 09:00:00')],'test:purchase-cost:mixed-in');
+        $ledger->post([new StockMovement(direction:'out',itemId:(int)$line->item_id,warehouseId:(int)$this->receipt->warehouse_id,
+            quantity:'4',sourceType:\App\Models\Tenant\Shipment::class,sourceId:81,sourceLineId:82,movedAt:'2026-09-09 10:00:00')],
+            'test:purchase-cost:mixed-out');
+        $this->source->transaction_currency_code='USD';$this->source->exchange_rate='2';$this->source->save();
+        app(FinancialLineAllocationService::class)->reserve($this->payload(9400,51,'2','10','10','3','30','0','0','30','2','USD'));
+        $input=['organization_mapping_uuid'=>$this->connection->mapping_uuid,'destination_document_id'=>9400,
+            'destination_fingerprint'=>str_repeat('a',64),'currency_code'=>'USD','base_currency_code'=>'JOD','exchange_rate'=>'2',
+            'finance_money_scale'=>3,'discount_posting_mode'=>'net'];
+        $plan=app(PurchaseCostAdjustmentService::class)->prepare($input);
+        $byRole=collect($plan['components'])->groupBy('destination_role')->map(fn($rows)=>$rows->sum(fn($r)=>(float)$r['posted_base_amount']));
+        $this->assertSame(-2.0,$byRole['cogs']);
+        $this->assertSame(-3.0,$byRole['inventory_asset']);
+        app(PurchaseCostAdjustmentService::class)->apply($input);
+        $this->assertSame('21.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+    }
+
+    #[Test]
+    public function fifo_uses_exact_layer_consumption_and_adjusts_only_the_remaining_layer(): void
+    {
+        $line=$this->receipt->lines()->firstOrFail();
+        \App\Models\Tenant\Item::query()->findOrFail($line->item_id)->update(['costing_method'=>'fifo']);
+        $ledger=app(StockLedgerService::class);
+        $ledger->post([new StockMovement(direction:'in',itemId:(int)$line->item_id,warehouseId:(int)$this->receipt->warehouse_id,
+            quantity:'10',sourceType:GoodsReceipt::class,sourceId:(int)$this->receipt->id,sourceLineId:(int)$line->id,
+            unitCost:'4',movedAt:'2026-09-09 09:00:00')],'test:purchase-cost:fifo-in');
+        $ledger->post([new StockMovement(direction:'out',itemId:(int)$line->item_id,warehouseId:(int)$this->receipt->warehouse_id,
+            quantity:'4',sourceType:\App\Models\Tenant\Shipment::class,sourceId:91,sourceLineId:92,movedAt:'2026-09-09 10:00:00')],
+            'test:purchase-cost:fifo-out');
+        app(FinancialLineAllocationService::class)->reserve($this->payload(9500,61,'2','10','10','5','50','0','0','50'));
+        $input=['organization_mapping_uuid'=>$this->connection->mapping_uuid,'destination_document_id'=>9500,
+            'destination_fingerprint'=>str_repeat('a',64),'currency_code'=>'JOD','base_currency_code'=>'JOD','exchange_rate'=>'1',
+            'finance_money_scale'=>3,'discount_posting_mode'=>'net'];
+        $plan=app(PurchaseCostAdjustmentService::class)->prepare($input);
+        $byRole=collect($plan['components'])->groupBy('destination_role')->map(fn($rows)=>$rows->sum(fn($r)=>(float)$r['posted_base_amount']));
+        $this->assertSame(4.0,$byRole['cogs']);$this->assertSame(6.0,$byRole['inventory_asset']);
+        app(PurchaseCostAdjustmentService::class)->apply($input);
+        $this->assertSame('30.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertSame('5.0000',(string)\App\Models\Tenant\CostLayer::query()->value('unit_cost'));
+    }
+
     private function payload(int $documentId, int $lineId, string $entered, string $base, string $destinationQty,
-        string $destinationPrice, string $gross, string $lineDiscount, string $documentDiscount, string $net): array
+        string $destinationPrice, string $gross, string $lineDiscount, string $documentDiscount, string $net, string $exchangeRate='1', string $currency='JOD'): array
     {
         return [
             'destination_document_type' => 'supplier_bill', 'destination_document_id' => $documentId,
             'destination_revision' => str_repeat('a', 64), 'destination_fingerprint' => str_repeat('a', 64),
-            'allocation_kind' => 'bill', 'currency_code' => 'JOD', 'base_currency_code' => 'JOD', 'exchange_rate' => '1',
+            'allocation_kind' => 'bill', 'currency_code' => $currency, 'base_currency_code' => 'JOD', 'exchange_rate' => $exchangeRate,
             'allocations' => [[
                 'source_document_mapping_uuid' => $this->source->mapping_uuid,
                 'source_document_type' => 'goods_receipt', 'source_document_id' => $this->receipt->id,
