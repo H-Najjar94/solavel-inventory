@@ -87,6 +87,8 @@ final class PurchaseCostAdjustmentService
         return ['contract_version'=>PurchaseCostAdjustmentPlanner::CONTRACT_VERSION,'adjustment_uuid'=>$row->adjustment_uuid,
             'organization_mapping_uuid'=>$row->organization_mapping_uuid,'destination_document_id'=>(int)$row->destination_document_id,
             'destination_fingerprint'=>$row->destination_fingerprint,'state'=>$row->state,
+            'currency_code'=>(string)$row->currency_code,'base_currency_code'=>(string)$row->base_currency_code,
+            'exchange_rate'=>(string)$row->exchange_rate,'finance_money_scale'=>(int)$row->finance_money_scale,
             'exact_base_difference'=>(string)$row->exact_base_difference,'allocated_base_difference'=>(string)$row->allocated_base_difference,
             'rounding_residual'=>(string)$row->rounding_residual,'rounding_bound'=>(string)$row->rounding_bound,
             'components'=>IntegrationPurchaseCostAdjustmentComponent::query()->where('adjustment_uuid',$row->adjustment_uuid)->orderBy('id')->get()->map(fn($c)=>[

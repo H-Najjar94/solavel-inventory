@@ -149,6 +149,10 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $service=app(PurchaseCostAdjustmentService::class);
         $prepared=$service->prepare($input); $again=$service->prepare($input);
         $this->assertSame($prepared['adjustment_uuid'],$again['adjustment_uuid']);
+        $this->assertSame('JOD',$prepared['currency_code']);
+        $this->assertSame('JOD',$prepared['base_currency_code']);
+        $this->assertSame('1.000000000000',$prepared['exchange_rate']);
+        $this->assertSame(3,$prepared['finance_money_scale']);
         $this->assertSame('10.00000000',$prepared['exact_base_difference']);
         $this->assertSame('inventory_asset',$prepared['components'][0]['destination_role']);
         $this->assertSame('40.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
