@@ -131,7 +131,15 @@ class GoodsReceiptService
             if ($cap['serial_ids'] === []) {
                 $originalAccepted = $line['accepted_qty'] ?? null;
                 $originalQuarantine = $line['quarantine_qty'] ?? null;
-                $line = $this->conversions->normalizeLine($line, 'received_qty');
+                $sourceLine = ! empty($line['purchase_order_line_id'])
+                    ? PurchaseOrderLine::query()->where('organization_id', $orgId)->find((int) $line['purchase_order_line_id'])
+                    : null;
+                if (! empty($line['purchase_order_line_id']) && ! $sourceLine) {
+                    throw new RuntimeException('The purchase-order source line is unavailable in this organization.');
+                }
+                $line = $sourceLine && $sourceLine->unit_conversion_version
+                    ? $this->conversions->normalizeLineFromSnapshot($line, 'received_qty', $sourceLine)
+                    : $this->conversions->normalizeLine($line, 'received_qty');
                 if ($originalAccepted !== null && ! empty($line['entered_unit_id'])) {
                     $line['accepted_qty'] = Decimal::qty(Decimal::mul((string) $originalAccepted, (string) $line['unit_conversion_factor']));
                 }

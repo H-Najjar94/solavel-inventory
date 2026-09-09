@@ -7,6 +7,9 @@ use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\StockAdjustment;
+use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
+use App\Models\Tenant\IntegrationFinancialLineAllocation;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\Support\DocumentNumber;
@@ -114,6 +117,45 @@ class InventoryReversalService
             $adjustment->markSystemTransition()->save();
             $this->recordEvent($reversal, 'adjustment.reversed');
 
+            return $reversal->fresh();
+        });
+    }
+
+    public function reverseSalesReturn(SalesReturn $return, string $reason): InventoryReversal
+    {
+        return DB::connection($this->connection())->transaction(function () use ($return, $reason) {
+            $return = SalesReturn::query()->with('lines')->lockForUpdate()->findOrFail($return->id);
+            if ($return->reversal_id) {
+                return InventoryReversal::query()->findOrFail($return->reversal_id);
+            }
+            if ($return->status !== 'posted') {
+                throw new RuntimeException("Only a posted sales return can be reversed (status '{$return->status}').");
+            }
+            $sourceMappingUuid = IntegrationDocumentLifecycleMapping::query()
+                ->where('source_application', 'solastock')->where('source_document_type', 'sales_return')
+                ->where('source_document_id', (string) $return->id)->value('mapping_uuid');
+            if ($sourceMappingUuid && IntegrationFinancialLineAllocation::query()
+                ->where('source_document_mapping_uuid', $sourceMappingUuid)->where('state', 'posted')->exists()) {
+                throw new RuntimeException('Void the linked Finance customer credit before reversing this physical return.');
+            }
+            $this->workflowValidation->assertOperationalDocumentReady($return, 'sales_return.reversed');
+            $this->assertReason($reason);
+            $namespace = 'sales_return:'.$return->id.':post';
+            $hasLedger = StockLedger::query()->where('idempotency_key', 'like', $namespace.'#%')->exists();
+            $reversal = $this->createReversal('sales_return', $return->id, $return->return_number, 'sales_return.posted', 'REV-RMA', $reason);
+            if ($hasLedger) {
+                $this->assertInboundSourceStillReversible($namespace);
+                $this->ledger->reverse($namespace, 'inventory_reversal:'.$reversal->id.':post', [
+                    'action' => 'sales_return.reverse', 'entity_type' => 'inventory_reversal',
+                    'entity_id' => $reversal->id, 'document_ref' => $reversal->reversal_number,
+                ], InventoryReversal::class, $reversal->id);
+            }
+            $return->status = 'reversed';
+            $return->reversal_id = $reversal->id;
+            $return->reversed_at = now();
+            $return->reversed_by = auth()->id();
+            $return->markSystemTransition()->save();
+            $this->recordEvent($reversal, 'sales_return.reversed');
             return $reversal->fresh();
         });
     }

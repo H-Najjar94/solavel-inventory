@@ -35,7 +35,13 @@ class EventPayloadBuilder
 
         $totalChange = '0';
         $lines = [];
-        $originalConversionLines = $this->originalConversionLines($document);
+        // A complete source reversal preserves the original event line ordering.
+        // A partial return has its own selected source-line provenance and must
+        // use the return ledger row snapshot instead of indexing into all lines
+        // from the original shipment.
+        $originalConversionLines = $document instanceof SalesReturn && ! $document->is_source_reversal
+            ? []
+            : $this->originalConversionLines($document);
         foreach ($ledger as $index => $row) {
             $signed = $row->direction === 'in' ? (string) $row->total_cost : '-'.$row->total_cost;
             $totalChange = Decimal::add($totalChange, $signed);
@@ -152,10 +158,10 @@ class EventPayloadBuilder
                 'reason' => $document->reason,
             ];
         }
-        if ($document instanceof SalesReturn && $document->is_source_reversal) {
+        if ($document instanceof SalesReturn && ($document->is_source_reversal || $document->shipment_id)) {
             return [
                 'type' => 'shipment',
-                'id' => (int) $document->source_reversal_shipment_id,
+                'id' => (int) ($document->source_reversal_shipment_id ?: $document->shipment_id),
                 'event_uuid' => $document->original_event_uuid,
                 'reason' => $document->reason,
             ];

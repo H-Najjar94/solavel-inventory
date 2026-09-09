@@ -283,6 +283,12 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::get('/finance-sources/receipts/{goods_receipt}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipt'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipt');
     Route::get('/finance-sources/shipments', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipments'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipments');
     Route::get('/finance-sources/shipments/{shipment}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipment'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipment');
+    Route::get('/finance-sources/returns', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'returns'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.returns');
+    Route::get('/finance-sources/returns/{sales_return}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'salesReturn'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.return');
+    Route::post('/finance-allocations/reserve', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reserve'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reserve');
+    Route::post('/finance-allocations/commit', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'commit'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.commit');
+    Route::post('/finance-allocations/release', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'release'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.release');
+    Route::post('/finance-allocations/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverse'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reverse');
 
     Route::get('/goods-receipts', [GoodsReceiptController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.index');
@@ -408,6 +414,10 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.authorize');
     Route::post('/sales-returns/{sales_return}/inspect', [SalesReturnController::class, 'inspect'])
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.inspect');
+    Route::post('/sales-returns/{sales_return}/cancel', [SalesReturnController::class, 'cancel'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.cancel');
+    Route::post('/sales-returns/{sales_return}/reverse', [SalesReturnController::class, 'reverse'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.reverse');
 
     // ── Traceability: Lots ──
     Route::get('/lots', [TraceabilityController::class, 'lots'])

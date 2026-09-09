@@ -22,6 +22,16 @@ class SalesReturnLine extends Model
         'unit_conversion_precision' => 'integer',
     ];
 
+    public function sourceShipmentLine(): BelongsTo
+    {
+        return $this->belongsTo(ShipmentLine::class, 'source_shipment_line_id');
+    }
+
+    public function sourceStockLedger(): BelongsTo
+    {
+        return $this->belongsTo(StockLedger::class, 'source_stock_ledger_id');
+    }
+
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);

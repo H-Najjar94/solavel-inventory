@@ -7,11 +7,12 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
-import { ItemPicker, WarehousePicker, CustomerPicker, QuantityInput, MoneyInput } from '../components/pickers.jsx';
+import { ItemPicker, WarehousePicker, CustomerPicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { DocumentCurrencyPicker } from '../components/DocumentCurrencyPicker.jsx';
 
-const emptyLine = () => ({ item_id: null, ordered_qty: '', unit_price: '', discount_rate: '', tax_rate: '', tax_code: '' });
+const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', discount_rate: '', tax_rate: '', tax_code: '' });
+const enteredPrice = (unitPrice, factor) => factor ? String((Number(unitPrice || 0) * Number(factor || 1)).toFixed(4)) : unitPrice;
 
 export default function SalesOrderFormPage() {
     const { t } = useI18n();
@@ -37,7 +38,7 @@ export default function SalesOrderFormPage() {
             const s = existing.data.sales_order;
             if (s.status !== 'draft') { toast.push(t('salesOrders.messages.onlyDraftEditable', 'Only draft sales orders can be edited.'), 'error'); nav(`/sales-orders/${id}`); return; }
             setHeader({ order_number: s.order_number, customer_id: s.customer_id ?? null, customer_name: s.customer_name ?? '', warehouse_id: s.warehouse_id, currency_code: s.integration_currency_code ?? '', order_date: s.order_date?.slice(0, 10), requested_ship_date: s.requested_ship_date?.slice(0, 10) ?? '', notes: s.notes ?? '' });
-            setLines((s.lines ?? []).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, unit_price: l.unit_price, discount_rate: l.discount_rate ?? '', tax_rate: l.tax_rate ?? '', tax_code: l.tax_code ?? '' })));
+            setLines((s.lines ?? []).map((l) => ({ item_id: l.item_id, ordered_qty: l.entered_qty ?? l.ordered_qty, entered_unit_id: l.entered_unit_id ?? null, unit_price: enteredPrice(l.unit_price, l.unit_conversion_factor), discount_rate: l.discount_rate ?? '', tax_rate: l.tax_rate ?? '', tax_code: l.tax_code ?? '' })));
         }
     }, [isEdit, existing.data]);
 
@@ -51,7 +52,7 @@ export default function SalesOrderFormPage() {
             const payload = {
                 ...header,
                 requested_ship_date: header.requested_ship_date || null,
-                lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, unit_price: l.unit_price || 0, discount_rate: l.discount_rate || 0, tax_code: l.tax_code || undefined })),
+                lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, entered_qty: l.ordered_qty, entered_unit_id: l.entered_unit_id || undefined, unit_price: l.unit_price || 0, discount_rate: l.discount_rate || 0, tax_code: l.tax_code || undefined })),
             };
             if (payload.lines.length === 0) { toast.push(t('salesOrders.validation.lineRequired', 'Add at least one line with an ordered quantity.'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateSalesOrder(id, payload) : await api.createSalesOrder(payload);
@@ -68,6 +69,7 @@ export default function SalesOrderFormPage() {
     const columns = [
         { key: 'item', label: t('salesOrders.common.item', 'Item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'qty', label: t('salesOrders.form.orderedQuantity', 'Ordered quantity'), width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
+        { key: 'unit', label: t('salesOrders.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: t('salesOrders.form.unitPrice', 'Unit price'), width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
         { key: 'disc', label: t('salesOrders.form.discountPercent', 'Discount %'), width: 110, render: (l, i) => <MoneyInput value={l.discount_rate} onChange={(v) => setLine(i, { discount_rate: v })} /> },
         { key: 'tax', label: t('salesOrders.common.tax', 'Tax'), width: 150, render: (l, i) => <select className="input" aria-label={t('salesOrders.form.salesTaxAria', 'Sales tax for line :line', { line: i + 1 })} value={l.tax_code} onChange={(e) => { const tax = taxOptions.find((option) => option.code === e.target.value); setLine(i, { tax_code: e.target.value, tax_rate: tax?.treatment === 'standard' ? tax.rate : 0 }); }}><option value="">{t('salesOrders.common.noTax', 'No tax')}</option>{taxOptions.map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.treatment === 'standard' ? `${tax.rate}%` : t(`receiving.taxTreatment.${tax.treatment}`, tax.treatment)}</option>)}</select> },

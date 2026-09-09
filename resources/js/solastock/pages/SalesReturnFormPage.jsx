@@ -33,18 +33,27 @@ export default function SalesReturnFormPage() {
             const s = ship.data.shipment;
             setHeader((h) => ({ ...h, warehouse_id: s.warehouse_id }));
             // Preserve the shipped lot/serial identity on the return lines.
-            setLines((s.lines ?? []).map((l) => ({ item_id: l.item_id, returned_qty: l.quantity, unit_cost: l.unit_cost ?? '', condition: 'resellable', bin_id: l.bin_id, lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, is_manual: false })));
+            setLines((s.lines ?? []).filter((l) => Number(l.remaining_base_qty ?? l.quantity) > 0).map((l) => ({
+                source_line_id: l.id, source_stock_ledger_id: l.source_stock_ledger_id,
+                item_id: l.item_id, returned_qty: l.remaining_entered_qty ?? l.entered_qty ?? l.quantity,
+                entered_unit_id: l.entered_unit_id, max_return_qty: l.remaining_entered_qty ?? l.entered_qty ?? l.quantity,
+                unit_cost: l.unit_cost ?? '', condition: 'resellable', disposition: 'restock', bin_id: l.bin_id,
+                lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, is_manual: false,
+            })));
         }
     }, [isEdit, shipmentId, ship.data]);
 
     const existing = useApiQuery(['sales-return', id], () => api.salesReturn(id), { fallback: null, enabled: isEdit });
-    const sourceDriven = !!shipmentId || !!existing.data?.sales_return?.is_source_reversal;
+    const sourceDriven = !!shipmentId || !!existing.data?.sales_return?.shipment_id;
     useEffect(() => {
         if (isEdit && existing.data?.sales_return) {
             const r = existing.data.sales_return;
             if (r.status !== 'draft') { toast.push(t('returns.messages.onlyDraftEditable', 'Only draft sales returns can be edited.'), 'error'); nav(`/sales-returns/${id}`); return; }
             setHeader({ return_number: r.return_number, shipment_id: r.shipment_id, customer_id: r.customer_id ?? null, customer_name: r.customer_name ?? '', warehouse_id: r.warehouse_id, return_date: r.return_date?.slice(0, 10), reason: r.reason ?? '', notes: r.notes ?? '' });
-            setLines((r.lines ?? []).map((l) => ({ item_id: l.item_id, returned_qty: l.returned_qty, unit_cost: l.unit_cost, condition: l.condition, bin_id: l.bin_id, lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, is_manual: !r.shipment_id })));
+            setLines((r.lines ?? []).map((l) => ({ source_line_id: l.source_shipment_line_id, source_stock_ledger_id: l.source_stock_ledger_id,
+                item_id: l.item_id, returned_qty: l.entered_qty ?? l.returned_qty, entered_unit_id: l.entered_unit_id,
+                max_return_qty: l.entered_qty ?? l.returned_qty, unit_cost: l.unit_cost, condition: l.condition,
+                disposition: l.disposition, bin_id: l.bin_id, lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, is_manual: !r.shipment_id })));
         }
     }, [isEdit, existing.data]);
 
@@ -56,7 +65,14 @@ export default function SalesReturnFormPage() {
         try {
             const payload = {
                 ...header,
-                lines: lines.filter((l) => l.item_id && Number(l.returned_qty) > 0).map((l) => ({ item_id: l.item_id, returned_qty: l.returned_qty, unit_cost: l.unit_cost || 0, condition: l.condition, bin_id: l.bin_id, lot_id: l.lot_id || undefined, serial_id: l.serial_id || undefined, lot_code: l.lot_code || undefined, is_manual: !header.shipment_id })),
+                lines: lines.filter((l) => l.item_id && Number(l.returned_qty) > 0).map((l) => ({
+                    source_line_id: l.source_line_id || undefined, source_stock_ledger_id: l.source_stock_ledger_id || undefined,
+                    item_id: l.item_id, returned_qty: l.returned_qty, entered_qty: l.returned_qty,
+                    entered_unit_id: l.entered_unit_id || undefined, unit_cost: l.unit_cost || 0,
+                    condition: l.condition, disposition: l.condition === 'resellable' ? 'restock' : l.condition === 'quarantine' ? 'quarantine' : l.condition === 'damaged' ? 'damage' : 'retire',
+                    bin_id: l.bin_id, lot_id: l.lot_id || undefined, serial_id: l.serial_id || undefined,
+                    lot_code: l.lot_code || undefined, is_manual: !header.shipment_id,
+                })),
             };
             if (payload.lines.length === 0) { toast.push(t('returns.validation.lineRequired', 'Add at least one line with a returned quantity.'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateSalesReturn(id, payload) : await api.createSalesReturn(payload);
@@ -72,9 +88,9 @@ export default function SalesReturnFormPage() {
 
     const columns = [
         { key: 'item', label: t('returns.common.item', 'Item'), render: (l, i) => sourceDriven ? <span>#{l.item_id}</span> : <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
-        { key: 'qty', label: t('returns.form.returnedQuantity', 'Returned quantity'), width: 110, render: (l, i) => sourceDriven ? <span>{l.returned_qty}</span> : <QuantityInput value={l.returned_qty} onChange={(v) => setLine(i, { returned_qty: v })} /> },
+        { key: 'qty', label: t('returns.form.returnedQuantity', 'Returned quantity'), width: 130, render: (l, i) => <div><QuantityInput value={l.returned_qty} onChange={(v) => setLine(i, { returned_qty: v })} /><small className="muted">{sourceDriven ? t('returns.form.remaining', 'Remaining: :quantity', { quantity: l.max_return_qty }) : null}</small></div> },
         { key: 'cond', label: t('returns.form.condition', 'Condition'), width: 180, render: (l, i) => (
-            sourceDriven ? <span>{t('returns.condition.resellable', 'Resellable')}</span> : <select className="input" value={l.condition} onChange={(e) => setLine(i, { condition: e.target.value })}>
+            <select className="input" value={l.condition} onChange={(e) => setLine(i, { condition: e.target.value })}>
                 <option value="resellable">{t('returns.condition.resellable', 'Resellable')}</option>
                         <option value="quarantine">{t('returns.condition.quarantine', 'Quarantine')}</option>
                         <option value="damaged">{t('returns.condition.damaged', 'Damaged (no restock)')}</option>
@@ -107,9 +123,9 @@ export default function SalesReturnFormPage() {
             <div className="panel">
                 <h2>{t('returns.common.lines', 'Lines')}</h2>
                 <DocumentLinesTable columns={columns} lines={lines}
-                    onAdd={() => setLines([...lines, emptyLine()])}
-                    onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={sourceDriven} />
-                <p className="muted">{sourceDriven ? t('returns.form.sourceLockedHint', 'Quantities, warehouse, lot or serial identity, and cost are locked to the posted shipment ledger.') : t('returns.form.manualHint', 'Resellable and quarantined units re-enter stock at their shipment unit cost. Damaged and retired units are recorded without being returned to stock.')}</p>
+                    onAdd={sourceDriven ? undefined : () => setLines([...lines, emptyLine()])}
+                    onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
+                <p className="muted">{sourceDriven ? t('returns.form.sourceLockedHint', 'Choose any remaining quantity and its disposition. Warehouse, lot/serial identity, conversion and cost stay locked to the posted shipment ledger.') : t('returns.form.manualHint', 'Resellable and quarantined units re-enter stock at their shipment unit cost. Damaged and retired units are recorded without being returned to stock.')}</p>
             </div>
 
             <div className="doc-actions">
