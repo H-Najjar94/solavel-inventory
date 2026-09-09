@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Services\Integration\FinancialLineAllocationService;
+use App\Services\Stock\PurchaseCostAdjustmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class FinancialLineAllocationController extends ApiController
 {
-    public function __construct(private FinancialLineAllocationService $allocations) {}
+    public function __construct(private FinancialLineAllocationService $allocations, private PurchaseCostAdjustmentService $costAdjustments) {}
 
     public function reserve(Request $request): JsonResponse
     {
@@ -30,6 +31,33 @@ final class FinancialLineAllocationController extends ApiController
     public function reverse(Request $request): JsonResponse
     {
         return $this->transition($request, 'reversed');
+    }
+
+    public function prepareCostAdjustment(Request $request): JsonResponse
+    {
+        return $this->success($this->costAdjustments->prepare($request->validate($this->costAdjustmentRules(true))));
+    }
+
+    public function applyCostAdjustment(Request $request): JsonResponse
+    {
+        return $this->success($this->costAdjustments->apply($request->validate($this->costAdjustmentRules(false))));
+    }
+
+    public function reverseCostAdjustment(Request $request): JsonResponse
+    {
+        return $this->success($this->costAdjustments->reverse($request->validate($this->costAdjustmentRules(false))));
+    }
+
+    private function costAdjustmentRules(bool $prepare): array
+    {
+        $rules = [
+            'organization_mapping_uuid'=>['required','uuid'],'destination_document_id'=>['required','integer','min:1'],
+            'destination_fingerprint'=>['required','string','size:64'],
+        ];
+        if ($prepare) $rules += ['currency_code'=>['required','string','size:3'],'base_currency_code'=>['required','string','size:3'],
+            'exchange_rate'=>['required','numeric','gt:0'],'finance_money_scale'=>['required','integer','between:0,6'],
+            'discount_posting_mode'=>['required','in:net,gross']];
+        return $rules;
     }
 
     private function transition(Request $request, string $state): JsonResponse

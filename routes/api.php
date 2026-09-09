@@ -289,6 +289,9 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::post('/finance-allocations/commit', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'commit'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.commit');
     Route::post('/finance-allocations/release', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'release'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.release');
     Route::post('/finance-allocations/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverse'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reverse');
+    Route::post('/finance-allocations/cost-adjustment/prepare', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'prepareCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.prepare');
+    Route::post('/finance-allocations/cost-adjustment/apply', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'applyCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.apply');
+    Route::post('/finance-allocations/cost-adjustment/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverseCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.reverse');
 
     Route::get('/goods-receipts', [GoodsReceiptController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.index');
