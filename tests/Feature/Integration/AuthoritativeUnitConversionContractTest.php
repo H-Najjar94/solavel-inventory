@@ -79,6 +79,24 @@ final class AuthoritativeUnitConversionContractTest extends TestCase
         $this->assertFails(fn () => app(UnitConversionResolver::class)->normalizeLine($cross, 'quantity'));
     }
 
+    public function test_serial_unit_conversion_must_resolve_to_whole_base_units(): void
+    {
+        $this->useTenantA();
+        $each = Unit::create(['code' => 'EA-SERIAL', 'name' => 'Serial each', 'kind' => 'count', 'is_active' => true]);
+        $pack = Unit::create(['code' => 'PACK-SERIAL', 'name' => 'Serial pack', 'kind' => 'count', 'is_active' => true]);
+        $item = F::serialItem(['base_unit_id' => $each->id]);
+        UnitConversion::create([
+            'item_id' => $item->id, 'from_unit_id' => $pack->id, 'to_unit_id' => $each->id, 'factor' => '2.5',
+        ]);
+
+        $input = ['item_id' => $item->id, 'entered_qty' => '1', 'entered_unit_id' => $pack->id, 'quantity' => '1'];
+        $this->assertFails(fn () => app(UnitConversionResolver::class)->normalizeLine($input, 'quantity'));
+
+        UnitConversion::query()->where('item_id', $item->id)->update(['factor' => '2']);
+        $normalized = app(UnitConversionResolver::class)->normalizeLine($input, 'quantity');
+        $this->assertSame('2.0000', $normalized['quantity']);
+    }
+
     public function test_alternate_units_are_persisted_for_shipment_return_transfer_and_adjustment_lines(): void
     {
         $this->useTenantA();

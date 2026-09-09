@@ -31,6 +31,7 @@ return [
             'integration_document_lifecycle_audits',
             'integration_document_lifecycle_links',
             'integration_document_lifecycle_mappings',
+            'integration_financial_line_allocations',
             'integration_historical_repair_attempt_audits',
             'integration_historical_repair_batches',
             'integration_mapping_audits',

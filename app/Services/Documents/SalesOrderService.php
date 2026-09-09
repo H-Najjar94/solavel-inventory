@@ -5,6 +5,7 @@ namespace App\Services\Documents;
 use App\Models\Tenant\Customer;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\SalesOrder;
+use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
@@ -29,6 +30,7 @@ class SalesOrderService
         private IntegrationOutboxService $outbox,
         private InventoryTaxService $taxes,
         private WorkflowValidationService $workflowValidation,
+        private UnitConversionResolver $conversions,
     ) {}
 
     private function conn(): string
@@ -225,8 +227,12 @@ class SalesOrderService
         $items = Item::query()->whereIn('id', collect($lines)->pluck('item_id')->filter()->unique())->get(['id', 'sales_price', 'tax_code'])->keyBy('id');
         foreach ($lines as $line) {
             $item = $items[$line['item_id']] ?? null;
+            $line = $this->conversions->normalizeLine(array_merge($line, [
+                'entered_qty' => $line['entered_qty'] ?? $line['ordered_qty'],
+            ]), 'ordered_qty');
             $qty = Decimal::qty((string) $line['ordered_qty']);
-            $unitPrice = Decimal::cost((string) ($line['unit_price'] ?? $item?->sales_price ?? '0'));
+            $enteredPrice = (string) ($line['unit_price'] ?? $item?->sales_price ?? '0');
+            $unitPrice = Decimal::cost(Decimal::div($enteredPrice, (string) ($line['unit_conversion_factor'] ?: 1)));
             $gross = Decimal::mul($qty, $unitPrice);
             $discountRate = Decimal::cost((string) ($line['discount_rate'] ?? '0'));
             $discountAmount = Decimal::money(Decimal::div(Decimal::mul($gross, $discountRate), '100'));
@@ -242,6 +248,15 @@ class SalesOrderService
                 'warehouse_id' => $line['warehouse_id'] ?? $so->warehouse_id,
                 'bin_id' => $line['bin_id'] ?? null,
                 'ordered_qty' => $qty,
+                'entered_qty' => $line['entered_qty'],
+                'entered_unit_id' => $line['entered_unit_id'],
+                'base_unit_id' => $line['base_unit_id'],
+                'unit_conversion_id' => $line['unit_conversion_id'],
+                'unit_conversion_factor' => $line['unit_conversion_factor'],
+                'unit_conversion_version' => $line['unit_conversion_version'],
+                'unit_conversion_hash' => $line['unit_conversion_hash'],
+                'unit_conversion_precision' => $line['unit_conversion_precision'],
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'],
                 'unit_price' => $unitPrice,
                 'discount_rate' => $discountRate,
                 'discount_amount' => $discountAmount,

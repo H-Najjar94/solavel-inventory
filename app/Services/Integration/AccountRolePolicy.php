@@ -17,6 +17,7 @@ final class AccountRolePolicy
         'grn.reversed' => ['inventory_asset', 'grni'],
         'shipment.posted' => ['cogs', 'inventory_asset'],
         'sales_return.posted' => ['inventory_asset', 'cogs'],
+        'sales_return.reversed' => ['inventory_asset', 'cogs'],
         'transfer.posted' => [], // Same organization: quantity movement, no journal.
         'purchase_order.approved' => [],
         'sales_order.confirmed' => [],
@@ -47,6 +48,7 @@ final class AccountRolePolicy
             'grn.reversed' => [['grni', 'debit'], ['inventory_asset', 'credit']],
             'shipment.posted' => [['cogs', 'debit'], ['inventory_asset', 'credit']],
             'sales_return.posted' => [['inventory_asset', 'debit'], ['cogs', 'credit']],
+            'sales_return.reversed' => [['cogs', 'debit'], ['inventory_asset', 'credit']],
             default => null,
         };
     }

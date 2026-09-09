@@ -55,12 +55,17 @@ class IntegrationFoundationTest extends TestCase
         foreach (['disconnected', 'connected_readonly', 'connected_pending_mapping', 'active', 'paused', 'error'] as $mode) {
             $this->assertContains($mode, IntegrationStatusService::MODES);
         }
-        $this->assertCount(12, IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS);
+        $this->assertSame(
+            ['cogs', 'grni', 'inventory_asset'],
+            \App\Services\Integration\AccountRolePolicy::forOperations(['grn.posted', 'shipment.posted'])
+        );
         $this->assertFalse(IntegrationEvents::postsJournal('transfer.posted'));
         $this->assertTrue(IntegrationEvents::postsJournal('grn.posted'));
         $this->assertFalse(IntegrationEvents::postsJournalForPayload('stock_count.posted', ['total_inventory_value_change' => '0.0000']));
         $this->assertTrue(IntegrationEvents::postsJournalForPayload('stock_count.posted', ['total_inventory_value_change' => '1.2500']));
         $this->assertFalse(IntegrationEvents::postsJournalForPayload('adjustment.posted', ['total_inventory_value_change' => '0']));
+        $this->assertFalse(IntegrationEvents::postsJournalForPayload('sales_return.posted', ['total_inventory_value_change' => '0']));
+        $this->assertTrue(IntegrationEvents::postsJournalForPayload('sales_return.reversed', ['total_inventory_value_change' => '-1.25']));
     }
 
     #[Test]
