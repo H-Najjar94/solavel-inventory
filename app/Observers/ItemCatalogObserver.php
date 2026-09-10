@@ -9,6 +9,7 @@ class ItemCatalogObserver
 {
     public function saved(Item $item): void
     {
+        if (app(\App\Services\InventoryWorkspace\MigrationCatalogScope::class)->active()) return;
         app(SolaBooksItemCatalogBridge::class)->sync(
             $item,
             $item->wasRecentlyCreated ? null : (string) $item->getOriginal('sku')

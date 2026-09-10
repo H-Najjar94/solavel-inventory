@@ -373,6 +373,40 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send(['action' => 'opening.index'])->assertForbidden()->assertJsonPath('message', 'workspace_integration_not_entitled');
     }
 
+    public function test_migration_catalog_uses_native_creation_then_durable_explicit_mapping(): void
+    {
+        $category=\App\Models\Tenant\ItemCategory::create(['name'=>'Migration category','code'=>'MIG-CAT','is_active'=>true]);
+        $unit=\App\Models\Tenant\Unit::create(['name'=>'Each','code'=>'MIG-EACH','kind'=>'count','is_active'=>true]);
+        $org=TenantTestManager::ORG_A;
+        foreach (['category'=>[$category->id,991],'unit'=>[$unit->id,992]] as $type=>[$stockId,$financeId]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),
+                'organization_mapping_uuid'=>IntegrationOrganizationMapping::query()->firstOrFail()->mapping_uuid,
+                'central_client_id'=>self::CLIENT,'central_organization_id'=>$org,'finance_organization_id'=>14,'solastock_organization_id'=>$org,
+                'entity_type'=>$type,'solastock_record_id'=>(string)$stockId,'solabooks_record_id'=>(string)$financeId,'status'=>'verified']);
+        }
+        $data=['source_hash'=>hash('sha256','synthetic source'),'name'=>'صنف جديد','sku'=>'MIG-00001','barcode'=>'0000987654321',
+            'finance_category_id'=>991,'finance_unit_id'=>992,'unit_price'=>'15.25','item_type'=>'inventory','valuation_method'=>'fifo'];
+        $facts=$this->send(['action'=>'items.migration-requirements','data'=>$data])->assertOk()->json('data');
+        $this->assertSame(0,\App\Models\Tenant\Item::where('sku','MIG-00001')->count());
+        $key='migration-catalog:'.hash('sha256','stable source identity');
+        $command=['action'=>'items.migration-create','data'=>$data+['requirements_version'=>$facts['version']],'idempotency_key'=>$key];
+        $created=$this->send($command)->assertCreated(); $id=$created->json('data.stock_item_id');
+        $this->send($command)->assertCreated()->assertHeader('X-Workspace-Replayed','true')->assertJsonPath('data.stock_item_id',$id);
+        $this->assertSame(1,\App\Models\Tenant\Item::where('sku','MIG-00001')->count());
+        $this->assertSame('15.2500',\App\Models\Tenant\Item::findOrFail($id)->sales_price);
+        $this->assertSame(1,\App\Models\Tenant\ItemBarcode::where('item_id',$id)->where('barcode','0000987654321')->count());
+        $this->assertSame(0,\App\Models\Tenant\StockLedger::where('item_id',$id)->count());
+        $this->assertSame(0,\App\Models\Tenant\IntegrationMasterDataMapping::where('entity_type','item')->count());
+        $link=['action'=>'items.migration-link','data'=>['creation_key'=>$key,'source_hash'=>$data['source_hash'],'stock_item_id'=>$id,'finance_item_id'=>993],
+            'idempotency_key'=>$key.':link'];
+        $this->send($link)->assertOk(); $this->send($link)->assertOk()->assertHeader('X-Workspace-Replayed','true');
+        $this->assertSame(1,\App\Models\Tenant\IntegrationMasterDataMapping::where('entity_type','item')->where('solabooks_record_id','993')->count());
+        $wrong=$link; $wrong['data']['finance_item_id']=994; $wrong['idempotency_key'].='2'; $this->send($wrong)->assertConflict();
+        $wrong=$command; $wrong['data']['name']='Different source'; $this->send($wrong)->assertConflict();
+        $this->send(['action'=>'items.migration-requirements','data'=>$data])->assertUnprocessable();
+        $this->assertFalse(app(\App\Services\InventoryWorkspace\MigrationCatalogScope::class)->active());
+    }
+
     private function centralFixtureSchema(): void
     {
         $schema = Schema::connection('mysql');

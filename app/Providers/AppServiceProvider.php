@@ -18,6 +18,7 @@ class AppServiceProvider extends ServiceProvider
         // Active-tenant context is request/job scoped state → singleton.
         $this->app->singleton(OrganizationContext::class);
         $this->app->singleton(TenantManager::class);
+        $this->app->singleton(\App\Services\InventoryWorkspace\MigrationCatalogScope::class);
     }
 
     /**

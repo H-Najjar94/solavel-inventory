@@ -25,6 +25,7 @@ final class WorkspaceActions
         'items.index',
         'items.show',
         'items.store',
+        'items.migration-requirements', 'items.migration-create', 'items.migration-link',
         'items.update',
         'items.movements',
         'items.valuation',

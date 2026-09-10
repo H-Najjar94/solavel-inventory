@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 /** Read-only owner facts for a bounded opening plan; no inferred master matches. */
 final class OpeningRequirements
 {
-    public function read(int $warehouseId, array $financeItemIds): array
+    public function read(int $warehouseId, array $financeItemIds,array $plannedItems=[]): array
     {
         $org=app(OrganizationContext::class)->idOrFail();
         app(WarehouseAccessService::class)->assertAllowed($warehouseId);
@@ -55,6 +55,18 @@ final class OpeningRequirements
                 'item_mapping_uuid'=>$identity->mapping_uuid,'unit_mapping_uuid'=>$unit->mapping_uuid,
                 'costing_method'=>$item->costing_method,'quantity'=>bcadd((string)($balance?->quantity ?? '0'),'0',4),
                 'value'=>bcadd((string)($balance?->value ?? '0'),'0',2)];
+        }
+        foreach ($plannedItems as $planned) {
+            $unit=IntegrationMasterDataMapping::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type','unit')
+                ->where('solastock_record_id',(string)$planned['stock_unit_id'])->where('solabooks_record_id',(string)$planned['finance_unit_id'])
+                ->where('status','verified')->whereNull('conflict_code')->whereNull('error_state')
+                ->where('solastock_archived',false)->where('solabooks_archived',false)->first();
+            if (!$unit || !\App\Models\Tenant\Unit::query()->whereKey($planned['stock_unit_id'])->where('is_active',true)->exists()
+                || Item::withTrashed()->where('sku',$planned['sku'])->exists()) $this->fail('items','A planned item needs a new SKU and its reviewed active base unit.');
+            $result[]=['finance_item_id'=>(int)$planned['finance_item_id'],'stock_item_id'=>0,'name'=>$planned['name'],'sku'=>$planned['sku'],
+                'base_unit_id'=>(int)$planned['stock_unit_id'],'finance_unit_id'=>(int)$planned['finance_unit_id'],
+                'item_mapping_uuid'=>'planned:'.$planned['source_hash'],'unit_mapping_uuid'=>$unit->mapping_uuid,
+                'costing_method'=>'fifo','quantity'=>'0.0000','value'=>'0.00'];
         }
         $facts=['warehouse'=>['id'=>$warehouseId,'name'=>$warehouse->name,'code'=>$warehouse->code],
             'signing_key_id'=>(string)($setting->meta['signing_key_id'] ?? ''),
