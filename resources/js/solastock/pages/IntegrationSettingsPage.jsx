@@ -1,3 +1,4 @@
+import FinanceReadiness from '../components/FinanceReadiness.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -58,7 +59,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <div><span>{tr('integration.phase.activation')}</span><strong>{tr(activated ? 'integration.connection.active' : 'integration.phase.safely_paused')}</strong></div>
                 <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
             </div>
-            <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
+            {status.readiness?.can_manage && <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
                 <dl className="kv">
                     <dt>{tr('integration.transport.worker')}</dt><dd>{tr(status.transport?.worker_enabled && status.transport?.worker_running ? 'integration.transport.running' : 'integration.transport.disabled')}</dd>
                     <dt>{tr('integration.transport.receiver')}</dt><dd>{tr(status.transport?.receiver_enabled ? 'integration.details.yes' : 'integration.details.no')}</dd>
@@ -68,7 +69,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                     <dt>{tr('integration.metrics.failed')}</dt><dd><bdi>{status.events?.failed ?? 0}</bdi></dd>
                     <dt>{tr('integration.metrics.ignored')}</dt><dd><bdi>{status.events?.ignored ?? 0}</bdi></dd>
                 </dl>
-            </details>
+            </details>}
         </section>
     </div>;
 }
@@ -96,7 +97,8 @@ export default function IntegrationSettingsPage() {
         refetchInterval: 15_000,
     });
     const s = status.data;
-    const connectionActivated = Boolean(s && (s.mode === 'active' || s.connection_wizard?.state === 'connected'));
+    const connectionActivated = s?.readiness?.state === 'CONNECTED_READY';
+    const [showWizard, setShowWizard] = useState(false);
     useEffect(() => {
         if (s || tenant.client_id) {
             setConnection((current) => ({
@@ -136,6 +138,7 @@ export default function IntegrationSettingsPage() {
                 <h1>{tr('integration.title')}</h1>
             </header>
 
+            {status.isLoading || status.isFetching ? <Skeleton /> : <FinanceReadiness status={status.isError ? null : s} details onRetry={() => status.refetch()} onContinue={() => { setShowWizard(true); setTab('wizard'); }} />}
             {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
             {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
@@ -246,7 +249,7 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {s?.readiness?.finance_setup_complete && s?.readiness?.can_manage && (showWizard || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
