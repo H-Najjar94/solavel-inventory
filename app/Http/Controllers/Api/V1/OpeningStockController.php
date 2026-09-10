@@ -24,6 +24,19 @@ class OpeningStockController extends ApiController
 
     public function __construct(private OpeningStockService $service, private OrganizationContext $context) {}
 
+    public function migrate(Request $request): JsonResponse
+    {
+        abort_unless($request->attributes->get('verified_workspace_action') === 'opening.migrate', 403, 'A signed durable workspace command is required.');
+        $data=$request->validate(['session_id'=>'required|uuid','warehouse_id'=>'required|integer|min:1',
+            'cutover_date'=>'required|date_format:Y-m-d','requirements_version'=>'required|string|regex:/^[a-f0-9]{64}$/D',
+            'lines'=>'required|array|min:1|max:2000','lines.*'=>'required|array:finance_item_id,quantity,unit_cost,total_value',
+            'lines.*.finance_item_id'=>'required|integer|min:1|distinct',
+            'lines.*.quantity'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
+            'lines.*.unit_cost'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
+            'lines.*.total_value'=>['required','string','regex:/^[0-9]{1,14}(\.[0-9]{1,2})?$/D','numeric','gt:0']]);
+        return $this->success(app(\App\Services\InventoryWorkspace\MigrationOpening::class)->post($data));
+    }
+
     public function requirements(Request $request): JsonResponse
     {
         $data=$request->validate(['warehouse_id'=>'required|integer|min:1','finance_item_ids'=>'required|array|min:1|max:2000',
