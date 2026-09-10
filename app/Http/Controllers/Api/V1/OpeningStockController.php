@@ -48,7 +48,12 @@ class OpeningStockController extends ApiController
             ->where('source_type', OpeningStockEntry::class)
             ->where('source_id', $entry->id)->get();
 
-        return $this->success(['entry' => $entry, 'ledger' => $ledger]);
+        $events = \App\Models\Tenant\IntegrationOutboxEvent::query()
+            ->where('aggregate_type', 'OpeningStockEntry')->where('aggregate_id', $entry->id)
+            ->whereIn('event_type', ['opening_stock.posted', 'opening_stock.reversed'])
+            ->orderBy('id')->get(['event_uuid', 'event_type', 'idempotency_key', 'status', 'mapping_status', 'sent_at']);
+
+        return $this->success(['entry' => $entry, 'ledger' => $ledger, 'accounting_events' => $events]);
     }
 
     public function store(StoreOpeningStockRequest $request): JsonResponse

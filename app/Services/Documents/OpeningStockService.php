@@ -106,6 +106,13 @@ class OpeningStockService
                 throw new RuntimeException("Only a draft opening stock entry can be edited (status '{$entry->status}').");
             }
 
+            // The shared request normalizes an omitted number/date to null.
+            // A draft edit must retain its existing server-issued identity/date.
+            foreach (['entry_number', 'opening_date'] as $field) {
+                if (($attributes[$field] ?? '') === '' || $attributes[$field] === null) {
+                    unset($attributes[$field]);
+                }
+            }
             $entry->fill(collect($attributes)->only(['entry_number', 'opening_date', 'warehouse_id', 'notes'])->toArray());
 
             $entry->lines()->delete();

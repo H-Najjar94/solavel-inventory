@@ -33,7 +33,10 @@ final class FinanceWorkspaceTest extends TestCase
         config()->set('integration_safety.solabooks_delivery_enabled', true);
         config()->set('inventory_entitlements.feature_enforcement', true);
         $this->centralFixtureSchema();
-        DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A]);
+        // The disposable shared-Finance projection must satisfy the actual
+        // onboarding contract; an application grant alone is not readiness.
+        DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A,
+            'setup_status' => 'complete', 'finance_setup_completed_at' => now()]);
         $central = DB::connection('mysql');
         $central->beginTransaction();
         $central->table('clients')->insert(['id' => self::CLIENT, 'is_active' => true]);
@@ -245,6 +248,99 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send(['action' => 'lots.index', 'data' => ['warehouse_id' => $other->id]])->assertOk()->assertJsonCount(0, 'data');
         $this->send(['action' => 'warehouses.show', 'parameters' => ['warehouse' => $warehouse->id], 'data' => ['reference_only' => true]])
             ->assertOk()->assertJsonMissingPath('data.balances')->assertJsonMissingPath('data.zones');
+    }
+
+    public function test_opening_draft_uses_native_validation_revision_and_durable_replay(): void
+    {
+        $warehouse = \Tests\Support\StockTestFactory::warehouse();
+        $item = \Tests\Support\StockTestFactory::item(['name' => 'رصيد مخزون افتتاحي']);
+        $create = ['action' => 'opening.store', 'idempotency_key' => 'migration-opening-draft-001',
+            'data' => ['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01',
+                'lines' => [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]]];
+        $response = $this->send($create)->assertCreated()->assertJsonPath('data.total_value', '40.00');
+        $id = $response->json('data.id');
+        $this->send($create)->assertCreated()->assertHeader('X-Workspace-Replayed', 'true')->assertJsonPath('data.id', $id);
+        $this->assertSame(1, \App\Models\Tenant\OpeningStockEntry::query()->count());
+        $this->assertSame(0, \App\Models\Tenant\StockLedger::query()->count());
+        $show = $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk();
+        $revision = $show->json('workspace_revision');
+        $edit = ['action' => 'opening.update', 'parameters' => ['entry' => $id],
+            'idempotency_key' => 'migration-opening-edit-001', 'revision' => $revision,
+            'data' => array_replace($create['data'], ['notes' => 'Reviewed cutover'])];
+        $this->send($edit)->assertOk()->assertJsonPath('data.notes', 'Reviewed cutover');
+        $this->send(array_replace($edit, ['idempotency_key' => 'migration-stale-edit-002']))->assertConflict();
+        $this->send(array_replace_recursive($create, ['data' => ['lines' => [['quantity' => '-4']]]]))->assertConflict();
+        $this->send(array_replace_recursive($create, ['idempotency_key' => 'migration-invalid-003',
+            'data' => ['lines' => [['quantity' => '-4']]]]))->assertUnprocessable();
+        // Native posting checks reviewed accounting mappings before a stock mutation.
+        $fresh = $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk();
+        $this->send(['action' => 'opening.post', 'parameters' => ['entry' => $id],
+            'idempotency_key' => 'migration-unmapped-post-001', 'revision' => $fresh->json('workspace_revision')])->assertUnprocessable();
+        $this->assertSame(0, \App\Models\Tenant\StockLedger::query()->count());
+        DB::connection('mysql')->table('user_organizations')->where('user_id', self::ACTOR)->update(['role' => 'viewer']);
+        $this->app->forgetInstance(\App\Services\Access\InventoryPermissionService::class);
+        $this->send(array_replace($create, ['idempotency_key' => 'migration-viewer-001']))->assertForbidden();
+        $this->assertSame(1, \App\Models\Tenant\OpeningStockEntry::withoutGlobalScopes()->where('organization_id', TenantTestManager::ORG_A)->count());
+    }
+
+    public function test_opening_posts_through_owner_ledger_and_outbox_and_replays_without_duplicates(): void
+    {
+        $org = TenantTestManager::ORG_A;
+        $warehouse = \Tests\Support\StockTestFactory::warehouse();
+        $unit = \App\Models\Tenant\Unit::create(['code' => 'OPEN-EACH', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = \Tests\Support\StockTestFactory::item(['base_unit_id' => $unit->id]);
+        foreach (['item' => [$item->id, 901], 'unit' => [$unit->id, 902]] as $type => [$stockId, $financeId]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create([
+                'mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => IntegrationOrganizationMapping::query()->firstOrFail()->mapping_uuid,
+                'central_client_id' => self::CLIENT, 'central_organization_id' => $org,
+                'finance_organization_id' => 14, 'solastock_organization_id' => $org,
+                'entity_type' => $type, 'solastock_record_id' => (string) $stockId, 'solabooks_record_id' => (string) $financeId, 'status' => 'verified',
+            ]);
+        }
+        foreach (['inventory_asset' => [801, 'asset'], 'opening_offset' => [802, 'equity']] as $role => [$id, $type]) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $id, 'organization_id' => 14, 'name' => $role, 'type' => $type]);
+            \App\Models\Tenant\IntegrationAccountMapping::create(['organization_id' => $org, 'integration' => 'solabooks',
+                'mapping_type' => $role, 'solabooks_account_id' => $id, 'status' => 'verified']);
+        }
+        IntegrationSetting::query()->firstOrFail()->update(['meta' => [
+            'client_id' => self::CLIENT, 'central_organization_id' => $org, 'signing_key_id' => 'synthetic-test-key',
+            'transport_enabled_workflows' => ['opening_stock.posted', 'opening_stock.reversed'],
+            'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD'],
+                'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8,
+                'inventory_valuation_basis' => \App\Services\Integration\FinanceBaseValuation::BASIS],
+        ]]);
+        $draft = $this->send(['action' => 'opening.store', 'idempotency_key' => 'migration-owner-opening-001',
+            'data' => ['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01',
+                'lines' => [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]]])->assertCreated();
+        $id = $draft->json('data.id');
+        $show = $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk();
+        $post = ['action' => 'opening.post', 'parameters' => ['entry' => $id], 'revision' => $show->json('workspace_revision'),
+            'idempotency_key' => 'migration-owner-post-001'];
+        $posted = $this->send($post);
+        $this->assertSame(200, $posted->status(), $posted->getContent());
+        $posted->assertJsonPath('data.status', 'posted');
+        $this->send($post)->assertOk()->assertHeader('X-Workspace-Replayed', 'true');
+        $this->assertSame('4.0000', \App\Models\Tenant\StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $ledger = \App\Models\Tenant\StockLedger::query()->where('source_type', \App\Models\Tenant\OpeningStockEntry::class)->where('source_id', $id)->get();
+        $this->assertCount(1, $ledger);
+        $this->assertSame('40.00', $ledger[0]->total_cost);
+        $events = \App\Models\Tenant\IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->get();
+        $this->assertCount(1, $events);
+        $contract = app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($events[0]);
+        $this->assertSame(801, $contract['lines'][0]['account_id']);
+        $this->assertSame('40.00', $contract['lines'][0]['base_debit']);
+        $this->assertSame(802, $contract['lines'][1]['account_id']);
+        $this->assertSame('40.00', $contract['lines'][1]['base_credit']);
+        $this->assertSame(901, $contract['inventory_quantities'][0]['finance_item_id']);
+        $this->assertSame('4.0000', $contract['inventory_quantities'][0]['base_quantity']);
+        $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk()
+            ->assertJsonCount(1, 'data.accounting_events')->assertJsonPath('data.accounting_events.0.event_uuid', $events[0]->event_uuid);
+    }
+
+    public function test_opening_access_requires_completed_finance_onboarding(): void
+    {
+        DB::connection('tenant')->table('organizations')->where('id', 14)->update(['finance_setup_completed_at' => null]);
+        $this->send(['action' => 'opening.index'])->assertForbidden()->assertJsonPath('message', 'workspace_integration_not_entitled');
     }
 
     private function centralFixtureSchema(): void
