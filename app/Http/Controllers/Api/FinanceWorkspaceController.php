@@ -55,6 +55,7 @@ final class FinanceWorkspaceController
             ->whereIn('status', ['verified', 'verified_hold'])->first();
 
         try {
+            app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete((int) $org->id);
             app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping ?? new IntegrationOrganizationMapping(['central_client_id' => $org->client_id, 'central_organization_id' => $org->id]));
         } catch (\RuntimeException $exception) {
             abort(403, 'workspace_integration_not_entitled');

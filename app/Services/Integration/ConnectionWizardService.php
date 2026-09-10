@@ -247,6 +247,7 @@ final class ConnectionWizardService
         bool $canOwnerReview = true,
         bool $canAccountingReview = false,
     ): array {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         if (! in_array($action, self::DECISIONS, true)) {
             $this->fail('unsupported_mapping_decision');
         }
@@ -632,6 +633,7 @@ final class ConnectionWizardService
 
     public function freezeSnapshot(int $organizationId, string $runUuid, int $expectedLockVersion, int $actorUserId): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         $preview = $this->discover($organizationId);
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $expectedLockVersion, $actorUserId, $preview): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
@@ -658,6 +660,7 @@ final class ConnectionWizardService
     public function reviewCutoff(int $organizationId, string $runUuid, string $cutoffAt, array $physicalCounts,
         string $unexplainedVariance, int $expectedLockVersion, int $actorUserId): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $cutoffAt, $physicalCounts, $unexplainedVariance, $expectedLockVersion, $actorUserId): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
             if ($run->state !== 'cutoff_review' || (int) $run->lock_version !== $expectedLockVersion || $run->snapshot_frozen_at === null) {
@@ -685,6 +688,7 @@ final class ConnectionWizardService
     public function approveRole(int $organizationId, string $runUuid, string $approvalHash, string $reviewerRole,
         int $actorUserId, bool $authorized): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         if (! $authorized || ! in_array($reviewerRole, ['owner', 'accountant'], true)) $this->fail('wizard_approval_role_forbidden');
         $preview = $this->finalPreview($organizationId, $runUuid);
         if (! ($preview['review_ready'] ?? false) || ! in_array($preview['state'], ['preview_ready', 'owner_approved', 'accountant_approved'], true) || ! hash_equals($preview['approval_payload_hash'], $approvalHash)) {
@@ -743,6 +747,7 @@ final class ConnectionWizardService
 
     public function approve(int $organizationId, string $runUuid, string $approvalHash, string $confirmation, int $actorUserId): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         $preview = $this->finalPreview($organizationId, $runUuid);
         if ($preview['state'] !== 'ready_for_approval'
             || ! hash_equals($preview['approval_payload_hash'], $approvalHash)
@@ -782,6 +787,7 @@ final class ConnectionWizardService
         string $confirmation,
         int $actorUserId,
     ): array {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         if (! $this->activationGateReady($organizationId)
             || ! hash_equals((string) config('integration_connection_wizard.confirmation_phrase'), $confirmation)) {
             $this->fail('organization_scoped_activation_gate_closed');
@@ -1652,6 +1658,8 @@ final class ConnectionWizardService
         }
         $financeOperational = $financeOperational || in_array(true, $evidence['finance'], true);
         $stockOperational = $stockOperational || in_array(true, $evidence['stock'], true);
+        $financeStarted = $financeOrgId > 0 && DB::connection('tenant')->table('organizations')->where('id', $financeOrgId)->where(fn ($q) => $q->whereNotNull('finance_setup_completed_at')->orWhereNotIn('finance_setup_step', ['1', 'step-1']))->exists();
+        $financeOperational = $financeOperational || $financeStarted;
         $customerScenario = $financeOperational && $stockOperational ? 'previously_separate'
             : ($financeOperational ? 'finance_first' : ($stockOperational ? 'stock_first' : 'new_both'));
 

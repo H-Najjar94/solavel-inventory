@@ -1,9 +1,11 @@
+import {useTenant} from '../stores/tenant.jsx';
+import FinanceReadiness from '../components/FinanceReadiness.jsx';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
-import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
 import { useCan } from '../stores/meta.jsx';
 import { useToast } from '../stores/toast.jsx';
 import { t } from '../i18n/index.js';
@@ -80,6 +82,7 @@ function OpsGroup({ title, icon, children }) {
 }
 
 export default function DashboardPage() {
+    const tenant = useTenant();
     const qc = useQueryClient();
     const toast = useToast();
     const can = useCan();
@@ -88,7 +91,7 @@ export default function DashboardPage() {
     const { data, isFetching } = useApiQuery(['dashboard'], api.dashboard, { fallback: EMPTY_DASHBOARD });
     const layoutQuery = useApiQuery(['dashboard-layout'], api.getDashboardLayout, { fallback: { layout: null } });
     const d = data ?? EMPTY_DASHBOARD;
-    const integ = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null, enabled: canViewIntegration });
+    const integ = useApiQuery(['integration-status', tenant.organization_id], api.integrationStatus, { fallback: null, enabled: canViewIntegration, refetchOnMount: 'always', refetchOnWindowFocus: 'always' });
     const si = integ.data;
     const [customizing, setCustomizing] = useState(false);
     const [layout, setLayout] = useState(DEFAULT_LAYOUT);
@@ -210,18 +213,7 @@ export default function DashboardPage() {
                 </OpsGroup>
             </div>
         ),
-        integration: canViewIntegration && si && (
-            <Link to="/integrations/solabooks" className="panel panel--link" style={{ display: 'block', textDecoration: 'none', color: 'inherit', marginTop: 16 }}>
-                <h2 style={{ fontSize: 14 }}>
-                    <i className="fa-solid fa-rotate" style={{ color: '#e09921', marginInlineEnd: 6 }} />
-                    {t('dashboard.solabooksSync')} <span className={`badge ${si.health === 'healthy' ? 'badge--live' : si.health === 'disconnected' ? 'badge--muted' : 'badge--warn'}`}>{['healthy', 'disconnected', 'needs_mapping', 'error'].includes(si.health) ? t(`status.${si.health}`) : t('status.unknown', undefined, { value: si.health })}</span>
-                </h2>
-                <p className="muted" style={{ margin: 0 }}>
-                    {t('dashboard.pending')}: {si.events?.pending ?? 0} · {t('dashboard.failed')}: {si.events?.failed ?? 0} ·
-                    {t('dashboard.mapping')} {si.mapping_completeness_pct ?? 0}% · {t('dashboard.awaitingSync')}: {si.documents_awaiting_sync ?? 0}
-                </p>
-            </Link>
-        ),
+        integration: canViewIntegration && (integ.isFetching ? <Skeleton /> : <FinanceReadiness status={integ.isError ? null : si} onRetry={() => integ.refetch()} />),
         activity: (
             <div className="dash-cols" style={{ marginTop: 16 }}>
                 <div className="panel">
