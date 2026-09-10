@@ -70,4 +70,9 @@ class FinanceOnboardingReadinessTest extends TestCase {
   $this->expectException(\RuntimeException::class);$controller->configure($request);
  }
 
+ public function test_incomplete_setup_has_an_actionable_conflict_response():void {
+  try{app(FinanceOnboardingReadiness::class)->assertComplete(71);$this->fail('Incomplete accepted');}
+  catch(\App\Exceptions\FinanceSetupRequired $e){$response=$e->render(\Illuminate\Http\Request::create('/integration/activate'));$this->assertSame(409,$response->getStatusCode());$this->assertSame('finance_setup_required',$response->getData(true)['error']['code']);}
+ }
+
 }
