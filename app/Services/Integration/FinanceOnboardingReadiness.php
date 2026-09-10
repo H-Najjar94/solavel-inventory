@@ -20,11 +20,7 @@ class FinanceOnboardingReadiness
         try {
             $access=app(InventoryCommercialEntitlementService::class)->checkConnectionSetupReadiness($centralOrgId);
             if (str_contains($access['reason_code'],'unavailable') || str_contains($access['reason_code'],'identity')) return $result;
-            $org=Schema::connection('tenant')->hasTable('organizations')
-                ? DB::connection('tenant')->table('organizations')->where('central_org_id',$centralOrgId)->first() : null;
-            $provisioned=$org && Schema::connection('tenant')->hasTable('accounts') && Schema::connection('tenant')->hasTable('invoices');
-            if ($org && (!property_exists($org,'setup_status') || !property_exists($org,'finance_setup_completed_at'))) return $result;
-            $complete=$org && $org->setup_status==='complete' && $org->finance_setup_completed_at!==null;
+            [$org, $provisioned, $complete] = $this->setupFacts($centralOrgId);
             $policy=app(ConnectionManagementPolicy::class)->status($centralOrgId,$user);
             $manage=(bool)($policy['can_manage_connection']??false);
             $entitled=(bool)$access['allowed'];
@@ -39,9 +35,27 @@ class FinanceOnboardingReadiness
     }
     public function assertComplete(int $centralOrgId):void
     {
-        $state=$this->resolve($centralOrgId);
-        if (!$state['readiness_available'] || !$state['finance_provisioned'] || !$state['finance_setup_complete']) {
-            throw new RuntimeException(__('inventory.integration.finance_setup_required'));
+        try {
+            [, $provisioned, $complete] = $this->setupFacts($centralOrgId);
+            if ($provisioned && $complete) return;
+        } catch (\Throwable) {
+            // Missing schema or unreadable Finance source is never readiness.
         }
+        throw new RuntimeException(__('inventory.integration.finance_setup_required'));
     }
+    /** Finance-owned tenant facts; usable by workers without an HTTP session.
+     * Commercial authorization stays in ApprovedFinanceIntegrationEntitlement.
+     */
+    private function setupFacts(int $centralOrgId): array
+    {
+        $org=Schema::connection('tenant')->hasTable('organizations')
+            ? DB::connection('tenant')->table('organizations')->where('central_org_id',$centralOrgId)->first() : null;
+        if ($org && (!property_exists($org,'setup_status') || !property_exists($org,'finance_setup_completed_at'))) {
+            throw new RuntimeException('Finance readiness contract unavailable.');
+        }
+        $provisioned=$org && Schema::connection('tenant')->hasTable('accounts') && Schema::connection('tenant')->hasTable('invoices');
+        $complete=$org && $org->setup_status==='complete' && $org->finance_setup_completed_at!==null;
+        return [$org, $provisioned, $complete];
+    }
+
 }

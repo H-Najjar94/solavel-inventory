@@ -55,4 +55,11 @@ class FinanceOnboardingReadinessTest extends TestCase {
   $this->assertFalse($safety->deliveryEnabledFor(72));
  }
 
+ public function test_completed_background_worker_setup_guard_does_not_require_interactive_entitlement_context():void {
+  $gate=\Mockery::mock(InventoryCommercialEntitlementService::class);$gate->shouldNotReceive('checkConnectionSetupReadiness');
+  $this->app->instance(InventoryCommercialEntitlementService::class,$gate);
+  app(FinanceOnboardingReadiness::class)->assertComplete(72);
+  $this->addToAssertionCount(1);
+ }
+
 }
