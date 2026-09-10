@@ -41,7 +41,7 @@ class FinanceOnboardingReadiness
         } catch (\Throwable) {
             // Missing schema or unreadable Finance source is never readiness.
         }
-        throw new RuntimeException(__('inventory.integration.finance_setup_required'));
+        throw new \App\Exceptions\FinanceSetupRequired();
     }
     /** Finance-owned tenant facts; usable by workers without an HTTP session.
      * Commercial authorization stays in ApprovedFinanceIntegrationEntitlement.
