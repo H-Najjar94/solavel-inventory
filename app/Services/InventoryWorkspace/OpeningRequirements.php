@@ -30,11 +30,13 @@ final class OpeningRequirements
             ->pluck('solabooks_account_id','mapping_type')->all();
         $identities=IntegrationMasterDataMapping::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)
             ->where('entity_type','item')->whereIn('solabooks_record_id',array_map('strval',$financeItemIds))
-            ->whereIn('status',['mapped','verified'])->whereNull('conflict_code')->get()->keyBy('solabooks_record_id');
+            ->whereIn('status',['mapped','verified'])->whereNull('conflict_code')->whereNull('error_state')
+            ->where('solastock_archived',false)->where('solabooks_archived',false)->get()->keyBy('solabooks_record_id');
         $items=Item::query()->with('baseUnit')->whereIn('id',$identities->pluck('solastock_record_id'))->get()->keyBy('id');
         $units=IntegrationMasterDataMapping::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)
             ->where('entity_type','unit')->whereIn('solastock_record_id',$items->pluck('base_unit_id')->map(fn($id)=>(string)$id))
-            ->whereIn('status',['mapped','verified'])->whereNull('conflict_code')->get()->keyBy('solastock_record_id');
+            ->whereIn('status',['mapped','verified'])->whereNull('conflict_code')->whereNull('error_state')
+            ->where('solastock_archived',false)->where('solabooks_archived',false)->get()->keyBy('solastock_record_id');
         $balances=StockBalance::query()->where('warehouse_id',$warehouseId)->whereIn('item_id',$items->keys())
             ->selectRaw('item_id, SUM(on_hand_qty) quantity, SUM(total_value) value')->groupBy('item_id')->get()->keyBy('item_id');
         $result=[];

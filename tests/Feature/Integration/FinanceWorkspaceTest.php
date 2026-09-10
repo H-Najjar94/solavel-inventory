@@ -313,6 +313,12 @@ final class FinanceWorkspaceTest extends TestCase
         $before=$this->send($requirements)->assertOk()->assertJsonPath('data.items.0.quantity','0.0000')
             ->assertJsonPath('data.inventory_account_id',801)->assertJsonPath('data.opening_offset_account_id',802);
         $this->send(array_replace_recursive($requirements,['data'=>['finance_item_ids'=>[999999]]]))->assertUnprocessable();
+        $identity=\App\Models\Tenant\IntegrationMasterDataMapping::query()->where('entity_type','item')->where('solabooks_record_id','901')->firstOrFail();
+        $identity->update(['solabooks_archived'=>true]);
+        $this->send($requirements)->assertUnprocessable();
+        $identity->update(['solabooks_archived'=>false,'error_state'=>['code'=>'synthetic_conflict']]);
+        $this->send($requirements)->assertUnprocessable();
+        $identity->update(['error_state'=>null]);
         $this->assertSame(0,\App\Models\Tenant\OpeningStockEntry::query()->count());
         $draft = $this->send(['action' => 'opening.store', 'idempotency_key' => 'migration-owner-opening-001',
             'data' => ['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01',
