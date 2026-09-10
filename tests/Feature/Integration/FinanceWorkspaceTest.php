@@ -342,6 +342,23 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertNotSame($before->json('data.version'),$after->json('data.version'));
         $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk()
             ->assertJsonCount(1, 'data.accounting_events')->assertJsonPath('data.accounting_events.0.event_uuid', $events[0]->event_uuid);
+        $migration=['action'=>'opening.migrate','idempotency_key'=>'migration-atomic-opening-001',
+            'data'=>['session_id'=>(string) \Illuminate\Support\Str::uuid(),'warehouse_id'=>$warehouse->id,
+                'cutover_date'=>'2026-09-01','requirements_version'=>$before->json('data.version'),
+                'lines'=>[['finance_item_id'=>901,'quantity'=>'4.0000','unit_cost'=>'10.0000','total_value'=>'40.00']]]];
+        $this->send($migration)->assertUnprocessable();
+        $this->assertSame(1,\App\Models\Tenant\OpeningStockEntry::query()->count());
+        $migration['data']['requirements_version']=$after->json('data.version');
+        $invalid=$migration; $invalid['data']['lines'][0]['total_value']='39.00';
+        $this->send($invalid)->assertUnprocessable();
+        $this->assertSame(1,\App\Models\Tenant\OpeningStockEntry::query()->count());
+        $this->send($migration)->assertOk()->assertJsonPath('data.status','posted')
+            ->assertJsonPath('data.positions.0.posted_value','40.00')->assertJsonPath('data.positions.0.value_difference','0.00');
+        $this->send($migration)->assertOk()->assertHeader('X-Workspace-Replayed','true');
+        $this->assertSame(2,\App\Models\Tenant\OpeningStockEntry::query()->count());
+        $this->assertSame(2,\App\Models\Tenant\IntegrationOutboxEvent::query()->where('event_type','opening_stock.posted')->count());
+        $this->assertSame('8.0000',\App\Models\Tenant\StockBalance::query()->where('item_id',$item->id)->value('on_hand_qty'));
+
     }
 
     public function test_opening_access_requires_completed_finance_onboarding(): void
