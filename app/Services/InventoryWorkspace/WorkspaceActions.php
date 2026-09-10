@@ -39,6 +39,7 @@ final class WorkspaceActions
         'balances.index',
         'ledger.index',
         'opening.index',
+        'opening.requirements',
         'opening.show',
         'opening.store',
         'opening.update',

@@ -192,6 +192,8 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouse-images.destroy');
 
     // Opening Stock documents
+    Route::get('/opening-stock/requirements', [OpeningStockController::class, 'requirements'])
+        ->middleware('perm:inventory.view_stock')->name('api.v1.opening.requirements');
     Route::get('/opening-stock', [OpeningStockController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.opening.index');
     Route::get('/opening-stock/{entry}', [OpeningStockController::class, 'show'])

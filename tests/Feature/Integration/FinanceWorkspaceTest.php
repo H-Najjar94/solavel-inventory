@@ -309,6 +309,11 @@ final class FinanceWorkspaceTest extends TestCase
                 'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8,
                 'inventory_valuation_basis' => \App\Services\Integration\FinanceBaseValuation::BASIS],
         ]]);
+        $requirements=['action'=>'opening.requirements','data'=>['warehouse_id'=>$warehouse->id,'finance_item_ids'=>[901]]];
+        $before=$this->send($requirements)->assertOk()->assertJsonPath('data.items.0.quantity','0.0000')
+            ->assertJsonPath('data.inventory_account_id',801)->assertJsonPath('data.opening_offset_account_id',802);
+        $this->send(array_replace_recursive($requirements,['data'=>['finance_item_ids'=>[999999]]]))->assertUnprocessable();
+        $this->assertSame(0,\App\Models\Tenant\OpeningStockEntry::query()->count());
         $draft = $this->send(['action' => 'opening.store', 'idempotency_key' => 'migration-owner-opening-001',
             'data' => ['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01',
                 'lines' => [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]]])->assertCreated();
@@ -333,6 +338,8 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame('40.00', $contract['lines'][1]['base_credit']);
         $this->assertSame(901, $contract['inventory_quantities'][0]['finance_item_id']);
         $this->assertSame('4.0000', $contract['inventory_quantities'][0]['base_quantity']);
+        $after=$this->send($requirements)->assertOk()->assertJsonPath('data.items.0.quantity','4.0000')->assertJsonPath('data.items.0.value','40.00');
+        $this->assertNotSame($before->json('data.version'),$after->json('data.version'));
         $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk()
             ->assertJsonCount(1, 'data.accounting_events')->assertJsonPath('data.accounting_events.0.event_uuid', $events[0]->event_uuid);
     }

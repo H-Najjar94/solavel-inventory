@@ -24,6 +24,13 @@ class OpeningStockController extends ApiController
 
     public function __construct(private OpeningStockService $service, private OrganizationContext $context) {}
 
+    public function requirements(Request $request): JsonResponse
+    {
+        $data=$request->validate(['warehouse_id'=>'required|integer|min:1','finance_item_ids'=>'required|array|min:1|max:2000',
+            'finance_item_ids.*'=>'required|integer|min:1|distinct']);
+        return $this->success(app(\App\Services\InventoryWorkspace\OpeningRequirements::class)->read($data['warehouse_id'],$data['finance_item_ids']));
+    }
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
