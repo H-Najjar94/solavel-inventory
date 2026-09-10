@@ -57,7 +57,11 @@ final class OpeningRequirements
                 'value'=>bcadd((string)($balance?->value ?? '0'),'0',2)];
         }
         $facts=['warehouse'=>['id'=>$warehouseId,'name'=>$warehouse->name,'code'=>$warehouse->code],
-            'currency_code'=>$currency['base_currency_code'],'inventory_account_id'=>(int)$accounts['inventory_asset'],
+            'currency_code'=>$currency['base_currency_code'],'money_scale'=>(int)$currency['money_scale'],'rate_scale'=>(int)$currency['rate_scale'],
+            'identity'=>['integration_mapping_id'=>(int)$mapping->id,'central_client_id'=>(int)$mapping->central_client_id,
+                'central_organization_id'=>(int)$mapping->central_organization_id,'finance_organization_id'=>(int)$mapping->finance_organization_id,
+                'inventory_organization_id'=>(int)$mapping->solastock_organization_id],
+            'inventory_account_id'=>(int)$accounts['inventory_asset'],
             'opening_offset_account_id'=>(int)$accounts['opening_offset'],'items'=>$result];
         return $facts+['version'=>hash('sha256',json_encode($facts,JSON_THROW_ON_ERROR))];
     }
