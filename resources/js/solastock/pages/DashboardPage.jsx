@@ -1,5 +1,5 @@
 import {useTenant} from '../stores/tenant.jsx';
-import FinanceReadiness from '../components/FinanceReadiness.jsx';
+import FinanceReadiness, {FinanceReadinessSkeleton} from '../components/FinanceReadiness.jsx';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -213,7 +213,7 @@ export default function DashboardPage() {
                 </OpsGroup>
             </div>
         ),
-        integration: canViewIntegration && (integ.isFetching ? <Skeleton /> : <FinanceReadiness status={integ.isError ? null : si} onRetry={() => integ.refetch()} />),
+        integration: canViewIntegration && (integ.isLoading ? <FinanceReadinessSkeleton /> : <FinanceReadiness status={integ.isError ? null : si} onRetry={() => integ.refetch()} />),
         activity: (
             <div className="dash-cols" style={{ marginTop: 16 }}>
                 <div className="panel">
