@@ -39,9 +39,15 @@ class OpeningStockController extends ApiController
 
     public function requirements(Request $request): JsonResponse
     {
-        $data=$request->validate(['warehouse_id'=>'required|integer|min:1','finance_item_ids'=>'required|array|min:1|max:2000',
-            'finance_item_ids.*'=>'required|integer|min:1|distinct']);
-        return $this->success(app(\App\Services\InventoryWorkspace\OpeningRequirements::class)->read($data['warehouse_id'],$data['finance_item_ids']));
+        $data=$request->validate(['warehouse_id'=>'required|integer|min:1','finance_item_ids'=>'present|array|max:2000',
+            'finance_item_ids.*'=>'required|integer|min:1|distinct','planned_items'=>'sometimes|array|max:2000',
+            'planned_items.*'=>'required|array:finance_item_id,finance_unit_id,stock_unit_id,name,sku,source_hash',
+            'planned_items.*.finance_item_id'=>'required|integer|max:-1|distinct','planned_items.*.finance_unit_id'=>'required|integer|min:1',
+            'planned_items.*.stock_unit_id'=>'required|integer|min:1','planned_items.*.name'=>'required|string|max:191',
+            'planned_items.*.sku'=>'required|string|max:50','planned_items.*.source_hash'=>'required|string|regex:/^[a-f0-9]{64}$/D']);
+        abort_unless(count($data['finance_item_ids'])+count($data['planned_items']??[])>0 && count($data['finance_item_ids'])+count($data['planned_items']??[])<=2000,422,'opening_item_limit');
+        if (!empty($data['planned_items'])) abort_unless($request->attributes->get('verified_workspace_action')==='opening.requirements',403,'signed_migration_workspace_required');
+        return $this->success(app(\App\Services\InventoryWorkspace\OpeningRequirements::class)->read($data['warehouse_id'],$data['finance_item_ids'],$data['planned_items']??[]));
     }
 
     public function index(Request $request): JsonResponse

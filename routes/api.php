@@ -191,6 +191,14 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::delete('/warehouse-images/{image}', [WarehouseImageController::class, 'destroy'])
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouse-images.destroy');
 
+    // Migration catalog commands are callable only through the signed workspace.
+    Route::get('/migration-catalog/requirements', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'requirements'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-requirements');
+    Route::post('/migration-catalog/create', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'store'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-create');
+    Route::post('/migration-catalog/link', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'link'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-link');
+
     // Opening Stock documents
     Route::post('/opening-stock/migrate', [OpeningStockController::class, 'migrate'])
         ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.migrate');
