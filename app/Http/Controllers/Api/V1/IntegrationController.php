@@ -228,6 +228,9 @@ class IntegrationController extends ApiController
             'api_key' => ['nullable', 'string', 'min:32', 'max:255'],
             'require_mapping_before_post' => ['boolean'],
         ]);
+        if ($data['mode'] === 'active') {
+            app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($orgId);
+        }
         $existing = IntegrationSetting::query()
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
@@ -339,6 +342,7 @@ class IntegrationController extends ApiController
     public function updateAccountMappings(Request $request): JsonResponse
     {
         $orgId = $this->context->idOrFail();
+        app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($orgId);
         $data = $request->validate([
             'mappings' => ['required', 'array'],
             'mappings.*.mapping_type' => ['required', 'string'],
@@ -390,6 +394,7 @@ class IntegrationController extends ApiController
     public function updateTaxMappings(Request $request): JsonResponse
     {
         $orgId = $this->context->idOrFail();
+        app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($orgId);
         $definitions = collect((array) (InventorySetting::query()->first()?->taxes ?? []))->keyBy('code');
         $data = $request->validate([
             'mappings' => ['required', 'array'],
