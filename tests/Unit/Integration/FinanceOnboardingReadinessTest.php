@@ -62,4 +62,12 @@ class FinanceOnboardingReadinessTest extends TestCase {
   $this->addToAssertionCount(1);
  }
 
+ public function test_legacy_configuration_cannot_set_active_before_finance_setup():void {
+  $context=\Mockery::mock(\App\Tenancy\OrganizationContext::class);$context->shouldReceive('idOrFail')->andReturn(71);
+  $controller=(new \ReflectionClass(\App\Http\Controllers\Api\V1\IntegrationController::class))->newInstanceWithoutConstructor();
+  (new \ReflectionProperty($controller,'context'))->setValue($controller,$context);
+  $request=\Illuminate\Http\Request::create('/integration/solabooks/configure','PUT',['mode'=>'active','solabooks_organization_id'=>31,'client_id'=>9]);
+  $this->expectException(\RuntimeException::class);$controller->configure($request);
+ }
+
 }
