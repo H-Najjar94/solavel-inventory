@@ -31,7 +31,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
     const setupInProgress = status.draft_status === 'in_progress';
     const activated = status.activation_status === 'enabled';
     return <div className="connection-business-status">
-        <header className="assistant-hero connection-status-hero">
+        {!activated && <header className="assistant-hero connection-status-hero">
             <div className="assistant-hero-copy">
                 <p className="assistant-kicker">{tr('integration.assistant.kicker')}</p>
                 <h1>{tr('integration.assistant.pageTitle')}</h1>
@@ -47,17 +47,18 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <span>{tr(activated ? 'integration.connection.active' : 'integration.assistant.safePause')}</span>
                 {!activated && <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>}
             </div>
-        </header>
+        </header>}
         <section className="connection-status-card" aria-labelledby="connection-status-heading">
             <h2 id="connection-status-heading">{tr('integration.businessStatus.title')}</h2>
             <div className="connection-status-list">
-                <div><span>{tr('integration.businessStatus.setup')}</span><strong>{tr(setupInProgress ? 'integration.businessStatus.inProgress' : 'integration.phase.available')}</strong></div>
-                <div><span>{tr('integration.businessStatus.currentStep')}</span><strong>{tr(`integration.businessStatus.step.${wizard.current_step || 'automatic_checks'}`)}</strong></div>
+                {!activated && <div><span>{tr('integration.businessStatus.setup')}</span><strong>{tr(setupInProgress ? 'integration.businessStatus.inProgress' : 'integration.phase.available')}</strong></div>}
+                {!activated && <div><span>{tr('integration.businessStatus.currentStep')}</span><strong>{tr(`integration.businessStatus.step.${wizard.current_step || 'automatic_checks'}`)}</strong></div>}
                 {remaining !== null && remaining !== undefined && <div><span>{tr('integration.businessStatus.remaining')}</span><strong><bdi>{tr('integration.assistant.remainingRecords', { count: remaining })}</bdi></strong></div>}
                 <div><span>{tr('integration.businessStatus.inventoryAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solastock')}</bdi></strong></div>
                 <div><span>{tr('integration.businessStatus.accountingAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solabooks')}</bdi></strong></div>
                 <div><span>{tr('integration.phase.activation')}</span><strong>{tr(activated ? 'integration.connection.active' : 'integration.phase.safely_paused')}</strong></div>
                 <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
+                {status.configured_automatically && <div><span>{tr('integration.businessStatus.accountMappings')}</span><strong>{tr('integration.businessStatus.automatic')}</strong></div>}
             </div>
             {status.readiness?.can_manage && <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
                 <dl className="kv">
