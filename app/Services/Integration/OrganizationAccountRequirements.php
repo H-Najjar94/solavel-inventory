@@ -21,6 +21,11 @@ final class OrganizationAccountRequirements
     {
         return AccountRolePolicy::forOperations($this->operations($organizationId));
     }
+    public function missingRoles(int $organizationId): array
+    {
+        return array_values(array_diff($this->roles($organizationId), $this->validMappedRoles($organizationId)));
+    }
+
     public function assertOperationReady(int $organizationId, string $operation): void
     {
         $setting = DB::connection('tenant')->table('integration_settings')

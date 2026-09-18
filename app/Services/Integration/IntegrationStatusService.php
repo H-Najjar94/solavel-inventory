@@ -196,7 +196,9 @@ class IntegrationStatusService
                 $wizardCurrentStep = 'temporarily_unavailable';
             }
         }
+        $automaticReady = data_get($settings->meta,'default_connection.state') === 'ready' && $activated && (float) $mappingCompleteness === 100.0;
         $connectionState = match (true) {
+            $automaticReady => 'connected',
             ! $organizationMapping && ! $settings->exists => 'not_subscribed',
             ! $organizationMapping => 'subscription_available',
             ! $wizardRun && $mappingCompleteness < 100 => 'setup_required',
@@ -244,7 +246,8 @@ class IntegrationStatusService
             'health' => $health,
             'setup_status' => $setupDecision['allowed'] ? 'available' : 'unavailable',
             'setup_status_reason' => $setupDecision['reason_code'],
-            'draft_status' => $draftStatus,
+            'draft_status' => $automaticReady ? 'completed' : $draftStatus,
+            'configured_automatically' => $automaticReady,
             'activation_status' => $activated ? 'enabled' : 'safely_paused',
             'delivery_status' => $deliveryEnabled ? 'enabled' : 'disabled',
             'connection_state' => $connectionState,

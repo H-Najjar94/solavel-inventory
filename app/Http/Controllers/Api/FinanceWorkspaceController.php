@@ -68,6 +68,20 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if ($input['action'] === 'workspace.initialize') {
+                abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can($actor, 'inventory.integration.setup'), 403, 'workspace_permission_required');
+                $policy=app(\App\Services\Integration\ConnectionManagementPolicy::class)->status((int)$org->id,$actor);
+                if ($policy['separation_of_duties'] ?? false) {
+                    return response()->json(['success'=>true,'data'=>['status'=>'manual_review','reason'=>'separate_review_required']]);
+                }
+                try {
+                    $result = app(\App\Services\Integration\DefaultStockConnection::class)->initialize(
+                        (int)$org->client_id, (int)$org->id, (int)$input['finance_organization_id'], (int)$actor->id);
+                    return response()->json(['success'=>true,'data'=>$result]);
+                } catch (\RuntimeException $exception) {
+                    return response()->json(['success'=>false,'message'=>$exception->getMessage()], 409);
+                }
+            }
             if ($input['action'] === 'workspace.context') {
                 return response()->json(['success' => true, 'data' => app(\App\Services\InventoryWorkspace\WorkspaceContext::class)->read($request, (int) $org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active')]);
             }

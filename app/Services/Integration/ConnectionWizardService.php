@@ -71,6 +71,9 @@ final class ConnectionWizardService
         if (! $mapping) {
             return $this->preMappingReadiness($organizationId);
         }
+        $setting = IntegrationSetting::query()->where('organization_id',$organizationId)->where('integration','solabooks')->first();
+        $automaticallyConfigured = data_get($setting?->meta,'default_connection.state') === 'ready'
+            && $setting->mode === 'active' && $mapping->status === 'verified' && $mapping->activation_state === 'active';
         $report = $this->discovery->discover($mapping->mapping_uuid);
         $comparison = collect($report['results'])->map(
             fn (array $candidate): array => $this->comparisonRow($mapping, $candidate)
@@ -111,7 +114,8 @@ final class ConnectionWizardService
             'read_only' => true,
             'generated_at' => now()->utc()->toIso8601String(),
             'snapshot_hash' => $this->hash($core),
-            'connection_state' => $this->state($comparison, $accounting, $masterData),
+            'configured_automatically' => $automaticallyConfigured,
+            'connection_state' => $automaticallyConfigured && $accounting['complete'] ? 'connected' : $this->state($comparison, $accounting, $masterData),
             'active_draft' => $this->activeDraftSummary($organizationId),
             'activation_available' => false,
         ];
@@ -1291,6 +1295,10 @@ final class ConnectionWizardService
     private function accountingSetup(IntegrationOrganizationMapping $mapping): array
     {
         $required = app(OrganizationAccountRequirements::class)->roles((int) $mapping->solastock_organization_id);
+        $configured = DB::connection('tenant')->table('integration_account_mappings')
+            ->where('organization_id',$mapping->solastock_organization_id)->where('integration','solabooks')
+            ->whereIn('mapping_type',array_keys(AccountRolePolicy::ROLE_TYPES))->pluck('mapping_type')->all();
+        $required = array_values(array_unique(array_merge($required,$configured)));
         $rows = DB::connection('tenant')->table('integration_account_mappings')
             ->where('organization_id', $mapping->solastock_organization_id)->where('integration', 'solabooks')
             ->whereIn('mapping_type', $required)->get()->keyBy('mapping_type');
