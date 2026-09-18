@@ -1786,3 +1786,12 @@ html[dir="rtl"] .fifo-total-line strong {
     .focus-wizard .focus-overview { padding: 8px 0; }
     .focus-wizard .focus-overview-context small { max-width: none; }
 }
+
+/* Long organization/account names must not widen the mobile application. */
+@media (max-width: 600px) {
+  .topbar { gap:8px; padding-inline:12px; }
+  .topbar-left { min-width:0; flex:1; }
+  .topbar-left .org-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .topbar-right { flex-shrink:0; gap:6px; }
+  .topbar-right .user-menu { max-width:72px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+}
