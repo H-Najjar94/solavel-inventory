@@ -6,7 +6,7 @@ namespace App\Services\Integration;
 final class AccountRolePolicy
 {
     public const VERSION = 'inventory-account-roles.v1';
-    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs']];
+    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability']];
     public const OPERATIONS = [
         'opening_stock.posted' => ['inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['inventory_asset', 'opening_offset'],
