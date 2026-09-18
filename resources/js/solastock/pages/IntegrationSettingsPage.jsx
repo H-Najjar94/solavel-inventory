@@ -465,7 +465,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         link.click(); URL.revokeObjectURL(url);
     }
 
-    if (!view && (discovery.isLoading || (runUuid && run.isLoading))) return <div className="wizard-loading" role="status" aria-busy="true"><img src={`${window.SOLASTOCK_BASE_PATH || ''}/imgs/favicon-solastock.svg`} alt="SolaStock" width="32" height="32" /><p>{tr('integration.loading')}</p><Skeleton /></div>;
+    if (!view && (discovery.isLoading || (runUuid && run.isLoading))) return <div className="wizard-loading" role="status" aria-busy="true"><img src={`${window.SOLASTOCK_BASE_PATH || ''}/imgs/favicon-solastock-gradient.svg`} alt="SolaStock" width="32" height="32" /><p>{tr('integration.loading')}</p><Skeleton /></div>;
     if (!view && (discovery.isError || (runUuid && run.isError))) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
     if (!view) return <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} />;
 
