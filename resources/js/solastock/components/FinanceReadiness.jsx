@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Link} from 'react-router-dom';
 import './FinanceReadiness.css';
-import financeIcon from './solacount-logo.svg';
+import financeIcon from './solacount-logo-gradient.svg';
 import {api} from '../services/api.js';
 const labels={
  FINANCE_PROVISIONED_SETUP_INCOMPLETE:['Finance setup incomplete','إعداد النظام المالي غير مكتمل'],
