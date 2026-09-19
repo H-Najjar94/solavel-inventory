@@ -78,7 +78,10 @@ final class FinanceWorkspaceTest extends TestCase
             'base_currency_code' => 'JOD', 'verified_at' => now(),
         ]);
         IntegrationSetting::query()->create(['organization_id' => TenantTestManager::ORG_A,
-            'integration' => 'solabooks', 'mode' => 'active', 'solabooks_organization_id' => 14]);
+            'integration' => 'solabooks', 'mode' => 'active', 'solabooks_organization_id' => 14, 'meta'=>['transport_enabled_workflows'=>[]]]);
+        $status=$this->createStub(\App\Services\Integration\IntegrationStatusService::class);
+        $status->method('status')->willReturnCallback(fn($id)=>['readiness'=>['state'=>IntegrationSetting::where('organization_id',$id)->value('mode')==='active'?'CONNECTED_READY':'CONNECTION_BLOCKED']]);
+        $this->app->instance(\App\Services\Integration\IntegrationStatusService::class,$status);
     }
 
     protected function tearDown(): void
@@ -208,8 +211,8 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send(['action' => 'warehouses.index'])->assertStatus(409);
         IntegrationSetting::query()->update(['mode' => 'paused']);
         $this->send(['action' => 'workspace.context'])->assertOk()
-            ->assertJsonPath('data.ready', true)->assertJsonPath('data.writable', false)
-            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.index']['allowed'] === true)
+            ->assertJsonPath('data.ready', false)->assertJsonPath('data.writable', false)
+            ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.index']['allowed'] === false)
             ->assertJsonPath('data.actions', fn ($a) => $a['warehouses.store']['allowed'] === false);
         DB::connection('mysql')->table('user_organizations')->where('user_id', self::ACTOR)->update(['role' => 'viewer']);
         $this->app->forgetInstance(\App\Services\Access\InventoryPermissionService::class);
@@ -221,7 +224,7 @@ final class FinanceWorkspaceTest extends TestCase
     {
         IntegrationOrganizationMapping::query()->update(['status' => 'verified_hold', 'activation_state' => 'maintenance_hold']);
         $this->send(['action' => 'workspace.context'])->assertOk()->assertJsonPath('data.writable', false);
-        $this->send(['action' => 'warehouses.index'])->assertOk();
+        $this->send(['action' => 'warehouses.index'])->assertStatus(409);
         $this->send(['action' => 'warehouses.store', 'data' => ['name' => 'Still held', 'code' => 'STILL-HELD', 'type' => 'warehouse'],
             'idempotency_key' => 'held-mapping-global-enable-001'])->assertStatus(409);
         $this->assertSame(0, Warehouse::query()->where('code', 'STILL-HELD')->count());
