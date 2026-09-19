@@ -191,7 +191,19 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::delete('/warehouse-images/{image}', [WarehouseImageController::class, 'destroy'])
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouse-images.destroy');
 
+    // Migration catalog commands are callable only through the signed workspace.
+    Route::get('/migration-catalog/requirements', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'requirements'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-requirements');
+    Route::post('/migration-catalog/create', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'store'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-create');
+    Route::post('/migration-catalog/link', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'link'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-link');
+
     // Opening Stock documents
+    Route::post('/opening-stock/migrate', [OpeningStockController::class, 'migrate'])
+        ->middleware('perm:inventory.manage_opening_stock')->name('api.v1.opening.migrate');
+    Route::get('/opening-stock/requirements', [OpeningStockController::class, 'requirements'])
+        ->middleware('perm:inventory.view_stock')->name('api.v1.opening.requirements');
     Route::get('/opening-stock', [OpeningStockController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.opening.index');
     Route::get('/opening-stock/{entry}', [OpeningStockController::class, 'show'])
@@ -277,6 +289,22 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.cancel');
 
     // ── Goods Receipts (GRN → stock IN via service) ──
+    Route::get('/finance-sources/suppliers', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'suppliers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.suppliers');
+    Route::get('/finance-sources/customers', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'customers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.customers');
+    Route::get('/finance-sources/receipts', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipts'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipts');
+    Route::get('/finance-sources/receipts/{goods_receipt}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipt'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipt');
+    Route::get('/finance-sources/shipments', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipments'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipments');
+    Route::get('/finance-sources/shipments/{shipment}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipment'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipment');
+    Route::get('/finance-sources/returns', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'returns'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.returns');
+    Route::get('/finance-sources/returns/{sales_return}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'salesReturn'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.return');
+    Route::post('/finance-allocations/reserve', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reserve'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reserve');
+    Route::post('/finance-allocations/commit', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'commit'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.commit');
+    Route::post('/finance-allocations/release', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'release'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.release');
+    Route::post('/finance-allocations/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverse'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reverse');
+    Route::post('/finance-allocations/cost-adjustment/prepare', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'prepareCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.prepare');
+    Route::post('/finance-allocations/cost-adjustment/apply', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'applyCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.apply');
+    Route::post('/finance-allocations/cost-adjustment/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverseCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.reverse');
+
     Route::get('/goods-receipts', [GoodsReceiptController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.index');
     Route::get('/goods-receipts/{goods_receipt}', [GoodsReceiptController::class, 'show'])
@@ -401,6 +429,10 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.authorize');
     Route::post('/sales-returns/{sales_return}/inspect', [SalesReturnController::class, 'inspect'])
         ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.inspect');
+    Route::post('/sales-returns/{sales_return}/cancel', [SalesReturnController::class, 'cancel'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.cancel');
+    Route::post('/sales-returns/{sales_return}/reverse', [SalesReturnController::class, 'reverse'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.sales-returns.reverse');
 
     // ── Traceability: Lots ──
     Route::get('/lots', [TraceabilityController::class, 'lots'])

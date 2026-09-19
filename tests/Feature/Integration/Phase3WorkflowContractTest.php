@@ -33,6 +33,13 @@ final class Phase3WorkflowContractTest extends TestCase
     {
         parent::setUp();
         $this->useTenantA();
+        // The integration contract is qualified against the canonical combined
+        // tenant schema, where Finance-owned exchange rates enforce an
+        // organization foreign key.
+        DB::connection('tenant')->table('organizations')->insert([
+            'id' => 14, 'central_org_id' => TenantTestManager::ORG_A,
+            'name' => 'Isolated Finance organization', 'setup_status' => 'complete',
+        ]);
         $this->organizationMapping = IntegrationOrganizationMapping::query()->create([
             'mapping_uuid' => (string) Str::uuid(),
             'central_client_id' => 7,
@@ -324,7 +331,6 @@ final class Phase3WorkflowContractTest extends TestCase
         $meta['finance_currency_contract']['inventory_valuation_basis'] = \App\Services\Integration\FinanceBaseValuation::BASIS;
         $setting->update(['meta' => $meta]);
         $po = $this->purchaseOrder('USD');
-        DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A]);
         foreach (['USD' => '1.41000000', 'GBP' => '1.10000000'] as $code => $rate) {
             DB::connection('tenant')->table('exchange_rates')->insert([
                 'organization_id' => 14, 'base_currency_code' => 'JOD', 'quote_currency_code' => $code,

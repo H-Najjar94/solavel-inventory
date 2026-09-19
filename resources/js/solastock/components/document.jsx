@@ -102,28 +102,30 @@ export function DocumentTotals({ rows }) {
  * Read-only mode hides add/remove and disables inputs (callers pass disabled cols).
  */
 export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel, errors = {} }) {
+    const canRemove = !readOnly && typeof onRemove === 'function';
+    const canAdd = !readOnly && typeof onAdd === 'function';
     return (
         <div className="doc-lines">
             <table className="data-table">
                 <thead>
                     <tr>
                         {columns.map((c) => <th key={c.key} style={c.width ? { width: c.width } : undefined}>{c.label}</th>)}
-                        {!readOnly && <th style={{ width: 40 }} />}
+                        {canRemove && <th style={{ width: 40 }} />}
                     </tr>
                 </thead>
                 <tbody>
                     {lines.length === 0 && (
-                        <tr><td colSpan={columns.length + (readOnly ? 0 : 1)} className="muted">{t('document.noLines')}</td></tr>
+                        <tr><td colSpan={columns.length + (canRemove ? 1 : 0)} className="muted">{t('document.noLines')}</td></tr>
                     )}
                     {lines.map((line, i) => (
                         <tr key={i} className={errors[i] ? 'row--error' : ''}>
                             {columns.map((c) => <td key={c.key}>{c.render(line, i)}</td>)}
-                            {!readOnly && <td><button type="button" className="btn btn--sm btn--danger" onClick={() => onRemove(i)}>×</button></td>}
+                            {canRemove && <td><button type="button" className="btn btn--sm btn--danger" onClick={() => onRemove(i)}>×</button></td>}
                         </tr>
                     ))}
                 </tbody>
             </table>
-            {!readOnly && <button type="button" className="btn btn--sm" onClick={onAdd}>+ {addLabel ?? t('document.addLine')}</button>}
+            {canAdd && <button type="button" className="btn btn--sm" onClick={onAdd}>+ {addLabel ?? t('document.addLine')}</button>}
         </div>
     );
 }

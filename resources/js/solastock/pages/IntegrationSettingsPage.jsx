@@ -1,3 +1,4 @@
+import FinanceReadiness from '../components/FinanceReadiness.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,7 +31,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
     const setupInProgress = status.draft_status === 'in_progress';
     const activated = status.activation_status === 'enabled';
     return <div className="connection-business-status">
-        <header className="assistant-hero connection-status-hero">
+        {!activated && <header className="assistant-hero connection-status-hero">
             <div className="assistant-hero-copy">
                 <p className="assistant-kicker">{tr('integration.assistant.kicker')}</p>
                 <h1>{tr('integration.assistant.pageTitle')}</h1>
@@ -46,19 +47,20 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <span>{tr(activated ? 'integration.connection.active' : 'integration.assistant.safePause')}</span>
                 {!activated && <details><summary>{tr('integration.assistant.statusDetails')}</summary><p>{tr('integration.assistant.statusDetailsText')}</p></details>}
             </div>
-        </header>
+        </header>}
         <section className="connection-status-card" aria-labelledby="connection-status-heading">
             <h2 id="connection-status-heading">{tr('integration.businessStatus.title')}</h2>
             <div className="connection-status-list">
-                <div><span>{tr('integration.businessStatus.setup')}</span><strong>{tr(setupInProgress ? 'integration.businessStatus.inProgress' : 'integration.phase.available')}</strong></div>
-                <div><span>{tr('integration.businessStatus.currentStep')}</span><strong>{tr(`integration.businessStatus.step.${wizard.current_step || 'automatic_checks'}`)}</strong></div>
+                {!activated && <div><span>{tr('integration.businessStatus.setup')}</span><strong>{tr(setupInProgress ? 'integration.businessStatus.inProgress' : 'integration.phase.available')}</strong></div>}
+                {!activated && <div><span>{tr('integration.businessStatus.currentStep')}</span><strong>{tr(`integration.businessStatus.step.${wizard.current_step || 'automatic_checks'}`)}</strong></div>}
                 {remaining !== null && remaining !== undefined && <div><span>{tr('integration.businessStatus.remaining')}</span><strong><bdi>{tr('integration.assistant.remainingRecords', { count: remaining })}</bdi></strong></div>}
                 <div><span>{tr('integration.businessStatus.inventoryAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solastock')}</bdi></strong></div>
                 <div><span>{tr('integration.businessStatus.accountingAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solabooks')}</bdi></strong></div>
                 <div><span>{tr('integration.phase.activation')}</span><strong>{tr(activated ? 'integration.connection.active' : 'integration.phase.safely_paused')}</strong></div>
                 <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
+                {status.configured_automatically && <div><span>{tr('integration.businessStatus.accountMappings')}</span><strong>{tr('integration.businessStatus.automatic')}</strong></div>}
             </div>
-            <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
+            {status.readiness?.can_manage && <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
                 <dl className="kv">
                     <dt>{tr('integration.transport.worker')}</dt><dd>{tr(status.transport?.worker_enabled && status.transport?.worker_running ? 'integration.transport.running' : 'integration.transport.disabled')}</dd>
                     <dt>{tr('integration.transport.receiver')}</dt><dd>{tr(status.transport?.receiver_enabled ? 'integration.details.yes' : 'integration.details.no')}</dd>
@@ -68,7 +70,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                     <dt>{tr('integration.metrics.failed')}</dt><dd><bdi>{status.events?.failed ?? 0}</bdi></dd>
                     <dt>{tr('integration.metrics.ignored')}</dt><dd><bdi>{status.events?.ignored ?? 0}</bdi></dd>
                 </dl>
-            </details>
+            </details>}
         </section>
     </div>;
 }
@@ -96,7 +98,8 @@ export default function IntegrationSettingsPage() {
         refetchInterval: 15_000,
     });
     const s = status.data;
-    const connectionActivated = Boolean(s && (s.mode === 'active' || s.connection_wizard?.state === 'connected'));
+    const connectionActivated = s?.readiness?.state === 'CONNECTED_READY';
+    const [showWizard, setShowWizard] = useState(false);
     useEffect(() => {
         if (s || tenant.client_id) {
             setConnection((current) => ({
@@ -136,6 +139,7 @@ export default function IntegrationSettingsPage() {
                 <h1>{tr('integration.title')}</h1>
             </header>
 
+            {status.isLoading || status.isFetching ? <Skeleton /> : <FinanceReadiness status={status.isError ? null : s} details onRetry={() => status.refetch()} onContinue={() => { setShowWizard(true); setTab('wizard'); }} />}
             {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
             {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
@@ -246,7 +250,7 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {(!connectionActivated || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {s?.readiness?.finance_setup_complete && s?.readiness?.can_manage && (showWizard || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
         </section>
     );
 }
@@ -462,7 +466,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         link.click(); URL.revokeObjectURL(url);
     }
 
-    if (!view && (discovery.isLoading || (runUuid && run.isLoading))) return <div className="wizard-loading" role="status" aria-busy="true"><img src={`${window.SOLASTOCK_BASE_PATH || ''}/imgs/favicon-solastock.svg`} alt="SolaStock" width="32" height="32" /><p>{tr('integration.loading')}</p><Skeleton /></div>;
+    if (!view && (discovery.isLoading || (runUuid && run.isLoading))) return <div className="wizard-loading" role="status" aria-busy="true"><img src={`${window.SOLASTOCK_BASE_PATH || ''}/imgs/favicon-solastock-gradient.svg`} alt="SolaStock" width="32" height="32" /><p>{tr('integration.loading')}</p><Skeleton /></div>;
     if (!view && (discovery.isError || (runUuid && run.isError))) return <EmptyState title={tr('integration.loadFailed')} hint={(run.error || discovery.error)?.message || tr('settings.common.errorFallback')} action={<button className="btn" onClick={() => (runUuid ? run.refetch() : discovery.refetch())}>{tr('integration.retry')}</button>} />;
     if (!view) return <EmptyState title={tr('integration.unavailable')} hint={tr('integration.noStatus')} />;
 

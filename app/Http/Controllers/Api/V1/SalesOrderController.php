@@ -46,7 +46,7 @@ class SalesOrderController extends ApiController
         $sales_order = $this->service->expireOverdueReservations($sales_order);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         // customer_name is already a denormalized string on the header (no customer table).
-        $sales_order->load(['lines.item:id,name,sku,tracking_type', 'warehouse:id,name,code', 'customer:id,code,name,contact', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code', 'reservations.serial:id,serial,status']);
+        $sales_order->load(['lines.item:id,name,sku,tracking_type', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code', 'customer:id,code,name,contact', 'reservations.item:id,name,sku', 'reservations.warehouse:id,name,code', 'reservations.serial:id,serial,status']);
         $sales_order->setAttribute('warehouse_name', $sales_order->warehouse?->name);
         $sales_order->setAttribute('customer_name', $sales_order->customer?->name ?? $sales_order->customer_name);
 

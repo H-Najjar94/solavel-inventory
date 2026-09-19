@@ -24,6 +24,32 @@ class OpeningStockController extends ApiController
 
     public function __construct(private OpeningStockService $service, private OrganizationContext $context) {}
 
+    public function migrate(Request $request): JsonResponse
+    {
+        abort_unless($request->attributes->get('verified_workspace_action') === 'opening.migrate', 403, 'A signed durable workspace command is required.');
+        $data=$request->validate(['session_id'=>'required|uuid','warehouse_id'=>'required|integer|min:1',
+            'cutover_date'=>'required|date_format:Y-m-d','requirements_version'=>'required|string|regex:/^[a-f0-9]{64}$/D',
+            'lines'=>'required|array|min:1|max:2000','lines.*'=>'required|array:finance_item_id,quantity,unit_cost,total_value',
+            'lines.*.finance_item_id'=>'required|integer|min:1|distinct',
+            'lines.*.quantity'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
+            'lines.*.unit_cost'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
+            'lines.*.total_value'=>['required','string','regex:/^[0-9]{1,14}(\.[0-9]{1,2})?$/D','numeric','gt:0']]);
+        return $this->success(app(\App\Services\InventoryWorkspace\MigrationOpening::class)->post($data));
+    }
+
+    public function requirements(Request $request): JsonResponse
+    {
+        $data=$request->validate(['warehouse_id'=>'required|integer|min:1','finance_item_ids'=>'present|array|max:2000',
+            'finance_item_ids.*'=>'required|integer|min:1|distinct','planned_items'=>'sometimes|array|max:2000',
+            'planned_items.*'=>'required|array:finance_item_id,finance_unit_id,stock_unit_id,name,sku,source_hash',
+            'planned_items.*.finance_item_id'=>'required|integer|max:-1|distinct','planned_items.*.finance_unit_id'=>'required|integer|min:1',
+            'planned_items.*.stock_unit_id'=>'required|integer|min:1','planned_items.*.name'=>'required|string|max:191',
+            'planned_items.*.sku'=>'required|string|max:50','planned_items.*.source_hash'=>'required|string|regex:/^[a-f0-9]{64}$/D']);
+        abort_unless(count($data['finance_item_ids'])+count($data['planned_items']??[])>0 && count($data['finance_item_ids'])+count($data['planned_items']??[])<=2000,422,'opening_item_limit');
+        if (!empty($data['planned_items'])) abort_unless($request->attributes->get('verified_workspace_action')==='opening.requirements',403,'signed_migration_workspace_required');
+        return $this->success(app(\App\Services\InventoryWorkspace\OpeningRequirements::class)->read($data['warehouse_id'],$data['finance_item_ids'],$data['planned_items']??[]));
+    }
+
     public function index(Request $request): JsonResponse
     {
         $perPage = min((int) $request->query('per_page', 25), 100);
@@ -48,7 +74,12 @@ class OpeningStockController extends ApiController
             ->where('source_type', OpeningStockEntry::class)
             ->where('source_id', $entry->id)->get();
 
-        return $this->success(['entry' => $entry, 'ledger' => $ledger]);
+        $events = \App\Models\Tenant\IntegrationOutboxEvent::query()
+            ->where('aggregate_type', 'OpeningStockEntry')->where('aggregate_id', $entry->id)
+            ->whereIn('event_type', ['opening_stock.posted', 'opening_stock.reversed'])
+            ->orderBy('id')->get(['event_uuid', 'event_type', 'idempotency_key', 'status', 'mapping_status', 'sent_at']);
+
+        return $this->success(['entry' => $entry, 'ledger' => $ledger, 'accounting_events' => $events]);
     }
 
     public function store(StoreOpeningStockRequest $request): JsonResponse

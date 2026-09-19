@@ -71,6 +71,9 @@ final class ConnectionWizardService
         if (! $mapping) {
             return $this->preMappingReadiness($organizationId);
         }
+        $setting = IntegrationSetting::query()->where('organization_id',$organizationId)->where('integration','solabooks')->first();
+        $automaticallyConfigured = data_get($setting?->meta,'default_connection.state') === 'ready'
+            && $setting->mode === 'active' && $mapping->status === 'verified' && $mapping->activation_state === 'active';
         $report = $this->discovery->discover($mapping->mapping_uuid);
         $comparison = collect($report['results'])->map(
             fn (array $candidate): array => $this->comparisonRow($mapping, $candidate)
@@ -111,7 +114,8 @@ final class ConnectionWizardService
             'read_only' => true,
             'generated_at' => now()->utc()->toIso8601String(),
             'snapshot_hash' => $this->hash($core),
-            'connection_state' => $this->state($comparison, $accounting, $masterData),
+            'configured_automatically' => $automaticallyConfigured,
+            'connection_state' => $automaticallyConfigured && $accounting['complete'] ? 'connected' : $this->state($comparison, $accounting, $masterData),
             'active_draft' => $this->activeDraftSummary($organizationId),
             'activation_available' => false,
         ];
@@ -247,6 +251,7 @@ final class ConnectionWizardService
         bool $canOwnerReview = true,
         bool $canAccountingReview = false,
     ): array {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         if (! in_array($action, self::DECISIONS, true)) {
             $this->fail('unsupported_mapping_decision');
         }
@@ -490,7 +495,7 @@ final class ConnectionWizardService
         $setting = IntegrationSetting::query()->where('organization_id', $organizationId)
             ->where('integration', 'solabooks')->first();
         $valuation = (array) data_get($setting?->meta, 'finance_currency_contract', []);
-        if ($valuation === [] && ($preview['guided_setup']['setup_path'] ?? '') === 'fresh_workspace') {
+        if ($valuation === []) {
             $base = (string) ($preview['accounting']['base_currency'] ?? '');
             $valuation = ['base_currency_code' => $base, 'enabled_currency_codes' => [$base],
                 'money_scale' => (int) ($preview['accounting']['money_scale'] ?? Decimal::MONEY_SCALE),
@@ -632,6 +637,7 @@ final class ConnectionWizardService
 
     public function freezeSnapshot(int $organizationId, string $runUuid, int $expectedLockVersion, int $actorUserId): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         $preview = $this->discover($organizationId);
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $expectedLockVersion, $actorUserId, $preview): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
@@ -658,6 +664,7 @@ final class ConnectionWizardService
     public function reviewCutoff(int $organizationId, string $runUuid, string $cutoffAt, array $physicalCounts,
         string $unexplainedVariance, int $expectedLockVersion, int $actorUserId): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $cutoffAt, $physicalCounts, $unexplainedVariance, $expectedLockVersion, $actorUserId): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
             if ($run->state !== 'cutoff_review' || (int) $run->lock_version !== $expectedLockVersion || $run->snapshot_frozen_at === null) {
@@ -685,6 +692,7 @@ final class ConnectionWizardService
     public function approveRole(int $organizationId, string $runUuid, string $approvalHash, string $reviewerRole,
         int $actorUserId, bool $authorized): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         if (! $authorized || ! in_array($reviewerRole, ['owner', 'accountant'], true)) $this->fail('wizard_approval_role_forbidden');
         $preview = $this->finalPreview($organizationId, $runUuid);
         if (! ($preview['review_ready'] ?? false) || ! in_array($preview['state'], ['preview_ready', 'owner_approved', 'accountant_approved'], true) || ! hash_equals($preview['approval_payload_hash'], $approvalHash)) {
@@ -743,6 +751,7 @@ final class ConnectionWizardService
 
     public function approve(int $organizationId, string $runUuid, string $approvalHash, string $confirmation, int $actorUserId): array
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         $preview = $this->finalPreview($organizationId, $runUuid);
         if ($preview['state'] !== 'ready_for_approval'
             || ! hash_equals($preview['approval_payload_hash'], $approvalHash)
@@ -782,6 +791,7 @@ final class ConnectionWizardService
         string $confirmation,
         int $actorUserId,
     ): array {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         if (! $this->activationGateReady($organizationId)
             || ! hash_equals((string) config('integration_connection_wizard.confirmation_phrase'), $confirmation)) {
             $this->fail('organization_scoped_activation_gate_closed');
@@ -868,7 +878,9 @@ final class ConnectionWizardService
                 $role = $decision->entity_type === 'account_role'
                     ? (string) ($details['account_role'] ?? $approvedCandidate['safe_details']['role'] ?? '') : '';
                 if ($role === '') $this->fail('approved_account_role_scope_invalid');
-                if (! in_array($role, $approvedRoles, true)) continue;
+                // PPV is an optional, explicitly reviewed rounding destination.
+                // Saving it does not expand the operational workflow allowlist.
+                if (! in_array($role, $approvedRoles, true) && $role !== 'purchase_price_variance') continue;
                 $account = DB::connection('tenant')->table('accounts')
                     ->where('organization_id', $organizationMapping->finance_organization_id)
                     ->where('id', $accountId)->where('is_active', true)->where('is_postable', true)->first();
@@ -895,7 +907,7 @@ final class ConnectionWizardService
             if (! in_array($decision->action, [
                 'bind_existing', 'create_solastock_record', 'keep_solastock_authority',
                 'select_authoritative_record', 'resolve_account_category',
-                'approve_exact_binding', 'select_unit', 'select_category', 'select_warehouse',
+                'approve_exact_binding', 'select_unit', 'select_category', 'select_warehouse', 'select_party',
             ], true)) {
                 continue;
             }
@@ -1283,6 +1295,10 @@ final class ConnectionWizardService
     private function accountingSetup(IntegrationOrganizationMapping $mapping): array
     {
         $required = app(OrganizationAccountRequirements::class)->roles((int) $mapping->solastock_organization_id);
+        $configured = DB::connection('tenant')->table('integration_account_mappings')
+            ->where('organization_id',$mapping->solastock_organization_id)->where('integration','solabooks')
+            ->whereIn('mapping_type',array_keys(AccountRolePolicy::ROLE_TYPES))->pluck('mapping_type')->all();
+        $required = array_values(array_unique(array_merge($required,$configured)));
         $rows = DB::connection('tenant')->table('integration_account_mappings')
             ->where('organization_id', $mapping->solastock_organization_id)->where('integration', 'solabooks')
             ->whereIn('mapping_type', $required)->get()->keyBy('mapping_type');
@@ -1650,6 +1666,8 @@ final class ConnectionWizardService
         }
         $financeOperational = $financeOperational || in_array(true, $evidence['finance'], true);
         $stockOperational = $stockOperational || in_array(true, $evidence['stock'], true);
+        $financeStarted = $financeOrgId > 0 && DB::connection('tenant')->table('organizations')->where('id', $financeOrgId)->where(fn ($q) => $q->whereNotNull('finance_setup_completed_at')->orWhereNotIn('finance_setup_step', ['1', 'step-1']))->exists();
+        $financeOperational = $financeOperational || $financeStarted;
         $customerScenario = $financeOperational && $stockOperational ? 'previously_separate'
             : ($financeOperational ? 'finance_first' : ($stockOperational ? 'stock_first' : 'new_both'));
 
@@ -1969,6 +1987,7 @@ final class ConnectionWizardService
             'opening_offset' => ['equity', ['opening'], ['opening_stock']],
             'adjustment_gain' => ['revenue', ['adjustment gain'], ['positive_adjustment']],
             'adjustment_loss' => ['expense', ['adjustment loss', 'shrinkage'], ['negative_adjustment']],
+            'purchase_price_variance' => ['expense', ['purchase price variance', 'price variance'], ['bounded_currency_rounding']],
             'landed_cost_clearing' => ['asset', ['landed', 'clearing'], ['landed_cost']],
             'transfer_clearing' => ['asset', ['transfer', 'clearing'], ['cross_entity_transfer']],
             'accounts_receivable' => ['asset', ['receivable'], ['customer_invoice']],
@@ -1984,7 +2003,7 @@ final class ConnectionWizardService
             ? (array) DB::connection('tenant')->table('org_account_defaults')->where('organization_id', $financeOrgId)->first() : [];
         $defaultKeys = ['inventory_asset'=>'inventory_asset_account_id','cogs'=>'purchases_account_id',
             'opening_offset'=>'opening_balance_equity_account_id','adjustment_gain'=>'inventory_adjustment_gain_account_id',
-            'adjustment_loss'=>'inventory_adjustment_loss_account_id','landed_cost_clearing'=>'asset_clearing_account_id',
+            'adjustment_loss'=>'inventory_adjustment_loss_account_id','purchase_price_variance'=>'purchase_price_variance_account_id','landed_cost_clearing'=>'asset_clearing_account_id',
             'accounts_receivable'=>'ar_account_id','accounts_payable'=>'ap_account_id','input_tax'=>'vat_input_account_id',
             'output_tax'=>'vat_output_account_id','rounding'=>'rounding_account_id','sales_revenue'=>'sales_account_id'];
         $stockOrgId = (int) DB::connection('tenant')->table('organizations')->where('id', $financeOrgId)->value('central_org_id');
@@ -2017,6 +2036,7 @@ final class ConnectionWizardService
                 'inventory_asset'=>[['1301','1300'],['inventory_asset']], 'cogs'=>[['5001'],['cogs']],
                 'grni'=>[['2150','2105'],['grni']], 'opening_offset'=>[['3501'],['opening_balance_equity']],
                 'adjustment_gain'=>[['4303'],['inventory_adjustment_gain']], 'adjustment_loss'=>[['6804'],['inventory_adjustment_loss']],
+                'purchase_price_variance'=>[['5104'],['purchase_price_variance']],
                 'landed_cost_clearing'=>[['1580'],['landed_cost_clearing','asset_clearing']],
                 'transfer_clearing'=>[[],['inventory_transfer_clearing']],
                 'accounts_receivable'=>[['1200'],['accounts_receivable']], 'accounts_payable'=>[['2100'],['accounts_payable']],

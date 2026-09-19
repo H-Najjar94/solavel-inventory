@@ -290,6 +290,10 @@ class StockLedgerService
             'created_by' => auth()->id(),
         ]);
         $ledger->save();
+        if ($m->direction === 'in' && $costLayerId) {
+            CostLayer::query()->where('organization_id',$orgId)->whereKey($costLayerId)
+                ->whereNull('source_ledger_id')->update(['source_ledger_id'=>$ledger->id]);
+        }
 
         // Record the exact FIFO layers this OUT consumed so a reversal can
         // restore them precisely (preserving layer order + valuation) instead of

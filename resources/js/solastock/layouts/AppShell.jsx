@@ -158,7 +158,7 @@ export default function AppShell() {
         <div className="app">
             <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
                 <div className="side-brand">
-                    <img className="side-logo-img" src="/inventory/imgs/favicon-solastock.svg" alt="SolaStock"
+                    <img className="side-logo-img" src="/inventory/imgs/favicon-solastock-gradient.svg" alt="SolaStock"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     {!collapsed && <span className="side-name">SolaStock</span>}
                 </div>
@@ -457,7 +457,7 @@ function SetupHero({ tenant }) {
         <div className="setup-hero">
             <div className="setup-hero__card">
                 <div className="setup-hero__brand">
-                    <img src="/inventory/imgs/favicon-solastock.svg" alt="" className="setup-hero__logo"
+                    <img src="/inventory/imgs/favicon-solastock-gradient.svg" alt="" className="setup-hero__logo"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     <span className="setup-hero__eyebrow">{t('shell.inventoryName')}</span>
                 </div>

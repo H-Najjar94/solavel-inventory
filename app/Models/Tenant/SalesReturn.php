@@ -22,6 +22,7 @@ class SalesReturn extends Model
         'authorized_at' => 'datetime',
         'inspected_at' => 'datetime',
         'posted_at' => 'datetime',
+        'reversed_at' => 'datetime',
         'is_source_reversal' => 'boolean',
     ];
 
@@ -38,5 +39,10 @@ class SalesReturn extends Model
     public function shipment()
     {
         return $this->belongsTo(Shipment::class, 'shipment_id');
+    }
+
+    public function reversal()
+    {
+        return $this->belongsTo(InventoryReversal::class, 'reversal_id');
     }
 }

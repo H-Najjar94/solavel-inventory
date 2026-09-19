@@ -19,7 +19,7 @@ class SalesFulfillmentFoundationTest extends TestCase
     {
         foreach ([
             'sales_order.confirmed', 'stock_reserved', 'stock_reservation_released',
-            'pick_list.picked', 'pack.packed', 'shipment.posted', 'sales_return.posted',
+            'pick_list.picked', 'pack.packed', 'shipment.posted', 'sales_return.posted', 'sales_return.reversed',
         ] as $type) {
             $this->assertTrue(IntegrationEvents::exists($type), "missing event {$type}");
             $this->assertNotNull(IntegrationEvents::aggregateType($type));
@@ -37,6 +37,9 @@ class SalesFulfillmentFoundationTest extends TestCase
         $ret = IntegrationEvents::suggestedAccounts('sales_return.posted');
         $this->assertSame('inventory_asset', $ret['suggested_debit_account_mapping']);
         $this->assertSame('cogs', $ret['suggested_credit_account_mapping']);
+        $reversed = IntegrationEvents::suggestedAccounts('sales_return.reversed');
+        $this->assertSame('cogs', $reversed['suggested_debit_account_mapping']);
+        $this->assertSame('inventory_asset', $reversed['suggested_credit_account_mapping']);
     }
 
     #[Test]

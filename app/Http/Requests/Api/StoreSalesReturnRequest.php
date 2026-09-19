@@ -24,6 +24,8 @@ class StoreSalesReturnRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.item_id' => ['required', 'integer'],
+            'lines.*.source_line_id' => ['nullable', 'integer', 'min:1'],
+            'lines.*.source_stock_ledger_id' => ['nullable', 'integer', 'min:1'],
             'lines.*.variant_id' => ['nullable', 'integer'],
             'lines.*.warehouse_id' => ['nullable', 'integer'],
             'lines.*.bin_id' => ['nullable', 'integer'],

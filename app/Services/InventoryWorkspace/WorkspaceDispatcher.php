@@ -63,6 +63,7 @@ final class WorkspaceDispatcher
         $request = Request::create($uri, $route->methods()[0], $data);
         $request->headers->set('Accept', 'application/json');
         $request->setUserResolver($outer->getUserResolver());
+        $request->attributes->set('verified_workspace_action', $action);
         $request->attributes->set('tenant_state', $outer->attributes->get('tenant_state'));
         $route->bind($request);
         $request->setRouteResolver(fn () => $route);

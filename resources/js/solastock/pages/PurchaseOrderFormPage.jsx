@@ -9,6 +9,7 @@ import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx'
 import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 import { useI18n } from '../i18n/context.jsx';
+import { DocumentCurrencyPicker } from '../components/DocumentCurrencyPicker.jsx';
 
 const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', tax_code: '', notes: '' });
 const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
@@ -36,7 +37,7 @@ export default function PurchaseOrderFormPage() {
         if (isEdit && existing.data?.purchase_order) {
             const po = existing.data.purchase_order;
             if (po.status !== 'draft') { toast.push(t('receiving.po.messages.onlyDraftEditable', 'Only draft purchase orders can be edited.'), 'error'); nav(`/purchase-orders/${id}`); return; }
-            setHeader({ po_number: po.po_number, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id, order_date: po.order_date, expected_date: po.expected_date ?? '', notes: po.notes ?? '' });
+            setHeader({ po_number: po.po_number, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id, currency_code: po.integration_currency_code ?? '', order_date: po.order_date?.slice(0,10), expected_date: po.expected_date?.slice(0,10) ?? '', notes: po.notes ?? '' });
             setLines((existing.data.lines ?? po.lines ?? []).map((l) => ({
                 item_id: l.item_id,
                 ordered_qty: l.entered_qty ?? l.ordered_qty,
@@ -96,6 +97,7 @@ export default function PurchaseOrderFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
+                <DocumentCurrencyPicker value={header.currency_code} onChange={currency_code => setHeader(current => ({...current, currency_code}))} error={errors.currency_code} />
                 <Field label={t('receiving.po.fields.number', 'PO number')} error={errors.po_number}><input className="input" placeholder={t('receiving.po.form.numberPlaceholder', 'Auto-generated if left blank')} value={header.po_number} onChange={(e) => setHeader({ ...header, po_number: e.target.value })} /></Field>
                 <Field label={t('receiving.common.supplier', 'Supplier')} error={errors.supplier_id}><SupplierPicker value={header.supplier_id} onChange={(v) => setHeader({ ...header, supplier_id: v })} /></Field>
                 <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>

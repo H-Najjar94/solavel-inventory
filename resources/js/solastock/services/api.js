@@ -253,6 +253,8 @@ export const api = {
 
     salesReturns: (params) => request('/sales-returns', { params }),
     salesReturn: (id) => request(`/sales-returns/${id}`),
+    cancelSalesReturn: (id) => request(`/sales-returns/${id}/cancel`, { method: 'POST' }),
+    reverseSalesReturn: (id, reason) => request(`/sales-returns/${id}/reverse`, { method: 'POST', body: { reason } }),
     createSalesReturn: (body) => request('/sales-returns', { method: 'POST', body }),
     updateSalesReturn: (id, body) => request(`/sales-returns/${id}`, { method: 'PUT', body }),
     postSalesReturn: (id) => request(`/sales-returns/${id}/post`, { method: 'POST' }),

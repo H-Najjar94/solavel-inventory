@@ -228,6 +228,9 @@ class IntegrationController extends ApiController
             'api_key' => ['nullable', 'string', 'min:32', 'max:255'],
             'require_mapping_before_post' => ['boolean'],
         ]);
+        if ($data['mode'] === 'active') {
+            app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($orgId);
+        }
         $existing = IntegrationSetting::query()
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
@@ -324,7 +327,7 @@ class IntegrationController extends ApiController
         $existing = IntegrationAccountMapping::query()
             ->where('integration', IntegrationEvents::INTEGRATION)->get()->keyBy('mapping_type');
 
-        $rows = collect(IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS)->map(fn ($type) => [
+        $rows = collect(app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles($this->context->idOrFail()))->map(fn ($type) => [
             'mapping_type' => $type,
             'solabooks_account_id' => $existing[$type]->solabooks_account_id ?? null,
             'account_code' => $existing[$type]->account_code ?? null,
@@ -339,6 +342,7 @@ class IntegrationController extends ApiController
     public function updateAccountMappings(Request $request): JsonResponse
     {
         $orgId = $this->context->idOrFail();
+        app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($orgId);
         $data = $request->validate([
             'mappings' => ['required', 'array'],
             'mappings.*.mapping_type' => ['required', 'string'],
@@ -349,7 +353,7 @@ class IntegrationController extends ApiController
         ]);
 
         foreach ($data['mappings'] as $m) {
-            if (! in_array($m['mapping_type'], IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS, true)) {
+            if (! in_array($m['mapping_type'], app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles($this->context->idOrFail()), true)) {
                 continue;
             }
             IntegrationAccountMapping::query()->updateOrCreate(
@@ -390,6 +394,7 @@ class IntegrationController extends ApiController
     public function updateTaxMappings(Request $request): JsonResponse
     {
         $orgId = $this->context->idOrFail();
+        app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($orgId);
         $definitions = collect((array) (InventorySetting::query()->first()?->taxes ?? []))->keyBy('code');
         $data = $request->validate([
             'mappings' => ['required', 'array'],

@@ -181,8 +181,14 @@ final class WorkflowValidationService
         } else {
             $valid = DB::connection('tenant')->table('unit_conversions')
                 ->where('id', $line->unit_conversion_id)->where('organization_id', $organizationId)
-                ->where('item_id', $line->item_id)->where('from_unit_id', $line->entered_unit_id)
-                ->where('to_unit_id', $line->base_unit_id)->where('factor', $factor)->exists();
+                // Runtime conversion resolution deliberately supports both a
+                // more-specific item conversion and an organization-wide
+                // default. Validate the exact frozen row selected by that
+                // resolver without narrowing a valid global default to this
+                // item after the fact.
+                ->where(fn ($query) => $query->whereNull('item_id')->orWhere('item_id', $line->item_id))
+                ->where('from_unit_id', $line->entered_unit_id)
+                ->where('to_unit_id', $line->base_unit_id)->exists();
             if (! $valid) {
                 $this->conversionFailure($eventType, 'unit_conversion_item_scope_invalid');
             }

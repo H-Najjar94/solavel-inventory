@@ -76,6 +76,13 @@ class IntegrationStatusService
             && $workerHeartbeat->state === 'running'
             && Carbon::parse($workerHeartbeat->last_seen_at)->gte(now()->subMinutes(2));
 
+        // The production supervisor publishes one server-owned heartbeat; the
+        // tenant table belongs to the legacy/staging single-tenant worker.
+        if (app()->environment('production')) {
+            $workerRunning = $organizationMapping && app(TransportWorkerHeartbeat::class)->runningFor(
+                (int)$organizationMapping->central_client_id, $orgId);
+        }
+
         $mapped = IntegrationAccountMapping::query()
             ->where('organization_id', $orgId)
             ->where('integration', IntegrationEvents::INTEGRATION)
@@ -145,9 +152,11 @@ class IntegrationStatusService
             $authoritativeState = 'unavailable';
         }
 
+        $onboarding = app(FinanceOnboardingReadiness::class)->resolve($orgId, auth()->user());
+        $realHold = ! $safety->deliveryEnabledFor($orgId);
         $activated = $mode === 'active' && $organizationMapping?->status === 'verified'
             && $organizationMapping?->activation_state === 'active';
-        $deliveryEnabled = $safety->deliveryEnabledFor($orgId) && $activated
+        $deliveryEnabled = $onboarding['finance_setup_complete'] && $onboarding['readiness_available'] && $safety->deliveryEnabledFor($orgId) && $activated
             && data_get($settings->meta, 'transport_enabled') === true;
         if ($deliveryEnabled) {
             try { app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($organizationMapping); }
@@ -155,7 +164,10 @@ class IntegrationStatusService
         }
         $workerEnabled = $safety->workerEnabledFor($orgId);
         $health = match (true) {
-            ! $deliveryEnabled => 'maintenance_hold',
+            $realHold => 'maintenance_hold',
+            ! $onboarding['readiness_available'] => 'unavailable',
+            ! $onboarding['finance_setup_complete'] => 'setup_required',
+            ! $deliveryEnabled => 'paused',
             $mode === 'disconnected' => 'disconnected',
             $failed > 0 => 'error',
             $incompleteMapping > 0 => 'needs_mapping',
@@ -191,7 +203,9 @@ class IntegrationStatusService
                 $wizardCurrentStep = 'temporarily_unavailable';
             }
         }
+        $automaticReady = data_get($settings->meta,'default_connection.state') === 'ready' && $activated && (float) $mappingCompleteness === 100.0;
         $connectionState = match (true) {
+            $automaticReady => 'connected',
             ! $organizationMapping && ! $settings->exists => 'not_subscribed',
             ! $organizationMapping => 'subscription_available',
             ! $wizardRun && $mappingCompleteness < 100 => 'setup_required',
@@ -206,7 +220,29 @@ class IntegrationStatusService
             default => (string) $wizardRun->state,
         };
 
+        $onboarding['blockers'] = array_values(array_filter([
+            ! $onboarding['readiness_available'] ? 'readiness_unavailable' : null,
+            $onboarding['readiness_available'] && ! $onboarding['premium_entitled'] ? 'access_required' : null,
+            $onboarding['premium_entitled'] && ! $onboarding['finance_provisioned'] ? 'provisioning_pending' : null,
+            $onboarding['finance_provisioned'] && ! $onboarding['finance_setup_complete'] ? 'finance_setup_incomplete' : null,
+            $realHold ? $safety->reason() : null,
+            $organizationMapping?->activation_state === 'maintenance_hold' ? 'reconciliation_hold' : null,
+            ! $activated ? 'connection_setup_incomplete' : null,
+            $failed > 0 ? 'sync_errors' : null,
+            $activated && ! $workerRunning ? 'sync_worker_unavailable' : null,
+        ]));
+        if ($onboarding['state'] === 'FINANCE_READY') {
+            $onboarding['state'] = match (true) {
+                $realHold => 'MAINTENANCE_HOLD',
+                $deliveryEnabled && $workerRunning && $failed === 0 && $incompleteMapping === 0 => 'CONNECTED_READY',
+                $activated => 'CONNECTION_BLOCKED',
+                in_array($wizardRun?->state, ['activation_ready', 'ready_for_approval', 'approved_maintenance_hold'], true) => 'ACTIVATION_REQUIRED',
+                default => 'CONNECTION_SETUP_INCOMPLETE',
+            };
+        }
+
         return [
+            'readiness' => $onboarding,
             'integration' => IntegrationEvents::INTEGRATION,
             'mode' => $mode,
             'workspace_connected' => $workspaceConnected,
@@ -217,7 +253,8 @@ class IntegrationStatusService
             'health' => $health,
             'setup_status' => $setupDecision['allowed'] ? 'available' : 'unavailable',
             'setup_status_reason' => $setupDecision['reason_code'],
-            'draft_status' => $draftStatus,
+            'draft_status' => $automaticReady ? 'completed' : $draftStatus,
+            'configured_automatically' => $automaticReady,
             'activation_status' => $activated ? 'enabled' : 'safely_paused',
             'delivery_status' => $deliveryEnabled ? 'enabled' : 'disabled',
             'connection_state' => $connectionState,
