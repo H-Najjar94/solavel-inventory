@@ -327,7 +327,7 @@ class IntegrationController extends ApiController
         $existing = IntegrationAccountMapping::query()
             ->where('integration', IntegrationEvents::INTEGRATION)->get()->keyBy('mapping_type');
 
-        $rows = collect(IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS)->map(fn ($type) => [
+        $rows = collect(app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles($this->context->idOrFail()))->map(fn ($type) => [
             'mapping_type' => $type,
             'solabooks_account_id' => $existing[$type]->solabooks_account_id ?? null,
             'account_code' => $existing[$type]->account_code ?? null,
@@ -353,7 +353,7 @@ class IntegrationController extends ApiController
         ]);
 
         foreach ($data['mappings'] as $m) {
-            if (! in_array($m['mapping_type'], IntegrationStatusService::REQUIRED_ACCOUNT_MAPPINGS, true)) {
+            if (! in_array($m['mapping_type'], app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles($this->context->idOrFail()), true)) {
                 continue;
             }
             IntegrationAccountMapping::query()->updateOrCreate(
