@@ -69,6 +69,13 @@ export default function SalesReturnDetailPage() {
                 {r.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.authorizeSalesReturn(id), t('returns.messages.authorized', 'RMA authorized.'))}>{t('returns.actions.authorize', 'Authorize RMA')}</button>}
                 {r.status === 'authorized' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.inspectSalesReturn(id), t('returns.messages.inspected', 'Return inspected.'))}>{t('returns.actions.inspect', 'Mark inspected')}</button>}
                 {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmPost(true)}>{t('returns.actions.post', 'Post return')}</button>}
+                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn" disabled={!gate.allowed} onClick={() => {
+                    if (window.confirm(t('returns.messages.confirmCancel', 'Cancel this unposted return and release its quantities?'))) action(() => api.cancelSalesReturn(id), t('returns.messages.cancelled', 'Return cancelled. Reserved quantities were released.'));
+                }}>{t('returns.actions.cancelReturn', 'Cancel return')}</button>}
+                {r.status === 'posted' && <button className="btn" disabled={!gate.allowed} onClick={() => {
+                    const reason = window.prompt(t('returns.messages.reverseReason', 'Reason for reversing this posted return'));
+                    if (reason) action(() => api.reverseSalesReturn(id, reason), t('returns.messages.reversed', 'Return reversed.'));
+                }}>{t('returns.actions.reverse', 'Reverse return')}</button>}
             </div>
             <ConfirmPostModal open={confirmPost} name={t('returns.detail.confirmPostName', 'sales return')}
                 onConfirm={() => { setConfirmPost(false); action(() => api.postSalesReturn(id), t('returns.messages.posted', 'Return posted. Eligible units have been returned to stock.')); }} onCancel={() => setConfirmPost(false)} />

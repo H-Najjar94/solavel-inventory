@@ -80,19 +80,30 @@ class GoodsReceiptController extends ApiController
                 return null;
             }
 
+            $factor = (string) ($l->unit_conversion_factor ?: '1');
+            $enteredRemaining = Decimal::qty(Decimal::div($remaining, $factor));
             $line = [
                 'purchase_order_line_id' => $l->id,
                 'item_id' => $l->item_id,
                 'variant_id' => $l->variant_id,
-                'received_qty' => $blind ? '' : (Decimal::lt($remaining, '0') ? '0.0000' : $remaining),
+                'received_qty' => $blind ? '' : (Decimal::lt($remaining, '0') ? '0.0000' : $enteredRemaining),
                 'unit_cost' => $l->unit_price,
+                'entered_qty' => $blind ? '' : $enteredRemaining,
+                'entered_unit_id' => $l->entered_unit_id,
+                'base_unit_id' => $l->base_unit_id,
+                'unit_conversion_id' => $l->unit_conversion_id,
+                'unit_conversion_factor' => $factor,
+                'unit_conversion_version' => $l->unit_conversion_version,
+                'unit_conversion_hash' => $l->unit_conversion_hash,
+                'unit_conversion_precision' => $l->unit_conversion_precision,
+                'unit_conversion_rounding_mode' => $l->unit_conversion_rounding_mode,
             ];
 
             if (! $blind) {
                 $line += [
-                    'ordered_qty' => $l->ordered_qty,
-                    'already_received_qty' => $l->received_qty,
-                    'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
+                    'ordered_qty' => $l->entered_qty,
+                    'already_received_qty' => Decimal::qty(Decimal::div((string) $l->received_qty, $factor)),
+                    'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $enteredRemaining,
                 ];
             }
 

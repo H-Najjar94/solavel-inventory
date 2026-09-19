@@ -240,7 +240,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('physical_quantity', $assistant);
         $this->assertStringContainsString('undoDecision', $assistant);
         $this->assertStringContainsString('connectionActivated && <Tabs', $page);
-        $this->assertStringContainsString("(!connectionActivated || tab === 'wizard')", $page);
+        $this->assertStringContainsString("(showWizard || tab === 'wizard')", $page);
         $this->assertStringContainsString('<bdi>', $assistant);
         $this->assertStringContainsString('No, they are different items', $translations);
         $this->assertStringContainsString('لا، هما صنفان مختلفان', $translations);
@@ -790,7 +790,7 @@ final class ConnectionWizardTest extends TestCase
         DB::connection('tenant')->table('inventory_items')->delete();
         DB::connection('tenant')->table('integration_account_mappings')->delete();
         $types = ['inventory_asset'=>'asset','cogs'=>'expense','grni'=>'liability','opening_offset'=>'equity',
-            'adjustment_gain'=>'revenue','adjustment_loss'=>'expense','landed_cost_clearing'=>'asset',
+            'adjustment_gain'=>'revenue','adjustment_loss'=>'expense','purchase_price_variance'=>'expense','landed_cost_clearing'=>'asset',
             'transfer_clearing'=>'asset','accounts_receivable'=>'asset','accounts_payable'=>'liability',
             'input_tax'=>'asset','output_tax'=>'liability','rounding'=>'expense','sales_revenue'=>'revenue'];
         $ids = [];
@@ -802,7 +802,8 @@ final class ConnectionWizardTest extends TestCase
         $wizard = app(ConnectionWizardService::class);
         $before = $this->mutationCounters();
         $run = $wizard->start(TenantTestManager::ORG_A, 7001);
-        $this->assertSame('fresh_workspace', $run['guided_setup']['setup_path']);
+        // Completed Finance setup follows the existing-business manual review policy.
+        $this->assertSame('existing_business', $run['guided_setup']['setup_path']);
         foreach ($run['comparison'] as $candidate) {
             if ($candidate['entity_type'] !== 'account_role') continue;
             $run = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
@@ -840,7 +841,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame('connected', $activated['state']);
         $this->assertSame($mapping->mapping_uuid, DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('run_uuid', $run['run_uuid'])->value('organization_mapping_uuid'));
-        $this->assertSame(6, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
+        $this->assertSame(7, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
         $this->assertSame('active', IntegrationSetting::firstOrFail()->mode);
     }
 
@@ -877,7 +878,7 @@ final class ConnectionWizardTest extends TestCase
     private function seedConnectionFixture(bool $withMapping = true): array
     {
         $this->seedCentralIdentity();
-        DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A]);
+        DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A, 'setup_status'=>'complete', 'finance_setup_completed_at'=>now()]);
         $unitId = DB::connection('tenant')->table('units')->insertGetId([
             'organization_id' => TenantTestManager::ORG_A, 'code' => 'EA', 'name' => 'Each',
             'symbol' => 'ea', 'kind' => 'count', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),

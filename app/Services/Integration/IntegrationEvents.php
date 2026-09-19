@@ -33,6 +33,7 @@ final class IntegrationEvents
         'pack.packed' => ['Pack', null, null],
         'shipment.posted' => ['Shipment', 'cogs', 'inventory_asset'],
         'sales_return.posted' => ['SalesReturn', 'inventory_asset', 'cogs'],
+        'sales_return.reversed' => ['InventoryReversal', 'cogs', 'inventory_asset'],
     ];
 
     public static function exists(string $type): bool
@@ -45,7 +46,7 @@ final class IntegrationEvents
         return in_array($type, [
             'opening_stock.posted', 'opening_stock.reversed',
             'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed',
-            'stock_count.posted', 'shipment.posted', 'sales_return.posted',
+            'stock_count.posted', 'shipment.posted', 'sales_return.posted', 'sales_return.reversed',
         ], true);
     }
 
@@ -55,7 +56,7 @@ final class IntegrationEvents
         if (! self::postsJournal($type)) {
             return false;
         }
-        if (in_array($type, ['adjustment.posted', 'adjustment.reversed', 'stock_count.posted'], true)) {
+        if (in_array($type, ['adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
             return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;
         }
 

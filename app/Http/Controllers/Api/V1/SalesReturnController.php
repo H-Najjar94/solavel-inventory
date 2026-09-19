@@ -7,13 +7,14 @@ use App\Http\Requests\Api\StoreSalesReturnRequest;
 use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\SalesReturnService;
+use App\Services\Documents\InventoryReversalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
 
 class SalesReturnController extends ApiController
 {
-    public function __construct(private SalesReturnService $service) {}
+    public function __construct(private SalesReturnService $service, private InventoryReversalService $reversals) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -96,5 +97,16 @@ class SalesReturnController extends ApiController
         }
 
         return $this->success($return);
+    }
+
+    public function cancel(SalesReturn $sales_return): JsonResponse
+    {
+        return $this->success($this->service->cancel($sales_return));
+    }
+
+    public function reverse(Request $request, SalesReturn $sales_return): JsonResponse
+    {
+        $input = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
+        return $this->success($this->reversals->reverseSalesReturn($sales_return, $input['reason']));
     }
 }

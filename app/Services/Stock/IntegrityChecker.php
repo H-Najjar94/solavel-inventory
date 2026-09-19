@@ -84,9 +84,22 @@ class IntegrityChecker
             if (Decimal::cmp((string) $row->net_qty, (string) $bal->on_hand_qty) !== 0) {
                 $problems[] = "Qty mismatch {$coord}: ledger {$row->net_qty} vs balance {$bal->on_hand_qty}.";
             }
-            $valDiff = Decimal::sub((string) $row->net_val, (string) $bal->total_value);
+            $valuationAdjustment='0';
+            if (DB::connection($connection)->getSchemaBuilder()->hasTable('integration_purchase_cost_adjustment_components')) {
+                $valuationAdjustment=(string)DB::connection($connection)->table('integration_purchase_cost_adjustment_components as c')
+                    ->join('integration_purchase_cost_adjustments as a','a.adjustment_uuid','=','c.adjustment_uuid')
+                    ->join('stock_ledger as l','l.id','=','c.stock_ledger_id')
+                    ->where('c.organization_id',$organizationId)->where('c.destination_role','inventory_asset')
+                    ->where('l.item_id',$row->item_id)->whereRaw('COALESCE(l.variant_id,0)=?',[$row->vkey])
+                    ->where('l.warehouse_id',$row->warehouse_id)->whereRaw('COALESCE(l.lot_id,0)=?',[$row->lkey])
+                    ->whereRaw('COALESCE(l.bin_id,0)=?',[$row->bkey])
+                    ->selectRaw("SUM(CASE WHEN a.state='applied' THEN c.posted_base_amount WHEN a.state='reversed' THEN 0 ELSE 0 END) total")
+                    ->value('total');
+            }
+            $expectedValue=Decimal::add((string)$row->net_val,$valuationAdjustment ?: '0');
+            $valDiff = Decimal::sub($expectedValue, (string) $bal->total_value);
             if (Decimal::gt(ltrim($valDiff, '-'), $tolerance)) {
-                $problems[] = "Value mismatch {$coord}: ledger {$row->net_val} vs balance {$bal->total_value} (>{$tolerance}).";
+                $problems[] = "Value mismatch {$coord}: ledger plus valuation adjustments {$expectedValue} vs balance {$bal->total_value} (>{$tolerance}).";
             }
         }
 

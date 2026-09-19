@@ -34,6 +34,22 @@ class ShipmentController extends ApiController
         $shipment->load('lines');
         $ledger = \App\Models\Tenant\StockLedger::query()
             ->where('source_type', Shipment::class)->where('source_id', $shipment->id)->get();
+        $costs = $ledger->keyBy('source_line_id');
+        $returned = \Illuminate\Support\Facades\DB::connection('tenant')->table('sales_return_lines as lines')
+            ->join('sales_returns as returns', 'returns.id', '=', 'lines.sales_return_id')
+            ->where('lines.organization_id', $shipment->organization_id)->where('returns.shipment_id', $shipment->id)
+            ->whereNull('returns.deleted_at')->whereNotIn('returns.status', ['cancelled'])
+            ->selectRaw('lines.source_shipment_line_id, SUM(lines.returned_qty) returned_qty')
+            ->groupBy('lines.source_shipment_line_id')->pluck('returned_qty', 'source_shipment_line_id');
+        $shipment->lines->each(function ($line) use ($costs, $returned): void {
+            $used = (string) ($returned[$line->id] ?? '0');
+            $remaining = \App\Services\Stock\Support\Decimal::qty(\App\Services\Stock\Support\Decimal::sub((string) $line->quantity, $used));
+            $factor = (string) ($line->unit_conversion_factor ?? 1);
+            $line->setAttribute('remaining_base_qty', $remaining);
+            $line->setAttribute('remaining_entered_qty', \App\Services\Stock\Support\Decimal::qty(\App\Services\Stock\Support\Decimal::div($remaining, $factor)));
+            $line->setAttribute('source_stock_ledger_id', $costs->get($line->id)?->id);
+            $line->setAttribute('unit_cost', $costs->get($line->id)?->unit_cost);
+        });
 
         return $this->success(['shipment' => $shipment, 'ledger' => $ledger]);
     }

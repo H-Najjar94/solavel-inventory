@@ -15,7 +15,10 @@ final class WorkspaceContext
         $permissions = app(InventoryPermissionService::class);
         $commercial = app(InventoryCommercialEntitlementService::class);
         $setting = IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
-        $ready = $mapped && in_array($setting?->mode, ['active', 'paused', 'connected_readonly'], true);
+        $status = app(\App\Services\Integration\IntegrationStatusService::class)->status($organizationId);
+        $readiness = data_get($status, 'readiness.state', 'PREPARING');
+        $ready = OperationalReadiness::allows($mapped, $activated, $readiness,
+            app(\App\Services\Integration\OrganizationAccountRequirements::class)->missingRoles($organizationId));
         $writable = $ready && $activated && $setting?->mode === 'active' && app(IntegrationSafetyHold::class)->deliveryEnabledFor($organizationId);
         $actions = [];
         foreach (WorkspaceActions::ALLOWED as $action) {
@@ -38,7 +41,7 @@ final class WorkspaceContext
             $actions[$action] = ['allowed' => $reason === null, 'reason' => $reason];
         }
         return ['organization_id' => $organizationId, 'mapped' => $mapped, 'mode' => $setting?->mode ?? 'disconnected',
-            'ready' => $ready, 'can_open_stock' => $permissions->can($request->user(), 'inventory.view_dashboard') || $permissions->can($request->user(), 'inventory.view_items') || $permissions->can($request->user(), 'inventory.view_stock'),
+            'ready' => $ready, 'readiness' => $readiness, 'can_open_stock' => $ready && ( $permissions->can($request->user(), 'inventory.view_dashboard') || $permissions->can($request->user(), 'inventory.view_items') || $permissions->can($request->user(), 'inventory.view_stock')),
             'writable' => $writable, 'actions' => $actions,
             'can_setup' => $permissions->can($request->user(), 'inventory.integration.setup'),
             'can_review_accounting' => $permissions->can($request->user(), 'inventory.integration.accounting_review'),

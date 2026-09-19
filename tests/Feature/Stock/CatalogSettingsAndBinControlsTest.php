@@ -384,6 +384,10 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $this->assertSame('10.0000', (string) $poLine->unit_price);
 
         app(PurchaseOrderController::class)->approve(\App\Models\Tenant\PurchaseOrder::query()->findOrFail($po['id']));
+        // A downstream receipt must retain the approved PO's immutable factor,
+        // even if the reusable organization-wide conversion is edited later.
+        UnitConversion::query()->where('from_unit_id', $case->id)->where('to_unit_id', $each->id)
+            ->update(['factor' => '15']);
         $grnRequest = $this->formRequest(StoreGoodsReceiptRequest::class, 'POST', '/goods-receipts', [
             'grn_number' => '',
             'purchase_order_id' => $po['id'],
@@ -401,12 +405,17 @@ class CatalogSettingsAndBinControlsTest extends TestCase
             ]],
         ]);
         $grn = app(GoodsReceiptController::class)->store($grnRequest)->getData(true)['data'];
+        $grnLine = \App\Models\Tenant\GoodsReceiptLine::query()->where('goods_receipt_id', $grn['id'])->sole();
+        $this->assertSame('2.0000', (string) $grnLine->entered_qty);
+        $this->assertSame('12.00000000', (string) $grnLine->unit_conversion_factor);
         app(GoodsReceiptController::class)->post(\App\Models\Tenant\GoodsReceipt::query()->findOrFail($grn['id']));
 
         $balance = StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->firstOrFail();
         $ledger = StockLedger::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->latest('id')->firstOrFail();
         $this->assertSame('24.0000', (string) $balance->on_hand_qty);
         $this->assertSame('10.0000', (string) $ledger->unit_cost);
+        UnitConversion::query()->where('from_unit_id', $case->id)->where('to_unit_id', $each->id)
+            ->update(['factor' => '12']);
 
         $openingRequest = $this->formRequest(StoreOpeningStockRequest::class, 'POST', '/opening-stock', [
             'entry_number' => '',

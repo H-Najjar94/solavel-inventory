@@ -20,8 +20,8 @@ class PurchaseOrder extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'order_date' => 'date',
-        'expected_date' => 'date',
+        'order_date' => 'date:Y-m-d',
+        'expected_date' => 'date:Y-m-d',
         'subtotal' => 'decimal:2',
         'tax_total' => 'decimal:2',
         'total' => 'decimal:2',

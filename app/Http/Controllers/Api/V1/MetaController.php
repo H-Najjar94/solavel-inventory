@@ -21,6 +21,8 @@ class MetaController extends ApiController
     public function index(Request $request, InventoryPermissionService $permissions): JsonResponse
     {
         $organizationId = app(OrganizationContext::class)->idOrFail();
+        $connection = \App\Models\Tenant\IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
+        $currency = (array) data_get($connection?->meta, 'finance_currency_contract', []);
 
         return $this->success([
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
@@ -28,6 +30,10 @@ class MetaController extends ApiController
             'permissions' => $permissions->permissionsFor($request->user()),
             'tenant_mode' => $request->attributes->get('tenant_mode', 'live'), // live|demo
             'settings' => InventorySetting::query()->first(),
+            'document_currency' => [
+                'base' => $currency['base_currency_code'] ?? null,
+                'enabled' => array_values(array_filter((array) ($currency['enabled_currency_codes'] ?? []), fn ($code) => is_string($code) && preg_match('/^[A-Z]{3}$/D', $code))),
+            ],
             'lookups' => [
                 'categories' => ItemCategory::query()->where('is_active', true)->get(['id', 'name', 'parent_id']),
                 'brands' => ItemBrand::query()->where('is_active', true)->get(['id', 'name']),

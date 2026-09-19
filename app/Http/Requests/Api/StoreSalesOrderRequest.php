@@ -42,6 +42,8 @@ class StoreSalesOrderRequest extends FormRequest
             'lines.*.warehouse_id' => ['nullable','integer'],
             'lines.*.bin_id' => ['nullable','integer'],
             'lines.*.ordered_qty' => ['required','numeric','gt:0'],
+            'lines.*.entered_qty' => ['nullable','numeric','gt:0'],
+            'lines.*.entered_unit_id' => ['nullable','integer'],
             'lines.*.unit_price' => ['nullable','numeric','min:0'],
             'lines.*.discount_rate' => ['nullable','numeric','min:0','max:100'],
             'lines.*.tax_code' => ['nullable','string','max:50'],

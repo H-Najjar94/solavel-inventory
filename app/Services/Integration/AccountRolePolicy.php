@@ -6,7 +6,7 @@ namespace App\Services\Integration;
 final class AccountRolePolicy
 {
     public const VERSION = 'inventory-account-roles.v1';
-    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense']];
+    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability']];
     public const OPERATIONS = [
         'opening_stock.posted' => ['inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['inventory_asset', 'opening_offset'],
@@ -17,6 +17,9 @@ final class AccountRolePolicy
         'grn.reversed' => ['inventory_asset', 'grni'],
         'shipment.posted' => ['cogs', 'inventory_asset'],
         'sales_return.posted' => ['inventory_asset', 'cogs'],
+        'sales_return.reversed' => ['inventory_asset', 'cogs'],
+        'purchase_cost_adjustment.posted' => ['inventory_asset','cogs','adjustment_loss','purchase_price_variance'],
+        'purchase_cost_adjustment.reversed' => ['inventory_asset','cogs','adjustment_loss','purchase_price_variance'],
         'transfer.posted' => [], // Same organization: quantity movement, no journal.
         'purchase_order.approved' => [],
         'sales_order.confirmed' => [],
@@ -47,6 +50,7 @@ final class AccountRolePolicy
             'grn.reversed' => [['grni', 'debit'], ['inventory_asset', 'credit']],
             'shipment.posted' => [['cogs', 'debit'], ['inventory_asset', 'credit']],
             'sales_return.posted' => [['inventory_asset', 'debit'], ['cogs', 'credit']],
+            'sales_return.reversed' => [['cogs', 'debit'], ['inventory_asset', 'credit']],
             default => null,
         };
     }

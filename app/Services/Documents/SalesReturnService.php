@@ -75,17 +75,19 @@ class SalesReturnService
                 if (mb_strlen(trim((string) ($attributes['reason'] ?? ''))) < 3) {
                     throw new RuntimeException('A source reversal reason of at least 3 characters is required.');
                 }
-                $this->assertFullSourceRequest($sourceShipment, $lines);
-                $existing = SalesReturn::query()
-                    ->where('source_reversal_shipment_id', $sourceShipment->id)
-                    ->lockForUpdate()
-                    ->first();
-                if ($existing) {
-                    return $existing->fresh('lines');
-                }
                 $attributes['warehouse_id'] = $sourceShipment->warehouse_id;
-                $attributes['is_source_reversal'] = true;
-                $attributes['source_reversal_shipment_id'] = $sourceShipment->id;
+                $fullReversal = $this->isFullResellableSourceRequest($sourceShipment, $lines);
+                if ($fullReversal) {
+                    $existing = SalesReturn::query()->where('source_reversal_shipment_id', $sourceShipment->id)
+                        ->lockForUpdate()->first();
+                    if ($existing) return $existing->fresh('lines');
+                    $hasPrior = SalesReturn::query()->where('shipment_id', $sourceShipment->id)
+                        ->whereNull('deleted_at')->whereNotIn('status', ['cancelled'])->lockForUpdate()->exists();
+                    if ($hasPrior) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The shipment already has a partial or disposition return; only its remaining quantities can be returned.']);
+                }
+                $attributes['is_source_reversal'] = $fullReversal;
+                $attributes['source_reversal_shipment_id'] = $fullReversal ? $sourceShipment->id : null;
+                $attributes['shipment_id'] = $sourceShipment->id;
                 $attributes['original_event_uuid'] = IntegrationOutboxEvent::query()
                     ->where('event_type', 'shipment.posted')
                     ->where('aggregate_id', $sourceShipment->id)
@@ -97,7 +99,9 @@ class SalesReturnService
             $r->organization_id = $orgId;
             $r->save();
             $sourceShipment
-                ? $this->syncSourceLines($r, $sourceShipment, $orgId)
+                ? ($r->is_source_reversal
+                    ? $this->syncSourceLines($r, $sourceShipment, $orgId)
+                    : $this->syncAllocatedSourceLines($r, $sourceShipment, $lines, $orgId))
                 : $this->syncLines($r, $lines, $orgId);
 
             return $r->fresh('lines');
@@ -120,7 +124,12 @@ class SalesReturnService
             $r->fill(collect($attributes)->only(['return_number', 'shipment_id', 'customer_id', 'customer_name', 'return_date', 'warehouse_id', 'reason', 'notes'])->toArray());
             $r->save();
             $r->lines()->delete();
-            $this->syncLines($r, $lines, $orgId);
+            if ($r->shipment_id) {
+                $shipment = Shipment::query()->with('lines')->lockForUpdate()->findOrFail($r->shipment_id);
+                $this->syncAllocatedSourceLines($r, $shipment, $lines, $orgId);
+            } else {
+                $this->syncLines($r, $lines, $orgId);
+            }
 
             return $r->fresh('lines');
         });
@@ -240,6 +249,20 @@ class SalesReturnService
         });
     }
 
+    public function cancel(SalesReturn $return): SalesReturn
+    {
+        return DB::connection($this->conn())->transaction(function () use ($return) {
+            $return = SalesReturn::query()->lockForUpdate()->findOrFail($return->id);
+            if ($return->status === 'cancelled') return $return;
+            if (! in_array($return->status, ['draft', 'authorized', 'inspected'], true)) {
+                throw new RuntimeException('Only an unposted sales return can be cancelled.');
+            }
+            $return->status = 'cancelled';
+            $return->save();
+            return $return->fresh('lines');
+        });
+    }
+
     public function inspect(SalesReturn $r, ?string $notes = null): SalesReturn
     {
         return DB::connection($this->conn())->transaction(function () use ($r, $notes) {
@@ -310,12 +333,12 @@ class SalesReturnService
         }
     }
 
-    /** This existing source-reversal workflow supports a full resellable reversal only. */
-    private function assertFullSourceRequest(Shipment $shipment, array $lines): void
+    /** Preserve the legacy exact reversal only for a complete resellable request. */
+    private function isFullResellableSourceRequest(Shipment $shipment, array $lines): bool
     {
         // The explicit source reversal action supplies no editable lines.
         if ($lines === []) {
-            return;
+            return true;
         }
         $expected = StockLedger::query()->where('source_type', Shipment::class)
             ->where('source_id', $shipment->id)->where('direction', 'out')->get()
@@ -324,7 +347,7 @@ class SalesReturnService
         foreach ($lines as $line) {
             if (($line['condition'] ?? 'resellable') !== 'resellable'
                 || ($line['disposition'] ?? 'restock') !== 'restock') {
-                $this->rejectPartialSourceReturn();
+                return false;
             }
             $line = $this->conversions->normalizeLine($line, 'returned_qty');
             $itemId = (int) $line['item_id'];
@@ -333,20 +356,90 @@ class SalesReturnService
         ksort($expected);
         ksort($requested);
         if (array_keys($requested) !== array_keys($expected)) {
-            $this->rejectPartialSourceReturn();
+            return false;
         }
         foreach ($expected as $itemId => $quantity) {
             if (Decimal::cmp($requested[$itemId], $quantity) !== 0) {
-                $this->rejectPartialSourceReturn();
+                return false;
             }
         }
+        return true;
     }
 
-    private function rejectPartialSourceReturn(): never
+    /**
+     * Create immutable source allocations for partial/disposition returns. Draft
+     * lines reserve quantity; deleting/replacing a draft releases it. Posted lines
+     * remain permanent and cumulative quantities are checked under shipment lock.
+     */
+    private function syncAllocatedSourceLines(SalesReturn $return, Shipment $shipment, array $lines, int $orgId): void
     {
-        throw \Illuminate\Validation\ValidationException::withMessages([
-            'lines' => 'This shipment-linked workflow reverses the complete shipment as resellable stock. Partial or damaged source returns are not supported and no return was created.',
-        ]);
+        if ($lines === []) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Select at least one shipped line and return quantity.']);
+        }
+        $seenSerials = [];
+        $requestedBySourceLine = [];
+        foreach ($lines as $input) {
+            $sourceLineId = (int) ($input['source_line_id'] ?? 0);
+            $sourceLine = ShipmentLine::query()->where('shipment_id', $shipment->id)->lockForUpdate()->find($sourceLineId);
+            if (! $sourceLine || (int) $sourceLine->organization_id !== $orgId) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'A selected line does not belong to the source shipment.']);
+            }
+            if ((int) $sourceLine->item_id !== (int) $input['item_id']) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The returned item does not match its shipment line.']);
+            }
+            $input = $this->conversions->normalizeLine($input, 'returned_qty');
+            $baseQty = Decimal::qty((string) $input['returned_qty']);
+            $already = (string) DB::connection($this->conn())->table('sales_return_lines as lines')
+                ->join('sales_returns as returns', 'returns.id', '=', 'lines.sales_return_id')
+                ->where('lines.organization_id', $orgId)->where('lines.source_shipment_line_id', $sourceLine->id)
+                ->where('returns.id', '!=', $return->id)->whereNull('returns.deleted_at')
+                ->whereNotIn('returns.status', ['cancelled'])->sum('lines.returned_qty');
+            $requestedBySourceLine[$sourceLine->id] = Decimal::add($requestedBySourceLine[$sourceLine->id] ?? '0', $baseQty);
+            if (Decimal::gt(Decimal::add($already, $requestedBySourceLine[$sourceLine->id]), (string) $sourceLine->quantity)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Cumulative returns cannot exceed the shipped quantity.']);
+            }
+            if ((int) ($input['entered_unit_id'] ?? 0) !== (int) ($sourceLine->entered_unit_id ?? 0)
+                || Decimal::cmp((string) ($input['unit_conversion_factor'] ?? 1), (string) ($sourceLine->unit_conversion_factor ?? 1), 8) !== 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Return quantities must use the shipment line frozen unit conversion.']);
+            }
+            $ledgerQuery = StockLedger::query()->where('organization_id', $orgId)->where('source_type', Shipment::class)
+                ->where('source_id', $shipment->id)->where('source_line_id', $sourceLine->id)->where('direction', 'out')->lockForUpdate();
+            $ledger = ! empty($input['source_stock_ledger_id'])
+                ? (clone $ledgerQuery)->whereKey((int) $input['source_stock_ledger_id'])->first()
+                : $ledgerQuery->first();
+            if (! $ledger) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The shipment cost provenance is unavailable.']);
+            if ($sourceLine->serial_id) {
+                if (Decimal::cmp($baseQty, '1') !== 0 || isset($seenSerials[$sourceLine->serial_id])) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'A serial-tracked shipment line can be returned exactly once.']);
+                }
+                $seenSerials[$sourceLine->serial_id] = true;
+            }
+            $condition = $input['condition'] ?? 'resellable';
+            $disposition = $input['disposition'] ?? match ($condition) {
+                'resellable' => 'restock', 'quarantine' => 'quarantine', 'damaged' => 'damage', 'retired' => 'retire', default => 'restock',
+            };
+            $validDisposition = match ($condition) {
+                'resellable' => $disposition === 'restock', 'quarantine' => $disposition === 'quarantine',
+                'damaged' => in_array($disposition, ['damage', 'no_restock'], true), 'retired' => in_array($disposition, ['retire', 'no_restock'], true), default => false,
+            };
+            if (! $validDisposition) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Return condition and disposition are inconsistent.']);
+            $return->lines()->create([
+                'organization_id' => $orgId, 'source_shipment_line_id' => $sourceLine->id,
+                'source_stock_ledger_id' => $ledger->id, 'item_id' => $sourceLine->item_id,
+                'variant_id' => $sourceLine->variant_id, 'warehouse_id' => $shipment->warehouse_id,
+                'bin_id' => $sourceLine->bin_id, 'returned_qty' => $baseQty,
+                'entered_qty' => $input['entered_qty'], 'entered_unit_id' => $sourceLine->entered_unit_id,
+                'base_unit_id' => $sourceLine->base_unit_id, 'unit_conversion_id' => $sourceLine->unit_conversion_id,
+                'unit_conversion_factor' => $sourceLine->unit_conversion_factor,
+                'unit_conversion_version' => $sourceLine->unit_conversion_version,
+                'unit_conversion_hash' => $sourceLine->unit_conversion_hash,
+                'unit_conversion_precision' => $sourceLine->unit_conversion_precision,
+                'unit_conversion_rounding_mode' => $sourceLine->unit_conversion_rounding_mode,
+                'unit_cost' => $ledger->unit_cost, 'condition' => $condition,
+                'inspection_status' => 'pending', 'disposition' => $disposition,
+                'lot_id' => $sourceLine->lot_id, 'serial_id' => $sourceLine->serial_id,
+            ]);
+        }
     }
 
     private function syncSourceLines(SalesReturn $return, Shipment $shipment, int $orgId): void
@@ -365,6 +458,8 @@ class SalesReturnService
             $shipmentLine = ShipmentLine::query()->find($row->source_line_id);
             $return->lines()->create([
                 'organization_id' => $orgId,
+                'source_shipment_line_id' => $shipmentLine?->id,
+                'source_stock_ledger_id' => $row->id,
                 'item_id' => $row->item_id,
                 'variant_id' => $row->variant_id,
                 'warehouse_id' => $row->warehouse_id,

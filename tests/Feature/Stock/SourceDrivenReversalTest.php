@@ -266,6 +266,102 @@ class SourceDrivenReversalTest extends TestCase
     }
 
     #[Test]
+    public function shipment_allows_partial_resellable_and_damaged_returns_without_over_return_or_duplicate_stock(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'PARTIAL-RETURN-WH']);
+        $item = F::fifoItem(['sku' => 'PARTIAL-RETURN-ITEM', 'sales_price' => '20']);
+        app(OpeningStockService::class)->post(app(OpeningStockService::class)->createDraft(
+            ['entry_number' => 'PARTIAL-RETURN-OPEN', 'warehouse_id' => $warehouse->id],
+            [['item_id' => $item->id, 'quantity' => '4', 'unit_cost' => '9.75']]
+        ));
+        $sales = app(SalesOrderService::class);
+        $order = $sales->reserve($sales->confirm($sales->createDraft([
+            'order_number' => 'PARTIAL-RETURN-SO', 'warehouse_id' => $warehouse->id,
+        ], [['item_id' => $item->id, 'ordered_qty' => '2', 'unit_price' => '20']])));
+        $shipment = app(ShipmentService::class)->createDraft([
+            'shipment_number' => 'PARTIAL-RETURN-SHIP', 'sales_order_id' => $order->id,
+            'warehouse_id' => $warehouse->id, 'ship_date' => now()->toDateString(),
+        ], app(ShipmentService::class)->fromSalesOrder($order));
+        app(ShipmentService::class)->post($shipment);
+        $sourceLine = $shipment->fresh('lines')->lines->sole();
+        $sourceLedger = StockLedger::query()->where('source_type', get_class($shipment))->where('source_id', $shipment->id)->sole();
+
+        $partial = app(SalesReturnService::class)->createDraft([
+            'return_number' => 'PARTIAL-RETURN-ONE', 'shipment_id' => $shipment->id,
+            'warehouse_id' => $warehouse->id, 'reason' => 'One unit resellable',
+        ], [['source_line_id' => $sourceLine->id, 'source_stock_ledger_id' => $sourceLedger->id,
+            'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable']]);
+        $this->assertFalse($partial->is_source_reversal);
+        app(SalesReturnService::class)->post($partial);
+        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame($sourceLine->id, (int) $partial->lines->sole()->source_shipment_line_id);
+        $this->assertSame($sourceLedger->id, (int) $partial->lines->sole()->source_stock_ledger_id);
+
+        $damaged = app(SalesReturnService::class)->createDraft([
+            'return_number' => 'PARTIAL-RETURN-DAMAGE', 'shipment_id' => $shipment->id,
+            'warehouse_id' => $warehouse->id, 'reason' => 'One unit damaged',
+        ], [['source_line_id' => $sourceLine->id, 'source_stock_ledger_id' => $sourceLedger->id,
+            'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'damaged', 'disposition' => 'damage']]);
+        app(SalesReturnService::class)->post($damaged);
+        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame(0, StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $damaged->id)->count());
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(SalesReturnService::class)->createDraft([
+            'return_number' => 'PARTIAL-RETURN-OVER', 'shipment_id' => $shipment->id,
+            'warehouse_id' => $warehouse->id, 'reason' => 'Over return attempt',
+        ], [['source_line_id' => $sourceLine->id, 'source_stock_ledger_id' => $sourceLedger->id,
+            'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable']]);
+    }
+
+    #[Test]
+    public function cancelling_releases_partial_return_quantity_and_posted_return_reversal_is_idempotent(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'RETURN-CANCEL-WH']);
+        $item = F::fifoItem(['sku' => 'RETURN-CANCEL-ITEM', 'sales_price' => '20']);
+        app(OpeningStockService::class)->post(app(OpeningStockService::class)->createDraft(
+            ['entry_number' => 'RETURN-CANCEL-OPEN', 'warehouse_id' => $warehouse->id],
+            [['item_id' => $item->id, 'quantity' => '3', 'unit_cost' => '8']]
+        ));
+        $sales = app(SalesOrderService::class);
+        $order = $sales->reserve($sales->confirm($sales->createDraft([
+            'order_number' => 'RETURN-CANCEL-SO', 'warehouse_id' => $warehouse->id,
+        ], [['item_id' => $item->id, 'ordered_qty' => '2', 'unit_price' => '20']])));
+        $shipment = app(ShipmentService::class)->createDraft([
+            'shipment_number' => 'RETURN-CANCEL-SHIP', 'sales_order_id' => $order->id,
+            'warehouse_id' => $warehouse->id,
+        ], app(ShipmentService::class)->fromSalesOrder($order));
+        app(ShipmentService::class)->post($shipment);
+        $sourceLine = $shipment->fresh('lines')->lines->sole();
+        $sourceLedger = StockLedger::query()->where('source_type', get_class($shipment))->where('source_id', $shipment->id)->sole();
+        $line = ['source_line_id' => $sourceLine->id, 'source_stock_ledger_id' => $sourceLedger->id,
+            'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable'];
+
+        $abandoned = app(SalesReturnService::class)->createDraft([
+            'return_number' => 'RETURN-CANCEL-DRAFT', 'shipment_id' => $shipment->id,
+            'warehouse_id' => $warehouse->id, 'reason' => 'Customer changed request',
+        ], [$line]);
+        app(SalesReturnService::class)->cancel($abandoned);
+        $replacement = app(SalesReturnService::class)->createDraft([
+            'return_number' => 'RETURN-CANCEL-REPLACEMENT', 'shipment_id' => $shipment->id,
+            'warehouse_id' => $warehouse->id, 'reason' => 'Accepted replacement return',
+        ], [$line]);
+        app(SalesReturnService::class)->post($replacement);
+        $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+
+        $reversal = app(InventoryReversalService::class)->reverseSalesReturn($replacement, 'Customer retained returned item');
+        $again = app(InventoryReversalService::class)->reverseSalesReturn($replacement->fresh(), 'Ignored retry');
+        $this->assertSame($reversal->id, $again->id);
+        $this->assertSame('reversed', $replacement->fresh()->status);
+        $this->assertSame('1.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertDatabaseHas('integration_outbox_events', [
+            'event_type' => 'sales_return.reversed', 'aggregate_id' => $reversal->id,
+        ], 'tenant');
+    }
+
+    #[Test]
     public function canonical_available_serial_can_leave_stock_after_a_resellable_return(): void
     {
         $this->useTenantA();

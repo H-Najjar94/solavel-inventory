@@ -93,6 +93,7 @@ return [
         'warehouse_scope' => 'Every assigned warehouse must belong to the active organization.',
     ],
     'integration' => [
+        'finance_setup_required' => 'Complete Finance setup before configuring or activating financial integration.',
         'wizard' => [
             'setupUnavailable' => 'Connection setup requires active Finance and Inventory access for this organization.',
         ],

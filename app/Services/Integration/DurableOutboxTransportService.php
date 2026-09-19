@@ -227,6 +227,7 @@ final class DurableOutboxTransportService
 
     private function assertExecutionEnabled(int $organizationId): void
     {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         $this->safety->assertDeliveryEnabledFor($organizationId);
         if (! $this->safety->workerEnabledFor($organizationId)) {
             throw new RuntimeException('Dedicated SolaStock Finance v2 worker is disabled.');

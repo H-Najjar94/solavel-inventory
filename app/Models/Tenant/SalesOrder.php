@@ -20,8 +20,8 @@ class SalesOrder extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'order_date' => 'date',
-        'requested_ship_date' => 'date',
+        'order_date' => 'date:Y-m-d',
+        'requested_ship_date' => 'date:Y-m-d',
         'subtotal' => 'decimal:2',
         'discount_total' => 'decimal:2',
         'tax_total' => 'decimal:2',

@@ -4,6 +4,7 @@ namespace App\Services\Documents;
 
 use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SalesOrder;
+use App\Models\Tenant\SalesOrderLine;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\Shipment;
 use App\Services\Catalog\UnitConversionResolver;
@@ -69,11 +70,22 @@ class ShipmentService
 
         return $so->lines->flatMap(function ($l) use ($so) {
             $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->shipped_qty));
+            $factor = (string) ($l->unit_conversion_factor ?: '1');
+            $enteredRemaining = Decimal::qty(Decimal::div($remaining, $factor));
             $base = [
                 'sales_order_line_id' => $l->id,
                 'item_id' => $l->item_id,
                 'warehouse_id' => $l->warehouse_id ?? $so->warehouse_id,
                 'bin_id' => $l->bin_id,
+                'entered_qty' => $enteredRemaining,
+                'entered_unit_id' => $l->entered_unit_id,
+                'base_unit_id' => $l->base_unit_id,
+                'unit_conversion_id' => $l->unit_conversion_id,
+                'unit_conversion_factor' => $factor,
+                'unit_conversion_version' => $l->unit_conversion_version,
+                'unit_conversion_hash' => $l->unit_conversion_hash,
+                'unit_conversion_precision' => $l->unit_conversion_precision,
+                'unit_conversion_rounding_mode' => $l->unit_conversion_rounding_mode,
             ];
             if ($l->item?->tracksSerials()) {
                 return $so->reservations
@@ -89,7 +101,7 @@ class ShipmentService
                     ]);
             }
 
-            return [$base + ['quantity' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining]];
+            return [$base + ['quantity' => Decimal::lt($remaining, '0') ? '0.0000' : $enteredRemaining]];
         })->filter(fn ($l) => Decimal::gt((string) $l['quantity'], '0'))->values()->all();
     }
 
@@ -272,7 +284,15 @@ class ShipmentService
     private function syncLines(Shipment $s, array $lines, int $orgId): void
     {
         foreach ($lines as $line) {
-            $line = $this->conversions->normalizeLine($line, 'quantity');
+            $sourceLine = ! empty($line['sales_order_line_id'])
+                ? SalesOrderLine::query()->where('organization_id', $orgId)->find((int) $line['sales_order_line_id'])
+                : null;
+            if (! empty($line['sales_order_line_id']) && ! $sourceLine) {
+                throw new RuntimeException('The sales-order source line is unavailable in this organization.');
+            }
+            $line = $sourceLine && $sourceLine->unit_conversion_version
+                ? $this->conversions->normalizeLineFromSnapshot($line, 'quantity', $sourceLine)
+                : $this->conversions->normalizeLine($line, 'quantity');
             $s->lines()->create([
                 'organization_id' => $orgId,
                 'sales_order_line_id' => $line['sales_order_line_id'] ?? null,

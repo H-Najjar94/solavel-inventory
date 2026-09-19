@@ -79,6 +79,9 @@ class UnitConversionResolver
 
         $normalizedSourceQty = Decimal::qty($enteredQty);
         $baseQty = Decimal::qty(Decimal::mul($normalizedSourceQty, $factor));
+        if ($item->tracksSerials() && Decimal::cmp($baseQty, Decimal::round($baseQty, 0)) !== 0) {
+            throw new RuntimeException('A serial-tracked item must convert to a whole number of base units.');
+        }
         $snapshot = [
             'organization_id' => (int) $item->organization_id,
             'item_id' => (int) $item->id,
@@ -102,6 +105,67 @@ class UnitConversionResolver
             'unit_conversion_precision' => self::PRECISION,
             'unit_conversion_rounding_mode' => self::ROUNDING_MODE,
             $quantityKey => $baseQty,
+        ]);
+    }
+
+    /**
+     * Normalize a downstream line with a conversion snapshot already frozen on
+     * its source document. A later edit to the reusable conversion rule must
+     * never reinterpret an approved PO's quantities or prices.
+     */
+    public function normalizeLineFromSnapshot(array $line, string $quantityKey, object $source): array
+    {
+        $enteredQty = (string) ($line['entered_qty'] ?? $line[$quantityKey] ?? '0');
+        if (! preg_match('/^\d+(?:\.\d+)?$/', $enteredQty) || Decimal::cmp($enteredQty, '0') <= 0) {
+            throw new RuntimeException('Entered quantity must be a positive decimal.');
+        }
+        if ((int) ($line['item_id'] ?? 0) !== (int) $source->item_id) {
+            throw new RuntimeException('The downstream item does not match its source line.');
+        }
+        foreach (['entered_unit_id', 'base_unit_id', 'unit_conversion_factor', 'unit_conversion_version',
+            'unit_conversion_hash', 'unit_conversion_precision', 'unit_conversion_rounding_mode'] as $field) {
+            if ($source->{$field} === null || $source->{$field} === '') {
+            throw new RuntimeException('The source line has no complete frozen unit-conversion snapshot.');
+            }
+        }
+        if (! empty($line['entered_unit_id']) && (int) $line['entered_unit_id'] !== (int) $source->entered_unit_id) {
+            throw new RuntimeException('A linked document must use its source line\'s frozen entered unit.');
+        }
+        $item = Item::query()->findOrFail((int) $source->item_id);
+        if ((int) $item->organization_id !== (int) $source->organization_id
+            || (int) $item->base_unit_id !== (int) $source->base_unit_id) {
+            throw new RuntimeException('The source conversion snapshot is outside the item organization or base unit.');
+        }
+        $factor = Decimal::round((string) $source->unit_conversion_factor, 8);
+        $snapshot = [
+            'organization_id' => (int) $source->organization_id,
+            'item_id' => (int) $source->item_id,
+            'source_unit_id' => (int) $source->entered_unit_id,
+            'base_unit_id' => (int) $source->base_unit_id,
+            'conversion_id' => $source->unit_conversion_id === null ? null : (int) $source->unit_conversion_id,
+            'factor' => $factor,
+            'version' => self::CONTRACT_VERSION,
+            'precision' => self::PRECISION,
+            'rounding_mode' => self::ROUNDING_MODE,
+        ];
+        if ((string) $source->unit_conversion_version !== self::CONTRACT_VERSION
+            || (int) $source->unit_conversion_precision !== self::PRECISION
+            || (string) $source->unit_conversion_rounding_mode !== self::ROUNDING_MODE
+            || ! hash_equals((string) $source->unit_conversion_hash, hash('sha256', json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION)))) {
+            throw new RuntimeException('The source unit-conversion snapshot is invalid.');
+        }
+
+        return array_merge($line, [
+            'entered_qty' => Decimal::qty($enteredQty),
+            'entered_unit_id' => (int) $source->entered_unit_id,
+            'base_unit_id' => (int) $source->base_unit_id,
+            'unit_conversion_id' => $source->unit_conversion_id === null ? null : (int) $source->unit_conversion_id,
+            'unit_conversion_factor' => $factor,
+            'unit_conversion_version' => self::CONTRACT_VERSION,
+            'unit_conversion_hash' => (string) $source->unit_conversion_hash,
+            'unit_conversion_precision' => self::PRECISION,
+            'unit_conversion_rounding_mode' => self::ROUNDING_MODE,
+            $quantityKey => Decimal::qty(Decimal::mul($enteredQty, $factor)),
         ]);
     }
 }
