@@ -19,6 +19,24 @@ class IntegrationConnectionConfigurationTest extends TestCase
     use TenantAware;
 
     #[Test]
+    public function account_mapping_details_use_the_configured_workflow_roles(): void
+    {
+        $this->useTenantA();
+        IntegrationSetting::query()->updateOrCreate(
+            ['organization_id' => TenantTestManager::ORG_A, 'integration' => IntegrationEvents::INTEGRATION],
+            ['mode' => 'connected_pending_mapping', 'meta' => ['transport_enabled_workflows' => ['grn.posted']]],
+        );
+        $expected = app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles(TenantTestManager::ORG_A);
+        $this->assertNotEmpty($expected);
+        $response = app(IntegrationController::class)->accountMappings();
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame($expected, array_column($response->getData(true)['data']['mappings'], 'mapping_type'));
+        IntegrationSetting::query()->where('integration', IntegrationEvents::INTEGRATION)
+            ->firstOrFail()->update(['meta' => ['transport_enabled_workflows' => []]]);
+        $this->assertSame([], app(IntegrationController::class)->accountMappings()->getData(true)['data']['mappings']);
+    }
+
+    #[Test]
     public function an_organization_row_without_an_immutable_mapping_is_not_reported_as_connected(): void
     {
         $this->useTenantA();
