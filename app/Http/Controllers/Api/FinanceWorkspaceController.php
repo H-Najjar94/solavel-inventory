@@ -89,6 +89,8 @@ final class FinanceWorkspaceController
                 abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can($actor, 'inventory.integration.view'), 403, 'workspace_permission_required');
                 return response()->json(['success' => true, 'data' => app(\App\Services\Integration\ConnectionWizardService::class)->discover((int) $org->id)]);
             }
+            $readiness = app(\App\Services\InventoryWorkspace\WorkspaceContext::class)->read($request, (int)$org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active');
+            abort_unless($readiness['ready'], 409, 'workspace_connection_not_ready');
             abort_unless($mapping, 409, 'workspace_mapping_not_ready');
             abort_unless($setting && in_array($setting->mode, ['active', 'paused', 'connected_readonly'], true), 409, 'workspace_connection_not_ready');
             return $workspace->dispatch($request, $input, $mapping, $setting);

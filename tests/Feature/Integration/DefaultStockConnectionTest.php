@@ -55,7 +55,7 @@ final class DefaultStockConnectionTest extends TestCase
             'effective_access_state' => 'paid_active', 'state_hash' => str_repeat('a', 64),
             'state_payload' => json_encode([
                 'client_id' => self::CLIENT, 'organization_id' => TenantTestManager::ORG_A,
-                'integration_capabilities' => ['connection_activation_delivery_entitled' => true],
+                'integration_capabilities' => ['connection_setup_readiness'=>true, 'connection_activation_delivery_entitled' => true],
                 'applications' => ['finance' => ['accessible' => true, 'commercially_entitled' => true],
                     'inventory' => ['accessible' => true, 'commercially_entitled' => true]],
             ]),
@@ -80,6 +80,7 @@ final class DefaultStockConnectionTest extends TestCase
                 'type'=>$types[0],'system_key'=>$role,'account_role'=>$role];
         }
         \Illuminate\Support\Facades\Http::preventStrayRequests();
+        DB::connection('tenant')->table('integration_transport_worker_heartbeats')->insert(['worker_id'=>'isolated-ready-worker','queue_name'=>'test','state'=>'running','started_at'=>now(),'last_seen_at'=>now()]);
         $this->fakeFinance();
     }
     protected function tearDown(): void
