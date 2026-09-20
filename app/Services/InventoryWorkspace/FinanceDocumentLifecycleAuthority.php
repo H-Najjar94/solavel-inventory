@@ -29,11 +29,33 @@ final class FinanceDocumentLifecycleAuthority
         'finance-allocations.cost-adjustment.reverse',
     ];
 
+    /**
+     * Creating a catalog item is native SolaCount mini-inventory work. In a connected
+     * organization the authoritative identity lives here, so SolaCount creates it through
+     * the established signed saga (requirements → create → link) instead of a second,
+     * disconnected catalog. SolaCount has already enforced `inventory.items.manage`; the
+     * saga itself only accepts reviewed category/unit mappings and native item rules, and
+     * opens no browsing, editing, stock or warehouse operation.
+     */
+    public const CATALOG_SCOPE = 'finance_catalog_item_creation';
+
+    public const CATALOG_ACTIONS = [
+        'items.migration-requirements',
+        'items.migration-create',
+        'items.migration-link',
+    ];
+
     public function __construct(private CentralAppAccess $central) {}
 
     public static function covers(string $action): bool
     {
-        return in_array($action, self::ACTIONS, true);
+        return self::scopeFor($action) !== null;
+    }
+
+    public static function scopeFor(string $action): ?string
+    {
+        return in_array($action, self::ACTIONS, true) ? self::SCOPE
+            : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 
     /** Fresh Central authority; an indeterminate answer never permits the effect. */

@@ -139,7 +139,7 @@ final class WorkspaceDispatcher
                         'entity_type' => 'finance_workspace_command', 'entity_id' => $mapping->id,
                         'document_ref' => $key, 'before' => ['request_hash' => $requestHash],
                         'after' => ['body' => $body, 'status' => $response->getStatusCode()]
-                            + (FinanceDocumentLifecycleAuthority::covers($action) ? ['authorization_scope' => FinanceDocumentLifecycleAuthority::SCOPE] : []),
+                            + (FinanceDocumentLifecycleAuthority::covers($action) ? ['authorization_scope' => FinanceDocumentLifecycleAuthority::scopeFor($action)] : []),
                         'created_at' => now(),
                     ]);
                 }
