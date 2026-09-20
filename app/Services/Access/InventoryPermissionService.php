@@ -51,6 +51,8 @@ class InventoryPermissionService
         }
 
         $granted = $this->permissionsForRole($role);
+        $ceiling = $this->centralPermissions($user);
+        if ($ceiling !== ['*']) $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
 
         if (in_array($permission, [
             ConnectionManagementPolicy::SETUP_PERMISSION,
@@ -59,6 +61,7 @@ class InventoryPermissionService
         ], true)) {
             $connection = $this->connectionPolicy()->status($orgId, $user);
 
+            if ($ceiling !== ['*'] && ! in_array($permission, $ceiling, true)) return false;
             return $permission === ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION
                 ? (bool) ($connection['can_review_accounting'] ?? false)
                 : (bool) ($connection['can_manage_connection'] ?? false);
@@ -75,6 +78,8 @@ class InventoryPermissionService
             return [];
         }
         $granted = $this->permissionsForRole($role);
+        $ceiling = $this->centralPermissions($user);
+        if ($ceiling !== ['*']) $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
 
         $connectionPermissions = [
             ConnectionManagementPolicy::SETUP_PERMISSION,
@@ -94,7 +99,31 @@ class InventoryPermissionService
             $granted[] = ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION;
         }
 
-        return array_values(array_unique($granted));
+        return array_values(array_unique($ceiling === ['*'] ? $granted : array_intersect($granted, $ceiling)));
+    }
+
+    private function centralPermissions(?object $user): array
+    {
+        $orgId = $this->context->has() ? (int) $this->context->id() : 0;
+        if ($this->isDemoOrg($orgId) && app()->environment('local', 'testing') && config('inventory.demo_tenant.enabled')) return ['*'];
+        $decision = app(CentralAppAccess::class)->decision($this->centralUserId($user), $orgId, 'inventory');
+        if (! ($decision['allowed'] ?? false)) return [];
+        if ($decision['owner'] ?? false) return ['*'];
+        $permissions = [];
+        foreach ($decision['roles'] ?? [] as $role) {
+            $localRole = match ($role) {
+                'stock_manager' => 'inventory_manager',
+                // Central emits membership roles only for legacy EXPLICIT app assignments.
+                // Preserve those records pending provenance review; new invitations require app roles.
+                'client_manager', 'client_member' => 'inventory_manager',
+                'client_viewer' => 'inventory_viewer',
+                'client_accountant' => 'inventory_accountant',
+                'warehouse_user' => 'inventory_viewer',
+                default => null,
+            };
+            if ($localRole) $permissions = array_merge($permissions, $this->permissionsForRole($localRole));
+        }
+        return array_values(array_unique($permissions));
     }
 
     private function connectionPolicy(): ConnectionManagementPolicy

@@ -33,6 +33,11 @@ class ResolveInventoryTenant
 
         switch ($s['state']) {
             case 'live_ready':
+                $authority = app(\App\Services\Access\CentralAppAccess::class);
+                $user = $request->user();
+                $centralId = (int) ($user?->central_user_id ?: ($user && $user->getConnectionName() === config('tenancy.central_connection', 'mysql') ? $user->id : 0));
+                $decision = $authority->decision($centralId, (int) $s['organization_id'], 'inventory');
+                if (! $decision['allowed']) return $authority->deny($request, $decision, 'inventory');
                 // DB is keyed by client_id (tenant_{clientId}); the org context
                 // (row scope) is the actual organization_id, which may differ.
                 $this->tenants->useTenant((int) $s['organization_id'], $s['database']);
