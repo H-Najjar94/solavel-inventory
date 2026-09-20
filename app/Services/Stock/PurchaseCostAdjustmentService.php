@@ -61,8 +61,10 @@ final class PurchaseCostAdjustmentService
             $components=IntegrationPurchaseCostAdjustmentComponent::query()->where('adjustment_uuid',$row->adjustment_uuid)->lockForUpdate()->get();
             foreach($components->where('destination_role','inventory_asset') as $component){
                 $amount=Decimal::money(Decimal::mul((string)$component->posted_base_amount,$sign));
-                $ledger=\App\Models\Tenant\StockLedger::query()->findOrFail($component->stock_ledger_id);
-                $balance=StockBalance::query()->where('organization_id',$row->organization_id)->where('item_id',$component->item_id)
+                // The reviewed plan fixes these rows; applying it is not a warehouse selection by the actor,
+                // who may be a SolaCount-only member completing the bill. Organization scope still binds them.
+                $ledger=\App\Models\Tenant\StockLedger::query()->withoutGlobalScope('warehouse_access')->where('organization_id',$row->organization_id)->findOrFail($component->stock_ledger_id);
+                $balance=StockBalance::query()->withoutGlobalScope('warehouse_access')->where('organization_id',$row->organization_id)->where('item_id',$component->item_id)
                     ->where('warehouse_id',$component->warehouse_id)->whereRaw('COALESCE(variant_id,0)=?',[(int)($ledger->variant_id??0)])
                     ->whereRaw('COALESCE(lot_id,0)=?',[(int)($ledger->lot_id??0)])->whereRaw('COALESCE(bin_id,0)=?',[(int)($ledger->bin_id??0)])
                     ->lockForUpdate()->firstOrFail();
