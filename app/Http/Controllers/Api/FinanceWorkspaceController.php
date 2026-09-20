@@ -34,12 +34,17 @@ final class FinanceWorkspaceController
         abort_unless($actor && $central->table('user_organizations')->where('user_id', $actor->id)
             ->where('organization_id', $org->id)->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'active'))->exists(),
             403, 'workspace_membership_required');
+        // The organization must hold both products for any integration call. The acting
+        // member always needs SolaCount; SolaStock assignment is waived only for the
+        // closed follow-through scope of an already reviewed financial document.
+        $lifecycle = \App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::covers($input['action']);
         foreach (['finance', 'inventory'] as $slug) {
             $project = $central->table('projects')->where('slug', $slug)->where('is_active', true)->value('id');
             abort_unless($project && $central->table('organization_projects')->where('organization_id', $org->id)
-                ->where('project_id', $project)->where('is_active', true)->exists()
-                && $central->table('user_projects')->where('organization_id', $org->id)->where('user_id', $actor->id)
-                    ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
+                ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
+            if ($lifecycle && $slug === 'inventory') continue;
+            abort_unless($central->table('user_projects')->where('organization_id', $org->id)->where('user_id', $actor->id)
+                ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
         }
         // Resolve the database on the server. This never provisions or migrates.
         $database = $tenants->resolveDatabaseName((int) $org->client_id);
