@@ -85,6 +85,10 @@ class AuthenticateFromInventoryHandoff
             return $next($request);
         }
 
+        $authority = app(\App\Services\Access\CentralAppAccess::class);
+        $decision = $authority->decision($userId, $orgId, 'inventory');
+        if (! ($decision['allowed'] ?? false)) return $authority->deny($request, $decision, 'inventory');
+
         // Switch to the shared per-client tenant DB (SolaStock owns its own tables there).
         try {
             $this->tenants->useTenant($clientId);
