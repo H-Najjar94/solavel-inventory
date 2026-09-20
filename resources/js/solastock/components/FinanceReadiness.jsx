@@ -45,9 +45,9 @@ export default function FinanceReadiness({status,details=false,onContinue,onRetr
   {status?.draft_status==='in_progress'&&status?.connection_wizard?.run_uuid&&<p className="finance-readiness__support">{ar?'تقدم إعداد الربط محفوظ':'Your connection setup progress is saved'}</p>}
   {s?.state==='CONNECTED_READY'&&status?.last_sync_at&&<p className="finance-readiness__support">{ar?'آخر مزامنة':'Last sync'}: {new Date(status.last_sync_at).toLocaleString(ar?'ar':'en')}</p>}
   {(s?.blockers??[]).filter(k=>blockers[k]).map(k=><p className="finance-readiness__blocker" role="status" key={k}>{blockers[k][i]}</p>)}
-  {incomplete&&!s?.setup_url&&<p>{ar?'اطلب من مسؤول المؤسسة المخوّل إكمال الإعداد المالي.':'Ask an authorized organization administrator to complete Finance setup.'}</p>}
+  {!s?.can_manage&&s?.state!=='CONNECTED_READY'&&<p>{ar?'اطلب من مسؤول المؤسسة المخوّل إكمال الإعداد المالي.':'Ask an authorized organization administrator to complete Finance setup.'}</p>}
   </div></div><div className="finance-readiness__actions">
-   {s?.state==='ACCESS_REQUIRED'&&<a className="btn btn--primary" href={s.manage_access_url}>{ar?'إدارة التطبيقات والخطط':'Manage apps and plans'}</a>}
+   {s?.state==='ACCESS_REQUIRED'&&s?.can_manage&&s?.manage_access_url&&<a className="btn btn--primary" href={s.manage_access_url}>{ar?'إدارة التطبيقات والخطط':'Manage apps and plans'}</a>}
    {incomplete&&s?.setup_url&&<button className="btn btn--primary" disabled={pending} aria-busy={pending} onClick={setup}>{pending&&<i className="fa-solid fa-spinner fa-spin" aria-hidden="true"/>} {pending?(ar?'جارٍ فتح الإعداد المالي…':'Opening Finance setup…'):(ar?'إكمال الإعداد المالي':'Complete Finance setup')}</button>}
    {details&&s?.finance_setup_complete&&s?.can_manage&&s?.state!=='CONNECTED_READY'&&<button className="btn btn--primary" onClick={onContinue}>{ar?'متابعة إعداد الربط':'Continue connection setup'}</button>}
    {(!s||s.state==='READINESS_UNAVAILABLE')&&<button className="btn" onClick={onRetry}>{ar?'إعادة المحاولة':'Retry'}</button>}

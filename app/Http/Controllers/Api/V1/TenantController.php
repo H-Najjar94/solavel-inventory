@@ -79,7 +79,7 @@ class TenantController extends ApiController
         [$badge, $dataState] = $this->badgeFor($s['state']);
 
         // Principal (the SSO-seeded user) for the top-bar account menu.
-        $principal = $request->hasSession() ? $request->session()->get('principal') : null;
+        $principal = $request->user()?->only(['id', 'name', 'email']);
 
         return $this->success([
             'state' => $s['state'],           // canonical state machine value
@@ -225,6 +225,10 @@ class TenantController extends ApiController
         if (! $org) {
             return $this->error('forbidden', __('inventory.tenancy.organization_forbidden'), 403);
         }
+
+        $authority = app(\App\Services\Access\CentralAppAccess::class);
+        $decision = $authority->decision((int) ($user->central_user_id ?: $user->id), $orgId, 'inventory');
+        if (! ($decision['allowed'] ?? false)) return $authority->deny($request, $decision, 'inventory');
 
         // Switch the SSO/session context: the selected org wins everywhere, and
         // the client_id follows the org (the tenant DB is keyed by client).

@@ -42,10 +42,13 @@ async function request(path, { method = 'GET', body, params } = {}) {
     }
 
     if (!res.ok || (json && json.success === false)) {
-        const err = new Error(json?.error?.message || `Request failed (${res.status})`);
+        const err = new Error(json?.error?.message || json?.message || `Request failed (${res.status})`);
         err.status = res.status;
-        err.code = json?.error?.code;
+        err.code = json?.error?.code || json?.code;
         err.payload = json?.error;
+        if (json?.app === 'inventory' && json?.code && json.code !== 'action_forbidden') {
+            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
+        }
         throw err;
     }
 
@@ -72,9 +75,12 @@ async function requestForm(path, formData) {
     try { json = await res.json(); } catch { /* non-JSON */ }
 
     if (!res.ok || (json && json.success === false)) {
-        const err = new Error(json?.error?.message || `Upload failed (${res.status})`);
+        const err = new Error(json?.error?.message || json?.message || `Upload failed (${res.status})`);
         err.status = res.status;
         err.payload = json?.error;
+        if (json?.app === 'inventory' && json?.code && json.code !== 'action_forbidden') {
+            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
+        }
         throw err;
     }
 
