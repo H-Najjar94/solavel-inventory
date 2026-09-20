@@ -48,8 +48,8 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
         return 'completed';
     }
     public function test_solacount_only_member_passes_assignment_only_for_document_follow_through():void {
-        foreach (\App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::ACTIONS as $action) $this->assertSame('passed_assignment_gate',$this->invoke($action),$action);
-        foreach (['finance-allocations.reserve','finance-sources.receipts','items.index','workspace.context','workspace.initialize','warehouses.store'] as $action) {
+        foreach (array_merge(\App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::ACTIONS,\App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS) as $action) $this->assertSame('passed_assignment_gate',$this->invoke($action),$action);
+        foreach (['finance-allocations.reserve','finance-sources.receipts','items.index','items.store','items.update','workspace.context','workspace.initialize','warehouses.store'] as $action) {
             $this->assertSame('workspace_application_assignment_required',$this->invoke($action),$action);
         }
     }

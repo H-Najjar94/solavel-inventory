@@ -218,6 +218,48 @@ final class FinanceDocumentLifecycleDispatchTest extends TestCase
     }
 
     #[Test]
+    public function finance_only_accountant_creates_one_authoritative_catalog_item_through_the_established_saga(): void
+    {
+        $this->arrange();
+        $category = \App\Models\Tenant\ItemCategory::create(['name' => 'Synthetic category', 'code' => 'SYN-CAT', 'is_active' => true]);
+        $unit = Unit::query()->create(['name' => 'Each', 'code' => 'SYN-EACH', 'kind' => 'count', 'is_active' => true]);
+        foreach (['category' => [$category->id, 991], 'unit' => [$unit->id, 992]] as $type => [$stockId, $financeId]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $this->connection->mapping_uuid,
+                'central_client_id' => 77, 'central_organization_id' => TenantTestManager::ORG_A, 'finance_organization_id' => 701, 'solastock_organization_id' => TenantTestManager::ORG_A,
+                'entity_type' => $type, 'solastock_record_id' => (string) $stockId, 'solabooks_record_id' => (string) $financeId, 'status' => 'verified']);
+        }
+        $data = ['source_hash' => hash('sha256', 'accountant item'), 'name' => 'Accountant Widget', 'sku' => 'ACC-W-1', 'finance_category_id' => 991, 'finance_unit_id' => 992,
+            'unit_price' => '15.25', 'item_type' => 'inventory', 'valuation_method' => 'fifo'];
+        [$status, $facts] = $this->send('items.migration-requirements', $data, str_repeat('n', 32));
+        $this->assertSame(200, $status, json_encode($facts));
+        $key = 'catalog-create:'.hash('sha256', '701|ACC-W-1');
+        [$status, $created] = $this->send('items.migration-create', $data + ['requirements_version' => $facts['data']['version']], $key);
+        $this->assertSame(201, $status, json_encode($created));
+        $id = (int) $created['data']['stock_item_id'];
+        [$status, $again, $replayed] = $this->send('items.migration-create', $data + ['requirements_version' => $facts['data']['version']], $key);
+        $this->assertSame([201, true, $id], [$status, $replayed, (int) $again['data']['stock_item_id']]);
+        $this->assertSame(1, \App\Models\Tenant\Item::query()->where('sku', 'ACC-W-1')->count(), 'No duplicate authoritative item.');
+        $this->assertSame(0, \App\Models\Tenant\StockLedger::query()->withoutGlobalScopes()->where('item_id', $id)->count(), 'Creation is catalog-only: no stock effect.');
+        // A different payload under the same key is refused rather than creating a second item.
+        $this->assertSame(409, $this->send('items.migration-create', ['name' => 'Different'] + $data + ['requirements_version' => $facts['data']['version']], $key)[0]);
+
+        $link = ['creation_key' => $key, 'source_hash' => $data['source_hash'], 'stock_item_id' => $id, 'finance_item_id' => 993];
+        $this->assertSame(200, $this->send('items.migration-link', $link, $key.':link')[0]);
+        $this->assertSame([200, true], array_values(array_intersect_key($this->send('items.migration-link', $link, $key.':link'), [0 => 1, 2 => 1])));
+        $this->assertSame(1, \App\Models\Tenant\IntegrationMasterDataMapping::query()->where('entity_type', 'item')->where('solabooks_record_id', '993')->count());
+        $receipt = InventoryAuditLog::query()->where('action', 'items.migration-create')->firstOrFail();
+        $this->assertSame([self::ACCOUNTANT, FinanceDocumentLifecycleAuthority::CATALOG_SCOPE], [(int) $receipt->actor_user_id, $receipt->after['authorization_scope']]);
+
+        // The scope is creation only: the accountant still cannot browse, edit or natively create Stock items.
+        foreach (['items.index' => [], 'items.store' => ['name' => 'Native', 'sku' => 'NATIVE-1'], 'items.valuation' => []] as $action => $payload) {
+            $this->assertSame(403, $this->send($action, $payload, str_repeat('d', 32))[0], $action);
+        }
+        $this->assertSame(0, \App\Models\Tenant\Item::query()->where('sku', 'NATIVE-1')->count());
+        // Unreviewed category/unit references are refused: nothing is auto-created.
+        $this->assertSame(422, $this->send('items.migration-requirements', ['sku' => 'ACC-W-2', 'finance_category_id' => 555] + $data, str_repeat('m', 32))[0]);
+    }
+
+    #[Test]
     public function held_or_paused_connection_blocks_the_effect_for_everyone(): void
     {
         $this->arrange();
