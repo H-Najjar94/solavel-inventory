@@ -47,7 +47,7 @@ use Illuminate\Support\Facades\Route;
 
 // Tenant selection — NOT tenant-gated (this is how a tenant gets selected).
 Route::prefix('v1/tenant')->group(function () {
-    Route::get('/status', [TenantController::class, 'status'])->name('api.v1.tenant.status');
+    Route::get('/status', [TenantController::class, 'status'])->middleware('inv.access')->name('api.v1.tenant.status');
     Route::post('/select-demo', [TenantController::class, 'selectDemo'])->name('api.v1.tenant.select-demo');
     Route::post('/clear', [TenantController::class, 'clear'])->name('api.v1.tenant.clear');
     // First-run provisioning of SolaStock tables for the live org (admin-only;
@@ -71,7 +71,7 @@ Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
 // commercial envelope when the plan excludes it. INERT until
 // SOLASTOCK_FEATURE_ENFORCEMENT=true. Runs alongside perm:, never replacing role
 // auth; routes with no mapped feature pass straight through.
-Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
+Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(function () {
 
     // Client-side SPA navigation tracking: forwards one page_view per
     // react-router move to the central event log (source_app=inventory) so

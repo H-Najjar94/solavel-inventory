@@ -42,6 +42,7 @@ Route::get('/', fn () => redirect()->route('inventory.dashboard'));
 // Main app page: https://solavel.com/inventory/dashboard
 // The Vite React SPA. Catch-all sub-paths so React Router handles client routes
 // (dashboard, items, warehouses, …) on deep links / refresh.
+Route::middleware('inv.access')->group(function () {
 Route::view('/dashboard', 'solastock-app')->name('inventory.dashboard');
 Route::view('/dashboard/{any}', 'solastock-app')->where('any', '.*');
 Route::view('/items/{any?}', 'solastock-app')->where('any', '.*');
@@ -78,3 +79,5 @@ Route::view('/ledger', 'solastock-app');
 
 // Back-compat: the original CDN/Babel demo (untouched) stays available.
 Route::view('/solastock', 'solastock')->name('solastock.demo');
+
+});

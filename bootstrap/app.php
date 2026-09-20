@@ -51,6 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'perm' => EnsureInventoryPermission::class,
             'integration.setup' => EnsureIntegrationSetupCapability::class,
             'feature' => EnsureInventoryFeature::class,
+            'inv.access' => \App\Http\Middleware\EnsureInventoryAppAccess::class,
             'inv.tenant' => ResolveInventoryTenant::class,
             'sync.signature' => VerifySolavelSyncSignature::class,
         ]);
@@ -93,6 +94,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // Auth::login() persist and a session cookie is set on the redirect.
             AuthenticateFromInventoryHandoff::class,
             BounceToParentForSso::class,
+            \App\Http\Middleware\EnsureInventoryAppAccess::class,
             ResolveInventoryTenant::class,
             SubstituteBindings::class,
             EnsureInventoryPermission::class,
