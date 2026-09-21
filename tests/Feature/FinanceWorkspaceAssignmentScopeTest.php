@@ -61,6 +61,21 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
         DB::connection('central_test')->table('organization_projects')->where('project_id',2)->update(['is_active'=>false]);
         $this->assertSame('workspace_application_assignment_required',$this->invoke('finance-allocations.commit'));
     }
+    /**
+     * Production regression, 2026-09-21: an invited member keeps the client of the
+     * account they registered with. The gate matched that to the organization's
+     * client, so every invited SolaCount member was reported as a non-member and
+     * could not create a stock item in a connected organization.
+     */
+    public function test_invited_member_with_a_different_home_client_is_still_a_member():void {
+        DB::connection('central_test')->table('users')->where('id',7)->update(['client_id'=>99]);
+        $this->assertSame('passed_assignment_gate',$this->invoke('items.migration-create'));
+    }
+    public function test_an_inactive_invited_member_is_still_rejected():void {
+        DB::connection('central_test')->table('users')->where('id',7)->update(['client_id'=>99]);
+        DB::connection('central_test')->table('user_organizations')->update(['status'=>'suspended']);
+        $this->assertSame('workspace_membership_required',$this->invoke('items.migration-create'));
+    }
     public function test_member_of_another_organization_is_rejected_before_any_scope_applies():void {
         DB::connection('central_test')->table('user_organizations')->update(['organization_id'=>999]);
         $this->assertSame('workspace_membership_required',$this->invoke('finance-allocations.commit'));

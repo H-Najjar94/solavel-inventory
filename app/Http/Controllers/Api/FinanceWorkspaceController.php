@@ -28,7 +28,11 @@ final class FinanceWorkspaceController
             ->where('client_id', $input['client_id'])->where('is_active', true)->whereNull('deleted_at')->first();
         abort_unless($org && $central->table('clients')->where('id', $input['client_id'])
             ->where('is_active', true)->whereNull('deleted_at')->exists(), 403, 'workspace_organization_unavailable');
-        $actor = User::query()->where('id', $input['actor_id'])->where('client_id', $input['client_id'])
+        // Membership is the user_organizations row checked below, not the member's
+        // home client. An invited member keeps the client of the account they
+        // registered with, so matching it to the organization's client reported
+        // every invited SolaCount member as a non-member.
+        $actor = User::query()->where('id', $input['actor_id'])
             ->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'active'))->whereNull('deleted_at')
             ->first(['id', 'name', 'client_id', 'status']);
         abort_unless($actor && $central->table('user_organizations')->where('user_id', $actor->id)
