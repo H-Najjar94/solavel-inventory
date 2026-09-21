@@ -22,6 +22,7 @@ final class FinanceDocumentLifecycleAuthority
     public const SCOPE = 'finance_document_lifecycle';
 
     public const ACTIONS = [
+        'finance-allocations.review-status',
         'finance-allocations.commit',
         'finance-allocations.release',
         'finance-allocations.reverse',
@@ -40,6 +41,7 @@ final class FinanceDocumentLifecycleAuthority
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
+        'catalog-references.ensure',
         'items.migration-requirements',
         'items.migration-create',
         'items.migration-link',

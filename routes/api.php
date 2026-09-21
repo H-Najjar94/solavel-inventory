@@ -192,6 +192,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouse-images.destroy');
 
     // Migration catalog commands are callable only through the signed workspace.
+    Route::post('/migration-catalog/references/ensure', [\App\Http\Controllers\Api\V1\MigrationCatalogReferenceController::class, 'ensure'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.catalog-references.ensure');
     Route::get('/migration-catalog/requirements', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'requirements'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-requirements');
     Route::post('/migration-catalog/create', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'store'])
@@ -297,6 +299,7 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::get('/finance-sources/shipments/{shipment}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipment'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipment');
     Route::get('/finance-sources/returns', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'returns'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.returns');
     Route::get('/finance-sources/returns/{sales_return}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'salesReturn'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.return');
+    Route::get('/finance-allocations/review-status', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reviewStatus'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.review-status');
     Route::post('/finance-allocations/reserve', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reserve'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reserve');
     Route::post('/finance-allocations/commit', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'commit'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.commit');
     Route::post('/finance-allocations/release', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'release'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.release');

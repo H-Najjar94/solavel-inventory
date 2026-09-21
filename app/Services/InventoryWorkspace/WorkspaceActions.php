@@ -25,6 +25,8 @@ final class WorkspaceActions
         'items.index',
         'items.show',
         'items.store',
+        'catalog-references.ensure',
+        'finance-allocations.review-status',
         'items.migration-requirements', 'items.migration-create', 'items.migration-link',
         'items.update',
         'items.movements',
