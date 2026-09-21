@@ -115,6 +115,52 @@ final class FinanceDocumentLifecycleDispatchTest extends TestCase
     }
 
     #[Test]
+    public function finance_accountant_can_revalidate_only_an_existing_reviewed_reservation(): void
+    {
+        $this->arrange();
+        $request = Request::create('/api/v1/finance-sources/receipts/'.$this->receipt->id, 'GET', [
+            'destination_document_type' => 'supplier_bill', 'destination_document_id' => 9001,
+        ]);
+        $snapshot = app(\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class)
+            ->receipt($request, $this->receipt)->getData(true)['data'];
+        $input = $this->document() + ['sources' => [$snapshot]];
+        [$status, $body] = $this->send('finance-allocations.review-status', $input, str_repeat('v', 32));
+        $this->assertSame(200, $status, json_encode($body));
+        $this->assertTrue($body['data']['ready']);
+        $this->assertSame(403, $this->send('finance-sources.receipt', [], str_repeat('b', 32))[0]);
+        $this->receipt->lines()->firstOrFail()->update(['unit_cost' => '5']);
+        $this->assertSame(409, $this->send('finance-allocations.review-status', $input, str_repeat('w', 32))[0]);
+    }
+
+    #[Test]
+    public function accountant_can_ensure_only_scoped_catalog_references_with_safe_replays(): void
+    {
+        $this->arrange();
+        $category = ['type' => 'category', 'finance_id' => 991, 'name' => 'Accountant category'];
+        $unit = ['type' => 'unit', 'finance_id' => 992, 'name' => 'Accountant unit', 'symbol' => 'au'];
+        [$status, $first] = $this->send('catalog-references.ensure', $category, str_repeat('c', 32));
+        $this->assertSame(201, $status, json_encode($first));
+        [$status, $again, $replayed] = $this->send('catalog-references.ensure', $category, str_repeat('c', 32));
+        $this->assertSame(201, $status);
+        $this->assertTrue($replayed);
+        $this->assertSame($first, $again);
+        [$status, $mapped] = $this->send('catalog-references.ensure', $category, str_repeat('d', 32));
+        $this->assertSame(200, $status, json_encode($mapped));
+        $this->assertSame($first['data']['stock_id'], $mapped['data']['stock_id']);
+        [$status, $createdUnit] = $this->send('catalog-references.ensure', $unit, str_repeat('u', 32));
+        $this->assertSame(201, $status, json_encode($createdUnit));
+        $this->assertSame(1, \App\Models\Tenant\ItemCategory::query()->where('name', 'Accountant category')->count());
+        $this->assertSame(1, Unit::query()->where('name', 'Accountant unit')->count());
+        $this->assertSame(2, \App\Models\Tenant\IntegrationMasterDataMapping::query()->where('organization_mapping_uuid', $this->connection->mapping_uuid)->count());
+
+        // A similar but different existing unit is not silently merged.
+        Unit::query()->create(['name' => 'Other unit', 'symbol' => 'amb', 'code' => 'OTHER-AMB']);
+        [$status, $reason] = $this->send('catalog-references.ensure', ['type' => 'unit', 'finance_id' => 993, 'name' => 'Unrelated', 'symbol' => 'amb'], str_repeat('z', 32));
+        $this->assertSame([409, 'catalog_reference_ambiguous_match'], [$status, $reason]);
+        $this->assertSame(1, Unit::query()->where('symbol', 'amb')->count());
+    }
+
+    #[Test]
     public function finance_only_accountant_commits_once_replays_safely_and_is_the_audited_actor(): void
     {
         $this->arrange();
