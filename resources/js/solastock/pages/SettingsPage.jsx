@@ -482,6 +482,7 @@ export default function SettingsPage() {
             <div className="panel">
                 <h2>{tr('settings.roles.title')}</h2>
                 <form onSubmit={addCustomRole}>
+                    <Field label={tr('settings.roles.preset')}><select className="input" defaultValue="" onChange={(e) => { const preset = (rolesQuery.data?.builtin_roles ?? []).find(r => r.key === e.target.value); if (preset) setCustomRole({ name: preset.label ?? preset.key, key: '', permissions: preset.permissions }); }}><option value="">{tr('settings.roles.choosePreset')}</option>{(rolesQuery.data?.builtin_roles ?? []).filter(r => ['scoped_inventory_manager', 'warehouse_manager', 'warehouse_operator', 'scoped_inventory_viewer'].includes(r.key)).map(r => <option key={r.key} value={r.key}>{r.label ?? r.key}</option>)}</select></Field>
                     <div className="fg2">
                         <Field label={tr('settings.roles.name')}><input className="input" value={customRole.name} onChange={(e) => setCustomRole({ ...customRole, name: e.target.value })} required /></Field>
                         <Field label={tr('settings.roles.key')}><input className="input" value={customRole.key} onChange={(e) => setCustomRole({ ...customRole, key: e.target.value })} placeholder={tr('settings.roles.keyPlaceholder')} /></Field>

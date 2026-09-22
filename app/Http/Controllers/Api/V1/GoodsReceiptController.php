@@ -7,6 +7,7 @@ use App\Http\Requests\Api\StoreGoodsReceiptRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\StockLedger;
+use App\Services\Access\OperationalReceiving;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Documents\InventoryReversalService;
@@ -120,7 +121,7 @@ class GoodsReceiptController extends ApiController
     public function store(StoreGoodsReceiptRequest $request): JsonResponse
     {
         try {
-            $data = $request->validated();
+            $data = app(OperationalReceiving::class)->prepare($request->validated());
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             unset($data['grn_number']);
             $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
@@ -135,7 +136,7 @@ class GoodsReceiptController extends ApiController
     {
         try {
             $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
-            $data = $request->validated();
+            $data = app(OperationalReceiving::class)->prepare($request->validated());
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $grn = $this->service->updateDraft($goods_receipt, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
@@ -147,6 +148,7 @@ class GoodsReceiptController extends ApiController
 
     public function post(GoodsReceipt $goods_receipt): JsonResponse
     {
+        app(OperationalReceiving::class)->posting($goods_receipt);
         $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
         try {
             $grn = $this->service->post($goods_receipt);
