@@ -36,13 +36,13 @@ class WarehouseAccessService
             return null;
         }
 
-        // Keep existing tenants readable until this tenant migration is applied.
+        // An authenticated user needs an enforceable warehouse assignment schema.
         try {
             if (! Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses')) {
-                return null;
+                return [];
             }
         } catch (\Throwable) {
-            return null;
+            return [];
         }
 
         // Owners and inventory administrators retain organization-wide access.
