@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\GoodsReceiptLine;
+use App\Models\Tenant\InventoryScheduledReport;
 use App\Models\Tenant\StockBalance;
 use App\Services\Access\CentralAppAccess;
 use App\Services\Access\InventoryPermissionService;
@@ -15,6 +17,7 @@ use Illuminate\Auth\GenericUser;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\TestCase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -201,6 +204,26 @@ class OperationalInventoryRolesTest extends TestCase
         DB::table('inventory_custom_roles')->where('id', 1)->update(['is_active' => false]);
         $this->assertFalse($p->can($this->actor, 'inventory.view_stock'));
         $this->assertFalse($p->can($this->actor, 'inventory.receive_goods'));
+    }
+
+    public function test_scoped_manager_cannot_read_create_update_or_run_unscoped_scheduled_reports(): void
+    {
+        $this->decision['roles'] = ['scoped_inventory_manager'];
+        $controller = app(ReportController::class);
+        foreach (['schedules', 'storeSchedule', 'updateSchedule', 'runSchedule'] as $method) {
+            $request = Request::create('/reports/schedules', 'POST');
+            $schedule = new InventoryScheduledReport;
+            $args = match ($method) {
+                'schedules' => [],'storeSchedule' => [$request],'updateSchedule' => [$request, $schedule],'runSchedule' => [$schedule]
+            };
+            try {
+                $controller->$method(...$args);
+                $this->fail('Scheduled report escaped warehouse scope');
+            } catch (HttpException $e) {
+                $this->assertSame(403, $e->getStatusCode());
+            }
+        }
+        $this->assertTrue(app(InventoryPermissionService::class)->can($this->actor, 'inventory.export_reports'));
     }
 
     public function test_signed_management_uses_explicit_actor_not_ambient_session(): void
