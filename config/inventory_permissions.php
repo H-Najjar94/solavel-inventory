@@ -11,6 +11,9 @@
 
 return [
     'permissions' => [
+        'inventory.receive_goods' => 'Receive approved purchase orders without changing valuation',
+        'inventory.transfer_stock' => 'Transfer stock between assigned warehouses',
+        'inventory.manage_warehouse_structure' => 'Manage zones and bins in assigned warehouses',
         'inventory.view_dashboard' => 'View the inventory dashboard',
         'inventory.view_items' => 'View items',
         'inventory.manage_items' => 'Create / edit / deactivate items',

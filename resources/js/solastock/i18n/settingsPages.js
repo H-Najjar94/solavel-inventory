@@ -1,4 +1,6 @@
 export const en = {
+    "settings.roles.preset": "Role preset",
+    "settings.roles.choosePreset": "Choose a preset",
     "integration.review.record_details_unavailable_refresh_discovery": "Record details unavailable — refresh discovery",
     "integration.review.not_configured_review_finance_settings": "Not configured — review Finance settings",
     "integration.review.need_review": "need review",
@@ -1076,6 +1078,8 @@ export const en = {
 };
 
 export const ar = {
+    "settings.roles.preset": "قالب الصلاحيات",
+    "settings.roles.choosePreset": "اختر قالباً",
     ...en,
     "integration.review.record_details_unavailable_refresh_discovery": "تفاصيل السجل غير متاحة — حدّث الاستكشاف",
     "integration.review.not_configured_review_finance_settings": "غير مهيأة — راجع إعدادات SolaCount",

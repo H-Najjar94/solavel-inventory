@@ -13,7 +13,7 @@ export default function TransferDetailPage() {
     const { t: tr } = useI18n();
     const { id } = useParams();
     const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.transfer_stock');
     const [tab, setTab] = useState('lines');
     const [confirmPost, setConfirmPost] = useState(false);
 

@@ -51,6 +51,7 @@ class InventoryPermissionService
         }
 
         $granted = $this->permissionsForRole($role);
+        $granted = $this->legacyOperationalAliases($granted);
         $ceiling = $this->centralPermissions($user);
         if ($ceiling !== ['*']) {
             $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
@@ -83,6 +84,7 @@ class InventoryPermissionService
             return [];
         }
         $granted = $this->permissionsForRole($role);
+        $granted = $this->legacyOperationalAliases($granted);
         $ceiling = $this->centralPermissions($user);
         if ($ceiling !== ['*']) {
             $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
@@ -124,7 +126,7 @@ class InventoryPermissionService
         }
         $permissions = [];
         foreach ($decision['roles'] ?? [] as $role) {
-            $localRole = match ($role) {
+            $localRole = array_key_exists($role, config('inventory_operational_roles', [])) ? $role : match ($role) {
                 'stock_manager' => 'inventory_manager',
                 // Central emits membership roles only for legacy EXPLICIT app assignments.
                 // Preserve those records pending provenance review; new invitations require app roles.
@@ -136,6 +138,16 @@ class InventoryPermissionService
             };
             if ($localRole) {
                 $permissions = array_merge($permissions, $this->permissionsForRole($localRole));
+            }
+        }
+
+        $permissions = $this->legacyOperationalAliases($permissions);
+        if (! array_intersect($decision['roles'] ?? [], array_keys(config('inventory_operational_roles', [])))) {
+            if (CentralPermissionConstraints::denied($decision, 'inventory.manage_adjustments')) {
+                $permissions = array_diff($permissions, ['inventory.receive_goods', 'inventory.transfer_stock']);
+            }
+            if (CentralPermissionConstraints::denied($decision, 'inventory.manage_warehouses')) {
+                $permissions = array_diff($permissions, ['inventory.manage_warehouse_structure']);
             }
         }
 
@@ -193,6 +205,9 @@ class InventoryPermissionService
         }
         // Organization membership rank is not an application permission ceiling.
         foreach ($decision['roles'] ?? [] as $role) {
+            if (array_key_exists($role, config('inventory_operational_roles', []))) {
+                return $role;
+            }
             if ($role === 'stock_manager') {
                 return 'inventory_manager';
             }
@@ -281,6 +296,18 @@ class InventoryPermissionService
 
     private function permissionsForRole(string $role): array
     {
+        if (str_starts_with($role, 'custom:')) {
+            return InventoryCustomRole::whereKey((int) substr($role, 7))->where('is_active', true)->first()?->permissions ?? [];
+        }
+        if (array_key_exists($role, config('inventory_operational_roles', []))) {
+            try {
+                $stored = DB::connection(config('tenancy.tenant_connection', 'tenant'))->table('inventory_operational_role_sets')->where('role_key', $role)->value('permissions');
+
+                return array_values(array_intersect(config("inventory_operational_roles.$role.permissions", []), json_decode($stored ?? '[]', true) ?: []));
+            } catch (\Throwable) {
+                return [];
+            }
+        }
         $roles = (array) config('inventory_permissions.roles', []);
         $set = $roles[$role] ?? [];
 
@@ -299,6 +326,22 @@ class InventoryPermissionService
         return $set === '*' ? ['*'] : (array) $set;
     }
 
+    private function legacyOperationalAliases(array $permissions): array
+    {
+        if ($permissions === ['*']) {
+            return $permissions;
+        }
+        // Preserve existing grants while separating NEW operations from adjustment authority.
+        if (in_array('inventory.manage_adjustments', $permissions, true)) {
+            $permissions = array_merge($permissions, ['inventory.receive_goods', 'inventory.transfer_stock']);
+        }
+        if (in_array('inventory.manage_warehouses', $permissions, true)) {
+            $permissions[] = 'inventory.manage_warehouse_structure';
+        }
+
+        return array_values(array_unique($permissions));
+    }
+
     private function customRole(int $userId): ?string
     {
         try {
@@ -311,7 +354,7 @@ class InventoryPermissionService
                 ->where('user_id', $userId)
                 ->first();
 
-            return $assignment?->role?->is_active ? $assignment->role->key : null;
+            return $assignment ? 'custom:'.$assignment->role_id : null;
         } catch (\Throwable) {
             return null;
         }

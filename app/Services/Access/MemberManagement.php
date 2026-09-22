@@ -2,6 +2,7 @@
 
 namespace App\Services\Access;
 
+use App\Models\Tenant\InventoryUserWarehouse;
 use App\Models\User;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,13 @@ class MemberManagement
     public function authorize(User $actor, int $centralOrg, User $target): void
     {
         abort_unless(app(OrganizationContext::class)->idOrFail() === $centralOrg, 403);
+        abort_if($actor->id === $target->id, 403);
+        abort_if(app(CentralAppAccess::class)->decision((int) $target->id, $centralOrg, 'inventory')['owner'] ?? false, 403);
+        $allowed = app(WarehouseAccessService::class)->allowedIds((int) $actor->id);
+        if ($allowed !== null) {
+            $targetIds = InventoryUserWarehouse::where('user_id', $target->id)->pluck('warehouse_id')->all();
+            abort_if(array_diff($targetIds, $allowed), 403);
+        }
         $this->member($centralOrg, (int) $actor->id);
         $this->member($centralOrg, (int) $target->id);
         if (request()->filled('central_org')) {

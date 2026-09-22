@@ -20,7 +20,8 @@ export default function GoodsReceiptFormPage() {
     const isEdit = !!id;
     const fromPo = !!poId;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.receive_goods');
+    const valuationGate = useCanCreate('inventory.manage_adjustments');
 
     const [header, setHeader] = useState({ grn_number: '', purchase_order_id: poId ? Number(poId) : null, supplier_id: null, warehouse_id: null, receipt_date: new Date().toISOString().slice(0, 10), notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
@@ -153,7 +154,7 @@ export default function GoodsReceiptFormPage() {
             );
         } },
         { key: 'bin', label: t('receiving.common.bin', 'Bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'cost', label: t('receiving.common.unitCost', 'Unit cost'), width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
+        { key: 'cost', label: t('receiving.common.unitCost', 'Unit cost'), width: 110, render: (l, i) => <MoneyInput disabled={!valuationGate.allowed} value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
     ];
 
     return (

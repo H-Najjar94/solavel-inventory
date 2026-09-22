@@ -9,7 +9,7 @@ import { useI18n } from '../i18n/context.jsx';
 
 export default function GoodsReceiptsPage() {
     const { t } = useI18n();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.receive_goods');
     const { data, isMock } = useApiQuery(['grns'], () => api.goodsReceipts({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     return (
