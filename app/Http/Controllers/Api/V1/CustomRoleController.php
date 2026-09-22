@@ -69,6 +69,8 @@ class CustomRoleController extends ApiController
                 ->where('is_active', true)],
         ]);
 
+        $management = app(\App\Services\Access\MemberManagement::class);
+        $management->authorize($request->user(), $orgId, $management->member($orgId, (int) $data['user_id']));
         $assignment = InventoryUserRoleAssignment::query()->updateOrCreate(
             ['user_id' => (int) $data['user_id']],
             ['role_id' => (int) $data['role_id'], 'assigned_by' => $request->user()?->id],
@@ -79,6 +81,9 @@ class CustomRoleController extends ApiController
 
     public function unassign(int $userId): JsonResponse
     {
+        $orgId = app(\App\Tenancy\OrganizationContext::class)->idOrFail();
+        $management = app(\App\Services\Access\MemberManagement::class);
+        $management->authorize(request()->user(), $orgId, $management->member($orgId, $userId));
         InventoryUserRoleAssignment::query()->where('user_id', $userId)->delete();
 
         return $this->success(['deleted' => true]);

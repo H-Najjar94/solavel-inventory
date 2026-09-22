@@ -153,6 +153,8 @@ class SettingsController extends ApiController
 
     public function warehouseAssignments(int $userId): JsonResponse
     {
+        $management = app(\App\Services\Access\MemberManagement::class);
+        $management->authorize(request()->user(), $this->context->idOrFail(), $management->member($this->context->idOrFail(), $userId));
         abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $rows = InventoryUserWarehouse::query()->where('user_id', $userId)->get();
 
@@ -168,6 +170,8 @@ class SettingsController extends ApiController
 
     public function syncWarehouseAssignments(Request $request, int $userId): JsonResponse
     {
+        $management = app(\App\Services\Access\MemberManagement::class);
+        $management->authorize(request()->user(), $this->context->idOrFail(), $management->member($this->context->idOrFail(), $userId));
         abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $data = $request->validate(['warehouse_ids' => ['array'], 'warehouse_ids.*' => ['integer']]);
         $ids = collect($data['warehouse_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();

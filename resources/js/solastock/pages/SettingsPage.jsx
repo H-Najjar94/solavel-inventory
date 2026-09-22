@@ -8,6 +8,10 @@ import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
 export default function SettingsPage() {
     const tr = useSettingsTranslation();
+    const memberContext = React.useMemo(() => {
+        const element = document.getElementById('member-management-context');
+        return element ? JSON.parse(element.textContent) : null;
+    }, []);
     const { data, isLoading, isMock } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
     const integration = useApiQuery(['integration'], api.integrationStatus, { fallback: { connected: false, planned_events: [], account_mappings: {} } });
     const rolesQuery = useApiQuery(['custom-roles'], api.customRoles, { fallback: { permissions: [], roles: [], assignments: [], builtin_roles: [] } });
@@ -29,8 +33,8 @@ export default function SettingsPage() {
     const [reasonCode, setReasonCode] = useState({ code: '', label: '' });
     const [currencyRate, setCurrencyRate] = useState({ currency_code: '', rate_to_base: '', effective_date: new Date().toISOString().slice(0, 10) });
     const [customRole, setCustomRole] = useState({ name: '', key: '', permissions: [] });
-    const [roleAssignment, setRoleAssignment] = useState({ user_id: '', role_id: '' });
-    const [warehouseAssignment, setWarehouseAssignment] = useState({ user_id: '', warehouse_ids: [] });
+    const [roleAssignment, setRoleAssignment] = useState({ user_id: memberContext?.id ?? '', role_id: memberContext?.role_id ?? '' });
+    const [warehouseAssignment, setWarehouseAssignment] = useState({ user_id: memberContext?.id ?? '', warehouse_ids: memberContext?.warehouse_ids ?? [] });
     const [taxes, setTaxes] = useState([]);
     const [defaultTaxes, setDefaultTaxes] = useState({ purchase: '', sales: '' });
     const [taxDraft, setTaxDraft] = useState({ code: '', name: '', rate: '', treatment: 'standard', active: true, purchase: true, sales: true });
@@ -264,7 +268,7 @@ export default function SettingsPage() {
         e.preventDefault();
         try {
             await api.assignCustomRole({ user_id: Number(roleAssignment.user_id), role_id: Number(roleAssignment.role_id) });
-            setRoleAssignment({ user_id: '', role_id: '' });
+            setRoleAssignment({ user_id: memberContext?.id ?? '', role_id: '' });
             await qc.invalidateQueries({ queryKey: ['custom-roles'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.roles.assigned'), 'success');
@@ -346,11 +350,11 @@ export default function SettingsPage() {
                 <h2>{tr('settings.warehouseScope.title')}</h2>
                 <p className="muted">{tr('settings.warehouseScope.description')}</p>
                 <form className="fg2" onSubmit={saveWarehouseAssignment}>
-                    <Field label={tr('settings.warehouseScope.userId')}><input className="input" type="number" min="1" value={warehouseAssignment.user_id} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, user_id: e.target.value })} placeholder={tr('settings.warehouseScope.userIdExample')} /></Field>
+                    <Field label={memberContext?.name || tr('settings.warehouseScope.userId')}><input className="input" type="number" min="1" readOnly={!!memberContext} title={memberContext?.name} value={warehouseAssignment.user_id} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, user_id: e.target.value })} placeholder={tr('settings.warehouseScope.userIdExample')} /></Field>
                     <div><span className="field-label">{tr('settings.warehouseScope.allowed')}</span>{(s.warehouses ?? []).map((warehouse) => <label className="check-inline" key={warehouse.id}><input type="checkbox" checked={warehouseAssignment.warehouse_ids.includes(Number(warehouse.id))} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, warehouse_ids: e.target.checked ? [...warehouseAssignment.warehouse_ids, Number(warehouse.id)] : warehouseAssignment.warehouse_ids.filter((id) => id !== Number(warehouse.id)) })} /> {warehouse.code} · {warehouse.name}</label>)}</div>
                     <button className="btn btn--primary">{tr('settings.warehouseScope.save')}</button>
                 </form>
-                {(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.user')}</th><th>{tr('settings.common.warehouse')}</th></tr></thead><tbody>{(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).map((row) => <tr key={row.id}><td>{row.user_id}</td><td>{row.warehouse_id}</td></tr>)}</tbody></table>}
+                {(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.user')}</th><th>{tr('settings.common.warehouse')}</th></tr></thead><tbody>{(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).filter(row => !memberContext || Number(row.user_id) === Number(memberContext.id)).map((row) => <tr key={row.id}><td>{row.user_id}</td><td>{row.warehouse_id}</td></tr>)}</tbody></table>}
             </div>
 
             <div className="panel">
@@ -493,12 +497,12 @@ export default function SettingsPage() {
                     {(rolesQuery.data?.roles ?? []).map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.key}</td><td>{(r.permissions ?? []).length}</td><td>{r.assignments_count ?? 0}</td><td>{tr(r.is_active ? 'settings.common.active' : 'settings.common.inactive')}</td></tr>)}
                 </tbody></table>}
                 <form className="fg2" onSubmit={assignRole} style={{ marginTop: 12 }}>
-                    <Field label={tr('settings.warehouseScope.userId')}><input className="input" type="number" min="1" value={roleAssignment.user_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, user_id: e.target.value })} required /></Field>
+                    <Field label={memberContext?.name || tr('settings.warehouseScope.userId')}><input className="input" type="number" min="1" readOnly={!!memberContext} title={memberContext?.name} value={roleAssignment.user_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, user_id: e.target.value })} required /></Field>
                     <Field label={tr('settings.roles.role')}><select className="input" value={roleAssignment.role_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, role_id: e.target.value })} required><option value="">{tr('settings.roles.select')}</option>{(rolesQuery.data?.roles ?? []).filter((r) => r.is_active).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{tr('settings.roles.assign')}</button></div>
                 </form>
                 {(rolesQuery.data?.assignments ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.roles.userId')}</th><th>{tr('settings.roles.role')}</th><th></th></tr></thead><tbody>
-                    {(rolesQuery.data?.assignments ?? []).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><button className="btn btn--sm btn--danger" onClick={() => unassignRole(a.user_id)}>{tr('settings.common.remove')}</button></td></tr>)}
+                    {(rolesQuery.data?.assignments ?? []).filter(a => !memberContext || Number(a.user_id) === Number(memberContext.id)).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><button className="btn btn--sm btn--danger" onClick={() => unassignRole(a.user_id)}>{tr('settings.common.remove')}</button></td></tr>)}
                 </tbody></table>}
             </div>
 

@@ -27,6 +27,9 @@ return Application::configure(basePath: dirname(__DIR__))
         using: function (): void {
             // Server-to-server only: no browser cookies, session mutation or CSRF exemption.
             require __DIR__.'/../routes/finance_workspace.php';
+            Route::post('/api/tenancy/member-management', \App\Http\Controllers\Api\Tenancy\MemberManagementController::class)
+                ->middleware(VerifySolavelSyncSignature::class)->name('api.tenancy.member-management');
+
             // Web routes (session-stateful).
             Route::middleware('web')
                 ->group(__DIR__.'/../routes/web.php');
