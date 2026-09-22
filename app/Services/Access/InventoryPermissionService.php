@@ -52,7 +52,9 @@ class InventoryPermissionService
 
         $granted = $this->permissionsForRole($role);
         $ceiling = $this->centralPermissions($user);
-        if ($ceiling !== ['*']) $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
+        if ($ceiling !== ['*']) {
+            $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
+        }
 
         if (in_array($permission, [
             ConnectionManagementPolicy::SETUP_PERMISSION,
@@ -61,7 +63,10 @@ class InventoryPermissionService
         ], true)) {
             $connection = $this->connectionPolicy()->status($orgId, $user);
 
-            if ($ceiling !== ['*'] && ! in_array($permission, $ceiling, true)) return false;
+            if ($ceiling !== ['*'] && ! in_array($permission, $ceiling, true)) {
+                return false;
+            }
+
             return $permission === ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION
                 ? (bool) ($connection['can_review_accounting'] ?? false)
                 : (bool) ($connection['can_manage_connection'] ?? false);
@@ -79,7 +84,9 @@ class InventoryPermissionService
         }
         $granted = $this->permissionsForRole($role);
         $ceiling = $this->centralPermissions($user);
-        if ($ceiling !== ['*']) $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
+        if ($ceiling !== ['*']) {
+            $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
+        }
 
         $connectionPermissions = [
             ConnectionManagementPolicy::SETUP_PERMISSION,
@@ -105,10 +112,16 @@ class InventoryPermissionService
     private function centralPermissions(?object $user): array
     {
         $orgId = $this->context->has() ? (int) $this->context->id() : 0;
-        if ($this->isDemoOrg($orgId) && app()->environment('local', 'testing') && config('inventory.demo_tenant.enabled')) return ['*'];
+        if ($this->isDemoOrg($orgId) && app()->environment('local', 'testing') && config('inventory.demo_tenant.enabled')) {
+            return ['*'];
+        }
         $decision = app(CentralAppAccess::class)->decision($this->centralUserId($user), $orgId, 'inventory');
-        if (! ($decision['allowed'] ?? false)) return [];
-        if ($decision['owner'] ?? false) return ['*'];
+        if (! ($decision['allowed'] ?? false)) {
+            return [];
+        }
+        if ($decision['owner'] ?? false) {
+            return array_values(array_filter($this->all(), fn ($permission) => ! CentralPermissionConstraints::denied($decision, $permission)));
+        }
         $permissions = [];
         foreach ($decision['roles'] ?? [] as $role) {
             $localRole = match ($role) {
@@ -121,9 +134,12 @@ class InventoryPermissionService
                 'warehouse_user' => 'inventory_viewer',
                 default => null,
             };
-            if ($localRole) $permissions = array_merge($permissions, $this->permissionsForRole($localRole));
+            if ($localRole) {
+                $permissions = array_merge($permissions, $this->permissionsForRole($localRole));
+            }
         }
-        return array_values(array_unique($permissions));
+
+        return array_values(array_filter(array_unique($permissions), fn ($permission) => ! CentralPermissionConstraints::denied($decision, $permission)));
     }
 
     private function connectionPolicy(): ConnectionManagementPolicy
@@ -166,6 +182,26 @@ class InventoryPermissionService
         $centralUserId = $this->centralUserId($user);
         if ($centralUserId <= 0) {
             return $this->roleCache[$orgId][$userId] = null;
+        }
+
+        $decision = app(CentralAppAccess::class)->decision($centralUserId, $orgId, 'inventory');
+        if (! ($decision['allowed'] ?? false)) {
+            return null;
+        }
+        if ($decision['owner'] ?? false) {
+            return 'inventory_admin';
+        }
+        // Organization membership rank is not an application permission ceiling.
+        foreach ($decision['roles'] ?? [] as $role) {
+            if ($role === 'stock_manager') {
+                return 'inventory_manager';
+            }
+            if ($role === 'warehouse_user') {
+                return 'inventory_viewer';
+            }
+        }
+        if (empty($decision['roles'])) {
+            return null;
         }
 
         return $this->roleCache[$orgId][$userId] = $this->mapCentralRole($this->fetchCentralRole($centralUserId, $orgId));

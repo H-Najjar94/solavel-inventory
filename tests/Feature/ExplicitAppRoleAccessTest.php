@@ -18,7 +18,7 @@ class ExplicitAppRoleAccessTest extends TestCase
         $authority->shouldReceive('decision')->with(7,10,'inventory')->andReturn($decision);
         $this->app->instance(CentralAppAccess::class,$authority);
         $service=new class($context) extends InventoryPermissionService {
-            protected function fetchCentralRole(int $userId,int $orgId): ?string {return 'client_member';}
+            protected function fetchCentralRole(int $userId,int $orgId): ?string {return 'client_viewer';}
         };
         return $service->can((object)['id'=>70,'central_user_id'=>7],$permission);
     }
