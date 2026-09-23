@@ -30,6 +30,7 @@ final class WorkspaceActions
         'items.migration-requirements', 'items.migration-create', 'items.migration-link',
         'items.update',
         'items.movements',
+        'items.movements.export',
         'items.valuation',
         'warehouses.index',
         'warehouses.show',
