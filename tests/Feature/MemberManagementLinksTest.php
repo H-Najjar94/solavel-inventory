@@ -89,10 +89,12 @@ class MemberManagementLinksTest extends TestCase
         $this->app->instance(TenantManager::class, $tenant);
         $this->app['router']->setRoutes(new RouteCollection);
         Route::get('/audit/manage/{centralOrg}/{centralMember}', MemberManagementController::class);
-        Route::get('/inventory/settings', [MemberManagementController::class, 'settings']);
+        Route::get('/settings', [MemberManagementController::class, 'settings'])->name('inventory.settings');
         Route::get('/audit/warehouse/{userId}', [SettingsController::class, 'warehouseAssignments']);
         Route::put('/audit/warehouse/{userId}', [SettingsController::class, 'syncWarehouseAssignments']);
         Route::post('/api/tenancy/member-management', \App\Http\Controllers\Api\Tenancy\MemberManagementController::class)->middleware(VerifySolavelSyncSignature::class);
+        $this->app['router']->getRoutes()->refreshNameLookups();
+        $this->app['url']->setRoutes($this->app['router']->getRoutes());
         config(['solavel_sync.secret' => str_repeat('s', 40), 'solavel_sync.use_signed_sync' => true, 'cache.default' => 'array']);
         $this->actingAs(User::find(700));
     }
@@ -100,10 +102,20 @@ class MemberManagementLinksTest extends TestCase
     public function test_owner_opens_existing_settings_with_resolved_member_and_preserved_assignments(): void
     {
         $before = DB::connection('tenant')->table('inventory_user_warehouses')->get()->toJson();
-        $this->getJson('/audit/manage/101/900')->assertRedirect('/inventory/settings?central_org=101&central_member=900');
-        $this->get('/inventory/settings?central_org=101&central_member=900')->assertOk()->assertViewHas('memberManagement', fn ($c) => $c['id'] === 900 && $c['name'] === 'Selected member' && $c['warehouse_ids']->all() === [55]);
+        $this->getJson('/audit/manage/101/900')->assertRedirect('/settings?central_org=101&central_member=900');
+        $this->get('/settings?central_org=101&central_member=900')->assertOk()->assertViewHas('memberManagement', fn ($c) => $c['id'] === 900 && $c['name'] === 'Selected member' && $c['warehouse_ids']->all() === [55]);
         $this->assertSame($before, DB::connection('tenant')->table('inventory_user_warehouses')->get()->toJson());
         $this->assertAuthenticatedAs(User::find(700));
+    }
+
+    public function test_application_mount_prefix_is_added_once_and_target_context_is_preserved(): void
+    {
+        \Illuminate\Support\Facades\URL::forceRootUrl('https://solavel.com/inventory');
+        \Illuminate\Support\Facades\URL::forceScheme('https');
+        $this->getJson('https://solavel.com/audit/manage/101/900')
+            ->assertRedirect('https://solavel.com/inventory/settings?central_org=101&central_member=900');
+        $this->assertAuthenticatedAs(User::find(700));
+        $this->assertSame([55], DB::connection('tenant')->table('inventory_user_warehouses')->pluck('warehouse_id')->all());
     }
 
     public function test_wrong_org_tampered_target_and_context_are_denied(): void

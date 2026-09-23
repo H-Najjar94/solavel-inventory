@@ -68,7 +68,7 @@ Route::view('/reports', 'solastock-app');
 Route::get('/member-management/{centralOrg}/{centralMember}', \App\Http\Controllers\MemberManagementController::class)
     ->middleware('inv.tenant')->whereNumber('centralOrg')->whereNumber('centralMember');
 Route::get('/settings/{any?}', [\App\Http\Controllers\MemberManagementController::class, 'settings'])
-    ->middleware('inv.tenant')->where('any', '.*');
+    ->middleware('inv.tenant')->where('any', '.*')->name('inventory.settings');
 Route::view('/integrations/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/ledger', 'solastock-app');
 

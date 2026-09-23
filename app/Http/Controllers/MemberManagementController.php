@@ -15,7 +15,7 @@ class MemberManagementController
         $target = $management->member($centralOrg, $centralMember);
         $management->authorize($request->user(), $centralOrg, $target);
 
-        return redirect('/inventory/settings?'.http_build_query(['central_org' => $centralOrg, 'central_member' => $centralMember]));
+        return redirect()->route('inventory.settings', ['central_org' => $centralOrg, 'central_member' => $centralMember]);
     }
 
     public function settings(Request $request, MemberManagement $management)
