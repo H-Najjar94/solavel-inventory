@@ -11,6 +11,7 @@ use App\Services\Access\CentralAppAccess;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\OperationalReceiving;
 use App\Services\Access\WarehouseAccessService;
+use App\Services\Tenancy\LiveTenantResolver;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\GenericUser;
@@ -234,5 +235,21 @@ class OperationalInventoryRolesTest extends TestCase
         $this->assertNull(app(WarehouseAccessService::class)->allowedIds(7));
         $this->decision = ['allowed' => false];
         $this->assertSame([], app(WarehouseAccessService::class)->allowedIds(7));
+    }
+
+    public function test_app_admission_does_not_query_native_roles_before_tenant_binding(): void
+    {
+        Schema::drop('inventory_operational_role_sets');
+        $resolver = \Mockery::mock(LiveTenantResolver::class)->makePartial();
+        $resolver->shouldReceive('clientId')->andReturn(87);
+        $resolver->shouldReceive('organizationId')->andReturn(101);
+        $resolver->shouldReceive('tenantDatabase')->with(87)->andReturn('tenant_000087');
+        $resolver->shouldReceive('inventoryEnabledForOrg')->with(101)->andReturn(true);
+        $state = $resolver->state(request());
+        $this->assertSame('live_ready', $state['state']);
+        $this->assertTrue($state['can_access']);
+        $this->decision['allowed'] = false;
+        $state = $resolver->state(request());
+        $this->assertSame('no_access', $state['state']);
     }
 }

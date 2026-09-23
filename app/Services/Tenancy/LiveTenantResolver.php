@@ -2,7 +2,9 @@
 
 namespace App\Services\Tenancy;
 
+use App\Services\Access\CentralAppAccess;
 use App\Services\Access\InventoryPermissionService;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -163,6 +165,7 @@ class LiveTenantResolver
             if ($home > 0 && $this->orgBelongsToClient($home, $clientId)) {
                 return $home;
             }
+
             // Otherwise the user's first membership org under this client.
             return (int) (DB::connection('mysql')->table('user_organizations as uo')
                 ->join('organizations as o', 'o.id', '=', 'uo.organization_id')
@@ -309,14 +312,16 @@ class LiveTenantResolver
             // The permission service is fail-closed unless an org context is set.
             // Set it to the ROW-SCOPE org (not the client id) before checking
             // access — this is what OrganizationScope filters on.
-            app(\App\Tenancy\OrganizationContext::class)->set($orgId);
+            app(OrganizationContext::class)->set($orgId);
 
-            // App access: the user must hold at least one inventory permission.
-            $canAccess = $this->permissions->can(Auth::user(), 'inventory.view_dashboard')
-                || $this->permissions->can(Auth::user(), 'inventory.view_items')
-                || $this->permissions->can(Auth::user(), 'inventory.view_stock');
+            // Admission is a Central app grant, independent of tenant role actions or warehouse scope.
+            // Native role definitions cannot be read until ResolveInventoryTenant connects the tenant.
+            $user = Auth::user();
+            $centralId = (int) ($user?->central_user_id ?: ($user && $user->getConnectionName() === config('tenancy.central_connection', 'mysql') ? $user->id : 0));
+            $decision = app(CentralAppAccess::class)->decision($centralId, $orgId, 'inventory');
+            $canAccess = (bool) ($decision['allowed'] ?? false);
             if ($authenticated && ! $canAccess) {
-                return $this->result('no_access', 'live', 'No SolaStock access', $orgId, $db, $authenticated, false, null, $clientId);
+                return $this->result('no_access', 'live', 'No SolaStock access', $orgId, $db, $authenticated, false, $decision['reason'] ?? 'access_required', $clientId);
             }
 
             // App-enabled gate (the Solavel way): SolaStock is only "live" for an
