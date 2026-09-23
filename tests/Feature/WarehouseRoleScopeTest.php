@@ -56,4 +56,42 @@ class WarehouseRoleScopeTest extends TestCase
         $this->assertSame([],app(WarehouseAccessService::class)->allowedIds());
         $this->assertSame([],StockBalance::pluck('id')->all());
     }
+
+    public function test_signed_export_requires_export_permission_and_only_returns_assigned_warehouse_rows(): void
+    {
+        foreach (['items', 'warehouses'] as $table) Schema::connection('tenant')->create($table, function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('name'); $t->string('sku')->nullable(); $t->string('code')->nullable(); $t->softDeletes();
+        });
+        Schema::connection('tenant')->create('stock_ledger', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->integer('item_id'); $t->integer('warehouse_id');
+            $t->string('direction'); $t->decimal('quantity'); $t->timestamp('moved_at');
+        });
+        DB::table('items')->insert([['id'=>9,'organization_id'=>101,'name'=>'Scoped item','sku'=>'SCOPE'], ['id'=>10,'organization_id'=>102,'name'=>'Other organization','sku'=>'OTHER']]);
+        foreach ([11,12] as $id) DB::table('warehouses')->insert(['id'=>$id,'organization_id'=>101,'name'=>'Warehouse '.$id]);
+        foreach ([11,12] as $id) DB::table('stock_ledger')->insert(['id'=>$id,'organization_id'=>101,'item_id'=>9,'warehouse_id'=>$id,'direction'=>'in','quantity'=>$id,'moved_at'=>'2026-09-23 08:00:00']);
+        $commercial=\Mockery::mock(\App\Services\Entitlements\InventoryCommercialEntitlementService::class);
+        $commercial->shouldReceive('checkPermission')->andReturn(['allowed'=>true,'reason_code'=>'allowed']);
+        $this->app->instance(\App\Services\Entitlements\InventoryCommercialEntitlementService::class,$commercial);
+        $mapping=new \App\Models\Tenant\IntegrationOrganizationMapping;
+        $mapping->forceFill(['central_organization_id'=>101,'solastock_organization_id'=>101]);
+        $setting=new \App\Models\Tenant\IntegrationSetting;
+        $outer=request(); $outer->setUserResolver(fn()=>$this->actor);
+        $dispatch=fn($item=9)=>app(\App\Services\InventoryWorkspace\WorkspaceDispatcher::class)->dispatch($outer,
+            ['action'=>'items.movements.export','parameters'=>['item'=>$item]],$mapping,$setting)->getData(true);
+        $this->decision['roles']=['scoped_inventory_manager'];
+        try { $dispatch(); $this->fail('Manager without export permission exported'); }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { $this->assertSame(403,$e->getStatusCode()); }
+        // Explicit custom export grant, no global warehouse grant.
+        $this->decision['roles']=['stock_manager'];
+        DB::table('inventory_custom_roles')->insert(['id'=>1,'organization_id'=>101,'key'=>'custom_exporter','permissions'=>json_encode(['inventory.view_ledger','inventory.export_reports']),'is_active'=>true]);
+        DB::table('inventory_user_role_assignments')->insert(['organization_id'=>101,'user_id'=>7,'role_id'=>1]);
+        $data=$dispatch(); $this->assertSame([11],array_column($data['data'],'warehouse_id'));
+        try { $dispatch(10); $this->fail('Cross-organization item exported'); }
+        catch (\Illuminate\Database\Eloquent\ModelNotFoundException) { $this->assertTrue(true); }
+        DB::table('inventory_user_warehouses')->where('organization_id',101)->delete();
+        $this->assertSame([],$dispatch()['data']);
+        $this->decision['grants']=[['effect'=>'deny','permission_key'=>'inventory.export_reports','scope_type'=>'organization']];
+        try { $dispatch(); $this->fail('Explicit export denial ignored'); }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { $this->assertSame(403,$e->getStatusCode()); }
+    }
 }

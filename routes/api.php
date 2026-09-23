@@ -127,6 +127,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.update');
     Route::get('/items/{item}/movements', [ItemController::class, 'movements'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.items.movements');
+    Route::get('/items/{item}/movements/export-rows', [ItemController::class, 'movements'])
+        ->middleware(['perm:inventory.view_ledger', 'perm:inventory.export_reports'])->name('api.v1.items.movements.export');
     Route::get('/items/{item}/valuation', [ItemController::class, 'valuation'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.items.valuation');
     Route::post('/items/{item}/barcodes', [ItemController::class, 'storeBarcode'])
