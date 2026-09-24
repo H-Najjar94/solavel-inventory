@@ -19,6 +19,7 @@ final class OperationalReceiving
         if (! $this->restricted()) {
             return $data;
         }
+        abort_unless((int) ($data['purchase_order_id'] ?? 0) > 0, 403, __('inventory.common.approved_po_required'));
         $po = PurchaseOrder::findOrFail((int) ($data['purchase_order_id'] ?? 0));
         app(WarehouseAccessService::class)->assertAllowed((int) $po->warehouse_id);
         abort_unless(in_array($po->status, ['approved', 'partially_received'], true) && (int) $data['warehouse_id'] === (int) $po->warehouse_id, 403);
@@ -40,6 +41,7 @@ final class OperationalReceiving
         if (! $this->restricted()) {
             return;
         }
+        abort_unless((int) $receipt->purchase_order_id > 0, 403, __('inventory.common.approved_po_required'));
         $po = PurchaseOrder::findOrFail((int) $receipt->purchase_order_id);
         app(WarehouseAccessService::class)->assertAllowed((int) $po->warehouse_id);
         abort_unless(in_array($po->status, ['approved', 'partially_received'], true) && (int) $receipt->warehouse_id === (int) $po->warehouse_id, 403);

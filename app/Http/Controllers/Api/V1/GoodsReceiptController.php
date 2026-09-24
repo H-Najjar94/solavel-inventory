@@ -125,6 +125,10 @@ class GoodsReceiptController extends ApiController
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             unset($data['grn_number']);
             $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            throw $e;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            abort(404);
         } catch (RuntimeException $e) {
             return $this->error('grn_create_failed', $e->getMessage(), 422);
         }
@@ -139,6 +143,10 @@ class GoodsReceiptController extends ApiController
             $data = app(OperationalReceiving::class)->prepare($request->validated());
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $grn = $this->service->updateDraft($goods_receipt, collect($data)->except('lines')->toArray(), $data['lines']);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            throw $e;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            abort(404);
         } catch (RuntimeException $e) {
             return $this->error('grn_update_failed', $e->getMessage(), 422);
         }
