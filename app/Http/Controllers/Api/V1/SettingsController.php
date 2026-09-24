@@ -158,7 +158,7 @@ class SettingsController extends ApiController
     {
         $management = app(MemberManagement::class);
         $management->authorize(request()->user(), $this->context->idOrFail(), $management->member($this->context->idOrFail(), $userId));
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
+        abort_unless(Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $rows = InventoryUserWarehouse::query()->where('user_id', $userId)->get();
 
         return $this->success(['user_id' => $userId, 'assignments' => $rows]);
@@ -166,7 +166,7 @@ class SettingsController extends ApiController
 
     public function allWarehouseAssignments(): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
+        abort_unless(Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
 
         return $this->success(InventoryUserWarehouse::query()->orderBy('user_id')->orderBy('warehouse_id')->get());
     }
@@ -175,7 +175,7 @@ class SettingsController extends ApiController
     {
         $management = app(MemberManagement::class);
         $management->authorize(request()->user(), $this->context->idOrFail(), $management->member($this->context->idOrFail(), $userId));
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
+        abort_unless(Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $data = $request->validate(['warehouse_ids' => ['array'], 'warehouse_ids.*' => ['integer']]);
         $ids = collect($data['warehouse_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
         $allowed = app(WarehouseAccessService::class)->allowedIds();
