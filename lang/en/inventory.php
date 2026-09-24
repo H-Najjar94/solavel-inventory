@@ -6,6 +6,7 @@ return [
         'plan_limit' => 'Your plan limit for this resource has been reached. Upgrade to add more.',
         'feature_unavailable' => 'This SolaStock feature is not available for the current plan or entitlement state.',
         'warehouse_unassigned' => 'You are not assigned to this warehouse.',
+        'approved_po_required' => 'Receive goods from an approved purchase order for an assigned warehouse.',
         'workspace_unavailable' => 'This workspace is temporarily unavailable. Please try again shortly.',
     ],
     'validation' => [
