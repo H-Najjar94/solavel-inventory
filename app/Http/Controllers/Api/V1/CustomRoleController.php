@@ -72,7 +72,7 @@ class CustomRoleController extends ApiController
         $orgId = app(OrganizationContext::class)->idOrFail();
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'min:1'],
-            'role_id' => ['required', 'integer', Rule::exists('inventory_custom_roles', 'id')
+            'role_id' => ['required', 'integer', Rule::exists(config('tenancy.tenant_connection', 'tenant').'.inventory_custom_roles', 'id')
                 ->where('organization_id', $orgId)
                 ->where('is_active', true)],
         ]);
@@ -106,7 +106,7 @@ class CustomRoleController extends ApiController
                 'nullable',
                 'string',
                 'max:80',
-                Rule::unique('inventory_custom_roles', 'key')
+                Rule::unique(config('tenancy.tenant_connection', 'tenant').'.inventory_custom_roles', 'key')
                     ->where('organization_id', app(OrganizationContext::class)->idOrFail())
                     ->ignore($ignoreId),
             ],
