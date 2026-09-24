@@ -41,7 +41,12 @@ class ReportController extends ApiController
             return $this->error('unknown_report', __('inventory.reports.unknown_report', ['report' => $report]), 404);
         }
 
-        return $this->success($this->reports->run($report, ReportFilters::fromRequest($request)));
+        $filters = ReportFilters::fromRequest($request);
+        if ($filters->warehouseId !== null) {
+            $this->warehouseAccess->assertAllowed($filters->warehouseId);
+        }
+
+        return $this->success($this->reports->run($report, $filters));
     }
 
     public function exportReport(Request $request, string $report): Response
