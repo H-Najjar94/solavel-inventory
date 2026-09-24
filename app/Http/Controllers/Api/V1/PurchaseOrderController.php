@@ -149,6 +149,8 @@ class PurchaseOrderController extends ApiController
             return $this->error('po_not_draft', __('inventory.documents.po_edit_draft'), 422);
         }
         $data = $request->validated();
+        // The document number is issued by the server and must survive draft edits.
+        unset($data['po_number']);
         $data['integration_currency_code'] = $data['currency_code'] ?? null;
         if (empty($data['currency_code'])) {
             unset($data['currency_code']);
