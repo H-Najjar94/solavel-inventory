@@ -21,7 +21,12 @@ use Illuminate\Validation\Rule;
  */
 class WarehouseStructureController extends ApiController
 {
-    public function __construct(private OrganizationContext $context, private WarehouseAccessService $warehouseAccess) {}
+    private WarehouseAccessService $warehouseAccess;
+
+    public function __construct(private OrganizationContext $context, ?WarehouseAccessService $warehouseAccess = null)
+    {
+        $this->warehouseAccess = $warehouseAccess ?? app(WarehouseAccessService::class);
+    }
 
     private function conn(): string
     {
