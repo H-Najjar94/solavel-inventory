@@ -224,7 +224,24 @@ class OperationalInventoryRolesTest extends TestCase
                 $this->assertSame(403, $e->getStatusCode());
             }
         }
-        $this->assertTrue(app(InventoryPermissionService::class)->can($this->actor, 'inventory.export_reports'));
+        $this->assertFalse(app(InventoryPermissionService::class)->can($this->actor, 'inventory.export_reports'));
+    }
+
+    public function test_export_migration_narrows_only_the_untouched_manager_default(): void
+    {
+        $table = fn () => DB::connection('tenant')->table('inventory_operational_role_sets');
+        $current = config('inventory_operational_roles.scoped_inventory_manager.permissions');
+        $previous = array_merge($current, ['inventory.export_reports']);
+        $table()->where('role_key', 'scoped_inventory_manager')->update(['permissions' => json_encode($previous)]);
+
+        $migration = require database_path('migrations/tenant/2026_09_24_090000_narrow_default_inventory_manager_export.php');
+        $migration->up();
+        $this->assertSame($current, json_decode($table()->where('role_key', 'scoped_inventory_manager')->value('permissions'), true));
+
+        $customized = array_merge($current, ['inventory.manage_items']);
+        $table()->where('role_key', 'scoped_inventory_manager')->update(['permissions' => json_encode($customized)]);
+        $migration->up();
+        $this->assertSame($customized, json_decode($table()->where('role_key', 'scoped_inventory_manager')->value('permissions'), true));
     }
 
     public function test_signed_management_uses_explicit_actor_not_ambient_session(): void
