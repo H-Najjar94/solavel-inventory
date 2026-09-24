@@ -7,6 +7,7 @@ use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseBin;
 use App\Models\Tenant\WarehouseZone;
+use App\Services\Access\WarehouseAccessService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ use Illuminate\Validation\Rule;
  */
 class WarehouseStructureController extends ApiController
 {
-    public function __construct(private OrganizationContext $context) {}
+    public function __construct(private OrganizationContext $context, private WarehouseAccessService $warehouseAccess) {}
 
     private function conn(): string
     {
@@ -30,6 +31,7 @@ class WarehouseStructureController extends ApiController
     // ── Zones ──
     public function storeZone(Request $request, Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $data = $request->validate([
             'code' => ['required', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:191'],
@@ -52,6 +54,7 @@ class WarehouseStructureController extends ApiController
     public function updateZone(Request $request, int $zone): JsonResponse
     {
         $zone = WarehouseZone::query()->findOrFail($zone);
+        $this->warehouseAccess->assertAllowed((int) $zone->warehouse_id);
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:191'],
             'code' => ['sometimes', 'string', 'max:50'],
@@ -70,6 +73,7 @@ class WarehouseStructureController extends ApiController
     // ── Bins ──
     public function storeBin(Request $request, Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $data = $request->validate([
             'zone_id' => ['required', 'integer'],
             'code' => ['required', 'string', 'max:50'],
@@ -106,6 +110,7 @@ class WarehouseStructureController extends ApiController
     public function updateBin(Request $request, int $bin): JsonResponse
     {
         $bin = WarehouseBin::query()->findOrFail($bin);
+        $this->warehouseAccess->assertAllowed((int) $bin->warehouse_id);
         $data = $request->validate([
             'name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'capacity' => ['nullable', 'numeric', 'min:0'],
@@ -123,6 +128,7 @@ class WarehouseStructureController extends ApiController
 
     public function labelSheet(Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $zones = WarehouseZone::query()->where('warehouse_id', $warehouse->id)->pluck('code', 'id');
         $bins = WarehouseBin::query()->where('warehouse_id', $warehouse->id)->orderBy('code')->get();
         $labels = $bins->map(function (WarehouseBin $bin) use ($warehouse, $zones) {
