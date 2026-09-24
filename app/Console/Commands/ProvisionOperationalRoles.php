@@ -42,6 +42,12 @@ class ProvisionOperationalRoles extends Command
         foreach (config('inventory_operational_roles') as $key => $definition) {
             $this->line($key.': '.(isset($existing[$key]) ? 'preserve existing definition' : 'new definition ('.count($definition['permissions']).' permissions)'));
         }
+        $manager = config('inventory_operational_roles.scoped_inventory_manager.permissions', []);
+        $previousManager = array_merge($manager, ['inventory.export_reports']);
+        $storedManager = json_decode($existing['scoped_inventory_manager'] ?? 'null', true);
+        $this->line('scoped_inventory_manager export: '.($storedManager === $previousManager
+            ? 'remove from exact seeded default'
+            : 'preserve existing definition'));
         if ($this->option('dry-run')) {
             return 0;
         }
@@ -49,6 +55,12 @@ class ProvisionOperationalRoles extends Command
         config(['tenancy.tenant_connection' => $connection]);
         try {
             $status = Artisan::call('migrate', ['--database' => $connection, '--path' => 'database/migrations/tenant/2026_09_22_230000_create_inventory_operational_role_sets.php', '--force' => true]);
+            $this->line(Artisan::output());
+
+            if ($status !== 0) {
+                return $status;
+            }
+            $status = Artisan::call('migrate', ['--database' => $connection, '--path' => 'database/migrations/tenant/2026_09_24_090000_narrow_default_inventory_manager_export.php', '--force' => true]);
             $this->line(Artisan::output());
 
             return $status;
