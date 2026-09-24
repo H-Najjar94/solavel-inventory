@@ -53,6 +53,9 @@ class DashboardMetricsService
         if ($allowed !== null) {
             if ($baseTable === 'warehouses') {
                 $query->whereIn($alias.'.id', $allowed);
+            } elseif ($baseTable === 'stock_transfers') {
+                $query->whereIn($alias.'.from_warehouse_id', $allowed)
+                    ->whereIn($alias.'.to_warehouse_id', $allowed);
             } elseif (Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasColumn($baseTable, 'warehouse_id')) {
                 $query->whereIn($alias.'.warehouse_id', $allowed);
             }
