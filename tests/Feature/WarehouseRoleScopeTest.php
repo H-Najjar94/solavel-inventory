@@ -1,7 +1,10 @@
 <?php
 namespace Tests\Feature;
 use App\Models\Tenant\StockBalance;
+use App\Http\Controllers\Api\V1\StockAdjustmentController;
+use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Services\Access\{CentralAppAccess,InventoryPermissionService,WarehouseAccessService};
+use App\Services\Documents\{InventoryReversalService,StockAdjustmentService};
 use App\Tenancy\OrganizationContext;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\{DB,Schema,Auth};
@@ -55,6 +58,22 @@ class WarehouseRoleScopeTest extends TestCase
         Schema::connection('tenant')->drop('inventory_user_warehouses');
         $this->assertSame([],app(WarehouseAccessService::class)->allowedIds());
         $this->assertSame([],StockBalance::pluck('id')->all());
+    }
+
+    public function test_adjustment_creation_rejects_an_unassigned_warehouse_before_writing(): void
+    {
+        $request = \Mockery::mock(StoreStockAdjustmentRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 12,
+            'adjustment_number' => null,
+            'lines' => [['item_id' => 9, 'direction' => 'increase', 'quantity' => 1]],
+        ]);
+        $service = \Mockery::mock(StockAdjustmentService::class);
+        $service->shouldNotReceive('createDraft');
+        $reversals = \Mockery::mock(InventoryReversalService::class);
+
+        $this->expectException(AuthorizationException::class);
+        (new StockAdjustmentController($service, $reversals, app(WarehouseAccessService::class)))->store($request);
     }
 
     public function test_signed_export_requires_export_permission_and_only_returns_assigned_warehouse_rows(): void
