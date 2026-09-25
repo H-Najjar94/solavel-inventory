@@ -13,7 +13,8 @@ export default function PurchaseOrderDetailPage() {
     const { t } = useI18n();
     const { id } = useParams();
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.manage_purchase_orders');
+    const approvalGate = useCanCreate('inventory.approve_purchase_orders');
     const receiveGate = useCanCreate('inventory.receive_goods');
     const [tab, setTab] = useState('lines');
     const [confirmApprove, setConfirmApprove] = useState(false);
@@ -44,9 +45,9 @@ export default function PurchaseOrderDetailPage() {
                 {isMock && <span className="badge badge--warn">{t('receiving.common.sampleData', 'Sample data')}</span>}
                 <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
                     {po.status === 'draft' && <Link to={`/purchase-orders/${id}/edit`} className="btn" style={{ opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{t('receiving.common.edit', 'Edit')}</Link>}
-                    {po.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmApprove(true)}>{t('receiving.po.actions.approve', 'Approve')}</button>}
+                    {po.status === 'draft' && approvalGate.allowed && <button className="btn btn--primary" onClick={() => setConfirmApprove(true)}>{t('receiving.po.actions.approve', 'Approve')}</button>}
                     {canReceive && <button className="btn btn--primary" disabled={!receiveGate.allowed} onClick={() => nav(`/goods-receipts/from-po/${id}`)} title={receiveGate.allowed ? '' : receiveGate.reason}>{t('receiving.grn.actions.create', 'Create GRN')}</button>}
-                    {!['received', 'cancelled'].includes(po.status) && <button className="btn btn--danger" disabled={!gate.allowed} onClick={() => setConfirmCancel(true)}>{t('receiving.common.cancel', 'Cancel')}</button>}
+                    {!['received', 'cancelled'].includes(po.status) && approvalGate.allowed && <button className="btn btn--danger" onClick={() => setConfirmCancel(true)}>{t('receiving.common.cancel', 'Cancel')}</button>}
                 </div>
             </header>
 

@@ -144,7 +144,13 @@ class InventoryPermissionService
         $permissions = $this->legacyOperationalAliases($permissions);
         if (! array_intersect($decision['roles'] ?? [], array_keys(config('inventory_operational_roles', [])))) {
             if (CentralPermissionConstraints::denied($decision, 'inventory.manage_adjustments')) {
-                $permissions = array_diff($permissions, ['inventory.receive_goods', 'inventory.transfer_stock']);
+                // Legacy adjustment denials also covered purchase-order writes
+                // when those routes shared the adjustment gate. Preserve that
+                // deliberate restriction after separating the permissions.
+                $permissions = array_diff($permissions, [
+                    'inventory.receive_goods', 'inventory.transfer_stock',
+                    'inventory.manage_purchase_orders', 'inventory.approve_purchase_orders',
+                ]);
             }
             if (CentralPermissionConstraints::denied($decision, 'inventory.manage_warehouses')) {
                 $permissions = array_diff($permissions, ['inventory.manage_warehouse_structure']);

@@ -12,6 +12,8 @@
 return [
     'permissions' => [
         'inventory.receive_goods' => 'Receive approved purchase orders without changing valuation',
+        'inventory.manage_purchase_orders' => 'Create and edit purchase orders in assigned warehouses',
+        'inventory.approve_purchase_orders' => 'Approve and cancel purchase orders in assigned warehouses',
         'inventory.transfer_stock' => 'Transfer stock between assigned warehouses',
         'inventory.manage_warehouse_structure' => 'Manage zones and bins in assigned warehouses',
         'inventory.view_dashboard' => 'View the inventory dashboard',
@@ -60,6 +62,7 @@ return [
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.manage_items',
             'inventory.view_warehouses', 'inventory.manage_warehouses', 'inventory.view_stock',
             'inventory.manage_opening_stock', 'inventory.manage_adjustments',
+            'inventory.manage_purchase_orders', 'inventory.approve_purchase_orders',
             'inventory.view_ledger', 'inventory.view_reports', 'inventory.export_reports',
             'inventory.view_settings',
             'inventory.integration.view',

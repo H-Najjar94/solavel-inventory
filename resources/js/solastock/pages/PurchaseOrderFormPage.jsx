@@ -19,7 +19,7 @@ export default function PurchaseOrderFormPage() {
     const { id } = useParams();
     const isEdit = !!id;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.manage_purchase_orders');
 
     const [header, setHeader] = useState({ po_number: '', supplier_id: null, warehouse_id: null, order_date: new Date().toISOString().slice(0, 10), expected_date: '', notes: '' });
     const [lines, setLines] = useState([emptyLine()]);

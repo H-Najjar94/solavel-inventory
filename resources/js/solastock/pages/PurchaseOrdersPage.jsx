@@ -9,7 +9,7 @@ import { useI18n } from '../i18n/context.jsx';
 
 export default function PurchaseOrdersPage() {
     const { t } = useI18n();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.manage_purchase_orders');
     const { data, isMock } = useApiQuery(['pos'], () => api.purchaseOrders({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     return (
