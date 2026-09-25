@@ -103,6 +103,34 @@ class OperationalInventoryRolesTest extends TestCase
         $this->assertFalse($p->can($this->actor, 'inventory.manage_purchase_orders'));
     }
 
+    public function test_explicit_custom_approver_can_approve_without_drafting_or_bypassing_central_denial(): void
+    {
+        $this->decision['roles'] = ['scoped_inventory_manager'];
+        DB::table('inventory_custom_roles')->insert([
+            'id' => 1, 'organization_id' => 101, 'key' => 'qa_purchase_approver',
+            'permissions' => json_encode(['inventory.view_stock', 'inventory.approve_purchase_orders']),
+            'is_active' => true,
+        ]);
+        DB::table('inventory_user_role_assignments')->insert([
+            'organization_id' => 101, 'user_id' => 7, 'role_id' => 1,
+        ]);
+
+        $p = app(InventoryPermissionService::class);
+        $this->assertTrue($p->can($this->actor, 'inventory.view_stock'));
+        $this->assertTrue($p->can($this->actor, 'inventory.approve_purchase_orders'));
+        $this->assertFalse($p->can($this->actor, 'inventory.manage_purchase_orders'));
+        $this->assertFalse($p->can($this->actor, 'inventory.manage_settings'));
+
+        $this->decision['grants'] = [[
+            'effect' => 'deny', 'permission_key' => 'inventory.approve_purchase_orders',
+            'scope_type' => 'organization',
+        ]];
+        $this->assertFalse($p->can($this->actor, 'inventory.approve_purchase_orders'));
+        $this->decision['grants'] = [];
+        $this->decision['allowed'] = false;
+        $this->assertFalse($p->can($this->actor, 'inventory.approve_purchase_orders'));
+    }
+
     public function test_purchase_order_preset_migration_only_updates_unchanged_default(): void
     {
         $table = DB::table('inventory_operational_role_sets');

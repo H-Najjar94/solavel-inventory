@@ -52,7 +52,7 @@ class InventoryPermissionService
 
         $granted = $this->permissionsForRole($role);
         $granted = $this->legacyOperationalAliases($granted);
-        $ceiling = $this->centralPermissions($user);
+        $ceiling = $this->centralPermissions($user, $role);
         if ($ceiling !== ['*']) {
             $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
         }
@@ -85,7 +85,7 @@ class InventoryPermissionService
         }
         $granted = $this->permissionsForRole($role);
         $granted = $this->legacyOperationalAliases($granted);
-        $ceiling = $this->centralPermissions($user);
+        $ceiling = $this->centralPermissions($user, $role);
         if ($ceiling !== ['*']) {
             $granted = array_values(array_intersect($granted === ['*'] ? $this->all() : $granted, $ceiling));
         }
@@ -111,7 +111,7 @@ class InventoryPermissionService
         return array_values(array_unique($ceiling === ['*'] ? $granted : array_intersect($granted, $ceiling)));
     }
 
-    private function centralPermissions(?object $user): array
+    private function centralPermissions(?object $user, ?string $effectiveRole = null): array
     {
         $orgId = $this->context->has() ? (int) $this->context->id() : 0;
         if ($this->isDemoOrg($orgId) && app()->environment('local', 'testing') && config('inventory.demo_tenant.enabled')) {
@@ -122,6 +122,13 @@ class InventoryPermissionService
             return [];
         }
         if ($decision['owner'] ?? false) {
+            return array_values(array_filter($this->all(), fn ($permission) => ! CentralPermissionConstraints::denied($decision, $permission)));
+        }
+        // A destination custom role is an explicit assignment made through
+        // Stock's guarded member controls. It replaces the invitation preset,
+        // so its own permission list is the grant. Central still decides app
+        // admission and its explicit denials remain binding.
+        if ($effectiveRole !== null && str_starts_with($effectiveRole, 'custom:')) {
             return array_values(array_filter($this->all(), fn ($permission) => ! CentralPermissionConstraints::denied($decision, $permission)));
         }
         $permissions = [];
