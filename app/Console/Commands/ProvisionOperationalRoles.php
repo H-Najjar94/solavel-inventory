@@ -43,10 +43,10 @@ class ProvisionOperationalRoles extends Command
             $this->line($key.': '.(isset($existing[$key]) ? 'preserve existing definition' : 'new definition ('.count($definition['permissions']).' permissions)'));
         }
         $manager = config('inventory_operational_roles.scoped_inventory_manager.permissions', []);
-        $previousManager = array_merge($manager, ['inventory.export_reports']);
+        $previousManager = array_values(array_diff($manager, ['inventory.manage_purchase_orders']));
         $storedManager = json_decode($existing['scoped_inventory_manager'] ?? 'null', true);
-        $this->line('scoped_inventory_manager export: '.($storedManager === $previousManager
-            ? 'remove from exact seeded default'
+        $this->line('scoped_inventory_manager purchase-order drafting: '.($storedManager === $previousManager
+            ? 'add to exact seeded default'
             : 'preserve existing definition'));
         if ($this->option('dry-run')) {
             return 0;
@@ -61,6 +61,12 @@ class ProvisionOperationalRoles extends Command
                 return $status;
             }
             $status = Artisan::call('migrate', ['--database' => $connection, '--path' => 'database/migrations/tenant/2026_09_24_090000_narrow_default_inventory_manager_export.php', '--force' => true]);
+            $this->line(Artisan::output());
+
+            if ($status !== 0) {
+                return $status;
+            }
+            $status = Artisan::call('migrate', ['--database' => $connection, '--path' => 'database/migrations/tenant/2026_09_25_090000_add_scoped_purchase_order_drafting.php', '--force' => true]);
             $this->line(Artisan::output());
 
             return $status;
