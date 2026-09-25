@@ -87,9 +87,35 @@ class OperationalInventoryRolesTest extends TestCase
         foreach (['receive_goods', 'transfer_stock', 'manage_picking', 'manage_packing', 'manage_shipments', 'manage_reservations'] as $action) {
             $this->assertTrue($p->can($this->actor, 'inventory.'.$action), $action);
         }
-        foreach (['manage_settings', 'manage_items', 'manage_warehouses', 'manage_adjustments', 'manage_opening_stock', 'override_quarantine', 'override_expired_lot', 'integration.setup'] as $action) {
+        foreach (['manage_settings', 'manage_items', 'manage_warehouses', 'manage_adjustments', 'manage_purchase_orders', 'approve_purchase_orders', 'manage_opening_stock', 'override_quarantine', 'override_expired_lot', 'integration.setup'] as $action) {
             $this->assertFalse($p->can($this->actor, 'inventory.'.$action), $action);
         }
+    }
+
+    public function test_scoped_manager_can_draft_but_not_approve_purchase_orders(): void
+    {
+        $this->decision['roles'] = ['scoped_inventory_manager'];
+        $p = app(InventoryPermissionService::class);
+        $this->assertTrue($p->can($this->actor, 'inventory.manage_purchase_orders'));
+        $this->assertFalse($p->can($this->actor, 'inventory.approve_purchase_orders'));
+        $this->assertFalse($p->can($this->actor, 'inventory.manage_adjustments'));
+        $this->decision['grants'] = [['effect' => 'deny', 'permission_key' => 'inventory.manage_purchase_orders', 'scope_type' => 'organization']];
+        $this->assertFalse($p->can($this->actor, 'inventory.manage_purchase_orders'));
+    }
+
+    public function test_purchase_order_preset_migration_only_updates_unchanged_default(): void
+    {
+        $table = DB::table('inventory_operational_role_sets');
+        $current = config('inventory_operational_roles.scoped_inventory_manager.permissions');
+        $old = array_values(array_diff($current, ['inventory.manage_purchase_orders']));
+        $migration = require database_path('migrations/tenant/2026_09_25_090000_add_scoped_purchase_order_drafting.php');
+        $table->where('role_key', 'scoped_inventory_manager')->update(['permissions' => json_encode($old)]);
+        $migration->up();
+        $this->assertSame($current, json_decode(DB::table('inventory_operational_role_sets')->where('role_key', 'scoped_inventory_manager')->value('permissions'), true));
+        $customized = array_values(array_diff($old, ['inventory.view_reports']));
+        $table->where('role_key', 'scoped_inventory_manager')->update(['permissions' => json_encode($customized)]);
+        $migration->up();
+        $this->assertSame($customized, json_decode(DB::table('inventory_operational_role_sets')->where('role_key', 'scoped_inventory_manager')->value('permissions'), true));
     }
 
     public function test_both_transfer_warehouses_queries_and_direct_ids_are_scoped(): void

@@ -267,6 +267,18 @@ final class Phase2MappingDiscoveryService
 
         $stock = $this->records($definition['stock_table'], (int) $mapping->solastock_organization_id, collect($keys)->pluck(0)->all());
         $books = $this->records($definition['books_table'], (int) $mapping->finance_organization_id, collect($keys)->pluck(1)->all());
+        // A signed Finance creation may commit while Stock activation is still
+        // pending. Keep that unactivated counterpart out of discovery so an
+        // exact retry sees the same approved before-image and never treats the
+        // provisional row as an independently reviewed match.
+        $provisionalFinanceIds = IntegrationMasterDataMapping::query()
+            ->where('organization_mapping_uuid', $mapping->mapping_uuid)
+            ->where('entity_type', $entityType)->where('status', 'pending_review_activation')
+            ->where('discovery_method', 'approved_wizard_creation')
+            ->pluck('solabooks_record_id')->map('strval')->all();
+        if ($provisionalFinanceIds !== []) {
+            $books = $books->reject(fn (array $row) => in_array((string) $row['id'], $provisionalFinanceIds, true))->values();
+        }
         $results = [];
         $matchedBookIds = [];
 
@@ -611,6 +623,7 @@ final class Phase2MappingDiscoveryService
     {
         return IntegrationMasterDataMapping::query()
             ->where('organization_mapping_uuid', $mapping->mapping_uuid)
+            ->where('status', '!=', 'pending_review_activation')
             ->orderBy('entity_type')
             ->orderBy('id')
             ->get();

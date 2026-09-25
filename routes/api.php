@@ -289,13 +289,13 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::get('/purchase-orders/{purchase_order}', [PurchaseOrderController::class, 'show'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.po.show');
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.store');
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.po.store');
     Route::put('/purchase-orders/{purchase_order}', [PurchaseOrderController::class, 'update'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.update');
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.po.update');
     Route::post('/purchase-orders/{purchase_order}/approve', [PurchaseOrderController::class, 'approve'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.approve');
+        ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.approve');
     Route::post('/purchase-orders/{purchase_order}/cancel', [PurchaseOrderController::class, 'cancel'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.cancel');
+        ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.cancel');
 
     // ── Goods Receipts (GRN → stock IN via service) ──
     Route::get('/finance-sources/suppliers', [FinanceDocumentSourceController::class, 'suppliers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.suppliers');
