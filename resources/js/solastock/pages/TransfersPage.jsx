@@ -9,7 +9,7 @@ import { useI18n } from '../i18n/context.jsx';
 
 export default function TransfersPage() {
     const { t } = useI18n();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.transfer_stock');
     const { data, isLoading, isError, isMock, refetch } = useApiQuery(['transfers'], () => api.transfers({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     if (isLoading) return <section className="page"><Skeleton /></section>;

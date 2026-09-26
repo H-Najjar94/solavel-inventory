@@ -28,18 +28,27 @@ final class FinanceWorkspaceController
             ->where('client_id', $input['client_id'])->where('is_active', true)->whereNull('deleted_at')->first();
         abort_unless($org && $central->table('clients')->where('id', $input['client_id'])
             ->where('is_active', true)->whereNull('deleted_at')->exists(), 403, 'workspace_organization_unavailable');
-        $actor = User::query()->where('id', $input['actor_id'])->where('client_id', $input['client_id'])
+        // Membership is the user_organizations row checked below, not the member's
+        // home client. An invited member keeps the client of the account they
+        // registered with, so matching it to the organization's client reported
+        // every invited SolaCount member as a non-member.
+        $actor = User::query()->where('id', $input['actor_id'])
             ->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'active'))->whereNull('deleted_at')
             ->first(['id', 'name', 'client_id', 'status']);
         abort_unless($actor && $central->table('user_organizations')->where('user_id', $actor->id)
             ->where('organization_id', $org->id)->where(fn ($q) => $q->whereNull('status')->orWhere('status', 'active'))->exists(),
             403, 'workspace_membership_required');
+        // The organization must hold both products for any integration call. The acting
+        // member always needs SolaCount; SolaStock assignment is waived only for the
+        // closed follow-through scope of an already reviewed financial document.
+        $lifecycle = \App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::covers($input['action']);
         foreach (['finance', 'inventory'] as $slug) {
             $project = $central->table('projects')->where('slug', $slug)->where('is_active', true)->value('id');
             abort_unless($project && $central->table('organization_projects')->where('organization_id', $org->id)
-                ->where('project_id', $project)->where('is_active', true)->exists()
-                && $central->table('user_projects')->where('organization_id', $org->id)->where('user_id', $actor->id)
-                    ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
+                ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
+            if ($lifecycle && $slug === 'inventory') continue;
+            abort_unless($central->table('user_projects')->where('organization_id', $org->id)->where('user_id', $actor->id)
+                ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
         }
         // Resolve the database on the server. This never provisions or migrates.
         $database = $tenants->resolveDatabaseName((int) $org->client_id);

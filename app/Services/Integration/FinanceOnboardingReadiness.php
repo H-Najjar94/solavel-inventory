@@ -30,7 +30,8 @@ class FinanceOnboardingReadiness
                     'intended_url'=>'/settings/organizations/'.$org->id.'/enter?'.http_build_query(['central_organization_id'=>$centralOrgId])]) : null;
             return array_replace($result,['state'=>!$entitled?'ACCESS_REQUIRED':(!$provisioned?'PROVISIONING_PENDING':(!$complete?'FINANCE_PROVISIONED_SETUP_INCOMPLETE':'FINANCE_READY')),
                 'readiness_available'=>true,'finance_setup_complete'=>(bool)$complete,'finance_provisioned'=>(bool)$provisioned,
-                'premium_entitled'=>$entitled,'can_manage'=>$manage,'setup_url'=>$url]);
+                'premium_entitled'=>$entitled,'can_manage'=>$manage,'setup_url'=>$url,
+                'manage_access_url'=>$manage ? $result['manage_access_url'] : null]);
         } catch (\Throwable $e) {report($e);return $result;}
     }
     public function assertComplete(int $centralOrgId):void

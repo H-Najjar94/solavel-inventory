@@ -37,6 +37,7 @@ function formatMovementDate(value) {
 export default function WarehouseDetailPage() {
     const { id } = useParams();
     const gate = useCanCreate('inventory.manage_warehouses');
+    const structureGate = useCanCreate('inventory.manage_warehouse_structure');
     const toast = useToast();
     const qc = useQueryClient();
     const [tab, setTab] = useState('overview');
@@ -106,7 +107,7 @@ export default function WarehouseDetailPage() {
             </dl></div>}
 
             {tab === 'zones' && <div className="panel">
-                {gate.allowed && <form className="inline-form" onSubmit={addZone}>
+                {structureGate.allowed && <form className="inline-form" onSubmit={addZone}>
                     <input className="input" placeholder={t('warehouseDetail.zoneCode')} aria-label={t('warehouseDetail.zoneCode')} value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} required />
                     <input className="input" placeholder={t('warehouseDetail.zoneName')} aria-label={t('warehouseDetail.zoneName')} value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} required />
                     <button className="btn btn--primary btn--sm">{t('warehouseDetail.addZone')}</button>
@@ -118,7 +119,7 @@ export default function WarehouseDetailPage() {
             </div>}
 
             {tab === 'bins' && <div className="panel">
-                {gate.allowed && <form className="inline-form" onSubmit={addBin}>
+                {structureGate.allowed && <form className="inline-form" onSubmit={addBin}>
                     <select className="input" value={binForm.zone_id} onChange={(e) => setBinForm({ ...binForm, zone_id: e.target.value })} required>
                         <option value="">{t('warehouseDetail.selectZone')}</option>{zones.map((z) => <option key={z.id} value={z.id}>{z.name}</option>)}
                     </select>

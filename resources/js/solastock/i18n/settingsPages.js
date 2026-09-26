@@ -1,4 +1,6 @@
 export const en = {
+    "settings.roles.preset": "Role preset",
+    "settings.roles.choosePreset": "Choose a preset",
     "integration.review.record_details_unavailable_refresh_discovery": "Record details unavailable — refresh discovery",
     "integration.review.not_configured_review_finance_settings": "Not configured — review Finance settings",
     "integration.review.need_review": "need review",
@@ -168,6 +170,8 @@ export const en = {
     'settings.permission.inventory.view_stock': 'View stock balances',
     'settings.permission.inventory.manage_opening_stock': 'Create, post, and reverse opening stock',
     'settings.permission.inventory.manage_adjustments': 'Create, post, and reverse stock adjustments',
+    'settings.permission.inventory.manage_purchase_orders': 'Create and edit purchase orders',
+    'settings.permission.inventory.approve_purchase_orders': 'Approve and cancel purchase orders',
     'settings.permission.inventory.view_ledger': 'View the stock ledger',
     'settings.permission.inventory.view_reports': 'View inventory reports',
     'settings.permission.inventory.export_reports': 'Export inventory reports',
@@ -1076,6 +1080,8 @@ export const en = {
 };
 
 export const ar = {
+    "settings.roles.preset": "قالب الصلاحيات",
+    "settings.roles.choosePreset": "اختر قالباً",
     ...en,
     "integration.review.record_details_unavailable_refresh_discovery": "تفاصيل السجل غير متاحة — حدّث الاستكشاف",
     "integration.review.not_configured_review_finance_settings": "غير مهيأة — راجع إعدادات SolaCount",
@@ -1267,6 +1273,8 @@ export const ar = {
     'settings.permission.inventory.view_stock': 'عرض أرصدة المخزون',
     'settings.permission.inventory.manage_opening_stock': 'إنشاء الرصيد الافتتاحي وترحيله وعكسه',
     'settings.permission.inventory.manage_adjustments': 'إنشاء تسويات المخزون وترحيلها وعكسها',
+    'settings.permission.inventory.manage_purchase_orders': 'إنشاء أوامر الشراء وتعديلها',
+    'settings.permission.inventory.approve_purchase_orders': 'اعتماد أوامر الشراء وإلغاؤها',
     'settings.permission.inventory.view_ledger': 'عرض سجل المخزون',
     'settings.permission.inventory.view_reports': 'عرض تقارير المخزون',
     'settings.permission.inventory.export_reports': 'تصدير تقارير المخزون',

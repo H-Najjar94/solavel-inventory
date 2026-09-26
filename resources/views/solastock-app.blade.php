@@ -44,5 +44,8 @@
 </head>
 <body>
     <div id="solastock-root"></div>
+@if(isset($memberManagement))
+<script id="member-management-context" type="application/json">@json($memberManagement)</script>
+@endif
 </body>
 </html>

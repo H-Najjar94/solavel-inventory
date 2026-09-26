@@ -5,6 +5,9 @@ use App\Http\Controllers\Api\Tenancy\SyncEventsController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomRoleController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\FinanceDocumentSourceController;
+use App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController;
+use App\Http\Controllers\Api\V1\FinancialLineAllocationController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\InventoryAuditController;
@@ -12,6 +15,8 @@ use App\Http\Controllers\Api\V1\ItemAttachmentController;
 use App\Http\Controllers\Api\V1\ItemController;
 use App\Http\Controllers\Api\V1\ItemImageController;
 use App\Http\Controllers\Api\V1\MetaController;
+use App\Http\Controllers\Api\V1\MigrationCatalogController;
+use App\Http\Controllers\Api\V1\MigrationCatalogReferenceController;
 use App\Http\Controllers\Api\V1\OpeningStockController;
 use App\Http\Controllers\Api\V1\PackController;
 use App\Http\Controllers\Api\V1\PickListController;
@@ -47,7 +52,7 @@ use Illuminate\Support\Facades\Route;
 
 // Tenant selection — NOT tenant-gated (this is how a tenant gets selected).
 Route::prefix('v1/tenant')->group(function () {
-    Route::get('/status', [TenantController::class, 'status'])->name('api.v1.tenant.status');
+    Route::get('/status', [TenantController::class, 'status'])->middleware('inv.access')->name('api.v1.tenant.status');
     Route::post('/select-demo', [TenantController::class, 'selectDemo'])->name('api.v1.tenant.select-demo');
     Route::post('/clear', [TenantController::class, 'clear'])->name('api.v1.tenant.clear');
     // First-run provisioning of SolaStock tables for the live org (admin-only;
@@ -71,7 +76,7 @@ Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
 // commercial envelope when the plan excludes it. INERT until
 // SOLASTOCK_FEATURE_ENFORCEMENT=true. Runs alongside perm:, never replacing role
 // auth; routes with no mapped feature pass straight through.
-Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
+Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(function () {
 
     // Client-side SPA navigation tracking: forwards one page_view per
     // react-router move to the central event log (source_app=inventory) so
@@ -82,16 +87,16 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     // Bootstrap data for the SPA (permissions, settings, lookups).
     Route::get('/meta', [MetaController::class, 'index'])->name('api.v1.meta');
 
-    Route::get('/finance-workspace/reorder-rules', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'rules'])->middleware('perm:inventory.view_reports')->name('api.v1.reorder-rules.index');
-    Route::get('/finance-workspace/reorder-rules/{rule}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'showRule'])->middleware('perm:inventory.view_reports')->name('api.v1.reorder-rules.show');
-    Route::put('/finance-workspace/reorder-rules/{rule}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'updateRule'])->middleware('perm:inventory.manage_settings')->name('api.v1.reorder-rules.update');
-    Route::get('/finance-workspace/lots/{lot}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'lot'])->middleware('perm:inventory.view_traceability')->name('api.v1.workspace.lot');
-    Route::get('/finance-workspace/serials/{serial}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'serial'])->middleware('perm:inventory.view_traceability')->name('api.v1.workspace.serial');
-    Route::get('/finance-workspace/warehouses/{warehouse}', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'warehouse'])->middleware('perm:inventory.view_warehouses')->name('api.v1.workspace.warehouse');
-    Route::get('/finance-workspace/dashboard', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'dashboard'])->middleware('perm:inventory.view_dashboard')->name('api.v1.workspace.dashboard');
-    Route::get('/finance-workspace/lookups', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'lookups'])
+    Route::get('/finance-workspace/reorder-rules', [FinanceWorkspaceSupportController::class, 'rules'])->middleware('perm:inventory.view_reports')->name('api.v1.reorder-rules.index');
+    Route::get('/finance-workspace/reorder-rules/{rule}', [FinanceWorkspaceSupportController::class, 'showRule'])->middleware('perm:inventory.view_reports')->name('api.v1.reorder-rules.show');
+    Route::put('/finance-workspace/reorder-rules/{rule}', [FinanceWorkspaceSupportController::class, 'updateRule'])->middleware('perm:inventory.manage_settings')->name('api.v1.reorder-rules.update');
+    Route::get('/finance-workspace/lots/{lot}', [FinanceWorkspaceSupportController::class, 'lot'])->middleware('perm:inventory.view_traceability')->name('api.v1.workspace.lot');
+    Route::get('/finance-workspace/serials/{serial}', [FinanceWorkspaceSupportController::class, 'serial'])->middleware('perm:inventory.view_traceability')->name('api.v1.workspace.serial');
+    Route::get('/finance-workspace/warehouses/{warehouse}', [FinanceWorkspaceSupportController::class, 'warehouse'])->middleware('perm:inventory.view_warehouses')->name('api.v1.workspace.warehouse');
+    Route::get('/finance-workspace/dashboard', [FinanceWorkspaceSupportController::class, 'dashboard'])->middleware('perm:inventory.view_dashboard')->name('api.v1.workspace.dashboard');
+    Route::get('/finance-workspace/lookups', [FinanceWorkspaceSupportController::class, 'lookups'])
         ->middleware('perm:inventory.view_items')->name('api.v1.workspace.lookups');
-    Route::get('/finance-workspace/reorder', [\App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController::class, 'reorder'])
+    Route::get('/finance-workspace/reorder', [FinanceWorkspaceSupportController::class, 'reorder'])
         ->middleware('perm:inventory.view_reports')->name('api.v1.workspace.reorder');
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])
@@ -103,7 +108,7 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::get('/dashboard/alerts', [DashboardController::class, 'alerts'])
         ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.alerts');
     Route::post('/dashboard/alerts/{alert}/acknowledge', [DashboardController::class, 'acknowledgeAlert'])
-        ->middleware('perm:inventory.view_dashboard')->name('api.v1.dashboard.alerts.acknowledge');
+        ->middleware('perm:inventory.manage_settings')->name('api.v1.dashboard.alerts.acknowledge');
 
     // Items
     Route::get('/items', [ItemController::class, 'index'])
@@ -122,6 +127,8 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.update');
     Route::get('/items/{item}/movements', [ItemController::class, 'movements'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.items.movements');
+    Route::get('/items/{item}/movements/export-rows', [ItemController::class, 'movements'])
+        ->middleware(['perm:inventory.view_ledger', 'perm:inventory.export_reports'])->name('api.v1.items.movements.export');
     Route::get('/items/{item}/valuation', [ItemController::class, 'valuation'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.items.valuation');
     Route::post('/items/{item}/barcodes', [ItemController::class, 'storeBarcode'])
@@ -192,11 +199,13 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_warehouses')->name('api.v1.warehouse-images.destroy');
 
     // Migration catalog commands are callable only through the signed workspace.
-    Route::get('/migration-catalog/requirements', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'requirements'])
+    Route::post('/migration-catalog/references/ensure', [MigrationCatalogReferenceController::class, 'ensure'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.catalog-references.ensure');
+    Route::get('/migration-catalog/requirements', [MigrationCatalogController::class, 'requirements'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-requirements');
-    Route::post('/migration-catalog/create', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'store'])
+    Route::post('/migration-catalog/create', [MigrationCatalogController::class, 'store'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-create');
-    Route::post('/migration-catalog/link', [\App\Http\Controllers\Api\V1\MigrationCatalogController::class, 'link'])
+    Route::post('/migration-catalog/link', [MigrationCatalogController::class, 'link'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-link');
 
     // Opening Stock documents
@@ -237,7 +246,7 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::get('/ledger', [StockLedgerController::class, 'index'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.ledger.index');
     Route::get('/audit-logs', [InventoryAuditController::class, 'index'])
-        ->middleware('perm:inventory.view_ledger')->name('api.v1.audit-logs.index');
+        ->middleware('perm:inventory.manage_settings')->name('api.v1.audit-logs.index');
     // Which FIFO cost layers a single outbound movement consumed (read-only).
     Route::get('/movements/{ledger}/consumed-layers', [StockLedgerController::class, 'consumedLayers'])
         ->middleware('perm:inventory.view_ledger')->name('api.v1.movements.consumed-layers');
@@ -267,7 +276,7 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
         ->middleware('perm:inventory.manage_sales_orders')->name('api.v1.customers.update');
 
     // ── Warehouse structure: zones & bins ──
-    Route::middleware('perm:inventory.manage_warehouses')->group(function () {
+    Route::middleware('perm:inventory.manage_warehouse_structure')->group(function () {
         Route::post('/warehouses/{warehouse}/zones', [WarehouseStructureController::class, 'storeZone'])->name('api.v1.zones.store');
         Route::put('/zones/{zone}', [WarehouseStructureController::class, 'updateZone'])->name('api.v1.zones.update');
         Route::post('/warehouses/{warehouse}/bins', [WarehouseStructureController::class, 'storeBin'])->name('api.v1.bins.store');
@@ -280,30 +289,31 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::get('/purchase-orders/{purchase_order}', [PurchaseOrderController::class, 'show'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.po.show');
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.store');
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.po.store');
     Route::put('/purchase-orders/{purchase_order}', [PurchaseOrderController::class, 'update'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.update');
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.po.update');
     Route::post('/purchase-orders/{purchase_order}/approve', [PurchaseOrderController::class, 'approve'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.approve');
+        ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.approve');
     Route::post('/purchase-orders/{purchase_order}/cancel', [PurchaseOrderController::class, 'cancel'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.po.cancel');
+        ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.cancel');
 
     // ── Goods Receipts (GRN → stock IN via service) ──
-    Route::get('/finance-sources/suppliers', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'suppliers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.suppliers');
-    Route::get('/finance-sources/customers', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'customers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.customers');
-    Route::get('/finance-sources/receipts', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipts'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipts');
-    Route::get('/finance-sources/receipts/{goods_receipt}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'receipt'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipt');
-    Route::get('/finance-sources/shipments', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipments'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipments');
-    Route::get('/finance-sources/shipments/{shipment}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'shipment'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipment');
-    Route::get('/finance-sources/returns', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'returns'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.returns');
-    Route::get('/finance-sources/returns/{sales_return}', [\App\Http\Controllers\Api\V1\FinanceDocumentSourceController::class, 'salesReturn'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.return');
-    Route::post('/finance-allocations/reserve', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reserve'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reserve');
-    Route::post('/finance-allocations/commit', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'commit'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.commit');
-    Route::post('/finance-allocations/release', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'release'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.release');
-    Route::post('/finance-allocations/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverse'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reverse');
-    Route::post('/finance-allocations/cost-adjustment/prepare', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'prepareCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.prepare');
-    Route::post('/finance-allocations/cost-adjustment/apply', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'applyCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.apply');
-    Route::post('/finance-allocations/cost-adjustment/reverse', [\App\Http\Controllers\Api\V1\FinancialLineAllocationController::class, 'reverseCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.reverse');
+    Route::get('/finance-sources/suppliers', [FinanceDocumentSourceController::class, 'suppliers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.suppliers');
+    Route::get('/finance-sources/customers', [FinanceDocumentSourceController::class, 'customers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.customers');
+    Route::get('/finance-sources/receipts', [FinanceDocumentSourceController::class, 'receipts'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipts');
+    Route::get('/finance-sources/receipts/{goods_receipt}', [FinanceDocumentSourceController::class, 'receipt'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipt');
+    Route::get('/finance-sources/shipments', [FinanceDocumentSourceController::class, 'shipments'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipments');
+    Route::get('/finance-sources/shipments/{shipment}', [FinanceDocumentSourceController::class, 'shipment'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.shipment');
+    Route::get('/finance-sources/returns', [FinanceDocumentSourceController::class, 'returns'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.returns');
+    Route::get('/finance-sources/returns/{sales_return}', [FinanceDocumentSourceController::class, 'salesReturn'])->middleware('perm:inventory.view_sales')->name('api.v1.finance-sources.return');
+    Route::get('/finance-allocations/review-status', [FinancialLineAllocationController::class, 'reviewStatus'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.review-status');
+    Route::post('/finance-allocations/reserve', [FinancialLineAllocationController::class, 'reserve'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reserve');
+    Route::post('/finance-allocations/commit', [FinancialLineAllocationController::class, 'commit'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.commit');
+    Route::post('/finance-allocations/release', [FinancialLineAllocationController::class, 'release'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.release');
+    Route::post('/finance-allocations/reverse', [FinancialLineAllocationController::class, 'reverse'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.reverse');
+    Route::post('/finance-allocations/cost-adjustment/prepare', [FinancialLineAllocationController::class, 'prepareCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.prepare');
+    Route::post('/finance-allocations/cost-adjustment/apply', [FinancialLineAllocationController::class, 'applyCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.apply');
+    Route::post('/finance-allocations/cost-adjustment/reverse', [FinancialLineAllocationController::class, 'reverseCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.reverse');
 
     Route::get('/goods-receipts', [GoodsReceiptController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.index');
@@ -312,11 +322,11 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::get('/purchase-orders/{purchase_order}/grn-draft', [GoodsReceiptController::class, 'fromPo'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.from-po');
     Route::post('/goods-receipts', [GoodsReceiptController::class, 'store'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.store');
+        ->middleware('perm:inventory.receive_goods')->name('api.v1.grn.store');
     Route::put('/goods-receipts/{goods_receipt}', [GoodsReceiptController::class, 'update'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.update');
+        ->middleware('perm:inventory.receive_goods')->name('api.v1.grn.update');
     Route::post('/goods-receipts/{goods_receipt}/post', [GoodsReceiptController::class, 'post'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.post');
+        ->middleware('perm:inventory.receive_goods')->name('api.v1.grn.post');
     Route::post('/goods-receipts/{goods_receipt}/reverse', [GoodsReceiptController::class, 'reverse'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.grn.reverse');
 
@@ -328,15 +338,15 @@ Route::prefix('v1')->middleware(['inv.tenant', 'feature'])->group(function () {
     Route::get('/transfers-available', [StockTransferController::class, 'available'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.transfers.available');
     Route::post('/transfers', [StockTransferController::class, 'store'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.store');
+        ->middleware('perm:inventory.transfer_stock')->name('api.v1.transfers.store');
     Route::put('/transfers/{stock_transfer}', [StockTransferController::class, 'update'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.update');
+        ->middleware('perm:inventory.transfer_stock')->name('api.v1.transfers.update');
     Route::post('/transfers/{stock_transfer}/post', [StockTransferController::class, 'post'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.post');
+        ->middleware('perm:inventory.transfer_stock')->name('api.v1.transfers.post');
     Route::post('/transfers/{stock_transfer}/ship', [StockTransferController::class, 'ship'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.ship');
+        ->middleware('perm:inventory.transfer_stock')->name('api.v1.transfers.ship');
     Route::post('/transfers/{stock_transfer}/receive', [StockTransferController::class, 'receive'])
-        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.transfers.receive');
+        ->middleware('perm:inventory.transfer_stock')->name('api.v1.transfers.receive');
 
     // ── Stock Counts (variance → adjustment via service) ──
     Route::get('/counts', [StockCountController::class, 'index'])

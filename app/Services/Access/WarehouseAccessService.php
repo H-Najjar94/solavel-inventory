@@ -36,24 +36,22 @@ class WarehouseAccessService
             return null;
         }
 
-        // Keep existing tenants readable until this tenant migration is applied.
+        // An authenticated user needs an enforceable warehouse assignment schema.
         try {
             if (! Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses')) {
-                return null;
+                return [];
             }
         } catch (\Throwable) {
-            return null;
+            return [];
         }
 
-        // Owners and inventory administrators retain organization-wide access.
-        $user = null;
-        try {
-            $user = request()->user();
-        } catch (\Throwable) {
-            // Console/test contexts may not have an HTTP request.
+        // Stock's User model is pinned to the Central registry. Resolve the
+        // requested actor, including signed server-to-server management checks.
+        $decision = app(CentralAppAccess::class)->decision($userId, (int) $this->context->id(), 'inventory');
+        if (! ($decision['allowed'] ?? false)) {
+            return [];
         }
-        $user ??= Auth::user();
-        if (app(InventoryPermissionService::class)->can($user, 'inventory.manage_settings')) {
+        if ($decision['owner'] ?? false) {
             return null;
         }
 

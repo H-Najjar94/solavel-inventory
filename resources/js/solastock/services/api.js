@@ -42,10 +42,13 @@ async function request(path, { method = 'GET', body, params } = {}) {
     }
 
     if (!res.ok || (json && json.success === false)) {
-        const err = new Error(json?.error?.message || `Request failed (${res.status})`);
+        const err = new Error(json?.error?.message || json?.message || `Request failed (${res.status})`);
         err.status = res.status;
-        err.code = json?.error?.code;
+        err.code = json?.error?.code || json?.code;
         err.payload = json?.error;
+        if (json?.app === 'inventory' && json?.code && json.code !== 'action_forbidden') {
+            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
+        }
         throw err;
     }
 
@@ -72,9 +75,12 @@ async function requestForm(path, formData) {
     try { json = await res.json(); } catch { /* non-JSON */ }
 
     if (!res.ok || (json && json.success === false)) {
-        const err = new Error(json?.error?.message || `Upload failed (${res.status})`);
+        const err = new Error(json?.error?.message || json?.message || `Upload failed (${res.status})`);
         err.status = res.status;
         err.payload = json?.error;
+        if (json?.app === 'inventory' && json?.code && json.code !== 'action_forbidden') {
+            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
+        }
         throw err;
     }
 
@@ -310,9 +316,9 @@ export const api = {
     settings: () => request('/settings'),
     updateSettings: (body) => request('/settings', { method: 'PUT', body }),
     updateTaxes: (taxes, defaults = {}) => request('/settings/taxes', { method: 'PUT', body: { taxes, default_purchase_tax_code: defaults.purchase || null, default_sales_tax_code: defaults.sales || null } }),
-    warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}`),
+    warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}${managementContextQuery()}`),
     allWarehouseAssignments: () => request('/settings/warehouse-assignments'),
-    syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
+    syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}${managementContextQuery()}`, { method: 'PUT', body: { warehouse_ids } }),
     // SolaCount integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
     integrationWizardDiscovery: () => request('/integration/solabooks/wizard/discovery'),
@@ -361,8 +367,8 @@ export const api = {
     customRoles: () => request('/settings/custom-roles'),
     createCustomRole: (body) => request('/settings/custom-roles', { method: 'POST', body }),
     updateCustomRole: (id, body) => request(`/settings/custom-roles/${id}`, { method: 'PUT', body }),
-    assignCustomRole: (body) => request('/settings/custom-role-assignments', { method: 'POST', body }),
-    unassignCustomRole: (userId) => request(`/settings/custom-role-assignments/${userId}`, { method: 'DELETE' }),
+    assignCustomRole: (body) => request('/settings/custom-role-assignments' + managementContextQuery(), { method: 'POST', body }),
+    unassignCustomRole: (userId) => request(`/settings/custom-role-assignments/${userId}${managementContextQuery()}`, { method: 'DELETE' }),
     barcodeLookup: (barcode) => request('/items/barcode/lookup', { params: { barcode } }),
     scannerLookup: (code) => request('/scanner/lookup', { params: { code } }),
     createItemBarcode: (itemId, body) => request(`/items/${itemId}/barcodes`, { method: 'POST', body }),
@@ -377,3 +383,9 @@ export const api = {
     createBin: (warehouseId, body) => request(`/warehouses/${warehouseId}/bins`, { method: 'POST', body }),
     updateBin: (binId, body) => request(`/bins/${binId}`, { method: 'PUT', body }),
 };
+
+function managementContextQuery() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('central_member')) return '';
+    return '?' + new URLSearchParams({central_org: params.get('central_org') || '', central_member: params.get('central_member') || ''});
+}

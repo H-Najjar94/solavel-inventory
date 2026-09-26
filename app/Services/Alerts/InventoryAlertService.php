@@ -3,6 +3,7 @@
 namespace App\Services\Alerts;
 
 use App\Models\Tenant\InventoryAlert;
+use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\WarehouseAccessService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Collection;
@@ -18,6 +19,9 @@ class InventoryAlertService
     /** Refresh in-app/email-ready exception alerts from canonical projections. */
     public function refresh(): Collection
     {
+        if (! app(InventoryPermissionService::class)->can(request()->user(), 'inventory.receive_goods')) {
+            return $this->visibleAlerts();
+        }
         $orgId = $this->context->idOrFail();
         $now = now();
         $openKeys = [];
@@ -110,27 +114,22 @@ class InventoryAlertService
         }
 
         InventoryAlert::query()
+            ->when($this->warehouseAccess->allowedIds() !== null, fn ($q) => $q->whereIn('metadata->warehouse_id', $this->warehouseAccess->allowedIds()))
             ->whereIn('type', $generatedTypes)
             ->when($openKeys !== [], fn ($query) => $query->whereNotIn('alert_key', $openKeys))
             ->whereIn('status', ['open', 'acknowledged'])
             ->update(['status' => 'resolved']);
 
-        $alerts = InventoryAlert::query()
-            ->whereIn('status', ['open', 'acknowledged'])
-            ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")
-            ->orderByDesc('triggered_at')
-            ->limit(100)
-            ->get();
+        return $this->visibleAlerts();
+    }
 
+    private function visibleAlerts(): Collection
+    {
         $allowed = $this->warehouseAccess->allowedIds();
-        if ($allowed !== null) {
-            $alerts = $alerts->filter(function (InventoryAlert $alert) use ($allowed) {
-                $warehouseId = data_get($alert->metadata, 'warehouse_id');
 
-                return $warehouseId === null || in_array((int) $warehouseId, $allowed, true);
-            })->values();
-        }
-
-        return $alerts;
+        return InventoryAlert::query()
+            ->when($allowed !== null, fn ($q) => $q->whereIn('metadata->warehouse_id', $allowed))
+            ->whereIn('status', ['open', 'acknowledged'])
+            ->orderByDesc('triggered_at')->limit(100)->get();
     }
 }

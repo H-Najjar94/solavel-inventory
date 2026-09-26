@@ -153,7 +153,7 @@ trait ValidatesItem
     {
         $req = $partial ? 'sometimes' : 'required';
         $orgId = app(\App\Tenancy\OrganizationContext::class)->id();
-        $activeForOrg = static fn (string $table) => Rule::exists($table, 'id')->where(
+        $activeForOrg = static fn (string $table) => Rule::exists('tenant.'.$table, 'id')->where(
             fn ($query) => $query->where('organization_id', $orgId)->where('is_active', true)->whereNull('deleted_at')
         );
 

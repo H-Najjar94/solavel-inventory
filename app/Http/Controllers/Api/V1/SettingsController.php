@@ -18,10 +18,13 @@ use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseBin;
 use App\Models\Tenant\WarehouseReorderRule;
 use App\Models\Tenant\WarehouseZone;
+use App\Services\Access\MemberManagement;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Replenishment\SafetyStockCalculator;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
@@ -153,7 +156,9 @@ class SettingsController extends ApiController
 
     public function warehouseAssignments(int $userId): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
+        $management = app(MemberManagement::class);
+        $management->authorize(request()->user(), $this->context->idOrFail(), $management->member($this->context->idOrFail(), $userId));
+        abort_unless(Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $rows = InventoryUserWarehouse::query()->where('user_id', $userId)->get();
 
         return $this->success(['user_id' => $userId, 'assignments' => $rows]);
@@ -161,24 +166,30 @@ class SettingsController extends ApiController
 
     public function allWarehouseAssignments(): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
+        abort_unless(Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
 
         return $this->success(InventoryUserWarehouse::query()->orderBy('user_id')->orderBy('warehouse_id')->get());
     }
 
     public function syncWarehouseAssignments(Request $request, int $userId): JsonResponse
     {
-        abort_unless(Schema::hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
+        $management = app(MemberManagement::class);
+        $management->authorize(request()->user(), $this->context->idOrFail(), $management->member($this->context->idOrFail(), $userId));
+        abort_unless(Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasTable('inventory_user_warehouses'), 503, __('inventory.settings.warehouse_migration_pending'));
         $data = $request->validate(['warehouse_ids' => ['array'], 'warehouse_ids.*' => ['integer']]);
         $ids = collect($data['warehouse_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        $allowed = app(WarehouseAccessService::class)->allowedIds();
+        abort_if($allowed !== null && array_diff($ids->all(), $allowed), 403);
         $valid = Warehouse::query()->whereIn('id', $ids)->pluck('id');
         if ($valid->count() !== $ids->count()) {
             return $this->error('invalid_warehouse_scope', __('inventory.settings.warehouse_scope'), 422);
         }
-        InventoryUserWarehouse::query()->where('user_id', $userId)->delete();
-        foreach ($valid as $warehouseId) {
-            InventoryUserWarehouse::create(['user_id' => $userId, 'warehouse_id' => $warehouseId, 'assigned_by' => auth()->id()]);
-        }
+        DB::connection(config('tenancy.tenant_connection', 'tenant'))->transaction(function () use ($userId, $valid) {
+            InventoryUserWarehouse::query()->where('user_id', $userId)->delete();
+            foreach ($valid as $warehouseId) {
+                InventoryUserWarehouse::create(['user_id' => $userId, 'warehouse_id' => $warehouseId, 'assigned_by' => auth()->id()]);
+            }
+        });
 
         return $this->warehouseAssignments($userId);
     }

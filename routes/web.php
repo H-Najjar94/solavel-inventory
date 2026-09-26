@@ -42,6 +42,7 @@ Route::get('/', fn () => redirect()->route('inventory.dashboard'));
 // Main app page: https://solavel.com/inventory/dashboard
 // The Vite React SPA. Catch-all sub-paths so React Router handles client routes
 // (dashboard, items, warehouses, …) on deep links / refresh.
+Route::middleware('inv.access')->group(function () {
 Route::view('/dashboard', 'solastock-app')->name('inventory.dashboard');
 Route::view('/dashboard/{any}', 'solastock-app')->where('any', '.*');
 Route::view('/items/{any?}', 'solastock-app')->where('any', '.*');
@@ -64,7 +65,10 @@ Route::view('/sales-returns/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/traceability/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/recalls/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/reports', 'solastock-app');
-Route::view('/settings/{any?}', 'solastock-app')->where('any', '.*');
+Route::get('/member-management/{centralOrg}/{centralMember}', \App\Http\Controllers\MemberManagementController::class)
+    ->middleware('inv.tenant')->whereNumber('centralOrg')->whereNumber('centralMember');
+Route::get('/settings/{any?}', [\App\Http\Controllers\MemberManagementController::class, 'settings'])
+    ->middleware('inv.tenant')->where('any', '.*')->name('inventory.settings');
 Route::view('/integrations/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/ledger', 'solastock-app');
 
@@ -78,3 +82,5 @@ Route::view('/ledger', 'solastock-app');
 
 // Back-compat: the original CDN/Babel demo (untouched) stays available.
 Route::view('/solastock', 'solastock')->name('solastock.demo');
+
+});

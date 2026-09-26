@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Access\CentralAppAccess;
 use App\Services\Tenancy\LiveTenantResolver;
 use App\Services\Tenancy\TenantManager;
 use App\Services\Tenancy\TenantResolver;
@@ -33,6 +34,13 @@ class ResolveInventoryTenant
 
         switch ($s['state']) {
             case 'live_ready':
+                $authority = app(CentralAppAccess::class);
+                $user = $request->user();
+                $centralId = (int) ($user?->central_user_id ?: ($user && $user->getConnectionName() === config('tenancy.central_connection', 'mysql') ? $user->id : 0));
+                $decision = $authority->decision($centralId, (int) $s['organization_id'], 'inventory');
+                if (! $decision['allowed']) {
+                    return $authority->deny($request, $decision, 'inventory');
+                }
                 // DB is keyed by client_id (tenant_{clientId}); the org context
                 // (row scope) is the actual organization_id, which may differ.
                 $this->tenants->useTenant((int) $s['organization_id'], $s['database']);
@@ -46,6 +54,10 @@ class ResolveInventoryTenant
                 return $this->stop('no_organization', __('inventory.tenancy.no_organization'), 409, $s);
 
             case 'no_access':
+                if (($s['reason'] ?? null) === 'temporarily_unavailable') {
+                    return app(CentralAppAccess::class)->deny($request, ['reason' => 'temporarily_unavailable'], 'inventory');
+                }
+
                 return $this->stop('no_access', __('inventory.tenancy.no_access'), 403, $s);
 
             case 'needs_activation':

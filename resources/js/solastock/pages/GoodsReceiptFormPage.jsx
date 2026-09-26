@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -20,7 +20,8 @@ export default function GoodsReceiptFormPage() {
     const isEdit = !!id;
     const fromPo = !!poId;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.receive_goods');
+    const valuationGate = useCanCreate('inventory.manage_adjustments');
 
     const [header, setHeader] = useState({ grn_number: '', purchase_order_id: poId ? Number(poId) : null, supplier_id: null, warehouse_id: null, receipt_date: new Date().toISOString().slice(0, 10), notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
@@ -110,6 +111,17 @@ export default function GoodsReceiptFormPage() {
 
     if ((fromPo && poDraft.isLoading) || (isEdit && existing.isLoading)) return <section className="page"><Skeleton /></section>;
 
+    // Receiving without an approved PO is a valuation/adjustment capability.
+    // Operators may receive against approved POs in their assigned warehouses.
+    const approvedPoRequired = gate.allowed && !valuationGate.allowed && !fromPo
+        && (!isEdit || (existing.data?.grn && !existing.data.grn.purchase_order_id));
+    if (approvedPoRequired) return <section className="page">
+        <Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts'), to: '/goods-receipts' }, { label: t('receiving.grn.form.newTitle', 'New goods receipt') }]} />
+        <header className="page-head"><h1>{t('receiving.grn.form.newTitle', 'New goods receipt')}</h1></header>
+        <div className="banner banner--warn">{t('receiving.grn.form.approvedPoRequired', 'Receive goods from an approved purchase order for an assigned warehouse.')}</div>
+        <Link className="btn btn--primary" to="/purchase-orders">{t('receiving.grn.form.openPurchaseOrders', 'Open purchase orders')}</Link>
+    </section>;
+
     const sourcePoNumber = poDraft.data?.purchase_order?.po_number
         ?? sourcePo.data?.purchase_order?.po_number
         ?? null;
@@ -153,7 +165,7 @@ export default function GoodsReceiptFormPage() {
             );
         } },
         { key: 'bin', label: t('receiving.common.bin', 'Bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
-        { key: 'cost', label: t('receiving.common.unitCost', 'Unit cost'), width: 110, render: (l, i) => <MoneyInput value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
+        { key: 'cost', label: t('receiving.common.unitCost', 'Unit cost'), width: 110, render: (l, i) => <MoneyInput disabled={!valuationGate.allowed} value={l.unit_cost} onChange={(v) => setLine(i, { unit_cost: v })} /> },
     ];
 
     return (
