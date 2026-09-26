@@ -303,6 +303,7 @@ export default function AppShell() {
  * explicit-sample modes render the page; a small banner labels sample preview.
  */
 function TenantContent({ tenant }) {
+    const meta = useMeta();
     const location = useLocation();
     const onOnboarding = location.pathname.startsWith('/onboarding');
 
@@ -333,6 +334,7 @@ function TenantContent({ tenant }) {
     return (
         <>
             {tenant.dataState === 'sample' && <SamplePreviewBanner tenant={tenant} />}
+            {meta.warehouse_scope_empty && <div className="alert alert-info" role="status">{document.documentElement.lang.startsWith('ar') ? 'لم يتم تعيين مستودعات لك بعد. اطلب من مسؤول المؤسسة تعيين المستودعات من صفحة صلاحيات العضو.' : 'No warehouses assigned yet. Ask your organization administrator to assign warehouses from your member permissions page.'}</div>}
             <Outlet />
         </>
     );

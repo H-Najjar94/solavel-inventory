@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api.js';
-import { useCan } from '../stores/meta.jsx';
+import { useCan, useMeta } from '../stores/meta.jsx';
 import { useTenant } from '../stores/tenant.jsx';
 import { Breadcrumbs, Skeleton, EmptyState, Field } from '../components/ui.jsx';
 import { WarehousePicker, ItemPicker } from '../components/pickers.jsx';
@@ -21,6 +21,7 @@ const hasDate = new Set(['stock-movement', 'adjustment', 'receiving', 'transfer'
 
 export default function ReportsPage() {
     const can = useCan();
+    const canSchedule = useMeta().can_schedule_reports === true;
     const tenant = useTenant();
     const [active, setActive] = useState(localStorage.getItem(LAST_KEY) || 'inventory-valuation');
     const [filters, setFilters] = useState({ warehouse_id: null, item_id: null, from: '', to: '', as_at: '', currency: '' });
@@ -47,6 +48,7 @@ export default function ReportsPage() {
     const schedulesQuery = useQuery({
         queryKey: ['report-schedules'],
         queryFn: api.reportSchedules,
+        enabled: canSchedule,
         retry: false,
     });
     const schedules = schedulesQuery.data?.data?.schedules ?? [];
@@ -124,7 +126,7 @@ export default function ReportsPage() {
                 </div>
             </div>
 
-            {canExport && <div className="panel">
+            {canExport && canSchedule && <div className="panel">
                 <h2>{t('reports.scheduledDelivery')}</h2>
                 <form className="fg2" onSubmit={saveSchedule}>
                     <Field label={t('reports.scheduleName')}><input className="input" value={schedule.name} onChange={(e) => setSchedule({ ...schedule, name: e.target.value })} placeholder={t('reports.weeklyValuation')} /></Field>

@@ -29,41 +29,9 @@ class AuthenticateFromInventoryHandoff
 
     public function handle(Request $request, Closure $next): Response
     {
-        // On EVERY request, if the session already carries a client, point the
-        // tenant connection at its database BEFORE the auth guard resolves the
-        // session user. The 'users' table lives in the per-client tenant DB; on
-        // un-gated routes (e.g. /tenant/status) the tenant DB would otherwise have
-        // no database selected and the auth user lookup 500s.
-        if ($request->hasSession()) {
-            $clientId = (int) ($request->session()->get('client_id') ?? 0);
-            // The org id comes from the SSO selection ONLY. Never coerce the
-            // clientId into the org slot — they are different id spaces and that
-            // collision scoped queries to the wrong org ("wrong org name / data").
-            $orgId = (int) ($request->session()->get('selected_central_org_id') ?? 0);
-            if ($clientId > 0) {
-                try {
-                    // The tenant DB is keyed by client (tenant_{clientId}); the org
-                    // is the ROW-SCOPE only. Switch the DB always; set the org
-                    // context only when a real selected org is known — otherwise
-                    // LiveTenantResolver resolves the user's org for this client.
-                    $db = $this->tenants->resolveDatabaseName($clientId);
-                    if ($orgId > 0) {
-                        $this->tenants->useTenant($orgId, $db);
-                    } else {
-                        $this->tenants->switchToDatabase($db);
-                    }
-                } catch (\Throwable $e) {
-                    // non-fatal: downstream resolvers report the real state
-                }
-            }
-        }
-
         $token = trim((string) $request->query('handoff', ''));
         if ($token === '') {
             return $next($request);
-        }
-        if (Auth::check()) {
-            return redirect($this->cleanUrl($request));
         }
 
         $payload = $this->decrypt($token);
@@ -72,7 +40,7 @@ class AuthenticateFromInventoryHandoff
 
             return $next($request);
         }
-        if (($exp = (int) ($payload['exp'] ?? 0)) > 0 && now()->timestamp > $exp) {
+        if (($exp = (int) ($payload['exp'] ?? 0)) <= now()->timestamp) {
             Log::warning('[InventoryHandoff] Handoff token expired');
 
             return $next($request);
@@ -81,13 +49,29 @@ class AuthenticateFromInventoryHandoff
         $clientId = (int) ($payload['client_id'] ?? 0);
         $userId = (int) ($payload['user_id'] ?? 0);
         $orgId = (int) ($payload['organization_id'] ?? 0);
-        if ($clientId <= 0 || $userId <= 0) {
+        if ($clientId <= 0 || $userId <= 0 || $orgId <= 0 || ($payload['context'] ?? null) !== 'inventory') {
             return $next($request);
+        }
+
+        $authority = app(\App\Services\Access\CentralAppAccess::class);
+        $decision = $authority->decision($userId, $orgId, 'inventory');
+        if (! ($decision['allowed'] ?? false)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return $authority->deny($request, $decision, 'inventory');
+        }
+        $mappedClient = (int) \Illuminate\Support\Facades\DB::connection(config('tenancy.central_connection', 'mysql'))
+            ->table('organizations')->where('id', $orgId)->value('client_id');
+        if ($mappedClient !== $clientId) return $authority->deny($request, ['reason' => 'membership_inactive'], 'inventory');
+        $nonce = (string) ($payload['nonce'] ?? '');
+        if ($nonce === '' || ! \Illuminate\Support\Facades\Cache::add('inventory.handoff.'.hash('sha256', $nonce), true, max(1, $exp - now()->timestamp))) {
+            return $authority->deny($request, ['reason' => 'membership_inactive'], 'inventory');
         }
 
         // Switch to the shared per-client tenant DB (SolaStock owns its own tables there).
         try {
-            $this->tenants->useTenant($clientId);
+$this->tenants->useTenant($orgId, $this->tenants->resolveDatabaseName($clientId));
         } catch (\Throwable $e) {
             Log::error('[InventoryHandoff] Could not switch tenant connection', ['client_id' => $clientId, 'error' => $e->getMessage()]);
 
@@ -123,7 +107,7 @@ class AuthenticateFromInventoryHandoff
                 // (leaving can_provision/permissions unresolved).
                 $local = $userModel::find($userId);
                 if ($local) {
-                    Auth::login($local, remember: true);
+                    Auth::login($local, remember: false);
                     if ($request->hasSession()) {
                         $request->session()->put('principal', ['id' => $local->id, 'name' => $local->name ?? null, 'email' => $local->email ?? null]);
                         $request->session()->regenerate();

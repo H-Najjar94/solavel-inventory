@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { setDataMode } from '../hooks/useApiQuery.js';
@@ -17,7 +17,13 @@ const FALLBACK = {
 
 export function TenantProvider({ children }) {
     const qc = useQueryClient();
-    const { data, isLoading, isError } = useQuery({
+    const [accessDenied, setAccessDenied] = useState(null);
+    useEffect(() => {
+        const deny = (event) => {setAccessDenied(event.detail); qc.cancelQueries();};
+        window.addEventListener('solastock-access-denied', deny);
+        return () => window.removeEventListener('solastock-access-denied', deny);
+    }, [qc]);
+    const { data, isLoading, isError, error, refetch } = useQuery({
         queryKey: ['tenant-status'],
         queryFn: async () => (await api.tenantStatus()).data,
         retry: false,
@@ -92,6 +98,14 @@ export function TenantProvider({ children }) {
         },
     };
 
+    const ar = document.documentElement.lang.startsWith('ar');
+    if (!accessDenied && !resolved && !isError) return <div role="status" style={{padding: 40}}>{ar ? 'جارٍ التحقق من الوصول…' : 'Checking application access…'}</div>;
+    if (accessDenied || isError || !ready || !status.can_access) return <main dir={ar ? 'rtl' : 'ltr'} style={{padding: 40}}>
+        <h1>{ar ? 'الوصول إلى SolaStock' : 'SolaStock access'}</h1>
+        <p>{accessDenied || error?.message || status.state_message || (ar ? 'تعذر فتح التطبيق لهذا الحساب والمؤسسة.' : 'This application cannot be opened for this account and organization.')}</p>
+        <a href="/portal">{ar ? 'العودة إلى البوابة' : 'Back to portal'}</a>
+        {(isError || accessDenied) && <button onClick={() => {setAccessDenied(null); refetch();}}>{ar ? 'إعادة المحاولة' : 'Retry'}</button>}
+    </main>;
     return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
 }
 

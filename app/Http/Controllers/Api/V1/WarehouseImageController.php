@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\Warehouse;
 use App\Models\Tenant\WarehouseImage;
+use App\Services\Access\WarehouseAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class WarehouseImageController extends ApiController
 {
+    public function __construct(private WarehouseAccessService $warehouseAccess) {}
+
     private const DISK = 'local'; // = storage/app/private (private, not symlinked)
 
     private const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
@@ -41,6 +44,7 @@ class WarehouseImageController extends ApiController
 
     public function index(Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $images = WarehouseImage::query()->where('warehouse_id', $warehouse->id)
             ->orderByDesc('is_primary')->orderBy('sort')->orderBy('id')->get();
 
@@ -49,6 +53,7 @@ class WarehouseImageController extends ApiController
 
     public function store(Request $request, Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $validated = $request->validate([
             'image' => ['required', 'file', 'max:5120', 'mimetypes:'.implode(',', self::ALLOWED)],
             'is_primary' => ['sometimes', 'boolean'],
@@ -84,6 +89,7 @@ class WarehouseImageController extends ApiController
 
     public function show(WarehouseImage $image): StreamedResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $image->warehouse_id);
         abort_unless(Storage::disk(self::DISK)->exists($image->path), 404);
 
         return Storage::disk(self::DISK)->response(
@@ -95,6 +101,7 @@ class WarehouseImageController extends ApiController
 
     public function setPrimary(WarehouseImage $image): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $image->warehouse_id);
         WarehouseImage::query()->where('warehouse_id', $image->warehouse_id)->update(['is_primary' => false]);
         $image->update(['is_primary' => true]);
 
@@ -103,6 +110,7 @@ class WarehouseImageController extends ApiController
 
     public function destroy(WarehouseImage $image): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $image->warehouse_id);
         $warehouseId = $image->warehouse_id;
         $wasPrimary = (bool) $image->is_primary;
 

@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\InventoryCustomRole;
 use App\Models\Tenant\InventoryUserRoleAssignment;
 use App\Services\Access\InventoryPermissionService;
+use App\Services\Access\MemberManagement;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -23,9 +25,10 @@ class CustomRoleController extends ApiController
                 ->with('role:id,key,name,permissions,is_active')
                 ->orderBy('user_id')
                 ->get(),
-            'builtin_roles' => collect(config('inventory_permissions.roles', []))
+            'builtin_roles' => collect(array_merge(config('inventory_permissions.roles', []), array_map(fn ($r) => $r['permissions'], config('inventory_operational_roles', []))))
                 ->map(fn ($perms, $key) => [
                     'key' => $key,
+                    'label' => config('inventory_operational_roles.'.$key.'.'.(app()->getLocale() === 'ar' ? 'ar' : 'label'), $key),
                     'permissions' => $perms === '*' ? $permissions->all() : array_values((array) $perms),
                 ])->values(),
         ]);
@@ -48,6 +51,11 @@ class CustomRoleController extends ApiController
 
     public function update(Request $request, InventoryCustomRole $role): JsonResponse
     {
+        $management = app(MemberManagement::class);
+        $orgId = app(OrganizationContext::class)->idOrFail();
+        foreach (InventoryUserRoleAssignment::where('role_id', $role->id)->pluck('user_id') as $targetId) {
+            $management->authorize($request->user(), $orgId, $management->member($orgId, (int) $targetId));
+        }
         $data = $this->validatedRole($request, $role->id);
         $role->fill([
             'key' => Str::slug($data['key'] ?? $role->key, '_'),
@@ -61,14 +69,18 @@ class CustomRoleController extends ApiController
 
     public function assign(Request $request): JsonResponse
     {
-        $orgId = app(\App\Tenancy\OrganizationContext::class)->idOrFail();
+        $orgId = app(OrganizationContext::class)->idOrFail();
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'min:1'],
-            'role_id' => ['required', 'integer', Rule::exists('inventory_custom_roles', 'id')
+            'role_id' => ['required', 'integer', Rule::exists(config('tenancy.tenant_connection', 'tenant').'.inventory_custom_roles', 'id')
                 ->where('organization_id', $orgId)
                 ->where('is_active', true)],
         ]);
 
+        $management = app(MemberManagement::class);
+        $management->authorize($request->user(), $orgId, $management->member($orgId, (int) $data['user_id']));
+        $role = InventoryCustomRole::findOrFail($data['role_id']);
+        abort_if(array_diff($role->permissions, app(InventoryPermissionService::class)->permissionsFor($request->user())), 403);
         $assignment = InventoryUserRoleAssignment::query()->updateOrCreate(
             ['user_id' => (int) $data['user_id']],
             ['role_id' => (int) $data['role_id'], 'assigned_by' => $request->user()?->id],
@@ -79,6 +91,9 @@ class CustomRoleController extends ApiController
 
     public function unassign(int $userId): JsonResponse
     {
+        $orgId = app(OrganizationContext::class)->idOrFail();
+        $management = app(MemberManagement::class);
+        $management->authorize(request()->user(), $orgId, $management->member($orgId, $userId));
         InventoryUserRoleAssignment::query()->where('user_id', $userId)->delete();
 
         return $this->success(['deleted' => true]);
@@ -86,13 +101,13 @@ class CustomRoleController extends ApiController
 
     private function validatedRole(Request $request, ?int $ignoreId = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'key' => [
                 'nullable',
                 'string',
                 'max:80',
-                Rule::unique('inventory_custom_roles', 'key')
-                    ->where('organization_id', app(\App\Tenancy\OrganizationContext::class)->idOrFail())
+                Rule::unique(config('tenancy.tenant_connection', 'tenant').'.inventory_custom_roles', 'key')
+                    ->where('organization_id', app(OrganizationContext::class)->idOrFail())
                     ->ignore($ignoreId),
             ],
             'name' => ['required', 'string', 'max:120'],
@@ -100,5 +115,8 @@ class CustomRoleController extends ApiController
             'permissions.*' => ['required', 'string', Rule::in(array_keys(config('inventory_permissions.permissions', [])))],
             'is_active' => ['boolean'],
         ]);
+        abort_if(array_diff($data['permissions'], app(InventoryPermissionService::class)->permissionsFor($request->user())), 403);
+
+        return $data;
     }
 }

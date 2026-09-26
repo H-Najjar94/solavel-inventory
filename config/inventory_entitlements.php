@@ -36,6 +36,8 @@ return [
         'inventory.view_stock',
         'inventory.manage_opening_stock',
         'inventory.manage_adjustments',
+        'inventory.manage_purchase_orders',
+        'inventory.approve_purchase_orders',
         'inventory.view_ledger',
         // Read-only visibility must survive a plan change so an existing
         // SolaBooks connection never becomes an opaque "feature unavailable"

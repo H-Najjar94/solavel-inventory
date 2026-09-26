@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\ItemBrand;
 use App\Models\Tenant\ItemCategory;
 use App\Models\Tenant\Unit;
 use App\Services\Access\InventoryPermissionService;
+use App\Services\Access\WarehouseAccessService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,13 +23,15 @@ class MetaController extends ApiController
     public function index(Request $request, InventoryPermissionService $permissions): JsonResponse
     {
         $organizationId = app(OrganizationContext::class)->idOrFail();
-        $connection = \App\Models\Tenant\IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
+        $connection = IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
         $currency = (array) data_get($connection?->meta, 'finance_currency_contract', []);
 
         return $this->success([
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
             'organization_id' => $organizationId,
             'permissions' => $permissions->permissionsFor($request->user()),
+            'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],
+            'can_schedule_reports' => app(WarehouseAccessService::class)->allowedIds() === null && $permissions->can($request->user(), 'inventory.export_reports'),
             'tenant_mode' => $request->attributes->get('tenant_mode', 'live'), // live|demo
             'settings' => InventorySetting::query()->first(),
             'document_currency' => [

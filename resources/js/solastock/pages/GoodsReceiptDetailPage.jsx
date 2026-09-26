@@ -13,7 +13,8 @@ export default function GoodsReceiptDetailPage() {
     const { t } = useI18n();
     const { id } = useParams();
     const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.receive_goods');
+    const reverseGate = useCanCreate('inventory.manage_adjustments');
     const [tab, setTab] = useState('lines');
     const [confirmPost, setConfirmPost] = useState(false);
     const [confirmReverse, setConfirmReverse] = useState(false);
@@ -63,7 +64,7 @@ export default function GoodsReceiptDetailPage() {
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title={t('receiving.common.auditTimeline', 'Audit timeline')} hint={t('receiving.grn.audit.hint', 'Goods-receipt creation and posting events are recorded in the audit log.')} /></div>}
 
-            <DocumentActions status={grn.reversal_id ? 'reversed' : grn.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} postLabel={t('receiving.grn.actions.post', 'Post GRN')} />
+            <DocumentActions status={grn.reversal_id ? 'reversed' : grn.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} onReverse={reverseGate.allowed ? () => setConfirmReverse(true) : undefined} postLabel={t('receiving.grn.actions.post', 'Post GRN')} />
             <ConfirmPostModal open={confirmPost} name={t('receiving.grn.singular', 'goods receipt')}
                 onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name={t('receiving.grn.singular', 'goods receipt')}

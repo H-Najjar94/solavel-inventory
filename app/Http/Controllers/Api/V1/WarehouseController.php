@@ -95,6 +95,7 @@ class WarehouseController extends ApiController
 
     public function update(UpdateWarehouseRequest $request, Warehouse $warehouse): JsonResponse
     {
+        $this->warehouseAccess->assertAllowed((int) $warehouse->id);
         $warehouse->update($request->validated());
 
         return $this->success($warehouse->fresh());

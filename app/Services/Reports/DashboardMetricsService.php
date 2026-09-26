@@ -50,8 +50,15 @@ class DashboardMetricsService
         $query = $this->db()->table($table)->where($alias.'.organization_id', $this->orgId());
         $allowed = $this->warehouseAccess->allowedIds();
         $baseTable = preg_replace('/\s+as\s+\w+\s*$/i', '', $table);
-        if ($allowed !== null && Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasColumn($baseTable, 'warehouse_id')) {
-            $query->whereIn($alias.'.warehouse_id', $allowed);
+        if ($allowed !== null) {
+            if ($baseTable === 'warehouses') {
+                $query->whereIn($alias.'.id', $allowed);
+            } elseif ($baseTable === 'stock_transfers') {
+                $query->whereIn($alias.'.from_warehouse_id', $allowed)
+                    ->whereIn($alias.'.to_warehouse_id', $allowed);
+            } elseif (Schema::connection(config('tenancy.tenant_connection', 'tenant'))->hasColumn($baseTable, 'warehouse_id')) {
+                $query->whereIn($alias.'.warehouse_id', $allowed);
+            }
         }
 
         return $query;

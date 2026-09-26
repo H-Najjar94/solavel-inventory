@@ -30,6 +30,10 @@ class SalesOrderController extends ApiController
                 ->orWhere('customer_name', 'like', '%'.$request->query('q').'%')))
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
+        $allowed = $this->warehouseAccess->allowedIds();
+        if ($allowed !== null) {
+            $query->whereDoesntHave('lines', fn ($lines) => $lines->whereNotNull('warehouse_id')->whereNotIn('warehouse_id', $allowed));
+        }
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (SalesOrder $order) {
             $order->setAttribute('warehouse_name', $order->warehouse?->name);
@@ -42,7 +46,7 @@ class SalesOrderController extends ApiController
 
     public function show(SalesOrder $sales_order): JsonResponse
     {
-        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        $this->assertSalesOrderScope($sales_order);
         $sales_order = $this->service->expireOverdueReservations($sales_order);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         // customer_name is already a denormalized string on the header (no customer table).
@@ -58,6 +62,7 @@ class SalesOrderController extends ApiController
         $data = $request->validated();
         unset($data['order_number']);
         $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
+        $this->assertSubmittedLinesScope($data);
         $so = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
         return $this->success($so, 201);
@@ -67,7 +72,9 @@ class SalesOrderController extends ApiController
     {
         try {
             $data = $request->validated();
+            $this->assertSalesOrderScope($sales_order);
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
+            $this->assertSubmittedLinesScope($data);
             $so = $this->service->updateDraft($sales_order, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('sales_order_update_failed', $e->getMessage(), 422);
@@ -78,7 +85,7 @@ class SalesOrderController extends ApiController
 
     public function confirm(SalesOrder $sales_order): JsonResponse
     {
-        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        $this->assertSalesOrderScope($sales_order);
         try {
             $so = $this->service->confirm($sales_order);
         } catch (RuntimeException $e) {
@@ -90,7 +97,7 @@ class SalesOrderController extends ApiController
 
     public function reserve(Request $request, SalesOrder $sales_order): JsonResponse
     {
-        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        $this->assertSalesOrderScope($sales_order);
         $data = $request->validate([
             'expires_at' => ['nullable', 'date'],
             'priority' => ['nullable', 'integer', 'min:1', 'max:999'],
@@ -110,7 +117,7 @@ class SalesOrderController extends ApiController
 
     public function releaseReservation(SalesOrder $sales_order): JsonResponse
     {
-        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        $this->assertSalesOrderScope($sales_order);
         try {
             $so = $this->service->releaseReservation($sales_order);
         } catch (RuntimeException $e) {
@@ -122,7 +129,7 @@ class SalesOrderController extends ApiController
 
     public function cancel(SalesOrder $sales_order): JsonResponse
     {
-        $this->warehouseAccess->assertAllowed((int) $sales_order->warehouse_id);
+        $this->assertSalesOrderScope($sales_order);
         try {
             $so = $this->service->cancel($sales_order);
         } catch (RuntimeException $e) {
@@ -130,5 +137,20 @@ class SalesOrderController extends ApiController
         }
 
         return $this->success($so);
+    }
+
+    private function assertSalesOrderScope(SalesOrder $salesOrder): void
+    {
+        $this->warehouseAccess->assertAllowed((int) $salesOrder->warehouse_id);
+        foreach ($salesOrder->lines()->distinct()->pluck('warehouse_id') as $warehouseId) {
+            $this->warehouseAccess->assertAllowed((int) ($warehouseId ?: $salesOrder->warehouse_id));
+        }
+    }
+
+    private function assertSubmittedLinesScope(array $data): void
+    {
+        foreach ($data['lines'] as $line) {
+            $this->warehouseAccess->assertAllowed((int) ($line['warehouse_id'] ?? $data['warehouse_id']));
+        }
     }
 }

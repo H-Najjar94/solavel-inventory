@@ -60,6 +60,7 @@ class StockTransferController extends ApiController
     public function store(StoreStockTransferRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $this->warehouseAccess->assertTransferAllowed((int) $data['from_warehouse_id'], (int) $data['to_warehouse_id']);
         unset($data['transfer_number']);
         try {
             $t = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
@@ -75,6 +76,7 @@ class StockTransferController extends ApiController
         $this->warehouseAccess->assertTransferAllowed((int) $stock_transfer->from_warehouse_id, (int) $stock_transfer->to_warehouse_id);
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertTransferAllowed((int) $data['from_warehouse_id'], (int) $data['to_warehouse_id']);
             $t = $this->service->updateDraft($stock_transfer, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('transfer_update_failed', $e->getMessage(), 422);
@@ -123,6 +125,7 @@ class StockTransferController extends ApiController
     public function available(Request $request): JsonResponse
     {
         $request->validate(['item_id' => ['required', 'integer'], 'warehouse_id' => ['required', 'integer']]);
+        $this->warehouseAccess->assertAllowed((int) $request->query('warehouse_id'));
         $avail = StockBalance::query()
             ->leftJoin('warehouse_bins as bin', 'stock_balances.bin_id', '=', 'bin.id')
             ->leftJoin('lots as lot', 'stock_balances.lot_id', '=', 'lot.id')

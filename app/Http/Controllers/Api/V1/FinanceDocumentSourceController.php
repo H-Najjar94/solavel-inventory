@@ -52,7 +52,9 @@ final class FinanceDocumentSourceController extends ApiController
 
     private function snapshot(Request $request, GoodsReceipt|Shipment $document, bool $receipt)
     {
-        app(WarehouseAccessService::class)->assertAllowed((int) $document->warehouse_id);
+        if ($request->attributes->get('verified_workspace_action') !== 'finance-allocations.review-status') {
+            app(WarehouseAccessService::class)->assertAllowed((int) $document->warehouse_id);
+        }
         abort_unless($document->posted_at && ! $document->reversed_at, 409, 'finance_source_not_posted_or_reversed');
         $type = $receipt ? 'goods_receipt' : 'shipment';
         $connection = IntegrationOrganizationMapping::query()
@@ -108,7 +110,9 @@ final class FinanceDocumentSourceController extends ApiController
     private function returnSnapshot(Request $request, SalesReturn $return)
     {
         abort_unless($return->posted_at && $return->status === 'posted', 409, 'finance_source_not_posted');
-        app(WarehouseAccessService::class)->assertAllowed((int) $return->warehouse_id);
+        if ($request->attributes->get('verified_workspace_action') !== 'finance-allocations.review-status') {
+            app(WarehouseAccessService::class)->assertAllowed((int) $return->warehouse_id);
+        }
         $connection = IntegrationOrganizationMapping::query()->where('solastock_organization_id', $return->organization_id)
             ->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())->where('status', 'verified')->where('activation_state', 'active')->firstOrFail();
         $mapping = IntegrationDocumentLifecycleMapping::query()->where('organization_mapping_uuid', $connection->mapping_uuid)

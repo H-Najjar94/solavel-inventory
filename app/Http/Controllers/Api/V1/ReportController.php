@@ -41,7 +41,12 @@ class ReportController extends ApiController
             return $this->error('unknown_report', __('inventory.reports.unknown_report', ['report' => $report]), 404);
         }
 
-        return $this->success($this->reports->run($report, ReportFilters::fromRequest($request)));
+        $filters = ReportFilters::fromRequest($request);
+        if ($filters->warehouseId !== null) {
+            $this->warehouseAccess->assertAllowed($filters->warehouseId);
+        }
+
+        return $this->success($this->reports->run($report, $filters));
     }
 
     public function exportReport(Request $request, string $report): Response
@@ -70,6 +75,8 @@ class ReportController extends ApiController
 
     public function schedules(): JsonResponse
     {
+        abort_unless($this->warehouseAccess->allowedIds() === null, 403);
+
         return $this->success([
             'schedules' => InventoryScheduledReport::query()->orderByDesc('created_at')->get(),
         ]);
@@ -77,6 +84,7 @@ class ReportController extends ApiController
 
     public function storeSchedule(Request $request): JsonResponse
     {
+        abort_unless($this->warehouseAccess->allowedIds() === null, 403);
         $schedule = InventoryScheduledReport::query()->create($this->validatedSchedule($request));
 
         return $this->success($schedule->fresh(), 201);
@@ -84,6 +92,7 @@ class ReportController extends ApiController
 
     public function updateSchedule(Request $request, InventoryScheduledReport $schedule): JsonResponse
     {
+        abort_unless($this->warehouseAccess->allowedIds() === null, 403);
         $schedule->fill($this->validatedSchedule($request))->save();
 
         return $this->success($schedule->fresh());
@@ -91,6 +100,8 @@ class ReportController extends ApiController
 
     public function runSchedule(InventoryScheduledReport $schedule): JsonResponse
     {
+        abort_unless($this->warehouseAccess->allowedIds() === null, 403);
+
         return $this->success($this->scheduledReports->run($schedule));
     }
 

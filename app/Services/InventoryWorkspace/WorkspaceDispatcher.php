@@ -30,9 +30,13 @@ final class WorkspaceDispatcher
         $write = ! in_array('GET', $route->methods(), true);
         $permissions = array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'perm:'));
         abort_if($permissions === [], 503, 'workspace_permission_contract_missing');
+        $lifecycle = FinanceDocumentLifecycleAuthority::covers($action);
+        if ($lifecycle) {
+            abort_unless(app(FinanceDocumentLifecycleAuthority::class)->allows($outer->user(), (int) $mapping->central_organization_id), 403, 'workspace_finance_access_required');
+        }
         foreach ($permissions as $middleware) {
             $permission = substr($middleware, 5);
-            abort_unless(app(InventoryPermissionService::class)->can($outer->user(), $permission), 403, 'workspace_permission_required');
+            abort_unless($lifecycle || app(InventoryPermissionService::class)->can($outer->user(), $permission), 403, 'workspace_permission_required');
             $decision = app(InventoryCommercialEntitlementService::class)->checkPermission($permission);
             abort_unless($decision['allowed'], 403, $decision['reason_code']);
         }
@@ -134,7 +138,9 @@ final class WorkspaceDispatcher
                         'actor_user_id' => $request->user()->id, 'action' => $action,
                         'entity_type' => 'finance_workspace_command', 'entity_id' => $mapping->id,
                         'document_ref' => $key, 'before' => ['request_hash' => $requestHash],
-                        'after' => ['body' => $body, 'status' => $response->getStatusCode()], 'created_at' => now(),
+                        'after' => ['body' => $body, 'status' => $response->getStatusCode()]
+                            + (FinanceDocumentLifecycleAuthority::covers($action) ? ['authorization_scope' => FinanceDocumentLifecycleAuthority::scopeFor($action)] : []),
+                        'created_at' => now(),
                     ]);
                 }
                 return response()->json($body, $response->getStatusCode());

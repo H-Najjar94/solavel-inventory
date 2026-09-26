@@ -28,7 +28,7 @@ export default function TransferFormPage() {
     const { id } = useParams();
     const isEdit = !!id;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
-    const gate = useCanCreate('inventory.manage_adjustments');
+    const gate = useCanCreate('inventory.transfer_stock');
 
     const [header, setHeader] = useState({ transfer_number: '', transfer_date: new Date().toISOString().slice(0, 10), from_warehouse_id: null, to_warehouse_id: null, notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
