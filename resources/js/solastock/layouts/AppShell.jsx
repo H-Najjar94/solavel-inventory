@@ -499,7 +499,7 @@ function SetupHero({ tenant }) {
                     {/* needs_activation → guided onboarding wizard (never enable
                         inline). Already-enabled-but-unprovisioned → inline init. */}
                     {readinessBlocked ? (
-                        <div className="setup-error" role="status" style={{ color: '#6f4a00', fontSize: 13, maxWidth: 560 }}>
+                        <div className="setup-error" role="status" style={{ color: 'var(--warning)', fontSize: 13, maxWidth: 560 }}>
                             <i className="fa-solid fa-shield-halved" /> {isAdminBlocked
                                 ? t('shell.adminNextStep')
                                 : t('shell.adminReadiness')}
