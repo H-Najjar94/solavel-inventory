@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         using: function (): void {
+            require __DIR__.'/../routes/internal.php';
             // Server-to-server only: no browser cookies, session mutation or CSRF exemption.
             require __DIR__.'/../routes/finance_workspace.php';
             Route::post('/api/tenancy/member-management', \App\Http\Controllers\Api\Tenancy\MemberManagementController::class)
@@ -57,6 +58,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'inv.access' => \App\Http\Middleware\EnsureInventoryAppAccess::class,
             'inv.tenant' => ResolveInventoryTenant::class,
             'sync.signature' => VerifySolavelSyncSignature::class,
+            'internal.health' => \App\Http\Middleware\RequireInternalHealthToken::class,
         ]);
 
         // Central sync posts are authenticated by the HMAC signature middleware,
