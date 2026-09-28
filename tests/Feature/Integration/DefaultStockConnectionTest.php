@@ -33,6 +33,13 @@ final class DefaultStockConnectionTest extends TestCase
         config()->set('integration_safety.solabooks_delivery_enabled', true);
         foreach (['activation_enabled','production_phase6b_enabled','receiver_confirmed_enabled'] as $gate) config()->set('integration_connection_wizard.'.$gate,true);
         config()->set('inventory_entitlements.feature_enforcement', true);
+        // App access is Central's decision over HTTP; this organization owner holds SolaStock.
+        config()->set('sso.shared_secret', str_repeat('c', 40));
+        config()->set('sso.central_app_url', 'https://central.test');
+        \Illuminate\Support\Facades\Http::fake(['https://central.test/api/sso/session-access' => fn ($request) => \Illuminate\Support\Facades\Http::response([
+            'user_id' => $request['user_id'], 'organization_id' => $request['organization_id'], 'app_key' => $request['app_key'],
+            'allowed' => $request['user_id'] === self::ACTOR, 'owner' => true, 'roles' => [],
+        ], $request['user_id'] === self::ACTOR ? 200 : 403)]);
         $this->centralFixtureSchema();
         // The disposable shared-Finance projection must satisfy the actual
         // onboarding contract; an application grant alone is not readiness.
@@ -167,10 +174,80 @@ final class DefaultStockConnectionTest extends TestCase
         $this->assertSame(0,DB::connection('tenant')->table('opening_stock_entries')->count());
     }
 
+    public function test_both_apps_see_the_same_summary_from_ready_to_connect_to_connected(): void
+    {
+        // Before anything runs: SolaCount's context carries the one action, "Connect".
+        $this->send(['action'=>'workspace.context'])->assertOk()
+            ->assertJsonPath('data.connection_summary.state','ready_to_connect')
+            ->assertJsonPath('data.connection_summary.action.kind','connect')
+            ->assertJsonPath('data.connection_summary.organization','Isolated workspace');
+        $response=$this->send(['action'=>'workspace.initialize'])->assertOk();
+        $this->assertContains($response->json('data.summary.state'),['connected','needs_attention']);
+        // SolaStock's own page reads the same summary.
+        $this->assertSame($response->json('data.summary.state'),
+            app(\App\Services\Integration\ConnectionSummary::class)->forOrganization(TenantTestManager::ORG_A)['state']);
+        $this->assertNotContains($response->json('data.summary.state'),['ready_to_connect','preparing','needs_input']);
+    }
+
+    public function test_existing_records_ask_for_decisions_instead_of_preparing_forever(): void
+    {
+        DB::connection('tenant')->table('items')->insert(['organization_id'=>TenantTestManager::ORG_A,'sku'=>'SUM-1','name'=>'Existing item','is_active'=>1]);
+        $this->send(['action'=>'workspace.context'])->assertOk()
+            ->assertJsonPath('data.connection_summary.state','needs_input')
+            ->assertJsonPath('data.connection_summary.action.kind','continue')
+            ->assertJsonPath('data.connection_summary.reason','existing_activity_requires_review:items');
+    }
+
+    public function test_summary_states_follow_stored_evidence_and_offer_one_action(): void
+    {
+        $summaries = app(\App\Services\Integration\ConnectionSummary::class);
+        $ready = ['readiness' => ['state' => 'CONNECTION_SETUP_INCOMPLETE', 'can_manage' => true], 'plan_requirement' => null, 'connection_wizard' => null];
+
+        // Preparation running right now → progress with auto refresh; silent for too long → stopped, retry.
+        $setting = IntegrationSetting::query()->create(['organization_id'=>TenantTestManager::ORG_A,'integration'=>'solabooks','solabooks_organization_id'=>14,
+            'mode'=>'connected_pending_mapping','meta'=>['default_connection'=>['version'=>\App\Services\Integration\DefaultStockConnection::VERSION,'state'=>'preparing']]]);
+        $running = $summaries->forOrganization(TenantTestManager::ORG_A, $ready);
+        $this->assertSame(['preparing', 'none', true], [$running['state'], $running['action']['kind'], $running['action']['auto_refresh']]);
+        DB::connection('tenant')->table('integration_settings')->where('id', $setting->id)->update(['updated_at' => now()->subMinutes(10)]);
+        $stalled = $summaries->forOrganization(TenantTestManager::ORG_A, $ready);
+        $this->assertSame(['failed', 'preparation_stalled', 'retry'], [$stalled['state'], $stalled['reason'], $stalled['action']['kind']]);
+        $setting->delete();
+
+        // An open guided setup resumes at its unfinished task; a finished one goes to the final review.
+        $open = $summaries->forOrganization(TenantTestManager::ORG_A, array_replace($ready, ['connection_wizard' => [
+            'run_uuid' => 'run-1', 'state' => 'draft_decisions', 'decisions_remaining' => 3, 'current_step' => 'required_decisions']]));
+        $this->assertSame(['needs_input', 'continue', 'required_decisions', 3], [$open['state'], $open['action']['kind'], $open['task'], $open['progress']['decisions_remaining']]);
+        $final = $summaries->forOrganization(TenantTestManager::ORG_A, array_replace($ready, ['connection_wizard' => ['run_uuid' => 'run-1', 'state' => 'activation_ready']]));
+        $this->assertSame(['ready_to_activate', 'result_preview'], [$final['state'], $final['task']]);
+
+        // Missing entitlement names the plan; people who may not manage are told to ask an admin.
+        $plan = $summaries->forOrganization(TenantTestManager::ORG_A, array_replace($ready, ['plan_requirement' => ['missing' => 'inventory', 'bundled_with_finance_plans' => ['advanced']]]));
+        $this->assertSame(['plan_required', 'manage_plans'], [$plan['state'], $plan['action']['kind']]);
+        $viewer = $summaries->forOrganization(TenantTestManager::ORG_A, array_replace_recursive($ready, ['readiness' => ['can_manage' => false]]));
+        $this->assertSame(['ready_to_connect', 'ask_admin'], [$viewer['state'], $viewer['action']['kind']]);
+
+        // Connected → open the other app; a safety hold offers no action.
+        $this->assertSame('open', $summaries->forOrganization(TenantTestManager::ORG_A, array_replace($ready, ['readiness' => ['state' => 'CONNECTED_READY', 'can_manage' => true]]))['action']['kind']);
+        $this->assertSame('none', $summaries->forOrganization(TenantTestManager::ORG_A, array_replace($ready, ['readiness' => ['state' => 'MAINTENANCE_HOLD', 'can_manage' => true]]))['action']['kind']);
+        $this->assertStringContainsString('/sso/finance/redirect?organization_id='.TenantTestManager::ORG_A, (string) $running['links']['solacount']);
+    }
+
+    public function test_connect_endpoint_requires_the_same_setup_authority_as_the_guided_setup(): void
+    {
+        $route = app('router')->getRoutes()->getByName('api.v1.integration.connect');
+        $this->assertSame(['POST'], $route->methods());
+        $this->assertContains('perm:inventory.integration.setup', $route->gatherMiddleware());
+        $this->assertContains('integration.setup', $route->gatherMiddleware());
+        $this->assertSame(app('router')->getRoutes()->getByName('api.v1.integration.wizard.start')->gatherMiddleware(), $route->gatherMiddleware());
+    }
+
     public function test_failed_prepare_can_retry_without_duplicate_configuration(): void
     {
         $this->failPrepare=true;
-        $this->send(['action'=>'workspace.initialize'])->assertConflict();
+        $failed=$this->send(['action'=>'workspace.initialize'])->assertConflict();
+        // The stop is recorded, so both apps show "Connection stopped — Try again", not "preparing".
+        $failed->assertJsonPath('summary.state','failed')->assertJsonPath('summary.action.kind','retry');
+        $this->assertSame('failed',data_get(IntegrationSetting::query()->sole()->meta,'default_connection.state'));
         $this->assertSame('connected_pending_mapping',IntegrationSetting::query()->sole()->mode);
         $this->assertSame(0,DB::connection('tenant')->table('integration_account_mappings')->count());
         $this->failPrepare=false;
@@ -185,7 +262,7 @@ final class DefaultStockConnectionTest extends TestCase
             'mode'=>'paused','solabooks_organization_id'=>14,'meta'=>['custom'=>'retained']]);
         $this->send(['action'=>'workspace.initialize'])->assertOk()->assertJsonPath('data.status','manual_review');
         $this->assertSame('paused',IntegrationSetting::query()->sole()->mode);
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://finance.test'));
     }
 
     public function test_missing_or_cross_organization_account_fails_before_activation(): void
@@ -206,21 +283,21 @@ final class DefaultStockConnectionTest extends TestCase
     {
         DB::connection('mysql')->table('organization_projects')->where('project_id',980074)->update(['is_active'=>false]);
         $this->send(['action'=>'workspace.initialize'])->assertForbidden();
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://finance.test'));
     }
 
     public function test_finance_must_finish_before_automatic_mapping(): void
     {
         DB::connection('tenant')->table('organizations')->where('id',14)->update(['finance_setup_completed_at'=>null]);
         $this->send(['action'=>'workspace.initialize'])->assertForbidden();
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://finance.test'));
     }
 
     public function test_existing_stock_data_requires_manual_review(): void
     {
         \Tests\Support\StockTestFactory::item();
         $this->send(['action'=>'workspace.initialize'])->assertConflict()->assertJsonPath('message','existing_activity_requires_review:items');
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://finance.test'));
     }
 
     public function test_viewer_and_cross_organization_requests_cannot_initialize(): void
@@ -229,7 +306,7 @@ final class DefaultStockConnectionTest extends TestCase
         DB::connection('mysql')->table('user_organizations')->where('user_id',self::ACTOR)->update(['role'=>'viewer']);
         $this->app->forgetInstance(\App\Services\Access\InventoryPermissionService::class);
         $this->send(['action'=>'workspace.initialize'])->assertForbidden();
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        \Illuminate\Support\Facades\Http::assertNotSent(fn ($request) => str_starts_with($request->url(), 'https://finance.test'));
     }
 
     public function test_missing_required_role_never_becomes_ready(): void

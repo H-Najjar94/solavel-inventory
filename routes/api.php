@@ -554,6 +554,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.discovery');
         Route::get('/wizard/connection-management-access', [IntegrationController::class, 'connectionManagementAccess'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.wizard.connection-management-access');
+        Route::post('/connect', [IntegrationController::class, 'connect'])
+            ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.connect');
         Route::post('/wizard/runs', [IntegrationController::class, 'startWizard'])
             ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.start');
         Route::get('/wizard/runs/{run}', [IntegrationController::class, 'wizardRun'])

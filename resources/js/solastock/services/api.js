@@ -322,6 +322,7 @@ export const api = {
     // SolaCount integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),
     integrationWizardDiscovery: () => request('/integration/solabooks/wizard/discovery'),
+    connectIntegration: () => request('/integration/solabooks/connect', { method: 'POST' }),
     startIntegrationWizard: () => request('/integration/solabooks/wizard/runs', { method: 'POST' }),
     integrationWizardRun: (run) => request(`/integration/solabooks/wizard/runs/${run}`),
     integrationWizardPreview: (run) => request(`/integration/solabooks/wizard/runs/${run}/preview`),

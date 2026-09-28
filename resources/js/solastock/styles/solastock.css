@@ -1979,3 +1979,10 @@ html[dir="rtl"] .fifo-total-line strong {
 [data-theme="dark"] .wizard-account-state.is-saved{color:#5fd3a2}
 [data-theme="dark"] .wizard-account-state.is-pending{color:var(--amber-soft)}
 /* ==== end generated dark-theme overrides ==== */
+
+/* Single setup progress indicator (replaces the separate three-stage badges). */
+.focus-header .focus-progress{flex:1 1 160px;max-width:320px;height:6px;border:0;border-radius:999px;overflow:hidden;background:var(--surface-3,#edf0f3);appearance:none}
+.focus-header .focus-progress::-webkit-progress-bar{background:var(--surface-3,#edf0f3);border-radius:999px}
+.focus-header .focus-progress::-webkit-progress-value{background:var(--brand,#1f7a4d);border-radius:999px}
+.focus-header .focus-progress::-moz-progress-bar{background:var(--brand,#1f7a4d);border-radius:999px}
+[dir="rtl"] .focus-header .focus-progress{transform:scaleX(-1)}

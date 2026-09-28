@@ -46,7 +46,42 @@ class IntegrationController extends ApiController
 
     public function status(): JsonResponse
     {
-        return $this->success($this->statusService->status($this->context->idOrFail()));
+        $orgId = $this->context->idOrFail();
+        $status = $this->statusService->status($orgId);
+        $status['summary'] = app(\App\Services\Integration\ConnectionSummary::class)->forOrganization($orgId, $status);
+
+        return $this->success($status);
+    }
+
+    /**
+     * "Connect SolaCount": run the automatic preparation for a fresh organization.
+     * Organizations with existing records or custom mappings are handed to the guided
+     * setup (the summary then says "Continue setup"); nothing is guessed or overwritten.
+     * Repeated requests are safe: preparation is locked, keyed and idempotent.
+     */
+    public function connect(ConnectionManagementPolicy $policy): JsonResponse
+    {
+        $orgId = $this->context->idOrFail();
+        $actor = auth()->user();
+        abort_unless($this->permissions->can($actor, 'inventory.integration.setup'), 403);
+        $financeId = (int) \Illuminate\Support\Facades\DB::connection('tenant')->table('organizations')
+            ->where('central_org_id', $orgId)->value('id');
+        $clientId = (int) app(\App\Services\Entitlements\EntitlementsCache::class)->currentClientId();
+
+        $outcome = ['status' => 'manual_review', 'reason' => 'separate_review_required'];
+        if (! ($policy->status($orgId, $actor)['separation_of_duties'] ?? false)) {
+            try {
+                $outcome = app(\App\Services\Integration\DefaultStockConnection::class)
+                    ->initialize($clientId, $orgId, $financeId, (int) $actor->id);
+            } catch (\RuntimeException $exception) {
+                $outcome = ['status' => 'failed', 'reason' => $exception->getMessage()];
+            }
+        }
+
+        return $this->success([
+            'outcome' => $outcome,
+            'summary' => app(\App\Services\Integration\ConnectionSummary::class)->forOrganization($orgId),
+        ]);
     }
 
     public function wizardDiscovery(ConnectionWizardService $wizard): JsonResponse

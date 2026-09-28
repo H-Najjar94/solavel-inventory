@@ -1,6 +1,6 @@
-import FinanceReadiness from '../components/FinanceReadiness.jsx';
+import ConnectionSummaryCard, { failureGroup } from '../components/ConnectionSummaryCard.jsx';
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
@@ -91,15 +91,55 @@ export default function IntegrationSettingsPage() {
     const [savingConnection, setSavingConnection] = useState(false);
     const [rotatingKey, setRotatingKey] = useState(false);
 
+    const location = useLocation();
+    // Deep links from SolaCount (?task=…) resume the exact unfinished task.
+    const requestedTask = new URLSearchParams(location.search).get('task');
+    const [preparing, setPreparing] = useState(false);
     const status = useApiQuery(['integration-status', tenant.organization_id], api.integrationStatus, {
         fallback: null,
         refetchOnMount: 'always',
         refetchOnWindowFocus: 'always',
-        refetchInterval: 15_000,
+        // Refresh quickly only while preparation is genuinely running.
+        refetchInterval: preparing ? 3_000 : 15_000,
     });
     const s = status.data;
+    const summary = s?.summary;
+    useEffect(() => { setPreparing(summary?.state === 'preparing'); }, [summary?.state]);
     const connectionActivated = s?.readiness?.state === 'CONNECTED_READY';
-    const [showWizard, setShowWizard] = useState(false);
+    const [showWizard, setShowWizard] = useState(Boolean(requestedTask));
+    const [acting, setActing] = useState(false);
+    const [actionError, setActionError] = useState('');
+    const wizardRef = useRef(null);
+    const setupOpen = !connectionActivated && (showWizard || Boolean(s?.connection_wizard && summary && ['needs_input', 'ready_to_activate'].includes(summary.state)));
+    const resumeStep = requestedTask === 'result_preview' || summary?.task === 'result_preview' ? 6 : wizardResumeStep;
+
+    function openSetup() {
+        setShowWizard(true); setTab('wizard');
+        requestAnimationFrame(() => wizardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+
+    async function onSummaryAction(kind, current) {
+        setActionError('');
+        if (kind === 'continue') return openSetup();
+        if (kind === 'refresh') return status.refetch();
+        if (kind === 'review') { setTab('status'); return undefined; }
+        const target = { open: current.links?.solacount, manage_plans: current.links?.manage_plans, finish_finance_setup: current.links?.finish_finance_setup }[kind];
+        if (target) { window.location.assign(target); return undefined; }
+        if (kind !== 'connect' && kind !== 'retry') return undefined;
+        setActing(true);
+        try {
+            const response = await api.connectIntegration();
+            const result = response?.data ?? response;
+            await qc.invalidateQueries({ queryKey: ['integration-status'] });
+            if (result?.summary?.state === 'needs_input') openSetup();
+            else if (result?.outcome?.status === 'failed' && result?.summary?.state !== 'failed') {
+                setActionError(tr(`integration.summary.text.failed.${failureGroup(result.outcome.reason)}`));
+            }
+        } catch (error) {
+            setActionError(error.message || tr('settings.common.errorFallback'));
+        } finally { setActing(false); }
+        return undefined;
+    }
     useEffect(() => {
         if (s || tenant.client_id) {
             setConnection((current) => ({
@@ -135,11 +175,13 @@ export default function IntegrationSettingsPage() {
     return (
         <section className="page page--connection-assistant">
             <Breadcrumbs items={[{ label: tr('integration.settingsBreadcrumb'), to: '/settings' }, { label: tr('integration.title') }]} />
-            <header className="page-head">
-                <h1>{tr('integration.title')}</h1>
-            </header>
 
-            {status.isLoading || status.isFetching ? <Skeleton /> : <FinanceReadiness status={status.isError ? null : s} details onRetry={() => status.refetch()} onContinue={() => { setShowWizard(true); setTab('wizard'); }} />}
+            {status.isLoading ? <Skeleton /> : status.isError || !summary ? <EmptyState
+                title={tr('integration.loadFailed')}
+                hint={status.error?.message || tr('settings.common.errorFallback')}
+                action={<button className="btn btn--primary" onClick={() => status.refetch()}>{tr('integration.retry')}</button>}
+            /> : <ConnectionSummaryCard tr={tr} busy={acting} error={actionError} onAction={onSummaryAction}
+                summary={setupOpen && summary.action?.kind === 'continue' ? { ...summary, action: { kind: 'none' } } : summary} />}
             {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
             {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
@@ -250,12 +292,12 @@ export default function IntegrationSettingsPage() {
                 </>
             ))}
 
-            {s?.readiness?.finance_setup_complete && s?.readiness?.can_manage && (showWizard || tab === 'wizard') && <ConnectionWizard key={`wizard-${tenant.organization_id}-${wizardResumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={wizardResumeStep} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} />}
+            {s?.readiness?.finance_setup_complete && s?.readiness?.can_manage && (setupOpen || (connectionActivated && tab === 'wizard')) && <div ref={wizardRef}><ConnectionWizard key={`wizard-${tenant.organization_id}-${resumeStep}`} organizationId={tenant.organization_id} initialAssistantStep={resumeStep} autoStart={setupOpen} gate={setupGate} accountingGate={accountingGate} connectionAccess={connectionAccess.data} status={s} toast={toast} tr={tr} organizationName={tenant.organization_name} /></div>}
         </section>
     );
 }
 
-function ConnectionWizard({ organizationId, gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1 }) {
+function ConnectionWizard({ organizationId, gate, accountingGate, connectionAccess, status, toast, tr, organizationName, initialAssistantStep = 1, autoStart = false }) {
     const queryClient = useQueryClient();
     const actionsByEntity = {
         item: {
@@ -322,15 +364,23 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         if (!runUuid && resumable) setRunUuid(resumable);
     }, [discovery.data?.active_draft?.run_uuid, runUuid]);
 
-    async function start() {
+    async function start({ silent = false } = {}) {
         setSaving(true);
         try {
+            // Resumes the organization's open session when one exists; never creates a second.
             const response = await api.startIntegrationWizard();
             setRunUuid(response.data.run_uuid);
-            toast.push(tr('integration.wizard.started'), 'success');
+            if (!silent) toast.push(tr('integration.wizard.started'), 'success');
         } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
         finally { setSaving(false); }
     }
+    // Opened from "Continue setup" (either app): start or resume without a second button.
+    const autoStarted = useRef(false);
+    useEffect(() => {
+        if (!autoStart || autoStarted.current || runUuid || !discovery.data || discovery.data.active_draft?.run_uuid || !gate.allowed) return;
+        autoStarted.current = true;
+        start({ silent: true });
+    }, [autoStart, runUuid, discovery.data, gate.allowed]);
 
     function decide(row, action, extraSafeDetails = {}) {
         setSaveState('saving');

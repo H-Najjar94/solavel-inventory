@@ -240,7 +240,10 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('physical_quantity', $assistant);
         $this->assertStringContainsString('undoDecision', $assistant);
         $this->assertStringContainsString('connectionActivated && <Tabs', $page);
-        $this->assertStringContainsString("(showWizard || tab === 'wizard')", $page);
+        // One summary card with one action; setup opens from it (or resumes an open session).
+        $this->assertStringContainsString("(setupOpen || (connectionActivated && tab === 'wizard'))", $page);
+        $this->assertStringContainsString('<ConnectionSummaryCard', $page);
+        $this->assertStringNotContainsString('<FinanceReadiness', $page);
         $this->assertStringContainsString('<bdi>', $assistant);
         $this->assertStringContainsString('No, they are different items', $translations);
         $this->assertStringContainsString('لا، هما صنفان مختلفان', $translations);
