@@ -177,6 +177,15 @@ final class ConnectionWizardService
             || (int) ($identity['central_organization_id'] ?? 0) !== $organizationId) {
             $this->fail('authoritative_setup_identity_required');
         }
+        // Standard units and categories both apps ship with are mapped by canonical
+        // key here, so they never become review tasks (idempotent; custom and
+        // conflicting records stay in review).
+        if (! empty($preview['organization_mapping_uuid'])) {
+            $mapping = IntegrationOrganizationMapping::query()->where('mapping_uuid', $preview['organization_mapping_uuid'])->first();
+            if ($mapping && array_sum(app(StandardCatalogMappings::class)->ensure($mapping, $actorUserId)) > 0) {
+                $preview = $this->discover($organizationId);
+            }
+        }
 
         $existing = DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('solastock_organization_id', $organizationId)
@@ -902,6 +911,8 @@ final class ConnectionWizardService
         string $runUuid,
         int $actorUserId,
     ): void {
+        // Standard defaults the review showed as ready must exist as real mappings.
+        app(StandardCatalogMappings::class)->ensure($organizationMapping, $actorUserId);
         $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
             ->where('run_uuid', $runUuid)->where('status', 'selected')->orderBy('id')->lockForUpdate()->get();
         $approvedRun = DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->first();
@@ -912,7 +923,11 @@ final class ConnectionWizardService
         // Materialize prerequisites before dependent items, irrespective of the
         // order in which the reviewer visited the screens.
         $decisions = $decisions->sortBy(fn ($decision) => match ($decision->entity_type) {
-            'account_role' => 0, 'unit', 'category' => 1, 'item' => 3, default => 2,
+            'account_role' => 0, 'unit' => 1,
+            // Parents before children, so a created category can attach to its mapped parent.
+            'category' => 1 + ((int) DB::connection('tenant')->table('inventory_categories')
+                ->where('id', (int) (json_decode($decision->solabooks_record_ids ?: '[]', true)[0] ?? 0))->value('level')) / 1000,
+            'item' => 3, default => 2,
         });
 
         foreach ($decisions as $decision) {
@@ -954,6 +969,8 @@ final class ConnectionWizardService
                 'select_authoritative_record', 'resolve_account_category',
                 'approve_exact_binding', 'select_unit', 'select_category', 'select_warehouse', 'select_party',
                 'propose_finance_party_creation',
+                // Previously skipped silently: a reviewed Finance-only unit/category now gets its SolaStock counterpart.
+                'propose_unit_creation', 'propose_category_creation', 'define_unit_conversion',
             ], true)) {
                 continue;
             }
@@ -961,7 +978,8 @@ final class ConnectionWizardService
             $stockIds = array_values(json_decode($decision->solastock_record_ids ?: '[]', true));
             $booksIds = array_values(json_decode($decision->solabooks_record_ids ?: '[]', true));
             $createsStock = $decision->action === 'create_solastock_record'
-                || ($decision->action === 'select_party' && $stockIds === []);
+                || ($decision->action === 'select_party' && $stockIds === [])
+                || (in_array($decision->action, ['propose_unit_creation', 'propose_category_creation', 'define_unit_conversion'], true) && $stockIds === []);
             $createsBooks = $decision->action === 'keep_solastock_authority'
                 || $decision->action === 'propose_finance_party_creation'
                 || ($decision->action === 'select_warehouse' && $booksIds === [])
@@ -1028,6 +1046,71 @@ final class ConnectionWizardService
         }
     }
 
+    /**
+     * A reviewed Finance-only unit or category gets its SolaStock counterpart.
+     * Units keep their meaning (dimension from the standard list, else "count");
+     * a stated conversion is recorded against the chosen SolaStock unit.
+     * Categories keep their hierarchy when the parent is already mapped.
+     * An existing same-name/symbol SolaStock record is a conflict to select, not a duplicate to create.
+     */
+    private function createStockReferenceFromFinance(IntegrationOrganizationMapping $mapping, object $decision, string $booksId): string
+    {
+        $db = DB::connection('tenant');
+        $financeTable = $decision->entity_type === 'unit' ? 'inventory_units' : 'inventory_categories';
+        $source = $db->table($financeTable)->where('id', $booksId)
+            ->where(fn ($q) => $q->where('organization_id', $mapping->finance_organization_id)->orWhereNull('organization_id'))
+            ->whereNull('deleted_at')->sharedLock()->first();
+        if (! $source || trim((string) $source->name) === '') {
+            $this->fail('finance_reference_source_missing');
+        }
+        $stockOrg = (int) $mapping->solastock_organization_id;
+        if ($decision->entity_type === 'unit') {
+            $symbol = trim((string) ($source->symbol ?? ''));
+            $code = mb_strtoupper($symbol !== '' ? $symbol : 'FIN-U-'.$booksId);
+            if ($db->table('units')->where('organization_id', $stockOrg)->whereNull('deleted_at')
+                ->where(fn ($q) => $q->where('code', $code)->orWhere('name', $source->name))->exists()) {
+                $this->fail('stock_unit_conflict_select_existing');
+            }
+            $kind = collect(\App\Services\Catalog\FinanceReferenceDefaultsService::UNITS)
+                ->first(fn ($unit) => $unit[1] === $symbol)[2] ?? 'count';
+            $unitId = (string) $db->table('units')->insertGetId(['organization_id' => $stockOrg, 'code' => $code,
+                'name' => $source->name, 'symbol' => $symbol !== '' ? $symbol : null, 'kind' => $kind, 'is_active' => true,
+                'created_at' => now(), 'updated_at' => now()]);
+            if ($decision->action === 'define_unit_conversion') {
+                $details = json_decode($decision->safe_details ?: '{}', true);
+                $target = (int) ($details['selected_record_id'] ?? 0);
+                $factor = (string) ($details['conversion_factor'] ?? '');
+                if (! is_numeric($factor) || (float) $factor <= 0
+                    || ! $db->table('units')->where('organization_id', $stockOrg)->where('id', $target)->whereNull('deleted_at')->exists()) {
+                    $this->fail('unit_conversion_requires_target_and_positive_factor');
+                }
+                $db->table('unit_conversions')->insert(['organization_id' => $stockOrg, 'item_id' => null,
+                    'from_unit_id' => (int) $unitId, 'to_unit_id' => $target, 'factor' => $factor,
+                    'created_at' => now(), 'updated_at' => now()]);
+            }
+
+            return $unitId;
+        }
+        $parentId = null;
+        if ($source->parent_id !== null) {
+            $parentId = IntegrationMasterDataMapping::query()->where('organization_mapping_uuid', $mapping->mapping_uuid)
+                ->where('entity_type', 'category')->where('solabooks_record_id', (string) $source->parent_id)
+                ->where('status', 'verified')->value('solastock_record_id');
+            if ($parentId === null) {
+                $this->fail('category_parent_requires_mapping_first');
+            }
+        }
+        if ($db->table('item_categories')->where('organization_id', $stockOrg)->where('name', $source->name)
+            ->where(fn ($q) => $parentId === null ? $q->whereNull('parent_id') : $q->where('parent_id', $parentId))
+            ->whereNull('deleted_at')->exists()) {
+            $this->fail('stock_category_conflict_select_existing');
+        }
+        $level = $parentId === null ? 1 : ((int) $db->table('item_categories')->where('id', $parentId)->value('level')) + 1;
+
+        return (string) $db->table('item_categories')->insertGetId(['organization_id' => $stockOrg, 'parent_id' => $parentId,
+            'name' => $source->name, 'level' => $level, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
     private function createStockRecordFromFinance(
         IntegrationOrganizationMapping $mapping,
         object $decision,
@@ -1063,6 +1146,9 @@ final class ConnectionWizardService
                 'code' => $code, 'name' => $source->name, 'is_active' => true,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
+        }
+        if (in_array($decision->entity_type, ['unit', 'category'], true)) {
+            return $this->createStockReferenceFromFinance($mapping, $decision, $booksId);
         }
         if ($decision->entity_type !== 'item') {
             $this->fail('create_solastock_record_requires_supported_entity');
@@ -1212,7 +1298,12 @@ final class ConnectionWizardService
             // Finance may have committed this owner-created record after our
             // review transaction began. A current read is required here; the
             // repeatable-read snapshot must not hide the committed response.
-            || ! DB::connection('tenant')->table($tables[1])->where('organization_id', $mapping->finance_organization_id)->where('id', $booksId)->sharedLock()->first()) {
+            || ! DB::connection('tenant')->table($tables[1])
+                // SolaCount's shared standard units/categories (organization_id NULL) belong to every Finance organization.
+                ->where(fn ($query) => in_array($entityType, ['unit', 'category'], true)
+                    ? $query->where('organization_id', $mapping->finance_organization_id)->orWhereNull('organization_id')
+                    : $query->where('organization_id', $mapping->finance_organization_id))
+                ->where('id', $booksId)->sharedLock()->first()) {
             $this->fail('mapping_record_scope_mismatch');
         }
     }
@@ -1288,11 +1379,11 @@ final class ConnectionWizardService
             'value_difference' => '0.00',
             'blocking_reason' => $candidate['classification'] === 'exact_match' ? null : $candidate['classification'],
         ];
-        if ($candidate['entity_type'] === 'item' && $candidate['classification'] === 'exact_match'
+        if ($candidate['classification'] === 'exact_match'
             && count($row['solastock_record_ids']) === 1 && count($row['solabooks_record_ids']) === 1) {
             $row['safe_details']['existing_mapping_verified'] = IntegrationMasterDataMapping::query()
                 ->where('organization_mapping_uuid', $mapping->mapping_uuid)
-                ->where('entity_type', 'item')->where('status', 'verified')
+                ->where('entity_type', $candidate['entity_type'])->where('status', 'verified')
                 ->where('solastock_record_id', $row['solastock_record_ids'][0])
                 ->where('solabooks_record_id', $row['solabooks_record_ids'][0])->exists();
         }
@@ -1702,8 +1793,9 @@ final class ConnectionWizardService
             && ($row['safe_details']['active'] ?? true) === true
         );
         $resolvedReferences = $rows->filter(fn (array $row) =>
-            in_array($row['entity_type'], ['unit', 'category'], true)
-            && ($row['safe_details']['deterministic_reference_match'] ?? false) === true
+            in_array($row['entity_type'], ['unit', 'category', 'customer', 'supplier'], true)
+            && (($row['safe_details']['deterministic_reference_match'] ?? false) === true
+                || ($row['safe_details']['existing_mapping_verified'] ?? false) === true)
         );
         $resolvedItems = $rows->filter(fn (array $row) => $row['entity_type'] === 'item'
             && ($row['safe_details']['existing_mapping_verified'] ?? false) === true);
@@ -1785,8 +1877,9 @@ final class ConnectionWizardService
         }
         $financeOperational = $financeOperational || in_array(true, $evidence['finance'], true);
         $stockOperational = $stockOperational || in_array(true, $evidence['stock'], true);
+        // Completing SolaCount setup is a precondition of connecting, not business
+        // history: only real records make an organization "existing business".
         $financeStarted = $financeOrgId > 0 && DB::connection('tenant')->table('organizations')->where('id', $financeOrgId)->where(fn ($q) => $q->whereNotNull('finance_setup_completed_at')->orWhereNotIn('finance_setup_step', ['1', 'step-1']))->exists();
-        $financeOperational = $financeOperational || $financeStarted;
         $customerScenario = $financeOperational && $stockOperational ? 'previously_separate'
             : ($financeOperational ? 'finance_first' : ($stockOperational ? 'stock_first' : 'new_both'));
 
@@ -1795,6 +1888,15 @@ final class ConnectionWizardService
             'customer_scenario' => $customerScenario,
             'setup_path' => $customerScenario === 'new_both' ? 'fresh_workspace' : 'existing_business',
             'business_record_evidence' => $evidence,
+            'finance_setup_started' => $financeStarted,
+            // Every business-record section, always present (zero is a valid answer):
+            // how many there are, how many are ready automatically, how many need a person.
+            'record_sections' => collect(['customers' => 'customer', 'suppliers' => 'supplier', 'items' => 'item', 'units' => 'unit', 'categories' => 'category'])
+                ->map(fn (string $type) => [
+                    'total' => $rows->where('entity_type', $type)->count(),
+                    'ready' => $automatic->where('entity_type', $type)->count(),
+                    'review' => $visible->where('entity_type', $type)->count(),
+                ])->all(),
             'automatic_bindings' => $automatic->all(),
             'automatic_exclusions' => $automaticExclusions,
             'automatic_bindings_hash' => $this->hash($automatic->all()),
@@ -2020,11 +2122,37 @@ final class ConnectionWizardService
                 ? DB::connection('tenant')->table($table)->where('organization_id', $financeOrgId)->orderBy('id')->get()
                 : collect();
         }
+        // Pair a SolaStock party with its SolaCount counterpart of the SAME role (a contact
+        // that is both customer and supplier is paired per role): number/code first,
+        // else an exact name that is unique on both sides. A pair is one row to confirm,
+        // never two "missing" rows that invite duplicates; nothing is bound automatically.
+        $normalize = fn ($value) => mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) $value)));
+        $pairedFinance = ['customer' => [], 'supplier' => []];
+        $partyCounterpart = function (string $entity, object $record) use (&$financeParties, &$pairedFinance, $normalize, $stockOrgId): ?object {
+            $finance = ($financeParties[$entity] ?? collect())->reject(fn ($p) => isset($pairedFinance[$entity][(string) $p->id]) || ($p->deleted_at ?? null) !== null);
+            $code = $normalize($record->code ?? '');
+            if ($code !== '') {
+                $byCode = $finance->filter(fn ($p) => in_array($code, array_filter([$normalize($p->code ?? ''),
+                    $normalize($entity === 'customer' ? ($p->customer_number ?? '') : ($p->supplier_number ?? ''))]), true));
+                if ($byCode->count() === 1) return $byCode->first();
+            }
+            $name = $normalize($record->name ?? '');
+            $byName = $finance->filter(fn ($p) => $normalize($p->name ?? '') === $name);
+            $stockSameName = DB::connection('tenant')->table($entity === 'customer' ? 'inventory_customers' : 'inventory_suppliers')
+                ->where('organization_id', $stockOrgId)->get(['name'])->filter(fn ($p) => $normalize($p->name) === $name)->count();
+            return $name !== '' && $byName->count() === 1 && $stockSameName === 1 ? $byName->first() : null;
+        };
         foreach (['warehouses' => 'warehouse', 'inventory_customers' => 'customer', 'inventory_suppliers' => 'supplier'] as $table => $entity) {
             if (! Schema::connection('tenant')->hasTable($table)) continue;
             $org = $table === 'warehouses' ? $stockOrgId : $stockOrgId;
             foreach (DB::connection('tenant')->table($table)->where('organization_id', $org)->orderBy('id')->get() as $record) {
                 $details = ['source' => 'existing_solastock_record'];
+                if (in_array($entity, ['customer', 'supplier'], true) && ($pair = $partyCounterpart($entity, $record))) {
+                    $pairedFinance[$entity][(string) $pair->id] = true;
+                    $rows[] = $this->draftCandidate($entity, 'exact_candidate_requires_owner_review', $record, $pair,
+                        'party_match_requires_confirmation', 'owner_decision', ['source' => 'matched_existing_records']);
+                    continue;
+                }
                 if (in_array($entity, ['customer', 'supplier'], true)) {
                     $details['available_finance_parties'] = ($financeParties[$entity] ?? collect())->map(fn ($party) => [
                         'id' => (string) $party->id,
@@ -2039,6 +2167,7 @@ final class ConnectionWizardService
         }
         foreach (['customers' => 'customer', 'suppliers' => 'supplier'] as $table => $entity) {
             foreach ($financeParties[$entity] ?? collect() as $record) {
+                if (isset($pairedFinance[$entity][(string) $record->id])) continue;
                 $rows[] = $this->draftCandidate($entity, 'owner_review_required', null, $record,
                     'owner_authoritative_record_selection_required', 'owner_decision', ['source' => 'existing_finance_record']);
             }
@@ -2510,7 +2639,9 @@ final class ConnectionWizardService
         [$table, $nameColumn, $codeColumn] = $definition;
         $query = DB::connection('tenant')->table($table)->where('id', $id);
         if (Schema::connection('tenant')->hasColumn($table, 'organization_id')) {
-            $query->where('organization_id', $application === 'solastock' ? $mapping->solastock_organization_id : $mapping->finance_organization_id);
+            $scope = $application === 'solastock' ? $mapping->solastock_organization_id : $mapping->finance_organization_id;
+            $shared = $application === 'solabooks' && in_array($entityType, ['unit', 'category'], true);
+            $query->where(fn ($q) => $shared ? $q->where('organization_id', $scope)->orWhereNull('organization_id') : $q->where('organization_id', $scope));
         }
         $record = $query->first();
         if (! $record) {

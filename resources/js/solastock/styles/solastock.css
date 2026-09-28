@@ -1986,3 +1986,39 @@ html[dir="rtl"] .fifo-total-line strong {
 .focus-header .focus-progress::-webkit-progress-value{background:var(--brand,#1f7a4d);border-radius:999px}
 .focus-header .focus-progress::-moz-progress-bar{background:var(--brand,#1f7a4d);border-radius:999px}
 [dir="rtl"] .focus-header .focus-progress{transform:scaleX(-1)}
+
+/* Setup footer: part of the panel's normal flow — never floats over rows or controls. */
+.focus-wizard .focus-footer{position:static;z-index:auto;backdrop-filter:none;background:transparent;margin:16px 0 0;padding:12px 0 0;border-radius:0;border-top:1px solid var(--line,#dfe5ea);flex-wrap:wrap}
+.focus-footer-primary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.focus-footer-reason{color:var(--muted,#667085);font-size:.8rem;max-width:42ch}
+.focus-meta{margin:6px 0;font-size:.8rem;color:var(--muted,#667085)}
+/* Business-record summary: every section with an honest count. */
+.focus-record-summary{margin:10px 0 14px}
+.focus-record-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.focus-record-table th,.focus-record-table td{padding:7px 10px;border-bottom:1px solid var(--line,#dfe5ea);text-align:start}
+.focus-record-table thead th{font-size:.75rem;font-weight:600;color:var(--muted,#667085)}
+.focus-record-table td:not(.focus-record-empty){font-variant-numeric:tabular-nums}
+.focus-record-empty{color:var(--muted,#667085)}
+.focus-record-table .btn--link{padding:0;font-weight:700}
+.focus-ready-summary{margin-top:8px;font-size:.85rem}
+.focus-ready-summary summary{cursor:pointer;color:var(--green,#21633b)}
+.focus-ready-summary p{margin:6px 0 0;color:var(--muted,#667085)}
+.focus-section-tools{margin:8px 0}
+.focus-section-tools .input{max-width:320px}
+.focus-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin:10px 0 0;font-size:.85rem}
+.focus-connect-effects{margin:10px 0;padding-inline-start:20px;font-size:.9rem;line-height:1.6}
+@media(max-width:760px){
+  .focus-wizard .focus-footer{align-items:stretch}
+  .focus-footer-primary{width:100%}.focus-footer-primary .btn{flex:1;min-height:44px}
+  .focus-record-table{font-size:.82rem}.focus-record-table th,.focus-record-table td{padding:6px}
+  .focus-section-tools .input{max-width:none;width:100%}
+}
+/* Record comparison: even hairline boxes instead of one-sided accent bars. */
+.focus-wizard .focus-app-record,.focus-wizard .focus-recommendation,.focus-wizard .focus-scenario{border-inline-start:0;border:1px solid var(--line,#dfe5ea);border-radius:8px;padding:8px 10px}
+.focus-wizard .focus-recommendation{background:#f3f8f5}
+[data-theme="dark"] .focus-wizard .focus-app-record,[data-theme="dark"] .focus-wizard .focus-recommendation,[data-theme="dark"] .focus-wizard .focus-scenario{border:1px solid var(--line,#2a3a37)}
+/* The side overview duplicated the step counts; the setup is one column now. */
+.focus-wizard .focus-workspace{grid-template-columns:minmax(0,1fr)}
+.focus-record-table .btn--link{min-height:0;height:auto;padding:0;border:0;background:none;text-decoration:underline}
+@media(max-width:640px){.connection-summary__facts{flex-direction:column;gap:2px}.connection-summary__facts dd{overflow-wrap:break-word}}
+@media(max-width:760px){.focus-wizard .focus-category-nav{flex-wrap:wrap;overflow:visible}}

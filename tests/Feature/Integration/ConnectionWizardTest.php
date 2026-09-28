@@ -805,8 +805,10 @@ final class ConnectionWizardTest extends TestCase
         $wizard = app(ConnectionWizardService::class);
         $before = $this->mutationCounters();
         $run = $wizard->start(TenantTestManager::ORG_A, 7001);
-        // Completed Finance setup follows the existing-business manual review policy.
-        $this->assertSame('existing_business', $run['guided_setup']['setup_path']);
+        // Completing SolaCount setup is a precondition of connecting, not business history:
+        // with no records in either app this is the fresh path (safeguards still apply).
+        $this->assertSame('fresh_workspace', $run['guided_setup']['setup_path']);
+        $this->assertTrue($run['guided_setup']['finance_setup_started']);
         foreach ($run['comparison'] as $candidate) {
             if ($candidate['entity_type'] !== 'account_role') continue;
             $run = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
@@ -898,6 +900,58 @@ final class ConnectionWizardTest extends TestCase
         $this->assertNull($status()['plan_requirement']);
         $seed(['connection_setup_readiness' => false, 'connection_activation_delivery_entitled' => false, 'reason' => 'finance_and_inventory_access_required']);
         $this->assertNull($status()['plan_requirement']);
+    }
+
+    #[Test]
+    public function standard_defaults_are_ready_automatically_and_every_record_section_is_counted(): void
+    {
+        $this->seedConnectionFixture(true);
+        foreach ([['Piece', 'pcs', 'count'], ['Kilogram', 'kg', 'weight']] as [$name, $symbol, $kind]) {
+            DB::connection('tenant')->table('inventory_units')->insert(['organization_id' => null, 'name' => $name, 'symbol' => $symbol, 'created_at' => now(), 'updated_at' => now()]);
+            DB::connection('tenant')->table('units')->insert(['organization_id' => TenantTestManager::ORG_A, 'code' => strtoupper($symbol), 'name' => $name, 'symbol' => $symbol, 'kind' => $kind, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        DB::connection('tenant')->table('customers')->insert(['organization_id' => 14, 'name' => 'Acme Trading', 'created_at' => now(), 'updated_at' => now()]);
+        DB::connection('tenant')->table('inventory_customers')->insert(['organization_id' => TenantTestManager::ORG_A, 'code' => 'C-1', 'name' => 'Acme Trading', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+
+        $run = app(ConnectionWizardService::class)->start(TenantTestManager::ORG_A, 7001);
+        $sections = $run['guided_setup']['record_sections'];
+
+        // Standard units are ready without a decision; only the custom SolaStock-only "Each" asks.
+        $this->assertGreaterThanOrEqual(2, $sections['units']['ready']);
+        $this->assertSame(1, $sections['units']['review']);
+        $this->assertSame(0, collect($run['comparison'])->where('entity_type', 'unit')
+            ->where('classification', 'missing_finance_record')->filter(fn ($row) => in_array($row['solastock']['code'] ?? null, ['PCS', 'KG'], true))->count());
+        $this->assertSame($sections['units']['ready'], IntegrationMasterDataMapping::query()->where('entity_type', 'unit')
+            ->where('discovery_method', 'canonical_standard_default')->count());
+        // Customers and suppliers are always reported; the matching customer is ONE row to confirm.
+        $this->assertSame(['total' => 1, 'ready' => 0, 'review' => 1], $sections['customers']);
+        $this->assertSame(['total' => 0, 'ready' => 0, 'review' => 0], $sections['suppliers']);
+
+        // Resuming never duplicates the session or the mappings.
+        $again = app(ConnectionWizardService::class)->start(TenantTestManager::ORG_A, 7001);
+        $this->assertSame($run['run_uuid'], $again['run_uuid']);
+        $this->assertSame($sections['units']['ready'], IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->count());
+    }
+
+    #[Test]
+    public function before_a_mapping_exists_matching_parties_are_one_row_per_role_and_nothing_is_bound(): void
+    {
+        $this->seedConnectionFixture(false);
+        // "Blue Harbor" is both a customer and a supplier in both apps; "Solo" exists only in SolaCount.
+        DB::connection('tenant')->table('customers')->insert([['organization_id' => 14, 'name' => 'Blue Harbor', 'created_at' => now(), 'updated_at' => now()],
+            ['organization_id' => 14, 'name' => 'Solo', 'created_at' => now(), 'updated_at' => now()]]);
+        DB::connection('tenant')->table('suppliers')->insert(['organization_id' => 14, 'name' => 'Blue Harbor', 'created_at' => now(), 'updated_at' => now()]);
+        DB::connection('tenant')->table('inventory_customers')->insert(['organization_id' => TenantTestManager::ORG_A, 'code' => 'C-9', 'name' => 'blue  harbor', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        DB::connection('tenant')->table('inventory_suppliers')->insert(['organization_id' => TenantTestManager::ORG_A, 'code' => 'S-9', 'name' => 'Blue Harbor', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+
+        $rows = collect(app(ConnectionWizardService::class)->discover(TenantTestManager::ORG_A)['comparison']);
+        $customers = $rows->where('entity_type', 'customer');
+        $this->assertSame(2, $customers->count()); // Blue Harbor pair + Solo
+        $pair = $customers->firstWhere('classification', 'exact_candidate_requires_owner_review');
+        $this->assertSame('Blue Harbor', $pair['solabooks']['name'] ?? null);
+        $this->assertNotNull($pair['solastock']);
+        $this->assertSame(1, $rows->where('entity_type', 'supplier')->where('classification', 'exact_candidate_requires_owner_review')->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->whereIn('entity_type', ['customer', 'supplier'])->count());
     }
 
     /** Central's commercial verdict for this organization, with a paid, current SolaStock and SolaCount. */
