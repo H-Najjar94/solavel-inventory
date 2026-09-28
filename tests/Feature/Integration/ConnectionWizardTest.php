@@ -8,6 +8,7 @@ use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\Item;
 use App\Services\Integration\ConnectionWizardService;
 use App\Services\Integration\IntegrationStatusService;
+use App\Services\Integration\StandardCatalogMappings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -932,6 +933,13 @@ final class ConnectionWizardTest extends TestCase
         // Resuming never duplicates the session or mappings.
         $again = app(ConnectionWizardService::class)->start(TenantTestManager::ORG_A, 7001);
         $this->assertSame($run['run_uuid'], $again['run_uuid']);
+        $this->assertSame($sections['units']['ready'], IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->count());
+
+        // An older, still-unfrozen draft is upgraded when resumed, without
+        // duplicating records or requiring the user to restart setup.
+        IntegrationMasterDataMapping::query()->where('discovery_method', StandardCatalogMappings::METHOD)->delete();
+        $resumed = app(ConnectionWizardService::class)->show(TenantTestManager::ORG_A, $run['run_uuid']);
+        $this->assertSame($sections['units']['ready'], $resumed['guided_setup']['record_sections']['units']['ready']);
         $this->assertSame($sections['units']['ready'], IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->count());
     }
 

@@ -262,6 +262,19 @@ final class ConnectionWizardService
 
     public function show(int $organizationId, string $runUuid): array
     {
+        // Drafts created by an older release may predate automatic standard
+        // mappings. Opening an unfrozen setup is the safe upgrade boundary;
+        // frozen evidence remains immutable.
+        $run = $this->runForOrganization($organizationId, $runUuid);
+        if ($run->snapshot_frozen_at === null && $run->organization_mapping_uuid !== null) {
+            $mapping = IntegrationOrganizationMapping::query()
+                ->where('mapping_uuid', $run->organization_mapping_uuid)->first();
+            if ($mapping) {
+                app(FinanceReferenceDefaultsService::class)->sync($organizationId, true);
+                app(StandardCatalogMappings::class)->ensure($mapping);
+            }
+        }
+
         return $this->finalPreview($organizationId, $runUuid);
     }
 
