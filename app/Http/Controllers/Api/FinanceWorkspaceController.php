@@ -80,19 +80,23 @@ final class FinanceWorkspaceController
             if ($input['action'] === 'workspace.initialize') {
                 abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can($actor, 'inventory.integration.setup'), 403, 'workspace_permission_required');
                 $policy=app(\App\Services\Integration\ConnectionManagementPolicy::class)->status((int)$org->id,$actor);
+                $summary = fn () => app(\App\Services\Integration\ConnectionSummary::class)->forOrganization((int) $org->id);
                 if ($policy['separation_of_duties'] ?? false) {
-                    return response()->json(['success'=>true,'data'=>['status'=>'manual_review','reason'=>'separate_review_required']]);
+                    return response()->json(['success'=>true,'data'=>['status'=>'manual_review','reason'=>'separate_review_required','summary'=>$summary()]]);
                 }
                 try {
                     $result = app(\App\Services\Integration\DefaultStockConnection::class)->initialize(
                         (int)$org->client_id, (int)$org->id, (int)$input['finance_organization_id'], (int)$actor->id);
-                    return response()->json(['success'=>true,'data'=>$result]);
+                    return response()->json(['success'=>true,'data'=>$result+['summary'=>$summary()]]);
                 } catch (\RuntimeException $exception) {
-                    return response()->json(['success'=>false,'message'=>$exception->getMessage()], 409);
+                    return response()->json(['success'=>false,'message'=>$exception->getMessage(),'summary'=>$summary()], 409);
                 }
             }
             if ($input['action'] === 'workspace.context') {
-                return response()->json(['success' => true, 'data' => app(\App\Services\InventoryWorkspace\WorkspaceContext::class)->read($request, (int) $org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active')]);
+                $context = app(\App\Services\InventoryWorkspace\WorkspaceContext::class)->read($request, (int) $org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active');
+                // The same connection answer SolaStock's own page shows, for SolaCount's Connection Status.
+                $context['connection_summary'] = app(\App\Services\Integration\ConnectionSummary::class)->forOrganization((int) $org->id);
+                return response()->json(['success' => true, 'data' => $context]);
             }
             if ($input['action'] === 'workspace.connection') {
                 abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can($actor, 'inventory.integration.view'), 403, 'workspace_permission_required');

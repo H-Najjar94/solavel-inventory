@@ -61,6 +61,12 @@ final class DefaultStockConnection
                 'solabooks_organization_id'=>$financeId,'mode'=>'connected_pending_mapping','require_mapping_before_post'=>true,
                 'meta'=>['client_id'=>$clientId,'central_organization_id'=>$orgId,'transport_enabled'=>false,
                     'default_connection'=>['version'=>self::VERSION,'state'=>'preparing']]]);
+            if (data_get($setting->meta,'default_connection.state') !== 'preparing') {
+                // A retry after a recorded failure: report it as running again (touches updated_at).
+                $meta = (array) $setting->meta;
+                $meta['default_connection'] = ['version'=>self::VERSION,'state'=>'preparing'];
+                $setting->update(['meta'=>$meta]);
+            }
             $credentials = app(FinanceConnectionClient::class)->command($payload+['action'=>'connection.prepare']);
             return $db->transaction(function () use ($db,$orgId,$financeId,$clientId,$actorId,$plan,$operations,$credentials): array {
                 $db->table('organizations')->where('id',$financeId)->lockForUpdate()->first();
@@ -114,8 +120,31 @@ final class DefaultStockConnection
                 app(\App\Services\Catalog\FinanceReferenceDefaultsService::class)->sync($orgId,true);
                 return ['status'=>'ready','changed'=>true,'organization_id'=>$orgId,'roles'=>array_keys($plan['accounts'])];
             },3);
+        } catch (RuntimeException $exception) {
+            $this->recordFailure($orgId, $exception->getMessage());
+            throw $exception;
         } finally {
             $db->selectOne('SELECT RELEASE_LOCK(?) AS released',[$lock]);
+        }
+    }
+
+    /**
+     * Leave evidence when preparation stops after it began, so both apps can show
+     * "stopped — retry" instead of "preparing" forever. Only this service's own
+     * record is touched; connections it did not create are never modified.
+     */
+    private function recordFailure(int $orgId, string $reason): void
+    {
+        try {
+            $setting = IntegrationSetting::query()->where('organization_id',$orgId)->where('integration','solabooks')->first();
+            if (! $setting || data_get($setting->meta,'default_connection.version') !== self::VERSION
+                || data_get($setting->meta,'default_connection.state') === 'ready') return;
+            $meta = (array) $setting->meta;
+            $meta['default_connection'] = ['version'=>self::VERSION,'state'=>'failed',
+                'reason'=>mb_substr($reason,0,120),'failed_at'=>now()->toIso8601String()];
+            $setting->update(['meta'=>$meta]);
+        } catch (\Throwable) {
+            // The original failure is what matters to the caller.
         }
     }
 

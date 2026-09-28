@@ -84,7 +84,6 @@ export default function GuidedConnectionAssistant({
     const scenarioText = tr(`integration.focus.scenario.${scenario}`);
     const steps = [1, ...(ownerRows.length ? [2] : []), ...(physicalRows.length ? [3] : []), 4, 5, 6];
     const totalSteps = steps.length;
-    const phase = task === 1 ? 1 : task === 6 ? 3 : 2;
     const resolvedOwner = ownerRows.length - ownerPending.length;
     const resolvedCounts = physicalRows.length - physicalPending.length;
     const resolvedAccounting = requiredAccountingRows.length - accountingPending.length;
@@ -118,7 +117,10 @@ export default function GuidedConnectionAssistant({
     useEffect(() => {
         if (!runUuid || resumedRunRef.current === runUuid) return;
         resumedRunRef.current = runUuid;
-        if (confirmedDecisions.size === 0) return;
+        if (assistantStep === 6 && ['activation_ready', 'preview_ready', 'owner_approved', 'accountant_approved', 'ready_for_approval'].includes(view.state)) { setTask(6); return; }
+        // Deterministic checks that already passed are not a step for the user to click through.
+        const preparedAutomatically = checks.organization_verified && checks.base_currency_inherited && !checks.tax_exceptions;
+        if (confirmedDecisions.size === 0 && !preparedAutomatically) return;
         if (ownerPending.length > 0) setTask(2);
         else if (physicalPending.length > 0) setTask(3);
         else if (accountingPending.length > 0) setTask(4);
@@ -599,12 +601,11 @@ export default function GuidedConnectionAssistant({
     </details>;
 
     const taskContent = () => {
-        if (!runUuid) return <section className="focus-card focus-landing">
-            <h1 ref={headingRef} tabIndex="-1">{tr('integration.focus.title')}</h1>
-            <p className="focus-lead">{tr('integration.focus.subtitle')}</p>
+        // The session starts (or resumes) automatically; this only shows while it opens or if opening failed.
+        if (!runUuid) return <section className="focus-card focus-landing" aria-busy={saving}>
+            <p ref={headingRef} tabIndex="-1" className="focus-lead">{saving ? tr('integration.summary.startingSetup') : tr('integration.summary.startFailed')}</p>
             <p className="focus-scenario">{scenarioText}</p>
-            <details><summary>{tr('integration.focus.whatHappens')}</summary><p>{tr('integration.focus.whatHappensText')}</p></details>
-            {footer(tr('integration.focus.continueSetup'), start, { hideBack: true, disabled: !gate.allowed || saving })}
+            {!saving && gate.allowed && footer(tr('integration.summary.action.retry'), () => start(), { hideBack: true })}
         </section>;
 
         if (task === 1) return <section className="focus-card focus-prepared">
@@ -784,25 +785,11 @@ export default function GuidedConnectionAssistant({
 
     return <div className="wizard focus-wizard" aria-live="polite">
         {loadError && <div role="alert" className="focus-attention">{tr("integration.loadFailed")} <button type="button" className="btn" onClick={retryLoad}>{tr("integration.retry")}</button></div>}
-        <section className="focus-overview">
-            <div><span className="focus-overview-kicker">{tr('integration.focus.overviewKicker')}</span><h1>{tr('integration.focus.title')}</h1><p>{tr('integration.focus.subtitle')}</p></div>
-            <div className="focus-overview-context"><span>{tr('integration.focus.organization')}</span><strong><bdi>{organizationName}</bdi></strong><small>{scenarioText}</small></div>
-        </section>
-        <nav className="focus-phase-stepper" aria-label={tr('integration.focus.setupProgress')}>
-            {[
-                [1, tr('integration.focus.phase.prepare'), 1],
-                [2, tr('integration.focus.phase.decisions'), 2],
-                [3, tr('integration.focus.phase.review'), 6],
-            ].map(([number, label, destination]) => <button type="button" key={number} className={phase === number ? 'is-current' : phase > number ? 'is-complete' : ''}
-                aria-current={phase === number ? 'step' : undefined} disabled={number > phase} onClick={() => go(destination)}>
-                <span>{phase > number ? '✓' : number}</span><strong>{label}</strong>
-            </button>)}
-        </nav>
-        <header className="focus-header">
+        {runUuid && totalSteps > 1 && <header className="focus-header">
             <div><span>{tr('integration.focus.stepOf', { current: steps.indexOf(task) + 1, total: totalSteps })}</span><strong>{taskLabels[task - 1]}</strong></div>
-            <span>{tr('integration.focus.stepsRemaining', { count: totalSteps - steps.indexOf(task) - 1 })}</span>
+            <progress className="focus-progress" max={totalSteps} value={steps.indexOf(task) + 1} aria-label={tr('integration.focus.setupProgress')} />
             <details className="focus-all-steps"><summary>{tr('integration.focus.allSteps')}</summary><ol>{taskLabels.map((label, index) => steps.includes(index + 1) && <li key={label}><button type="button" onClick={() => go(index + 1)} disabled={index + 1 > task}>{label}</button></li>)}</ol></details>
-        </header>
+        </header>}
         <div className="focus-safety-bar">{tr('integration.focus.safety')} {technical}</div>
         <div className="focus-workspace">
             <main className="focus-stage">{taskContent()}</main>
