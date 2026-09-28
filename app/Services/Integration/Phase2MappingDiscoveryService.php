@@ -270,6 +270,13 @@ final class Phase2MappingDiscoveryService
         // (organization_id NULL); they belong to every Finance organization.
         $books = $this->records($definition['books_table'], (int) $mapping->finance_organization_id, collect($keys)->pluck(1)->all(),
             in_array($entityType, ['unit', 'category'], true));
+        // Built-in reference lists are application metadata, not customer
+        // business records. Never show them in setup totals or ask a person to
+        // reconcile them. Custom references remain visible.
+        if (in_array($entityType, ['unit', 'category'], true)) {
+            $stock = $stock->reject(fn (array $row) => $this->isStandardReference($entityType, $row))->values();
+            $books = $books->reject(fn (array $row) => $this->isStandardReference($entityType, $row))->values();
+        }
         // A signed Finance creation may commit while Stock activation is still
         // pending. Keep that unactivated counterpart out of discovery so an
         // exact retry sees the same approved before-image and never treats the
@@ -364,6 +371,27 @@ final class Phase2MappingDiscoveryService
         }
 
         return $results;
+    }
+
+    private function isStandardReference(string $entityType, array $row): bool
+    {
+        if ($entityType === 'unit') {
+            return \App\Services\Integration\StandardCatalogMappings::unitKey(
+                $row['name'] ?? null,
+                $row['symbol'] ?? null,
+            ) !== null;
+        }
+
+        if ($entityType === 'category') {
+            $name = (string) ($row['name'] ?? '');
+            $standardNames = collect(\App\Support\InventoryCategoryDefaults::all())->pluck('name')
+                ->merge(collect(\App\Services\Catalog\FinanceReferenceDefaultsService::LEGACY_FINANCE_CATEGORIES)
+                    ->flatMap(fn (array $entry) => [$entry[0], ...$entry[1]]));
+
+            return $standardNames->containsStrict($name);
+        }
+
+        return false;
     }
 
     /** @return array<int,array<string,mixed>> */
