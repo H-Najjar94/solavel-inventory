@@ -241,9 +241,9 @@ final class DefaultStockConnectionTest extends TestCase
 
     public function test_setup_cta_path_resolves_to_the_real_stock_spa(): void
     {
-        $route=app('router')->getRoutes()->match(\Illuminate\Http\Request::create('/integrations/solabooks','GET'));
+        $route=app('router')->getRoutes()->match(\Illuminate\Http\Request::create('/integrations/solacount','GET'));
         $this->assertSame('integrations/{any?}',$route->uri());
-        $this->assertStringContainsString("path: 'integrations/solabooks'",file_get_contents(resource_path('js/solastock/router/router.jsx')));
+        $this->assertStringContainsString("path: 'integrations/solacount'",file_get_contents(resource_path('js/solastock/router/router.jsx')));
     }
 
     private function counts(): array
