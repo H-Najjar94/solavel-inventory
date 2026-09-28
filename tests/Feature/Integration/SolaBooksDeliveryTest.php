@@ -578,6 +578,34 @@ class SolaBooksDeliveryTest extends TestCase
     }
 
     #[Test]
+    public function reviewed_retry_allows_the_shared_unit_receiver_fix_but_not_other_permanent_failures(): void
+    {
+        $this->bootActiveIntegration();
+        $transport = app(DurableOutboxTransportService::class);
+        $event = $this->enableDurableTransport($this->event());
+        $event->update([
+            'status' => 'failed',
+            'mapping_status' => 'complete',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'unit_conversion_finance_scope_invalid',
+        ]);
+
+        $retried = $transport->queueReviewedRetry($event->fresh(), 42);
+        $this->assertSame('ready', $retried->status);
+        $this->assertSame('unit_conversion_finance_scope_invalid', $retried->failure_code);
+
+        $blocked = $this->enableDurableTransport($this->event());
+        $blocked->update([
+            'status' => 'failed',
+            'mapping_status' => 'complete',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'currency_invalid',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        $transport->queueReviewedRetry($blocked->fresh(), 42);
+    }
+
+    #[Test]
     public function maximum_attempts_dead_letter_and_remote_commit_ack_crash_are_recoverable(): void
     {
         $this->bootActiveIntegration();

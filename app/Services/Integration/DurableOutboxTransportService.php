@@ -13,6 +13,11 @@ use Throwable;
 
 final class DurableOutboxTransportService
 {
+    /** Permanent receiver rejections whose unchanged payload can become valid after a reviewed receiver fix. */
+    private const REVIEWABLE_RECEIVER_CODES = [
+        'unit_conversion_finance_scope_invalid',
+    ];
+
     public function __construct(
         private readonly IntegrationSafetyHold $safety,
         private readonly OrganizationContext $organizations,
@@ -302,7 +307,8 @@ final class DurableOutboxTransportService
     {
         $this->assertExecutionEnabled((int) $event->organization_id);
         if ($event->mapping_status !== 'complete'
-            || $event->failure_category === 'business_permanent'
+            || ($event->failure_category === 'business_permanent'
+                && ! in_array((string) $event->failure_code, self::REVIEWABLE_RECEIVER_CODES, true))
             || ! in_array($event->status, ['failed', 'retry_scheduled', 'review_required'], true)) {
             throw new RuntimeException('This event is not eligible for reviewed retry.');
         }
