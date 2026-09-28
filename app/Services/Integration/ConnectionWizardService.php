@@ -177,20 +177,23 @@ final class ConnectionWizardService
             || (int) ($identity['central_organization_id'] ?? 0) !== $organizationId) {
             $this->fail('authoritative_setup_identity_required');
         }
-        // Standard units and categories both apps ship with are mapped by canonical
-        // key here, so they never become review tasks (idempotent; custom and
-        // conflicting records stay in review).
-        if (! empty($preview['organization_mapping_uuid'])) {
-            $mapping = IntegrationOrganizationMapping::query()->where('mapping_uuid', $preview['organization_mapping_uuid'])->first();
-            if ($mapping && array_sum(app(StandardCatalogMappings::class)->ensure($mapping, $actorUserId)) > 0) {
-                $preview = $this->discover($organizationId);
-            }
-        }
-
         $existing = DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('solastock_organization_id', $organizationId)
             ->whereIn('state', ['draft_decisions', 'decisions_complete', 'snapshot_required', 'cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'])
             ->whereNull('discarded_at')->latest('id')->first();
+        // An untouched draft may be regenerated when discovery semantics or
+        // source records change. Never discard actual user progress.
+        if ($existing && $existing->state === 'draft_decisions'
+            && ! DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                ->where('run_uuid', $existing->run_uuid)->exists()
+            && ! hash_equals((string) $existing->snapshot_hash, (string) $preview['snapshot_hash'])) {
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $existing->id)->update([
+                'invalidated_at' => now(),
+                'invalidation_reason' => 'untouched_discovery_changed',
+                'updated_at' => now(),
+            ]);
+            $existing = null;
+        }
         if ($existing) {
             return $this->finalPreview($organizationId, (string) $existing->run_uuid);
         }
@@ -911,8 +914,6 @@ final class ConnectionWizardService
         string $runUuid,
         int $actorUserId,
     ): void {
-        // Standard defaults the review showed as ready must exist as real mappings.
-        app(StandardCatalogMappings::class)->ensure($organizationMapping, $actorUserId);
         $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
             ->where('run_uuid', $runUuid)->where('status', 'selected')->orderBy('id')->lockForUpdate()->get();
         $approvedRun = DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->first();

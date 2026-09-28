@@ -903,7 +903,7 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
-    public function standard_defaults_are_ready_automatically_and_every_record_section_is_counted(): void
+    public function standard_defaults_are_not_customer_records_and_every_customer_section_is_counted(): void
     {
         $this->seedConnectionFixture(true);
         foreach ([['Piece', 'pcs', 'count'], ['Kilogram', 'kg', 'weight']] as [$name, $symbol, $kind]) {
@@ -916,21 +916,22 @@ final class ConnectionWizardTest extends TestCase
         $run = app(ConnectionWizardService::class)->start(TenantTestManager::ORG_A, 7001);
         $sections = $run['guided_setup']['record_sections'];
 
-        // Standard units are ready without a decision; only the custom SolaStock-only "Each" asks.
-        $this->assertGreaterThanOrEqual(2, $sections['units']['ready']);
+        // Built-in references are metadata, not customer records. Only the
+        // custom SolaStock-only "Each" belongs in the review.
+        $this->assertSame(0, $sections['units']['ready']);
         $this->assertSame(1, $sections['units']['review']);
+        $this->assertSame(1, $sections['units']['total']);
         $this->assertSame(0, collect($run['comparison'])->where('entity_type', 'unit')
-            ->where('classification', 'missing_finance_record')->filter(fn ($row) => in_array($row['solastock']['code'] ?? null, ['PCS', 'KG'], true))->count());
-        $this->assertSame($sections['units']['ready'], IntegrationMasterDataMapping::query()->where('entity_type', 'unit')
-            ->where('discovery_method', 'canonical_standard_default')->count());
+            ->filter(fn ($row) => in_array($row['solastock']['code'] ?? null, ['PCS', 'KG'], true))->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->count());
         // Customers and suppliers are always reported; the matching customer is ONE row to confirm.
         $this->assertSame(['total' => 1, 'ready' => 0, 'review' => 1], $sections['customers']);
         $this->assertSame(['total' => 0, 'ready' => 0, 'review' => 0], $sections['suppliers']);
 
-        // Resuming never duplicates the session or the mappings.
+        // Resuming never duplicates the session or creates hidden mappings.
         $again = app(ConnectionWizardService::class)->start(TenantTestManager::ORG_A, 7001);
         $this->assertSame($run['run_uuid'], $again['run_uuid']);
-        $this->assertSame($sections['units']['ready'], IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->count());
+        $this->assertSame(0, IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->count());
     }
 
     #[Test]

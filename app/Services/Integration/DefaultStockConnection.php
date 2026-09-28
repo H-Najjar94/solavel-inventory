@@ -36,8 +36,6 @@ final class DefaultStockConnection
             if ($owned && $mapping?->status === 'verified' && $mapping?->activation_state === 'active'
                 && $setting?->mode === 'active'
                 && app(OrganizationAccountRequirements::class)->missingRoles($orgId) === []) {
-                // Already connected: only fill in missing standard unit/category mappings.
-                app(StandardCatalogMappings::class)->ensure($mapping, $actorId);
                 return ['status'=>'ready','changed'=>false,'organization_id'=>$orgId];
             }
             if (($setting || $mapping || $db->table('integration_account_mappings')->where('organization_id',$orgId)->exists()) && ! $owned) {
@@ -118,9 +116,7 @@ final class DefaultStockConnection
                     'actor_id'=>$actorId,'roles'=>array_keys($plan['accounts']),'historical_policy'=>'no_history_no_replay'];
                 $setting->update(['mode'=>'active','meta'=>$meta]);
                 $mapping->update(['status'=>'verified','activation_state'=>'active']);
-                app(StandardCatalogMappings::class)->ensure($mapping, $actorId);
                 if (app(OrganizationAccountRequirements::class)->missingRoles($orgId) !== []) throw new RuntimeException('default_mapping_validation_failed');
-                app(\App\Services\Catalog\FinanceReferenceDefaultsService::class)->sync($orgId,true);
                 return ['status'=>'ready','changed'=>true,'organization_id'=>$orgId,'roles'=>array_keys($plan['accounts'])];
             },3);
         } catch (RuntimeException $exception) {
