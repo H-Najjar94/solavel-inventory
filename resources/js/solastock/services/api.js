@@ -46,7 +46,10 @@ async function request(path, { method = 'GET', body, params } = {}) {
         err.status = res.status;
         err.code = json?.error?.code || json?.code;
         err.payload = json?.error;
-        if (json?.app === 'inventory' && json?.code && json.code !== 'action_forbidden') {
+        // A transient Central outage is not an access revocation. Keep the
+        // authenticated shell mounted and let the affected request retry;
+        // only a definitive authorization decision may replace the app.
+        if (json?.app === 'inventory' && json?.code && !['action_forbidden', 'temporarily_unavailable'].includes(json.code)) {
             window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
         }
         throw err;
@@ -78,7 +81,7 @@ async function requestForm(path, formData) {
         const err = new Error(json?.error?.message || json?.message || `Upload failed (${res.status})`);
         err.status = res.status;
         err.payload = json?.error;
-        if (json?.app === 'inventory' && json?.code && json.code !== 'action_forbidden') {
+        if (json?.app === 'inventory' && json?.code && !['action_forbidden', 'temporarily_unavailable'].includes(json.code)) {
             window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
         }
         throw err;
