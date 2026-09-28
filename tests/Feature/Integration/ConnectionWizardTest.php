@@ -34,10 +34,10 @@ final class ConnectionWizardTest extends TestCase
         $web = file_get_contents(base_path('routes/web.php'));
         $navigation = file_get_contents(resource_path('js/solastock/router/nav.js'));
 
-        $this->assertStringContainsString("path: 'integrations/solabooks'", $router);
+        $this->assertStringContainsString("path: 'integrations/solacount'", $router);
         $this->assertStringContainsString("protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view')", $router);
         $this->assertStringContainsString("Route::view('/integrations/{any?}', 'solastock-app')", $web);
-        $this->assertStringContainsString("path: '/integrations/solabooks'", $navigation);
+        $this->assertStringContainsString("path: '/integrations/solacount'", $navigation);
         $this->assertStringContainsString("useCanCreate('inventory.integration.setup')", file_get_contents(resource_path('js/solastock/pages/IntegrationSettingsPage.jsx')));
     }
 
@@ -836,6 +836,20 @@ final class ConnectionWizardTest extends TestCase
             'currency_verified_at' => now(), 'verified_at' => now(),
         ]);
         $this->openActivationGate();
+
+        // Central has not entitled the connection (e.g. SolaStock below Premium): activation is refused, nothing changes.
+        $this->commercialApproval(false);
+        try {
+            $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
+                'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+            $this->fail('Activation must require Central commercial approval.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['integration_plan_required'], $e->errors()['connection_wizard']);
+        }
+        $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
+
+        // SolaCount Premium + separately purchased SolaStock Premium: Central entitles it and activation connects.
+        $this->commercialApproval(true);
         $activated = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
             'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
         $this->assertSame('connected', $activated['state']);
@@ -843,6 +857,56 @@ final class ConnectionWizardTest extends TestCase
             ->where('run_uuid', $run['run_uuid'])->value('organization_mapping_uuid'));
         $this->assertSame(7, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
         $this->assertSame('active', IntegrationSetting::firstOrFail()->mode);
+
+        // Repeating the request is a no-op: no duplicate connection or mappings.
+        $again = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
+            'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+        $this->assertSame('connected', $again['state']);
+        $this->assertSame(7, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
+        $this->assertSame(1, DB::connection('tenant')->table('integration_organization_mappings')->count());
+    }
+
+    #[Test]
+    public function status_names_the_missing_plan_but_never_calls_setup_an_upgrade(): void
+    {
+        $this->seedConnectionFixture(false);
+        request()->attributes->set('tenant_state', ['client_id' => 860001]);
+        $seed = function (array $capabilities): void {
+            DB::connection('mysql')->table('entitlement_state_snapshots')->updateOrInsert(
+                ['organization_id' => TenantTestManager::ORG_A],
+                ['subscription_id' => null, 'underlying_subscription_state' => 'paid_active', 'effective_access_state' => 'paid_active',
+                    'state_hash' => hash('sha256', json_encode($capabilities)),
+                    'state_payload' => json_encode(['client_id' => 860001, 'organization_id' => TenantTestManager::ORG_A,
+                        'integration_capabilities' => $capabilities], JSON_UNESCAPED_SLASHES),
+                    'evaluated_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        };
+        $status = fn () => app(IntegrationStatusService::class)->status(TenantTestManager::ORG_A);
+
+        $seed(['connection_setup_readiness' => true, 'connection_activation_delivery_entitled' => false, 'reason' => 'inventory_premium_required',
+            'plan_requirements' => ['inventory' => ['required_plan' => 'premium', 'current_plan' => 'professional', 'met' => false, 'bundled_with_finance_plans' => ['advanced', 'enterprise']]]]);
+        $this->assertSame(['missing' => 'inventory', 'bundled_with_finance_plans' => ['advanced', 'enterprise']], $status()['plan_requirement']);
+        $this->assertSame('available', $status()['setup_status']);
+
+        $seed(['connection_setup_readiness' => true, 'connection_activation_delivery_entitled' => false, 'reason' => 'finance_premium_required']);
+        $this->assertSame('finance', $status()['plan_requirement']['missing']);
+
+        // Premium + Premium: eligible; remaining work is setup/activation, not a plan.
+        $seed(['connection_setup_readiness' => true, 'connection_activation_delivery_entitled' => true, 'reason' => 'setup_available_delivery_still_requires_activation']);
+        $this->assertNull($status()['plan_requirement']);
+        $seed(['connection_setup_readiness' => false, 'connection_activation_delivery_entitled' => false, 'reason' => 'finance_and_inventory_access_required']);
+        $this->assertNull($status()['plan_requirement']);
+    }
+
+    /** Central's commercial verdict for this organization, with a paid, current SolaStock and SolaCount. */
+    private function commercialApproval(bool $entitled): void
+    {
+        $cache = $this->createStub(\App\Services\Entitlements\EntitlementsCache::class);
+        $cache->method('getProjectSnapshot')->willReturn(['accessible' => true, 'commercially_entitled' => true,
+            'subscription_status' => 'active', 'entitlement_source' => 'separate_subscription', 'access_until' => now()->addMonth()->toIso8601String()]);
+        $capability = $this->createStub(\App\Services\Integration\FinanceInventoryCapability::class);
+        $capability->method('allows')->willReturn($entitled);
+        $this->app->instance(\App\Services\Integration\ApprovedFinanceIntegrationEntitlement::class,
+            new \App\Services\Integration\ApprovedFinanceIntegrationEntitlement($cache, $capability, new \App\Services\Entitlements\EntitlementAccessDecision));
     }
 
     #[Test]

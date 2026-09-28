@@ -37,21 +37,26 @@ export default function FinanceReadiness({status,details=false,onContinue,onRetr
   window.location.assign(next.setup_url);
  }catch{busy.current=false;setPending(false);setError(ar?'تعذّر فتح الإعداد. أعد المحاولة.':'Could not open setup. Please retry.');}}
  const incomplete=s?.state==='FINANCE_PROVISIONED_SETUP_INCOMPLETE';
+ // A missing subscription (never setup or provisioning) — named exactly, from Central's rule.
+ const plan=status?.plan_requirement,bundles=(plan?.bundled_with_finance_plans??[]).map(p=>'SolaCount '+p.charAt(0).toUpperCase()+p.slice(1)).join(ar?' أو ':' or ');
+ const planText=!plan?null:plan.missing==='finance'?['Connecting SolaStock requires SolaCount Premium or above for this organization.','يتطلب ربط SolaStock اشتراك SolaCount Premium أو أعلى لهذه المؤسسة.']
+  :plan.missing==='inventory'?[`Connecting SolaCount requires SolaStock Premium or above for this organization. Add SolaStock Premium${bundles?`, or get it through an eligible SolaCount bundle (${bundles})`:''}.`,`يتطلب الربط مع SolaCount اشتراك SolaStock Premium أو أعلى لهذه المؤسسة. أضف SolaStock Premium${bundles?` أو احصل عليه ضمن باقة SolaCount مؤهلة (${bundles})`:''}.`]
+  :['The SolaCount connection requires SolaCount Premium or above and SolaStock Premium or above for this organization.','يتطلب الربط مع SolaCount اشتراك SolaCount Premium أو أعلى واشتراك SolaStock Premium أو أعلى لهذه المؤسسة.'];
  return <section className="finance-readiness-shell" dir={ar?'rtl':'ltr'}>
  <div className="finance-readiness" dir={ar?'rtl':'ltr'}>
   <div className="finance-readiness__body"><img className="finance-readiness__icon" src={financeIcon} alt=""/><div className="finance-readiness__copy">
-  <div className="finance-readiness__heading"><strong>SolaCount</strong><span className="finance-readiness__badge" data-tone={s?.state==='CONNECTED_READY'?'success':(!s||['READINESS_UNAVAILABLE','PROVISIONING_PENDING'].includes(s.state))?'neutral':'warning'}>{(labels[s?.state]??labels.READINESS_UNAVAILABLE)[i]}</span></div>
-  <p>{(descriptions[s?.state]??descriptions.READINESS_UNAVAILABLE)[i]}</p>
+  <div className="finance-readiness__heading"><strong>SolaCount</strong><span className="finance-readiness__badge" data-tone={s?.state==='CONNECTED_READY'?'success':(!plan&&(!s||['READINESS_UNAVAILABLE','PROVISIONING_PENDING'].includes(s.state)))?'neutral':'warning'}>{plan?(ar?'يتطلب خطة مؤهلة':'Qualifying plan required'):(labels[s?.state]??labels.READINESS_UNAVAILABLE)[i]}</span></div>
+  <p>{planText?planText[i]:(descriptions[s?.state]??descriptions.READINESS_UNAVAILABLE)[i]}</p>
   {status?.draft_status==='in_progress'&&status?.connection_wizard?.run_uuid&&<p className="finance-readiness__support">{ar?'تقدم إعداد الربط محفوظ':'Your connection setup progress is saved'}</p>}
   {s?.state==='CONNECTED_READY'&&status?.last_sync_at&&<p className="finance-readiness__support">{ar?'آخر مزامنة':'Last sync'}: {new Date(status.last_sync_at).toLocaleString(ar?'ar':'en')}</p>}
   {(s?.blockers??[]).filter(k=>blockers[k]).map(k=><p className="finance-readiness__blocker" role="status" key={k}>{blockers[k][i]}</p>)}
   {!s?.can_manage&&s?.state!=='CONNECTED_READY'&&<p>{ar?'اطلب من مسؤول المؤسسة المخوّل إكمال الإعداد المالي.':'Ask an authorized organization administrator to complete Finance setup.'}</p>}
   </div></div><div className="finance-readiness__actions">
-   {s?.state==='ACCESS_REQUIRED'&&s?.can_manage&&s?.manage_access_url&&<a className="btn btn--primary" href={s.manage_access_url}>{ar?'إدارة التطبيقات والخطط':'Manage apps and plans'}</a>}
+   {(s?.state==='ACCESS_REQUIRED'||plan)&&s?.can_manage&&s?.manage_access_url&&<a className="btn btn--primary" href={s.manage_access_url}>{ar?'إدارة التطبيقات والخطط':'Manage apps and plans'}</a>}
    {incomplete&&s?.setup_url&&<button className="btn btn--primary" disabled={pending} aria-busy={pending} onClick={setup}>{pending&&<i className="fa-solid fa-spinner fa-spin" aria-hidden="true"/>} {pending?(ar?'جارٍ فتح الإعداد المالي…':'Opening Finance setup…'):(ar?'إكمال الإعداد المالي':'Complete Finance setup')}</button>}
-   {details&&s?.finance_setup_complete&&s?.can_manage&&s?.state!=='CONNECTED_READY'&&<button className="btn btn--primary" onClick={onContinue}>{ar?'متابعة إعداد الربط':'Continue connection setup'}</button>}
+   {details&&!plan&&s?.finance_setup_complete&&s?.can_manage&&s?.state!=='CONNECTED_READY'&&<button className="btn btn--primary" onClick={onContinue}>{ar?'متابعة إعداد الربط':'Continue connection setup'}</button>}
    {(!s||s.state==='READINESS_UNAVAILABLE')&&<button className="btn" onClick={onRetry}>{ar?'إعادة المحاولة':'Retry'}</button>}
-   {!details&&<Link className="btn ghost" to="/integrations/solabooks">{ar?'عرض التفاصيل':'View details'}<svg className="finance-readiness__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></Link>}
+   {!details&&<Link className="btn ghost" to="/integrations/solacount">{ar?'عرض التفاصيل':'View details'}<svg className="finance-readiness__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></Link>}
   </div>
  </div>
   {error&&<p className="finance-readiness__footer" role="alert">{error}</p>}

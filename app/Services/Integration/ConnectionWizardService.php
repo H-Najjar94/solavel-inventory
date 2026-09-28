@@ -803,6 +803,13 @@ final class ConnectionWizardService
             && hash_equals((string) $currentRun->approval_payload_hash, $approvalHash)) {
             return $this->show($organizationId, $runUuid);
         }
+        // Commercial authority is Central's: SolaCount Premium+ and SolaStock Premium+
+        // in this same organization. Setup may be prepared without it; activation may not.
+        try {
+            app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+        } catch (\RuntimeException) {
+            $this->fail('integration_plan_required');
+        }
         // The Finance endpoint has its own connection to this tenant database.
         // Calling it after locking wizard/master rows can deadlock against our
         // activation transaction. Create only reviewed, source-keyed pending

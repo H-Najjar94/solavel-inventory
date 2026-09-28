@@ -136,7 +136,12 @@ class InventoryCommercialEntitlementService
             $allowed ? 'setup_only' : 'blocked',
             null,
             null,
-            ['evaluated_at' => $row->evaluated_at ?? null]
+            [
+                'evaluated_at' => $row->evaluated_at ?? null,
+                // Central's per-app plan check (SolaCount Premium+ and SolaStock Premium+).
+                'delivery_entitled' => ($capabilities['connection_activation_delivery_entitled'] ?? false) === true,
+                'plan_requirements' => is_array($capabilities['plan_requirements'] ?? null) ? $capabilities['plan_requirements'] : null,
+            ]
         );
     }
 

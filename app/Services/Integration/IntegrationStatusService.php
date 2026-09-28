@@ -253,6 +253,7 @@ class IntegrationStatusService
             'health' => $health,
             'setup_status' => $setupDecision['allowed'] ? 'available' : 'unavailable',
             'setup_status_reason' => $setupDecision['reason_code'],
+            'plan_requirement' => $this->planRequirement($setupDecision),
             'draft_status' => $automaticReady ? 'completed' : $draftStatus,
             'configured_automatically' => $automaticReady,
             'activation_status' => $activated ? 'enabled' : 'safely_paused',
@@ -363,5 +364,27 @@ class IntegrationStatusService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Which subscription blocks the SolaCount connection, or null when plans qualify.
+     * Setup and provisioning problems never appear here, so they are never shown as upgrades.
+     *
+     * @return array{missing:string,bundled_with_finance_plans:array<int,string>}|null
+     */
+    private function planRequirement(array $setupDecision): ?array
+    {
+        $missing = match ($setupDecision['reason_code'] ?? null) {
+            'finance_premium_required' => 'finance',
+            'inventory_premium_required' => 'inventory',
+            'finance_and_inventory_premium_required', 'setup_available_delivery_not_entitled' => 'both',
+            default => null,
+        };
+
+        return $missing === null ? null : [
+            'missing' => $missing,
+            'bundled_with_finance_plans' => array_values(array_filter((array) data_get(
+                $setupDecision, 'snapshot.plan_requirements.inventory.bundled_with_finance_plans', ['advanced']), 'is_string')),
+        ];
     }
 }

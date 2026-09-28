@@ -229,7 +229,7 @@ export default function IntegrationSettingsPage() {
                             <dt>{tr('integration.details.legacyBlocked')}</dt><dd>{tr(s.legacy_finance_inventory_writes_blocked ? 'integration.details.yes' : 'integration.details.no')}</dd>
                         </dl>
                         <div className="doc-actions">
-                            <Link className="btn btn--primary" to="/integrations/solabooks/events">{tr('integration.details.viewEvents')}</Link>
+                            <Link className="btn btn--primary" to="/integrations/solacount/events">{tr('integration.details.viewEvents')}</Link>
                         </div>
                         <p className="muted">{tr('integration.details.deliveryDescription')}</p>
                     </div>
