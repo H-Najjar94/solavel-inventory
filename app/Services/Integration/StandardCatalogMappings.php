@@ -73,6 +73,26 @@ final class StandardCatalogMappings
         return $result;
     }
 
+    /** @return array{unit:array{stock:int,finance:int,mapped:int},category:array{stock:int,finance:int,mapped:int}} */
+    public function summary(IntegrationOrganizationMapping $mapping): array
+    {
+        $summary = ['unit' => ['stock' => 0, 'finance' => 0, 'mapped' => 0],
+            'category' => ['stock' => 0, 'finance' => 0, 'mapped' => 0]];
+        foreach (['unit' => ['units', 'inventory_units'], 'category' => ['item_categories', 'inventory_categories']] as $type => [$stockTable, $booksTable]) {
+            if (! Schema::connection('tenant')->hasTable($stockTable) || ! Schema::connection('tenant')->hasTable($booksTable)) continue;
+            $stock = $this->keyed($type, $stockTable, fn ($q) => $q->where('organization_id', $mapping->solastock_organization_id));
+            $finance = $this->keyed($type, $booksTable, fn ($q) => $q->where(fn ($w) => $w
+                ->where('organization_id', $mapping->finance_organization_id)->orWhereNull('organization_id')));
+            $summary[$type]['stock'] = collect($stock)->filter(fn (array $ids) => count($ids) === 1)->count();
+            $summary[$type]['finance'] = collect($finance)->filter(fn (array $ids) => count($ids) === 1)->count();
+            $summary[$type]['mapped'] = IntegrationMasterDataMapping::query()
+                ->where('organization_mapping_uuid', $mapping->mapping_uuid)->where('entity_type', $type)
+                ->where('status', 'verified')->where('discovery_method', self::METHOD)->count();
+        }
+
+        return $summary;
+    }
+
     /** Canonical key of one record, or null when it is not an unmodified standard default. */
     public static function unitKey(?string $name, ?string $symbol): ?string
     {
