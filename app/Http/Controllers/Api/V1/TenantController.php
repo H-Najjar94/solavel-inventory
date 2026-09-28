@@ -249,7 +249,8 @@ class TenantController extends ApiController
      * Finance/Projects tables. If the shared DB doesn't exist or this process
      * lacks privileges, it returns the exact command for a server admin to run.
      */
-    public function provision(Request $request, \App\Services\Tenancy\SecureTenantProvisioner $provisioner): JsonResponse
+    public function provision(Request $request, \App\Services\Tenancy\SecureTenantProvisioner $provisioner,
+        ?\App\Services\Catalog\FinanceReferenceDefaultsService $referenceDefaults = null): JsonResponse
     {
         $s = $this->live->state($request);
 
@@ -278,14 +279,12 @@ class TenantController extends ApiController
         try {
             // DB key is the client id, not the org id.
             $result = $provisioner->provisionInventory((int) ($s['client_id'] ?? $s['organization_id']), $db);
-            // A new organization starts with an empty customer catalog. Shared
-            // Finance reference lists are not customer records and must not be
-            // copied into SolaStock during provisioning.
-            $result['finance_reference_defaults'] = [
-                'status' => 'not_copied',
-                'units' => ['created' => 0],
-                'categories' => ['created' => 0],
-            ];
+            // Local counterparts make SolaStock item creation usable immediately.
+            // Connection setup binds these to Finance's shared references without
+            // presenting them as customer reconciliation decisions.
+            $result['finance_reference_defaults'] = ($referenceDefaults
+                ?? app(\App\Services\Catalog\FinanceReferenceDefaultsService::class))
+                ->sync((int) $s['organization_id'], true);
         } catch (\Throwable $e) {
             // Most likely: this process cannot CREATE DATABASE / migrate (no privs).
             return $this->success([

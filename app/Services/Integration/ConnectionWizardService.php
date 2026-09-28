@@ -107,7 +107,8 @@ final class ConnectionWizardService
             'totals' => $totals,
             'accounting' => $accounting,
             'master_data' => $masterData,
-            'guided_setup' => $this->guidedSetup($comparison, (string) ($accounting['base_currency'] ?? ''), (int) $mapping->finance_organization_id),
+            'guided_setup' => $this->guidedSetup($comparison, (string) ($accounting['base_currency'] ?? ''),
+                (int) $mapping->finance_organization_id, (string) $mapping->mapping_uuid),
         ];
 
         return $core + [
@@ -176,6 +177,21 @@ final class ConnectionWizardService
             || (int) ($identity['finance_organization_id'] ?? 0) <= 0
             || (int) ($identity['central_organization_id'] ?? 0) !== $organizationId) {
             $this->fail('authoritative_setup_identity_required');
+        }
+        // Bind identical built-in references before constructing the draft. This
+        // is idempotent and leaves custom, renamed, ambiguous and conflicting
+        // records for explicit review.
+        if (! empty($preview['organization_mapping_uuid'])) {
+            $mapping = IntegrationOrganizationMapping::query()->where('mapping_uuid', $preview['organization_mapping_uuid'])->first();
+            if ($mapping) {
+                $created = app(FinanceReferenceDefaultsService::class)->sync($organizationId, true);
+                $mapped = app(StandardCatalogMappings::class)->ensure($mapping, $actorUserId);
+            }
+            if ($mapping && (array_sum($mapped ?? []) > 0
+                || (int) data_get($created ?? [], 'units.created', 0) > 0
+                || (int) data_get($created ?? [], 'categories.created', 0) > 0)) {
+                $preview = $this->discover($organizationId);
+            }
         }
         $existing = DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('solastock_organization_id', $organizationId)
@@ -1778,7 +1794,8 @@ final class ConnectionWizardService
      * draft/snapshot, but never materialized as operational mappings here.
      * Only exceptions which require a human decision remain editable.
      */
-    private function guidedSetup(array $comparison, string $baseCurrency, int $financeOrgId): array
+    private function guidedSetup(array $comparison, string $baseCurrency, int $financeOrgId,
+        ?string $organizationMappingUuid = null): array
     {
         $rows = collect($comparison);
         $accountRows = $rows->where('entity_type', 'account_role')->filter(fn ($row) => $row['safe_details']['required'] ?? true);
@@ -1884,6 +1901,15 @@ final class ConnectionWizardService
         $customerScenario = $financeOperational && $stockOperational ? 'previously_separate'
             : ($financeOperational ? 'finance_first' : ($stockOperational ? 'stock_first' : 'new_both'));
 
+        $standardReferences = ['unit' => ['stock' => 0, 'finance' => 0, 'mapped' => 0],
+            'category' => ['stock' => 0, 'finance' => 0, 'mapped' => 0]];
+        if ($stockOrgId > 0 && $organizationMappingUuid !== null) {
+            $mapping = IntegrationOrganizationMapping::query()->where('mapping_uuid', $organizationMappingUuid)->first();
+            if ($mapping) {
+                $standardReferences = app(StandardCatalogMappings::class)->summary($mapping);
+            }
+        }
+
         return [
             'version' => 'connection-assistant.v1',
             'customer_scenario' => $customerScenario,
@@ -1894,9 +1920,16 @@ final class ConnectionWizardService
             // how many there are, how many are ready automatically, how many need a person.
             'record_sections' => collect(['customers' => 'customer', 'suppliers' => 'supplier', 'items' => 'item', 'units' => 'unit', 'categories' => 'category'])
                 ->map(fn (string $type) => [
-                    'total' => $rows->where('entity_type', $type)->count(),
-                    'ready' => $automatic->where('entity_type', $type)->count(),
+                    'total' => in_array($type, ['unit', 'category'], true)
+                        ? $rows->where('entity_type', $type)->count() + $standardReferences[$type]['stock']
+                        : $rows->where('entity_type', $type)->count(),
+                    'ready' => in_array($type, ['unit', 'category'], true)
+                        ? $automatic->where('entity_type', $type)->count() + $standardReferences[$type]['mapped']
+                        : $automatic->where('entity_type', $type)->count(),
                     'review' => $visible->where('entity_type', $type)->count(),
+                    'built_in_available' => $standardReferences[$type]['stock'] ?? 0,
+                    'built_in_finance' => $standardReferences[$type]['finance'] ?? 0,
+                    'built_in_mapped' => $standardReferences[$type]['mapped'] ?? 0,
                 ])->all(),
             'automatic_bindings' => $automatic->all(),
             'automatic_exclusions' => $automaticExclusions,

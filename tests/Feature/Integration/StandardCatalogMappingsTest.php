@@ -47,6 +47,7 @@ final class StandardCatalogMappingsTest extends TestCase
         $electrical = DB::connection('tenant')->table('inventory_categories')->insertGetId(['organization_id' => null, 'name' => 'Electrical', 'level' => 1, 'created_at' => now(), 'updated_at' => now()]);
         DB::connection('tenant')->table('inventory_categories')->insert(['organization_id' => null, 'name' => 'Cables', 'parent_id' => $electrical, 'level' => 2, 'created_at' => now(), 'updated_at' => now()]);
         DB::connection('tenant')->table('inventory_categories')->insert(['organization_id' => null, 'name' => 'Raw Materials', 'level' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        DB::connection('tenant')->table('inventory_categories')->insert(['organization_id' => null, 'name' => 'Industrial & Maintenance Supplies', 'level' => 1, 'created_at' => now(), 'updated_at' => now()]);
         // SolaStock: its own per-organization copy (different local ids).
         foreach ([['Piece', 'pcs', 'count'], ['Box', 'bx', 'count'], ['Kilogram', 'kg', 'weight']] as [$name, $symbol, $kind]) {
             DB::connection('tenant')->table('units')->insert(['organization_id' => TenantTestManager::ORG_A, 'code' => strtoupper($symbol), 'name' => $name, 'symbol' => $symbol, 'kind' => $kind, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
@@ -54,6 +55,7 @@ final class StandardCatalogMappingsTest extends TestCase
         $stockElectrical = DB::connection('tenant')->table('item_categories')->insertGetId(['organization_id' => TenantTestManager::ORG_A, 'name' => 'Electrical', 'level' => 1, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
         DB::connection('tenant')->table('item_categories')->insert(['organization_id' => TenantTestManager::ORG_A, 'name' => 'Cables', 'parent_id' => $stockElectrical, 'level' => 2, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
         DB::connection('tenant')->table('item_categories')->insert(['organization_id' => TenantTestManager::ORG_A, 'name' => 'Raw Materials', 'level' => 1, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        DB::connection('tenant')->table('item_categories')->insert(['organization_id' => TenantTestManager::ORG_A, 'name' => 'Industrial & Maintenance Supplies', 'level' => 1, 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     private function mapped(string $type): int
@@ -64,10 +66,17 @@ final class StandardCatalogMappingsTest extends TestCase
     #[Test]
     public function fresh_defaults_map_once_by_canonical_key_and_retries_change_nothing(): void
     {
-        $this->assertSame(['unit' => 3, 'category' => 3], app(StandardCatalogMappings::class)->ensure($this->mapping, 5));
+        $column = DB::connection('tenant')->selectOne(
+            "SELECT CHARACTER_MAXIMUM_LENGTH AS max_length FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'integration_master_data_mappings' AND COLUMN_NAME = 'contract_source_version'"
+        );
+        $this->assertSame(512, (int) $column->max_length);
+        $this->assertSame(['unit' => 3, 'category' => 4], app(StandardCatalogMappings::class)->ensure($this->mapping, 5));
         $this->assertSame(['unit' => 0, 'category' => 0], app(StandardCatalogMappings::class)->ensure($this->mapping, 5));
         $this->assertSame(3, $this->mapped('unit'));
-        $this->assertSame(3, $this->mapped('category'));
+        $this->assertSame(4, $this->mapped('category'));
+        $this->assertSame('category:Industrial & Maintenance Supplies', IntegrationMasterDataMapping::query()
+            ->where('entity_type', 'category')->where('contract_source_version', 'like', 'category:Industrial%')
+            ->value('contract_source_version'));
         // Hierarchy preserved: SolaStock "Cables" under "Electrical" maps to SolaCount "Cables" under "Electrical".
         $stockCables = DB::connection('tenant')->table('item_categories')->where('organization_id', TenantTestManager::ORG_A)->where('name', 'Cables')->value('id');
         $booksCables = DB::connection('tenant')->table('inventory_categories')->where('name', 'Cables')->value('id');
@@ -104,9 +113,10 @@ final class StandardCatalogMappingsTest extends TestCase
 
         app(StandardCatalogMappings::class)->ensure($this->mapping);
         $after = collect(app(Phase2MappingDiscoveryService::class)->discover($this->mapping->mapping_uuid)['results'] ?? []);
-        $this->assertSame(3, $after->where('entity_type', 'unit')->where('classification', 'exact_match')->count());
-        // Categories have no strong key; the verified canonical mapping is what makes them exact.
-        $this->assertSame(3, $after->where('entity_type', 'category')->where('classification', 'exact_match')->count());
+        // Built-ins are mapped and available, but are not emitted as customer
+        // comparison rows or manual decisions.
+        $this->assertSame(0, $after->where('entity_type', 'unit')->count());
+        $this->assertSame(0, $after->where('entity_type', 'category')->count());
     }
 
     #[Test]
