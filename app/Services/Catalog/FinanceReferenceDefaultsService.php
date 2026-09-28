@@ -10,7 +10,7 @@ final class FinanceReferenceDefaultsService
 {
     public const VERSION = 'solabooks-inventory-reference-defaults.v2';
 
-    private const UNITS = [
+    public const UNITS = [
         ['Piece', 'pcs', 'count'], ['Box', 'bx', 'count'], ['Pack', 'pk', 'count'], ['Dozen', 'dz', 'count'], ['Unit', 'u', 'count'], ['Set', 'set', 'count'],
         ['Millimeter', 'mm', 'length'], ['Centimeter', 'cm', 'length'], ['Meter', 'm', 'length'], ['Kilometer', 'km', 'length'], ['Inch', 'in', 'length'], ['Foot', 'ft', 'length'], ['Yard', 'yd', 'length'], ['Mile', 'mi', 'length'],
         ['Square Meter', 'm²', 'count'], ['Square Foot', 'ft²', 'count'],
@@ -25,7 +25,7 @@ final class FinanceReferenceDefaultsService
      * Finance may contain repeated seed runs; this hierarchy is intentionally
      * deduplicated into one organization-owned SolaStock tree.
      */
-    private const LEGACY_FINANCE_CATEGORIES = [
+    public const LEGACY_FINANCE_CATEGORIES = [
         ['Electrical', ['Switches', 'Cables']],
         ['Plumbing', ['Valves', 'Pipes']],
         ['Mechanical', ['Bearings', 'Bolts']],

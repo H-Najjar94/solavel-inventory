@@ -197,6 +197,28 @@ CREATE TABLE IF NOT EXISTS inventory_categories (
   created_at TIMESTAMP NULL,
   updated_at TIMESTAMP NULL
 );
+CREATE TABLE IF NOT EXISTS customers (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(191) NOT NULL,
+  customer_number VARCHAR(64) NULL,
+  code VARCHAR(64) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP NULL,
+  updated_at TIMESTAMP NULL
+);
+CREATE TABLE IF NOT EXISTS suppliers (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(191) NOT NULL,
+  supplier_number VARCHAR(64) NULL,
+  code VARCHAR(64) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP NULL,
+  updated_at TIMESTAMP NULL
+);
 SQL
 done
 

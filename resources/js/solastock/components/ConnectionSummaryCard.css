@@ -8,7 +8,7 @@
 .connection-summary__facts{display:flex;flex-wrap:wrap;gap:4px 20px;margin:0}
 .connection-summary__facts div{display:flex;gap:6px;font-size:13px;min-width:0}
 .connection-summary__facts dt{color:var(--cs-muted);font-weight:500}
-.connection-summary__facts dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.connection-summary__facts dd{margin:0;font-weight:600;overflow-wrap:break-word}
 .connection-summary__badge{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;line-height:1.5;padding:3px 10px;border-radius:999px;background:var(--cs-subtle);color:var(--cs-muted)}
 .connection-summary__badge[data-tone="success"]{background:#e2f4e9;color:#21633b}
 .connection-summary__badge[data-tone="warning"]{background:#fff3d6;color:#795000}

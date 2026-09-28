@@ -21,6 +21,8 @@ function SectionIcon({ section }) {
     </svg>;
 }
 
+const PAGE_SIZE = 25;
+
 export default function GuidedConnectionAssistant({
     view, runUuid, run, gate, accountingGate, status, saving, tr, decisions,
     confirmedDecisions, pendingDecisions, rows, totals, accounting,
@@ -53,6 +55,9 @@ export default function GuidedConnectionAssistant({
     const [manualChoiceRows, setManualChoiceRows] = useState(() => new Set());
     const [excludedRecommendations, setExcludedRecommendations] = useState(() => new Set());
     const headingRef = useRef(null);
+    const [sectionQuery, setSectionQuery] = useState('');
+    const [sectionPage, setSectionPage] = useState(1);
+    useEffect(() => { setSectionQuery(''); setSectionPage(1); }, [openOwnerSection]);
     const resumedRunRef = useRef(null);
 
     const rowsFor = (...names) => unique(names.flatMap((name) => groups[name] || []))
@@ -103,7 +108,7 @@ export default function GuidedConnectionAssistant({
         ['warehouses', ownerRows.filter((row) => row.entity_type === 'warehouse')],
         ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
         ['items', itemRows],
-    ].filter(([, sectionRows]) => sectionRows.length > 0);
+    ].filter(([section, sectionRows]) => sectionRows.length > 0 || section === 'customers' || section === 'suppliers');
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
     const activeOwnerSection = ownerSections.find(([section]) => section === openOwnerSection) || ownerSections[0];
@@ -588,15 +593,42 @@ export default function GuidedConnectionAssistant({
         </div>;
     };
 
-    const footer = (primaryLabel, onPrimary, { disabled = false, hideBack = false } = {}) => <footer className="focus-footer">
+    // Part of the panel's normal flow (never floating over rows): Back, save state, one primary action.
+    const footer = (primaryLabel, onPrimary, { disabled = false, hideBack = false, reason = '' } = {}) => <footer className="focus-footer">
         <div>{!hideBack && task > 1 && <button type="button" className="btn btn--link" onClick={() => go(task - 1)}>{tr('integration.focus.back')}</button>}
             <span className="focus-footer-feedback">{saveIndicator}{lastSaved && <button type="button" className="btn btn--link focus-footer-undo" onClick={undo}>{tr('integration.focus.undo')}</button>}</span>
         </div>
-        <div><button type="button" className="btn btn--primary" disabled={disabled || saving} onClick={onPrimary}>{primaryLabel}</button></div>
+        <div className="focus-footer-primary">
+            {disabled && !saving && reason && <small className="focus-footer-reason" id="focus-footer-reason">{reason}</small>}
+            <button type="button" className="btn btn--primary" disabled={disabled || saving} aria-busy={saving}
+                aria-describedby={disabled && reason ? 'focus-footer-reason' : undefined} onClick={onPrimary}>
+                {saving ? tr('integration.assistant.saving') : primaryLabel}
+            </button>
+        </div>
     </footer>;
 
+    // Every business-record section with an honest count; zero is shown, never hidden.
+    const sections = guided.record_sections || {};
+    const recordSummary = <div className="focus-record-summary">
+        <table className="focus-record-table">
+            <thead><tr><th scope="col">{tr('integration.records.section')}</th><th scope="col">{tr('integration.records.total')}</th><th scope="col">{tr('integration.records.ready')}</th><th scope="col">{tr('integration.records.review')}</th></tr></thead>
+            <tbody>{['customers', 'suppliers', 'items', 'units', 'categories'].map((key) => {
+                const c = sections[key] || { total: 0, ready: 0, review: 0 };
+                return <tr key={key}><th scope="row">{tr(`integration.focus.section.${key}`)}</th>
+                    {c.total === 0 ? <td colSpan={3} className="focus-record-empty">{tr(`integration.records.empty.${key}`)}</td> : <>
+                        <td><bdi>{c.total}</bdi></td><td><bdi>{c.ready}</bdi></td>
+                        <td>{c.review > 0 ? <button type="button" className="btn btn--link" onClick={() => { go(2); setOpenOwnerSection(key); }}><bdi>{c.review}</bdi></button> : '—'}</td></>}
+                </tr>;
+            })}</tbody>
+        </table>
+        {((sections.units?.ready || 0) + (sections.categories?.ready || 0)) > 0 && <details className="focus-ready-summary">
+            <summary>✓ {tr('integration.records.referencesReady', { units: sections.units?.ready || 0, categories: sections.categories?.ready || 0 })}</summary>
+            <p>{tr('integration.records.referencesReadyText')}</p>
+        </details>}
+    </div>;
+
     const technical = <details className="focus-details"><summary>{tr('integration.assistant.statusDetails')}</summary>
-        <p>{tr('integration.focus.fullSafety')}</p><p><bdi>{view.run_uuid}</bdi></p>
+        <p>{tr('integration.focus.safety')}</p><p>{tr('integration.focus.fullSafety')}</p><p><bdi>{view.run_uuid}</bdi></p>
         <button type="button" className="btn btn--link" onClick={exportComparison}>{tr('integration.wizard.export')}</button>
     </details>;
 
@@ -625,7 +657,8 @@ export default function GuidedConnectionAssistant({
         </section>;
 
         if (task === 2) return <section className="focus-card focus-list-card">
-            <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessListTitle')}</h2><p>{tr('integration.focus.businessListText')}</p></div><strong><bdi>{tr('integration.focus.remainingCount', { count: ownerPending.length })}</bdi></strong></div>
+            <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessListTitle')}</h2></div><strong><bdi>{tr('integration.focus.remainingCount', { count: ownerPending.length })}</bdi></strong></div>
+            {recordSummary}
             <nav className="focus-category-nav" aria-label={tr('integration.focus.businessSections')}>
                 {ownerSections.map(([section, sectionRows]) => {
                     const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
@@ -657,16 +690,16 @@ export default function GuidedConnectionAssistant({
                     return true;
                 });
                 return <section className="focus-list-section" key={section}>
-                    <header><span><strong>{tr(`integration.focus.section.${section}`)}</strong><small>{tr(`integration.focus.sectionHelp.${section}`)}</small></span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></header>
+                    <header><span><strong>{tr(`integration.focus.section.${section}`)}</strong>{remaining > 0 && <small>{tr(`integration.focus.sectionHelp.${section}`)}</small>}</span><bdi>{tr('integration.focus.sectionProgress', { done: sectionRows.length - remaining, total: sectionRows.length })}</bdi></header>
                     <div className="focus-list-columns" aria-hidden="true"><span>{tr('integration.focus.comparisonColumn')}</span><span>{tr('integration.focus.decisionColumn')}</span></div>
-                    {section === 'items' && <div className="focus-item-catalog-summary" aria-label={tr('integration.focus.itemCatalogSummary')}>
+                    {section === 'items' && itemRows.length > 10 && <div className="focus-item-catalog-summary" aria-label={tr('integration.focus.itemCatalogSummary')}>
                         <div><span>{tr('integration.businessStatus.solabooks')}</span><strong><bdi>{itemCounts.solabooks}</bdi></strong></div>
                         <div><span>SolaStock</span><strong><bdi>{itemCounts.solastock}</bdi></strong></div>
                         <div><span>{tr('integration.focus.itemsInBoth')}</span><strong><bdi>{itemCounts.both}</bdi></strong></div>
                         <div><span>{tr('integration.focus.itemsBooksOnly')}</span><strong><bdi>{itemCounts.solabooksOnly}</bdi></strong></div>
                         <div><span>{tr('integration.focus.itemsStockOnly')}</span><strong><bdi>{itemCounts.solastockOnly}</bdi></strong></div>
                     </div>}
-                    {section === 'items' && <nav className="focus-item-filters" aria-label={tr('integration.focus.itemFilters')}>
+                    {section === 'items' && itemRows.length > 10 && <nav className="focus-item-filters" aria-label={tr('integration.focus.itemFilters')}>
                         {[
                             ['all', tr('integration.focus.filterAll'), itemRows.length],
                             ['both', tr('integration.focus.itemsInBoth'), itemCounts.both],
@@ -675,11 +708,30 @@ export default function GuidedConnectionAssistant({
                         ].map(([filter, label, count]) => <button type="button" key={filter} className={itemFilter === filter ? 'is-active' : ''}
                             aria-pressed={itemFilter === filter} onClick={() => setItemFilter(filter)}>{label} <bdi>{count}</bdi></button>)}
                     </nav>}
-                    <div className="focus-decision-list">{visibleSectionRows.length ? visibleSectionRows.map(compactDecisionRow)
-                        : <p className="focus-empty-filter">{tr('integration.focus.noItemsInFilter')}</p>}</div>
+                    {sectionRows.length > PAGE_SIZE && <div className="focus-section-tools">
+                        <input className="input" type="search" value={sectionQuery} placeholder={tr('integration.records.search')} aria-label={tr('integration.records.search')}
+                            onChange={(e) => { setSectionQuery(e.target.value); setSectionPage(1); }} />
+                    </div>}
+                    {(() => {
+                        const needle = sectionQuery.trim().toLowerCase();
+                        const found = needle ? visibleSectionRows.filter((row) => [row.solastock?.name, row.solabooks?.name, row.solastock?.code, row.solabooks?.code, row.solastock?.sku, row.solabooks?.sku]
+                            .some((value) => String(value || '').toLowerCase().includes(needle))) : visibleSectionRows;
+                        const pages = Math.max(1, Math.ceil(found.length / PAGE_SIZE));
+                        const page = Math.min(sectionPage, pages);
+                        return <>
+                            <div className="focus-decision-list">{found.length ? found.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(compactDecisionRow)
+                                : <p className="focus-empty-filter">{sectionRows.length === 0 ? tr(`integration.records.empty.${section}`) : tr('integration.focus.noItemsInFilter')}</p>}</div>
+                            {pages > 1 && <nav className="focus-pagination" aria-label={tr('integration.records.pages')}>
+                                <button type="button" className="btn btn--link" disabled={page <= 1} onClick={() => setSectionPage(page - 1)}>{tr('integration.records.previous')}</button>
+                                <bdi>{tr('integration.records.pageOf', { page, pages })}</bdi>
+                                <button type="button" className="btn btn--link" disabled={page >= pages} onClick={() => setSectionPage(page + 1)}>{tr('integration.records.next')}</button>
+                            </nav>}
+                        </>;
+                    })()}
                 </section>;
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
+                reason: tr('integration.records.decideFirst'),
                 disabled: activeSectionPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))
@@ -729,6 +781,7 @@ export default function GuidedConnectionAssistant({
             })}</div>
             {!physicalRows.length && <div className="focus-complete"><h2>{tr('integration.focus.countComplete')}</h2><p>{tr('integration.focus.countCompleteText')}</p></div>}
             {footer(tr('integration.focus.confirmCountsContinue'), savePhysicalCountsAndContinue, {
+                reason: tr('integration.records.countFirst'),
                 disabled: physicalPending.some((row) => !/^\d+(\.\d+)?$/.test(physicalValueFor(row))),
             })}
         </section>;
@@ -741,7 +794,7 @@ export default function GuidedConnectionAssistant({
             <AccountingMappingTable rows={requiredAccountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
             {accountingRows.length > requiredAccountingRows.length && <details><summary>{locale === 'ar' ? 'حسابات اختيارية — غير مطلوبة للعمليات الحالية' : 'Optional accounts — not required for current operations'}</summary><AccountingMappingTable rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></details>}
             {taxReviewRows.map(compactDecisionRow)}
-            {footer(tr('integration.focus.continue'), () => go(5), { disabled: accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
+            {footer(tr('integration.focus.continue'), () => go(5), { reason: tr('integration.records.accountsFirst'), disabled: accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
         </section>;
 
         if (task === 5) return <section className="focus-card">
@@ -756,7 +809,7 @@ export default function GuidedConnectionAssistant({
                 if (run.data?.state === 'snapshot_required') return runAction(() => api.freezeIntegrationWizardSnapshot(runUuid, { expected_lock_version: run.data.lock_version }), 'integration.wizard.snapshotFrozen');
                 if (run.data?.state === 'cutoff_review' && cutoffAt) return runAction(() => api.reviewIntegrationWizardCutoff(runUuid, { cutoff_at: cutoffAt, physical_counts: [], unexplained_variance: '0.00', expected_lock_version: run.data.lock_version }), 'integration.wizard.cutoffReviewed');
                 return go(6);
-            }, { disabled: saving || cutoffPending.length > 0 || (run.data?.state === 'cutoff_review' && !cutoffAt) })}
+            }, { reason: tr('integration.records.startDateFirst'), disabled: saving || cutoffPending.length > 0 || (run.data?.state === 'cutoff_review' && !cutoffAt) })}
         </section>;
 
         const blockers = [
@@ -773,11 +826,17 @@ export default function GuidedConnectionAssistant({
         const ready = blockers.length === 0 && Number(totals.total_quantity_difference || 0) === 0;
         return <section className="focus-card focus-result">
             <div className={`focus-outcome ${ready ? 'is-ready' : 'is-warning'}`}><h2 ref={headingRef} tabIndex="-1">{tr(ready ? 'integration.focus.ready' : 'integration.focus.notReady')}</h2><p>{tr(ready ? 'integration.focus.readyText' : 'integration.focus.notReadyText')}</p></div>
+            <ul className="focus-connect-effects" aria-label={tr('integration.records.effectsTitle')}>
+                <li>{tr('integration.records.effectMappings', { count: Object.values(sections).reduce((sum, c) => sum + (c?.total || 0), 0) })}</li>
+                <li>{tr('integration.records.effectSync', { date: view.cutoff_at ? new Date(view.cutoff_at).toLocaleString(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }) : tr('integration.review.not_reviewed') })}</li>
+                <li>{tr('integration.records.effectNoBalances')}</li>
+            </ul>
             <p>{tr("integration.review.solastock_owns_quantities_and_inventory_operations_solacount")}</p>
             <details><summary>{tr("integration.review.review_selected_accounts")}</summary><AccountingMappingTable rows={accountingRows} decisions={confirmedDecisions} choose={choose} canEdit={false} saving={saving} /></details>
             {['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(view.state) && <section className="wizard-final-approvals"><h3>{tr("integration.review.explicit_approval")}</h3><p>{tr("integration.review.approval_records_this_review_delivery_remains_subject")}</p><label className="field"><span><input type="checkbox" checked={Boolean(confirmation)} disabled={saving || Boolean(view.owner_approved_at)} onChange={event => setConfirmation(event.target.checked ? "Reviewed inventory authority and connection scope" : "")} /> {tr("integration.review.i_reviewed_the_inventory_authority_accounts_and")}</span></label><div className="doc-actions"><button type="button" className="btn btn--primary" disabled={!gate.allowed || !view.review_ready || saving || !confirmation || Boolean(view.owner_approved_at)} onClick={() => runAction(() => api.approveIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash, confirmation }), 'integration.wizard.ownerApproved')}>{view.owner_approved_at ? tr("integration.review.owner_review_approved") : tr('integration.wizard.ownerApprove')}</button><button type="button" className="btn btn--primary" disabled={!accountingGate.allowed || !view.review_ready || saving || Boolean(view.accountant_approved_at)} onClick={() => runAction(() => api.accountantApproveIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash }), 'integration.wizard.accountantApproved')}>{view.accountant_approved_at ? tr("integration.review.accounting_review_approved") : tr('integration.wizard.accountantApprove')}</button></div></section>}
             {view.state === 'activation_ready' && <button type="button" className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => runAction(() => api.activateIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash, confirmation: 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY' }), 'integration.wizard.activated')}>{tr('integration.wizard.activate')}</button>}
             {!ready && <ol className="focus-blockers">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ol>}
+            {recordSummary}
             <div className="focus-result-summary"><div><span>{tr('integration.focus.quantityDifference')}</span><strong><bdi>{formatNumber(totals.total_quantity_difference, 4)}</bdi></strong></div><div><span>{tr('integration.focus.valueDifference')}</span><strong><bdi>{formatMoney(totals.total_valuation_difference)}</bdi></strong></div><div><span>{tr('integration.focus.startDateLabel')}</span><strong><bdi>{view.cutoff_at || tr("integration.review.not_reviewed")}</bdi></strong></div></div>
             {footer(tr('integration.focus.backToTasks'), () => go(blockers[0] === tr('integration.focus.blocker.count') ? 3 : 2), { disabled: false })}
         </section>;
@@ -790,20 +849,9 @@ export default function GuidedConnectionAssistant({
             <progress className="focus-progress" max={totalSteps} value={steps.indexOf(task) + 1} aria-label={tr('integration.focus.setupProgress')} />
             <details className="focus-all-steps"><summary>{tr('integration.focus.allSteps')}</summary><ol>{taskLabels.map((label, index) => steps.includes(index + 1) && <li key={label}><button type="button" onClick={() => go(index + 1)} disabled={index + 1 > task}>{label}</button></li>)}</ol></details>
         </header>}
-        <div className="focus-safety-bar">{tr('integration.focus.safety')} {technical}</div>
+        <div className="focus-meta">{technical}</div>
         <div className="focus-workspace">
             <main className="focus-stage">{taskContent()}</main>
-            <aside className="focus-summary" aria-labelledby="focus-summary-title">
-                <h2 id="focus-summary-title">{tr('integration.focus.summaryTitle')}</h2>
-                <p>{tr('integration.focus.summaryText')}</p>
-                <div className="focus-summary-list">
-                    <button type="button" onClick={() => go(2)}><span>{tr('integration.focus.summary.business')}</span><strong><bdi>{resolvedOwner}/{ownerRows.length}</bdi></strong></button>
-                    <button type="button" onClick={() => go(3)}><span>{tr('integration.focus.summary.count')}</span><strong><bdi>{resolvedCounts}/{physicalRows.length}</bdi></strong></button>
-                    <button type="button" onClick={() => go(4)}><span>{tr('integration.focus.summary.accounting')}</span><strong><bdi>{resolvedAccounting}/{requiredAccountingRows.length}</bdi></strong></button>
-                    <button type="button" onClick={() => go(5)}><span>{tr('integration.focus.summary.documents')}</span><strong><bdi>{cutoffRows.length}</bdi></strong></button>
-                </div>
-                <div className="focus-authority"><p><span>{tr('integration.focus.inventoryAuthority')}</span><strong>SolaStock</strong></p><p><span>{tr('integration.focus.accountingAuthority')}</span><strong>{tr('integration.businessStatus.solabooks')}</strong></p></div>
-            </aside>
         </div>
         {bulkReviewOpen && <div className="assistant-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-title"><div className="assistant-bulk-dialog__content"><h2 id="bulk-title">{tr('integration.assistant.confirmExactMatches', { count: exactRows.length })}</h2><p>{tr('integration.assistant.bulkDraftOnly')}</p>{exactRows.map((row) => <label key={row.fingerprint}><input type="checkbox" checked={bulkSelection.includes(row.fingerprint)} onChange={() => toggleBulk(row.fingerprint)} /><span><bdi>{row.solabooks?.name}</bdi> → <bdi>{row.solastock?.name}</bdi></span></label>)}<div className="doc-actions"><button className="btn" onClick={() => setBulkReviewOpen(false)}>{tr('settings.common.cancel')}</button><button className="btn btn--primary" onClick={async () => { if (await bulk('approve_exact_sku_candidates')) setBulkReviewOpen(false); }}>{tr('integration.assistant.confirmSelectedMatches', { count: bulkSelection.length })}</button></div></div></div>}
     </div>;

@@ -266,7 +266,10 @@ final class Phase2MappingDiscoveryService
         }
 
         $stock = $this->records($definition['stock_table'], (int) $mapping->solastock_organization_id, collect($keys)->pluck(0)->all());
-        $books = $this->records($definition['books_table'], (int) $mapping->finance_organization_id, collect($keys)->pluck(1)->all());
+        // SolaCount keeps its standard units and categories once per tenant
+        // (organization_id NULL); they belong to every Finance organization.
+        $books = $this->records($definition['books_table'], (int) $mapping->finance_organization_id, collect($keys)->pluck(1)->all(),
+            in_array($entityType, ['unit', 'category'], true));
         // A signed Finance creation may commit while Stock activation is still
         // pending. Keep that unactivated counterpart out of discovery so an
         // exact retry sees the same approved before-image and never treats the
@@ -332,9 +335,13 @@ final class Phase2MappingDiscoveryService
 
             $matchedBookIds[] = (string) $book['id'];
             $strongConflict = $this->hasConflictingPopulatedKeys($stockRow, $book, $strongKeys);
+            // A verified mapping for exactly this pair (e.g. a standard default mapped
+            // by canonical key) needs no further review.
+            $verifiedPair = $existingForStock && ($existingForStock->status ?? null) === 'verified'
+                && (string) $existingForStock->solabooks_record_id === (string) $book['id'];
             $classification = match (true) {
                 $stockRow['archived'] || $book['archived'] => 'archived_match',
-                $candidateBasis !== 'stable_candidate_key' => 'review_required',
+                $candidateBasis !== 'stable_candidate_key' && ! $verifiedPair => 'review_required',
                 $strongConflict => 'conflicting_candidates',
                 default => 'exact_match',
             };
@@ -595,7 +602,7 @@ final class Phase2MappingDiscoveryService
         return [$mapping, true];
     }
 
-    private function records(string $table, int $organizationId, array $keys): Collection
+    private function records(string $table, int $organizationId, array $keys, bool $includeShared = false): Collection
     {
         $columns = array_values(array_unique(array_merge(['id'], $keys)));
         $hasDeleted = Schema::connection('tenant')->hasColumn($table, 'deleted_at');
@@ -604,7 +611,9 @@ final class Phase2MappingDiscoveryService
         }
 
         return DB::connection('tenant')->table($table)
-            ->where('organization_id', $organizationId)
+            ->where(fn ($query) => $includeShared
+                ? $query->where('organization_id', $organizationId)->orWhereNull('organization_id')
+                : $query->where('organization_id', $organizationId))
             ->orderBy('id')
             ->get($columns)
             ->map(function ($row) use ($columns, $hasDeleted): array {
