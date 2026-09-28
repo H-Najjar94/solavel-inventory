@@ -106,7 +106,9 @@ class IntegrationController extends ApiController
 
     public function wizardPreview(string $run, ConnectionWizardService $wizard): JsonResponse
     {
-        return $this->success($wizard->finalPreview($this->context->idOrFail(), $run));
+        // Opening an existing unfrozen draft is also its upgrade boundary for
+        // canonical defaults created before automatic mappings existed.
+        return $this->success($wizard->show($this->context->idOrFail(), $run));
     }
 
     public function decideWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
