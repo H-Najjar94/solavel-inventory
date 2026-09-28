@@ -18,7 +18,8 @@ function describe(summary, tr) {
         const bundles = (plan?.bundled_with_finance_plans || []).map((p) => `SolaCount ${p.charAt(0).toUpperCase()}${p.slice(1)}`).join(tr('integration.summary.or'));
         return tr(`integration.summary.text.plan_required.${plan?.missing || 'both'}`, { bundles: bundles || 'SolaCount Advanced' });
     }
-    if (state === 'preparing') return tr(`integration.summary.text.preparing.${reason === 'finance_provisioning' ? 'finance' : 'connecting'}`);
+    if (state === 'finance_provisioning') return tr('integration.summary.text.finance_provisioning');
+    if (state === 'preparing') return tr('integration.summary.text.preparing.connecting');
     if (state === 'failed') return tr(`integration.summary.text.failed.${failureGroup(reason)}`);
     if (state === 'needs_input') {
         if (reason === 'decisions_remaining') return tr('integration.summary.text.needs_input.decisions', { count: progress?.decisions_remaining ?? 0 });

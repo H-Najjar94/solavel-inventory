@@ -208,6 +208,12 @@ final class DefaultStockConnectionTest extends TestCase
             'mode'=>'connected_pending_mapping','meta'=>['default_connection'=>['version'=>\App\Services\Integration\DefaultStockConnection::VERSION,'state'=>'preparing']]]);
         $running = $summaries->forOrganization(TenantTestManager::ORG_A, $ready);
         $this->assertSame(['preparing', 'none', true], [$running['state'], $running['action']['kind'], $running['action']['auto_refresh']]);
+        $provisioning = $summaries->forOrganization(TenantTestManager::ORG_A, array_replace_recursive($ready, [
+            'readiness' => ['state' => 'PROVISIONING_PENDING', 'can_manage' => true],
+        ]));
+        $this->assertSame(['finance_provisioning', 'finish_finance_setup', false], [
+            $provisioning['state'], $provisioning['action']['kind'], $provisioning['action']['auto_refresh'],
+        ]);
         DB::connection('tenant')->table('integration_settings')->where('id', $setting->id)->update(['updated_at' => now()->subMinutes(10)]);
         $stalled = $summaries->forOrganization(TenantTestManager::ORG_A, $ready);
         $this->assertSame(['failed', 'preparation_stalled', 'retry'], [$stalled['state'], $stalled['reason'], $stalled['action']['kind']]);

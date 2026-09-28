@@ -20,7 +20,8 @@ use RuntimeException;
  * States and their single primary action:
  *   plan_required            → manage_plans      (the approved Premium + Premium rule)
  *   finance_setup_required   → finish_finance_setup
- *   preparing                → none (auto refresh) — preparation is running now
+ *   finance_provisioning     → finish_finance_setup — SolaCount tenant/org does not exist yet
+ *   preparing                → none (auto refresh) — connection activation is running now
  *   failed                   → retry             — preparation stopped with an error
  *   ready_to_connect         → connect           — fresh organization, automatic path
  *   needs_input              → continue          — existing records need business decisions
@@ -67,7 +68,7 @@ final class ConnectionSummary
             $summary['plan_requirement'] !== null => 'plan_required',
             ($readiness['state'] ?? null) === 'ACCESS_REQUIRED' => 'plan_required',
             ($readiness['state'] ?? null) === 'READINESS_UNAVAILABLE' => 'unavailable',
-            ($readiness['state'] ?? null) === 'PROVISIONING_PENDING' => 'preparing',
+            ($readiness['state'] ?? null) === 'PROVISIONING_PENDING' => 'finance_provisioning',
             ($readiness['state'] ?? null) === 'FINANCE_PROVISIONED_SETUP_INCOMPLETE' => 'finance_setup_required',
             ($readiness['state'] ?? null) === 'MAINTENANCE_HOLD' => 'on_hold',
             ($readiness['state'] ?? null) === 'CONNECTED_READY' => 'connected',
@@ -182,7 +183,7 @@ final class ConnectionSummary
     {
         $kind = match ($state) {
             'plan_required' => 'manage_plans',
-            'finance_setup_required' => 'finish_finance_setup',
+            'finance_provisioning', 'finance_setup_required' => 'finish_finance_setup',
             'ready_to_connect' => 'connect',
             'failed' => 'retry',
             'needs_input', 'ready_to_activate' => 'continue',

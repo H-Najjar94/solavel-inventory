@@ -108,7 +108,12 @@ export default function GuidedConnectionAssistant({
         ['warehouses', ownerRows.filter((row) => row.entity_type === 'warehouse')],
         ['currencies', ownerRows.filter((row) => row.entity_type === 'currency')],
         ['items', itemRows],
-    ].filter(([section, sectionRows]) => sectionRows.length > 0 || section === 'customers' || section === 'suppliers');
+    // Always show the five business-catalog sections. Canonical units and
+    // categories can be fully automatic (there are deliberately no decision
+    // rows), but users still need the same visible ✓ completion evidence they
+    // get for customers and suppliers.
+    ].filter(([section, sectionRows]) => sectionRows.length > 0
+        || ['customers', 'suppliers', 'units', 'categories'].includes(section));
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
     const activeOwnerSection = ownerSections.find(([section]) => section === openOwnerSection) || ownerSections[0];
