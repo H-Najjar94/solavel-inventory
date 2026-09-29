@@ -9,6 +9,8 @@ use App\Models\Tenant\InventorySetting;
 use App\Services\Integration\IntegrationEvents;
 use App\Services\Integration\IntegrationStatusService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Config;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -64,6 +66,8 @@ class IntegrationConnectionConfigurationTest extends TestCase
     public function owner_configuration_encrypts_the_key_and_status_never_returns_it(): void
     {
         $this->useTenantA();
+        $this->markFinanceReady();
+        Config::set('integration_safety.solabooks_delivery_enabled', true);
         $plainKey = 'solabooks_test.'.str_repeat('x', 40);
         $response = app(IntegrationController::class)->configure(Request::create('/integration/solabooks/connection', 'PUT', [
             'mode' => 'connected_pending_mapping',
@@ -86,6 +90,7 @@ class IntegrationConnectionConfigurationTest extends TestCase
     public function tax_mappings_use_stable_codes_and_are_organization_scoped(): void
     {
         $this->useTenantA();
+        $this->markFinanceReady();
         InventorySetting::query()->create([
             'default_costing_method' => 'fifo', 'allow_negative_stock' => false,
             'taxes' => [
@@ -106,5 +111,14 @@ class IntegrationConnectionConfigurationTest extends TestCase
 
         $this->useTenantB();
         $this->assertSame(0, IntegrationTaxMapping::query()->count());
+    }
+
+    private function markFinanceReady(): void
+    {
+        DB::connection('tenant')->table('organizations')->updateOrInsert(
+            ['id' => 14],
+            ['central_org_id' => TenantTestManager::ORG_A, 'setup_status' => 'complete',
+                'finance_setup_completed_at' => now()]
+        );
     }
 }

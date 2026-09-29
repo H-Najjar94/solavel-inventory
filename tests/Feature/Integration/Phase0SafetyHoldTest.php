@@ -9,6 +9,7 @@ use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -22,6 +23,11 @@ class Phase0SafetyHoldTest extends TestCase
     {
         parent::setUp();
         $this->useTenantA();
+        DB::connection('tenant')->table('organizations')->updateOrInsert(
+            ['id' => 14],
+            ['central_org_id' => TenantTestManager::ORG_A, 'setup_status' => 'complete',
+                'finance_setup_completed_at' => now()]
+        );
         config()->set('integration_safety.solabooks_delivery_enabled', false);
         config()->set('integration_safety.legacy_finance_inventory_writes_blocked', true);
         Http::fake();

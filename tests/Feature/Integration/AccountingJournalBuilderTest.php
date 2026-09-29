@@ -176,6 +176,7 @@ class AccountingJournalBuilderTest extends TestCase
             'account_mapping_snapshot' => [
                 'inventory_asset' => ['account_id' => 100],
                 'adjustment_gain' => ['account_id' => 600],
+                'adjustment_loss' => ['account_id' => 601],
             ],
         ];
         $event->save();

@@ -151,7 +151,7 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $this->assertSame($prepared['adjustment_uuid'],$again['adjustment_uuid']);
         $this->assertSame('JOD',$prepared['currency_code']);
         $this->assertSame('JOD',$prepared['base_currency_code']);
-        $this->assertSame('1.000000000000',$prepared['exchange_rate']);
+        $this->assertSame(0,bccomp('1.000000000000',(string)$prepared['exchange_rate'],12));
         $this->assertSame(3,$prepared['finance_money_scale']);
         $this->assertSame('10.00000000',$prepared['exact_base_difference']);
         $this->assertSame('inventory_asset',$prepared['components'][0]['destination_role']);
