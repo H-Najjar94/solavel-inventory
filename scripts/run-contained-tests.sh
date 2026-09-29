@@ -12,7 +12,7 @@ DEPENDENCIES="${STOCK_CONTAINED_VENDOR:?An explicit installed Stock vendor direc
 RUN="$(mktemp -d /var/tmp/stock-contained.XXXXXXXXXX)"
 mkdir "$RUN/source" "$RUN/etc" "$RUN/php"
 rsync -a --exclude='/.git' --exclude='/.env*' --exclude='/vendor' --exclude='/node_modules' \
-  --exclude='/storage' --exclude='/bootstrap/cache/*.php' --exclude='/public/build' \
+  --exclude='/storage' --exclude='/bootstrap/cache/*.php' \
   --exclude='/public/storage' --exclude='*.log' "$SOURCE/" "$RUN/source/"
 rsync -a "$DEPENDENCIES/" "$RUN/source/vendor/"
 ! find "$RUN/source" -type l -print -quit | grep -q . || exit 2

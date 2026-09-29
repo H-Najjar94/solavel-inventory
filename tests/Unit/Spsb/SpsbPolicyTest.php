@@ -17,11 +17,11 @@ class SpsbPolicyTest extends TestCase
         $ownership = config('spsb.ownership');
         $this->assertCount(60, $ownership['solastock_owned']);
         $this->assertCount(2, $ownership['shared_core_contributor']);
-        $this->assertCount(21, $ownership['integration_contract']);
+        $this->assertCount(24, $ownership['integration_contract']);
 
         $all = array_merge(...array_values($ownership));
-        $this->assertCount(83, $all);
-        $this->assertCount(83, array_unique($all));
+        $this->assertCount(86, $all);
+        $this->assertCount(86, array_unique($all));
         $this->assertContains('stock_ledger', $ownership['solastock_owned']);
         $this->assertContains('stock_balances', $ownership['solastock_owned']);
         $this->assertContains('warehouses', $ownership['solastock_owned']);
@@ -39,7 +39,7 @@ class SpsbPolicyTest extends TestCase
 
         $files = glob(base_path($group['path'].'/*.php')) ?: [];
         sort($files, SORT_STRING);
-        $this->assertCount(49, $files);
+        $this->assertCount(51, $files);
         $this->assertSame($files, array_values(array_unique($files)));
         $this->assertStringNotContainsString(
             '2026_08_17_130000_solastock_create_pos_sale_consumptions.php',
