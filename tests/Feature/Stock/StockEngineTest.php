@@ -319,6 +319,25 @@ class StockEngineTest extends TestCase
         $this->assertSame('5.0000', $this->balanceFor($item->id, $wh->id)->on_hand_qty);
     }
 
+    #[Test]
+    public function backdated_movement_is_rejected_after_a_later_posting(): void
+    {
+        $this->boot();
+        $wh = F::warehouse();
+        $item = F::averageItem();
+        $ledger = app(StockLedgerService::class);
+
+        $ledger->post([
+            new StockMovement('in', $item->id, $wh->id, '5', 'Test', 20, unitCost: '2', movedAt: '2026-09-20 10:00:00'),
+        ], 'test:20:post');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Backdated stock movement rejected');
+        $ledger->post([
+            new StockMovement('in', $item->id, $wh->id, '3', 'Test', 19, unitCost: '4', movedAt: '2026-09-19 10:00:00'),
+        ], 'test:19:post');
+    }
+
     // 14. Ledger immutability
     #[Test]
     public function ledger_rows_cannot_be_updated_or_deleted(): void
