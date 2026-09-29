@@ -87,8 +87,8 @@ class AccountingJournalBuilder
         $inventory = $this->inventoryValue($event);
 
         return [
-            $this->line($this->account($orgId, 'inventory_asset'), $inventory, '0', $event),
-            $this->line($this->account($orgId, 'grni'), '0', $inventory, $event),
+            $this->line($this->account($event, $orgId, 'inventory_asset'), $inventory, '0', $event),
+            $this->line($this->account($event, $orgId, 'grni'), '0', $inventory, $event),
         ];
     }
 
@@ -97,8 +97,8 @@ class AccountingJournalBuilder
         $cogs = $this->inventoryValue($event);
 
         return [
-            $this->line($this->account($orgId, 'cogs'), $cogs, '0', $event),
-            $this->line($this->account($orgId, 'inventory_asset'), '0', $cogs, $event),
+            $this->line($this->account($event, $orgId, 'cogs'), $cogs, '0', $event),
+            $this->line($this->account($event, $orgId, 'inventory_asset'), '0', $cogs, $event),
         ];
     }
 
@@ -111,14 +111,14 @@ class AccountingJournalBuilder
         }
         if (Decimal::gt($change, '0')) {
             return [
-                $this->line($this->account($orgId, 'inventory_asset'), $amount, '0', $event),
-                $this->line($this->account($orgId, 'adjustment_gain'), '0', $amount, $event),
+                $this->line($this->account($event, $orgId, 'inventory_asset'), $amount, '0', $event),
+                $this->line($this->account($event, $orgId, 'adjustment_gain'), '0', $amount, $event),
             ];
         }
 
         return [
-            $this->line($this->account($orgId, 'adjustment_loss'), $amount, '0', $event),
-            $this->line($this->account($orgId, 'inventory_asset'), '0', $amount, $event),
+            $this->line($this->account($event, $orgId, 'adjustment_loss'), $amount, '0', $event),
+            $this->line($this->account($event, $orgId, 'inventory_asset'), '0', $amount, $event),
         ];
     }
 
@@ -137,8 +137,8 @@ class AccountingJournalBuilder
         }
 
         return [
-            $this->line($this->account($orgId, $debit), $amount, '0', $event),
-            $this->line($this->account($orgId, $credit), '0', $amount, $event),
+            $this->line($this->account($event, $orgId, $debit), $amount, '0', $event),
+            $this->line($this->account($event, $orgId, $credit), '0', $amount, $event),
         ];
     }
 
@@ -158,8 +158,17 @@ class AccountingJournalBuilder
         return Decimal::lt($value, '0') ? Decimal::sub('0', $value) : $value;
     }
 
-    private function account(int $orgId, string $type): int
+    private function account(IntegrationOutboxEvent $event, int $orgId, string $type): int
     {
+        $snapshot = (array) data_get($event->payload, 'account_mapping_snapshot', []);
+        if ($snapshot !== []) {
+            $id = (int) data_get($snapshot, "{$type}.account_id", 0);
+            if ($id <= 0) {
+                throw new RuntimeException("The event account mapping snapshot is missing '{$type}'.");
+            }
+
+            return $id;
+        }
         $id = IntegrationAccountMapping::query()
             ->where('organization_id', $orgId)->where('integration', IntegrationEvents::INTEGRATION)
             ->where('mapping_type', $type)->whereIn('status', ['mapped', 'verified'])
@@ -194,13 +203,17 @@ class AccountingJournalBuilder
     ): array {
         $role = $tax
             ? 'tax'
-            : (string) IntegrationAccountMapping::query()
+            : (string) collect((array) data_get($event->payload, 'account_mapping_snapshot', []))
+                ->search(fn (array $mapping) => (int) ($mapping['account_id'] ?? 0) === $accountId);
+        if ($role === '') {
+            $role = (string) IntegrationAccountMapping::query()
                 ->where('organization_id', $event->organization_id)
                 ->where('integration', IntegrationEvents::INTEGRATION)
                 ->where('solabooks_account_id', (string) $accountId)
                 ->whereIn('status', ['mapped', 'verified'])
                 ->orderBy('id')
                 ->value('mapping_type');
+        }
         if ($role === '') {
             throw new RuntimeException("SolaCount account {$accountId} has no active organization mapping role.");
         }

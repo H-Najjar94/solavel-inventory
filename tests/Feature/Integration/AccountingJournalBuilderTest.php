@@ -165,6 +165,35 @@ class AccountingJournalBuilderTest extends TestCase
     }
 
     #[Test]
+    public function retry_uses_the_account_mapping_snapshot_captured_with_the_event(): void
+    {
+        $this->useTenantA();
+        $this->mappings();
+        $event = $this->event('adjustment.posted', 'StockAdjustment', 99123, 'ADJ-MAPPING-SNAPSHOT');
+        $event->payload = [
+            'document_date' => now()->toDateString(),
+            'total_inventory_value_change' => '25.00',
+            'account_mapping_snapshot' => [
+                'inventory_asset' => ['account_id' => 100],
+                'adjustment_gain' => ['account_id' => 600],
+            ],
+        ];
+        $event->save();
+
+        IntegrationAccountMapping::query()
+            ->where('mapping_type', 'inventory_asset')
+            ->update(['solabooks_account_id' => '999']);
+        IntegrationAccountMapping::query()
+            ->where('mapping_type', 'adjustment_gain')
+            ->update(['solabooks_account_id' => '998']);
+
+        $lines = app(AccountingJournalBuilder::class)->build($event->fresh(), TenantTestManager::ORG_A);
+
+        $this->assertSame([100, 600], array_column($lines, 'account_id'));
+        $this->assertSame(['inventory_asset', 'adjustment_gain'], array_column($lines, 'account_role'));
+    }
+
+    #[Test]
     public function adjustment_reversal_inverts_the_original_source_journal_instead_of_recalculating_it(): void
     {
         $this->useTenantA();
