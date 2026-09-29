@@ -172,7 +172,7 @@ trait ValidatesItem
             'brand_id' => ['nullable', 'integer'],
             'base_unit_id' => [$partial ? 'sometimes' : 'nullable', 'integer', $activeForOrg('units')],
             'preferred_supplier_id' => ['nullable', 'integer'],
-            'costing_method' => ['nullable', \Illuminate\Validation\Rule::in(['average', 'fifo', 'standard'])],
+            'costing_method' => ['nullable', \Illuminate\Validation\Rule::in(['average', 'fifo'])],
             'reorder_point' => ['nullable', 'numeric', 'min:0'],
             'reorder_qty' => ['nullable', 'numeric', 'min:0'],
             'weight' => ['nullable', 'numeric', 'min:0'],
