@@ -211,6 +211,25 @@ class StockLedgerService
         // ── lock + resolve the balance row (coordinate granularity) ──
         $balance = $this->lockBalance($orgId, $m, $item);
 
+        // Cost layers and running averages are applied in posting order. A
+        // movement dated before an already-posted movement would otherwise
+        // leave both FIFO consumption and average valuation inconsistent with
+        // the ledger chronology. Reject it until an explicit rebuild workflow
+        // is selected; reversals use the exact-source path below.
+        if (! $isReversal && $m->movedAt !== null) {
+            $latestMovement = StockLedger::query()
+                ->where('organization_id', $orgId)
+                ->where('item_id', $m->itemId)
+                ->where('warehouse_id', $m->warehouseId)
+                ->max('moved_at');
+
+            if ($latestMovement !== null && Carbon::parse($m->movedAt)->lt(Carbon::parse($latestMovement))) {
+                throw new RuntimeException(
+                    'Backdated stock movement rejected because a later movement is already posted for this item and warehouse.'
+                );
+            }
+        }
+
         // ── cost ──
         $costLayerId = null;
         if ($m->direction === 'in') {
