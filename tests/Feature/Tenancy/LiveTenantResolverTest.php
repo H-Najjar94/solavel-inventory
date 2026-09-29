@@ -10,8 +10,10 @@ use App\Services\Tenancy\TenantResolver;
 use App\Services\Access\InventoryPermissionService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -51,6 +53,30 @@ class LiveTenantResolverTest extends TestCase
         DB::connection('mysql')->table('organizations')->updateOrInsert(
             ['id' => 123],
             ['central_organization_id' => 123, 'client_id' => 123, 'name' => 'Resolver fixture', 'database_name' => 'tenant_000123', 'is_active' => 1],
+        );
+        if (! Schema::connection('mysql')->hasTable('projects')) {
+            Schema::connection('mysql')->create('projects', function (Blueprint $table): void {
+                $table->id();
+                $table->string('slug')->unique();
+                $table->boolean('is_active')->default(true);
+            });
+        }
+        if (! Schema::connection('mysql')->hasTable('organization_projects')) {
+            Schema::connection('mysql')->create('organization_projects', function (Blueprint $table): void {
+                $table->unsignedBigInteger('organization_id');
+                $table->unsignedBigInteger('project_id');
+                $table->boolean('is_active')->default(true);
+                $table->unique(['organization_id', 'project_id']);
+            });
+        }
+        DB::connection('mysql')->table('projects')->updateOrInsert(
+            ['slug' => 'inventory'],
+            ['is_active' => 1],
+        );
+        $inventoryProjectId = (int) DB::connection('mysql')->table('projects')->where('slug', 'inventory')->value('id');
+        DB::connection('mysql')->table('organization_projects')->updateOrInsert(
+            ['organization_id' => 123, 'project_id' => $inventoryProjectId],
+            ['is_active' => 1],
         );
         $s = app(LiveTenantResolver::class)->state($this->request(['client_id' => 123, 'selected_central_org_id' => 123]));
         $this->assertSame('tenant_000123', $s['database']);

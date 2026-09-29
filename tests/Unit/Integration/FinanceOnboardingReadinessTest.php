@@ -43,7 +43,7 @@ class FinanceOnboardingReadinessTest extends TestCase {
   $this->assertSame('READINESS_UNAVAILABLE',$service->resolve(71)['state']);
  }
  public function test_sync_requests_cannot_bypass_setup():void {
-  $service=(new \ReflectionClass(\App\Services\Integration\DurableOutboxTransportService::class))->newInstanceWithoutConstructor();
+  $service=app(\App\Services\Integration\DurableOutboxTransportService::class);
   $guard=new \ReflectionMethod($service,'assertExecutionEnabled');
   $this->expectException(\RuntimeException::class);$guard->invoke($service,71);
  }
