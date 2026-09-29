@@ -34,6 +34,8 @@ class SolaBooksDeliveryTest extends TestCase
     private function bootActiveIntegration(): void
     {
         $this->useTenantA();
+        Config::set('integration_safety.solabooks_delivery_enabled', true);
+        Config::set('integration_transport.worker_enabled', true);
         DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
             ['client_id' => 7, 'project_slug' => 'inventory'],
             [
@@ -66,7 +68,8 @@ class SolaBooksDeliveryTest extends TestCase
         );
         DB::connection('tenant')->table('organizations')->updateOrInsert(
             ['id' => 14],
-            ['central_org_id' => TenantTestManager::ORG_A]
+            ['central_org_id' => TenantTestManager::ORG_A, 'setup_status' => 'complete',
+                'finance_setup_completed_at' => now()]
         );
         Organization::query()->updateOrCreate(
             ['central_organization_id' => TenantTestManager::ORG_A],
@@ -135,6 +138,16 @@ class SolaBooksDeliveryTest extends TestCase
             'accounts_receivable' => 606,
             'sales_revenue' => 707,
         ] as $type => $accountId) {
+            DB::connection('tenant')->table('accounts')->updateOrInsert(
+                ['id' => $accountId],
+                ['organization_id' => 14, 'code' => (string) $accountId, 'name' => $type,
+                    'type' => match ($type) {
+                        'inventory_asset', 'accounts_receivable' => 'asset',
+                        'grni' => 'liability',
+                        'sales_revenue', 'adjustment_gain' => 'income',
+                        default => 'expense',
+                    }, 'is_active' => true, 'is_postable' => true]
+            );
             IntegrationAccountMapping::query()->updateOrCreate(
                 [
                     'organization_id' => TenantTestManager::ORG_A,
@@ -179,6 +192,12 @@ class SolaBooksDeliveryTest extends TestCase
                 ],
             ]];
         }
+        $payload['account_mapping_snapshot'] ??= [
+            'inventory_asset' => ['account_id' => 101],
+            'adjustment_gain' => ['account_id' => 404],
+            'adjustment_loss' => ['account_id' => 405],
+        ];
+        $payload['account_mapping_policy_version'] ??= \App\Services\Integration\AccountRolePolicy::VERSION;
         $overrides['payload'] = $payload;
         $event = IntegrationOutboxEvent::query()->create(array_merge([
             'organization_id' => TenantTestManager::ORG_A,
@@ -347,7 +366,7 @@ class SolaBooksDeliveryTest extends TestCase
     }
 
     #[Test]
-    public function it_refreshes_a_historical_incomplete_mapping_snapshot_before_delivery(): void
+    public function it_refuses_a_historical_incomplete_event_without_a_mapping_snapshot(): void
     {
         $this->bootActiveIntegration();
         $this->configureHttp();
@@ -355,11 +374,12 @@ class SolaBooksDeliveryTest extends TestCase
             'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 988]], 201),
         ]);
 
-        $event = $this->event(['mapping_status' => 'incomplete']);
-        $result = app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
-
-        $this->assertSame('complete', $result->mapping_status);
-        $this->assertSame('sent', $result->status);
+        $payload = $this->event()->payload;
+        $payload['account_mapping_snapshot'] = [];
+        unset($payload['account_mapping_policy_version']);
+        $event = $this->event(['mapping_status' => 'incomplete', 'payload' => $payload]);
+        $this->expectException(\RuntimeException::class);
+        app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
     }
 
     #[Test]
@@ -452,7 +472,7 @@ class SolaBooksDeliveryTest extends TestCase
     }
 
     #[Test]
-    public function missing_account_mapping_blocks_delivery_without_http_and_recovers_after_restoration(): void
+    public function retry_uses_frozen_mapping_when_current_mapping_changes(): void
     {
         $this->bootActiveIntegration();
         $this->configureHttp();
@@ -461,19 +481,8 @@ class SolaBooksDeliveryTest extends TestCase
         Http::fake([
             'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 1300]], 200),
         ]);
-        $event = $this->event(['mapping_status' => 'incomplete']);
-
-        try {
-            app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
-            $this->fail('Incomplete account mappings must block delivery.');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('mapping', strtolower($e->getMessage()));
-        }
-        Http::assertNothingSent();
-        $this->assertSame('failed', $event->fresh()->status);
-
-        $mapping->update(['solabooks_account_id' => '101', 'status' => 'mapped']);
-        $recovered = app(SolaBooksOutboxDeliveryService::class)->deliver($event->fresh(), true);
+        $event = $this->event();
+        $recovered = app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
         $this->assertSame('sent', $recovered->status);
         $this->assertSame('1300', $recovered->external_document_id);
         Http::assertSentCount(1);

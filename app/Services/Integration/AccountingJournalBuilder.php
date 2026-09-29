@@ -19,7 +19,19 @@ class AccountingJournalBuilder
 {
     public function build(IntegrationOutboxEvent $event, int $orgId): array
     {
-        app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $event->event_type);
+        $snapshot = (array) data_get($event->payload, 'account_mapping_snapshot', []);
+        if ($snapshot === []) {
+            app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $event->event_type);
+        } else {
+            $required = AccountRolePolicy::forOperations([$event->event_type]);
+            $missing = array_values(array_filter(
+                $required,
+                fn (string $role): bool => (int) data_get($snapshot, "{$role}.account_id", 0) <= 0
+            ));
+            if ($missing !== []) {
+                throw new RuntimeException('The event account mapping snapshot is incomplete: '.implode(', ', $missing));
+            }
+        }
         return match ($event->event_type) {
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),

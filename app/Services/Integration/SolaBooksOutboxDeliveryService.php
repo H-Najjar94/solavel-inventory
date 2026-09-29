@@ -325,7 +325,8 @@ class SolaBooksOutboxDeliveryService
 
     private function journalPayload(IntegrationOutboxEvent $event, int $orgId): array
     {
-        if ($event->mapping_status !== 'complete' && $this->outbox->eventMappingsComplete($orgId, $event->event_type)) {
+        $snapshot = (array) data_get($event->payload, 'account_mapping_snapshot', []);
+        if ($event->mapping_status !== 'complete' && $snapshot !== []) {
             $event->mapping_status = 'complete';
             $event->save();
         }
