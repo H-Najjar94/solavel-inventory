@@ -70,7 +70,7 @@ class SettingsController extends ApiController
     {
         $orgId = $this->context->idOrFail();
         $data = $request->validate([
-            'default_costing_method' => ['nullable', 'in:average,fifo,standard'],
+            'default_costing_method' => ['nullable', 'in:average,fifo'],
             'allow_negative_stock' => ['boolean'],
             'picking_policy' => ['nullable', 'in:manual,fifo,fefo'],
             'value_tolerance' => ['nullable', 'numeric', 'min:0'],

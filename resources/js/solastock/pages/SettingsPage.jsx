@@ -297,7 +297,6 @@ export default function SettingsPage() {
                         <select className="input" value={policy.default_costing_method} onChange={(e) => setPolicy((current) => ({ ...current, default_costing_method: e.target.value }))}>
                             <option value="average">{tr('settings.policy.weightedAverage')}</option>
                             <option value="fifo">{tr('settings.policy.fifo')}</option>
-                            <option value="standard">{tr('settings.policy.standard')}</option>
                         </select>
                     </Field>
                     <Field label={tr('settings.policy.pickingPolicy')} error={errors.picking_policy}>
