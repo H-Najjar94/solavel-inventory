@@ -51,6 +51,10 @@ class IntegrationOutboxService
         // If integration is disconnected, still record — status reflects the mode.
         $mode = $this->mode($orgId);
         $postsJournal = IntegrationEvents::postsJournalForPayload($eventType, $payload);
+        if ($postsJournal && $mappingComplete) {
+            $payload['account_mapping_snapshot'] = $this->accountMappingSnapshot($orgId, $eventType);
+            $payload['account_mapping_policy_version'] = AccountRolePolicy::VERSION;
+        }
         $transportEligible = $postsJournal && $mappingComplete
             && $this->transportEnabled($orgId, $eventType);
         $status = match (true) {
@@ -149,5 +153,39 @@ class IntegrationOutboxService
         $mapped = app(OrganizationAccountRequirements::class)->validMappedRoles($orgId);
 
         return count(array_intersect($required, $mapped)) === count($required);
+    }
+
+    /**
+     * Freeze the accounting identities used by this economic event. A later
+     * configuration change must affect new events only; retries and reversals
+     * retain the mapping reviewed when the stock transaction committed.
+     */
+    private function accountMappingSnapshot(int $orgId, string $eventType): array
+    {
+        $required = AccountRolePolicy::forOperations([$eventType]);
+        $mappings = IntegrationAccountMapping::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->whereIn('mapping_type', $required)
+            ->whereIn('status', ['mapped', 'verified'])
+            ->get(['id', 'mapping_type', 'solabooks_account_id', 'updated_at'])
+            ->keyBy('mapping_type');
+
+        $snapshot = [];
+        foreach ($required as $role) {
+            $mapping = $mappings->get($role);
+            if (! $mapping || ! $mapping->solabooks_account_id) {
+                throw new \RuntimeException("Missing SolaCount account mapping '{$role}'.");
+            }
+            $snapshot[$role] = [
+                'account_id' => (int) $mapping->solabooks_account_id,
+                'mapping_id' => (int) $mapping->id,
+                'mapped_at' => $mapping->updated_at?->toISOString(),
+            ];
+        }
+
+        ksort($snapshot);
+
+        return $snapshot;
     }
 }
