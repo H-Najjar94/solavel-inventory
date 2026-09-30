@@ -125,6 +125,8 @@ export default function IntegrationSettingsPage() {
         if (kind === 'review') { setTab('status'); return undefined; }
         const target = { open: current.links?.solacount, manage_plans: current.links?.manage_plans, finish_finance_setup: current.links?.finish_finance_setup }[kind];
         if (target) { window.location.assign(target); return undefined; }
+        // SC-UAE-037: a link action this user cannot open must explain the next step, not do nothing.
+        if (['open', 'manage_plans', 'finish_finance_setup'].includes(kind)) { setActionError(tr('integration.summary.linkUnavailable')); return undefined; }
         if (kind !== 'connect' && kind !== 'retry') return undefined;
         setActing(true);
         try {

@@ -61,6 +61,7 @@ export default function ConnectionSummaryCard({ summary, tr, busy = false, error
         <p className="connection-summary__text">{describe(summary, tr)}</p>
         {state === 'connected' && <p className="connection-summary__meta">{lastSync ? tr('integration.summary.lastSync', { when: lastSync.toLocaleString(document.documentElement.lang || undefined) }) : tr('integration.summary.noSyncYet')}</p>}
         {kind === 'ask_admin' && <p className="connection-summary__meta">{tr('integration.summary.askAdmin')}</p>}
+        {kind === 'none' && state !== 'connected' && <p className="connection-summary__meta">{tr('integration.summary.noActionYet')}</p>}
         {error && <p className="connection-summary__error" role="alert">{error}</p>}
         <div className="connection-summary__actions">
             {label && <button type="button" className="btn btn--primary" disabled={busy} aria-busy={busy} onClick={() => onAction?.(kind, summary)}>
