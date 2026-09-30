@@ -157,7 +157,7 @@ export default function SettingsPage() {
             setUnit({ name: '', code: '' });
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
-            toast.push(tr('settings.master.unitSaved', 'Unit saved'), 'success');
+            toast.push(tr('settings.master.unitSaved'), 'success');
         } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
     }
 
@@ -299,9 +299,9 @@ export default function SettingsPage() {
     if (isLoading) return <section className="page"><Skeleton /></section>;
     // SC-UAE-036: a failed or empty load must say so, never spin forever.
     if (isError || !s.settings) return <section className="page"><EmptyState
-        title={tr('settings.common.loadFailed', 'Settings could not be loaded')}
-        hint={error?.status === 403 ? tr('settings.common.noViewPermission', 'You do not have permission to view inventory settings.') : (error?.message || tr('settings.common.errorFallback'))}
-        action={<button className="btn btn--primary" onClick={() => refetch?.()}>{tr('common.retry', 'Retry')}</button>} /></section>;
+        title={tr('settings.common.loadFailed')}
+        hint={error?.status === 403 ? tr('settings.common.noViewPermission') : (error?.message || tr('settings.common.errorFallback'))}
+        action={<button className="btn btn--primary" onClick={() => refetch?.()}>{tr('common.retry')}</button>} /></section>;
 
     return (
         <section className="page">
@@ -389,10 +389,10 @@ export default function SettingsPage() {
                         <button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
                     </div></form>
                     {/* SC-UAE-041: an empty tenant must be able to create the units items require. */}
-                    <form className="card" onSubmit={addUnit}><div className="card-head"><h3>{tr('settings.master.unit', 'Unit of measure')}</h3></div><div className="card-body">
+                    <form className="card" onSubmit={addUnit}><div className="card-head"><h3>{tr('settings.master.unit')}</h3></div><div className="card-body">
                         <Field label={tr('settings.common.name')}><input className="input" value={unit.name} onChange={(e) => setUnit({ ...unit, name: e.target.value })} required /></Field>
-                        <Field label={tr('settings.master.unitCode', 'Code')}><input className="input" value={unit.code} maxLength={50} placeholder={(unit.name || '').slice(0, 8).toUpperCase()} onChange={(e) => setUnit({ ...unit, code: e.target.value.toUpperCase() })} /></Field>
-                        <button className="btn btn--primary">{tr('settings.master.addUnit', 'Add unit')}</button>
+                        <Field label={tr('settings.master.unitCode')}><input className="input" value={unit.code} maxLength={50} placeholder={(unit.name || '').slice(0, 8).toUpperCase()} onChange={(e) => setUnit({ ...unit, code: e.target.value.toUpperCase() })} /></Field>
+                        <button className="btn btn--primary">{tr('settings.master.addUnit')}</button>
                     </div></form>
                     <form className="card" onSubmit={addBrand}><div className="card-head"><h3>{tr('settings.master.brand')}</h3></div><div className="card-body">
                         <Field label={tr('settings.common.name')}><input className="input" value={brand.name} onChange={(e) => setBrand({ name: e.target.value })} required /></Field>
