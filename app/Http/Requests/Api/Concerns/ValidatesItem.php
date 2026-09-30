@@ -144,6 +144,12 @@ trait ValidatesItem
                             $v->errors()->add('item_type', __('inventory.validation.item_type_locked'));
                         }
                     }
+                } elseif ($current && $this->filled('item_type') && $this->input('item_type') !== $current->item_type
+                    && \Illuminate\Support\Facades\DB::connection($conn)->table('stock_ledger')
+                        ->where('organization_id', $orgId)->where('item_id', $id)->exists()) {
+                    // Any stock history (even with zero on hand) keeps the type: a stocked item
+                    // with ledger rows must not become a service/non-inventory item (SC-UAE-042).
+                    $v->errors()->add('item_type', __('inventory.validation.item_type_locked'));
                 }
             }
         });

@@ -184,6 +184,14 @@ class StockLedgerService
             throw new RuntimeException(__('inventory.stock.cross_warehouse'));
         }
 
+        // ── only stock-tracked items move stock (SC-UAE-042) ──
+        // Service and non-inventory items have no quantity or valuation; a posted
+        // movement would create ledger rows, cost layers and inventory/COGS
+        // postings for them. Reversals stay allowed so historical rows unwind.
+        if (! $isReversal && (string) $item->item_type !== 'inventory') {
+            throw new RuntimeException(__('inventory.stock.non_stock_item', ['sku' => (string) $item->sku]));
+        }
+
         // ── tracking compatibility (relaxed for reversals: original coords carried) ──
         if (! $isReversal) {
             if ($item->tracksSerials() && $m->serialId === null) {
