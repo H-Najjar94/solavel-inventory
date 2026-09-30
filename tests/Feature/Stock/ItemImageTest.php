@@ -169,6 +169,15 @@ class ItemImageTest extends TestCase
     #[Test]
     public function viewer_can_view_images_but_cannot_upload_or_delete(): void
     {
+        // Since 6647c93/eb4e2ed the Central app decision caps every grant; model a
+        // Central viewer assignment so this checks the viewer contract itself.
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class, new class extends \App\Services\Access\CentralAppAccess {
+            public function __construct() {}
+            public function decision(int $userId, int $organizationId, string $appKey): array
+            {
+                return ['allowed' => true, 'owner' => false, 'roles' => ['inventory_viewer'], 'grants' => []];
+            }
+        });
         app(OrganizationContext::class)->set(660066);
         $perms = new class(app(OrganizationContext::class), 'some_unknown_role') extends InventoryPermissionService {
             public function __construct(OrganizationContext $ctx, private ?string $forced)
