@@ -60,6 +60,7 @@ import RecallFormPage from '../pages/RecallFormPage.jsx';
 import RecallDetailPage from '../pages/RecallDetailPage.jsx';
 import ReportsPage from '../pages/ReportsPage.jsx';
 import SettingsPage from '../pages/SettingsPage.jsx';
+import TeamAccessPage from '../pages/TeamAccessPage.jsx';
 import IntegrationSettingsPage from '../pages/IntegrationSettingsPage.jsx';
 import IntegrationEventsPage from '../pages/IntegrationEventsPage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
@@ -168,6 +169,7 @@ export const router = createBrowserRouter(
                 { path: 'recalls/:id', element: <RecallDetailPage /> },
                 { path: 'reports', element: <ReportsPage /> },
                 { path: 'settings', element: protectedElement(<SettingsPage />, 'inventory.manage_settings') },
+                { path: 'team-access', element: protectedElement(<TeamAccessPage />, 'inventory.manage_settings') },
                 { path: 'integrations/solacount', element: protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view') },
                 { path: 'integrations/solacount/events', element: protectedElement(<IntegrationEventsPage />, 'inventory.integration.view') },
                 // Old SolaBooks-era addresses keep working for bookmarks and emails.

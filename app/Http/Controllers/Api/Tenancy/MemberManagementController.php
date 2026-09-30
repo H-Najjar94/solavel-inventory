@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Tenancy;
 
 use App\Models\Landlord\Organization;
+use App\Services\Access\AppAuthority;
 use App\Services\Access\MemberManagement;
 use App\Services\Tenancy\TenantManager;
 use App\Tenancy\OrganizationContext;
@@ -16,9 +17,9 @@ class MemberManagementController
     private function readyRoles(): array
     {
         try {
-            return array_merge(['stock_manager', 'warehouse_user'], array_values(array_intersect(array_keys(config('inventory_operational_roles', [])), DB::connection(config('tenancy.tenant_connection', 'tenant'))->table('inventory_operational_role_sets')->pluck('role_key')->all())));
+            return array_merge(['stock_manager', 'warehouse_user', AppAuthority::ADMINISTRATOR_ROLE], array_values(array_intersect(array_keys(config('inventory_operational_roles', [])), DB::connection(config('tenancy.tenant_connection', 'tenant'))->table('inventory_operational_role_sets')->pluck('role_key')->all())));
         } catch (\Throwable) {
-            return ['stock_manager', 'warehouse_user'];
+            return ['stock_manager', 'warehouse_user', AppAuthority::ADMINISTRATOR_ROLE];
         }
     }
 

@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Schema;
  * The user's role is resolved from their CENTRAL organization membership
  * (user_organizations.role for user + active org). There is NO admin fallback:
  * a user with no membership / no resolvable role gets NO permissions (fail
- * closed, least privilege). Only an org owner maps to full inventory admin.
+ * closed, least privilege). Only full app authority (the org owner or a
+ * SolaStock Administrator, see AppAuthority) maps to full inventory admin.
  */
 class InventoryPermissionService
 {
@@ -121,7 +122,7 @@ class InventoryPermissionService
         if (! ($decision['allowed'] ?? false)) {
             return [];
         }
-        if ($decision['owner'] ?? false) {
+        if (AppAuthority::full($decision)) {
             return array_values(array_filter($this->all(), fn ($permission) => ! CentralPermissionConstraints::denied($decision, $permission)));
         }
         // A destination custom role is an explicit assignment made through
@@ -191,6 +192,13 @@ class InventoryPermissionService
 
         $customRole = $this->customRole($userId);
         if ($customRole !== null) {
+            // A leftover custom-role assignment never narrows full app
+            // authority (owner / SolaStock Administrator); Central decides that.
+            $centralUserId = $this->centralUserId($user);
+            if ($centralUserId > 0 && AppAuthority::full(app(CentralAppAccess::class)->decision($centralUserId, $orgId, 'inventory'))) {
+                return $this->roleCache[$orgId][$userId] = 'inventory_admin';
+            }
+
             return $this->roleCache[$orgId][$userId] = $customRole;
         }
 
@@ -213,7 +221,7 @@ class InventoryPermissionService
         if (! ($decision['allowed'] ?? false)) {
             return null;
         }
-        if ($decision['owner'] ?? false) {
+        if (AppAuthority::full($decision)) {
             return 'inventory_admin';
         }
         // Organization membership rank is not an application permission ceiling.

@@ -24,7 +24,7 @@ const NAV_LABELS = {
     'goods-receipts': 'goodsReceipts', customers: 'customers', 'sales-orders': 'salesOrders',
     'pick-lists': 'picking', packs: 'packing', shipments: 'shipments', 'sales-returns': 'salesReturns',
     traceability: 'traceability', lots: 'lots', serials: 'serials', recalls: 'recalls', reports: 'reports',
-    integration: 'solabooks', settings: 'settings',
+    integration: 'solabooks', 'team-access': 'nav.teamAccess', settings: 'settings',
 };
 const GROUP_LABELS = { Catalog: 'catalog', Stock: 'stock', Operations: 'operations', Purchasing: 'purchasing', 'Sales / Fulfillment': 'sales', Traceability: 'traceability', Insights: 'insights', Admin: 'admin' };
 
