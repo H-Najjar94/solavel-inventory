@@ -197,7 +197,9 @@ class SettingsController extends ApiController
     public function storeUnit(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'code' => ['required', 'string', 'max:50'],
+            // A duplicate code must be a clear 422, not a unique-index 500 (SC-UAE-041).
+            'code' => ['required', 'string', 'max:50', \Illuminate\Validation\Rule::unique(config('tenancy.tenant_connection', 'tenant').'.units', 'code')
+                ->where('organization_id', $this->context->idOrFail())->whereNull('deleted_at')],
             'name' => ['required', 'string', 'max:100'],
             'symbol' => ['nullable', 'string', 'max:20'],
             'kind' => ['nullable', 'in:count,weight,volume,length'],

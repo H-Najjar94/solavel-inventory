@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
-import { Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import { EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
 export default function SettingsPage() {
@@ -12,7 +12,7 @@ export default function SettingsPage() {
         const element = document.getElementById('member-management-context');
         return element ? JSON.parse(element.textContent) : null;
     }, []);
-    const { data, isLoading, isMock } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
+    const { data, isLoading, isMock, isError, error, refetch } = useApiQuery(['settings'], api.settings, { fallback: { settings: null, units: [], categories: [], brands: [], items: [], warehouses: [], warehouse_reorder_rules: [] } });
     const integration = useApiQuery(['integration'], api.integrationStatus, { fallback: { connected: false, planned_events: [], account_mappings: {} } });
     const rolesQuery = useApiQuery(['custom-roles'], api.customRoles, { fallback: { permissions: [], roles: [], assignments: [], builtin_roles: [] } });
     const warehouseAssignmentsQuery = useApiQuery(['warehouse-assignments'], api.allWarehouseAssignments, { fallback: [] });
@@ -27,6 +27,7 @@ export default function SettingsPage() {
     const [safetyResult, setSafetyResult] = useState(null);
     const [conversion, setConversion] = useState({ from_unit_id: '', to_unit_id: '', factor: '' });
     const [category, setCategory] = useState({ name: '', parent_id: '' });
+    const [unit, setUnit] = useState({ name: '', code: '' });
     const [brand, setBrand] = useState({ name: '' });
     const [editingCategory, setEditingCategory] = useState(null);
     const [editingBrand, setEditingBrand] = useState(null);
@@ -146,6 +147,17 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.master.categoryUpdated'), 'success');
+        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+    }
+
+    async function addUnit(e) {
+        e.preventDefault();
+        try {
+            await api.createUnit(unit.name, unit.code);
+            setUnit({ name: '', code: '' });
+            await qc.invalidateQueries({ queryKey: ['settings'] });
+            await qc.invalidateQueries({ queryKey: ['meta'] });
+            toast.push(tr('settings.master.unitSaved', 'Unit saved'), 'success');
         } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
     }
 
@@ -284,7 +296,12 @@ export default function SettingsPage() {
         } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
     }
 
-    if (isLoading || !s.settings) return <section className="page"><Skeleton /></section>;
+    if (isLoading) return <section className="page"><Skeleton /></section>;
+    // SC-UAE-036: a failed or empty load must say so, never spin forever.
+    if (isError || !s.settings) return <section className="page"><EmptyState
+        title={tr('settings.common.loadFailed', 'Settings could not be loaded')}
+        hint={error?.status === 403 ? tr('settings.common.noViewPermission', 'You do not have permission to view inventory settings.') : (error?.message || tr('settings.common.errorFallback'))}
+        action={<button className="btn btn--primary" onClick={() => refetch?.()}>{tr('common.retry', 'Retry')}</button>} /></section>;
 
     return (
         <section className="page">
@@ -370,6 +387,12 @@ export default function SettingsPage() {
                             </select>
                         </Field>
                         <button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
+                    </div></form>
+                    {/* SC-UAE-041: an empty tenant must be able to create the units items require. */}
+                    <form className="card" onSubmit={addUnit}><div className="card-head"><h3>{tr('settings.master.unit', 'Unit of measure')}</h3></div><div className="card-body">
+                        <Field label={tr('settings.common.name')}><input className="input" value={unit.name} onChange={(e) => setUnit({ ...unit, name: e.target.value })} required /></Field>
+                        <Field label={tr('settings.master.unitCode', 'Code')}><input className="input" value={unit.code} maxLength={50} placeholder={(unit.name || '').slice(0, 8).toUpperCase()} onChange={(e) => setUnit({ ...unit, code: e.target.value.toUpperCase() })} /></Field>
+                        <button className="btn btn--primary">{tr('settings.master.addUnit', 'Add unit')}</button>
                     </div></form>
                     <form className="card" onSubmit={addBrand}><div className="card-head"><h3>{tr('settings.master.brand')}</h3></div><div className="card-body">
                         <Field label={tr('settings.common.name')}><input className="input" value={brand.name} onChange={(e) => setBrand({ name: e.target.value })} required /></Field>
