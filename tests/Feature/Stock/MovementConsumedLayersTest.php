@@ -137,6 +137,15 @@ class MovementConsumedLayersTest extends TestCase
     #[Test]
     public function a_viewer_may_read_movements_but_cannot_mutate(): void
     {
+        // Since 6647c93/eb4e2ed the Central app decision caps every grant; model a
+        // Central viewer assignment so this checks the viewer contract itself.
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class, new class extends \App\Services\Access\CentralAppAccess {
+            public function __construct() {}
+            public function decision(int $userId, int $organizationId, string $appKey): array
+            {
+                return ['allowed' => true, 'owner' => false, 'roles' => ['inventory_viewer'], 'grants' => []];
+            }
+        });
         app(OrganizationContext::class)->set(660066); // non-demo, non-reserved org
         // Any unknown central role → least-privilege viewer.
         $perms = new class(app(OrganizationContext::class), 'some_unknown_role') extends InventoryPermissionService {
