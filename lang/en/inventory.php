@@ -36,6 +36,7 @@ return [
         'unit_conversion_distinct' => 'From and to units must be different.',
     ],
     'stock' => [
+        'non_stock_item' => 'Item :sku is a service or non-inventory item; it cannot have stock movements.',
         'movement_positive' => 'Movement quantity must be greater than zero.',
         'cross_item' => 'Cross-organization item reference rejected.',
         'cross_warehouse' => 'Cross-organization warehouse reference rejected.',

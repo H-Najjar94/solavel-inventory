@@ -132,7 +132,7 @@ class InventoryReportService
         }
 
         $q = $this->scoped('stock_balances as b')
-            ->join('items as i', 'i.id', '=', 'b.item_id')
+            ->join('items as i', 'i.id', '=', 'b.item_id')->where('i.item_type', 'inventory')
             ->leftJoin('item_categories as c', 'c.id', '=', 'i.category_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->leftJoin('lots as lo', 'lo.id', '=', 'b.lot_id')
@@ -165,7 +165,7 @@ class InventoryReportService
     {
         $asAt = $f->asAt.' 23:59:59';
         $rows = $this->scoped('stock_ledger as l')
-            ->join('items as i', 'i.id', '=', 'l.item_id')
+            ->join('items as i', 'i.id', '=', 'l.item_id')->where('i.item_type', 'inventory')
             ->leftJoin('item_categories as c', 'c.id', '=', 'i.category_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
             ->leftJoin('lots as lo', 'lo.id', '=', 'l.lot_id')
@@ -290,7 +290,7 @@ class InventoryReportService
     private function reportWarehouseStock(ReportFilters $f): array
     {
         $rows = $this->scoped('stock_balances as b')
-            ->join('items as i', 'i.id', '=', 'b.item_id')
+            ->join('items as i', 'i.id', '=', 'b.item_id')->where('i.item_type', 'inventory')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->leftJoin('warehouse_bins as bin', 'bin.id', '=', 'b.bin_id')
             ->when($f->warehouseId, fn ($x) => $x->where('b.warehouse_id', $f->warehouseId))
@@ -359,7 +359,7 @@ class InventoryReportService
     {
         $cutoff = now()->subDays($f->days)->toDateTimeString();
         $moved = $this->scoped('stock_ledger')->where('direction', 'out')->where('moved_at', '>=', $cutoff)->distinct()->pluck('item_id');
-        $rows = $this->scoped('stock_balances as b')->join('items as i', 'i.id', '=', 'b.item_id')
+        $rows = $this->scoped('stock_balances as b')->join('items as i', 'i.id', '=', 'b.item_id')->where('i.item_type', 'inventory')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->where('b.on_hand_qty', '>', 0)->whereNotIn('b.item_id', $moved)
             ->selectRaw('i.sku, i.name item, w.name warehouse, b.on_hand_qty, b.total_value')->get();

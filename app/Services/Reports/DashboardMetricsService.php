@@ -66,7 +66,10 @@ class DashboardMetricsService
 
     public function metrics(): array
     {
-        $balances = $this->scoped('stock_balances')->get(['item_id', 'on_hand_qty', 'reserved_qty', 'total_value']);
+        // Stock value and availability cover stock-tracked items only (SC-UAE-042).
+        $balances = $this->scoped('stock_balances')
+            ->whereIn('item_id', fn ($q) => $q->select('id')->from('items')->where('item_type', 'inventory'))
+            ->get(['item_id', 'on_hand_qty', 'reserved_qty', 'total_value']);
 
         $inventoryValue = '0';
         $low = 0;
