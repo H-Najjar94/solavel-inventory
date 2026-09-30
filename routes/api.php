@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\SpaPageViewController;
 use App\Http\Controllers\Api\Tenancy\SyncEventsController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomRoleController;
+use App\Http\Controllers\Api\V1\TeamAccessController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FinanceDocumentSourceController;
 use App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController;
@@ -526,6 +527,7 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::middleware('perm:inventory.manage_settings')->group(function () {
         Route::put('/settings', [SettingsController::class, 'updateSettings']);
         Route::put('/settings/taxes', [SettingsController::class, 'updateTaxes']);
+        Route::get('/team-access', [TeamAccessController::class, 'index'])->name('api.v1.team-access.index');
         Route::get('/settings/warehouse-assignments', [SettingsController::class, 'allWarehouseAssignments']);
         Route::get('/settings/warehouse-assignments/{userId}', [SettingsController::class, 'warehouseAssignments']);
         Route::put('/settings/warehouse-assignments/{userId}', [SettingsController::class, 'syncWarehouseAssignments']);

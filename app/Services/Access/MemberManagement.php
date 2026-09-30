@@ -25,7 +25,9 @@ class MemberManagement
     {
         abort_unless(app(OrganizationContext::class)->idOrFail() === $centralOrg, 403);
         abort_if($actor->id === $target->id, 403);
-        abort_if(app(CentralAppAccess::class)->decision((int) $target->id, $centralOrg, 'inventory')['owner'] ?? false, 403);
+        // Owner and SolaStock Administrator hold full app authority decided by
+        // Central; nobody edits their SolaStock access from inside SolaStock.
+        abort_if(AppAuthority::full(app(CentralAppAccess::class)->decision((int) $target->id, $centralOrg, 'inventory')), 403);
         $allowed = app(WarehouseAccessService::class)->allowedIds((int) $actor->id);
         if ($allowed !== null) {
             $targetIds = InventoryUserWarehouse::where('user_id', $target->id)->pluck('warehouse_id')->all();

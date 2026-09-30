@@ -28,6 +28,7 @@ export const NAV = [
     { key: 'recalls', label: 'Recalls', path: '/recalls', icon: 'fa-solid fa-triangle-exclamation', perm: 'inventory.view_traceability', group: 'Traceability' },
     { key: 'reports', label: 'Reports', path: '/reports', icon: 'fa-solid fa-chart-line', perm: 'inventory.view_reports', group: 'Insights' },
     { key: 'integration', label: 'SolaCount', path: '/integrations/solacount', icon: 'fa-solid fa-book-open', perm: 'inventory.integration.view', group: 'Admin' },
+    { key: 'team-access', label: 'Team access', path: '/team-access', icon: 'fa-solid fa-users-gear', perm: 'inventory.manage_settings', group: 'Admin' },
     { key: 'settings', label: 'Settings', path: '/settings', icon: 'fa-solid fa-gear', perm: 'inventory.manage_settings', group: 'Admin' },
 ];
 

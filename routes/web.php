@@ -67,6 +67,10 @@ Route::view('/recalls/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/reports', 'solastock-app');
 Route::get('/member-management/{centralOrg}/{centralMember}', \App\Http\Controllers\MemberManagementController::class)
     ->middleware('inv.tenant')->whereNumber('centralOrg')->whereNumber('centralMember');
+// Team access (warehouse scope + custom role per member). The Central deep
+// link lands here with ?central_org=&central_member= and is authorized first.
+Route::get('/team-access', [\App\Http\Controllers\MemberManagementController::class, 'settings'])
+    ->middleware('inv.tenant')->name('inventory.team-access');
 Route::get('/settings/{any?}', [\App\Http\Controllers\MemberManagementController::class, 'settings'])
     ->middleware('inv.tenant')->where('any', '.*')->name('inventory.settings');
 Route::view('/integrations/{any?}', 'solastock-app')->where('any', '.*');

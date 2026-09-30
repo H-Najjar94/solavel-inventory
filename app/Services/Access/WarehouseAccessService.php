@@ -51,8 +51,8 @@ class WarehouseAccessService
         if (! ($decision['allowed'] ?? false)) {
             return [];
         }
-        if ($decision['owner'] ?? false) {
-            return null;
+        if (AppAuthority::full($decision)) {
+            return null; // owner / SolaStock Administrator: every warehouse
         }
 
         $ids = InventoryUserWarehouse::query()

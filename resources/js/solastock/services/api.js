@@ -321,6 +321,12 @@ export const api = {
     updateTaxes: (taxes, defaults = {}) => request('/settings/taxes', { method: 'PUT', body: { taxes, default_purchase_tax_code: defaults.purchase || null, default_sales_tax_code: defaults.sales || null } }),
     warehouseAssignments: (userId) => request(`/settings/warehouse-assignments/${userId}${managementContextQuery()}`),
     allWarehouseAssignments: () => request('/settings/warehouse-assignments'),
+    // Team access page: the member is chosen on the page itself, so these calls
+    // never inherit a Central deep-link member from the page URL.
+    teamAccess: () => request('/team-access'),
+    teamSyncWarehouses: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}`, { method: 'PUT', body: { warehouse_ids } }),
+    teamAssignCustomRole: (user_id, role_id) => request('/settings/custom-role-assignments', { method: 'POST', body: { user_id, role_id } }),
+    teamUnassignCustomRole: (userId) => request(`/settings/custom-role-assignments/${userId}`, { method: 'DELETE' }),
     syncWarehouseAssignments: (userId, warehouse_ids) => request(`/settings/warehouse-assignments/${userId}${managementContextQuery()}`, { method: 'PUT', body: { warehouse_ids } }),
     // SolaCount integration (foundation)
     integrationStatus: () => request('/integration/solabooks/status'),

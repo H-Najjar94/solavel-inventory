@@ -2022,3 +2022,20 @@ html[dir="rtl"] .fifo-total-line strong {
 .focus-record-table .btn--link{min-height:0;height:auto;padding:0;border:0;background:none;text-decoration:underline}
 @media(max-width:640px){.connection-summary__facts{flex-direction:column;gap:2px}.connection-summary__facts dd{overflow-wrap:break-word}}
 @media(max-width:760px){.focus-wizard .focus-category-nav{flex-wrap:wrap;overflow:visible}}
+
+/* ── Team access ── */
+.team-access-note { display:flex; align-items:flex-start; gap:10px; padding:14px 16px; }
+.team-access-note i { color: var(--muted,#888); margin-top:3px; }
+.team-access-note p { margin:0; font-size:14px; color: var(--text,#222); }
+.team-access-table-wrap { overflow-x:auto; }
+.team-access-name { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.team-access-cta { text-align:end; white-space:nowrap; }
+.team-access-section { margin-bottom:22px; }
+.team-access-section h4 { margin:0 0 8px; font-size:14px; }
+.team-access-search { width:100%; min-width:0; box-sizing:border-box; }
+.team-access-list { margin-top:8px; max-height:320px; overflow-y:auto; border:1px solid var(--line-soft,#eee); border-radius:9px; padding:4px; }
+.team-access-option { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:7px; cursor:pointer; font-size:14px; }
+.team-access-option:hover { background: var(--surface-2,#faf9f7); }
+.team-access-option .muted { margin-inline-start:auto; }
+.team-access-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; }
+@media (max-width: 640px) { .team-access-toolbar .input { min-width:0; width:100%; } }
