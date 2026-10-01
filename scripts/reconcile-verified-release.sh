@@ -31,6 +31,7 @@ new="$base/releases/$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:8}"
 test ! -e "$new"
 cp -a "$cur" "$new"
 install -m 755 -o hnajjar -g sharedgroup "$repo/scripts/reconcile-verified-release.sh" "$new/scripts/reconcile-verified-release.sh"
+install -m 755 -o hnajjar -g sharedgroup "$repo/scripts/refresh-verified-stock-pool.py" "$new/scripts/refresh-verified-stock-pool.py"
 export STOCK_VERIFIED_RELEASE="$new" STOCK_VERIFIED_SHA="$sha"
 php -r '$p=getenv("STOCK_VERIFIED_RELEASE");$s=getenv("STOCK_VERIFIED_SHA");foreach(["RELEASE_SHA",".release-sha"] as $f){chmod("$p/$f",0644);file_put_contents("$p/$f",$s."\n");}file_put_contents("$p/.release-id",basename($p)."\n");'
 chown hnajjar:sharedgroup "$new/RELEASE_SHA" "$new/.release-sha" "$new/.release-id"
@@ -49,7 +50,7 @@ test "$(readlink -f "$base/current")" = "$cur"
 # reports no secrets and is removed on every exit.
 probe="_qa32_opcache_$(openssl rand -hex 12).php"
 export STOCK_VERIFIED_PROBE="$new/public/$probe"
-php -r 'file_put_contents(getenv("STOCK_VERIFIED_PROBE"), "<?php opcache_reset(); echo realpath(__DIR__.\"/..\");");'
+php -r 'file_put_contents(getenv("STOCK_VERIFIED_PROBE"), "<?php clearstatcache(true); opcache_reset(); echo realpath(__DIR__.\"/..\");");'
 chmod 644 "$new/public/$probe"
 trap 'rm -f -- "$new/public/$probe"' EXIT
 printf '%s\n' "$cur" > "$base/PREVIOUS_RELEASE"
@@ -57,7 +58,9 @@ ln -s "$new" "$base/.current.qa32.new"
 mv -T "$base/.current.qa32.new" "$base/current"
 ok=0
 for attempt in $(seq 1 16); do
-  answer=$(curl -fsS --max-time 15 "https://solavel.com/inventory/$probe" || true)
+  # An absolute immutable filename reaches the Stock pool even while an old
+  # worker's realpath cache still points current/public at the predecessor.
+  answer=$(python3 "$new/scripts/refresh-verified-stock-pool.py" --release "$(basename "$new")" --sha "$sha" --probe "$probe" || true)
   if test "$answer" = "$new"; then ok=$((ok+1)); else ok=0; fi
   test "$ok" -ge 8 && break
 done
