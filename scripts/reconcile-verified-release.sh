@@ -38,7 +38,12 @@ chmod 444 "$new/RELEASE_SHA" "$new/.release-sha" "$new/.release-id"
 for cache in "$new"/bootstrap/cache/*.php; do
   sed -i -E "s#$base/releases/[0-9TZ]+-[0-9a-f]+#$new#g" "$cache"
 done
-(cd "$new" && runuser -u hnajjar -- php artisan config:cache && runuser -u hnajjar -- php artisan route:cache && bash scripts/validate-runtime-cache.sh)
+(cd "$new" && runuser -u hnajjar -- php artisan config:cache && runuser -u hnajjar -- php artisan route:cache)
+# The predecessor has executable generated package manifests (0775). They
+# contain public provider names, not secrets; restore normal read-only PHP
+# file modes rather than bypassing the existing runtime permission gate.
+chmod 644 "$new/bootstrap/cache/packages.php" "$new/bootstrap/cache/services.php"
+(cd "$new" && bash scripts/validate-runtime-cache.sh)
 test "$(readlink -f "$base/current")" = "$cur"
 # Proof is served by the Stock FPM pool, not by CLI. Random short-lived probe
 # reports no secrets and is removed on every exit.
