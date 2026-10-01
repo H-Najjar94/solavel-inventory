@@ -90,7 +90,7 @@ export default function TransferFormPage() {
     );
 
     const columns = [
-        { key: 'item', label: t('transfers.form.item', 'Item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('transfers.form.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'avail', label: t('transfers.form.availableAtSource', 'Available at source'), width: 130, render: (l) => <AvailableCell itemId={l.item_id} warehouseId={header.from_warehouse_id} /> },
         { key: 'fbin', label: t('transfers.form.sourceBin', 'Source bin'), render: (l, i) => <BinPicker warehouseId={header.from_warehouse_id} value={l.from_bin_id} onChange={(v) => setLine(i, { from_bin_id: v })} /> },
         { key: 'tbin', label: t('transfers.form.destinationBin', 'Destination bin'), render: (l, i) => <BinPicker warehouseId={header.to_warehouse_id} value={l.to_bin_id} onChange={(v) => setLine(i, { to_bin_id: v })} /> },

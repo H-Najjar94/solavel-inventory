@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Stock;
 
+use App\Http\Requests\Api\StoreStockAdjustmentRequest;
+use App\Http\Requests\Api\StoreStockTransferRequest;
 use App\Models\Tenant\InventorySetting;
+use Illuminate\Validation\ValidationException;
 use App\Models\Tenant\StockBalance;
 use App\Services\Documents\OpeningStockService;
 use PHPUnit\Framework\Attributes\Test;
@@ -44,6 +47,41 @@ class NonStockItemMovementTest extends TestCase
                 $this->assertStringContainsString((string) $item->sku, $e->getMessage());
             }
             $this->assertFalse(StockBalance::query()->where('item_id', $item->id)->exists());
+        }
+    }
+
+    #[Test]
+    public function adjustment_and_transfer_drafts_reject_non_inventory_items_on_save(): void
+    {
+        $this->boot();
+        InventorySetting::query()->where('organization_id', TenantTestManager::ORG_A)->update(['adjustment_reason_codes' => null]);
+        $wh = F::warehouse();
+        $other = F::warehouse();
+        $service = F::item(['item_type' => 'service', 'tracking_type' => 'none']);
+        $stock = F::item();
+
+        $payloads = [
+            StoreStockAdjustmentRequest::class => fn ($itemId) => ['warehouse_id' => $wh->id, 'lines' => [['item_id' => $itemId, 'direction' => 'increase', 'quantity' => '1', 'unit_cost' => '1']]],
+            StoreStockTransferRequest::class => fn ($itemId) => ['from_warehouse_id' => $wh->id, 'to_warehouse_id' => $other->id, 'lines' => [['item_id' => $itemId, 'quantity' => '1']]],
+        ];
+        foreach ($payloads as $class => $payload) {
+            $request = $class::create('/', 'POST', $payload($service->id));
+            $request->setContainer(app())->setRedirector(app('redirect'));
+            try {
+                $request->validateResolved();
+                $this->fail("{$class} accepted a service item.");
+            } catch (ValidationException $e) {
+                $this->assertArrayHasKey('lines.0.item_id', $e->errors());
+                $this->assertStringContainsString((string) $service->sku, $e->errors()['lines.0.item_id'][0]);
+            }
+
+            $ok = $class::create('/', 'POST', $payload($stock->id));
+            $ok->setContainer(app())->setRedirector(app('redirect'));
+            try {
+                $ok->validateResolved();
+            } catch (ValidationException $e) {
+                $this->assertArrayNotHasKey('lines.0.item_id', $e->errors(), "{$class} rejected an inventory item.");
+            }
         }
     }
 

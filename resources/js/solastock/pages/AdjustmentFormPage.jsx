@@ -83,7 +83,7 @@ export default function AdjustmentFormPage() {
             <select className="input" value={l.direction} onChange={(e) => setLine(i, { direction: e.target.value })}>
                 <option value="increase">{t('adjustment.direction.increase')}</option><option value="decrease">{t('adjustment.direction.decrease')}</option>
             </select>) },
-        { key: 'item', label: t('adjustment.item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('adjustment.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'bin', label: t('adjustment.bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
         { key: 'qty', label: t('adjustment.quantity'), width: 110, render: (l, i) => {
             const serial = tracking.tracksSerial(l.item_id);
@@ -129,7 +129,7 @@ export default function AdjustmentFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label={t('adjustment.documentNumber')} required error={errors.adjustment_number}><input className="input" value={header.adjustment_number} onChange={(e) => setHeader({ ...header, adjustment_number: e.target.value })} /></Field>
+                <Field label={t('adjustment.documentNumber')} error={errors.adjustment_number}><input className="input" readOnly aria-readonly="true" placeholder={t('adjustment.documentNumberAuto')} value={header.adjustment_number} /></Field>
                 <Field label={t('adjustment.date')} error={errors.adjustment_date}><input className="input" type="date" value={header.adjustment_date} onChange={(e) => setHeader({ ...header, adjustment_date: e.target.value })} /></Field>
                 <Field label={t('adjustment.warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
                 <Field label={t('adjustment.reasonCode')} error={errors.reason_code}>

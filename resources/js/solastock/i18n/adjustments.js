@@ -18,6 +18,8 @@ export const en = {
     'adjustment.editTitle': 'Edit adjustment',
     'adjustment.newTitle': 'New adjustment',
     'adjustment.documentNumber': 'Document number',
+    // The server always assigns adjustment numbers; the field is display-only.
+    'adjustment.documentNumberAuto': 'Assigned automatically when saved',
     'adjustment.date': 'Date',
     'adjustment.warehouse': 'Warehouse',
     'adjustment.reasonCode': 'Reason code',
@@ -66,6 +68,7 @@ export const ar = {
     'adjustment.editTitle': 'تعديل التسوية',
     'adjustment.newTitle': 'تسوية جديدة',
     'adjustment.documentNumber': 'رقم المستند',
+    'adjustment.documentNumberAuto': 'يُعيَّن تلقائياً عند الحفظ',
     'adjustment.date': 'التاريخ',
     'adjustment.warehouse': 'المستودع',
     'adjustment.reasonCode': 'رمز السبب',

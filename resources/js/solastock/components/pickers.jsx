@@ -16,8 +16,11 @@ function Select({ value, onChange, options, placeholder, getLabel, disabled }) {
     );
 }
 
-export function ItemPicker({ value, onChange, disabled }) {
-    const { data } = useApiQuery(['items-picker'], () => api.items({ per_page: 200, is_active: true }), { fallback: [] });
+// stockOnly: documents that move stock offer inventory items only; service and
+// non-inventory items cannot hold stock (the ledger rejects them on posting).
+export function ItemPicker({ value, onChange, disabled, stockOnly = false }) {
+    const params = stockOnly ? { per_page: 200, is_active: true, item_type: 'inventory' } : { per_page: 200, is_active: true };
+    const { data } = useApiQuery(stockOnly ? ['items-picker', 'inventory'] : ['items-picker'], () => api.items(params), { fallback: [] });
     const items = Array.isArray(data) ? data : (data?.data ?? []);
     return <Select value={value} onChange={onChange} options={items} disabled={disabled}
         placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;

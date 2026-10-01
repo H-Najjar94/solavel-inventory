@@ -80,7 +80,7 @@ export default function OpeningStockFormPage() {
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: t('openingStock.item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('openingStock.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'bin', label: t('openingStock.bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
         { key: 'qty', label: t('openingStock.quantity'), width: 120, render: (l, i) => tracking.tracksSerial(l.item_id)
             ? <span className="muted" title={t('openingStock.serialQuantity')}>{(l.serials ?? []).length}</span>
