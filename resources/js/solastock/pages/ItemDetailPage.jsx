@@ -402,8 +402,11 @@ export default function ItemDetailPage() {
                     <div className="item-hero-actions">
                         <Link to={`/items/${item.id}/edit`} className={`btn btn--sm btn--primary ${gate.allowed ? '' : 'is-disabled'}`}>{t('items.edit')}</Link>
                         <button className="btn btn--sm" onClick={() => setTab('media')}>{t('items.manageMedia')}</button>
-                        <Link to="/adjustments/new" className="btn btn--sm">{t('itemDetail.adjustStock')}</Link>
-                        <Link to="/transfers/new" className="btn btn--sm">{t('itemDetail.transfer')}</Link>
+                        {/* Only inventory items can hold stock. */}
+                        {item.item_type === 'inventory' && <>
+                            <Link to="/adjustments/new" className="btn btn--sm">{t('itemDetail.adjustStock')}</Link>
+                            <Link to="/transfers/new" className="btn btn--sm">{t('itemDetail.transfer')}</Link>
+                        </>}
                     </div>
                 </div>
             </div>

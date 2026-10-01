@@ -92,7 +92,7 @@ export default function CountFormPage() {
     );
 
     const columns = [
-        { key: 'item', label: t('counts.form.item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('counts.form.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'lot', label: t('counts.form.lot'), width: 150, render: (l) => l.lot_code
             ? <span title={l.expiry_date ? t('counts.form.lotExpiry', undefined, { date: l.expiry_date }) : ''}><bdi>{l.lot_code}</bdi>{l.expiry_date ? <> · <bdi>{l.expiry_date}</bdi></> : ''}</span>
             : <span className="muted">—</span> },

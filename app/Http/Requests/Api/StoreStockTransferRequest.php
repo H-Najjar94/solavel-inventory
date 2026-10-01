@@ -3,9 +3,12 @@
 namespace App\Http\Requests\Api;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreStockTransferRequest extends FormRequest
 {
+    use Concerns\RejectsNonStockItems;
+
     public function authorize(): bool
     {
         return true;
@@ -47,5 +50,10 @@ class StoreStockTransferRequest extends FormRequest
             'lines.*.from_bin_id' => ['nullable', 'integer'],
             'lines.*.to_bin_id' => ['nullable', 'integer'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(fn (Validator $validator) => $this->rejectNonStockItems($validator));
     }
 }

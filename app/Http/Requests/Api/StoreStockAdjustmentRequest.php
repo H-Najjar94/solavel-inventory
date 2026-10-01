@@ -9,6 +9,8 @@ use Illuminate\Validation\Validator;
 
 class StoreStockAdjustmentRequest extends FormRequest
 {
+    use Concerns\RejectsNonStockItems;
+
     public function authorize(): bool
     {
         return true;
@@ -62,6 +64,8 @@ class StoreStockAdjustmentRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $this->rejectNonStockItems($validator);
+
             $codes = collect(InventorySetting::query()->first()?->adjustment_reason_codes ?? [])
                 ->filter(fn ($code) => ($code['active'] ?? true) !== false)
                 ->pluck('code')
