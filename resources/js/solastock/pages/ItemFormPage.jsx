@@ -82,7 +82,7 @@ export default function ItemFormPage() {
             await qc.invalidateQueries({ queryKey: ['meta'] });
             await qc.invalidateQueries({ queryKey: ['suppliers-lookup'] });
             return res?.data ?? res;
-        } catch (e) { toast.push(e.message, 'error'); return null; }
+        } catch (e) { toast.failure(e, e.message); return null; }
     }
 
     // After an item is created, optionally seed opening stock (a real stock write
@@ -100,7 +100,7 @@ export default function ItemFormPage() {
             if (draftId) await api.postOpeningStock(draftId);
         } catch (e) {
             // Item already created — surface a soft warning, don't lose the item.
-            toast.push(t('items.openingStockFailed', undefined, { message: e.message }), 'error');
+            toast.failure(e, t('items.openingStockFailed', undefined, { message: e.message }));
         }
     }
 
@@ -124,7 +124,7 @@ export default function ItemFormPage() {
             nav(`/items/${newId}`);
         } catch (err) {
             setErrors(fieldErrors(err));
-            toast.push(err.message || t('items.saveFailed'), 'error');
+            toast.failure(err, err.message || t('items.saveFailed'));
         } finally { setSaving(false); }
     }
 

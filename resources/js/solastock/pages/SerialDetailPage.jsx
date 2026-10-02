@@ -36,7 +36,7 @@ export default function SerialDetailPage() {
             toast.push(text('traceabilityPages.serialDetail.statusUpdated', { status: traceabilityStatusText(locale, status) }), 'success');
             qc.invalidateQueries({ queryKey: ['serial', id] });
         }
-        catch (e) { toast.push(e.message, 'error'); }
+        catch (e) { toast.failure(e, e.message); }
     }
 
     return (

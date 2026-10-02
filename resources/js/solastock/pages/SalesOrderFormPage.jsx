@@ -60,7 +60,7 @@ export default function SalesOrderFormPage() {
             toast.push(isEdit ? t('salesOrders.messages.updated', 'Draft updated.') : t('salesOrders.messages.created', 'Sales order created.'), 'success');
             qc.invalidateQueries({ queryKey: ['sales-orders'] });
             nav(`/sales-orders/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('salesOrders.common.saveFailed', 'Save failed.'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('salesOrders.common.saveFailed', 'Save failed.')); }
         finally { setSaving(false); }
     }
 

@@ -34,19 +34,19 @@ export default function PickListDetailPage() {
     async function savePicks() {
         setBusy(true);
         try { await api.updatePickList(id, { picks }); toast.push(t('fulfillment.picking.picksSaved', 'Picks saved.'), 'success'); qc.invalidateQueries({ queryKey: ['pick-list', id] }); }
-        catch (e) { toast.push(e.message || t('fulfillment.picking.saveFailed', 'The picks could not be saved.'), 'error'); } finally { setBusy(false); }
+        catch (e) { toast.failure(e, e.message || t('fulfillment.picking.saveFailed', 'The picks could not be saved.')); } finally { setBusy(false); }
     }
     async function finalize() {
         setBusy(true);
         try { await api.markPickListPicked(id); toast.push(t('fulfillment.picking.markedPicked', 'Pick list marked picked.'), 'success'); qc.invalidateQueries({ queryKey: ['pick-list', id] }); }
-        catch (e) { toast.push(e.message || t('fulfillment.picking.finalizeFailed', 'The pick list could not be marked picked.'), 'error'); } finally { setBusy(false); }
+        catch (e) { toast.failure(e, e.message || t('fulfillment.picking.finalizeFailed', 'The pick list could not be marked picked.')); } finally { setBusy(false); }
     }
     async function makePack() {
         setBusy(true);
         try {
             const res = await api.createPack({ pick_list_id: pl.id, pack_number: `PACK-${pl.pick_number}` });
             toast.push(t('fulfillment.picking.packCreated', 'Pack created.'), 'success'); nav(`/packs/${res?.data?.id}`);
-        } catch (e) { toast.push(e.message || t('fulfillment.picking.packCreateFailed', 'The pack could not be created.'), 'error'); } finally { setBusy(false); }
+        } catch (e) { toast.failure(e, e.message || t('fulfillment.picking.packCreateFailed', 'The pack could not be created.')); } finally { setBusy(false); }
     }
 
     return (

@@ -36,7 +36,7 @@ export default function CountDetailPage() {
 
     async function post() {
         try { await api.postCount(id); toast.push(t('counts.detail.posted'), 'success'); qc.invalidateQueries({ queryKey: ['count'] }); return true; }
-        catch (e) { if (!e.feedbackHandled) toast.push(e.message || t('counts.detail.postFailed'), 'error'); return false; }
+        catch (e) { if (!e.feedbackHandled) toast.failure(e, e.message || t('counts.detail.postFailed')); return false; }
     }
 
     return (

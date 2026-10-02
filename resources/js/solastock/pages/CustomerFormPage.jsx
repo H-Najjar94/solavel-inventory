@@ -40,7 +40,7 @@ export default function CustomerFormPage() {
             toast.push(t(isEdit ? 'partners.customers.form.updated' : 'partners.customers.form.created'), 'success');
             qc.invalidateQueries({ queryKey: ['customers'] });
             nav(`/customers/${res?.data?.id ?? id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(t('partners.customers.form.saveFailed'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, t('partners.customers.form.saveFailed')); }
         finally { setSaving(false); }
     }
 

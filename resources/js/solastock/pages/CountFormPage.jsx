@@ -62,7 +62,7 @@ export default function CountFormPage() {
             const rows = res?.data?.lines ?? [];
             if (rows.length === 0) { toast.push(t('counts.form.noStock'), 'info'); }
             setLines(rows.length ? rows.map((r) => ({ item_id: r.item_id, bin_id: r.bin_id, lot_id: r.lot_id ?? null, lot_code: r.lot_code ?? null, expiry_date: r.expiry_date ?? null, system_qty: r.system_qty, snapshot_qty: r.system_qty, counted_qty: '', expected_serials: r.expected_serials ?? [] })) : [emptyLine()]);
-        } catch { toast.push(t('counts.form.prefillFailed'), 'error'); }
+        } catch (feedbackError) { toast.failure(feedbackError, t('counts.form.prefillFailed')); }
         finally { setPrefilling(false); }
     }
 
@@ -78,7 +78,7 @@ export default function CountFormPage() {
             else toast.push(t(isEdit ? 'counts.form.updated' : 'counts.form.saved'), 'success');
             qc.invalidateQueries({ queryKey: ['counts'] });
             nav(`/counts/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(t('counts.form.saveFailed'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, t('counts.form.saveFailed')); }
         finally { setSaving(false); }
     }
 

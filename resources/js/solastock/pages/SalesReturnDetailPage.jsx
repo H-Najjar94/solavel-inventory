@@ -27,8 +27,8 @@ export default function SalesReturnDetailPage() {
 
     async function action(fn, msg) {
         return feedback.run(`sales-return:${id}`, async()=>{
-        try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['sales-return', id] }); qc.invalidateQueries({ queryKey: ['sales-returns'] }); }
-        catch (e) { toast.push(e.message || t('returns.messages.actionFailed', 'The return action could not be completed.'), 'error'); }
+        try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['sales-return', id] }); qc.invalidateQueries({ queryKey: ['sales-returns'] });  return true; }
+        catch (e) { toast.failure(e, e.message || t('returns.messages.actionFailed', 'The return action could not be completed.'));  return false; }
         });
     }
 
@@ -81,7 +81,7 @@ export default function SalesReturnDetailPage() {
                 }}>{t('returns.actions.reverse', 'Reverse return')}</button>}
             </div>
             <ConfirmPostModal open={confirmPost} name={t('returns.detail.confirmPostName', 'sales return')}
-                onConfirm={() => { setConfirmPost(false); action(() => api.postSalesReturn(id), t('returns.messages.posted', 'Return posted. Eligible units have been returned to stock.')); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={async () => { if (await action(() => api.postSalesReturn(id), t('returns.messages.posted', 'Return posted. Eligible units have been returned to stock.'))) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
         </section>
     );
 }

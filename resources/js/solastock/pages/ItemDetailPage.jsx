@@ -293,7 +293,7 @@ export default function ItemDetailPage() {
             setNewBarcode({ barcode: '', type: 'internal' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
             toast.push(t('itemDetail.barcodeAdded'), 'success');
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function lookupBarcode(e) {
@@ -303,21 +303,21 @@ export default function ItemDetailPage() {
         try {
             const res = await api.barcodeLookup(scanCode.trim());
             setScanResult(res.data);
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function makePrimary(barcodeId) {
         try {
             await api.makeItemBarcodePrimary(item.id, barcodeId);
             await qc.invalidateQueries({ queryKey: ['item', id] });
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function removeBarcode(barcodeId) {
         try {
             await api.deleteItemBarcode(item.id, barcodeId);
             await qc.invalidateQueries({ queryKey: ['item', id] });
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function addVariant(e) {
@@ -336,7 +336,7 @@ export default function ItemDetailPage() {
             setVariantForm({ sku: '', option: '', value: '', barcode_primary: '', purchase_price: '', sales_price: '' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
             toast.push(t('itemDetail.variantAdded'), 'success');
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function deleteVariant(variantId) {
@@ -344,7 +344,7 @@ export default function ItemDetailPage() {
             await api.deleteItemVariant(item.id, variantId);
             await qc.invalidateQueries({ queryKey: ['item', id] });
             toast.push(t('itemDetail.variantRemoved'), 'success');
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function addSupplierPrice(e) {
@@ -355,7 +355,7 @@ export default function ItemDetailPage() {
             setPriceForm({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: 'SAR' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
             toast.push(t('itemDetail.supplierPriceSaved'), 'success');
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function deleteSupplierPrice(priceId) {
@@ -363,7 +363,7 @@ export default function ItemDetailPage() {
             await api.deleteSupplierPrice(item.id, priceId);
             await qc.invalidateQueries({ queryKey: ['item', id] });
             toast.push(t('itemDetail.supplierPriceRemoved'), 'success');
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     async function loadLabels() {
@@ -371,7 +371,7 @@ export default function ItemDetailPage() {
             const res = await api.itemLabelSheet(item.id);
             setLabels(res.data ?? res);
             setTimeout(() => window.print(), 150);
-        } catch (err) { toast.push(err.message, 'error'); }
+        } catch (err) { toast.failure(err, err.message); }
     }
 
     return (

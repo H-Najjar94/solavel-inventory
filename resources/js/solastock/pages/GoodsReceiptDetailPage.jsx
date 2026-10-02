@@ -28,13 +28,13 @@ export default function GoodsReceiptDetailPage() {
     if (!grn) return <section className="page"><Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts'), to: '/goods-receipts' }, { label: t('receiving.common.notFound', 'Not found') }]} /><EmptyState title={t('receiving.common.unavailable', 'Unavailable')} hint={t('receiving.common.selectOrganization', 'Select an organization to load data.')} /></section>;
 
     async function post() {
-        try { await api.postGoodsReceipt(id); toast.push(t('receiving.grn.messages.posted', 'Goods receipt posted. Stock has been received.'), 'success'); qc.invalidateQueries({ queryKey: ['grn'] }); }
-        catch (e) { toast.push(e.message, 'error'); }
+        try { await api.postGoodsReceipt(id); toast.push(t('receiving.grn.messages.posted', 'Goods receipt posted. Stock has been received.'), 'success'); qc.invalidateQueries({ queryKey: ['grn'] });  return true; }
+        catch (e) { toast.failure(e, e.message);  return false; }
     }
 
     async function reverse(reason) {
-        try { await api.reverseGoodsReceipt(id, reason); toast.push(t('receiving.grn.messages.reversed', 'Goods receipt reversed from its original ledger source.'), 'success'); qc.invalidateQueries({ queryKey: ['grn'] }); }
-        catch (e) { toast.push(e.message, 'error'); }
+        try { await api.reverseGoodsReceipt(id, reason); toast.push(t('receiving.grn.messages.reversed', 'Goods receipt reversed from its original ledger source.'), 'success'); qc.invalidateQueries({ queryKey: ['grn'] });  return true; }
+        catch (e) { toast.failure(e, e.message);  return false; }
     }
 
     return (
@@ -66,9 +66,9 @@ export default function GoodsReceiptDetailPage() {
 
             <DocumentActions status={grn.reversal_id ? 'reversed' : grn.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} onReverse={reverseGate.allowed ? () => setConfirmReverse(true) : undefined} postLabel={t('receiving.grn.actions.post', 'Post GRN')} />
             <ConfirmPostModal open={confirmPost} name={t('receiving.grn.singular', 'goods receipt')}
-                onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={async () => { if (await post()) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name={t('receiving.grn.singular', 'goods receipt')}
-                onConfirm={(reason) => { setConfirmReverse(false); reverse(reason); }} onCancel={() => setConfirmReverse(false)} />
+                onConfirm={async (reason) => { if (await reverse(reason)) setConfirmReverse(false); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }

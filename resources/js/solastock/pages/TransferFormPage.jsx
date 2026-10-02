@@ -75,7 +75,7 @@ export default function TransferFormPage() {
             else toast.push(isEdit ? t('transfers.form.updated', 'Draft updated.') : t('transfers.form.saved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['transfers'] });
             nav(`/transfers/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('transfers.form.saveFailed', 'The transfer could not be saved.'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('transfers.form.saveFailed', 'The transfer could not be saved.')); }
         finally { setSaving(false); }
     }
 

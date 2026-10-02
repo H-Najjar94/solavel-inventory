@@ -58,16 +58,16 @@ export default function WarehouseDetailPage() {
     async function addZone(e) {
         e.preventDefault();
         try { await api.createZone(id, zoneForm); toast.push(t('warehouseDetail.zoneCreated'), 'success'); setZoneForm({ code: '', name: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
-        catch { toast.push(t('warehouseDetail.zoneCreateFailed'), 'error'); }
+        catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.zoneCreateFailed')); }
     }
     async function addBin(e) {
         e.preventDefault();
         try { await api.createBin(id, binForm); toast.push(t('warehouseDetail.binCreated'), 'success'); setBinForm({ zone_id: '', code: '', bin_type: 'storage', capacity: '' }); qc.invalidateQueries({ queryKey: ['warehouse', id] }); }
-        catch { toast.push(t('warehouseDetail.binCreateFailed'), 'error'); }
+        catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.binCreateFailed')); }
     }
     async function loadLabels() {
         try { const res = await api.warehouseLabels(id); setLabels(res.data); toast.push(t('warehouseDetail.binLabelsGenerated'), 'success'); }
-        catch { toast.push(t('warehouseDetail.binLabelsFailed'), 'error'); }
+        catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.binLabelsFailed')); }
     }
 
     const tabs = [

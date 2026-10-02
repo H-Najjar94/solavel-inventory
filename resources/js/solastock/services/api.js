@@ -1,93 +1,67 @@
-// SolaStock API client. All calls hit the versioned JSON API mounted under
-// /inventory/api/v1 (Apache serves the app beneath /inventory). The Finance-style
-// envelope is { success, data, meta? } / { success:false, error }.
+import { feedback } from '../../shared/feedback/store';
+import { text } from '../../shared/feedback/messages';
 
 const BASE = `${window.SOLASTOCK_BASE_PATH ?? '/inventory'}/api/v1`;
-
-function csrfToken() {
-    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+const uncertain = new Set();
+let organizationScope = "unresolved";
+function bodyFingerprint(body) {
+    const raw = body instanceof FormData ? JSON.stringify([...body.entries()].map(([key,value])=>[key,value instanceof File?[value.name,value.size,value.type,value.lastModified]:value])) : String(body || "");
+    let hash=2166136261;for(let i=0;i<raw.length;i++)hash=Math.imul(hash^raw.charCodeAt(i),16777619);return (hash>>>0).toString(36);
 }
+function csrfToken() { return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? ''; }
+function locale() { return window.SOLASTOCK_LOCALE?.locale === 'ar' ? 'ar' : 'en'; }
 
-function locale() {
-    return window.SOLASTOCK_LOCALE?.locale === 'ar' ? 'ar' : 'en';
-}
-
-async function request(path, { method = 'GET', body, params } = {}) {
-    const url = new URL(BASE + path, window.location.origin);
-    if (params) {
-        Object.entries(params).forEach(([k, v]) => {
-            if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
-        });
-    }
-
-    const res = await fetch(url.toString(), {
-        method,
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept-Language': locale(),
-            'X-Locale': locale(),
-        },
-        credentials: 'same-origin',
-        body: body ? JSON.stringify(body) : undefined,
-    });
-
-    let json = null;
-    try {
-        json = await res.json();
-    } catch {
-        // non-JSON (e.g. 500 HTML) — surface a generic error below
-    }
-
-    if (!res.ok || (json && json.success === false)) {
-        const err = new Error(json?.error?.message || json?.message || `Request failed (${res.status})`);
-        err.status = res.status;
-        err.code = json?.error?.code || json?.code;
-        err.payload = json?.error;
-        // A transient Central outage is not an access revocation. Keep the
-        // authenticated shell mounted and let the affected request retry;
-        // only a definitive authorization decision may replace the app.
-        if (json?.app === 'inventory' && json?.code && !['action_forbidden', 'temporarily_unavailable'].includes(json.code)) {
-            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
+// Presentation-only request boundary. Existing envelopes, permissions, headers and payloads remain intact.
+function transport(url, options) {
+    const mutation = !['GET', 'HEAD'].includes(options.method);
+    const key = `${organizationScope}:${options.method}:${url}`;
+    const execute = async () => {
+        const unknown = (metadata = {}) => {
+            uncertain.add(key);
+            void feedback.failure(undefined, true);
+            return Object.assign(new Error(text('unknown')), {...metadata, feedbackHandled:true, outcomeUnknown:true});
+        };
+        if (mutation && uncertain.has(key)) throw unknown();
+        const controller = new AbortController();
+        const timer = mutation ? setTimeout(() => controller.abort(), 45000) : undefined;
+        let res, json;
+        try {
+            res = await fetch(url, {...options, signal: controller.signal});
+            json = await res.json();
+        } catch (error) {
+            if (mutation) throw unknown();
+            throw Object.assign(new Error(text('failed')), {status:res?.status,cause:error});
+        } finally { clearTimeout(timer); }
+        const metadata = {status:res.status,code:json?.error?.code || json?.code,
+            payload:json?.error || (json?.errors ? {errors:json.errors} : undefined)};
+        // Preserve the existing access event independently of presentation and outcome certainty.
+        if ((!res.ok || json?.success === false) && json?.app === 'inventory' && json?.code && !['action_forbidden','temporarily_unavailable'].includes(json.code)) {
+            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail:text(res.status === 403 ? 'forbidden' : 'failed')}));
         }
-        throw err;
-    }
-
-    return json; // { success, data, meta? }
-}
-
-// Multipart form upload (e.g. images). No JSON Content-Type — the browser sets
-// the multipart boundary itself. Same envelope + error handling as request().
-async function requestForm(path, formData) {
-    const res = await fetch(BASE + path, {
-        method: 'POST',
-        headers: {
-            Accept: 'application/json',
-            'X-CSRF-TOKEN': csrfToken(),
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept-Language': locale(),
-            'X-Locale': locale(),
-        },
-        credentials: 'same-origin',
-        body: formData,
-    });
-
-    let json = null;
-    try { json = await res.json(); } catch { /* non-JSON */ }
-
-    if (!res.ok || (json && json.success === false)) {
-        const err = new Error(json?.error?.message || json?.message || `Upload failed (${res.status})`);
-        err.status = res.status;
-        err.payload = json?.error;
-        if (json?.app === 'inventory' && json?.code && !['action_forbidden', 'temporarily_unavailable'].includes(json.code)) {
-            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail: err.message}));
+        if (mutation && (res.status >= 500 || !json || typeof json !== 'object' || (res.ok && json.success !== true && json.success !== false))) throw unknown(metadata);
+        if (!res.ok || json?.success === false) {
+            const message = res.status === 422 ? json?.error?.message || json?.message || text('invalid')
+                : text(res.status === 403 ? 'forbidden' : [401,419].includes(res.status) ? 'expired' : 'failed');
+            const err = Object.assign(new Error(message), metadata);
+            if (mutation && res.status !== 422) { void feedback.failure(res.status, false); err.feedbackHandled = true; }
+            throw err;
         }
-        throw err;
-    }
-
-    return json;
+        if (new URL(url).pathname.endsWith("/tenant/status") && json?.data?.organization_id) organizationScope=String(json.data.organization_id);
+        return json;
+    };
+    return mutation ? feedback.run(`stock:${key}:${bodyFingerprint(options.body)}`, execute) : execute();
+}
+function request(path, {method='GET',body,params}={}) {
+    const url=new URL(BASE+path,window.location.origin);
+    if(params)Object.entries(params).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=='')url.searchParams.set(k,v);});
+    return transport(url.toString(), {method,headers:{Accept:'application/json','Content-Type':'application/json',
+        'X-CSRF-TOKEN':csrfToken(),'X-Requested-With':'XMLHttpRequest','Accept-Language':locale(),'X-Locale':locale()},
+        credentials:'same-origin',body:body?JSON.stringify(body):undefined});
+}
+function requestForm(path,formData) {
+    return transport(new URL(BASE+path,window.location.origin).href,{method:'POST',headers:{Accept:'application/json',
+        'X-CSRF-TOKEN':csrfToken(),'X-Requested-With':'XMLHttpRequest','Accept-Language':locale(),'X-Locale':locale()},
+        credentials:'same-origin',body:formData});
 }
 
 export const api = {

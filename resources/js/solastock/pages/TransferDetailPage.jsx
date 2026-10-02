@@ -34,15 +34,15 @@ export default function TransferDetailPage() {
 
     async function post() {
         try { await api.postTransfer(id); toast.push(tr('transfers.detail.posted', 'Transfer posted.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); return true; }
-        catch (e) { if (!e.feedbackHandled) toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); return false; }
+        catch (e) { if (!e.feedbackHandled) toast.failure(e, e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.')); return false; }
     }
     async function ship() {
         try { await api.shipTransfer(id); toast.push(tr('transfers.detail.shipped', 'Transfer shipped.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); return true; }
-        catch (e) { if (!e.feedbackHandled) toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); return false; }
+        catch (e) { if (!e.feedbackHandled) toast.failure(e, e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.')); return false; }
     }
     async function receive() {
         try { await api.receiveTransfer(id); toast.push(tr('transfers.detail.received', 'Transfer received.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); return true; }
-        catch (e) { if (!e.feedbackHandled) toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); return false; }
+        catch (e) { if (!e.feedbackHandled) toast.failure(e, e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.')); return false; }
     }
 
     function ledgerPreview() {

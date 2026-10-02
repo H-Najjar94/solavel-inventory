@@ -43,7 +43,7 @@ export default function RecallFormPage() {
             toast.push(t('recalls.messages.created', 'Recall case created.'), 'success');
             qc.invalidateQueries({ queryKey: ['recalls'] });
             nav(`/recalls/${res?.data?.id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('recalls.messages.saveFailed', 'The recall case could not be saved.'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('recalls.messages.saveFailed', 'The recall case could not be saved.')); }
         finally { setSaving(false); }
     }
 

@@ -1,6 +1,6 @@
 import React, {createContext,useCallback,useContext} from 'react';
 import {FeedbackProvider} from '../../shared/feedback/FeedbackProvider';
-import {feedback} from '../../shared/feedback/store';
+import {feedback,focusInvalid} from '../../shared/feedback/store';
 import {text} from '../../shared/feedback/messages';
 const ToastContext=createContext(null);
 export function ToastProvider({children}){
@@ -8,6 +8,17 @@ export function ToastProvider({children}){
   if(type==='error'||type==='warning')void feedback.error({title:text(type),message,tone:type});
   else feedback.notify(message,type);
  },[]);
- return <ToastContext.Provider value={{push}}><FeedbackProvider>{children}</FeedbackProvider></ToastContext.Provider>;
+ const failure=useCallback((error,fallback)=>{
+  if(error?.feedbackHandled)return;
+  if(error?.status===422&&error?.payload?.errors){
+   requestAnimationFrame(()=>{
+    if(document.querySelector('.field[data-feedback-invalid]'))focusInvalid(error.payload.errors);
+    else void feedback.error({title:text('invalid'),message:Object.values(error.payload.errors).flat().join(' ')});
+   });
+   return;
+  }
+  push(error?.message||fallback||text('failed'),'error');
+ },[push]);
+ return <ToastContext.Provider value={{push,failure}}><FeedbackProvider>{children}</FeedbackProvider></ToastContext.Provider>;
 }
-export function useToast(){return useContext(ToastContext)??{push:()=>{}};}
+export function useToast(){return useContext(ToastContext)??{push:()=>{},failure:()=>{}};}

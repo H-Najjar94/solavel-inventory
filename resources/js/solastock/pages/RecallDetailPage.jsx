@@ -30,7 +30,7 @@ export default function RecallDetailPage() {
 
     async function act(fn, msg) {
         try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['recall', id] }); qc.invalidateQueries({ queryKey: ['recalls'] }); return true; }
-        catch (e) { if (!e.feedbackHandled) toast.push(e.message || t('recalls.messages.actionFailed', 'The recall action could not be completed.'), 'error'); return false; }
+        catch (e) { if (!e.feedbackHandled) toast.failure(e, e.message || t('recalls.messages.actionFailed', 'The recall action could not be completed.')); return false; }
     }
 
     function csvCell(value) {

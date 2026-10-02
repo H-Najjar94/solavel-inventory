@@ -75,7 +75,7 @@ export default function PurchaseOrderFormPage() {
             toast.push(isEdit ? t('receiving.po.messages.updated', 'Purchase order updated.') : t('receiving.po.messages.created', 'Purchase order created.'), 'success');
             qc.invalidateQueries({ queryKey: ['pos'] });
             nav(`/purchase-orders/${res?.data?.id ?? id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('receiving.common.saveFailed', 'Save failed.'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
         finally { setSaving(false); }
     }
 

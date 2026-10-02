@@ -36,7 +36,7 @@ export default function LotDetailPage() {
             toast.push(text('traceabilityPages.lotDetail.statusUpdated', { status: traceabilityStatusText(locale, status) }), 'success');
             qc.invalidateQueries({ queryKey: ['lot', id] });
         }
-        catch (e) { toast.push(e.message, 'error'); }
+        catch (e) { toast.failure(e, e.message); }
     }
 
     const SourceList = ({ rows, emptyKey }) => rows.length === 0

@@ -31,7 +31,7 @@ export default function ItemAttachments({ itemId, canManage }) {
             await refetch();
             await qc.invalidateQueries({ queryKey: ['item', String(itemId)] });
         } catch (err) {
-            toast.push(err.message, 'error');
+            toast.failure(err, err.message);
         } finally {
             setBusy(false);
         }
@@ -45,7 +45,7 @@ export default function ItemAttachments({ itemId, canManage }) {
             await refetch();
             await qc.invalidateQueries({ queryKey: ['item', String(itemId)] });
         } catch (err) {
-            toast.push(err.message, 'error');
+            toast.failure(err, err.message);
         } finally {
             setBusy(false);
         }
