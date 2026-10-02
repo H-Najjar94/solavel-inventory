@@ -1,0 +1,58 @@
+[
+  {
+    "locale": "en",
+    "width": 1440,
+    "status": "passed",
+    "checks": [
+      "actual Stock ConfirmModal Cancel0",
+      "Confirmdouble1",
+      "pending Escape cannot close",
+      "focus restored",
+      "existing toast API deduplicated",
+      "errors use shared modal",
+      "locale/RTL/mobile fit"
+    ]
+  },
+  {
+    "locale": "en",
+    "width": 390,
+    "status": "passed",
+    "checks": [
+      "actual Stock ConfirmModal Cancel0",
+      "Confirmdouble1",
+      "pending Escape cannot close",
+      "focus restored",
+      "existing toast API deduplicated",
+      "errors use shared modal",
+      "locale/RTL/mobile fit"
+    ]
+  },
+  {
+    "locale": "ar",
+    "width": 1440,
+    "status": "passed",
+    "checks": [
+      "actual Stock ConfirmModal Cancel0",
+      "Confirmdouble1",
+      "pending Escape cannot close",
+      "focus restored",
+      "existing toast API deduplicated",
+      "errors use shared modal",
+      "locale/RTL/mobile fit"
+    ]
+  },
+  {
+    "locale": "ar",
+    "width": 390,
+    "status": "passed",
+    "checks": [
+      "actual Stock ConfirmModal Cancel0",
+      "Confirmdouble1",
+      "pending Escape cannot close",
+      "focus restored",
+      "existing toast API deduplicated",
+      "errors use shared modal",
+      "locale/RTL/mobile fit"
+    ]
+  }
+]

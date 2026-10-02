@@ -1,3 +1,4 @@
+import {feedback} from '../../shared/feedback/store';
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -25,8 +26,10 @@ export default function SalesReturnDetailPage() {
     if (!r) return <section className="page"><Breadcrumbs items={[{ label: t('returns.list.title', 'Sales Returns'), to: '/sales-returns' }, { label: t('returns.common.notFound', 'Not found') }]} /><EmptyState title={t('returns.common.unavailable', 'Unavailable')} hint={t('returns.common.selectOrganization', 'Select an organization to load data.')} /></section>;
 
     async function action(fn, msg) {
+        return feedback.run(`sales-return:${id}`, async()=>{
         try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['sales-return', id] }); qc.invalidateQueries({ queryKey: ['sales-returns'] }); }
         catch (e) { toast.push(e.message || t('returns.messages.actionFailed', 'The return action could not be completed.'), 'error'); }
+        });
     }
 
     return (
@@ -69,11 +72,11 @@ export default function SalesReturnDetailPage() {
                 {r.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.authorizeSalesReturn(id), t('returns.messages.authorized', 'RMA authorized.'))}>{t('returns.actions.authorize', 'Authorize RMA')}</button>}
                 {r.status === 'authorized' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.inspectSalesReturn(id), t('returns.messages.inspected', 'Return inspected.'))}>{t('returns.actions.inspect', 'Mark inspected')}</button>}
                 {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmPost(true)}>{t('returns.actions.post', 'Post return')}</button>}
-                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn" disabled={!gate.allowed} onClick={() => {
-                    if (window.confirm(t('returns.messages.confirmCancel', 'Cancel this unposted return and release its quantities?'))) action(() => api.cancelSalesReturn(id), t('returns.messages.cancelled', 'Return cancelled. Reserved quantities were released.'));
+                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn" disabled={!gate.allowed} onClick={async () => {
+                    if (await feedback.confirm({title:t('returns.actions.cancelReturn','Cancel return'),action:t('returns.actions.cancelReturn','Cancel return'),message:t('returns.messages.confirmCancel', 'Cancel this unposted return and release its quantities?'),reference:r.return_number})) action(() => api.cancelSalesReturn(id), t('returns.messages.cancelled', 'Return cancelled. Reserved quantities were released.'));
                 }}>{t('returns.actions.cancelReturn', 'Cancel return')}</button>}
-                {r.status === 'posted' && <button className="btn" disabled={!gate.allowed} onClick={() => {
-                    const reason = window.prompt(t('returns.messages.reverseReason', 'Reason for reversing this posted return'));
+                {r.status === 'posted' && <button className="btn" disabled={!gate.allowed} onClick={async () => {
+                    const reason = await feedback.input({title:t('returns.actions.reverse','Reverse return'),action:t('returns.actions.reverse','Reverse return'),message:t('returns.messages.reverseReason', 'Reason for reversing this posted return'),label:t('returns.common.reason','Reason'),minLength:1,reference:r.return_number});
                     if (reason) action(() => api.reverseSalesReturn(id, reason), t('returns.messages.reversed', 'Return reversed.'));
                 }}>{t('returns.actions.reverse', 'Reverse return')}</button>}
             </div>
