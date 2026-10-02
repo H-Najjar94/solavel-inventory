@@ -1,5 +1,14 @@
 export const messages = {
     "en": {
+        "resetIntegrationDraft": "Reset integration draft",
+        "resetIntegrationDraftBody": "This resets the saved decisions in this integration draft.",
+        "discardIntegrationDraft": "Discard integration draft",
+        "discardIntegrationDraftBody": "This deletes the integration draft. Existing connected data remains available.",
+        "freezeIntegrationSnapshot": "Freeze integration snapshot",
+        "freezeIntegrationSnapshotBody": "This freezes the reviewed inventory snapshot for this integration workflow.",
+        "approveIntegrationSnapshot": "Approve integration snapshot",
+        "approveIntegrationSnapshotBody": "This records approval of the reviewed snapshot and mappings. Existing typed confirmation and permission requirements still apply.",
+
         "removeRole": "Remove role assignment",
         "removeRoleBody": "This user will lose permissions granted by this role assignment. Other memberships remain unchanged.",
         "offline": "You are offline. Reconnect to load current information.",
@@ -232,6 +241,15 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "resetIntegrationDraft": "إعادة ضبط مسودة التكامل",
+        "resetIntegrationDraftBody": "سيتم إعادة ضبط القرارات المحفوظة في مسودة التكامل هذه.",
+        "discardIntegrationDraft": "حذف مسودة التكامل",
+        "discardIntegrationDraftBody": "سيتم حذف مسودة التكامل. تبقى البيانات المتصلة الحالية متاحة.",
+        "freezeIntegrationSnapshot": "تثبيت لقطة التكامل",
+        "freezeIntegrationSnapshotBody": "سيتم تثبيت لقطة المخزون التي راجعتها لمسار التكامل هذا.",
+        "approveIntegrationSnapshot": "اعتماد لقطة التكامل",
+        "approveIntegrationSnapshotBody": "سيتم تسجيل اعتماد اللقطة والمطابقات التي راجعتها. تظل متطلبات التأكيد الكتابي والصلاحيات الحالية سارية.",
+
         "removeRole": "إزالة تعيين الدور",
         "removeRoleBody": "سيفقد هذا المستخدم الصلاحيات التي يمنحها تعيين هذا الدور. تبقى العضويات الأخرى دون تغيير.",
         "offline": "أنت غير متصل بالإنترنت. أعد الاتصال لتحميل المعلومات الحالية.",
