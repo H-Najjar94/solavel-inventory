@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -110,8 +112,8 @@ export default function TransferDetailPage() {
             {tab === 'audit' && <div className="panel"><EmptyState title={tr('transfers.detail.auditTitle', 'Audit timeline')} hint={tr('transfers.detail.auditHint', 'Transfer posting events are recorded in the inventory audit log.')} /></div>}
 
             <div className="doc-actions">
-                {t.status === 'draft' && <button className="btn" disabled={!gate.allowed} onClick={ship}>{tr('transfers.detail.ship', 'Ship transfer')}</button>}
-                {t.status === 'in_transit' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={receive}>{tr('transfers.detail.receive', 'Receive transfer')}</button>}
+                {t.status === 'draft' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} onConfirm={ship} title={feedbackText('shipTransfer')} message={feedbackText('shipTransferBody')} action={feedbackText('shipTransfer')}>{tr('transfers.detail.ship', 'Ship transfer')}</ConfirmedActionButton>}
+                {t.status === 'in_transit' && <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed} onConfirm={receive} title={feedbackText('receiveTransfer')} message={feedbackText('receiveTransferBody')} action={feedbackText('receiveTransfer')}>{tr('transfers.detail.receive', 'Receive transfer')}</ConfirmedActionButton>}
             </div>
             <DocumentActions status={t.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} postLabel={tr('transfers.detail.post', 'Post transfer')} />
             <ConfirmModal open={confirmPost}

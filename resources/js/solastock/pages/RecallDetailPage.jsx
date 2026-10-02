@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -112,7 +114,7 @@ export default function RecallDetailPage() {
 
             <div className="doc-actions">
                 {recall.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmActivate(true)}>{t('recalls.detail.activate', 'Activate recall')}</button>}
-                {recall.status === 'active' && <button className="btn btn--danger" disabled={!gate.allowed} onClick={() => act(() => api.closeRecall(id), t('recalls.messages.closed', 'Recall closed.'))}>{t('recalls.detail.close', 'Close recall')}</button>}
+                {recall.status === 'active' && <ConfirmedActionButton className="btn btn--danger" disabled={!gate.allowed} onConfirm={() => act(() => api.closeRecall(id), t('recalls.messages.closed', 'Recall closed.'))} title={t('recalls.detail.close', 'Close recall')} message={feedbackText('closeRecallBody')} action={t('recalls.detail.close', 'Close recall')}>{t('recalls.detail.close', 'Close recall')}</ConfirmedActionButton>}
             </div>
             <ConfirmModal open={confirmActivate} danger title={t('recalls.detail.activateTitle', 'Activate recall?')}
                 message={t('recalls.detail.activateMessage', 'Activating the recall marks affected lots as recalled and serial numbers as quarantined. They cannot be shipped without an override.')}

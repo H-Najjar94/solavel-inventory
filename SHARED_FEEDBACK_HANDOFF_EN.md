@@ -1,3 +1,17 @@
+# Stock consequential-action batch — ready for coordinated integration
+
+Base includes root shared keys through `bf85929`; previous runtime is `20261002T185836Z-192a788b`.
+
+Added one reusable `ConfirmedActionButton` over shared WorkflowConfirmation. Covered save-and-post on adjustment/count/opening-stock/transfer/goods-receipt forms; image/attachment/barcode/variant/supplier-price removal; transfer ship/receive; sales-order confirm/cancel; role removal; integration reset/discard/freeze/approval/activation (both settings and guided assistant); lot/serial availability changes; picked/packed completion; recall close; item creation with opening stock. Original permission predicates, API call arguments, typed safeguards and server rules remain intact. Cancel performs no request. Whole save-and-post sequence has a synchronous duplicate guard; if a draft was saved but posting failed, inputs stay visible and repeat saves are disabled with an explicit status path to that saved draft. Unknown create outcome offers the document list for status review.
+
+Focused actual-component tests: eight EN/AR desktop/mobile CountForm partial-post failure and ItemAttachments delete cases passed. Cancel0; double Confirm sends one draft update plus one post (count) or one delete (attachment); pending Escape blocked; partial-post failure prevents a second draft sequence. Screenshots and `action-button-results.json` in tests/feedback/evidence. `action-payload-contract.cjs` confirms identical API expressions/arguments across21modified application files; JSX parse passes. Build `/tmp/stock-final-actions-build.txt` PASS; dictionary3305EN/AR PASS. No migrations/backend changes. Additional integration/lifecycle callers share this tested presentation wrapper; those specific production actions are not yet individually verified.
+
+Previous deployed192a788 now has actual production8-case evidence: customer Laravel422 focus/value preservation and unknown503 repeat protection; existing synthetic count pending/error with unchanged server draft/ledger. Evidence `/root/feedback-release-evidence-20261002/stock-production/20261002T185836Z-192a788b/`. No new customer/draft creation in this verification, no stock posting.
+
+Finite inventory `tests/feedback/flow-register.json`:76route entries (including redirect aliases/not-found),4reusable boundaries,6explicit retained/noncustomer exceptions. This is a route ledger, not a percentage claim. Remaining migration: inline document-line required summaries, aggregate invalid media messages, scanner offline review. Representative verification is explicitly separate from route-wide verification. Release owner alone deploys; preserve current compatible rollback192a788.
+
+---
+
 # Stock outcome and pending batch — 2026-10-02
 
 Base: shared `9d7a0d6` after deployed `d0f695d5`. No migrations, backend, permission, accounting or endpoint payload changes. Parent coordinator owns the shared package.

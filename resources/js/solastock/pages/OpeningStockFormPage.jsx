@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import {text as feedbackText} from '../../shared/feedback/messages';
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {t as documentText} from '../i18n/index';
+import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -28,6 +31,8 @@ export default function OpeningStockFormPage() {
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const savePending=useRef(false);
+    const [statusCheck,setStatusCheck]=useState(null);
 
     const existing = useApiQuery(['opening', id], () => api.openingStockEntry(id), { fallback: null, enabled: isEdit });
     useEffect(() => {
@@ -44,7 +49,10 @@ export default function OpeningStockFormPage() {
     const total = lines.reduce((s, l) => s + (Number(l.quantity || 0) * Number(l.unit_cost || 0)), 0);
 
     async function save(post = false) {
+        if(savePending.current||statusCheck)return;
+        let savedDocument;
         if (!gate.allowed) return;
+        savePending.current=true;
         setSaving(true); setErrors({});
         try {
             const payload = {
@@ -69,12 +77,13 @@ export default function OpeningStockFormPage() {
             if (payload.lines.length === 0) { toast.push(t('openingStock.addLineRequired'), 'error'); setSaving(false); return; }
             let res = isEdit ? await api.updateOpeningStock(id, payload) : await api.createOpeningStock(payload);
             const docId = res?.data?.id ?? id;
+            savedDocument=docId;
             if (post) { await api.postOpeningStock(docId); toast.push(t('openingStock.posted'), 'success'); }
             else toast.push(t(isEdit ? 'openingStock.draftUpdated' : 'openingStock.draftSaved'), 'success');
             qc.invalidateQueries({ queryKey: ['opening'] });
             nav(`/opening-stock/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('openingStock.saveFailed')); }
-        finally { setSaving(false); }
+        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('openingStock.saveFailed')); }
+        finally { savePending.current=false; setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
@@ -123,10 +132,11 @@ export default function OpeningStockFormPage() {
                 <DocumentTotals rows={[{ label: t('openingStock.totalValue'), value: total.toFixed(2) }]} />
             </div>
 
+            {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/opening-stock/${statusCheck.id}`:"/opening-stock")}>{feedbackText("reload")}</button></div>}
             <div className="doc-actions">
                 <button className="btn" onClick={() => nav('/opening-stock')}>{t('openingStock.cancel')}</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('openingStock.saving') : t('openingStock.saveDraft')}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('openingStock.savePost')}</button>
+                <button className="btn" disabled={!gate.allowed || saving || !!statusCheck} onClick={() => save(false)}>{saving ? t('openingStock.saving') : t('openingStock.saveDraft')}</button>
+                <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || saving || !!statusCheck} title={documentText("document.confirmPostTitle",undefined,{name:documentText("document.kind.opening stock","opening stock")})} message={documentText("document.confirmPostMessage")} action={documentText("document.post")} onConfirm={()=>save(true)}>{t('openingStock.savePost')}</ConfirmedActionButton>
             </div>
         </section>
     );

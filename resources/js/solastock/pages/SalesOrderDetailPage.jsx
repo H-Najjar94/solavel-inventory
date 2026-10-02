@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -137,12 +139,12 @@ export default function SalesOrderDetailPage() {
             </div>}
 
             <div className="doc-actions">
-                {isDraft && <button className="btn btn--primary" disabled={!canSO.allowed || busy} onClick={() => act(() => api.confirmSalesOrder(id), t('salesOrders.messages.confirmed', 'Sales order confirmed.'))}>{t('salesOrders.actions.confirm', 'Confirm')}</button>}
+                {isDraft && <ConfirmedActionButton className="btn btn--primary" disabled={!canSO.allowed || busy} onConfirm={() => act(() => api.confirmSalesOrder(id), t('salesOrders.messages.confirmed', 'Sales order confirmed.'))} title={feedbackText('confirmSalesOrder')} message={feedbackText('confirmSalesOrderBody')} action={feedbackText('confirmSalesOrder')}>{t('salesOrders.actions.confirm', 'Confirm')}</ConfirmedActionButton>}
                 {isConfirmed && <button className="btn btn--primary" disabled={!canRes.allowed || busy} onClick={() => act(() => api.reserveSalesOrder(id, { ...reservationOptions, serial_ids: serialSelections }), t('salesOrders.messages.stockReserved', 'Stock reserved.'))}>{t('salesOrders.actions.reserveStock', 'Reserve stock')}</button>}
                 {isReserved && <button className="btn" disabled={!canRes.allowed || busy} onClick={() => act(() => api.releaseSalesOrderReservation(id), t('salesOrders.messages.reservationReleased', 'Reservation released.'))}>{t('salesOrders.actions.releaseReservation', 'Release reservation')}</button>}
                 {isReserved && <button className="btn" disabled={!canPick.allowed || busy} onClick={createPickList}>{t('salesOrders.actions.createPickList', 'Create pick list')}</button>}
                 {canShipNow && <button className="btn btn--primary" disabled={!canShip.allowed || busy} onClick={createShipment}>{t('salesOrders.actions.createShipment', 'Create shipment')}</button>}
-                {!isDraft && !closed && <button className="btn btn--danger" disabled={!canSO.allowed || busy} onClick={() => act(() => api.cancelSalesOrder(id), t('salesOrders.messages.cancelled', 'Sales order cancelled.'))}>{t('salesOrders.actions.cancelOrder', 'Cancel order')}</button>}
+                {!isDraft && !closed && <ConfirmedActionButton className="btn btn--danger" disabled={!canSO.allowed || busy} onConfirm={() => act(() => api.cancelSalesOrder(id), t('salesOrders.messages.cancelled', 'Sales order cancelled.'))} title={feedbackText('cancelSalesOrder')} message={feedbackText('cancelSalesOrderBody')} action={feedbackText('cancelSalesOrder')}>{t('salesOrders.actions.cancelOrder', 'Cancel order')}</ConfirmedActionButton>}
             </div>
             <p className="muted">{t('salesOrders.detail.shippingNoticeBeforeEvent', 'Shipping posts stock OUT through the canonical ledger and records a')} <code dir="ltr">{'shipment.posted'}</code> {t('salesOrders.detail.shippingNoticeAfterEvent', 'outbox event for SolaCount. No invoice or journal entry is created here.')}</p>
         </section>

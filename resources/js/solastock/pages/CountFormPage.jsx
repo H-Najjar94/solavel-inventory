@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import {text as feedbackText} from '../../shared/feedback/messages';
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {t as documentText} from '../i18n/index';
+import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -28,6 +31,8 @@ export default function CountFormPage() {
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const savePending=useRef(false);
+    const [statusCheck,setStatusCheck]=useState(null);
     const [prefilling, setPrefilling] = useState(false);
 
     const existing = useApiQuery(['count', id], () => api.count(id), { fallback: null, enabled: isEdit });
@@ -67,19 +72,23 @@ export default function CountFormPage() {
     }
 
     async function save(post = false) {
+        if(savePending.current||statusCheck)return;
+        let savedDocument;
         if (!gate.allowed) return;
+        savePending.current=true;
         setSaving(true); setErrors({});
         try {
             const payload = { ...header, lines: lines.filter((l) => l.item_id).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id || undefined, system_qty: l.system_qty || '0', counted_qty: l.counted_qty === '' ? null : l.counted_qty })) };
             if (payload.lines.length === 0) { toast.push(t('counts.form.lineRequired'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateCount(id, payload) : await api.createCount(payload);
             const docId = res?.data?.id ?? id;
+            savedDocument=docId;
             if (post) { await api.postCount(docId); toast.push(t('counts.form.posted'), 'success'); }
             else toast.push(t(isEdit ? 'counts.form.updated' : 'counts.form.saved'), 'success');
             qc.invalidateQueries({ queryKey: ['counts'] });
             nav(`/counts/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, t('counts.form.saveFailed')); }
-        finally { setSaving(false); }
+        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, t('counts.form.saveFailed')); }
+        finally { savePending.current=false; setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
@@ -148,10 +157,11 @@ export default function CountFormPage() {
                 <p className="muted">{t('counts.form.varianceHelp')}</p>
             </div>
 
+            {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/counts/${statusCheck.id}`:"/counts")}>{feedbackText("reload")}</button></div>}
             <div className="doc-actions">
                 <button className="btn" onClick={() => nav('/counts')}>{t('counts.form.cancel')}</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('counts.form.saving') : t('counts.form.saveDraft')}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('counts.form.savePost')}</button>
+                <button className="btn" disabled={!gate.allowed || saving || !!statusCheck} onClick={() => save(false)}>{saving ? t('counts.form.saving') : t('counts.form.saveDraft')}</button>
+                <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || saving || !!statusCheck} title={documentText("document.confirmPostTitle",undefined,{name:documentText("document.kind.count variance","count variance")})} message={documentText("document.confirmPostMessage")} action={documentText("document.post")} onConfirm={()=>save(true)}>{t('counts.form.savePost')}</ConfirmedActionButton>
             </div>
         </section>
     );

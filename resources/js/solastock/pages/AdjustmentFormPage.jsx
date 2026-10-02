@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import {text as feedbackText} from '../../shared/feedback/messages';
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {t as documentText} from '../i18n/index';
+import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -24,6 +27,8 @@ export default function AdjustmentFormPage() {
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const savePending=useRef(false);
+    const [statusCheck,setStatusCheck]=useState(null);
 
     const existing = useApiQuery(['adjustment', id], () => api.adjustment(id), { fallback: null, enabled: isEdit });
     const meta = useApiQuery(['meta'], api.meta, { fallback: { settings: {} } });
@@ -41,7 +46,10 @@ export default function AdjustmentFormPage() {
     const reasonCodes = (meta.data?.settings?.adjustment_reason_codes ?? []).filter((code) => code.active !== false);
 
     async function save(post = false) {
+        if(savePending.current||statusCheck)return;
+        let savedDocument;
         if (!gate.allowed) return;
+        savePending.current=true;
         setSaving(true); setErrors({});
         try {
             const payload = {
@@ -68,12 +76,13 @@ export default function AdjustmentFormPage() {
             if (payload.lines.length === 0) { toast.push(t('adjustment.addLineRequired'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateAdjustment(id, payload) : await api.createAdjustment(payload);
             const docId = res?.data?.id ?? id;
+            savedDocument=docId;
             if (post) { await api.postAdjustment(docId); toast.push(t('adjustment.posted'), 'success'); }
             else toast.push(t(isEdit ? 'adjustment.draftUpdated' : 'adjustment.draftSaved'), 'success');
             qc.invalidateQueries({ queryKey: ['adjustments'] });
             nav(`/adjustments/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('adjustment.saveFailed')); }
-        finally { setSaving(false); }
+        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('adjustment.saveFailed')); }
+        finally { savePending.current=false; setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
@@ -153,10 +162,11 @@ export default function AdjustmentFormPage() {
                 ]} />
             </div>
 
+            {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/adjustments/${statusCheck.id}`:"/adjustments")}>{feedbackText("reload")}</button></div>}
             <div className="doc-actions">
                 <button className="btn" onClick={() => nav('/adjustments')}>{t('adjustment.cancel')}</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('adjustment.saving') : t('adjustment.saveDraft')}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('adjustment.savePost')}</button>
+                <button className="btn" disabled={!gate.allowed || saving || !!statusCheck} onClick={() => save(false)}>{saving ? t('adjustment.saving') : t('adjustment.saveDraft')}</button>
+                <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || saving || !!statusCheck} title={documentText("document.confirmPostTitle",undefined,{name:documentText("document.kind.adjustment","adjustment")})} message={documentText("document.confirmPostMessage")} action={documentText("document.post")} onConfirm={()=>save(true)}>{t('adjustment.savePost')}</ConfirmedActionButton>
             </div>
         </section>
     );

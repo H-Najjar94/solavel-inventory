@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -63,9 +65,9 @@ export default function SerialDetailPage() {
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={movements} /></div>}
 
             <div className="doc-actions">
-                {lifecycle_status !== 'quarantined' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setStatus('quarantined')}>{text('traceabilityPages.serialDetail.quarantine')}</button>}
-                {lifecycle_status !== 'damaged' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setStatus('damaged')}>{text('traceabilityPages.serialDetail.markDamaged')}</button>}
-                {lifecycle_status !== 'retired' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setStatus('retired')}>{text('traceabilityPages.serialDetail.retire')}</button>}
+                {lifecycle_status !== 'quarantined' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} triggerTitle={gate.allowed ? '' : gate.reason} onConfirm={() => setStatus('quarantined')} title={text('traceabilityPages.serialDetail.quarantine')} message={feedbackText('stockLifecycleBody')} action={text('traceabilityPages.serialDetail.quarantine')}>{text('traceabilityPages.serialDetail.quarantine')}</ConfirmedActionButton>}
+                {lifecycle_status !== 'damaged' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} triggerTitle={gate.allowed ? '' : gate.reason} onConfirm={() => setStatus('damaged')} title={text('traceabilityPages.serialDetail.markDamaged')} message={feedbackText('stockLifecycleBody')} action={text('traceabilityPages.serialDetail.markDamaged')}>{text('traceabilityPages.serialDetail.markDamaged')}</ConfirmedActionButton>}
+                {lifecycle_status !== 'retired' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} triggerTitle={gate.allowed ? '' : gate.reason} onConfirm={() => setStatus('retired')} title={text('traceabilityPages.serialDetail.retire')} message={feedbackText('stockLifecycleBody')} action={text('traceabilityPages.serialDetail.retire')}>{text('traceabilityPages.serialDetail.retire')}</ConfirmedActionButton>}
             </div>
         </section>
     );

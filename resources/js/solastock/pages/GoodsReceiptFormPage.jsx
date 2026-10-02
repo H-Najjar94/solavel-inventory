@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import {text as feedbackText} from '../../shared/feedback/messages';
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {t as documentText} from '../i18n/index';
+import React, { useRef, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -28,6 +31,8 @@ export default function GoodsReceiptFormPage() {
     const [blindReceiving, setBlindReceiving] = useState(false);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const savePending=useRef(false);
+    const [statusCheck,setStatusCheck]=useState(null);
 
     // Prefill from PO
     const poDraft = useApiQuery(['grn-from-po', poId, blindReceiving], () => api.grnDraftFromPo(poId, { blind: blindReceiving ? 1 : 0 }), { fallback: null, enabled: fromPo });
@@ -73,7 +78,10 @@ export default function GoodsReceiptFormPage() {
     const trackingOf = (id) => itemsArr.find((it) => it.id === id) ?? {};
 
     async function save(post = false) {
+        if(savePending.current||statusCheck)return;
+        let savedDocument;
         if (!gate.allowed) return;
+        savePending.current=true;
         setSaving(true); setErrors({});
         try {
             const payload = {
@@ -101,12 +109,13 @@ export default function GoodsReceiptFormPage() {
             if (payload.lines.length === 0) { toast.push(t('receiving.grn.validation.lineRequired', 'Add at least one line with a received quantity.'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateGoodsReceipt(id, payload) : await api.createGoodsReceipt(payload);
             const docId = res?.data?.id ?? id;
+            savedDocument=docId;
             if (post) { await api.postGoodsReceipt(docId); toast.push(t('receiving.grn.messages.posted', 'Goods receipt posted. Stock has been received.'), 'success'); }
             else toast.push(isEdit ? t('receiving.grn.messages.draftUpdated', 'Draft updated.') : t('receiving.grn.messages.draftSaved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['grns'] }); qc.invalidateQueries({ queryKey: ['po'] });
             nav(`/goods-receipts/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
-        finally { setSaving(false); }
+        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
+        finally { savePending.current=false; setSaving(false); }
     }
 
     if ((fromPo && poDraft.isLoading) || (isEdit && existing.isLoading)) return <section className="page"><Skeleton /></section>;
@@ -195,10 +204,11 @@ export default function GoodsReceiptFormPage() {
                 {fromPo && <p className="muted">{t('receiving.grn.form.poLinesHint', "Lines use the purchase order's remaining quantities. Adjust received amounts for partial receipts.")}</p>}
             </div>
 
+            {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/goods-receipts/${statusCheck.id}`:"/goods-receipts")}>{feedbackText("reload")}</button></div>}
             <div className="doc-actions">
                 <button className="btn" onClick={() => nav('/goods-receipts')}>{t('receiving.common.cancel', 'Cancel')}</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('receiving.common.saving', 'Saving…') : t('receiving.common.saveDraft', 'Save draft')}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={() => save(true)}>{t('receiving.grn.actions.saveAndPost', 'Save & post')}</button>
+                <button className="btn" disabled={!gate.allowed || saving || !!statusCheck} onClick={() => save(false)}>{saving ? t('receiving.common.saving', 'Saving…') : t('receiving.common.saveDraft', 'Save draft')}</button>
+                <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || saving || !!statusCheck} title={documentText("document.confirmPostTitle",undefined,{name:documentText("document.kind.goods receipt","goods receipt")})} message={documentText("document.confirmPostMessage")} action={documentText("document.post")} onConfirm={()=>save(true)}>{t('receiving.grn.actions.saveAndPost', 'Save & post')}</ConfirmedActionButton>
             </div>
         </section>
     );
