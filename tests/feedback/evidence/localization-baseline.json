@@ -1,0 +1,120 @@
+{
+  "servingBase": "97ac11d4",
+  "dictionaryCheck": "PASS:3303 keys each locale, zero missing references",
+  "scanStatus": "existing candidates require review; not full localization completion",
+  "candidateFiles": [
+    {
+      "file": "app/Http/Controllers/Api/V1/OpeningStockController.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Access/CentralAppAccess.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Catalog/UnitConversionResolver.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Documents/GoodsReceiptService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Documents/InventoryReversalService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Documents/OpeningStockService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Documents/SalesReturnService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Documents/ShipmentService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Documents/StockAdjustmentService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/ApprovedFinanceIntegrationEntitlement.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/DeadLetterReviewService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/DurableOutboxTransportService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/FinanceBaseValuation.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/FinanceOnboardingReadiness.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/FinancialLineAllocationService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/OutboxStateMachine.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/Phase5aManifestService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/SolaBooksOutboxDeliveryService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/SolaStockJournalContractBuilder.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Integration/TransportWorkerHeartbeat.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/InventoryWorkspace/MigrationOpening.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/InventoryWorkspace/OpeningRequirements.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Stock/PurchaseCostAdjustmentPlanner.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Stock/PurchaseCostAdjustmentService.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "app/Services/Tenancy/LiveTenantResolver.php",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "resources/js/solastock/components/ConnectionSummaryCard.jsx",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "resources/js/solastock/components/FinanceReadiness.jsx",
+      "unchangedFromServingBase": true
+    },
+    {
+      "file": "resources/js/solastock/components/GuidedConnectionAssistant.jsx",
+      "unchangedFromServingBase": true
+    }
+  ],
+  "review": "Existing registered product names remain exact; conservative scanner also matches JSX comparison syntax. Existing backend exception strings require separate feedback presentation review; no business-rule or exception-contract changes in this UI batch."
+}
