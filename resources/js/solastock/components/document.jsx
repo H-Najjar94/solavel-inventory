@@ -1,3 +1,4 @@
+import { WorkflowConfirmation } from '../../shared/feedback/WorkflowConfirmation';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmModal } from './ui.jsx';
@@ -153,22 +154,17 @@ export function ConfirmPostModal({ open, onConfirm, onCancel, name = 'document' 
 
 export function ConfirmReverseModal({ open, onConfirm, onCancel, name = 'document' }) {
     const [reason, setReason] = useState('');
+    const [pending, setPending] = useState(false);
     useEffect(() => { if (open) setReason(''); }, [open]);
     if (!open) return null;
-    return <div className="modal-overlay" onClick={onCancel}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{t('document.confirmReverseTitle', undefined, { name: t(`document.kind.${name}`, name) })}</h3>
-            <p>{t('document.confirmReverseMessage')}</p>
-            <label className="field">
-                <span className="field-label">{t('document.reason')} <span className="field-req">*</span></span>
-                <textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder={t('document.reversePlaceholder')} />
-            </label>
-            <div className="modal-actions">
-                <button className="btn" onClick={onCancel}>{t('document.cancel')}</button>
-                <button className="btn btn--danger" disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>{t('document.reverse')}</button>
-            </div>
-        </div>
-    </div>;
+    return <WorkflowConfirmation title={t('document.confirmReverseTitle', undefined, { name: t(`document.kind.${name}`, name) })}
+        action={t('document.reverse')} busy={pending} disabledConfirm={reason.trim().length < 3} onClose={onCancel}
+        onConfirm={async()=>{setPending(true);try{await onConfirm(reason.trim());}finally{setPending(false);}}}>
+        <p>{t('document.confirmReverseMessage')}</p>
+        <label className="field"><span className="field-label">{t('document.reason')} <span className="field-req">*</span></span>
+            <textarea value={reason} maxLength={500} disabled={pending} onChange={(e)=>setReason(e.target.value)} placeholder={t('document.reversePlaceholder')}/>
+        </label>
+    </WorkflowConfirmation>;
 }
 
 export function LedgerPreview({ rows }) {

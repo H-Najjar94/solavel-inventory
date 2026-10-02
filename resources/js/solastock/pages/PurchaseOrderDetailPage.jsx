@@ -32,7 +32,7 @@ export default function PurchaseOrderDetailPage() {
 
     async function act(fn, label) {
         try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['po'] }); return true; }
-        catch (e) { if (!e.feedbackHandled) toast.push(e.message, 'error'); return false; }
+        catch (e) { if (!e.feedbackHandled) toast.failure(e, e.message); return false; }
     }
 
     const canReceive = ['approved', 'partially_received'].includes(po.status) && hasRemaining;

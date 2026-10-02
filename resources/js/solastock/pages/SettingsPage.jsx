@@ -75,7 +75,7 @@ export default function SettingsPage() {
             toast.push(tr('settings.policy.saved'), 'success');
         } catch (e) {
             setErrors(fieldErrors(e));
-            toast.push(e.message || tr('settings.policy.saveError'), 'error');
+            toast.failure(e, e.message || tr('settings.policy.saveError'));
         } finally {
             setSaving(false);
         }
@@ -88,13 +88,13 @@ export default function SettingsPage() {
             await api.syncWarehouseAssignments(Number(warehouseAssignment.user_id), warehouseAssignment.warehouse_ids.map(Number));
             await qc.invalidateQueries({ queryKey: ['warehouse-assignments'] });
             toast.push(tr('settings.warehouseScope.saved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function saveTaxes(e) {
         e.preventDefault();
         try { await api.updateTaxes(taxes, defaultTaxes); await qc.invalidateQueries({ queryKey: ['settings'] }); toast.push(tr('settings.taxes.saved'), 'success'); }
-        catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     function addTax(e) {
@@ -120,7 +120,7 @@ export default function SettingsPage() {
             setConversion({ from_unit_id: '', to_unit_id: '', factor: '' });
             await qc.invalidateQueries({ queryKey: ['settings'] });
             toast.push(tr('settings.master.conversionSaved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function addCategory(e) {
@@ -131,7 +131,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.master.categorySaved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function saveCategoryEdit(e) {
@@ -147,7 +147,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.master.categoryUpdated'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function addUnit(e) {
@@ -158,7 +158,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.master.unitSaved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function addBrand(e) {
@@ -169,7 +169,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.master.brandSaved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function saveBrandEdit(e) {
@@ -184,7 +184,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.master.brandUpdated'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function addReorderRule(e) {
@@ -203,7 +203,7 @@ export default function SettingsPage() {
             setSafetyResult(null);
             await qc.invalidateQueries({ queryKey: ['settings'] });
             toast.push(tr('settings.reorder.saved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function calculateSafetyStock() {
@@ -230,7 +230,7 @@ export default function SettingsPage() {
             });
             toast.push(tr('settings.reorder.calculated'), 'success');
         } catch (err) {
-            toast.push(err.message || tr('settings.common.errorFallback'), 'error');
+            toast.failure(err, err.message || tr('settings.common.errorFallback'));
         } finally {
             setCalculatingSafety(false);
         }
@@ -244,7 +244,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.reasons.saved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function addCurrencyRate(e) {
@@ -254,7 +254,7 @@ export default function SettingsPage() {
             setCurrencyRate({ currency_code: '', rate_to_base: '', effective_date: new Date().toISOString().slice(0, 10) });
             await qc.invalidateQueries({ queryKey: ['settings'] });
             toast.push(tr('settings.currency.saved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function addCustomRole(e) {
@@ -264,7 +264,7 @@ export default function SettingsPage() {
             setCustomRole({ name: '', key: '', permissions: [] });
             await qc.invalidateQueries({ queryKey: ['custom-roles'] });
             toast.push(tr('settings.roles.saved'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     function togglePermission(key) {
@@ -284,7 +284,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['custom-roles'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.roles.assigned'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     async function unassignRole(userId) {
@@ -293,7 +293,7 @@ export default function SettingsPage() {
             await qc.invalidateQueries({ queryKey: ['custom-roles'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
             toast.push(tr('settings.roles.removed'), 'success');
-        } catch (err) { toast.push(err.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
     }
 
     if (isLoading) return <section className="page"><Skeleton /></section>;

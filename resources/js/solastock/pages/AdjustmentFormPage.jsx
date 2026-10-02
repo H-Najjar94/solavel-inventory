@@ -72,7 +72,7 @@ export default function AdjustmentFormPage() {
             else toast.push(t(isEdit ? 'adjustment.draftUpdated' : 'adjustment.draftSaved'), 'success');
             qc.invalidateQueries({ queryKey: ['adjustments'] });
             nav(`/adjustments/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('adjustment.saveFailed'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('adjustment.saveFailed')); }
         finally { setSaving(false); }
     }
 

@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "samePayloadRequests": 1,
+  "differentPayloadRequests": 1,
+  "accessEvents": 1,
+  "offlineRequests": 1,
+  "scope": "Actual API boundary; synthetic intercepted requests. Permission/access event codes preserved; no server mutations."
+}

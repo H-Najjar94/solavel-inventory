@@ -36,7 +36,7 @@ export default function SalesOrderDetailPage() {
     async function act(fn, msg) {
         setBusy(true);
         try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['sales-order', id] }); qc.invalidateQueries({ queryKey: ['sales-orders'] }); }
-        catch (e) { toast.push(e.message, 'error'); }
+        catch (e) { toast.failure(e, e.message); }
         finally { setBusy(false); }
     }
 
@@ -46,7 +46,7 @@ export default function SalesOrderDetailPage() {
             const res = await api.createPickList({ sales_order_id: so.id, pick_number: `PICK-${so.order_number}`, warehouse_id: so.warehouse_id });
             toast.push(t('salesOrders.messages.pickListCreated', 'Pick list created.'), 'success');
             nav(`/pick-lists/${res?.data?.id}`);
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.failure(e, e.message); }
         finally { setBusy(false); }
     }
 
@@ -66,7 +66,7 @@ export default function SalesOrderDetailPage() {
             });
             toast.push(t('salesOrders.messages.shipmentCreated', 'Draft shipment created — review it, then post it to ship.'), 'success');
             nav(`/shipments/${res?.data?.id}`);
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.failure(e, e.message); }
         finally { setBusy(false); }
     }
 

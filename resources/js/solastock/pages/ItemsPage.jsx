@@ -45,7 +45,7 @@ export default function ItemsPage() {
             await qc.invalidateQueries({ queryKey: ['items'] });
             toast.push(t('items.updated', 'Updated :count item(s).', { count: res.data.updated }), 'success');
         } catch (err) {
-            toast.push(err.message || t('items.bulkFailed'), 'error');
+            toast.failure(err, err.message || t('items.bulkFailed'));
         }
     }
 

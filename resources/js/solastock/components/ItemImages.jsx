@@ -49,7 +49,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
         let ok = 0;
         for (let i = 0; i < valid.length; i++) {
             try { await api.uploadItemImage(itemId, valid[i]); ok++; }
-            catch (err) { toast.push(`${valid[i].name}: ${err.message}`, 'error'); }
+            catch (err) { toast.failure(err, `${valid[i].name}: ${err.message}`); }
             setProgress({ done: i + 1, total: valid.length });
         }
         setBusy(false); setProgress(null);
@@ -59,14 +59,14 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
     async function makePrimary(id) {
         setBusy(true);
         try { await api.setItemImagePrimary(id); invalidate(); }
-        catch (err) { toast.push(err.message, 'error'); }
+        catch (err) { toast.failure(err, err.message); }
         finally { setBusy(false); }
     }
 
     async function remove(id) {
         setBusy(true);
         try { await api.deleteItemImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); }
-        catch (err) { toast.push(err.message, 'error'); }
+        catch (err) { toast.failure(err, err.message); }
         finally { setBusy(false); }
     }
 

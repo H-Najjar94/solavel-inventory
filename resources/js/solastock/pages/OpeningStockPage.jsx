@@ -59,7 +59,7 @@ export default function OpeningStockPage() {
             const key = importState.post ? 'openingStock.importedPosted' : 'openingStock.importedDraft';
             toast.push(t(key, { count: res.data?.line_count ?? 0 }), 'success');
         } catch (err) {
-            toast.push(err.message, 'error');
+            toast.failure(err, err.message);
         } finally {
             setBusy(false);
         }

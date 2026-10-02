@@ -40,7 +40,7 @@ export default function SupplierFormPage() {
             toast.push(t(isEdit ? 'partners.suppliers.form.updated' : 'partners.suppliers.form.created'), 'success');
             qc.invalidateQueries({ queryKey: ['suppliers'] });
             nav(`/suppliers/${res?.data?.id ?? id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(t('partners.suppliers.form.saveFailed'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, t('partners.suppliers.form.saveFailed')); }
         finally { setSaving(false); }
     }
 

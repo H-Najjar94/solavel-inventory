@@ -28,8 +28,8 @@ export default function OpeningStockDetailPage() {
     if (!entry) return <section className="page"><Breadcrumbs items={[{ label: t('openingStock.title'), to: '/opening-stock' }, { label: t('openingStock.notFound') }]} /><EmptyState title={t('openingStock.unavailable')} hint={t('openingStock.unavailableHint')} /></section>;
 
     async function act(fn, label, after) {
-        try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['opening'] }); after?.(); }
-        catch (e) { toast.push(e.message, 'error'); }
+        try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['opening'] }); after?.();  return true; }
+        catch (e) { toast.failure(e, e.message);  return false; }
     }
 
     return (
@@ -66,9 +66,9 @@ export default function OpeningStockDetailPage() {
                 onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} postLabel={t('openingStock.post')} />
 
             <ConfirmPostModal open={confirmPost} name="opening stock"
-                onConfirm={() => { setConfirmPost(false); act(api.postOpeningStock, t('openingStock.posted')); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={async () => { if (await act(api.postOpeningStock, t('openingStock.posted'))) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name="opening stock"
-                onConfirm={() => { setConfirmReverse(false); act(api.reverseOpeningStock, t('openingStock.reversed')); }} onCancel={() => setConfirmReverse(false)} />
+                onConfirm={async () => { if (await act(api.reverseOpeningStock, t('openingStock.reversed'))) setConfirmReverse(false); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }

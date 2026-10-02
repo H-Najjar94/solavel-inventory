@@ -25,8 +25,8 @@ export default function AdjustmentDetailPage() {
     if (!adj) return <section className="page"><Breadcrumbs items={[{ label: t('adjustments'), to: '/adjustments' }, { label: t('adjustment.notFound') }]} /><EmptyState title={t('adjustment.unavailable')} hint={t('adjustment.unavailableHint')} /></section>;
 
     async function act(fn, label) {
-        try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['adjustment'] }); }
-        catch (e) { toast.push(e.message, 'error'); }
+        try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['adjustment'] });  return true; }
+        catch (e) { toast.failure(e, e.message);  return false; }
     }
 
     return (
@@ -58,9 +58,9 @@ export default function AdjustmentDetailPage() {
                 onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} />
 
             <ConfirmPostModal open={confirmPost} name="adjustment"
-                onConfirm={() => { setConfirmPost(false); act(api.postAdjustment, t('adjustment.posted')); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={async () => { if (await act(api.postAdjustment, t('adjustment.posted'))) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name="adjustment"
-                onConfirm={(reason) => { setConfirmReverse(false); act(() => api.reverseAdjustment(id, reason), t('adjustment.reversed')); }} onCancel={() => setConfirmReverse(false)} />
+                onConfirm={async (reason) => { if (await act(() => api.reverseAdjustment(id, reason), t('adjustment.reversed'))) setConfirmReverse(false); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }

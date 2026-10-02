@@ -97,7 +97,7 @@ export default function ShipmentDetailPage() {
             await api.updateShipment(id, payload);
             toast.push(t('fulfillment.shipmentDetail.traceabilitySaved', 'Lot/serial selection saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['shipment', id] });
-        } catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.traceabilitySaveFailed', 'The lot/serial selection could not be saved.'), 'error'); }
+        } catch (e) { toast.failure(e, e.message || t('fulfillment.shipmentDetail.traceabilitySaveFailed', 'The lot/serial selection could not be saved.')); }
         finally { setSavingPicks(false); }
     }
 
@@ -115,7 +115,7 @@ export default function ShipmentDetailPage() {
             toast.push(t('fulfillment.shipmentDetail.shippingSaved', 'Shipping details saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['shipment', id] });
             qc.invalidateQueries({ queryKey: ['shipment-rates', id] });
-        } catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.shippingSaveFailed', 'The shipping details could not be saved.'), 'error'); }
+        } catch (e) { toast.failure(e, e.message || t('fulfillment.shipmentDetail.shippingSaveFailed', 'The shipping details could not be saved.')); }
     }
 
     async function generateLabel(serviceCode = null) {
@@ -125,12 +125,12 @@ export default function ShipmentDetailPage() {
             toast.push(t('fulfillment.shipmentDetail.labelGenerated', 'Shipping label generated.'), 'success');
             qc.invalidateQueries({ queryKey: ['shipment', id] });
             qc.invalidateQueries({ queryKey: ['shipment-tracking', id] });
-        } catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.labelFailed', 'The shipping label could not be generated.'), 'error'); }
+        } catch (e) { toast.failure(e, e.message || t('fulfillment.shipmentDetail.labelFailed', 'The shipping label could not be generated.')); }
     }
 
     async function post() {
-        try { await api.postShipment(id, overrides); toast.push(t('fulfillment.shipmentDetail.posted', 'Shipment posted — stock shipped OUT.'), 'success'); qc.invalidateQueries({ queryKey: ['shipment', id] }); }
-        catch (e) { toast.push(e.message || t('fulfillment.shipmentDetail.postFailed', 'The shipment could not be posted.'), 'error'); }
+        try { await api.postShipment(id, overrides); toast.push(t('fulfillment.shipmentDetail.posted', 'Shipment posted — stock shipped OUT.'), 'success'); qc.invalidateQueries({ queryKey: ['shipment', id] });  return true; }
+        catch (e) { toast.failure(e, e.message || t('fulfillment.shipmentDetail.postFailed', 'The shipment could not be posted.'));  return false; }
     }
 
     const setPick = (lineId, patch) => setPicks((p) => ({ ...p, [lineId]: { ...(p[lineId] ?? {}), ...patch } }));
@@ -247,7 +247,7 @@ export default function ShipmentDetailPage() {
             </div>
             {isDraft && !captureComplete && <p className="muted">{t('fulfillment.shipmentDetail.captureRequired', 'Select lot/serial for every tracked line before posting.')}</p>}
             <ConfirmPostModal open={confirmPost} name={t('fulfillment.shipmentDetail.confirmPostName', 'shipment')}
-                onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={async () => { if (await post()) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
         </section>
     );
 }

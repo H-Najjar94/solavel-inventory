@@ -143,7 +143,7 @@ export default function DashboardPage() {
             setCustomizing(false);
             toast.push(t('dashboard.layoutSaved'), 'success');
         } catch (e) {
-            toast.push(e.message || t('dashboard.layoutSaveFailed'), 'error');
+            toast.failure(e, e.message || t('dashboard.layoutSaveFailed'));
         }
     }
 
@@ -153,7 +153,7 @@ export default function DashboardPage() {
             await qc.invalidateQueries({ queryKey: ['dashboard'] });
             toast.push(t('dashboard.alertAcknowledged'), 'success');
         } catch (e) {
-            toast.push(e.message || t('dashboard.alertAckFailed'), 'error');
+            toast.failure(e, e.message || t('dashboard.alertAckFailed'));
         }
     }
 

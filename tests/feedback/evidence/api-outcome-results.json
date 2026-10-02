@@ -1,0 +1,34 @@
+[
+  {
+    "locale": "en",
+    "width": 1440,
+    "status": "passed",
+    "saves": 2,
+    "unknownRequests": 1,
+    "scope": "Actual CustomerForm: Laravel422 field map, first field focus, retained values, success toast. Shared Stock request boundary deduplicates repeated count post, sanitizes503 and blocks blind retry. All intercepted synthetic operations."
+  },
+  {
+    "locale": "en",
+    "width": 390,
+    "status": "passed",
+    "saves": 2,
+    "unknownRequests": 1,
+    "scope": "Actual CustomerForm: Laravel422 field map, first field focus, retained values, success toast. Shared Stock request boundary deduplicates repeated count post, sanitizes503 and blocks blind retry. All intercepted synthetic operations."
+  },
+  {
+    "locale": "ar",
+    "width": 1440,
+    "status": "passed",
+    "saves": 2,
+    "unknownRequests": 1,
+    "scope": "Actual CustomerForm: Laravel422 field map, first field focus, retained values, success toast. Shared Stock request boundary deduplicates repeated count post, sanitizes503 and blocks blind retry. All intercepted synthetic operations."
+  },
+  {
+    "locale": "ar",
+    "width": 390,
+    "status": "passed",
+    "saves": 2,
+    "unknownRequests": 1,
+    "scope": "Actual CustomerForm: Laravel422 field map, first field focus, retained values, success toast. Shared Stock request boundary deduplicates repeated count post, sanitizes503 and blocks blind retry. All intercepted synthetic operations."
+  }
+]

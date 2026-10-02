@@ -73,7 +73,7 @@ export default function OpeningStockFormPage() {
             else toast.push(t(isEdit ? 'openingStock.draftUpdated' : 'openingStock.draftSaved'), 'success');
             qc.invalidateQueries({ queryKey: ['opening'] });
             nav(`/opening-stock/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('openingStock.saveFailed'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('openingStock.saveFailed')); }
         finally { setSaving(false); }
     }
 

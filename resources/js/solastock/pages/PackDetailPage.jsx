@@ -36,12 +36,12 @@ export default function PackDetailPage() {
     async function savePacks() {
         setBusy(true);
         try { await api.updatePack(id, { packs, ...meta }); toast.push(t('fulfillment.packing.saved', 'Pack saved.'), 'success'); qc.invalidateQueries({ queryKey: ['pack', id] }); }
-        catch (e) { toast.push(e.message || t('fulfillment.packing.saveFailed', 'The pack could not be saved.'), 'error'); } finally { setBusy(false); }
+        catch (e) { toast.failure(e, e.message || t('fulfillment.packing.saveFailed', 'The pack could not be saved.')); } finally { setBusy(false); }
     }
     async function finalize() {
         setBusy(true);
         try { await api.markPackPacked(id); toast.push(t('fulfillment.packing.markedPacked', 'Pack marked packed.'), 'success'); qc.invalidateQueries({ queryKey: ['pack', id] }); }
-        catch (e) { toast.push(e.message || t('fulfillment.packing.finalizeFailed', 'The pack could not be marked packed.'), 'error'); } finally { setBusy(false); }
+        catch (e) { toast.failure(e, e.message || t('fulfillment.packing.finalizeFailed', 'The pack could not be marked packed.')); } finally { setBusy(false); }
     }
 
     return (

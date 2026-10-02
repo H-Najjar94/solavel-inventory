@@ -80,7 +80,7 @@ export default function SalesReturnFormPage() {
             toast.push(isEdit ? t('returns.messages.updated', 'Draft updated.') : t('returns.messages.created', 'Sales return created.'), 'success');
             qc.invalidateQueries({ queryKey: ['sales-returns'] });
             nav(`/sales-returns/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('returns.messages.saveFailed', 'The sales return could not be saved.'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('returns.messages.saveFailed', 'The sales return could not be saved.')); }
         finally { setSaving(false); }
     }
 

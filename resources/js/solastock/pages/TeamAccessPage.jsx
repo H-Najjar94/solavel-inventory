@@ -63,7 +63,7 @@ function EditAccessDrawer({ member, warehouses, customRoles, onClose, onSaved })
             toast.push(t('teamAccess.warehousesSaved'), 'success');
             await onSaved();
         } catch (err) {
-            toast.push(err.message || t('teamAccess.saveFailed'), 'error');
+            toast.failure(err, err.message || t('teamAccess.saveFailed'));
         } finally { setBusy(''); }
     }
 
@@ -79,7 +79,7 @@ function EditAccessDrawer({ member, warehouses, customRoles, onClose, onSaved })
             }
             await onSaved();
         } catch (err) {
-            toast.push(err.message || t('teamAccess.saveFailed'), 'error');
+            toast.failure(err, err.message || t('teamAccess.saveFailed'));
         } finally { setBusy(''); }
     }
 

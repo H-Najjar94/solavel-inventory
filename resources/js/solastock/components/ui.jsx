@@ -1,5 +1,5 @@
 import {WorkflowConfirmation} from '../../shared/feedback/WorkflowConfirmation';
-import React, { useState } from 'react';
+import React, { useState, useId, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { t } from '../i18n/index.js';
 
@@ -57,11 +57,20 @@ export function StatusBadge({ active, labels = [t('active'), t('inactive', 'Inac
 
 // ── Field wrapper with error ──
 export function Field({ label, error, children, required }) {
+    const root=useRef(null),id=useId();
+    useEffect(()=>{
+        const field=root.current?.querySelector('input,select,textarea');
+        if(!field||!error)return;
+        const invalid=field.getAttribute('aria-invalid'),described=field.getAttribute('aria-describedby');
+        field.setAttribute('aria-invalid','true');field.setAttribute('aria-describedby',[described,id].filter(Boolean).join(' '));
+        const frame=document.querySelector('.field[data-feedback-invalid]')===root.current?requestAnimationFrame(()=>field.focus()):null;
+        return()=>{if(frame!==null)cancelAnimationFrame(frame);if(invalid===null)field.removeAttribute('aria-invalid');else field.setAttribute('aria-invalid',invalid);if(described===null)field.removeAttribute('aria-describedby');else field.setAttribute('aria-describedby',described);};
+    },[error,id]);
     return (
-        <label className="field">
+        <label ref={root} className="field" data-feedback-invalid={error ? '' : undefined}>
             <span className="field-label">{label}{required && <span className="field-req"> *</span>}</span>
             {children}
-            {error && <span className="field-error">{error}</span>}
+            {error && <span id={id} className="field-error" role="alert">{error}</span>}
         </label>
     );
 }

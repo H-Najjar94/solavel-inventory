@@ -47,15 +47,15 @@ export default function WarehouseImages({ warehouseId, canManage }) {
         let ok = 0;
         for (let i = 0; i < valid.length; i++) {
             try { await api.uploadWarehouseImage(warehouseId, valid[i]); ok++; }
-            catch { toast.push(t('warehouseDetail.media.uploadFailed', undefined, { file: valid[i].name }), 'error'); }
+            catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.media.uploadFailed', undefined, { file: valid[i].name })); }
             setProgress({ done: i + 1, total: valid.length });
         }
         setBusy(false); setProgress(null);
         if (ok) { toast.push(ok === 1 ? t('warehouseDetail.media.uploadedOne') : t('warehouseDetail.media.uploadedMany', undefined, { count: ok }), 'success'); invalidate(); }
     }
 
-    async function makePrimary(id) { setBusy(true); try { await api.setWarehouseImagePrimary(id); invalidate(); } catch { toast.push(t('warehouseDetail.media.primaryFailed'), 'error'); } finally { setBusy(false); } }
-    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); } catch { toast.push(t('warehouseDetail.media.removeFailed'), 'error'); } finally { setBusy(false); } }
+    async function makePrimary(id) { setBusy(true); try { await api.setWarehouseImagePrimary(id); invalidate(); } catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.media.primaryFailed')); } finally { setBusy(false); } }
+    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); } catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.media.removeFailed')); } finally { setBusy(false); } }
 
     if (isLoading) return <Skeleton rows={2} />;
 

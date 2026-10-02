@@ -105,7 +105,7 @@ export default function GoodsReceiptFormPage() {
             else toast.push(isEdit ? t('receiving.grn.messages.draftUpdated', 'Draft updated.') : t('receiving.grn.messages.draftSaved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['grns'] }); qc.invalidateQueries({ queryKey: ['po'] });
             nav(`/goods-receipts/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.push(err.message || t('receiving.common.saveFailed', 'Save failed.'), 'error'); }
+        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
         finally { setSaving(false); }
     }
 

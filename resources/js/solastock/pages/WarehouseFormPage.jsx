@@ -61,7 +61,7 @@ export default function WarehouseFormPage() {
             nav(`/warehouses/${newId}`);
         } catch (err) {
             setErrors(fieldErrors(err));
-            toast.push(err.message || t('warehouses.saveFailed'), 'error');
+            toast.failure(err, err.message || t('warehouses.saveFailed'));
         } finally { setSaving(false); }
     }
 

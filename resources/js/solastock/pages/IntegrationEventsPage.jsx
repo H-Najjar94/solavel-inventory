@@ -36,7 +36,7 @@ export default function IntegrationEventsPage() {
 
     async function act(fn, id, label) {
         try { await fn(id); toast.push(tr(label), 'success'); qc.invalidateQueries({ queryKey: ['integration-events'] }); setSelected(null); }
-        catch (e) { toast.push(e.message || tr('settings.common.errorFallback'), 'error'); }
+        catch (e) { toast.failure(e, e.message || tr('settings.common.errorFallback')); }
     }
 
     return (

@@ -43,7 +43,7 @@ export default function OnboardingPage() {
             setProvisionResult(res);
             if (res?.provisioned) { toast.push(t('onboarding.provisioned'), 'success'); setStep(4); }
             else toast.push(res?.message || t('onboarding.provisionAdmin'), 'error');
-        } catch (e) { toast.push(e.message, 'error'); setProvisionResult({ provisioned: false, message: e.message }); }
+        } catch (e) { toast.failure(e, e.message); setProvisionResult({ provisioned: false, message: e.message }); }
         finally { setBusy(false); }
     }
 
@@ -53,7 +53,7 @@ export default function OnboardingPage() {
             const res = await api.createWarehouse({ code: wh.code || 'MAIN', name: wh.name || 'Main Warehouse', type: 'warehouse', is_active: true });
             setWh({ ...wh, id: res?.data?.id });
             toast.push(t('onboarding.warehouseCreated'), 'success'); setStep(6);
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.failure(e, e.message); }
         finally { setBusy(false); }
     }
 
@@ -63,7 +63,7 @@ export default function OnboardingPage() {
             const res = await api.createItem({ ...item, item_type: 'inventory', tracking_type: 'none', costing_method: 'average', is_active: true });
             setItem({ ...item, id: res?.data?.id });
             toast.push(t('onboarding.itemCreated'), 'success'); setStep(7);
-        } catch (e) { toast.push(e.message, 'error'); }
+        } catch (e) { toast.failure(e, e.message); }
         finally { setBusy(false); }
     }
 
@@ -72,7 +72,7 @@ export default function OnboardingPage() {
             const res = await (kind === 'unit' ? api.createUnit(name) : api.createCategory(name));
             await qc.invalidateQueries({ queryKey: ['meta'] });
             return res?.data ?? res;
-        } catch (e) { toast.push(e.message, 'error'); return null; }
+        } catch (e) { toast.failure(e, e.message); return null; }
     }
 
     function finish() {

@@ -160,7 +160,7 @@ export default function IntegrationSettingsPage() {
             setConnection((current) => ({ ...current, api_key: '' }));
             await qc.invalidateQueries({ queryKey: ['integration-status'] });
             toast.push(tr('integration.connection.saved'), 'success');
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (error) { toast.failure(error, error.message || tr('settings.common.errorFallback')); }
         finally { setSavingConnection(false); }
     }
 
@@ -170,7 +170,7 @@ export default function IntegrationSettingsPage() {
             await api.rotateIntegrationSigningKey();
             await qc.invalidateQueries({ queryKey: ['integration-status'] });
             toast.push(tr('integration.connection.keyGenerated'), 'success');
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (error) { toast.failure(error, error.message || tr('settings.common.errorFallback')); }
         finally { setRotatingKey(false); }
     }
 
@@ -373,7 +373,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             const response = await api.startIntegrationWizard();
             setRunUuid(response.data.run_uuid);
             if (!silent) toast.push(tr('integration.wizard.started'), 'success');
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); }
+        } catch (error) { toast.failure(error, error.message || tr('settings.common.errorFallback')); }
         finally { setSaving(false); }
     }
     // Opened from "Continue setup" (either app): start or resume without a second button.
@@ -433,7 +433,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             }));
             setFailedDecision({ row, action, extraSafeDetails, mutationSequence });
             setSaveState(conflict ? 'conflict' : 'failed');
-            toast.push(error.message || tr('settings.common.errorFallback'), 'error');
+            toast.failure(error, error.message || tr('settings.common.errorFallback'));
             throw error;
           } finally { setSaving(false); }
         }).catch(() => null);
@@ -461,7 +461,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             return true;
         } catch (error) {
             setSaveState('failed');
-            toast.push(error.message || tr('settings.common.errorFallback'), 'error');
+            toast.failure(error, error.message || tr('settings.common.errorFallback'));
             return false;
         } finally { setSaving(false); }
     }
@@ -474,7 +474,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             setConfirmation('');
             toast.push(tr(successKey), 'success');
             return true;
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); return false; }
+        } catch (error) { toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
         finally { setSaving(false); }
     }
 
@@ -651,7 +651,7 @@ function TaxMappings({ gate, toast, qc, tr }) {
             toast.push(tr('integration.tax.saved'), 'success');
             qc.invalidateQueries({ queryKey: ['integration-taxes'] });
             qc.invalidateQueries({ queryKey: ['integration-status'] });
-        } catch (error) { toast.push(error.message || tr('settings.common.errorFallback'), 'error'); } finally { setSaving(false); }
+        } catch (error) { toast.failure(error, error.message || tr('settings.common.errorFallback')); } finally { setSaving(false); }
     }
     if (isLoading) return <Skeleton />;
     if (isError) return <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} />;
@@ -680,7 +680,7 @@ function AccountMappings({ gate, toast, qc, tr }) {
     async function save() {
         setSaving(true);
         try { await api.saveIntegrationAccountMappings(rows); toast.push(tr('integration.account.saved'), 'success'); qc.invalidateQueries({ queryKey: ['integration-accounts'] }); qc.invalidateQueries({ queryKey: ['integration-status'] }); }
-        catch (e) { toast.push(e.message || tr('settings.common.errorFallback'), 'error'); } finally { setSaving(false); }
+        catch (e) { toast.failure(e, e.message || tr('settings.common.errorFallback')); } finally { setSaving(false); }
     }
 
     if (isLoading) return <Skeleton />;
