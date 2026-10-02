@@ -1,5 +1,9 @@
 export const messages = {
     "en": {
+        "stockLifecycleBody": "This changes the availability status of this lot or serial. Existing stock restrictions still apply.",
+        "fulfillmentCompleteBody": "This completes the current fulfillment step. Review the recorded quantities before continuing.",
+        "closeRecallBody": "This closes the recall workflow. Review affected items and outstanding actions before continuing.",
+
         "resetIntegrationDraft": "Reset integration draft",
         "resetIntegrationDraftBody": "This resets the saved decisions in this integration draft.",
         "discardIntegrationDraft": "Discard integration draft",
@@ -241,6 +245,10 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "stockLifecycleBody": "سيتم تغيير حالة إتاحة هذه الدفعة أو الرقم التسلسلي. تظل قيود المخزون الحالية سارية.",
+        "fulfillmentCompleteBody": "سيتم إكمال خطوة التنفيذ الحالية. راجع الكميات المسجلة قبل المتابعة.",
+        "closeRecallBody": "سيتم إغلاق مسار الاستدعاء. راجع الأصناف المتأثرة والإجراءات المعلقة قبل المتابعة.",
+
         "resetIntegrationDraft": "إعادة ضبط مسودة التكامل",
         "resetIntegrationDraftBody": "سيتم إعادة ضبط القرارات المحفوظة في مسودة التكامل هذه.",
         "discardIntegrationDraft": "حذف مسودة التكامل",
