@@ -106,7 +106,7 @@ export default function GoodsReceiptFormPage() {
                     };
                 }),
             };
-            if (payload.lines.length === 0) { toast.push(t('receiving.grn.validation.lineRequired', 'Add at least one line with a received quantity.'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('receiving.grn.validation.lineRequired', 'Add at least one line with a received quantity.')}); setSaving(false); return; }
             const res = isEdit ? await api.updateGoodsReceipt(id, payload) : await api.createGoodsReceipt(payload);
             const docId = res?.data?.id ?? id;
             savedDocument=docId;
@@ -197,7 +197,7 @@ export default function GoodsReceiptFormPage() {
 
             <div className="panel">
                 <h2>{t('receiving.common.lines', 'Lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines}
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
                     onAdd={fromPo ? undefined : () => setLines([...lines, emptyLine()])}
                     onRemove={fromPo ? () => {} : (i) => setLines(lines.filter((_, idx) => idx !== i))}
                     readOnly={false} />

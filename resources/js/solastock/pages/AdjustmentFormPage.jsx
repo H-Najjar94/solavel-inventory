@@ -73,7 +73,7 @@ export default function AdjustmentFormPage() {
                         };
                     }),
             };
-            if (payload.lines.length === 0) { toast.push(t('adjustment.addLineRequired'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('adjustment.addLineRequired')}); setSaving(false); return; }
             const res = isEdit ? await api.updateAdjustment(id, payload) : await api.createAdjustment(payload);
             const docId = res?.data?.id ?? id;
             savedDocument=docId;
@@ -156,7 +156,7 @@ export default function AdjustmentFormPage() {
 
             <div className="panel">
                 <h2>{t('adjustment.lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[
                     { label: t('adjustment.increaseValue'), value: lines.filter((l) => l.direction === 'increase').reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_cost || 0), 0).toFixed(2) },
                 ]} />

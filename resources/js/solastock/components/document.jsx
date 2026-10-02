@@ -1,5 +1,5 @@
 import { WorkflowConfirmation } from '../../shared/feedback/WorkflowConfirmation';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmModal } from './ui.jsx';
 import { t } from '../i18n/index.js';
@@ -102,11 +102,19 @@ export function DocumentTotals({ rows }) {
  * Generic line editor table. `columns` = [{ key, label, render(line, set, i), width? }].
  * Read-only mode hides add/remove and disables inputs (callers pass disabled cols).
  */
-export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel, errors = {} }) {
+export function DocumentLineErrors({errors={}}) {
+    const ref=useRef(null);
+    const message=Object.entries(errors).filter(([key])=>key==='lines'||key.startsWith('lines.')).map(([,value])=>Array.isArray(value)?value.join(' '):value).filter(Boolean).join(' ');
+    useEffect(()=>{if(message){const frame=requestAnimationFrame(()=>ref.current?.focus());return()=>cancelAnimationFrame(frame);}},[message]);
+    return message?<p ref={ref} tabIndex={-1} className="field-error" role="alert" data-feedback-validation>{message}</p>:null;
+}
+
+export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel, errors = {}, validationErrors = {} }) {
     const canRemove = !readOnly && typeof onRemove === 'function';
     const canAdd = !readOnly && typeof onAdd === 'function';
     return (
         <div className="doc-lines">
+            <DocumentLineErrors errors={validationErrors}/>
             <table className="data-table">
                 <thead>
                     <tr>

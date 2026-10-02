@@ -11,12 +11,14 @@ export default function ScannerPage() {
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const inputRef = useRef(null);
+    const inFlight=useRef(false);
 
     useEffect(() => { inputRef.current?.focus(); }, []);
 
     async function lookup(e) {
         e.preventDefault();
-        if (!code.trim()) return;
+        if (!code.trim()||inFlight.current) return;
+        inFlight.current=true;
         setBusy(true); setError('');
         try {
             const res = await api.scannerLookup(code.trim());
@@ -29,6 +31,7 @@ export default function ScannerPage() {
                 ? { title: t('scanner.noMatch', 'No match'), hint: t('scanner.noMatchHint', 'No item, bin, or shipment matches that scan.') }
                 : { title: t('scanner.lookupError', 'Lookup failed'), hint: t('scanner.lookupFailed', 'The scan could not be looked up. Try again.') });
         } finally {
+            inFlight.current=false;
             setBusy(false);
         }
     }
@@ -44,7 +47,7 @@ export default function ScannerPage() {
                     aria-label={t('scanner.lookupAria', 'Scanner lookup')} />
                 <button className="btn btn--primary" disabled={busy}>{busy ? t('scanner.lookingUp', 'Looking up…') : t('scanner.lookup', 'Lookup')}</button>
             </form>
-            {error && <div className="panel"><EmptyState title={error.title} hint={error.hint} /></div>}
+            {error && <div className="panel" role="alert"><EmptyState title={error.title} hint={error.hint} /></div>}
             {result && <div className="panel">
                 <h3>{t(`scanner.result.${result.type}`, result.type)}</h3>
                 {result.type === 'item' && <dl className="kv">

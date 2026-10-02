@@ -1,3 +1,13 @@
+# Stock inline validation and final source review batch
+
+Nine document-form line-required checks now render one focusable inline summary beside document lines. Existing checks/payloads remain unchanged; server nested line errors use the same summary. Count warehouse and same-warehouse transfer validation remain beside their fields. Invalid image selections aggregate into one inline alert rather than one modal per file; attachment size errors remain beside upload controls. Scanner no-match/read-only lookup failure remains contextual, preserves the scanned code and blocks repeated simultaneous lookup. Account mapping save feedback no longer claims a known failure or invites a blind retry when the outcome may be uncertain.
+
+Focused evidence:12EN/AR desktop/mobile cases in `inline-validation-results.json` (actual count form/media/scanner components),8existing consequential-action cases rerun pass. No writes occurred in inline tests; scanner duplicate Enter produced one request. API payload AST contract passes16modified files. Required build and dictionary gates run before commit. Source inventory now has no unassigned migration items; explicit retained exceptions remain documented. Individual route-state verification beyond representative fixtures is not falsely counted as complete.
+
+Production action batch `20261002T190227Z-0f8a176f` now verified actual count edit4cases: Cancel0, Confirm one intercepted update/post sequence, repeat disabled after failure, unchanged server record. Evidence `stock-production/20261002T190227Z-0f8a176f/save-post-results.json`. Latest inline batch still needs owner integration/deployment and production checks. Rollback reference remains current0f8a176 release. No migrations or business rules changed.
+
+---
+
 # Stock consequential-action batch — ready for coordinated integration
 
 Base includes root shared keys through `bf85929`; previous runtime is `20261002T185836Z-192a788b`.

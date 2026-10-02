@@ -12,7 +12,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/items",
@@ -25,7 +27,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/items/new",
@@ -38,7 +42,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/items/:id",
@@ -51,7 +57,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/items/:id/edit",
@@ -64,7 +72,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/warehouses",
@@ -77,7 +87,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/warehouses/new",
@@ -90,7 +102,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/warehouses/:id",
@@ -103,7 +117,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/warehouses/:id/edit",
@@ -116,7 +132,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/suppliers",
@@ -129,7 +147,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/suppliers/new",
@@ -142,7 +162,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/suppliers/:id",
@@ -155,7 +177,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/suppliers/:id/edit",
@@ -168,7 +192,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/balances",
@@ -181,7 +207,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/opening-stock",
@@ -194,7 +222,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/opening-stock/new",
@@ -207,7 +237,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/opening-stock/:id",
@@ -220,7 +252,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/opening-stock/:id/edit",
@@ -233,7 +267,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/adjustments",
@@ -246,7 +282,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/adjustments/new",
@@ -259,7 +297,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/adjustments/:id",
@@ -272,7 +312,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/adjustments/:id/edit",
@@ -285,7 +327,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/transfers",
@@ -298,7 +342,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/transfers/new",
@@ -311,7 +357,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/transfers/:id",
@@ -324,7 +372,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/transfers/:id/edit",
@@ -337,7 +387,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/counts",
@@ -350,7 +402,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/counts/new",
@@ -363,7 +417,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/counts/:id",
@@ -376,7 +432,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/counts/:id/edit",
@@ -384,12 +442,14 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "production EN/AR desktop/mobile Cancel0, intercepted one update/post, disabled repeat after failure: save-post-results.json",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/scanner",
@@ -402,7 +462,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/purchase-orders",
@@ -415,7 +477,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/purchase-orders/new",
@@ -428,7 +492,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/purchase-orders/:id",
@@ -441,7 +507,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/purchase-orders/:id/edit",
@@ -454,7 +522,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/goods-receipts",
@@ -467,7 +537,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/goods-receipts/new",
@@ -480,7 +552,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/goods-receipts/from-po/:poId",
@@ -493,7 +567,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/goods-receipts/:id",
@@ -506,7 +582,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/goods-receipts/:id/edit",
@@ -519,7 +597,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-orders",
@@ -532,7 +612,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-orders/new",
@@ -545,7 +627,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-orders/:id",
@@ -558,7 +642,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-orders/:id/edit",
@@ -571,7 +657,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/customers",
@@ -584,7 +672,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/customers/new",
@@ -597,7 +687,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/customers/:id",
@@ -610,7 +702,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/customers/:id/edit",
@@ -623,7 +717,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/pick-lists",
@@ -636,7 +732,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/pick-lists/:id",
@@ -649,7 +747,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/packs",
@@ -662,7 +762,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/packs/:id",
@@ -675,7 +777,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/shipments",
@@ -688,7 +792,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/shipments/:id",
@@ -701,7 +807,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-returns",
@@ -714,7 +822,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-returns/new",
@@ -727,7 +837,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-returns/:id",
@@ -740,7 +852,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/sales-returns/:id/edit",
@@ -753,7 +867,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/traceability",
@@ -766,7 +882,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/traceability/lots",
@@ -779,7 +897,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/traceability/lots/:id",
@@ -792,7 +912,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/traceability/serials",
@@ -805,7 +927,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/traceability/serials/:id",
@@ -818,7 +942,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/recalls",
@@ -831,7 +957,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/recalls/new",
@@ -844,7 +972,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/recalls/:id",
@@ -857,7 +987,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/reports",
@@ -870,7 +1002,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/settings",
@@ -883,7 +1017,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/team-access",
@@ -896,7 +1032,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/integrations/solacount",
@@ -909,7 +1047,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/integrations/solacount/events",
@@ -922,7 +1062,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/integrations/solabooks",
@@ -935,7 +1077,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Redirect alias or route shell; no mutation feedback."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/settings/solabooks",
@@ -948,7 +1092,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Redirect alias or route shell; no mutation feedback."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/integrations/solabooks/events",
@@ -961,7 +1107,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Redirect alias or route shell; no mutation feedback."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/ledger",
@@ -974,7 +1122,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     },
     {
       "route": "/inventory/*",
@@ -987,7 +1137,9 @@
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
-      ]
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f"
     }
   ],
   "reusable_boundaries": [
@@ -1032,16 +1184,29 @@
     {
       "component": "resources/js/solastock/utils/reportPageView.js",
       "reason": "Best-effort page-view telemetry failure remains silent; must not interrupt accounting/inventory work."
+    },
+    {
+      "component": "resources/js/solastock/pages/ScannerPage.jsx",
+      "reason": "No-match and read-only lookup failure remain contextual results, not blocking modals. Enter preserves scan value; one in-flight request enforced; read-only retry is safe."
+    },
+    {
+      "component": "resources/js/solastock/components/AccountingMappingTable.jsx",
+      "reason": "AccountPicker is a selection workflow, not a feedback confirmation. Existing picker kept; failed-save text now asks status review rather than blind retry."
+    },
+    {
+      "component": "Stock document forms and item rows",
+      "reason": "Removing an unsaved draft line or changing reversible draft mapping inputs is local editing; no destructive confirmation needed. Existing server validation remains authoritative."
     }
   ],
-  "remaining_actual_migration": [
-    "Form line-required summaries currently show blocking toast adapter; move to one inline document-line summary preserving validation logic.",
-    "Media invalid-file loops should aggregate validation rather than queue one dialog per rejected file.",
-    "Review scanner queued/offline feedback and page-level pending states."
-  ],
+  "remaining_actual_migration": [],
   "counts": {
     "routes": 76,
     "reusable_boundaries": 4,
-    "explicit_exceptions": 6
-  }
+    "explicit_exceptions": 9
+  },
+  "unverified_acceptance": [
+    "Individual route action matrix beyond representative synthetic routes; permissions/fixtures required for some detail states.",
+    "Latest inline/media/scanner batch needs integration, deployment and real production verification.",
+    "Shared navigation-staleness contract under coordinator review."
+  ]
 }

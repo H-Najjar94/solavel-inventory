@@ -74,7 +74,7 @@ export default function SalesReturnFormPage() {
                     lot_code: l.lot_code || undefined, is_manual: !header.shipment_id,
                 })),
             };
-            if (payload.lines.length === 0) { toast.push(t('returns.validation.lineRequired', 'Add at least one line with a returned quantity.'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('returns.validation.lineRequired', 'Add at least one line with a returned quantity.')}); setSaving(false); return; }
             const res = isEdit ? await api.updateSalesReturn(id, payload) : await api.createSalesReturn(payload);
             const docId = res?.data?.id ?? id;
             toast.push(isEdit ? t('returns.messages.updated', 'Draft updated.') : t('returns.messages.created', 'Sales return created.'), 'success');
@@ -122,7 +122,7 @@ export default function SalesReturnFormPage() {
 
             <div className="panel">
                 <h2>{t('returns.common.lines', 'Lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines}
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
                     onAdd={sourceDriven ? undefined : () => setLines([...lines, emptyLine()])}
                     onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
                 <p className="muted">{sourceDriven ? t('returns.form.sourceLockedHint', 'Choose any remaining quantity and its disposition. Warehouse, lot/serial identity, conversion and cost stay locked to the posted shipment ledger.') : t('returns.form.manualHint', 'Resellable and quarantined units re-enter stock at their shipment unit cost. Damaged and retired units are recorded without being returned to stock.')}</p>
