@@ -1,5 +1,8 @@
 export const messages = {
     "en": {
+        "removeRole": "Remove role assignment",
+        "removeRoleBody": "This user will lose permissions granted by this role assignment. Other memberships remain unchanged.",
+        "offline": "You are offline. Reconnect to load current information.",
         "deleteImage": "Delete image",
         "deleteImageBody": "This image will be removed from the record.",
         "deleteBarcode": "Delete barcode",
@@ -229,6 +232,9 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "removeRole": "إزالة تعيين الدور",
+        "removeRoleBody": "سيفقد هذا المستخدم الصلاحيات التي يمنحها تعيين هذا الدور. تبقى العضويات الأخرى دون تغيير.",
+        "offline": "أنت غير متصل بالإنترنت. أعد الاتصال لتحميل المعلومات الحالية.",
         "deleteImage": "حذف الصورة",
         "deleteImageBody": "ستتم إزالة هذه الصورة من السجل.",
         "deleteBarcode": "حذف الباركود",
