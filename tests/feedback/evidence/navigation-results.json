@@ -6,7 +6,8 @@
     "saveToastRetained": true,
     "linkAndBackClear": true,
     "obsoleteDialogCleared": true,
-    "reducedMotion": true
+    "reducedMotion": true,
+    "liveDisabledGuard": true
   },
   {
     "lang": "en",
@@ -15,7 +16,8 @@
     "saveToastRetained": true,
     "linkAndBackClear": true,
     "obsoleteDialogCleared": true,
-    "reducedMotion": true
+    "reducedMotion": true,
+    "liveDisabledGuard": true
   },
   {
     "lang": "ar",
@@ -24,7 +26,8 @@
     "saveToastRetained": true,
     "linkAndBackClear": true,
     "obsoleteDialogCleared": true,
-    "reducedMotion": true
+    "reducedMotion": true,
+    "liveDisabledGuard": true
   },
   {
     "lang": "ar",
@@ -33,6 +36,7 @@
     "saveToastRetained": true,
     "linkAndBackClear": true,
     "obsoleteDialogCleared": true,
-    "reducedMotion": true
+    "reducedMotion": true,
+    "liveDisabledGuard": true
   }
 ]
