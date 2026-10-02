@@ -1,3 +1,4 @@
+import {statusRoute} from './statusRoute';
 import { feedback } from '../../shared/feedback/store';
 import { text as feedbackText } from '../../shared/feedback/messages';
 
@@ -18,7 +19,7 @@ function transport(url, options) {
     const execute = async () => {
         const unknown = (metadata = {}) => {
             uncertain.add(key);
-            void feedback.failure(undefined, true);
+            void feedback.failure(undefined, true, statusRoute(url,window.SOLASTOCK_BASE_PATH??'/inventory'));
             return Object.assign(new Error(feedbackText('unknown')), {...metadata, feedbackHandled:true, outcomeUnknown:true});
         };
         if (mutation && uncertain.has(key)) throw unknown();
