@@ -1,5 +1,6 @@
 export const messages = {
     "en": {
+        "notificationReadUnconfirmed": "Could not confirm that this notification was marked as read. You can still open its destination.",
         "importBankTransactions": "Import bank transactions",
         "importBankTransactionsBody": "This saves the reviewed statement transactions using the selected mapping. Review the preview before importing.",
         "paymentApiConfirm": "Send payment API request?",
@@ -211,6 +212,7 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "notificationReadUnconfirmed": "تعذر تأكيد وضع علامة مقروء على هذا الإشعار. لا يزال بإمكانك فتح وجهته.",
         "importBankTransactions": "استيراد المعاملات البنكية",
         "importBankTransactionsBody": "سيتم حفظ معاملات كشف الحساب التي راجعتها باستخدام المطابقة المحددة. راجع المعاينة قبل الاستيراد.",
         "paymentApiConfirm": "إرسال طلب إلى خدمة الدفع؟",
