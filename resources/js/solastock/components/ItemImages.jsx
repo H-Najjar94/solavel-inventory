@@ -90,7 +90,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
         return (
             <div className="item-gallery-empty">
                 <EmptyState title={t('media.noImages')}
-                    hint={canManage ? 'Upload one or more product photos (JPG, PNG or WEBP, up to 5 MB each). Stored privately.' : 'No product photos have been added for this item.'}
+                    hint={canManage ? t('media.imagesHint') : undefined}
                     action={uploadBtn} />
             </div>
         );
