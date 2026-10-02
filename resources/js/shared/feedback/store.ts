@@ -56,9 +56,9 @@ export const feedback = {
         } catch { /* Storage can be unavailable; the successful operation is unaffected. */ }
     },
     clearNotices() { state = { ...state, notices: [] }; publish(); },
-    navigate() {
+    navigate(options: {preserveNotices?: boolean} = {}) {
         const obsolete = state.dialogs;
-        state = { ...state, dialogs: [], notices: [] }; publish();
+        state = { ...state, dialogs: [], notices: options.preserveNotices ? state.notices : [] }; publish();
         obsolete.forEach(item => item.resolve(false));
     },
     /** Same action shares a promise; unrelated requests run independently. */
