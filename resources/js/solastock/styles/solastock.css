@@ -987,7 +987,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .doc-totals { display:flex; gap:24px; justify-content:flex-end; margin-top:12px; }
 .doc-total { display:flex; gap:8px; align-items:baseline; font-size:14px; }
 .doc-total strong { font-size:16px; }
-.doc-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+.doc-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; margin-top:18px; }
 .row--error td { background:#fdecec; }
 .audit-timeline { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
 .audit-timeline li { font-size:14px; padding:8px 0; border-bottom:1px solid var(--line-soft,#f4f1ec); }

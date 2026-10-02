@@ -1,3 +1,4 @@
+import {FeedbackNavigation} from '../components/FeedbackNavigation';
 import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { visibleNav } from '../router/nav.js';
@@ -156,6 +157,7 @@ export default function AppShell() {
 
     return (
         <div className="app">
+            <FeedbackNavigation/>
             <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
                 <div className="side-brand">
                     <img className="side-logo-img" src="/inventory/imgs/favicon-solastock-gradient.svg" alt="SolaStock"

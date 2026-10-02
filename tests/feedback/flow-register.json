@@ -1206,7 +1206,13 @@
   },
   "unverified_acceptance": [
     "Individual route action matrix beyond representative synthetic routes; permissions/fixtures required for some detail states.",
-    "Latest inline/media/scanner batch needs integration, deployment and real production verification.",
-    "Shared navigation-staleness contract under coordinator review."
-  ]
+    "Latest mobile scroller/navigation follow-up needs coordinated deployment and production verification."
+  ],
+  "latest_verified_release": "20261002T190615Z-61b2c80f",
+  "production_evidence": {
+    "customer_validation_unknown": "20261002T185836Z-192a788b/customer-outcomes-results.json",
+    "count_pending": "20261002T185836Z-192a788b/pending-results.json",
+    "save_post_sequence": "20261002T190227Z-0f8a176f/save-post-results.json",
+    "inline_media_scanner": "20261002T190615Z-61b2c80f/inline-results.json"
+  }
 }
