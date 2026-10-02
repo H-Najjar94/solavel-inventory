@@ -1,6 +1,6 @@
 import { text } from './messages';
 export type Tone = 'success' | 'info' | 'warning' | 'error';
-export type DialogOptions = { title: string; message: string; action?: string; reference?: string; tone?: Tone; checkStatus?: boolean; input?: { label: string; minLength: number; choices?: {value:string;label:string}[]; onValue: (value: string) => void } };
+export type DialogOptions = { title: string; message: string; action?: string; reference?: string; tone?: Tone; checkStatus?: boolean; statusHref?: string; input?: { label: string; minLength: number; choices?: {value:string;label:string}[]; onValue: (value: string) => void } };
 export type Dialog = DialogOptions & { id: number; resolve: (confirmed: boolean) => void; trigger: HTMLElement | null };
 export type Notice = { id: number; message: string; tone: Tone; title?: string };
 let sequence = 0;
@@ -18,7 +18,7 @@ export function finish(id: number, confirmed: boolean) {
 }
 function dialog(options: DialogOptions) {
     // Repeated activation of the same control must not queue another decision.
-    if (state.dialogs.some(item => JSON.stringify({ title: item.title, message: item.message, action: item.action, reference: item.reference, tone: item.tone, checkStatus: item.checkStatus }) === JSON.stringify({ title: options.title, message: options.message, action: options.action, reference: options.reference, tone: options.tone, checkStatus: options.checkStatus }))) return Promise.resolve(false);
+    if (state.dialogs.some(item => JSON.stringify({ title: item.title, message: item.message, action: item.action, reference: item.reference, tone: item.tone, checkStatus: item.checkStatus, statusHref:item.statusHref }) === JSON.stringify({ title: options.title, message: options.message, action: options.action, reference: options.reference, tone: options.tone, checkStatus: options.checkStatus, statusHref:options.statusHref }))) return Promise.resolve(false);
     return new Promise<boolean>(resolve => {
         state = { ...state, dialogs: [...state.dialogs, { ...options, id: ++sequence, resolve, trigger: document.activeElement as HTMLElement }] };
         publish();
@@ -70,9 +70,9 @@ export const feedback = {
         locks.set(key, result); state = { ...state, pending: [...state.pending, key] }; publish();
         return result;
     },
-    failure(status?: number, mutation = true) {
+    failure(status?: number, mutation = true, statusHref?: string) {
         const unknown = mutation && (status === undefined || status >= 500);
-        return dialog({ title: text(unknown ? 'unknownTitle' : 'error'), message: text(status === 403 ? 'forbidden' : status === 419 || status === 401 ? 'expired' : unknown ? 'unknown' : 'failed'), tone: unknown ? 'warning' : 'error', checkStatus: status !== 403 });
+        return dialog({ title: text(unknown ? 'unknownTitle' : 'error'), message: text(status === 403 ? 'forbidden' : status === 419 || status === 401 ? 'expired' : unknown ? 'unknown' : 'failed'), tone: unknown ? 'warning' : 'error', checkStatus: status !== 403, statusHref });
     },
 };
 export function focusInvalid(errors: Record<string, unknown>) {

@@ -42,7 +42,9 @@ function FeedbackDialog({ item, locale }: { item: Dialog; locale: string }) {
         <div className="sf-actions">
             <button type="button" autoFocus onClick={() => finish(item.id, false)}>{text(item.action ? 'cancel' : 'acknowledge', locale)}</button>
             {item.action && <button type="button" className="sf-primary" disabled={!!item.input && inputValue.trim().length < item.input.minLength} onClick={() => finish(item.id, true)}>{item.action}</button>}
-            {item.checkStatus && <button type="button" className="sf-primary" onClick={() => { finish(item.id, false); window.location.reload(); }}>{text('reload', locale)}</button>}
+            {item.checkStatus && <button type="button" className="sf-primary" onClick={() => { finish(item.id, false);
+                if(item.statusHref){try{const destination=new URL(item.statusHref,window.location.href);if(destination.origin===window.location.origin&&['http:','https:'].includes(destination.protocol)){window.location.assign(destination.href);return;}}catch{/* Ignore invalid external destinations. */}}
+                window.location.reload(); }}>{text('reload', locale)}</button>}
         </div>
     </>;
     // If a workflow already owns a modal, present feedback within that modal.
