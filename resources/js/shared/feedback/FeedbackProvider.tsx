@@ -1,3 +1,4 @@
+import {bindFeedbackNavigation} from './navigationDom';
 import { activeWorkflow, visibleWorkflow } from './dialogDom';
 import { presentFlash } from './flashDom';
 import React, { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
@@ -68,11 +69,12 @@ export function FeedbackProvider({ children, locale: selectedLocale }: { childre
         return () => observer.disconnect();
     }, []);
     useEffect(() => {
+        const stopNavigation = bindFeedbackNavigation();
         feedback.restoreAfterReload();
         presentFlash();
         const observer = new MutationObserver(() => presentFlash());
         observer.observe(document.body, {childList: true, subtree: true});
-        return () => observer.disconnect();
+        return () => { stopNavigation(); observer.disconnect(); };
     }, []);
     const locale = selectedLocale || documentLocale;
     const state = useSyncExternalStore(subscribe, snapshot, snapshot);
