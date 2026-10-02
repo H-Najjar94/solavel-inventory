@@ -31,8 +31,8 @@ export default function PurchaseOrderDetailPage() {
     if (!po) return <section className="page"><Breadcrumbs items={[{ label: t('receiving.po.list.title', 'Purchase Orders'), to: '/purchase-orders' }, { label: t('receiving.common.notFound', 'Not found') }]} /><EmptyState title={t('receiving.common.unavailable', 'Unavailable')} hint={t('receiving.common.selectOrganization', 'Select an organization to load data.')} /></section>;
 
     async function act(fn, label) {
-        try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['po'] }); }
-        catch (e) { toast.push(e.message, 'error'); }
+        try { await fn(id); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['po'] }); return true; }
+        catch (e) { if (!e.feedbackHandled) toast.push(e.message, 'error'); return false; }
     }
 
     const canReceive = ['approved', 'partially_received'].includes(po.status) && hasRemaining;
@@ -82,9 +82,9 @@ export default function PurchaseOrderDetailPage() {
             {tab === 'audit' && <div className="panel"><EmptyState title={t('receiving.common.auditTimeline', 'Audit timeline')} hint={t('receiving.po.audit.hint', 'Purchase-order creation, approval, and cancellation events are recorded in the audit log.')} /></div>}
 
             <ConfirmModal open={confirmApprove} title={t('receiving.po.approve.title', 'Approve purchase order?')} message={t('receiving.po.approve.message', 'Approval allows receiving against this purchase order. The order then becomes read-only except for its receiving status.')}
-                confirmLabel={t('receiving.po.actions.approve', 'Approve')} onConfirm={() => { setConfirmApprove(false); act(api.approvePurchaseOrder, t('receiving.po.messages.approved', 'Purchase order approved.')); }} onCancel={() => setConfirmApprove(false)} />
+                confirmLabel={t('receiving.po.actions.approve', 'Approve')} onConfirm={async () => { if (await act(api.approvePurchaseOrder, t('receiving.po.messages.approved', 'Purchase order approved.'))) setConfirmApprove(false); }} onCancel={() => setConfirmApprove(false)} />
             <ConfirmModal open={confirmCancel} danger title={t('receiving.po.cancel.title', 'Cancel purchase order?')} message={t('receiving.po.cancel.message', 'This marks the purchase order as cancelled. Posted goods receipts are unaffected.')}
-                confirmLabel={t('receiving.po.actions.cancel', 'Cancel PO')} onConfirm={() => { setConfirmCancel(false); act(api.cancelPurchaseOrder, t('receiving.po.messages.cancelled', 'Purchase order cancelled.')); }} onCancel={() => setConfirmCancel(false)} />
+                confirmLabel={t('receiving.po.actions.cancel', 'Cancel PO')} onConfirm={async () => { if (await act(api.cancelPurchaseOrder, t('receiving.po.messages.cancelled', 'Purchase order cancelled.'))) setConfirmCancel(false); }} onCancel={() => setConfirmCancel(false)} />
         </section>
     );
 }

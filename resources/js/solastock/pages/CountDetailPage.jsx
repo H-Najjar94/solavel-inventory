@@ -35,8 +35,8 @@ export default function CountDetailPage() {
     if (!c) return <section className="page"><Breadcrumbs items={[{ label: t('counts.breadcrumb'), to: '/counts' }, { label: t('counts.detail.notFound') }]} /><EmptyState title={t('counts.detail.unavailable')} hint={t('counts.detail.unavailableHint')} /></section>;
 
     async function post() {
-        try { await api.postCount(id); toast.push(t('counts.detail.posted'), 'success'); qc.invalidateQueries({ queryKey: ['count'] }); }
-        catch { toast.push(t('counts.detail.postFailed'), 'error'); }
+        try { await api.postCount(id); toast.push(t('counts.detail.posted'), 'success'); qc.invalidateQueries({ queryKey: ['count'] }); return true; }
+        catch (e) { if (!e.feedbackHandled) toast.push(e.message || t('counts.detail.postFailed'), 'error'); return false; }
     }
 
     return (
@@ -86,7 +86,7 @@ export default function CountDetailPage() {
 
             <DocumentActions status={c.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} postLabel={t('counts.detail.postVariance')} />
             <ConfirmModal open={confirmPost} title={t('counts.detail.confirmTitle')} message={t('counts.detail.confirmMessage')}
-                confirmLabel={t('counts.detail.confirm')} onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
+                confirmLabel={t('counts.detail.confirm')} onConfirm={async () => { if (await post()) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
         </section>
     );
 }

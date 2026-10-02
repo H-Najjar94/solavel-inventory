@@ -33,16 +33,16 @@ export default function TransferDetailPage() {
     if (!t) return <section className="page"><Breadcrumbs items={[{ label: tr('transfers.breadcrumb', 'Transfers'), to: '/transfers' }, { label: tr('transfers.detail.notFoundBreadcrumb', 'Not found') }]} /><EmptyState title={tr('transfers.detail.unavailableTitle', 'Transfer unavailable')} hint={tr('transfers.detail.unavailableHint', 'Select an organization to load transfer data.')} /></section>;
 
     async function post() {
-        try { await api.postTransfer(id); toast.push(tr('transfers.detail.posted', 'Transfer posted.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); }
-        catch (e) { toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); }
+        try { await api.postTransfer(id); toast.push(tr('transfers.detail.posted', 'Transfer posted.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); return true; }
+        catch (e) { if (!e.feedbackHandled) toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); return false; }
     }
     async function ship() {
-        try { await api.shipTransfer(id); toast.push(tr('transfers.detail.shipped', 'Transfer shipped.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); }
-        catch (e) { toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); }
+        try { await api.shipTransfer(id); toast.push(tr('transfers.detail.shipped', 'Transfer shipped.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); return true; }
+        catch (e) { if (!e.feedbackHandled) toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); return false; }
     }
     async function receive() {
-        try { await api.receiveTransfer(id); toast.push(tr('transfers.detail.received', 'Transfer received.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); }
-        catch (e) { toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); }
+        try { await api.receiveTransfer(id); toast.push(tr('transfers.detail.received', 'Transfer received.'), 'success'); qc.invalidateQueries({ queryKey: ['transfer'] }); return true; }
+        catch (e) { if (!e.feedbackHandled) toast.push(e.message || tr('transfers.detail.actionFailed', 'The transfer action could not be completed.'), 'error'); return false; }
     }
 
     function ledgerPreview() {
@@ -118,7 +118,7 @@ export default function TransferDetailPage() {
                 title={tr('transfers.detail.confirmPostTitle', 'Post this transfer?')}
                 message={tr('transfers.detail.confirmPostMessage', 'Posting writes the stock movements to the inventory ledger and locks this transfer. It cannot be edited afterwards.')}
                 confirmLabel={tr('transfers.detail.confirmPost', 'Post transfer')}
-                onConfirm={() => { setConfirmPost(false); post(); }} onCancel={() => setConfirmPost(false)} />
+                onConfirm={async () => { if (await post()) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
         </section>
     );
 }
