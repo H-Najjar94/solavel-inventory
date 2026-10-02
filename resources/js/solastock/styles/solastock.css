@@ -942,7 +942,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .field { display:flex; flex-direction:column; gap:6px; }
 .field-label { font-size:13px; font-weight:600; color: var(--muted,#666); }
 .field-req { color:#e05151; }
-.field-error { color:#e05151; font-size:12px; }
+.field-error { color:#e05151; font-size:12px; overflow-wrap:anywhere; }
 .field-hint { color: var(--muted,#999); font-size:12px; }
 .form-actions { grid-column:1/-1; display:flex; justify-content:flex-end; gap:10px; padding-top:6px; }
 .check-row { display:flex; gap:16px; align-items:center; font-size:14px; }
