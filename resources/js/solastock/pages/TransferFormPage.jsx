@@ -58,7 +58,7 @@ export default function TransferFormPage() {
         if(savePending.current||statusCheck)return;
         let savedDocument;
         if (!gate.allowed) return;
-        if (sameWh) { toast.push(t('transfers.form.warehousesDiffer', 'Source and destination warehouses must be different.'), 'error'); return; }
+        if (sameWh) { setErrors({to_warehouse_id:t('transfers.form.warehousesDiffer', 'Source and destination warehouses must be different.')}); return; }
         savePending.current=true;
         setSaving(true); setErrors({});
         try {
@@ -76,7 +76,7 @@ export default function TransferFormPage() {
                         };
                     }),
             };
-            if (payload.lines.length === 0) { toast.push(t('transfers.form.lineRequired', 'Add at least one transfer line.'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('transfers.form.lineRequired', 'Add at least one transfer line.')}); setSaving(false); return; }
             const res = isEdit ? await api.updateTransfer(id, payload) : await api.createTransfer(payload);
             const docId = res?.data?.id ?? id;
             savedDocument=docId;
@@ -139,7 +139,7 @@ export default function TransferFormPage() {
 
             <div className="panel">
                 <h2>{t('transfers.form.lines', 'Lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines} addLabel={t('transfers.form.addLine', 'Add line')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} addLabel={t('transfers.form.addLine', 'Add line')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
             </div>
 
             {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/transfers/${statusCheck.id}`:"/transfers")}>{feedbackText("reload")}</button></div>}

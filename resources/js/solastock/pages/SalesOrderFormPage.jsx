@@ -54,7 +54,7 @@ export default function SalesOrderFormPage() {
                 requested_ship_date: header.requested_ship_date || null,
                 lines: lines.filter((l) => l.item_id && Number(l.ordered_qty) > 0).map((l) => ({ item_id: l.item_id, ordered_qty: l.ordered_qty, entered_qty: l.ordered_qty, entered_unit_id: l.entered_unit_id || undefined, unit_price: l.unit_price || 0, discount_rate: l.discount_rate || 0, tax_code: l.tax_code || undefined })),
             };
-            if (payload.lines.length === 0) { toast.push(t('salesOrders.validation.lineRequired', 'Add at least one line with an ordered quantity.'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('salesOrders.validation.lineRequired', 'Add at least one line with an ordered quantity.')}); setSaving(false); return; }
             const res = isEdit ? await api.updateSalesOrder(id, payload) : await api.createSalesOrder(payload);
             const docId = res?.data?.id ?? id;
             toast.push(isEdit ? t('salesOrders.messages.updated', 'Draft updated.') : t('salesOrders.messages.created', 'Sales order created.'), 'success');
@@ -100,7 +100,7 @@ export default function SalesOrderFormPage() {
 
             <div className="panel">
                 <h2>{t('salesOrders.common.lines', 'Lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines}
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
                     onAdd={() => { const code = settings.data?.settings?.default_sales_tax_code ?? ''; const tax = taxOptions.find((row) => row.code === code); setLines([...lines, { ...emptyLine(), tax_code: code, tax_rate: tax?.treatment === 'standard' ? tax.rate : 0 }]); }}
                     onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
             </div>

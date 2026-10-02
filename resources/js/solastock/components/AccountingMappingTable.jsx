@@ -1,3 +1,4 @@
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n/context.jsx';
@@ -110,7 +111,7 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
                             setFailed(result ? null : row.fingerprint);
                         } finally { setPending(null); }
                     }}>{pending === row.fingerprint ? (ar ? 'جارٍ الحفظ…' : 'Saving…') : (ar ? 'حفظ الاختيار' : 'Save selection')}</button>}
-                    {failed === row.fingerprint && <small role="alert">{ar ? 'لم يتم الحفظ. راجع رسالة الخطأ وأعد المحاولة.' : 'Selection was not saved. Review the error and retry.'}</small>}
+                    {failed === row.fingerprint && <small role="alert">{feedbackText('unknown')}</small>}
                 </div>
             </section>;
         })}

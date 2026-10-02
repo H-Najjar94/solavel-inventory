@@ -74,7 +74,7 @@ export default function OpeningStockFormPage() {
                         };
                     }),
             };
-            if (payload.lines.length === 0) { toast.push(t('openingStock.addLineRequired'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('openingStock.addLineRequired')}); setSaving(false); return; }
             let res = isEdit ? await api.updateOpeningStock(id, payload) : await api.createOpeningStock(payload);
             const docId = res?.data?.id ?? id;
             savedDocument=docId;
@@ -128,7 +128,7 @@ export default function OpeningStockFormPage() {
 
             <div className="panel">
                 <h2>{t('openingStock.lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[{ label: t('openingStock.totalValue'), value: total.toFixed(2) }]} />
             </div>
 

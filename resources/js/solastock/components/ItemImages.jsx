@@ -22,6 +22,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
     const toast = useToast();
     const fileRef = useRef(null);
     const [busy, setBusy] = useState(false);
+    const [validation,setValidation]=useState('');
     const [progress, setProgress] = useState(null); // {done,total}
 
     const { data, isLoading, refetch } = useApiQuery(['item-images', String(itemId)],
@@ -39,12 +40,13 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
         e.target.value = '';
         if (!files.length) return;
 
-        const valid = [];
+        const valid = [],rejected=[];
         for (const f of files) {
-            if (!ALLOWED.includes(f.type)) { toast.push(t('media.imageTypeError', undefined, { file: f.name }), 'error'); continue; }
-            if (f.size > MAX_BYTES) { toast.push(t('media.imageSizeError', undefined, { file: f.name }), 'error'); continue; }
+            if (!ALLOWED.includes(f.type)) { rejected.push(t('media.imageTypeError', undefined, { file: f.name })); continue; }
+            if (f.size > MAX_BYTES) { rejected.push(t('media.imageSizeError', undefined, { file: f.name })); continue; }
             valid.push(f);
         }
+        setValidation(rejected.join(' '));
         if (!valid.length) return;
 
         setBusy(true); setProgress({ done: 0, total: valid.length });
@@ -76,6 +78,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
 
     const uploadBtn = canManage && (
         <>
+            {validation&&<p className="field-error" role="alert">{validation}</p>}
             <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {busy && progress ? t('media.uploading', 'Uploading :done/:total…', progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadImages'))}

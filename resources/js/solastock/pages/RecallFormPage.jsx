@@ -1,3 +1,4 @@
+import {DocumentLineErrors} from '../components/document';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -38,7 +39,7 @@ export default function RecallFormPage() {
                     .filter((l) => (header.scope === 'lot' ? l.lot_id : l.serial_id))
                     .map((l) => ({ item_id: header.item_id, lot_id: l.lot_id, serial_id: l.serial_id, disposition: l.disposition })),
             };
-            if (payload.lines.length === 0) { toast.push(t('recalls.validation.lineRequired', 'Add at least one affected lot or serial number.'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('recalls.validation.lineRequired', 'Add at least one affected lot or serial number.')}); setSaving(false); return; }
             const res = await api.createRecall(payload);
             toast.push(t('recalls.messages.created', 'Recall case created.'), 'success');
             qc.invalidateQueries({ queryKey: ['recalls'] });
@@ -66,6 +67,7 @@ export default function RecallFormPage() {
             <div className="panel">
                 <h2>{t(header.scope === 'lot' ? 'recalls.form.affectedLots' : 'recalls.form.affectedSerials', header.scope === 'lot' ? 'Affected lots' : 'Affected serial numbers')}</h2>
                 {!header.item_id && <p className="muted">{t('recalls.form.chooseItem', 'Choose an item first.')}</p>}
+                <DocumentLineErrors errors={errors}/>
                 {header.item_id && (
                     <table className="data-table">
                         <thead><tr><th>{t(header.scope === 'lot' ? 'recalls.common.lot' : 'recalls.common.serial', header.scope === 'lot' ? 'Lot' : 'Serial number')}</th><th>{t('recalls.form.disposition', 'Disposition')}</th><th /></tr></thead>

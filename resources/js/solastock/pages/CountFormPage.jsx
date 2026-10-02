@@ -60,7 +60,7 @@ export default function CountFormPage() {
     const variance = (l) => (l.counted_qty === '' ? null : Number(l.counted_qty) - Number(l.system_qty || 0));
 
     async function prefill() {
-        if (!header.warehouse_id) { toast.push(t('counts.form.selectWarehouse'), 'error'); return; }
+        if (!header.warehouse_id) { setErrors({warehouse_id:t('counts.form.selectWarehouse')}); return; }
         setPrefilling(true);
         try {
             const res = await api.countPrefill(header.warehouse_id);
@@ -79,7 +79,7 @@ export default function CountFormPage() {
         setSaving(true); setErrors({});
         try {
             const payload = { ...header, lines: lines.filter((l) => l.item_id).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id || undefined, system_qty: l.system_qty || '0', counted_qty: l.counted_qty === '' ? null : l.counted_qty })) };
-            if (payload.lines.length === 0) { toast.push(t('counts.form.lineRequired'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('counts.form.lineRequired')}); setSaving(false); return; }
             const res = isEdit ? await api.updateCount(id, payload) : await api.createCount(payload);
             const docId = res?.data?.id ?? id;
             savedDocument=docId;
@@ -153,7 +153,7 @@ export default function CountFormPage() {
                         {prefilling ? t('counts.form.prefilling') : t('counts.form.prefill')}
                     </button>
                 </div>
-                <DocumentLinesTable columns={columns} lines={lines} addLabel={t('counts.form.addLine')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} addLabel={t('counts.form.addLine')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <p className="muted">{t('counts.form.varianceHelp')}</p>
             </div>
 

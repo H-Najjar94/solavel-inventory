@@ -70,7 +70,7 @@ export default function PurchaseOrderFormPage() {
                     entered_unit_id: l.entered_unit_id || undefined,
                 })),
             };
-            if (payload.lines.length === 0) { toast.push(t('receiving.po.validation.lineRequired', 'Add at least one line.'), 'error'); setSaving(false); return; }
+            if (payload.lines.length === 0) { setErrors({lines:t('receiving.po.validation.lineRequired', 'Add at least one line.')}); setSaving(false); return; }
             const res = isEdit ? await api.updatePurchaseOrder(id, payload) : await api.createPurchaseOrder(payload);
             toast.push(isEdit ? t('receiving.po.messages.updated', 'Purchase order updated.') : t('receiving.po.messages.created', 'Purchase order created.'), 'success');
             qc.invalidateQueries({ queryKey: ['pos'] });
@@ -108,7 +108,7 @@ export default function PurchaseOrderFormPage() {
 
             <div className="panel">
                 <h2>{t('receiving.common.lines', 'Lines')}</h2>
-                <DocumentLinesTable columns={columns} lines={lines} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[{ label: t('receiving.common.net', 'Net'), value: totals.net.toFixed(2) }, { label: t('receiving.common.tax', 'Tax'), value: totals.tax.toFixed(2) }, { label: t('receiving.common.total', 'Total'), value: (totals.net + totals.tax).toFixed(2) }]} />
             </div>
 

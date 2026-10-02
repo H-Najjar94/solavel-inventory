@@ -22,6 +22,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
     const toast = useToast();
     const fileRef = useRef(null);
     const [busy, setBusy] = useState(false);
+    const [validation,setValidation]=useState('');
     const [progress, setProgress] = useState(null);
 
     const { data, isLoading, refetch } = useApiQuery(['warehouse-images', String(warehouseId)],
@@ -38,12 +39,13 @@ export default function WarehouseImages({ warehouseId, canManage }) {
     async function onPick(e) {
         const files = Array.from(e.target.files ?? []);
         e.target.value = '';
-        const valid = [];
+        const valid = [],rejected=[];
         for (const f of files) {
-            if (!ALLOWED.includes(f.type)) { toast.push(t('warehouseDetail.media.invalidType', undefined, { file: f.name }), 'error'); continue; }
-            if (f.size > MAX_BYTES) { toast.push(t('warehouseDetail.media.tooLarge', undefined, { file: f.name }), 'error'); continue; }
+            if (!ALLOWED.includes(f.type)) { rejected.push(t('warehouseDetail.media.invalidType', undefined, { file: f.name })); continue; }
+            if (f.size > MAX_BYTES) { rejected.push(t('warehouseDetail.media.tooLarge', undefined, { file: f.name })); continue; }
             valid.push(f);
         }
+        setValidation(rejected.join(' '));
         if (!valid.length) return;
         setBusy(true); setProgress({ done: 0, total: valid.length });
         let ok = 0;
@@ -63,6 +65,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
 
     const uploadBtn = canManage && (
         <>
+            {validation&&<p className="field-error" role="alert">{validation}</p>}
             <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {busy && progress ? t('media.uploading', undefined, progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadBanner'))}

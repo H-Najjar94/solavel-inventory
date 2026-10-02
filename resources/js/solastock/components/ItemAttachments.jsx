@@ -15,6 +15,7 @@ export default function ItemAttachments({ itemId, canManage }) {
     const toast = useToast();
     const fileRef = useRef(null);
     const [busy, setBusy] = useState(false);
+    const [validation,setValidation]=useState('');
     const { data, isLoading, refetch } = useApiQuery(['item-attachments', String(itemId)], () => api.itemAttachments(itemId), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
 
@@ -23,9 +24,10 @@ export default function ItemAttachments({ itemId, canManage }) {
         e.target.value = '';
         if (!file) return;
         if (file.size > MAX_BYTES) {
-            toast.push(t('media.attachmentSizeError', 'Attachment must be 10 MB or smaller.'), 'error');
+            setValidation(t('media.attachmentSizeError', 'Attachment must be 10 MB or smaller.'));
             return;
         }
+        setValidation('');
         setBusy(true);
         try {
             await api.uploadItemAttachment(itemId, file);
@@ -57,6 +59,7 @@ export default function ItemAttachments({ itemId, canManage }) {
 
     const action = canManage && (
         <>
+            {validation&&<p className="field-error" role="alert">{validation}</p>}
             <input ref={fileRef} type="file" hidden onChange={upload} />
             <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {busy ? t('media.uploading', 'Uploading…') : t('media.uploadAttachment')}
