@@ -29,8 +29,8 @@ export default function RecallDetailPage() {
     if (!recall) return <section className="page"><Breadcrumbs items={[{ label: t('recalls.common.title', 'Recalls'), to: '/recalls' }, { label: t('recalls.common.notFound', 'Not found') }]} /><EmptyState title={t('recalls.common.unavailable', 'Unavailable')} hint={t('recalls.common.selectOrganization', 'Select an organization to load recall data.')} /></section>;
 
     async function act(fn, msg) {
-        try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['recall', id] }); qc.invalidateQueries({ queryKey: ['recalls'] }); }
-        catch (e) { toast.push(e.message || t('recalls.messages.actionFailed', 'The recall action could not be completed.'), 'error'); }
+        try { await fn(); toast.push(msg, 'success'); qc.invalidateQueries({ queryKey: ['recall', id] }); qc.invalidateQueries({ queryKey: ['recalls'] }); return true; }
+        catch (e) { if (!e.feedbackHandled) toast.push(e.message || t('recalls.messages.actionFailed', 'The recall action could not be completed.'), 'error'); return false; }
     }
 
     function csvCell(value) {
@@ -116,7 +116,7 @@ export default function RecallDetailPage() {
             </div>
             <ConfirmModal open={confirmActivate} danger title={t('recalls.detail.activateTitle', 'Activate recall?')}
                 message={t('recalls.detail.activateMessage', 'Activating the recall marks affected lots as recalled and serial numbers as quarantined. They cannot be shipped without an override.')}
-                confirmLabel={t('recalls.detail.activateConfirm', 'Activate')} onConfirm={() => { setConfirmActivate(false); act(() => api.activateRecall(id), t('recalls.messages.activated', 'Recall activated.')); }} onCancel={() => setConfirmActivate(false)} />
+                confirmLabel={t('recalls.detail.activateConfirm', 'Activate')} onConfirm={async () => { if (await act(() => api.activateRecall(id), t('recalls.messages.activated', 'Recall activated.'))) setConfirmActivate(false); }} onCancel={() => setConfirmActivate(false)} />
         </section>
     );
 }
