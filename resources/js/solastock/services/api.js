@@ -1,5 +1,5 @@
 import { feedback } from '../../shared/feedback/store';
-import { text } from '../../shared/feedback/messages';
+import { text as feedbackText } from '../../shared/feedback/messages';
 
 const BASE = `${window.SOLASTOCK_BASE_PATH ?? '/inventory'}/api/v1`;
 const uncertain = new Set();
@@ -19,7 +19,7 @@ function transport(url, options) {
         const unknown = (metadata = {}) => {
             uncertain.add(key);
             void feedback.failure(undefined, true);
-            return Object.assign(new Error(text('unknown')), {...metadata, feedbackHandled:true, outcomeUnknown:true});
+            return Object.assign(new Error(feedbackText('unknown')), {...metadata, feedbackHandled:true, outcomeUnknown:true});
         };
         if (mutation && uncertain.has(key)) throw unknown();
         const controller = new AbortController();
@@ -30,18 +30,18 @@ function transport(url, options) {
             json = await res.json();
         } catch (error) {
             if (mutation) throw unknown();
-            throw Object.assign(new Error(text('failed')), {status:res?.status,cause:error});
+            throw Object.assign(new Error(feedbackText('failed')), {status:res?.status,cause:error});
         } finally { clearTimeout(timer); }
         const metadata = {status:res.status,code:json?.error?.code || json?.code,
             payload:json?.error || (json?.errors ? {errors:json.errors} : undefined)};
         // Preserve the existing access event independently of presentation and outcome certainty.
         if ((!res.ok || json?.success === false) && json?.app === 'inventory' && json?.code && !['action_forbidden','temporarily_unavailable'].includes(json.code)) {
-            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail:text(res.status === 403 ? 'forbidden' : 'failed')}));
+            window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail:feedbackText(res.status === 403 ? 'forbidden' : 'failed')}));
         }
         if (mutation && (res.status >= 500 || !json || typeof json !== 'object' || (res.ok && json.success !== true && json.success !== false))) throw unknown(metadata);
         if (!res.ok || json?.success === false) {
-            const message = res.status === 422 ? json?.error?.message || json?.message || text('invalid')
-                : text(res.status === 403 ? 'forbidden' : [401,419].includes(res.status) ? 'expired' : 'failed');
+            const message = res.status === 422 ? json?.error?.message || json?.message || feedbackText('invalid')
+                : feedbackText(res.status === 403 ? 'forbidden' : [401,419].includes(res.status) ? 'expired' : 'failed');
             const err = Object.assign(new Error(message), metadata);
             if (mutation && res.status !== 422) { void feedback.failure(res.status, false); err.feedbackHandled = true; }
             throw err;
