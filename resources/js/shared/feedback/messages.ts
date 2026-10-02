@@ -1,5 +1,7 @@
 export const messages = {
     "en": {
+        "paymentApiConfirm": "Send payment API request?",
+        "paymentApiConsequence": "This request is sent to the configured payment service and may create or change a real payment. Review the method and endpoint before continuing.",
         "approveAction": "Approve",
         "rejectAction": "Reject",
         "rejectionReason": "Rejection reason",
@@ -207,6 +209,8 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "paymentApiConfirm": "إرسال طلب إلى خدمة الدفع؟",
+        "paymentApiConsequence": "سيُرسل هذا الطلب إلى خدمة الدفع المحددة وقد يُنشئ أو يغيّر دفعة فعلية. راجع طريقة الطلب وعنوانه قبل المتابعة.",
         "approveAction": "موافقة",
         "rejectAction": "رفض",
         "rejectionReason": "سبب الرفض",
