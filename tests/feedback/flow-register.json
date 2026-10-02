@@ -7,14 +7,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/items",
@@ -22,14 +24,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/items/new",
@@ -37,14 +41,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/items/:id",
@@ -52,14 +58,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual synthetic item3 media validation EN/ARdesktop/mobile; long filenames wrap, zero uploads.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/items/:id/edit",
@@ -67,14 +75,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/warehouses",
@@ -82,14 +92,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/warehouses/new",
@@ -97,14 +109,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/warehouses/:id",
@@ -112,14 +126,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/warehouses/:id/edit",
@@ -127,14 +143,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/suppliers",
@@ -142,14 +160,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/suppliers/new",
@@ -157,14 +177,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/suppliers/:id",
@@ -172,14 +194,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/suppliers/:id/edit",
@@ -187,14 +211,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/balances",
@@ -202,14 +228,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/opening-stock",
@@ -217,14 +245,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/opening-stock/new",
@@ -232,14 +262,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/opening-stock/:id",
@@ -247,14 +279,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/opening-stock/:id/edit",
@@ -262,14 +296,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/adjustments",
@@ -277,14 +313,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/adjustments/new",
@@ -292,14 +330,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/adjustments/:id",
@@ -307,14 +347,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/adjustments/:id/edit",
@@ -322,14 +364,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/transfers",
@@ -337,14 +381,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/transfers/new",
@@ -352,14 +398,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/transfers/:id",
@@ -367,14 +415,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/transfers/:id/edit",
@@ -382,14 +432,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/counts",
@@ -397,14 +449,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/counts/new",
@@ -412,14 +466,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/counts/:id",
@@ -434,7 +490,9 @@
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/counts/:id/edit",
@@ -449,7 +507,9 @@
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/scanner",
@@ -457,14 +517,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual production EN/ARdesktop/mobile no-match: one intercepted GET, preserved input, no mutations.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/purchase-orders",
@@ -472,14 +534,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/purchase-orders/new",
@@ -487,14 +551,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/purchase-orders/:id",
@@ -502,14 +568,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/purchase-orders/:id/edit",
@@ -517,14 +585,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/goods-receipts",
@@ -532,14 +602,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/goods-receipts/new",
@@ -547,14 +619,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/goods-receipts/from-po/:poId",
@@ -562,14 +636,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/goods-receipts/:id",
@@ -577,14 +653,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/goods-receipts/:id/edit",
@@ -592,14 +670,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-orders",
@@ -607,14 +687,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-orders/new",
@@ -622,14 +704,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-orders/:id",
@@ -637,14 +721,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-orders/:id/edit",
@@ -652,14 +738,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/customers",
@@ -667,14 +755,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/customers/new",
@@ -689,7 +779,9 @@
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/customers/:id",
@@ -697,14 +789,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/customers/:id/edit",
@@ -712,14 +806,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/pick-lists",
@@ -727,14 +823,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/pick-lists/:id",
@@ -742,14 +840,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/packs",
@@ -757,14 +857,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/packs/:id",
@@ -772,14 +874,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/shipments",
@@ -787,14 +891,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/shipments/:id",
@@ -802,14 +908,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-returns",
@@ -817,14 +925,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-returns/new",
@@ -832,14 +942,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-returns/:id",
@@ -847,14 +959,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/sales-returns/:id/edit",
@@ -862,14 +976,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/traceability",
@@ -877,14 +993,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/traceability/lots",
@@ -892,14 +1010,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/traceability/lots/:id",
@@ -907,14 +1027,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/traceability/serials",
@@ -922,14 +1044,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/traceability/serials/:id",
@@ -937,14 +1061,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/recalls",
@@ -952,14 +1078,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/recalls/new",
@@ -967,14 +1095,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/recalls/:id",
@@ -982,14 +1112,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/reports",
@@ -997,14 +1129,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/settings",
@@ -1012,14 +1146,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/team-access",
@@ -1027,14 +1163,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/integrations/solacount",
@@ -1042,14 +1180,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": true,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/integrations/solacount/events",
@@ -1057,14 +1197,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/integrations/solabooks",
@@ -1072,14 +1214,16 @@
       "shared_request_feedback": false,
       "implementation": "retained-navigation",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Redirect alias or route shell; no mutation feedback."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/settings/solabooks",
@@ -1087,14 +1231,16 @@
       "shared_request_feedback": false,
       "implementation": "retained-navigation",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Redirect alias or route shell; no mutation feedback."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/integrations/solabooks/events",
@@ -1102,14 +1248,16 @@
       "shared_request_feedback": false,
       "implementation": "retained-navigation",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Redirect alias or route shell; no mutation feedback."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/ledger",
@@ -1117,14 +1265,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     },
     {
       "route": "/inventory/*",
@@ -1132,14 +1282,16 @@
       "shared_request_feedback": true,
       "implementation": "reviewed-shared-adapter",
       "new_confirmations_ready": false,
-      "route_specific_browser": "pending",
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
       "integrated_request_adapter": "192a788",
       "deployed_request_adapter": "20261002T185836Z-192a788b",
       "retained": [
         "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
       ],
       "integrated_action_batch": "0f8a176",
-      "deployed_action_batch": "20261002T190227Z-0f8a176f"
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
     }
   ],
   "reusable_boundaries": [
@@ -1205,14 +1357,18 @@
     "explicit_exceptions": 9
   },
   "unverified_acceptance": [
-    "Individual route action matrix beyond representative synthetic routes; permissions/fixtures required for some detail states.",
-    "Latest mobile scroller/navigation follow-up needs coordinated deployment and production verification."
+    "Individual document lifecycle states without synthetic records were reviewed and share tested confirmation/API adapters, but were not each mutated in production. Production mutations are deliberately intercepted; customer documents are never modified for QA."
   ],
-  "latest_verified_release": "20261002T190615Z-61b2c80f",
+  "latest_verified_release": "20261002T192314Z-b744c418",
   "production_evidence": {
     "customer_validation_unknown": "20261002T185836Z-192a788b/customer-outcomes-results.json",
     "count_pending": "20261002T185836Z-192a788b/pending-results.json",
     "save_post_sequence": "20261002T190227Z-0f8a176f/save-post-results.json",
-    "inline_media_scanner": "20261002T190615Z-61b2c80f/inline-results.json"
-  }
+    "inline_media_scanner": "20261002T190615Z-61b2c80f/inline-results.json",
+    "form_confirmations": "20261002T191805Z-a04fd3aa/form-confirmations-results.json",
+    "safe_status": "20261002T191805Z-a04fd3aa/status-path-results.json",
+    "navigation": "20261002T192314Z-b744c418/navigation-results.json (EN desktop reused explicitly from a04; other3 confirmed b744 assets)",
+    "long_media_validation": "20261002T192314Z-b744c418/inline-results.json"
+  },
+  "runtime_main_commit": "b744c418"
 }
