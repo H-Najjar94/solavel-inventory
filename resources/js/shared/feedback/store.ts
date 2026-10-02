@@ -42,9 +42,9 @@ export const feedback = {
         if (!message || state.notices.some(item => item.message === message && item.tone === tone)) return;
         state = { ...state, notices: [...state.notices, { id: ++sequence, message, tone, title }] }; publish();
     },
-    notifyAfterReload(message: string) {
-        try { sessionStorage.setItem('solavel.feedback.reload', JSON.stringify({ message, path: location.pathname, time: Date.now() })); }
-        catch { feedback.notify(message); }
+    notifyAfterReload(message: string, options: {path?: string; tone?: Tone} = {}) {
+        try { sessionStorage.setItem('solavel.feedback.reload', JSON.stringify({ message, path: options.path ? new URL(options.path, location.href).pathname : location.pathname, tone: options.tone || 'success', time: Date.now() })); }
+        catch { feedback.notify(message, options.tone); }
     },
     restoreAfterReload() {
         try {
@@ -52,7 +52,7 @@ export const feedback = {
             sessionStorage.removeItem('solavel.feedback.reload');
             if (!raw) return;
             const item = JSON.parse(raw);
-            if (item.path === location.pathname && Date.now() - item.time < 30000 && typeof item.message === 'string') feedback.notify(item.message);
+            if (item.path === location.pathname && Date.now() - item.time < 30000 && typeof item.message === 'string') feedback.notify(item.message, ['success','info','warning','error'].includes(item.tone) ? item.tone : 'success');
         } catch { /* Storage can be unavailable; the successful operation is unaffected. */ }
     },
     clearNotices() { state = { ...state, notices: [] }; publish(); },
