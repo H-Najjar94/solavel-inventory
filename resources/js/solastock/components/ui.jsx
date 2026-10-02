@@ -1,3 +1,4 @@
+import {WorkflowConfirmation} from '../../shared/feedback/WorkflowConfirmation';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { t } from '../i18n/index.js';
@@ -67,19 +68,9 @@ export function Field({ label, error, children, required }) {
 
 // ── Confirm modal ──
 export function ConfirmModal({ open, title, message, confirmLabel = t('confirm'), onConfirm, onCancel, danger }) {
+    const [pending,setPending]=useState(false);
     if (!open) return null;
-    return (
-        <div className="modal-overlay" onClick={onCancel}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <h3>{title}</h3>
-                <p>{message}</p>
-                <div className="modal-actions">
-                    <button className="btn" onClick={onCancel}>{t('common.cancel')}</button>
-                    <button className={`btn ${danger ? 'btn--danger' : 'btn--primary'}`} onClick={onConfirm}>{confirmLabel}</button>
-                </div>
-            </div>
-        </div>
-    );
+    return <WorkflowConfirmation title={title} action={confirmLabel} busy={pending} onClose={onCancel} onConfirm={async()=>{setPending(true);try{await onConfirm();}finally{setPending(false);}}}><p>{message}</p></WorkflowConfirmation>;
 }
 
 // ── Quick-create select: a dropdown with an inline "+ create" option ──

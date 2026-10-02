@@ -1,29 +1,13 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
-
-// Minimal global toast system (replaces the demo's ad-hoc toast).
-const ToastContext = createContext(null);
-
-export function ToastProvider({ children }) {
-    const [toasts, setToasts] = useState([]);
-
-    const push = useCallback((message, type = 'info') => {
-        const id = `${Date.now()}-${Math.round(performance.now())}`;
-        setToasts((t) => [...t, { id, message, type }]);
-        setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2600);
-    }, []);
-
-    return (
-        <ToastContext.Provider value={{ push }}>
-            {children}
-            <div className="toast-dock" aria-live="polite">
-                {toasts.map((t) => (
-                    <div key={t.id} className={`toast toast--${t.type}`}>{t.message}</div>
-                ))}
-            </div>
-        </ToastContext.Provider>
-    );
+import React, {createContext,useCallback,useContext} from 'react';
+import {FeedbackProvider} from '../../shared/feedback/FeedbackProvider';
+import {feedback} from '../../shared/feedback/store';
+import {text} from '../../shared/feedback/messages';
+const ToastContext=createContext(null);
+export function ToastProvider({children}){
+ const push=useCallback((message,type='info')=>{
+  if(type==='error'||type==='warning')void feedback.error({title:text(type),message,tone:type});
+  else feedback.notify(message,type);
+ },[]);
+ return <ToastContext.Provider value={{push}}><FeedbackProvider>{children}</FeedbackProvider></ToastContext.Provider>;
 }
-
-export function useToast() {
-    return useContext(ToastContext) ?? { push: () => {} };
-}
+export function useToast(){return useContext(ToastContext)??{push:()=>{}};}
