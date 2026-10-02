@@ -1,3 +1,4 @@
+import{feedback}from'../../resources/js/shared/feedback/store';window.fixtureFeedback=feedback;
 import '../../resources/js/solastock/styles/solastock.css';
 import React,{useState} from 'react';import{createRoot}from'react-dom/client';import{ToastProvider,useToast}from'../../resources/js/solastock/stores/toast';import{ConfirmModal}from'../../resources/js/solastock/components/ui';
 const locale=new URLSearchParams(location.search).get('lang')||'en';document.documentElement.lang=locale;document.documentElement.dir=locale==='ar'?'rtl':'ltr';window.calls=0;
