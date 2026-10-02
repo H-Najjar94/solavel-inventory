@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from './ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -76,7 +78,7 @@ export default function ItemAttachments({ itemId, canManage }) {
                         <td><a href={a.download_url} target="_blank" rel="noreferrer">{a.name}</a></td>
                         <td>{a.mime_type ?? 'file'}</td>
                         <td>{Math.ceil((a.size_bytes ?? 0) / 1024)} KB</td>
-                        <td style={{ textAlign: 'right' }}>{canManage && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(a.id)}>{t('delete')}</button>}</td>
+                        <td style={{ textAlign: 'right' }}>{canManage && <ConfirmedActionButton className="btn btn--sm btn--danger" disabled={busy}  title={feedbackText("deleteAttachment")} message={feedbackText("deleteAttachmentBody")} action={feedbackText("deleteAttachment")} onConfirm={()=>remove(a.id)}> {t('delete')}</ConfirmedActionButton>}</td>
                     </tr>
                 ))}</tbody>
             </table>

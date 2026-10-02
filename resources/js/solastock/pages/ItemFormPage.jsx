@@ -1,3 +1,4 @@
+import {feedback} from '../../shared/feedback/store';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -107,6 +108,10 @@ export default function ItemFormPage() {
     async function submit(e) {
         e.preventDefault();
         if (!gate.allowed || saving) return;
+        if (!isEdit && !isService && Number(form.opening_qty)>0 && form.opening_warehouse_id && !await feedback.confirm({
+            title:t('document.confirmPostTitle',undefined,{name:t('document.kind.opening stock')}),
+            message:t('document.confirmPostMessage'),action:t('document.post'),reference:form.sku,
+        })) return;
         setSaving(true); setErrors({});
         try {
             const payload = { ...form };

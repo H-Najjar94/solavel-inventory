@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from './ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -101,7 +103,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
                         {canManage && (
                             <div className="gallery-actions">
                                 {!img.is_primary && <button className="gallery-act" title={t('media.setPrimary')} disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
-                                <button className="gallery-act gallery-act--danger" title={t('delete')} disabled={busy} onClick={() => remove(img.id)}>🗑</button>
+                                <ConfirmedActionButton className="gallery-act gallery-act--danger" disabled={busy}  title={feedbackText("deleteImage")} message={feedbackText("deleteImageBody")} action={feedbackText("deleteImage")} onConfirm={()=>remove(img.id)}> 🗑</ConfirmedActionButton>
                             </div>
                         )}
                     </figure>

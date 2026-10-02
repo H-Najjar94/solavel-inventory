@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import {text as feedbackText} from '../../shared/feedback/messages';
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {t as documentText} from '../i18n/index';
+import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -34,6 +37,8 @@ export default function TransferFormPage() {
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const savePending=useRef(false);
+    const [statusCheck,setStatusCheck]=useState(null);
 
     const existing = useApiQuery(['transfer', id], () => api.transfer(id), { fallback: null, enabled: isEdit });
     useEffect(() => {
@@ -50,8 +55,11 @@ export default function TransferFormPage() {
     const sameWh = header.from_warehouse_id && header.from_warehouse_id === header.to_warehouse_id;
 
     async function save(post = false) {
+        if(savePending.current||statusCheck)return;
+        let savedDocument;
         if (!gate.allowed) return;
         if (sameWh) { toast.push(t('transfers.form.warehousesDiffer', 'Source and destination warehouses must be different.'), 'error'); return; }
+        savePending.current=true;
         setSaving(true); setErrors({});
         try {
             const payload = {
@@ -71,12 +79,13 @@ export default function TransferFormPage() {
             if (payload.lines.length === 0) { toast.push(t('transfers.form.lineRequired', 'Add at least one transfer line.'), 'error'); setSaving(false); return; }
             const res = isEdit ? await api.updateTransfer(id, payload) : await api.createTransfer(payload);
             const docId = res?.data?.id ?? id;
+            savedDocument=docId;
             if (post) { await api.postTransfer(docId); toast.push(t('transfers.form.posted', 'Transfer posted.'), 'success'); }
             else toast.push(isEdit ? t('transfers.form.updated', 'Draft updated.') : t('transfers.form.saved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['transfers'] });
             nav(`/transfers/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('transfers.form.saveFailed', 'The transfer could not be saved.')); }
-        finally { setSaving(false); }
+        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('transfers.form.saveFailed', 'The transfer could not be saved.')); }
+        finally { savePending.current=false; setSaving(false); }
     }
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
@@ -133,10 +142,11 @@ export default function TransferFormPage() {
                 <DocumentLinesTable columns={columns} lines={lines} addLabel={t('transfers.form.addLine', 'Add line')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
             </div>
 
+            {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/transfers/${statusCheck.id}`:"/transfers")}>{feedbackText("reload")}</button></div>}
             <div className="doc-actions">
                 <button className="btn" onClick={() => nav('/transfers')}>{t('transfers.form.cancel', 'Cancel')}</button>
-                <button className="btn" disabled={!gate.allowed || saving} onClick={() => save(false)}>{saving ? t('transfers.form.saving', 'Saving…') : t('transfers.form.saveDraft', 'Save draft')}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving || sameWh} onClick={() => save(true)}>{t('transfers.form.saveAndPost', 'Save and post')}</button>
+                <button className="btn" disabled={!gate.allowed || saving || !!statusCheck} onClick={() => save(false)}>{saving ? t('transfers.form.saving', 'Saving…') : t('transfers.form.saveDraft', 'Save draft')}</button>
+                <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || saving || !!statusCheck || sameWh} title={documentText("document.confirmPostTitle",undefined,{name:documentText("document.kind.transfer","transfer")})} message={documentText("document.confirmPostMessage")} action={documentText("document.post")} onConfirm={()=>save(true)}>{t('transfers.form.saveAndPost', 'Save and post')}</ConfirmedActionButton>
             </div>
         </section>
     );

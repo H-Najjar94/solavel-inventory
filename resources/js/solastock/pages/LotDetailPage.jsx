@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -83,9 +85,9 @@ export default function LotDetailPage() {
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={movements} /></div>}
 
             <div className="doc-actions">
-                {lot.status !== 'quarantined' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setStatus('quarantined')}>{text('traceabilityPages.lotDetail.quarantine')}</button>}
-                {lot.status !== 'active' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setStatus('active')}>{text('traceabilityPages.lotDetail.markActive')}</button>}
-                {lot.status !== 'consumed' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setStatus('consumed')}>{text('traceabilityPages.lotDetail.markConsumed')}</button>}
+                {lot.status !== 'quarantined' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} triggerTitle={gate.allowed ? '' : gate.reason} onConfirm={() => setStatus('quarantined')} title={text('traceabilityPages.lotDetail.quarantine')} message={feedbackText('stockLifecycleBody')} action={text('traceabilityPages.lotDetail.quarantine')}>{text('traceabilityPages.lotDetail.quarantine')}</ConfirmedActionButton>}
+                {lot.status !== 'active' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} triggerTitle={gate.allowed ? '' : gate.reason} onConfirm={() => setStatus('active')} title={text('traceabilityPages.lotDetail.markActive')} message={feedbackText('stockLifecycleBody')} action={text('traceabilityPages.lotDetail.markActive')}>{text('traceabilityPages.lotDetail.markActive')}</ConfirmedActionButton>}
+                {lot.status !== 'consumed' && <ConfirmedActionButton className="btn" disabled={!gate.allowed} triggerTitle={gate.allowed ? '' : gate.reason} onConfirm={() => setStatus('consumed')} title={text('traceabilityPages.lotDetail.markConsumed')} message={feedbackText('stockLifecycleBody')} action={text('traceabilityPages.lotDetail.markConsumed')}>{text('traceabilityPages.lotDetail.markConsumed')}</ConfirmedActionButton>}
             </div>
         </section>
     );

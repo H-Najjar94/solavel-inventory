@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -69,7 +71,7 @@ export default function PackDetailPage() {
 
             <div className="doc-actions">
                 {editable && <button className="btn" disabled={!gate.allowed || busy} onClick={savePacks}>{t('fulfillment.packing.savePack', 'Save pack')}</button>}
-                {editable && <button className="btn btn--primary" disabled={!gate.allowed || busy} onClick={finalize}>{t('fulfillment.packing.markPacked', 'Mark packed')}</button>}
+                {editable && <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || busy} onConfirm={finalize} title={t('fulfillment.packing.markPacked', 'Mark packed')} message={feedbackText('fulfillmentCompleteBody')} action={t('fulfillment.packing.markPacked', 'Mark packed')}>{t('fulfillment.packing.markPacked', 'Mark packed')}</ConfirmedActionButton>}
                 {pk.status === 'packed' && <Link to={`/sales-orders/${pk.sales_order_id}`} className="btn btn--primary" style={{ opacity: canShip.allowed ? 1 : 0.5, pointerEvents: canShip.allowed ? 'auto' : 'none' }}>{t('fulfillment.packing.goToOrder', 'Go to order to ship')}</Link>}
             </div>
         </section>

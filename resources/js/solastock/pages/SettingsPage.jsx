@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -526,7 +528,7 @@ export default function SettingsPage() {
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{tr('settings.roles.assign')}</button></div>
                 </form>
                 {(rolesQuery.data?.assignments ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.roles.userId')}</th><th>{tr('settings.roles.role')}</th><th></th></tr></thead><tbody>
-                    {(rolesQuery.data?.assignments ?? []).filter(a => !memberContext || Number(a.user_id) === Number(memberContext.id)).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><button className="btn btn--sm btn--danger" onClick={() => unassignRole(a.user_id)}>{tr('settings.common.remove')}</button></td></tr>)}
+                    {(rolesQuery.data?.assignments ?? []).filter(a => !memberContext || Number(a.user_id) === Number(memberContext.id)).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => unassignRole(a.user_id)} title={feedbackText('removeRole')} message={feedbackText('removeRoleBody')} action={feedbackText('removeRole')}>{tr('settings.common.remove')}</ConfirmedActionButton></td></tr>)}
                 </tbody></table>}
             </div>
 

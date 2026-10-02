@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -68,7 +70,7 @@ export default function PickListDetailPage() {
 
             <div className="doc-actions">
                 {editable && <button className="btn" disabled={!gate.allowed || busy} onClick={savePicks}>{t('fulfillment.picking.savePicks', 'Save picks')}</button>}
-                {editable && <button className="btn btn--primary" disabled={!gate.allowed || busy} onClick={finalize}>{t('fulfillment.picking.markPicked', 'Mark picked')}</button>}
+                {editable && <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || busy} onConfirm={finalize} title={t('fulfillment.picking.markPicked', 'Mark picked')} message={feedbackText('fulfillmentCompleteBody')} action={t('fulfillment.picking.markPicked', 'Mark picked')}>{t('fulfillment.picking.markPicked', 'Mark picked')}</ConfirmedActionButton>}
                 {pl.status === 'picked' && <button className="btn btn--primary" disabled={!canPack.allowed || busy} onClick={makePack}>{t('fulfillment.picking.createPack', 'Create pack')}</button>}
             </div>
         </section>

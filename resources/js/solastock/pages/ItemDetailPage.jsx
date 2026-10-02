@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
@@ -457,7 +459,7 @@ export default function ItemDetailPage() {
                             : <table className="data-table"><thead><tr><th>{t('itemDetail.code')}</th><th>{t('itemDetail.type')}</th><th></th></tr></thead><tbody>
                                 {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
                                     {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>{t('itemDetail.makePrimary')}</button>}
-                                    {gate.allowed && <button className="btn btn--sm" onClick={() => removeBarcode(b.id)}>{t('itemDetail.delete')}</button>}
+                                    {gate.allowed && <ConfirmedActionButton className="btn btn--sm" onConfirm={() => removeBarcode(b.id)} title={feedbackText('deleteBarcode')} message={feedbackText('deleteBarcodeBody')} action={feedbackText('deleteBarcode')}>{t('itemDetail.delete')}</ConfirmedActionButton>}
                                 </td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addBarcode} style={{ marginTop: 12 }}>
@@ -508,7 +510,7 @@ export default function ItemDetailPage() {
                     </dl>
                         {(data.supplier_price_lists ?? []).length === 0 ? <EmptyState title={t('itemDetail.noSupplierPrices')} hint={t('itemDetail.noSupplierPricesHint')} />
                             : <table className="data-table"><thead><tr><th>{t('itemDetail.supplier')}</th><th>{t('sku')}</th><th>{t('itemDetail.cost')}</th><th>{t('itemDetail.minimumQuantity')}</th><th></th></tr></thead><tbody>
-                                {data.supplier_price_lists.map((p) => <tr key={p.id}><td>{p.supplier?.name ?? `#${p.supplier_id}`}</td><td><bdi>{p.supplier_sku ?? '—'}</bdi></td><td>{p.unit_cost} <bdi>{p.currency_code ?? ''}</bdi></td><td>{p.minimum_qty}</td><td>{gate.allowed && <button className="btn btn--sm btn--danger" onClick={() => deleteSupplierPrice(p.id)}>{t('itemDetail.delete')}</button>}</td></tr>)}
+                                {data.supplier_price_lists.map((p) => <tr key={p.id}><td>{p.supplier?.name ?? `#${p.supplier_id}`}</td><td><bdi>{p.supplier_sku ?? '—'}</bdi></td><td>{p.unit_cost} <bdi>{p.currency_code ?? ''}</bdi></td><td>{p.minimum_qty}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteSupplierPrice(p.id)} title={feedbackText('deleteSupplierPrice')} message={feedbackText('deleteSupplierPriceBody')} action={feedbackText('deleteSupplierPrice')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addSupplierPrice} style={{ marginTop: 12 }}>
                             <SupplierPicker value={priceForm.supplier_id} onChange={(v) => setPriceForm({ ...priceForm, supplier_id: v })} />
@@ -521,7 +523,7 @@ export default function ItemDetailPage() {
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.variants')}</h3></div><div className="card-body">
                         {(item.variants?.length ?? 0) === 0 ? <EmptyState title={t('itemDetail.noVariants')} hint={t('itemDetail.noVariantsHint')} />
                             : <table className="data-table"><thead><tr><th>{t('sku')}</th><th>{t('itemDetail.attributes')}</th><th>{t('itemDetail.barcode')}</th><th>{t('itemDetail.status')}</th><th></th></tr></thead><tbody>
-                                {item.variants.map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <button className="btn btn--sm btn--danger" onClick={() => deleteVariant(v.id)}>{t('itemDetail.delete')}</button>}</td></tr>)}
+                                {item.variants.map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteVariant(v.id)} title={feedbackText('deleteVariant')} message={feedbackText('deleteVariantBody')} action={feedbackText('deleteVariant')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addVariant} style={{ marginTop: 12 }}>
                             <input className="input" placeholder={t('itemDetail.variantSku')} value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required dir="ltr" />

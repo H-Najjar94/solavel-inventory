@@ -1,3 +1,5 @@
+import {ConfirmedActionButton} from './ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -86,7 +88,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
                             {canManage && (
                                 <div className="gallery-actions">
                                     {!img.is_primary && <button className="gallery-act" title={t('media.setPrimary')} disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
-                                    <button className="gallery-act gallery-act--danger" title={t('warehouseDetail.media.deleteImage')} disabled={busy} onClick={() => remove(img.id)}>🗑</button>
+                                    <ConfirmedActionButton className="gallery-act gallery-act--danger" disabled={busy}  title={feedbackText("deleteImage")} message={feedbackText("deleteImageBody")} action={feedbackText("deleteImage")} onConfirm={()=>remove(img.id)}> 🗑</ConfirmedActionButton>
                                 </div>
                             )}
                         </figure>
@@ -96,7 +98,7 @@ export default function WarehouseImages({ warehouseId, canManage }) {
             {canManage && (
                 <div className="item-images-actions">
                     {uploadBtn}
-                    {images.length === 1 && <button className="btn btn--sm btn--danger" disabled={busy} onClick={() => remove(primary.id)}>{t('media.removeImage')}</button>}
+                    {images.length === 1 && <ConfirmedActionButton className="btn btn--sm btn--danger" disabled={busy}  title={feedbackText("deleteImage")} message={feedbackText("deleteImageBody")} action={feedbackText("deleteImage")} onConfirm={()=>remove(primary.id)}> {t('media.removeImage')}</ConfirmedActionButton>}
                     <div className="item-images-hint">{t('warehouseDetail.media.privateHint')}</div>
                 </div>
             )}
