@@ -1,3 +1,11 @@
+# Stock mobile and navigation follow-up
+
+Consumes shared e06208a navigation contract. AppShell route observer cancels obsolete dialogs while retaining immediate save-redirect notices; deliberate links/back clear stale notices through the shared provider. Existing document-table scroller now contains wide columns on mobile, keeping inline validation outside the scroller; action buttons wrap. Fixture now supplies the proper scroll container. Four EN/AR desktop/mobile navigation/reduced-motion cases pass, plus12inline/media/scanner cases including explicit summary viewport bounds. Build and dictionary pass. Shared package files remain coordinator-owned.
+
+Latest source-review batch61b2c80 is production deployed as `20261002T190615Z-61b2c80f`. Twelve real-route production cases pass: empty-line validation on count1 edit, aggregated rejected files on synthetic item3, and scanner no-match. Zero mutations; server count unchanged. Evidence in `stock-production/20261002T190615Z-61b2c80f/inline-results.json`. Visual inspection of these screenshots identified the mobile table overflow fixed by this follow-up. This follow-up is not yet deployed. Individual route action-state coverage remains explicit in flow-register; do not infer full route acceptance from representative matrices.
+
+---
+
 # Stock inline validation and final source review batch
 
 Nine document-form line-required checks now render one focusable inline summary beside document lines. Existing checks/payloads remain unchanged; server nested line errors use the same summary. Count warehouse and same-warehouse transfer validation remain beside their fields. Invalid image selections aggregate into one inline alert rather than one modal per file; attachment size errors remain beside upload controls. Scanner no-match/read-only lookup failure remains contextual, preserves the scanned code and blocks repeated simultaneous lookup. Account mapping save feedback no longer claims a known failure or invites a blind retry when the outcome may be uncertain.

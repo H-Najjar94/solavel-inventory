@@ -115,7 +115,7 @@ export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, 
     return (
         <div className="doc-lines">
             <DocumentLineErrors errors={validationErrors}/>
-            <table className="data-table">
+            <div className="tbl-wrap"><table className="data-table">
                 <thead>
                     <tr>
                         {columns.map((c) => <th key={c.key} style={c.width ? { width: c.width } : undefined}>{c.label}</th>)}
@@ -133,7 +133,7 @@ export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, 
                         </tr>
                     ))}
                 </tbody>
-            </table>
+            </table></div>
             {canAdd && <button type="button" className="btn btn--sm" onClick={onAdd}>+ {addLabel ?? t('document.addLine')}</button>}
         </div>
     );
