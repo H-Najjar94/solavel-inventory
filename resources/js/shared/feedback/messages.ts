@@ -1,5 +1,7 @@
 export const messages = {
     "en": {
+        "importBankTransactions": "Import bank transactions",
+        "importBankTransactionsBody": "This saves the reviewed statement transactions using the selected mapping. Review the preview before importing.",
         "paymentApiConfirm": "Send payment API request?",
         "paymentApiConsequence": "This request is sent to the configured payment service and may create or change a real payment. Review the method and endpoint before continuing.",
         "approveAction": "Approve",
@@ -209,6 +211,8 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "importBankTransactions": "استيراد المعاملات البنكية",
+        "importBankTransactionsBody": "سيتم حفظ معاملات كشف الحساب التي راجعتها باستخدام المطابقة المحددة. راجع المعاينة قبل الاستيراد.",
         "paymentApiConfirm": "إرسال طلب إلى خدمة الدفع؟",
         "paymentApiConsequence": "سيُرسل هذا الطلب إلى خدمة الدفع المحددة وقد يُنشئ أو يغيّر دفعة فعلية. راجع طريقة الطلب وعنوانه قبل المتابعة.",
         "approveAction": "موافقة",
