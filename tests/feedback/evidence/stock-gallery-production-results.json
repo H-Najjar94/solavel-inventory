@@ -1,0 +1,86 @@
+[
+  {
+    "release": "20261002T193034Z-caa63900",
+    "locale": "en",
+    "width": 1440,
+    "route": "https://solavel.com/inventory/items/3?locale=en",
+    "passed": true,
+    "readOnly": true,
+    "blockedWrites": 0,
+    "assets": [
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap",
+      "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css",
+      "https://solavel.com/inventory/build/assets/solastock-DVd6dGcr.css",
+      "https://solavel.com/inventory/build/assets/app-CA0BsfKq.css",
+      "https://solavel.com/inventory/build/assets/app-BuhLdbCy.js"
+    ],
+    "checks": [
+      "actual item3 empty-gallery hint selected locale",
+      "RTL/mobile view",
+      "zero mutations"
+    ]
+  },
+  {
+    "release": "20261002T193034Z-caa63900",
+    "locale": "en",
+    "width": 390,
+    "route": "https://solavel.com/inventory/items/3?locale=en",
+    "passed": true,
+    "readOnly": true,
+    "blockedWrites": 0,
+    "assets": [
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap",
+      "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css",
+      "https://solavel.com/inventory/build/assets/solastock-DVd6dGcr.css",
+      "https://solavel.com/inventory/build/assets/app-CA0BsfKq.css",
+      "https://solavel.com/inventory/build/assets/app-BuhLdbCy.js"
+    ],
+    "checks": [
+      "actual item3 empty-gallery hint selected locale",
+      "RTL/mobile view",
+      "zero mutations"
+    ]
+  },
+  {
+    "release": "20261002T193034Z-caa63900",
+    "locale": "ar",
+    "width": 1440,
+    "route": "https://solavel.com/inventory/items/3?locale=ar",
+    "passed": true,
+    "readOnly": true,
+    "blockedWrites": 0,
+    "assets": [
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap",
+      "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css",
+      "https://solavel.com/inventory/build/assets/solastock-DVd6dGcr.css",
+      "https://solavel.com/inventory/build/assets/app-CA0BsfKq.css",
+      "https://solavel.com/inventory/build/assets/app-BuhLdbCy.js"
+    ],
+    "checks": [
+      "actual item3 empty-gallery hint selected locale",
+      "RTL/mobile view",
+      "zero mutations"
+    ]
+  },
+  {
+    "release": "20261002T193034Z-caa63900",
+    "locale": "ar",
+    "width": 390,
+    "route": "https://solavel.com/inventory/items/3?locale=ar",
+    "passed": true,
+    "readOnly": true,
+    "blockedWrites": 0,
+    "assets": [
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap",
+      "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css",
+      "https://solavel.com/inventory/build/assets/solastock-DVd6dGcr.css",
+      "https://solavel.com/inventory/build/assets/app-CA0BsfKq.css",
+      "https://solavel.com/inventory/build/assets/app-BuhLdbCy.js"
+    ],
+    "checks": [
+      "actual item3 empty-gallery hint selected locale",
+      "RTL/mobile view",
+      "zero mutations"
+    ]
+  }
+]
