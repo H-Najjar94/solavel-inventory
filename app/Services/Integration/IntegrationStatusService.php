@@ -180,7 +180,8 @@ class IntegrationStatusService
         $wizardRun = Schema::connection('tenant')->hasTable('integration_connection_wizard_runs')
             ? DB::connection('tenant')->table('integration_connection_wizard_runs')
                 ->where('solastock_organization_id', $orgId)
-                ->whereNull('discarded_at')
+                ->when(Schema::connection('tenant')->hasColumn('integration_connection_wizard_runs', 'discarded_at'),
+                    fn ($query) => $query->whereNull('discarded_at'))
                 ->orderByDesc('created_at')->first()
             : null;
         $setupDecision = app(InventoryCommercialEntitlementService::class)
