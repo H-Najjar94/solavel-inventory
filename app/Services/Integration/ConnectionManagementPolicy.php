@@ -50,8 +50,9 @@ class ConnectionManagementPolicy
                 $clientQuery->whereNull('deleted_at');
             }
             $clientActive = $clientQuery->exists();
+            // Organization membership, not the invited account's home client,
+            // binds the actor to this tenant.
             $userQuery = $central->table('users')->where('id', $userId)
-                ->where('client_id', $organization->client_id)
                 ->where(fn ($query) => $query->whereNull('status')->orWhere('status', 'active'));
             if ($schema->hasColumn('users', 'deleted_at')) {
                 $userQuery->whereNull('deleted_at');

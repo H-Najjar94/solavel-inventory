@@ -103,4 +103,11 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
         $this->access['inventory']=['allowed'=>false,'reason'=>'temporarily_unavailable'];
         $this->assertSame('workspace_access_temporarily_unavailable',$this->invoke('workspace.context'));
     }
+    public function test_invited_owner_management_uses_membership_not_home_client():void {
+        DB::connection('central_test')->table('users')->where('id',7)->update(['client_id'=>99]);
+        $this->access['inventory']=['allowed'=>true];
+        $this->assertTrue(app(\App\Services\Integration\ConnectionManagementPolicy::class)->status(100,(object)['central_user_id'=>7])['can_manage_connection']);
+        DB::connection('central_test')->table('user_organizations')->update(['status'=>'suspended']);
+        $this->assertFalse(app(\App\Services\Integration\ConnectionManagementPolicy::class)->status(100,(object)['central_user_id'=>7])['can_manage_connection']);
+    }
 }
