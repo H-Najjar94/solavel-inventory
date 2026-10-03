@@ -30,7 +30,8 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
         $schema->create('clients',function(Blueprint $t){$t->id();$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
         $schema->create('organizations',function(Blueprint $t){$t->id();$t->integer('client_id');$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
         $schema->create('users',function(Blueprint $t){$t->id();$t->string('name');$t->integer('client_id');$t->string('status')->nullable();$t->timestamp('deleted_at')->nullable();});
-        $schema->create('user_organizations',function(Blueprint $t){$t->id();$t->integer('user_id');$t->integer('organization_id');$t->string('status')->nullable();});
+        $schema->create('user_organizations',function(Blueprint $t){$t->id();$t->integer('user_id');$t->integer('organization_id');$t->string('status')->nullable();$t->string('role')->default('client_owner');});
+        $schema->create('app_permission_grants',function(Blueprint $t){$t->id();$t->integer('organization_id');$t->integer('user_id')->nullable();$t->string('app_key');$t->string('permission_key');$t->string('effect');});
         $schema->create('projects',function(Blueprint $t){$t->id();$t->string('slug');$t->boolean('is_active');});
         foreach(['organization_projects','user_projects'] as $table)$schema->create($table,function(Blueprint $t){$t->id();$t->integer('organization_id');$t->integer('user_id')->nullable();$t->integer('project_id');$t->boolean('is_active');});
         $db=DB::connection('central_test');
@@ -89,10 +90,14 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
         DB::connection('central_test')->table('user_projects')->insert(['organization_id'=>100,'user_id'=>7,'project_id'=>2,'is_active'=>false]);
         $this->access['inventory']=['allowed'=>true];
         $this->assertSame('passed_assignment_gate',$this->invoke('workspace.context'));
+        $policy=app(\App\Services\Integration\ConnectionManagementPolicy::class)->status(100,(object)['id'=>7]);
+        $this->assertTrue($policy['can_manage_connection']);
+        $this->assertTrue($policy['can_review_accounting']);
     }
     public function test_current_revocation_overrides_an_active_legacy_assignment():void {
         DB::connection('central_test')->table('user_projects')->insert(['organization_id'=>100,'user_id'=>7,'project_id'=>2,'is_active'=>true]);
         $this->assertSame('workspace_application_assignment_required',$this->invoke('workspace.initialize'));
+        $this->assertFalse(app(\App\Services\Integration\ConnectionManagementPolicy::class)->status(100,(object)['id'=>7])['can_manage_connection']);
     }
     public function test_unavailable_authority_is_not_misreported_as_missing_assignment():void {
         $this->access['inventory']=['allowed'=>false,'reason'=>'temporarily_unavailable'];
