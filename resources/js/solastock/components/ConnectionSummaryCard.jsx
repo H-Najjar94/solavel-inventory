@@ -2,7 +2,7 @@ import React from 'react';
 import './ConnectionSummaryCard.css';
 import financeIcon from './solacount-logo-gradient.svg?inline';
 
-/** Plain-language group for a preparation failure code; the raw code stays under Details. */
+/** Translate preparation failures without exposing internal codes. */
 export function failureGroup(reason = '') {
     if (reason.startsWith('default_connection_credentials_not_ready')) return 'credentials';
     if (reason.startsWith('default_connection_activation_gate_closed')) return 'gate';
@@ -61,16 +61,12 @@ export default function ConnectionSummaryCard({ summary, tr, busy = false, error
         <p className="connection-summary__text">{describe(summary, tr)}</p>
         {state === 'connected' && <p className="connection-summary__meta">{lastSync ? tr('integration.summary.lastSync', { when: lastSync.toLocaleString(document.documentElement.lang || undefined) }) : tr('integration.summary.noSyncYet')}</p>}
         {kind === 'ask_admin' && <p className="connection-summary__meta">{tr('integration.summary.askAdmin')}</p>}
-        {kind === 'none' && state !== 'connected' && <p className="connection-summary__meta">{tr('integration.summary.noActionYet')}</p>}
+        {kind === 'none' && ['preparing', 'finance_provisioning'].includes(state) && <p className="connection-summary__meta">{tr('integration.summary.noActionYet')}</p>}
         {error && <p className="connection-summary__error" role="alert">{error}</p>}
         <div className="connection-summary__actions">
             {label && <button type="button" className="btn btn--primary" disabled={busy} aria-busy={busy} onClick={() => onAction?.(kind, summary)}>
                 {busy && <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />} {busy ? tr('integration.summary.working') : label}
             </button>}
-            {(summary.reason && ['failed', 'needs_attention', 'needs_input'].includes(state)) && <details className="connection-summary__details">
-                <summary>{tr('integration.summary.details')}</summary>
-                <p><bdi>{summary.reason}</bdi>{summary.failed_at ? <> · <bdi>{summary.failed_at}</bdi></> : null}</p>
-            </details>}
         </div>
     </section>;
 }
