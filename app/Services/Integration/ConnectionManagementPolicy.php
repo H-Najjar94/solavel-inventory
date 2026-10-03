@@ -117,9 +117,8 @@ class ConnectionManagementPolicy
             $organizationAccess = $central->table('organization_projects')
                 ->where('organization_id', $organizationId)->where('project_id', $project->id)
                 ->where('is_active', true)->exists();
-            $userAccess = $organizationAccess && $central->table('user_projects')
-                ->where('organization_id', $organizationId)->where('user_id', $userId)
-                ->where('project_id', $project->id)->where('is_active', true)->exists();
+            $userAccess = $organizationAccess && (app(\App\Services\Access\CentralAppAccess::class)
+                ->decision($userId, $organizationId, (string) $project->slug)['allowed'] ?? false) === true;
             $result[(string) $project->slug] = $userAccess;
         }
 
