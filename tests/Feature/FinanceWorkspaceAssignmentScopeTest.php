@@ -12,6 +12,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class FinanceWorkspaceAssignmentScopeTest extends TestCase
 {
+    private array $access = ['finance'=>['allowed'=>true], 'inventory'=>['allowed'=>false]];
     public function createApplication() {
         $app=require __DIR__.'/../../bootstrap/app.php';
         $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
@@ -22,6 +23,9 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
     }
     protected function setUp():void {
         parent::setUp();
+        $authority=\Mockery::mock(\App\Services\Access\CentralAppAccess::class);
+        $authority->shouldReceive('decision')->with(7,100,\Mockery::type('string'))->andReturnUsing(fn($user,$org,$slug)=>$this->access[$slug]);
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class,$authority);
         $schema=Schema::connection('central_test');
         $schema->create('clients',function(Blueprint $t){$t->id();$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
         $schema->create('organizations',function(Blueprint $t){$t->id();$t->integer('client_id');$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
@@ -55,6 +59,7 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
     }
     public function test_follow_through_still_requires_the_members_solacount_assignment():void {
         DB::connection('central_test')->table('user_projects')->update(['is_active'=>false]);
+        $this->access['finance']=['allowed'=>false];
         $this->assertSame('workspace_application_assignment_required',$this->invoke('finance-allocations.commit'));
     }
     public function test_follow_through_still_requires_the_organization_to_hold_solastock():void {
@@ -79,5 +84,18 @@ class FinanceWorkspaceAssignmentScopeTest extends TestCase
     public function test_member_of_another_organization_is_rejected_before_any_scope_applies():void {
         DB::connection('central_test')->table('user_organizations')->update(['organization_id'=>999]);
         $this->assertSame('workspace_membership_required',$this->invoke('finance-allocations.commit'));
+    }
+    public function test_current_owner_access_overrides_an_inactive_legacy_assignment():void {
+        DB::connection('central_test')->table('user_projects')->insert(['organization_id'=>100,'user_id'=>7,'project_id'=>2,'is_active'=>false]);
+        $this->access['inventory']=['allowed'=>true];
+        $this->assertSame('passed_assignment_gate',$this->invoke('workspace.context'));
+    }
+    public function test_current_revocation_overrides_an_active_legacy_assignment():void {
+        DB::connection('central_test')->table('user_projects')->insert(['organization_id'=>100,'user_id'=>7,'project_id'=>2,'is_active'=>true]);
+        $this->assertSame('workspace_application_assignment_required',$this->invoke('workspace.initialize'));
+    }
+    public function test_unavailable_authority_is_not_misreported_as_missing_assignment():void {
+        $this->access['inventory']=['allowed'=>false,'reason'=>'temporarily_unavailable'];
+        $this->assertSame('workspace_access_temporarily_unavailable',$this->invoke('workspace.context'));
     }
 }
