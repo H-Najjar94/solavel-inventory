@@ -47,8 +47,12 @@ final class FinanceWorkspaceController
             abort_unless($project && $central->table('organization_projects')->where('organization_id', $org->id)
                 ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
             if ($lifecycle && $slug === 'inventory') continue;
-            abort_unless($central->table('user_projects')->where('organization_id', $org->id)->where('user_id', $actor->id)
-                ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
+            // Central owns assignment, owner access and explicit revocations. A
+            // historical user_projects row is not the current access decision.
+            $access = app(\App\Services\Access\CentralAppAccess::class)
+                ->decision((int) $actor->id, (int) $org->id, $slug);
+            abort_if(($access['reason'] ?? null) === 'temporarily_unavailable', 503, 'workspace_access_temporarily_unavailable');
+            abort_unless(($access['allowed'] ?? false) === true, 403, 'workspace_application_assignment_required');
         }
         // Resolve the database on the server. This never provisions or migrates.
         $database = $tenants->resolveDatabaseName((int) $org->client_id);
