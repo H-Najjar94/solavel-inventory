@@ -92,7 +92,10 @@ final class FinanceWorkspaceTest extends TestCase
                 ->where('organization_id', $organizationId)->where('status', 'active')->exists()
                 && $central->table('user_projects')->where('user_id', $userId)->where('organization_id', $organizationId)
                     ->where('project_id', $project)->where('is_active', true)->exists();
-            return ['allowed' => (bool) $allowed, 'reason' => $allowed ? 'allowed' : 'access_required'];
+            $role = $central->table('user_organizations')->where('user_id', $userId)->where('organization_id', $organizationId)->value('role');
+            return ['allowed' => (bool) $allowed, 'reason' => $allowed ? 'allowed' : 'access_required',
+                'owner' => $allowed && $role === 'client_owner',
+                'roles' => $role === 'viewer' ? ['inventory_viewer'] : ($role === 'client_owner' ? [] : [$role])];
         });
         $this->app->instance(\App\Services\Access\CentralAppAccess::class, $access);
     }
