@@ -147,6 +147,34 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send($changed)->assertConflict();
     }
 
+    public function test_reviewed_reference_links_are_scoped_immutable_and_idempotent(): void
+    {
+        $unit = \App\Models\Tenant\Unit::create(['name' => 'Piece', 'code' => 'REVIEW-PCS', 'kind' => 'count', 'is_active' => true]);
+        $financeId = DB::connection('tenant')->table('inventory_units')->insertGetId(['name' => 'Piece', 'symbol' => 'pcs', 'created_at' => now(), 'updated_at' => now()]);
+        $otherId = DB::connection('tenant')->table('inventory_units')->insertGetId(['name' => 'Box', 'symbol' => 'bx', 'created_at' => now(), 'updated_at' => now()]);
+        $command = ['action' => 'migration-references.link', 'idempotency_key' => 'reviewed-reference-command-001', 'data' => [
+            'organization_mapping_uuid' => IntegrationOrganizationMapping::query()->firstOrFail()->mapping_uuid,
+            'entity_type' => 'unit', 'stock_record_id' => $unit->id, 'finance_record_id' => $financeId,
+            'reviewed' => true, 'evidence' => 'Reviewed counted Piece equivalence', 'source_hash' => hash('sha256', 'review fixture'),
+        ]];
+        $this->send($command)->assertOk();
+        $this->send($command)->assertOk()->assertHeader('X-Workspace-Replayed', 'true');
+        $this->assertSame(1, \App\Models\Tenant\IntegrationMasterDataMapping::where('entity_type', 'unit')->count());
+        $conflict = $command;
+        $conflict['idempotency_key'] = 'reviewed-reference-command-002';
+        $conflict['data']['finance_record_id'] = $otherId;
+        $this->send($conflict)->assertConflict();
+        $foreign = $command;
+        $foreign['idempotency_key'] = 'reviewed-reference-command-003';
+        $foreign['data']['organization_mapping_uuid'] = (string) Str::uuid();
+        $this->send($foreign)->assertNotFound();
+        $unreviewed = $command;
+        $unreviewed['idempotency_key'] = 'reviewed-reference-command-004';
+        $unreviewed['data']['reviewed'] = false;
+        $this->send($unreviewed)->assertUnprocessable();
+        $this->assertSame(1, \App\Models\Tenant\IntegrationMasterDataMapping::where('entity_type', 'unit')->count());
+    }
+
     public function test_signed_identity_does_not_bypass_membership_and_organization_scope(): void
     {
         $this->send(['action' => 'warehouses.index', 'organization_id' => TenantTestManager::ORG_B])->assertForbidden();

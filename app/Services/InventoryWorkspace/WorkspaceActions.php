@@ -14,6 +14,7 @@ final class WorkspaceActions
         'finance-allocations.release', 'finance-allocations.reverse',
         'finance-allocations.cost-adjustment.prepare', 'finance-allocations.cost-adjustment.apply',
         'finance-allocations.cost-adjustment.reverse',
+        'migration-references.link',
         // Native operational documents retain their own permissions, dates,
         // stock guards and outbox lifecycle under the signed command receipt.
         'suppliers.index', 'suppliers.show', 'suppliers.store',
