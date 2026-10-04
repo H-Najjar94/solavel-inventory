@@ -82,6 +82,19 @@ final class FinanceWorkspaceTest extends TestCase
         $status=$this->createStub(\App\Services\Integration\IntegrationStatusService::class);
         $status->method('status')->willReturnCallback(fn($id)=>['readiness'=>['state'=>IntegrationSetting::where('organization_id',$id)->value('mode')==='active'?'CONNECTED_READY':'CONNECTION_BLOCKED']]);
         $this->app->instance(\App\Services\Integration\IntegrationStatusService::class,$status);
+        // Central is the production authority; this isolated server has no
+        // network access and supplies the same decision from synthetic fixtures.
+        $access = $this->createStub(\App\Services\Access\CentralAppAccess::class);
+        $access->method('decision')->willReturnCallback(function (int $userId, int $organizationId, string $appKey): array {
+            $central = DB::connection('mysql');
+            $project = $central->table('projects')->where('slug', $appKey)->where('is_active', true)->value('id');
+            $allowed = $project && $central->table('user_organizations')->where('user_id', $userId)
+                ->where('organization_id', $organizationId)->where('status', 'active')->exists()
+                && $central->table('user_projects')->where('user_id', $userId)->where('organization_id', $organizationId)
+                    ->where('project_id', $project)->where('is_active', true)->exists();
+            return ['allowed' => (bool) $allowed, 'reason' => $allowed ? 'allowed' : 'access_required'];
+        });
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class, $access);
     }
 
     protected function tearDown(): void
