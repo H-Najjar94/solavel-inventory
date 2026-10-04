@@ -121,6 +121,32 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(0, Warehouse::query()->where('code', 'HELD')->count());
     }
 
+    public function test_signed_historical_grn_preserves_source_number_date_and_replays_once(): void
+    {
+        $warehouse = Warehouse::create(['name' => 'Historical fixture', 'code' => 'HIST', 'type' => 'warehouse']);
+        $unit = \App\Models\Tenant\Unit::create(['name' => 'Historical piece', 'code' => 'H-PCS', 'kind' => 'count', 'is_active' => true]);
+        $category = \App\Models\Tenant\ItemCategory::create(['name' => 'Historical category', 'code' => 'H-CAT', 'is_active' => true]);
+        $item = \App\Models\Tenant\Item::create(['name' => 'Historical item', 'sku' => 'H-ITEM', 'base_unit_id' => $unit->id,
+            'category_id' => $category->id, 'item_type' => 'inventory', 'tracking_type' => 'none', 'costing_method' => 'fifo', 'is_active' => true]);
+        $command = ['action' => 'grn.store', 'idempotency_key' => 'historical-grn-source-00001', 'data' => [
+            'grn_number' => '00001', 'receipt_date' => '2024-01-03', 'warehouse_id' => $warehouse->id,
+            'lines' => [['item_id' => $item->id, 'received_qty' => '2', 'unit_cost' => '3.25', 'entered_unit_id' => $unit->id]],
+        ]];
+        $created = $this->send($command)->assertCreated()->assertJsonPath('data.grn_number', '00001');
+        $id = $created->json('data.id');
+        $this->send($command)->assertCreated()->assertHeader('X-Workspace-Replayed', 'true')->assertJsonPath('data.id', $id);
+        $grn = \App\Models\Tenant\GoodsReceipt::findOrFail($id);
+        $this->assertSame('2024-01-03', $grn->receipt_date->toDateString());
+        $this->assertSame('draft', $grn->status);
+        $this->assertSame(1, \App\Models\Tenant\GoodsReceipt::where('grn_number', '00001')->count());
+        $this->assertSame(0, \App\Models\Tenant\StockLedger::where('source_type', \App\Models\Tenant\GoodsReceipt::class)->where('source_id', $id)->count());
+        $show = $this->send(['action' => 'grn.show', 'parameters' => ['goods_receipt' => $id]])->assertOk();
+        $this->assertSame(64, strlen($show->json('workspace_revision')));
+        $changed = $command;
+        $changed['data']['receipt_date'] = '2024-01-04';
+        $this->send($changed)->assertConflict();
+    }
+
     public function test_signed_identity_does_not_bypass_membership_and_organization_scope(): void
     {
         $this->send(['action' => 'warehouses.index', 'organization_id' => TenantTestManager::ORG_B])->assertForbidden();

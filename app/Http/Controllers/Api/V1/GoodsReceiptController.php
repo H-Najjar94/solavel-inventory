@@ -123,7 +123,11 @@ class GoodsReceiptController extends ApiController
         try {
             $data = app(OperationalReceiving::class)->prepare($request->validated());
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
-            unset($data['grn_number']);
+            // Historical signed commands preserve textual source references.
+            // Ordinary interactive creation continues to issue native numbers.
+            if ($request->attributes->get('verified_workspace_action') !== 'grn.store') {
+                unset($data['grn_number']);
+            }
             $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             throw $e;
