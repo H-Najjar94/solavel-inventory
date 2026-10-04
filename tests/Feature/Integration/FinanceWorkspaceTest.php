@@ -95,7 +95,7 @@ final class FinanceWorkspaceTest extends TestCase
             $role = $central->table('user_organizations')->where('user_id', $userId)->where('organization_id', $organizationId)->value('role');
             return ['allowed' => (bool) $allowed, 'reason' => $allowed ? 'allowed' : 'access_required',
                 'owner' => $allowed && $role === 'client_owner',
-                'roles' => $role === 'viewer' ? ['inventory_viewer'] : ($role === 'client_owner' ? [] : [$role])];
+                'roles' => $role === 'viewer' ? ['scoped_inventory_viewer'] : ($role === 'client_owner' ? [] : [$role])];
         });
         $this->app->instance(\App\Services\Access\CentralAppAccess::class, $access);
     }
@@ -483,6 +483,12 @@ final class FinanceWorkspaceTest extends TestCase
     private function centralFixtureSchema(): void
     {
         $schema = Schema::connection('mysql');
+        if (! $schema->hasTable('app_permission_grants')) {
+            $schema->create('app_permission_grants', function ($t): void {
+                $t->id(); $t->unsignedBigInteger('organization_id'); $t->unsignedBigInteger('user_id')->nullable();
+                $t->string('app_key'); $t->string('permission_key'); $t->string('effect'); $t->timestamp('expires_at')->nullable();
+            });
+        }
         if (! $schema->hasColumn('users', 'deleted_at')) {
             $schema->table('users', fn ($t) => $t->softDeletes());
         }
