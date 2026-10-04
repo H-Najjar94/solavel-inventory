@@ -1,5 +1,6 @@
 export const messages = {
     "en": {
+    "exportReady": "Export file is ready.",
         "stockLifecycleBody": "This changes the availability status of this lot or serial. Existing stock restrictions still apply.",
         "fulfillmentCompleteBody": "This completes the current fulfillment step. Review the recorded quantities before continuing.",
         "closeRecallBody": "This closes the recall workflow. Review affected items and outstanding actions before continuing.",
@@ -245,6 +246,7 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+    "exportReady": "ملف التصدير جاهز.",
         "stockLifecycleBody": "سيتم تغيير حالة إتاحة هذه الدفعة أو الرقم التسلسلي. تظل قيود المخزون الحالية سارية.",
         "fulfillmentCompleteBody": "سيتم إكمال خطوة التنفيذ الحالية. راجع الكميات المسجلة قبل المتابعة.",
         "closeRecallBody": "سيتم إغلاق مسار الاستدعاء. راجع الأصناف المتأثرة والإجراءات المعلقة قبل المتابعة.",

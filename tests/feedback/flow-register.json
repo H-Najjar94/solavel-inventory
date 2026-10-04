@@ -1359,7 +1359,7 @@
   "unverified_acceptance": [
     "Individual document lifecycle states without synthetic records were reviewed and share tested confirmation/API adapters, but were not each mutated in production. Production mutations are deliberately intercepted; customer documents are never modified for QA."
   ],
-  "latest_verified_release": "20261002T192314Z-b744c418",
+  "latest_verified_release": "20261002T193034Z-caa63900",
   "production_evidence": {
     "customer_validation_unknown": "20261002T185836Z-192a788b/customer-outcomes-results.json",
     "count_pending": "20261002T185836Z-192a788b/pending-results.json",
@@ -1368,7 +1368,8 @@
     "form_confirmations": "20261002T191805Z-a04fd3aa/form-confirmations-results.json",
     "safe_status": "20261002T191805Z-a04fd3aa/status-path-results.json",
     "navigation": "20261002T192314Z-b744c418/navigation-results.json (EN desktop reused explicitly from a04; other3 confirmed b744 assets)",
-    "long_media_validation": "20261002T192314Z-b744c418/inline-results.json"
+    "long_media_validation": "20261002T192314Z-b744c418/inline-results.json",
+    "gallery_hint_locale": "20261002T193034Z-caa63900/gallery-copy-results.json (actual item3 EN/AR1440/390 read-only, zero mutation requests, exact assets captured)"
   },
-  "runtime_main_commit": "b744c418"
+  "runtime_main_commit": "caa63900"
 }
