@@ -26,7 +26,7 @@ final class MigrationCatalogController extends ApiController
         $data=$request->validate(['source_hash'=>'required|string|regex:/^[a-f0-9]{64}$/D',
             'name'=>'required|string|max:191','sku'=>'required|string|max:50','barcode'=>'nullable|string|max:50',
             'finance_category_id'=>'required|integer|min:1','finance_unit_id'=>'required|integer|min:1',
-            'unit_price'=>['nullable','string','regex:/^[0-9]{1,12}(\.[0-9]{1,2})?$/D'],
+            'unit_price'=>['nullable','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D'],
             'item_type'=>'required|in:inventory','valuation_method'=>'required|in:fifo']);
         $references=[];
         foreach (['category'=>'finance_category_id','unit'=>'finance_unit_id'] as $type=>$field) {

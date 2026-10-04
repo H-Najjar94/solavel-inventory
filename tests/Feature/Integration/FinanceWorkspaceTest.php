@@ -458,15 +458,17 @@ final class FinanceWorkspaceTest extends TestCase
                 'entity_type'=>$type,'solastock_record_id'=>(string)$stockId,'solabooks_record_id'=>(string)$financeId,'status'=>'verified']);
         }
         $data=['source_hash'=>hash('sha256','synthetic source'),'name'=>'صنف جديد','sku'=>'MIG-00001','barcode'=>'0000987654321',
-            'finance_category_id'=>991,'finance_unit_id'=>992,'unit_price'=>'15.25','item_type'=>'inventory','valuation_method'=>'fifo'];
+            'finance_category_id'=>991,'finance_unit_id'=>992,'unit_price'=>'37.241','item_type'=>'inventory','valuation_method'=>'fifo'];
         $facts=$this->send(['action'=>'items.migration-requirements','data'=>$data])->assertOk()->json('data');
+        $this->send(['action'=>'items.migration-requirements','data'=>array_replace($data,['unit_price'=>'37.2415'])])->assertOk();
+        $this->send(['action'=>'items.migration-requirements','data'=>array_replace($data,['unit_price'=>'37.24159'])])->assertUnprocessable();
         $this->assertSame(0,\App\Models\Tenant\Item::where('sku','MIG-00001')->count());
         $key='migration-catalog:'.hash('sha256','stable source identity');
         $command=['action'=>'items.migration-create','data'=>$data+['requirements_version'=>$facts['version']],'idempotency_key'=>$key];
         $created=$this->send($command)->assertCreated(); $id=$created->json('data.stock_item_id');
         $this->send($command)->assertCreated()->assertHeader('X-Workspace-Replayed','true')->assertJsonPath('data.stock_item_id',$id);
         $this->assertSame(1,\App\Models\Tenant\Item::where('sku','MIG-00001')->count());
-        $this->assertSame('15.2500',\App\Models\Tenant\Item::findOrFail($id)->sales_price);
+        $this->assertSame('37.2410',\App\Models\Tenant\Item::findOrFail($id)->sales_price);
         $this->assertSame(1,\App\Models\Tenant\ItemBarcode::where('item_id',$id)->where('barcode','0000987654321')->count());
         $this->assertSame(0,\App\Models\Tenant\StockLedger::where('item_id',$id)->count());
         $this->assertSame(0,\App\Models\Tenant\IntegrationMasterDataMapping::where('entity_type','item')->count());
