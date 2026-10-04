@@ -234,4 +234,69 @@ final class FinancialLineAllocationServiceTest extends TestCase
             ]],
         ];
     }
+
+    #[Test]
+    public function paid_and_bonus_lines_reserve_one_physical_source_without_duplicate_quantity(): void
+    {
+        $input = $this->shipmentPayload('4');
+        $paid = $input['allocations'][0];
+        $paid['entered_quantity'] = $paid['base_quantity'] = $paid['destination_quantity'] = '7';
+        $paid['destination_gross'] = $paid['destination_net'] = '28';
+        $bonus = $input['allocations'][0];
+        $bonus['destination_line_id'] = 902;
+        $bonus['entered_quantity'] = $bonus['base_quantity'] = $bonus['destination_quantity'] = '3';
+        $bonus['destination_unit_price'] = $bonus['destination_gross'] = $bonus['destination_net'] = '0';
+        $input['allocations'] = [$paid, $bonus];
+        $service = app(FinancialLineAllocationService::class);
+        $result = $service->reserve($input);
+        $again = $service->reserve($input);
+        $this->assertSame(array_column($result['allocations'], 'allocation_uuid'), array_column($again['allocations'], 'allocation_uuid'));
+        $this->assertSame('0.00000000', $result['allocations'][1]['destination_net']);
+        $this->assertSame(10.0, (float) IntegrationFinancialLineAllocation::where('state', 'draft_reserved')->sum('base_quantity'));
+        $this->assertSame(2, IntegrationFinancialLineAllocation::query()->count());
+    }
+
+    #[Test]
+    public function recorded_fully_free_shipment_can_link_but_missing_source_price_cannot(): void
+    {
+        $input = $this->shipmentPayload('0');
+        $result = app(FinancialLineAllocationService::class)->reserve($input);
+        $this->assertSame('0.00000000', $result['allocations'][0]['source_unit_price']);
+        $this->assertSame('0.00000000', $result['allocations'][0]['destination_net']);
+        \App\Models\Tenant\SalesOrderLine::query()->delete();
+        $input['destination_document_id']++;
+        $this->expectException(ValidationException::class);
+        app(FinancialLineAllocationService::class)->reserve($input);
+    }
+
+    private function shipmentPayload(string $price): array
+    {
+        $receiptLine = $this->receipt->lines()->firstOrFail();
+        $order = \App\Models\Tenant\SalesOrder::create(['order_number' => 'ALLOC-SO', 'order_date' => '2024-06-19', 'warehouse_id' => $this->receipt->warehouse_id]);
+        $orderLine = $order->lines()->create(['item_id' => $receiptLine->item_id, 'ordered_qty' => '10', 'unit_price' => $price]);
+        $shipment = \App\Models\Tenant\Shipment::create(['shipment_number' => '00001', 'sales_order_id' => $order->id,
+            'warehouse_id' => $this->receipt->warehouse_id, 'ship_date' => '2024-06-19', 'status' => 'posted', 'posted_at' => now()]);
+        $line = $shipment->lines()->create(['sales_order_line_id' => $orderLine->id, 'item_id' => $receiptLine->item_id,
+            'warehouse_id' => $this->receipt->warehouse_id, 'quantity' => '10', 'entered_qty' => '10',
+            'entered_unit_id' => $receiptLine->base_unit_id, 'base_unit_id' => $receiptLine->base_unit_id,
+            'unit_conversion_factor' => '1', 'unit_conversion_version' => 'v1', 'unit_conversion_hash' => hash('sha256', 'each-to-each'),
+            'unit_conversion_precision' => 4, 'unit_conversion_rounding_mode' => 'HALF_UP']);
+        $source = IntegrationDocumentLifecycleMapping::create([
+            'mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $this->connection->mapping_uuid,
+            'central_client_id' => 77, 'central_organization_id' => TenantTestManager::ORG_A,
+            'tenant_database_identity' => DB::connection('tenant')->getDatabaseName(),
+            'finance_organization_id' => 701, 'solastock_organization_id' => TenantTestManager::ORG_A,
+            'source_application' => 'solastock', 'source_document_type' => 'shipment', 'source_document_id' => (string) $shipment->id,
+            'lifecycle_status' => 'posted', 'shipped_qty' => '10', 'transaction_currency_code' => 'JOD', 'base_currency_code' => 'JOD',
+            'exchange_rate' => '1', 'accounting_source_key' => 'shipment:alloc:1',
+        ]);
+        $payload = $this->payload(9600, 901, '10', '10', '10', $price, (string) ((float) $price * 10), '0', '0', (string) ((float) $price * 10));
+        $payload['destination_document_type'] = 'customer_invoice';
+        $payload['allocation_kind'] = 'invoice';
+        $payload['allocations'][0] = array_replace($payload['allocations'][0], [
+            'source_document_mapping_uuid' => $source->mapping_uuid, 'source_document_type' => 'shipment',
+            'source_document_id' => $shipment->id, 'source_line_id' => $line->id,
+        ]);
+        return $payload;
+    }
 }

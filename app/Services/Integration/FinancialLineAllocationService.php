@@ -169,13 +169,19 @@ final class FinancialLineAllocationService
         $salesOrderLineId = $return && $line->source_shipment_line_id
             ? \App\Models\Tenant\ShipmentLine::query()->find($line->source_shipment_line_id)?->sales_order_line_id
             : ($line->sales_order_line_id ?? null);
-        $sourcePrice = Decimal::round((string) ($receipt ? $line->unit_cost : SalesOrderLine::query()
-            ->where('organization_id', $connection->solastock_organization_id)->find($salesOrderLineId)?->unit_price), 8);
-        if (! Decimal::gt($sourcePrice, '0')) $this->fail('The selected source line has no valid base-unit price.');
+        $sourcePriceValue = $receipt ? $line->unit_cost : SalesOrderLine::query()
+            ->where('organization_id', $connection->solastock_organization_id)->find($salesOrderLineId)?->unit_price;
+        // A recorded free sale is distinct from a missing priced source.
+        // Its stock cost still comes exclusively from the physical ledger.
+        if ($sourcePriceValue === null || $sourcePriceValue === '') $this->fail('The selected source line has no valid base-unit price.');
+        $sourcePrice = Decimal::round((string) $sourcePriceValue, 8);
+        if ($receipt ? ! Decimal::gt($sourcePrice, '0') : Decimal::lt($sourcePrice, '0')) {
+            $this->fail('The selected source line has no valid base-unit price.');
+        }
         $sourceGross = Decimal::round(Decimal::mul($baseQty, $sourcePrice), 8);
         $destinationGross = Decimal::round((string) $requested['destination_gross'], 8);
         $destinationUnitPrice = Decimal::round((string) $requested['destination_unit_price'], 8);
-        if (! Decimal::gt($destinationUnitPrice, '0')
+        if (Decimal::lt($destinationUnitPrice, '0')
             || Decimal::cmp(Decimal::mul($destinationQty, $destinationUnitPrice), $destinationGross, 8) !== 0) {
             $this->fail('The financial quantity and unit price do not reconcile to the destination gross amount.');
         }
