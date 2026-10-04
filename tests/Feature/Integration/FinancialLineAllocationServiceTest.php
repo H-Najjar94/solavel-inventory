@@ -263,6 +263,11 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $result = app(FinancialLineAllocationService::class)->reserve($input);
         $this->assertSame('0.00000000', $result['allocations'][0]['source_unit_price']);
         $this->assertSame('0.00000000', $result['allocations'][0]['destination_net']);
+        app(FinancialLineAllocationService::class)->transition([
+            'destination_document_type' => $input['destination_document_type'],
+            'destination_document_id' => $input['destination_document_id'],
+            'destination_fingerprint' => $input['destination_fingerprint'],
+        ], 'released');
         \App\Models\Tenant\SalesOrderLine::query()->delete();
         $input['destination_document_id']++;
         $this->expectException(ValidationException::class);
