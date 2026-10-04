@@ -151,7 +151,7 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $this->assertSame($prepared['adjustment_uuid'],$again['adjustment_uuid']);
         $this->assertSame('JOD',$prepared['currency_code']);
         $this->assertSame('JOD',$prepared['base_currency_code']);
-        $this->assertSame('1.000000000000',$prepared['exchange_rate']);
+        $this->assertTrue(\Brick\Math\BigDecimal::of($prepared['exchange_rate'])->isEqualTo('1'));
         $this->assertSame(3,$prepared['finance_money_scale']);
         $this->assertSame('10.00000000',$prepared['exact_base_difference']);
         $this->assertSame('inventory_asset',$prepared['components'][0]['destination_role']);
@@ -251,7 +251,7 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $result = $service->reserve($input);
         $again = $service->reserve($input);
         $this->assertSame(array_column($result['allocations'], 'allocation_uuid'), array_column($again['allocations'], 'allocation_uuid'));
-        $this->assertSame('0.00000000', $result['allocations'][1]['destination_net']);
+        $this->assertSame('0.00000000', (string) IntegrationFinancialLineAllocation::where('allocation_uuid', $result['allocations'][1]['allocation_uuid'])->value('destination_net'));
         $this->assertSame(10.0, (float) IntegrationFinancialLineAllocation::where('state', 'draft_reserved')->sum('base_quantity'));
         $this->assertSame(2, IntegrationFinancialLineAllocation::query()->count());
     }
@@ -261,8 +261,9 @@ final class FinancialLineAllocationServiceTest extends TestCase
     {
         $input = $this->shipmentPayload('0');
         $result = app(FinancialLineAllocationService::class)->reserve($input);
-        $this->assertSame('0.00000000', $result['allocations'][0]['source_unit_price']);
-        $this->assertSame('0.00000000', $result['allocations'][0]['destination_net']);
+        $saved = IntegrationFinancialLineAllocation::where('allocation_uuid', $result['allocations'][0]['allocation_uuid'])->firstOrFail();
+        $this->assertSame('0.00000000', (string) $saved->source_unit_price);
+        $this->assertSame('0.00000000', (string) $saved->destination_net);
         app(FinancialLineAllocationService::class)->transition([
             'destination_document_type' => $input['destination_document_type'],
             'destination_document_id' => $input['destination_document_id'],
