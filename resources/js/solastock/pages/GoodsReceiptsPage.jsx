@@ -22,7 +22,7 @@ export default function GoodsReceiptsPage() {
             <p className="muted">{t('receiving.grn.list.stockNotice', 'Posting a goods receipt adds the accepted quantities to stock and updates its purchase order.')}</p>
             {rows.length === 0 ? <EmptyState title={t('receiving.grn.empty.title', 'No goods receipts')} hint={t('receiving.grn.empty.hint', 'Create one, or receive from an approved purchase order.')} /> : (
                 <table className="data-table"><thead><tr><th>{t('receiving.grn.fields.numberShort', 'GRN #')}</th><th>{t('receiving.po.abbreviation', 'PO')}</th><th>{t('receiving.common.warehouseShort', 'WH')}</th><th>{t('receiving.common.date', 'Date')}</th><th>{t('receiving.common.status', 'Status')}</th></tr></thead>
-                <tbody>{rows.map((g) => (<tr key={g.id}><td><Link to={`/goods-receipts/${g.id}`}>{g.grn_number}</Link></td><td>{g.purchase_order_number ?? (g.purchase_order_id ? `#${g.purchase_order_id}` : '—')}</td><td>{g.warehouse_name ?? `#${g.warehouse_id}`}</td><td>{g.receipt_date}</td><td><DocumentStatusBadge status={g.status} /></td></tr>))}</tbody></table>
+                <tbody>{rows.map((g) => (<tr key={g.id}><td><Link to={`/goods-receipts/${g.id}`}>{g.grn_number}</Link></td><td>{g.purchase_order_number ?? (g.purchase_order_id ? `#${g.purchase_order_id}` : '—')}</td><td>{g.warehouse_name ?? `#${g.warehouse_id}`}</td><td>{g.receipt_date}</td><td><DocumentStatusBadge status={g.reversal_id ? 'reversed' : g.status} /></td></tr>))}</tbody></table>
             )}
         </section>
     );
