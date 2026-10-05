@@ -90,6 +90,7 @@ class DashboardMetricsService
 
         return [
             'inventory_value' => Decimal::money($inventoryValue),
+            'currency_code' => app(InventoryReportService::class)->baseCurrency(),
             'total_skus' => $this->scoped('items')->count(),
             'active_items' => $this->scoped('items')->where('is_active', true)->count(),
             'low_stock' => $low,

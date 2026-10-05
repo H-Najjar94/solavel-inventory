@@ -47,6 +47,8 @@ class LowStockReorderPointTest extends TestCase
         // LOW-2 has 3 available but no reorder point: not low (the old fixed 5 said low).
         $this->assertSame(3, $metrics['low_stock']);
         $this->assertSame(0, $metrics['out_of_stock']);
+        // The value tile is labelled with the organization currency, not "$".
+        $this->assertMatchesRegularExpression('/^[A-Z]{3}$/', $metrics['currency_code']);
 
         $low = app(ItemController::class)->index(Request::create('/items', 'GET', ['stock_status' => 'low']))->getData(true)['data'];
         $this->assertEqualsCanonicalizing(['LOW-1', 'LOW-3', 'LOW-4'], array_column($low, 'sku'));
