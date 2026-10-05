@@ -179,7 +179,7 @@ export default function DashboardPage() {
                     {serverAlerts.map((a) => (
                         <div key={a.id} className="banner banner--warn" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
                             <span><strong>{a.title}</strong> · {a.message}</span>
-                            {a.status === 'open' && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>{t('dashboard.acknowledge')}</button>}
+                            {a.status === 'open' && can('inventory.manage_settings') && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>{t('dashboard.acknowledge')}</button>}
                         </div>
                     ))}
                 </div>}
