@@ -94,6 +94,35 @@ class WarehouseRoleScopeTest extends TestCase
         (new StockAdjustmentController($service, \Mockery::mock(InventoryReversalService::class), app(WarehouseAccessService::class)))->update($request, $adjustment);
     }
 
+    public function test_sales_returns_list_and_detail_respect_warehouse_scope(): void
+    {
+        Schema::connection('tenant')->create('sales_returns', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('return_number'); $t->integer('warehouse_id');
+            $t->integer('customer_id')->nullable(); $t->string('customer_name')->nullable(); $t->string('status')->default('draft');
+            $t->integer('shipment_id')->nullable(); $t->timestamps(); $t->softDeletes();
+        });
+        Schema::connection('tenant')->create('sales_return_lines', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->integer('sales_return_id'); $t->integer('item_id'); $t->integer('warehouse_id')->nullable();
+        });
+        Schema::connection('tenant')->create('customers', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('code')->nullable(); $t->string('name'); $t->string('contact')->nullable();
+        });
+        DB::table('sales_returns')->insert([
+            ['id' => 1, 'organization_id' => 101, 'return_number' => 'RMA-OWN', 'warehouse_id' => 11],
+            ['id' => 2, 'organization_id' => 101, 'return_number' => 'RMA-OTHER', 'warehouse_id' => 12],
+            ['id' => 3, 'organization_id' => 101, 'return_number' => 'RMA-MIXED', 'warehouse_id' => 11],
+        ]);
+        DB::table('sales_return_lines')->insert(['organization_id' => 101, 'sales_return_id' => 3, 'item_id' => 9, 'warehouse_id' => 12]);
+        $controller = app(\App\Http\Controllers\Api\V1\SalesReturnController::class);
+
+        $listed = array_column($controller->index(\Illuminate\Http\Request::create('/sales-returns'))->getData(true)['data'], 'return_number');
+        $this->assertSame(['RMA-OWN'], $listed);
+        foreach ([2, 3] as $id) {
+            try { $controller->show(\App\Models\Tenant\SalesReturn::query()->withoutGlobalScopes()->findOrFail($id)); $this->fail("Return {$id} outside scope was shown"); }
+            catch (AuthorizationException) { $this->assertTrue(true); }
+        }
+    }
+
     public function test_count_creation_rejects_an_unassigned_warehouse_before_writing(): void
     {
         $request = \Mockery::mock(StoreStockCountRequest::class);
