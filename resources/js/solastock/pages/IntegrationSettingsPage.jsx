@@ -189,6 +189,9 @@ export default function IntegrationSettingsPage() {
                 action={<button className="btn btn--primary" onClick={() => status.refetch()}>{tr('integration.retry')}</button>}
             /> : <ConnectionSummaryCard tr={tr} busy={acting} error={actionError} onAction={onSummaryAction}
                 summary={setupOpen && summary.action?.kind === 'continue' ? { ...summary, action: { kind: 'none' } } : summary} />}
+            {!status.isLoading && !connectionActivated && <div className="doc-actions">
+                <Link className="btn btn--sm" to="/integrations/solacount/events">{tr('integration.details.viewEvents')}</Link>
+            </div>}
             {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
             {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (
