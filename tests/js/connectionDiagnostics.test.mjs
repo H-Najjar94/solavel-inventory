@@ -7,6 +7,7 @@ test('blocked established connection explains worker failure without replacing r
  const status={readiness:{state:'CONNECTION_BLOCKED',blockers:['sync_worker_unavailable']},summary:{reason:'sync_worker_unavailable'}};
  assert.equal(diagnosticReason(status),'worker');
  assert.equal(status.readiness.state,'CONNECTION_BLOCKED');
+ assert.equal(diagnosticReason({readiness:{state:'CONNECTED_READY',blockers:[]}}),'ready');
  assert.equal(diagnosticReason({summary:{reason:'sync_errors'}}),'delivery');
  assert.equal(diagnosticReason({readiness:{blockers:['access_required']}}),'access');
  assert.equal(diagnosticReason({summary:{reason:'internal_unknown_reason'}}),'review');

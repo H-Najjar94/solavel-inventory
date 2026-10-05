@@ -1,5 +1,6 @@
 export const en = {
     'integration.diagnostics.title': 'Connection details',
+    'integration.diagnostics.reason.ready': 'The connection is ready and syncing can continue.',
     'integration.diagnostics.reason.worker': 'The connection is configured, but its delivery worker is unavailable. An administrator needs to check the running service.',
     'integration.diagnostics.reason.delivery': 'Some deliveries need review. Check their status before attempting the original action again.',
     'integration.diagnostics.reason.setup': 'Some setup requirements remain incomplete. Review the required setup steps.',
@@ -1182,6 +1183,7 @@ export const ar = {
     "settings.roles.choosePreset": "اختر قالباً",
     ...en,
     'integration.diagnostics.title': 'تفاصيل الاتصال',
+    'integration.diagnostics.reason.ready': 'الاتصال جاهز ويمكن متابعة المزامنة.',
     'integration.diagnostics.reason.worker': 'الاتصال مُهيأ، لكن خدمة إرسال البيانات غير متاحة. يجب على المسؤول التحقق من الخدمة قيد التشغيل.',
     'integration.diagnostics.reason.delivery': 'بعض عمليات الإرسال تحتاج إلى مراجعة. تحقق من حالتها قبل إعادة تنفيذ العملية الأصلية.',
     'integration.diagnostics.reason.setup': 'بعض متطلبات الإعداد لم تكتمل. راجع خطوات الإعداد المطلوبة.',
