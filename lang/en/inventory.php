@@ -59,6 +59,8 @@ return [
         'reversal_no_ledger' => 'The source document has no posted stock ledger rows.',
         'reversal_downstream' => 'Cannot reverse this receipt because downstream stock consumption exists on a received coordinate. Reverse the downstream source first.',
         'reversal_unavailable' => 'Cannot reverse this receipt because its stock is no longer fully available.',
+        'adjustment_reversal_downstream' => 'Cannot reverse this adjustment because stock it added has since been consumed downstream. Reverse the downstream source first.',
+        'adjustment_reversal_unavailable' => 'Cannot reverse this adjustment because the stock it added is no longer fully available.',
         'return_source_invalid' => 'Only an unreversed posted shipment can create a source reversal.',
         'return_source_immutable' => 'A shipment source reversal is immutable. Cancel it and start again before posting.',
         'shipment_already_reversed' => 'This shipment was already reversed by another return.',

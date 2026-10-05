@@ -172,6 +172,38 @@ class SourceDrivenReversalTest extends TestCase
     }
 
     #[Test]
+    public function increase_adjustment_reversal_blocked_downstream_names_the_adjustment_not_a_receipt(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-INC-WH']);
+        $item = F::fifoItem(['sku' => 'REV-INC-ITEM']);
+        $adjustment = app(StockAdjustmentService::class)->post(app(StockAdjustmentService::class)->createDraft([
+            'adjustment_number' => 'REV-INC-SOURCE',
+            'warehouse_id' => $warehouse->id,
+            'reason_code' => 'FOUND',
+        ], [[
+            'item_id' => $item->id,
+            'direction' => 'increase',
+            'quantity' => '4',
+            'unit_cost' => '2',
+        ]]));
+        app(StockLedgerService::class)->post([
+            new StockMovement('out', $item->id, $warehouse->id, '1', self::class, 9002),
+        ], 'downstream-consumption:9002');
+
+        try {
+            app(InventoryReversalService::class)->reverseNegativeAdjustment($adjustment, 'Found stock was miscounted');
+            $this->fail('Downstream consumption must block reversing an increase adjustment.');
+        } catch (RuntimeException $e) {
+            $this->assertSame(__('inventory.documents.adjustment_reversal_downstream'), $e->getMessage());
+            $this->assertStringContainsString('adjustment', $e->getMessage());
+            $this->assertStringNotContainsString('receipt', $e->getMessage());
+        }
+
+        $this->assertNull($adjustment->fresh()->reversal_id);
+    }
+
+    #[Test]
     public function negative_adjustment_reversal_restores_exact_fifo_layer_and_has_its_own_event_source(): void
     {
         $this->useTenantA();
