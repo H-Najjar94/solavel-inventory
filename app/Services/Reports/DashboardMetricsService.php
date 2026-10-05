@@ -72,17 +72,16 @@ class DashboardMetricsService
             ->get(['item_id', 'on_hand_qty', 'reserved_qty', 'total_value']);
 
         $inventoryValue = '0';
-        $low = 0;
-        $out = 0;
         foreach ($balances as $b) {
             $inventoryValue = Decimal::add($inventoryValue, (string) $b->total_value);
-            $avail = (float) $b->on_hand_qty - (float) $b->reserved_qty;
-            if ($avail <= 0) {
-                $out++;
-            } elseif ($avail <= 5) {
-                $low++;
-            }
         }
+        // Low/out are counted per item against reorder points (warehouse rule,
+        // else item), matching the low-stock alerts and the Items filter.
+        $statuses = array_count_values(\App\Services\Stock\Support\StockStatus::byItem(
+            \App\Services\Stock\Support\StockStatus::balanceRows($this->scoped('stock_balances as b'))
+        ));
+        $low = $statuses['low'] ?? 0;
+        $out = $statuses['out'] ?? 0;
 
         $today = now()->toDateString();
         $expiryWarningDays = InventorySetting::expiryWarningDays();
