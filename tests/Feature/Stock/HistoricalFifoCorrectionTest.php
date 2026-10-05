@@ -111,6 +111,19 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $this->assertSame(5, StockLedger::query()->count());
     }
 
+    public function test_original_financial_document_binding_cannot_be_assigned_to_an_unproven_parent(): void
+    {
+        [$item, $wh, $events, $openings] = $this->fixture();
+        $events[0]['finance_document_id'] = 999;
+        $events[0]['finance_document_type'] = 'bill';
+        $review = app(HistoricalFifoReviewService::class)->review((string) Str::uuid(), (string) Str::uuid(), $events, $openings, 337);
+        $before = SolaStockJournalContract::payloadHash(app(HistoricalFifoReviewService::class)->projectionSnapshot($item->organization_id, $review->plan));
+        try { app(StockLedgerService::class)->applyHistoricalFifo($review); $this->fail('Unproven source parent accepted'); }
+        catch (\RuntimeException $e) { $this->assertStringContainsString('document binding unproven', $e->getMessage()); }
+        $this->assertSame($before, SolaStockJournalContract::payloadHash(app(HistoricalFifoReviewService::class)->projectionSnapshot($item->organization_id, $review->plan)));
+        $this->assertSame('reviewed', $review->fresh()->status);
+    }
+
     public function test_new_native_activity_after_review_refuses_stale_projection(): void
     {
         [$item, $wh, $events, $openings] = $this->fixture();
