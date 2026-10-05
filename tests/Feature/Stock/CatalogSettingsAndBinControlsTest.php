@@ -74,6 +74,23 @@ class CatalogSettingsAndBinControlsTest extends TestCase
     }
 
     #[Test]
+    public function supplier_price_without_currency_uses_the_organization_currency(): void
+    {
+        $this->useTenantA();
+        $reports = \Mockery::mock(\App\Services\Reports\InventoryReportService::class);
+        $reports->shouldReceive('baseCurrency')->andReturn('JOD');
+        $this->app->instance(\App\Services\Reports\InventoryReportService::class, $reports);
+        $supplier = Supplier::query()->create(['code' => 'SUP-CUR', 'name' => 'Currency Supplier']);
+        $item = $this->createItem(['sku' => 'CUR-ITEM']);
+
+        $price = app(ItemController::class)->storeSupplierPrice(Request::create("/items/{$item->id}/supplier-prices", 'POST', [
+            'supplier_id' => $supplier->id, 'unit_cost' => '3',
+        ]), $item)->getData(true)['data'];
+
+        $this->assertSame('JOD', $price['currency_code']);
+    }
+
+    #[Test]
     public function item_expiry_tick_and_edit_barcode_are_saved(): void
     {
         $this->useTenantA();

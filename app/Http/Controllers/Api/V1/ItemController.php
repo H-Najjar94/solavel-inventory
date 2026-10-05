@@ -370,7 +370,8 @@ class ItemController extends ApiController
             'supplier_sku' => $data['supplier_sku'] ?? null,
             'unit_cost' => $data['unit_cost'],
             'minimum_qty' => $data['minimum_qty'] ?? 1,
-            'currency_code' => strtoupper($data['currency_code'] ?? 'SAR'),
+            // Default to the organization's base currency, never a fixed SAR.
+            'currency_code' => strtoupper($data['currency_code'] ?? app(\App\Services\Reports\InventoryReportService::class)->baseCurrency()),
             'effective_from' => $data['effective_from'] ?? null,
             'effective_to' => $data['effective_to'] ?? null,
             'is_active' => $data['is_active'] ?? true,
@@ -395,6 +396,11 @@ class ItemController extends ApiController
             'is_active' => ['boolean'],
         ]);
         Supplier::query()->whereKey($data['supplier_id'])->firstOrFail();
+        if (empty($data['currency_code'])) {
+            unset($data['currency_code']);
+        } else {
+            $data['currency_code'] = strtoupper($data['currency_code']);
+        }
         $price->fill($data + ['minimum_qty' => 1, 'is_active' => true])->save();
 
         return $this->success($price->fresh('supplier:id,code,name'));

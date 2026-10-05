@@ -245,7 +245,7 @@ export default function ItemDetailPage() {
     const [scanCode, setScanCode] = useState('');
     const [scanResult, setScanResult] = useState(null);
     const [variantForm, setVariantForm] = useState({ sku: '', option: '', value: '', barcode_primary: '', purchase_price: '', sales_price: '' });
-    const [priceForm, setPriceForm] = useState({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: 'SAR' });
+    const [priceForm, setPriceForm] = useState({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: '' });
     const [labels, setLabels] = useState(null);
 
     const { data, isLoading } = useApiQuery(['item', id], () => api.item(id), { fallback: null });
@@ -353,8 +353,8 @@ export default function ItemDetailPage() {
         e.preventDefault();
         if (!priceForm.supplier_id || !priceForm.unit_cost) return;
         try {
-            await api.createSupplierPrice(item.id, priceForm);
-            setPriceForm({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: 'SAR' });
+            await api.createSupplierPrice(item.id, { ...priceForm, currency_code: priceForm.currency_code || undefined });
+            setPriceForm({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: '' });
             await qc.invalidateQueries({ queryKey: ['item', id] });
             toast.push(t('itemDetail.supplierPriceSaved'), 'success');
         } catch (err) { toast.failure(err, err.message); }
@@ -517,6 +517,8 @@ export default function ItemDetailPage() {
                             <input className="input" placeholder={t('itemDetail.supplierSku')} value={priceForm.supplier_sku} onChange={(e) => setPriceForm({ ...priceForm, supplier_sku: e.target.value })} dir="ltr" />
                             <MoneyInput value={priceForm.unit_cost} onChange={(v) => setPriceForm({ ...priceForm, unit_cost: v })} />
                             <input className="input" type="number" step="0.0001" min="0" value={priceForm.minimum_qty} onChange={(e) => setPriceForm({ ...priceForm, minimum_qty: e.target.value })} />
+                            <input className="input" aria-label={t('itemDetail.priceCurrency')} placeholder={t('itemDetail.priceCurrencyDefault')} value={priceForm.currency_code} maxLength={3} dir="ltr"
+                                onChange={(e) => setPriceForm({ ...priceForm, currency_code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })} />
                             <button className="btn btn--primary">{t('itemDetail.addSupplierPrice')}</button>
                         </form>}
                     </div></div>
