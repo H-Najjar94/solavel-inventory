@@ -110,7 +110,7 @@ export default function CountFormPage() {
             <span>{header.blind_count ? t('counts.form.hidden') : <bdi>{l.snapshot_qty ?? l.system_qty}</bdi>}{!header.blind_count && (l.expected_serials ?? []).length > 0 && <span className="muted" title={(l.expected_serials).map((s) => s.serial).join(', ')}> · {translateCountPlural(locale, 'counts.form.serialCount', (l.expected_serials).length)}</span>}</span>
         ) },
         { key: 'cnt', label: t('counts.form.counted'), width: 110, render: (l, i) => <QuantityInput value={l.counted_qty} onChange={(v) => setLine(i, { counted_qty: v })} /> },
-        { key: 'var', label: t('counts.form.variance'), width: 100, render: (l) => { const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}><bdi>{v === null ? '—' : v}</bdi></span>; } },
+        { key: 'var', label: t('counts.form.variance'), width: 100, render: (l) => { if (header.blind_count) return <span className="muted">{t('counts.form.hidden')}</span>; const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}><bdi>{v === null ? '—' : v}</bdi></span>; } },
     ];
 
     return (
