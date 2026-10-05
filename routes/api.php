@@ -202,6 +202,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     // Migration catalog commands are callable only through the signed workspace.
     Route::post('/migration-catalog/references/ensure', [MigrationCatalogReferenceController::class, 'ensure'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.catalog-references.ensure');
+    Route::post('/historical-fifo/review', [\App\Http\Controllers\Api\V1\HistoricalFifoController::class, 'review'])->middleware('perm:inventory.integration.setup')->name('api.v1.historical-fifo.review');
+    Route::post('/historical-fifo/{plan}/apply', [\App\Http\Controllers\Api\V1\HistoricalFifoController::class, 'apply'])->middleware('perm:inventory.integration.setup')->name('api.v1.historical-fifo.apply');
     Route::post('/migration-references/link', [\App\Http\Controllers\Api\V1\MigrationReferenceController::class, 'link'])
         ->middleware('perm:inventory.integration.setup')->name('api.v1.migration-references.link');
     Route::get('/migration-catalog/requirements', [MigrationCatalogController::class, 'requirements'])

@@ -15,6 +15,7 @@ final class AccountRolePolicy
         'stock_count.posted' => ['inventory_asset', 'adjustment_gain', 'adjustment_loss'],
         'grn.posted' => ['inventory_asset', 'grni'],
         'grn.reversed' => ['inventory_asset', 'grni'],
+        'stock.historical_fifo_cost_corrected.v1' => ['cogs', 'inventory_asset'],
         'shipment.posted' => ['cogs', 'inventory_asset'],
         'sales_return.posted' => ['inventory_asset', 'cogs'],
         'sales_return.reversed' => ['inventory_asset', 'cogs'],
@@ -48,6 +49,7 @@ final class AccountRolePolicy
         return match ($eventType) {
             'grn.posted' => [['inventory_asset', 'debit'], ['grni', 'credit']],
             'grn.reversed' => [['grni', 'debit'], ['inventory_asset', 'credit']],
+            'stock.historical_fifo_cost_corrected.v1' => null, // Dedicated approved delta supports either direction.
             'shipment.posted' => [['cogs', 'debit'], ['inventory_asset', 'credit']],
             'sales_return.posted' => [['inventory_asset', 'debit'], ['cogs', 'credit']],
             'sales_return.reversed' => [['cogs', 'debit'], ['inventory_asset', 'credit']],

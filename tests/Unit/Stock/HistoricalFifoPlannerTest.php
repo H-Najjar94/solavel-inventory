@@ -53,7 +53,7 @@ final class HistoricalFifoPlannerTest extends TestCase
     {
         $events = [
             $this->event('sale', '2024-01-02', 'out', '2'),
-            $this->event('return', '2024-01-03', 'return', '1', ['original_sale_source_id' => 'sale', 'return_disposition_evidence' => 'resalable-inspection']),
+            $this->event('return', '2024-01-03', 'return', '1', ['original_sale_source_id' => 'sale', 'return_disposition' => 'restock', 'return_disposition_evidence' => 'resalable-inspection']),
             $this->event('resale', '2024-01-04', 'out', '1'),
         ];
         $plan = (new HistoricalFifoPlanner)->plan($events, $this->opening([['quantity' => '2', 'unit_cost' => '3']]));
@@ -64,6 +64,31 @@ final class HistoricalFifoPlannerTest extends TestCase
         $blocked = (new HistoricalFifoPlanner)->plan($events, $this->opening([['quantity' => '2', 'unit_cost' => '3']]));
         $this->assertSame('return_origin_or_disposition_unproven', $blocked['blocked_items']['1:1']);
         $this->assertSame('blocked', $blocked['events'][2]['status']);
+    }
+
+    public function test_partial_return_allocates_only_the_returned_quantity_across_original_layers(): void
+    {
+        $plan = (new HistoricalFifoPlanner)->plan([
+            $this->event('sale', '2024-01-02', 'out', '4'),
+            $this->event('return', '2024-01-03', 'return', '3', ['original_sale_source_id' => 'sale', 'return_disposition' => 'restock', 'return_disposition_evidence' => 'inspection']),
+        ], $this->opening([['quantity' => '2', 'unit_cost' => '3'], ['quantity' => '2', 'unit_cost' => '5']]));
+        $this->assertSame(['2.0000', '1.0000'], array_column($plan['events'][1]['allocations'], 'quantity'));
+        $this->assertSame('11.00', $plan['events'][1]['reconstructed_cost']);
+    }
+
+    public function test_damaged_disposition_does_not_restock(): void
+    {
+        $plan = (new HistoricalFifoPlanner)->plan([
+            $this->event('sale', '2024-01-02', 'out', '1'),
+            $this->event('return', '2024-01-03', 'return', '1', ['original_sale_source_id' => 'sale', 'return_disposition' => 'damaged', 'return_disposition_evidence' => 'inspection']),
+        ], $this->opening([['quantity' => '1', 'unit_cost' => '3']]));
+        $this->assertSame('return_origin_or_disposition_unproven', $plan['events'][1]['reason']);
+    }
+
+    public function test_zero_acquisition_cost_requires_specific_evidence(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        (new HistoricalFifoPlanner)->plan([$this->event('purchase', '2024-01-02', 'receipt', '1', ['acquisition_unit_cost' => '0'])], $this->opening());
     }
 
     public function test_later_purchase_cannot_fund_earlier_outbound(): void

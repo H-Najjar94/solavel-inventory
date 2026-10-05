@@ -41,7 +41,7 @@ final class HistoricalFifoPlanner
                     foreach ($opening['layers'] as $index => $layer) {
                         $q = $this->decimal($layer['quantity'] ?? '', 4);
                         $cost = $this->decimal($layer['unit_cost'] ?? '', 4);
-                        if (D::cmp($q, '0') <= 0 || D::cmp($cost, '0') < 0) throw new RuntimeException('Historical FIFO opening layer invalid');
+                        if (D::cmp($q, '0') <= 0 || D::cmp($cost, '0') < 0 || (D::isZero($cost) && empty($layer['zero_cost_evidence_reference']))) throw new RuntimeException('Historical FIFO opening layer invalid');
                         $layers[$key][] = ['origin' => 'opening:'.$index, 'date' => $opening['business_date'], 'remaining' => $q, 'unit_cost' => $cost];
                     }
                     // An explicit reviewed empty layers array proves zero. A null opening never does.
@@ -54,7 +54,7 @@ final class HistoricalFifoPlanner
             }
             if ($event['kind'] === 'receipt') {
                 $cost = $this->decimal($event['acquisition_unit_cost'] ?? '', 4);
-                if (D::cmp($cost, '0') < 0) throw new RuntimeException('Historical FIFO acquisition cost invalid');
+                if (D::cmp($cost, '0') < 0 || (D::isZero($cost) && empty($event['zero_cost_evidence_reference']))) throw new RuntimeException('Historical FIFO acquisition cost invalid');
                 $layers[$key][] = ['origin' => $id, 'date' => $event['date'], 'remaining' => $qty, 'unit_cost' => $cost];
                 $amount = D::money(D::mul($qty, $cost));
             } elseif ($event['kind'] === 'out') {
@@ -79,7 +79,7 @@ final class HistoricalFifoPlanner
                 $sales[$id] = ['key' => $key, 'quantity' => $qty, 'allocations' => $result['allocations']];
             } elseif ($event['kind'] === 'return') {
                 $original = (string) ($event['original_sale_source_id'] ?? '');
-                if (! isset($sales[$original]) || $sales[$original]['key'] !== $key || empty($event['return_disposition_evidence'])) {
+                if (! isset($sales[$original]) || $sales[$original]['key'] !== $key || ($event['return_disposition'] ?? null) !== 'restock' || empty($event['return_disposition_evidence'])) {
                     $blocked[$key] = 'return_origin_or_disposition_unproven';
                     $results[] = array_merge($event, ['status' => 'blocked', 'reason' => $blocked[$key], 'allocations' => []]);
                     continue;
@@ -96,7 +96,7 @@ final class HistoricalFifoPlanner
                     $take = D::lt($remaining, $available) ? $remaining : $available;
                     if (D::isZero($take)) break;
                     $layers[$key][] = ['origin' => $id.':'.$allocation['origin'], 'date' => $event['date'], 'remaining' => D::qty($take), 'unit_cost' => $allocation['unit_cost']];
-                    $result['allocations'][] = $allocation + ['returned_quantity' => D::qty($take)];
+                    $result['allocations'][] = array_merge($allocation, ['quantity' => D::qty($take), 'returned_quantity' => D::qty($take)]);
                     $amount = D::add($amount, D::mul($take, $allocation['unit_cost']));
                     $remaining = D::sub($remaining, $take);
                 }

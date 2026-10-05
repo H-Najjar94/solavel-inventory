@@ -21,6 +21,7 @@ class AccountingJournalBuilder
     {
         app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $event->event_type);
         return match ($event->event_type) {
+            'stock.historical_fifo_cost_corrected.v1' => $this->historicalFifo($event, $orgId),
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),
             'shipment.posted' => $this->shipment($event, $orgId),
@@ -28,6 +29,18 @@ class AccountingJournalBuilder
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
             default => $this->twoLine($event, $orgId),
         };
+    }
+
+    private function historicalFifo(IntegrationOutboxEvent $event, int $orgId): array
+    {
+        $delta = (string) data_get($event->payload, 'historical_fifo_correction.cogs_delta');
+        if (Decimal::isZero($delta)) return [];
+        $value = ltrim($delta, '-');
+        $positive = Decimal::gt($delta, '0');
+        return [
+            $this->line($this->account($orgId, 'cogs'), $positive ? $value : '0', $positive ? '0' : $value, $event),
+            $this->line($this->account($orgId, 'inventory_asset'), $positive ? '0' : $value, $positive ? $value : '0', $event),
+        ];
     }
 
     private function inventoryReversal(IntegrationOutboxEvent $event, int $orgId): array

@@ -207,6 +207,11 @@ final class SolaStockJournalContractBuilder
                 'document_number' => $event->aggregate_number,
                 'transaction_date' => $date,
                 'reversal' => $reversal,
+                ...($event->event_type === 'stock.historical_fifo_cost_corrected.v1' ? [
+                    'historical_fifo_correction' => $eventPayload['historical_fifo_correction'],
+                    'cost_revision_ledger_ids' => $eventPayload['cost_revision_ledger_ids'],
+                    'missing_quantity_ledger_ids' => $eventPayload['missing_quantity_ledger_ids'],
+                ] : []),
             ],
             'currency' => [
                 'transaction_code' => $txCode,

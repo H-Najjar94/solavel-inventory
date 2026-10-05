@@ -141,6 +141,9 @@ class InventoryIntegrityRepairPlan extends Command
             [$org]
         );
 
+        $activeConsumption = \Illuminate\Support\Facades\Schema::connection($connection)->hasColumn('cost_layer_consumptions', 'superseded_fifo_correction_id') ? ' and superseded_fifo_correction_id is null' : '';
+        $activeLayer = \Illuminate\Support\Facades\Schema::connection($connection)->hasColumn('cost_layers', 'superseded_fifo_correction_id') ? ' and superseded_fifo_correction_id is null' : '';
+        $activeAliasedLayer = $activeLayer !== '' ? ' and cl.superseded_fifo_correction_id is null' : '';
         $fifoLayerRecalculations = DB::connection($connection)->select(
             'select cl.id cost_layer_id, cl.item_id, cl.warehouse_id, cl.original_qty,
                     coalesce(c.consumed_qty, 0) consumed_qty, cl.remaining_qty,
@@ -149,10 +152,10 @@ class InventoryIntegrityRepairPlan extends Command
              left join (
                 select cost_layer_id, sum(qty) consumed_qty
                 from cost_layer_consumptions
-                where organization_id = ?
+                where organization_id = ?'.$activeConsumption.'
                 group by cost_layer_id
              ) c on c.cost_layer_id = cl.id
-             where cl.organization_id = ?
+             where cl.organization_id = ?'.$activeAliasedLayer.'
              having abs(diff) > 0.0001',
             [$org, $org]
         );
@@ -168,7 +171,7 @@ class InventoryIntegrityRepairPlan extends Command
              left join (
                 select item_id, warehouse_id, sum(remaining_qty) layer_remaining, sum(remaining_qty * unit_cost) layer_value
                 from cost_layers
-                where organization_id = ?
+                where organization_id = ?'.$activeLayer.'
                 group by item_id, warehouse_id
              ) cl on cl.item_id = b.item_id and ((cl.warehouse_id = b.warehouse_id) or (cl.warehouse_id is null and b.warehouse_id is null))
              where b.organization_id = ?
