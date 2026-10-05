@@ -16,7 +16,11 @@ final class HistoricalFifoCorrectionTest extends TestCase
     private function fixture(): array
     {
         $this->useTenantA();
-        $this->mock(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class, fn ($mock) => $mock->shouldReceive('assert')->zeroOrMoreTimes());
+        // Cost/projection cases use a fixture ownership port; the explicit
+        // unproven-parent case restores the real final production verifier.
+        $this->app->instance(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class, new class {
+            public function assert(array $event, StockLedger $row, int $org, string $segmentQuantity): void {}
+        });
         $item = F::fifoItem(); $wh = F::warehouse();
         $svc = app(StockLedgerService::class);
         $old = $svc->post([new StockMovement('in', $item->id, $wh->id, '5', 'test', 1, unitCost: '2', movedAt: '2024-01-02 00:00:00')], 'fifo-fixture:old')[0];
