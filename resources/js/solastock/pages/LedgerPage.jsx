@@ -5,6 +5,7 @@ import { Breadcrumbs, EmptyState, Field, Skeleton } from '../components/ui.jsx';
 import { WarehousePicker, ItemPicker } from '../components/pickers.jsx';
 import { SourceDocumentLink } from '../components/document.jsx';
 import { t } from '../i18n/index.js';
+import { useCan } from '../stores/meta.jsx';
 
 export default function LedgerPage() {
     const [tab, setTab] = useState('ledger');
@@ -26,7 +27,9 @@ export default function LedgerPage() {
         to: filters.to || undefined,
     };
     const ledger = useApiQuery(['ledger', params], () => api.ledger(params), { fallback: { data: [] } });
-    const audit = useApiQuery(['audit-logs', auditParams], () => api.auditLogs(auditParams), { fallback: { data: [] } });
+    // The audit log endpoint requires inventory.manage_settings.
+    const canViewAudit = useCan()('inventory.manage_settings');
+    const audit = useApiQuery(['audit-logs', auditParams], () => api.auditLogs(auditParams), { fallback: { data: [] }, enabled: canViewAudit });
     const rows = Array.isArray(ledger.data) ? ledger.data : (ledger.data?.data ?? []);
     const auditRows = Array.isArray(audit.data) ? audit.data : (audit.data?.data ?? []);
 
@@ -64,7 +67,7 @@ export default function LedgerPage() {
             </div>}
 
             {tab === 'audit' && <div className="panel">
-                {audit.isLoading ? <Skeleton rows={6} /> : auditRows.length === 0 ? <EmptyState title={t('ledger.noAudit')} /> : <div style={{ overflowX: 'auto' }}><table className="data-table"><thead><tr><th>{t('ledger.time')}</th><th>{t('ledger.actor')}</th><th>{t('ledger.action')}</th><th>{t('ledger.entity')}</th><th>{t('ledger.document')}</th><th>{t('ledger.before')}</th><th>{t('ledger.after')}</th></tr></thead>
+                {!canViewAudit ? <EmptyState title={t('ledger.auditNoPermission')} hint={t('ledger.auditNoPermissionHint')} /> : audit.isLoading ? <Skeleton rows={6} /> : auditRows.length === 0 ? <EmptyState title={t('ledger.noAudit')} /> : <div style={{ overflowX: 'auto' }}><table className="data-table"><thead><tr><th>{t('ledger.time')}</th><th>{t('ledger.actor')}</th><th>{t('ledger.action')}</th><th>{t('ledger.entity')}</th><th>{t('ledger.document')}</th><th>{t('ledger.before')}</th><th>{t('ledger.after')}</th></tr></thead>
                     <tbody>{auditRows.map((r) => <tr key={r.id}><td>{r.created_at}</td><td>{r.actor_user_id ?? t('ledger.system')}</td><td>{r.action}</td><td>{r.entity_type} #{r.entity_id ?? '—'}</td><td>{r.document_ref ?? '—'}</td><td><code>{JSON.stringify(r.before ?? {})}</code></td><td><code>{JSON.stringify(r.after ?? {})}</code></td></tr>)}</tbody></table></div>}
             </div>}
         </section>
