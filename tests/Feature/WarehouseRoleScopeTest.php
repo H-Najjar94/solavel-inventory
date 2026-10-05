@@ -107,6 +107,10 @@ class WarehouseRoleScopeTest extends TestCase
         Schema::connection('tenant')->create('customers', function (Blueprint $t) {
             $t->id(); $t->integer('organization_id'); $t->string('code')->nullable(); $t->string('name'); $t->string('contact')->nullable();
         });
+        Schema::connection('tenant')->create('warehouses', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('name'); $t->string('code')->nullable(); $t->softDeletes();
+        });
+        DB::table('warehouses')->insert([['id' => 11, 'organization_id' => 101, 'name' => 'Main store'], ['id' => 12, 'organization_id' => 101, 'name' => 'Other store']]);
         DB::table('sales_returns')->insert([
             ['id' => 1, 'organization_id' => 101, 'return_number' => 'RMA-OWN', 'warehouse_id' => 11],
             ['id' => 2, 'organization_id' => 101, 'return_number' => 'RMA-OTHER', 'warehouse_id' => 12],
@@ -115,8 +119,9 @@ class WarehouseRoleScopeTest extends TestCase
         DB::table('sales_return_lines')->insert(['organization_id' => 101, 'sales_return_id' => 3, 'item_id' => 9, 'warehouse_id' => 12]);
         $controller = app(\App\Http\Controllers\Api\V1\SalesReturnController::class);
 
-        $listed = array_column($controller->index(\Illuminate\Http\Request::create('/sales-returns'))->getData(true)['data'], 'return_number');
-        $this->assertSame(['RMA-OWN'], $listed);
+        $rows = $controller->index(\Illuminate\Http\Request::create('/sales-returns'))->getData(true)['data'];
+        $this->assertSame(['RMA-OWN'], array_column($rows, 'return_number'));
+        $this->assertSame('Main store', $rows[0]['warehouse_name']);
         foreach ([2, 3] as $id) {
             try { $controller->show(\App\Models\Tenant\SalesReturn::query()->withoutGlobalScopes()->findOrFail($id)); $this->fail("Return {$id} outside scope was shown"); }
             catch (AuthorizationException) { $this->assertTrue(true); }

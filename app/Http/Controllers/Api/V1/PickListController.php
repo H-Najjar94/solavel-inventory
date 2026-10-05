@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsFulfilmentNames;
 use App\Models\Tenant\PickList;
 use App\Models\Tenant\SalesOrder;
 use App\Services\Access\WarehouseAccessService;
@@ -13,6 +14,7 @@ use RuntimeException;
 
 class PickListController extends ApiController
 {
+    use PresentsFulfilmentNames;
     public function __construct(private PickListService $service, private WarehouseAccessService $warehouseAccess) {}
 
     public function index(Request $request): JsonResponse
@@ -29,13 +31,20 @@ class PickListController extends ApiController
             $query->whereDoesntHave('lines', fn ($lines) => $lines->whereNotNull('warehouse_id')->whereNotIn('warehouse_id', $allowed));
         }
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        $page = $query->paginate($perPage)->withQueryString();
+        $this->nameDocuments($page);
+
+        return $this->paginated($page);
     }
 
     public function show(PickList $pick_list): JsonResponse
     {
         $this->assertPickListScope($pick_list);
-        return $this->success(['pick_list' => $pick_list->load('lines')]);
+        $pick_list->load('lines');
+        $this->nameDocuments([$pick_list]);
+        $this->nameLines($pick_list->lines);
+
+        return $this->success(['pick_list' => $pick_list]);
     }
 
     public function store(Request $request): JsonResponse

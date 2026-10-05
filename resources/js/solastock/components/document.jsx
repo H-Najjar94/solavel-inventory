@@ -8,6 +8,8 @@ const STATUS = {
     draft: ['document.draft', 'badge--muted'], posted: ['document.posted', 'badge--live'], reversed: ['document.reversed', 'badge--demo'], cancelled: ['document.cancelled', 'badge--muted'], approved: ['document.approved', 'badge--live'], partially_received: ['document.partiallyReceived', 'badge--demo'], received: ['document.received', 'badge--live'], in_transit: ['document.inTransit', 'badge--demo'], counting: ['document.counting', 'badge--demo'], review: ['document.review', 'badge--demo'],
     // Sales fulfillment
     confirmed: ['document.confirmed', 'badge--demo'], partially_reserved: ['document.partiallyReserved', 'badge--demo'], reserved: ['document.reserved', 'badge--demo'], picking: ['document.picking', 'badge--demo'], partially_picked: ['document.partiallyPicked', 'badge--demo'], picked: ['document.picked', 'badge--demo'], packing: ['document.packing', 'badge--demo'], packed: ['document.packed', 'badge--demo'], partially_shipped: ['document.partiallyShipped', 'badge--demo'], shipped: ['document.shipped', 'badge--live'],
+    // Sales returns
+    authorized: ['document.authorized', 'badge--demo'], inspected: ['document.inspected', 'badge--demo'],
 };
 
 export function DocumentStatusBadge({ status }) {

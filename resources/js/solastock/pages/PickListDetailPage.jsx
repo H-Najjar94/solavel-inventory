@@ -56,14 +56,14 @@ export default function PickListDetailPage() {
             <Breadcrumbs items={[{ label: t('fulfillment.picking.breadcrumb', 'Picking'), to: '/pick-lists' }, { label: pl.pick_number }]} />
             <header className="page-head"><h1>{pl.pick_number}</h1><DocumentStatusBadge status={pl.status} /></header>
             <div className="panel"><dl className="kv">
-                <dt>{t('fulfillment.common.salesOrder', 'Sales order')}</dt><dd><Link to={`/sales-orders/${pl.sales_order_id}`}>#{pl.sales_order_id}</Link></dd>
-                <dt>{t('fulfillment.common.warehouse', 'Warehouse')}</dt><dd>#{pl.warehouse_id}</dd>
+                <dt>{t('fulfillment.common.salesOrder', 'Sales order')}</dt><dd><Link to={`/sales-orders/${pl.sales_order_id}`}>{pl.sales_order_number ?? <bdi>#{pl.sales_order_id}</bdi>}</Link></dd>
+                <dt>{t('fulfillment.common.warehouse', 'Warehouse')}</dt><dd>{pl.warehouse_name ?? <bdi>#{pl.warehouse_id}</bdi>}</dd>
             </dl></div>
 
             <div className="panel"><table className="data-table">
                 <thead><tr><th>{t('fulfillment.common.item', 'Item')}</th><th>{t('fulfillment.common.bin', 'Bin')}</th><th>{t('fulfillment.common.traceability', 'Lot / Serial')}</th><th>{t('fulfillment.common.reserved', 'Reserved')}</th><th>{t('fulfillment.common.picked', 'Picked')}</th></tr></thead>
                 <tbody>{(pl.lines ?? []).map((l) => (
-                    <tr key={l.id}><td>#{l.item_id}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.reserved_qty}</td>
+                    <tr key={l.id}><td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className=\"muted\"> · <bdi>{l.item_sku}</bdi></span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.reserved_qty}</td>
                         <td>{editable ? <QuantityInput value={picks[l.id] ?? ''} onChange={(v) => setPicks({ ...picks, [l.id]: v })} /> : l.picked_qty}</td></tr>
                 ))}</tbody>
             </table></div>

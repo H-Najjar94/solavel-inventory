@@ -146,9 +146,9 @@ export default function ShipmentDetailPage() {
             <header className="page-head"><h1>{s.shipment_number}</h1><DocumentStatusBadge status={s.status} />{isMock && <span className="badge badge--warn">{t('fulfillment.common.sampleData', 'Sample data')}</span>}</header>
 
             <div className="panel"><dl className="kv">
-                <dt>{t('fulfillment.common.salesOrder', 'Sales order')}</dt><dd><Link to={`/sales-orders/${s.sales_order_id}`}>#{s.sales_order_id}</Link></dd>
+                <dt>{t('fulfillment.common.salesOrder', 'Sales order')}</dt><dd><Link to={`/sales-orders/${s.sales_order_id}`}>{s.sales_order_number ?? <bdi>#{s.sales_order_id}</bdi>}</Link></dd>
                 <dt>{t('fulfillment.shipmentDetail.shipDate', 'Ship date')}</dt><dd>{s.ship_date}</dd>
-                <dt>{t('fulfillment.common.warehouse', 'Warehouse')}</dt><dd>#{s.warehouse_id}</dd>
+                <dt>{t('fulfillment.common.warehouse', 'Warehouse')}</dt><dd>{s.warehouse_name ?? <bdi>#{s.warehouse_id}</bdi>}</dd>
                 <dt>{t('fulfillment.common.carrier', 'Carrier')}</dt><dd>{s.carrier ?? '—'} {s.carrier_service && <span className="muted">· {t(`fulfillment.service.${s.carrier_service}`, s.carrier_service)}</span>}</dd>
                 <dt>{t('fulfillment.common.trackingNumber', 'Tracking #')}</dt><dd>{s.tracking_number ?? '—'}</dd>
                 <dt>{t('fulfillment.shipmentDetail.label', 'Label')}</dt><dd>{s.label_number ?? '—'} {s.label_status && <span className="badge badge--demo">{t(`fulfillment.labelStatus.${s.label_status}`, s.label_status)}</span>}</dd>
@@ -163,7 +163,7 @@ export default function ShipmentDetailPage() {
                     const selCount = tracking.tracksSerial(l.item_id) ? (p.serial_ids ?? []).length : (p.lot_id ? 1 : 0);
                     return (
                         <tr key={l.id}>
-                            <td>#{l.item_id} <TraceabilityRequiredBadge trackingType={t.tracking_type} tracksExpiry={t.tracks_expiry} /></td>
+                            <td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className=\"muted\"> · <bdi>{l.item_sku}</bdi></span>} <TraceabilityRequiredBadge trackingType={t.tracking_type} tracksExpiry={t.tracks_expiry} /></td>
                             <td>{l.quantity}</td>
                             <td>
                                 {(!t.tracking_type || t.tracking_type === 'none') && <span className="muted">—</span>}

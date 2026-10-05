@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsFulfilmentNames;
 use App\Http\Requests\Api\StoreSalesReturnRequest;
 use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\StockLedger;
@@ -15,6 +16,7 @@ use RuntimeException;
 
 class SalesReturnController extends ApiController
 {
+    use PresentsFulfilmentNames;
     public function __construct(
         private SalesReturnService $service,
         private InventoryReversalService $reversals,
@@ -57,11 +59,14 @@ class SalesReturnController extends ApiController
             $query->whereDoesntHave('lines', fn ($lines) => $lines->whereNotNull('warehouse_id')->whereNotIn('warehouse_id', $allowed));
         }
 
-        return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (SalesReturn $return) {
+        $page = $query->paginate($perPage)->withQueryString()->through(function (SalesReturn $return) {
             $return->setAttribute('customer_name', $return->customer?->name ?? $return->customer_name);
 
             return $return;
-        }));
+        });
+        $this->nameDocuments($page);
+
+        return $this->paginated($page);
     }
 
     public function show(SalesReturn $sales_return): JsonResponse
@@ -71,6 +76,8 @@ class SalesReturnController extends ApiController
         $sales_return->setAttribute('customer_name', $sales_return->customer?->name ?? $sales_return->customer_name);
         $ledger = StockLedger::query()
             ->where('source_type', SalesReturn::class)->where('source_id', $sales_return->id)->get();
+
+        $this->nameDocuments([$sales_return]);
 
         return $this->success(['sales_return' => $sales_return, 'ledger' => $ledger]);
     }

@@ -41,7 +41,7 @@ export default function SalesReturnDetailPage() {
             <div className="panel"><dl className="kv">
                 <dt>{t('returns.common.customer', 'Customer')}</dt><dd>{r.customer_name ?? '—'}</dd>
                 <dt>{t('returns.detail.returnDate', 'Return date')}</dt><dd>{r.return_date}</dd>
-                <dt>{t('returns.common.warehouse', 'Warehouse')}</dt><dd>#{r.warehouse_id}</dd>
+                <dt>{t('returns.common.warehouse', 'Warehouse')}</dt><dd>{r.warehouse_name ?? <bdi>#{r.warehouse_id}</bdi>}</dd>
                 <dt>{t('returns.detail.sourceShipment', 'Source shipment')}</dt><dd>{r.shipment_id ? <Link to={`/shipments/${r.shipment_id}`}>#{r.shipment_id}</Link> : '—'}</dd>
                 <dt>{t('returns.detail.authorized', 'Authorized')}</dt><dd>{r.authorized_at ?? '—'}</dd>
                 <dt>{t('returns.detail.inspected', 'Inspected')}</dt><dd>{r.inspected_at ?? '—'}</dd>
