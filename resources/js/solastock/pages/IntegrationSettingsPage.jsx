@@ -1,5 +1,6 @@
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
+import { diagnosticReason } from '../services/connectionDiagnostics.js';
 import ConnectionSummaryCard, { failureGroup } from '../components/ConnectionSummaryCard.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -88,6 +89,13 @@ export default function IntegrationSettingsPage() {
         fallback: null, enabled: Boolean(tenant.organization_id), refetchOnMount: 'always', refetchOnWindowFocus: true,
     });
     const [tab, setTab] = useState('status');
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const diagnosticRef = useRef(null);
+    useEffect(() => {
+        if (!showDiagnostics) return;
+        diagnosticRef.current?.focus({ preventScroll: true });
+        diagnosticRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }, [showDiagnostics]);
     const [wizardResumeStep, setWizardResumeStep] = useState(1);
     const [connection, setConnection] = useState({ mode: 'connected_pending_mapping', client_id: '', solabooks_organization_id: '', api_key: '', require_mapping_before_post: true });
     const [savingConnection, setSavingConnection] = useState(false);
@@ -124,7 +132,11 @@ export default function IntegrationSettingsPage() {
         setActionError('');
         if (kind === 'continue') return openSetup();
         if (kind === 'refresh') return status.refetch();
-        if (kind === 'review') { setTab('status'); return undefined; }
+        if (kind === 'review') {
+            setTab('status'); setShowDiagnostics(true);
+            if (showDiagnostics) { diagnosticRef.current?.focus({ preventScroll: true }); diagnosticRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }); }
+            return undefined;
+        }
         const target = { open: current.links?.solacount, manage_plans: current.links?.manage_plans, finish_finance_setup: current.links?.finish_finance_setup }[kind];
         if (target) { window.location.assign(target); return undefined; }
         // SC-UAE-037: a link action this user cannot open must explain the next step, not do nothing.
@@ -186,6 +198,16 @@ export default function IntegrationSettingsPage() {
                 action={<button className="btn btn--primary" onClick={() => status.refetch()}>{tr('integration.retry')}</button>}
             /> : <ConnectionSummaryCard tr={tr} busy={acting} error={actionError} onAction={onSummaryAction}
                 summary={setupOpen && summary.action?.kind === 'continue' ? { ...summary, action: { kind: 'none' } } : summary} />}
+            {showDiagnostics && s && <section ref={diagnosticRef} tabIndex={-1} className="panel" aria-labelledby="connection-diagnostics-title">
+                <h2 id="connection-diagnostics-title">{tr('integration.diagnostics.title')}</h2>
+                <p role="status">{tr(`integration.diagnostics.reason.${diagnosticReason(s)}`)}</p>
+                <p>{tr('integration.diagnostics.safeNextStep')}</p>
+                <dl className="kv">
+                    <dt>{tr('integration.metrics.pending')}</dt><dd><bdi>{s.events?.pending ?? 0}</bdi></dd>
+                    <dt>{tr('integration.metrics.failed')}</dt><dd><bdi>{s.events?.failed ?? 0}</bdi></dd>
+                </dl>
+                <button type="button" className="btn btn--secondary" disabled={status.isFetching} onClick={() => status.refetch()}>{tr('integration.retry')}</button>
+            </section>}
             {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
             {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (

@@ -1,4 +1,12 @@
 export const en = {
+    'integration.diagnostics.title': 'Connection details',
+    'integration.diagnostics.reason.worker': 'The connection is configured, but its delivery worker is unavailable. An administrator needs to check the running service.',
+    'integration.diagnostics.reason.delivery': 'Some deliveries need review. Check their status before attempting the original action again.',
+    'integration.diagnostics.reason.setup': 'Some setup requirements remain incomplete. Review the required setup steps.',
+    'integration.diagnostics.reason.access': 'Current application access needs review by an administrator.',
+    'integration.diagnostics.reason.review': 'The connection needs review before syncing can continue.',
+    'integration.diagnostics.safeNextStep': 'Refresh the status after the issue is resolved. Do not disconnect or repeat financial actions to clear this warning.',
+
     "settings.roles.preset": "Role preset",
     "settings.roles.choosePreset": "Choose a preset",
     "integration.review.record_details_unavailable_refresh_discovery": "Record details unavailable — refresh discovery",
@@ -1169,9 +1177,17 @@ export const en = {
 };
 
 export const ar = {
+
     "settings.roles.preset": "قالب الصلاحيات",
     "settings.roles.choosePreset": "اختر قالباً",
     ...en,
+    'integration.diagnostics.title': 'تفاصيل الاتصال',
+    'integration.diagnostics.reason.worker': 'الاتصال مُهيأ، لكن خدمة إرسال البيانات غير متاحة. يجب على المسؤول التحقق من الخدمة قيد التشغيل.',
+    'integration.diagnostics.reason.delivery': 'بعض عمليات الإرسال تحتاج إلى مراجعة. تحقق من حالتها قبل إعادة تنفيذ العملية الأصلية.',
+    'integration.diagnostics.reason.setup': 'بعض متطلبات الإعداد لم تكتمل. راجع خطوات الإعداد المطلوبة.',
+    'integration.diagnostics.reason.access': 'يجب على المسؤول مراجعة صلاحية الوصول الحالية إلى التطبيق.',
+    'integration.diagnostics.reason.review': 'يحتاج الاتصال إلى مراجعة قبل متابعة المزامنة.',
+    'integration.diagnostics.safeNextStep': 'حدّث الحالة بعد معالجة المشكلة. لا تفصل الاتصال أو تعِد العمليات المالية لإزالة هذا التنبيه.',
     "integration.review.record_details_unavailable_refresh_discovery": "تفاصيل السجل غير متاحة — حدّث الاستكشاف",
     "integration.review.not_configured_review_finance_settings": "غير مهيأة — راجع إعدادات SolaCount",
     "integration.review.need_review": "بحاجة للمراجعة",
