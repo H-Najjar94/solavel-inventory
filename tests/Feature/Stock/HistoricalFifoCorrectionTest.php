@@ -178,6 +178,22 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $this->assertSame('24.00', StockBalance::query()->where('item_id', $item->id)->first()->total_value);
     }
 
+    public function test_prior_correction_remains_bound_to_immutable_original_finance_parent(): void
+    {
+        [$item, $wh, $events, $openings] = $this->fixture();
+        $this->mock(IntegrationOutboxService::class, fn ($mock) => $mock->shouldReceive('record')->twice()->andReturn(new \App\Models\Tenant\IntegrationOutboxEvent));
+        $review = app(HistoricalFifoReviewService::class)->review((string) Str::uuid(), (string) Str::uuid(), $events, $openings, 337);
+        app(StockLedgerService::class)->applyHistoricalFifo($review);
+        $prior = StockLedger::query()->where('source_type', \App\Models\Tenant\HistoricalFifoCorrection::class)->where('quantity', '>', 0)->firstOrFail();
+        $this->app->forgetInstance(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class);
+        $proof = app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class);
+        $proof->assert($events[2], $prior, $item->organization_id, '4'); $this->addToAssertionCount(1);
+        foreach ([['finance_document_id' => 99], ['finance_document_type' => 'bill']] as $wrong) {
+            try { $proof->assert(array_merge($events[2], $wrong), $prior, $item->organization_id, '4'); $this->fail('Prior correction moved to another parent'); }
+            catch (\RuntimeException $e) { $this->assertStringContainsString('original parent mismatch', $e->getMessage()); }
+        }
+    }
+
     public function test_new_native_activity_after_review_refuses_stale_projection(): void
     {
         [$item, $wh, $events, $openings] = $this->fixture();

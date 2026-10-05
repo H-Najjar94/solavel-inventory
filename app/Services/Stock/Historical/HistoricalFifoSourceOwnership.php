@@ -14,6 +14,11 @@ final class HistoricalFifoSourceOwnership
             $correction = \App\Models\Tenant\HistoricalFifoCorrection::query()->where('organization_id', $org)->findOrFail($row->source_id);
             $plan = \App\Models\Tenant\HistoricalFifoPlan::query()->where('organization_id', $org)->where('status', 'applied')->findOrFail($correction->plan_id);
             $c = $correction->causal_payload;
+            $original = collect($plan->plan['events'])->firstWhere('source_id', $c['planner_unique_id']);
+            if (! $original || (int) $original['finance_document_id'] !== (int) $event['finance_document_id']
+                || $original['finance_document_type'] !== $event['finance_document_type'] || $original['finance_source_id'] !== $event['finance_source_id']) {
+                throw new RuntimeException('Historical FIFO prior correction original parent mismatch');
+            }
             if ($c['source_id'] !== $event['finance_source_id'] || (int) $c['stock_item_id'] !== (int) $event['stock_item_id'] || (int) $c['warehouse_id'] !== (int) $event['warehouse_id']
                 || ! in_array((int) $row->id, $correction->ledger_ids, true) || array_diff($c['finance_line_ids'], $event['finance_line_ids'])) throw new RuntimeException('Historical FIFO prior correction ownership mismatch');
             return;
