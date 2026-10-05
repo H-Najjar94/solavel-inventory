@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsLineTraceability;
 use App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Models\Tenant\StockAdjustment;
@@ -20,7 +21,7 @@ use RuntimeException;
  */
 class StockAdjustmentController extends ApiController
 {
-    use ResolvesTraceOverrides;
+    use ResolvesTraceOverrides, PresentsLineTraceability;
 
     public function __construct(
         private StockAdjustmentService $service,
@@ -70,6 +71,8 @@ class StockAdjustmentController extends ApiController
         $adjustment->lines->each(function ($line) {
             $line->setAttribute('bin_code', $line->bin?->code);
         });
+
+        $this->attachLineTraceability($adjustment->lines);
 
         return $this->success(['adjustment' => $adjustment, 'ledger' => $ledger]);
     }

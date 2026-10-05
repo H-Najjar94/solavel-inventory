@@ -66,6 +66,9 @@ export default function GoodsReceiptFormPage() {
                 rejected_qty: l.rejected_qty ?? '', disposition: l.disposition ?? 'restock',
                 entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor),
                 bin_id: l.bin_id, ordered_qty: null, remaining_qty: null,
+                // Draft lots/serials already exist: keep them and resend by id.
+                kept: l.lot_id || l.serial_id ? { lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, lot_code: l.lot_code ?? null, expiry_date: l.lot_expiry_date ?? l.expiry_date ?? null, serial: l.serial ?? null } : null,
+                lot_code: '', expiry_date: '', serials: [],
             })));
         }
     }, [isEdit, existing.data]);
@@ -103,6 +106,7 @@ export default function GoodsReceiptFormPage() {
                         lot_code: l.lot_code || undefined,
                         expiry_date: l.expiry_date || undefined,
                         serials: tracksSerial && (l.serials ?? []).length > 0 ? l.serials : undefined,
+                        ...(l.kept ? { lot_code: undefined, serials: undefined, lot_id: l.kept.lot_id || undefined, serial_id: l.kept.serial_id || undefined, expiry_date: l.kept.expiry_date || undefined } : {}),
                     };
                 }),
             };
@@ -145,7 +149,7 @@ export default function GoodsReceiptFormPage() {
         { key: 'recv', label: t('receiving.grn.fields.received', 'Received'), width: 110, render: (l, i) => {
             const t = trackingOf(l.item_id);
             const tracksSerial = t.tracking_type === 'serial' || t.tracking_type === 'lot_serial';
-            return tracksSerial
+            return tracksSerial && !l.kept
                 ? <span className="muted" title={t('receiving.grn.form.serialCountHint', 'Quantity equals the number of serial numbers')}>{(l.serials ?? []).length}</span>
                 : <QuantityInput value={l.received_qty} onChange={(v) => setLine(i, { received_qty: v, accepted_qty: v })} />;
         } },
@@ -165,10 +169,11 @@ export default function GoodsReceiptFormPage() {
             return (
                 <div className="trace-cell">
                     <TraceabilityRequiredBadge trackingType={t.tracking_type} tracksExpiry={t.tracks_expiry} />
-                    {tracksLot && <LotCapture value={{ lot_code: l.lot_code, expiry_date: l.expiry_date }}
+                    {l.kept && <span className="muted">{[l.kept.lot_code && <bdi key="lot">{l.kept.lot_code}{l.kept.expiry_date ? ` · ${l.kept.expiry_date}` : ''}</bdi>, l.kept.serial && <bdi key="serial">{l.kept.serial}</bdi>].filter(Boolean).reduce((all, part) => all.length ? [...all, ' · ', part] : [part], [])}</span>}
+                    {!l.kept && tracksLot && <LotCapture value={{ lot_code: l.lot_code, expiry_date: l.expiry_date }}
                         requireExpiry={!!t.tracks_expiry}
                         onChange={(v) => setLine(i, { lot_code: v.lot_code, expiry_date: v.expiry_date })} />}
-                    {tracksSerial && <SerialNumberListInput value={l.serials ?? []} autoFocus={false}
+                    {!l.kept && tracksSerial && <SerialNumberListInput value={l.serials ?? []} autoFocus={false}
                         onChange={(arr) => setLine(i, { serials: arr, received_qty: String(arr.length), accepted_qty: String(arr.length) })} />}
                 </div>
             );

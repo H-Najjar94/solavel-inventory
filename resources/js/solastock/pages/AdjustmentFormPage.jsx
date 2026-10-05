@@ -37,7 +37,14 @@ export default function AdjustmentFormPage() {
             const a = existing.data.adjustment;
             if (a.status !== 'draft') { toast.push(t('adjustment.readOnly'), 'error'); nav(`/adjustments/${id}`); return; }
             setHeader({ adjustment_number: a.adjustment_number, adjustment_date: a.adjustment_date, warehouse_id: a.warehouse_id, reason_code: a.reason_code ?? '', notes: a.notes ?? '' });
-            setLines((a.lines ?? []).map((l) => ({ direction: l.direction, item_id: l.item_id, bin_id: l.bin_id, quantity: l.quantity, unit_cost: l.unit_cost })));
+            // Keep draft traceability: decreases reselect their lot/serial; captured
+            // increase lots/serials already exist, so they are kept and resent by id.
+            setLines((a.lines ?? []).map((l) => {
+                const inc = l.direction === 'increase';
+                const kept = inc && (l.lot_id || l.serial_id) ? { lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, lot_code: l.lot_code ?? null, expiry_date: l.lot_expiry_date ?? null, serial: l.serial ?? null } : null;
+                return { ...emptyLine(), direction: l.direction, item_id: l.item_id, bin_id: l.bin_id, quantity: l.quantity, unit_cost: l.unit_cost, kept,
+                    lot_id: inc ? null : (l.lot_id ?? null), serial_ids: !inc && l.serial_id ? [l.serial_id] : [] };
+            }));
         }
     }, [isEdit, existing.data]);
 
@@ -58,6 +65,10 @@ export default function AdjustmentFormPage() {
                     .filter((l) => l.item_id && (Number(l.quantity) > 0 || (l.serials ?? []).length > 0 || (l.serial_ids ?? []).length > 0))
                     .map((l) => {
                         const isInc = l.direction === 'increase';
+                        if (isInc && l.kept) {
+                            return { direction: l.direction, item_id: l.item_id, bin_id: l.bin_id, quantity: l.quantity, unit_cost: l.unit_cost,
+                                lot_id: l.kept.lot_id || undefined, serial_id: l.kept.serial_id || undefined };
+                        }
                         const serialCapture = isInc && tracking.tracksSerial(l.item_id) && (l.serials ?? []).length > 0;
                         const serialSelect = !isInc && tracking.tracksSerial(l.item_id) && (l.serial_ids ?? []).length > 0;
                         return {
@@ -89,14 +100,14 @@ export default function AdjustmentFormPage() {
 
     const columns = [
         { key: 'dir', label: t('adjustment.type'), width: 130, render: (l, i) => (
-            <select className="input" value={l.direction} onChange={(e) => setLine(i, { direction: e.target.value })}>
+            <select className="input" value={l.direction} onChange={(e) => setLine(i, { direction: e.target.value, kept: null })}>
                 <option value="increase">{t('adjustment.direction.increase')}</option><option value="decrease">{t('adjustment.direction.decrease')}</option>
             </select>) },
-        { key: 'item', label: t('adjustment.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('adjustment.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v, kept: null })} /> },
         { key: 'bin', label: t('adjustment.bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
         { key: 'qty', label: t('adjustment.quantity'), width: 110, render: (l, i) => {
             const serial = tracking.tracksSerial(l.item_id);
-            if (serial) {
+            if (serial && !l.kept) {
                 const n = l.direction === 'increase' ? (l.serials ?? []).length : (l.serial_ids ?? []).length;
                 return <span className="muted" title={t('adjustment.serialQuantity')}>{n}</span>;
             }
@@ -109,7 +120,9 @@ export default function AdjustmentFormPage() {
             return (
                 <div className="trace-cell">
                     <TraceabilityRequiredBadge trackingType={t.tracking_type} tracksExpiry={t.tracks_expiry} />
-                    {inc ? (
+                    {inc && l.kept ? (
+                        <span className="muted">{[l.kept.lot_code && <bdi key="lot">{l.kept.lot_code}{l.kept.expiry_date ? ` · ${l.kept.expiry_date}` : ''}</bdi>, l.kept.serial && <bdi key="serial">{l.kept.serial}</bdi>].filter(Boolean).reduce((all, part) => all.length ? [...all, ' · ', part] : [part], [])}</span>
+                    ) : inc ? (
                         <>
                             {tracking.tracksLot(l.item_id) && <LotCapture value={{ lot_code: l.lot_code, expiry_date: l.expiry_date }} requireExpiry={!!t.tracks_expiry}
                                 onChange={(v) => setLine(i, { lot_code: v.lot_code, expiry_date: v.expiry_date })} />}

@@ -46,7 +46,7 @@ export default function TransferFormPage() {
             const transfer = existing.data.transfer;
             if (transfer.status !== 'draft') { toast.push(t('transfers.form.draftOnly', 'Only draft transfers can be edited.'), 'error'); nav(`/transfers/${id}`); return; }
             setHeader({ transfer_number: transfer.transfer_number, transfer_date: transfer.transfer_date, from_warehouse_id: transfer.from_warehouse_id, to_warehouse_id: transfer.to_warehouse_id, notes: transfer.notes ?? '' });
-            setLines((transfer.lines ?? []).map((l) => ({ item_id: l.item_id, from_bin_id: l.from_bin_id, to_bin_id: l.to_bin_id, quantity: l.quantity })));
+            setLines((transfer.lines ?? []).map((l) => ({ item_id: l.item_id, from_bin_id: l.from_bin_id, to_bin_id: l.to_bin_id, quantity: l.quantity, lot_id: l.lot_id ?? null, serial_ids: l.serial_id ? [l.serial_id] : [] })));
         }
     }, [isEdit, existing.data, id, nav, t, toast]);
 

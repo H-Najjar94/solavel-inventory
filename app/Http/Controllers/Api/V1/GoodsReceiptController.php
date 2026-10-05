@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsLineTraceability;
 use App\Http\Requests\Api\StoreGoodsReceiptRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
@@ -18,6 +19,7 @@ use RuntimeException;
 
 class GoodsReceiptController extends ApiController
 {
+    use PresentsLineTraceability;
     public function __construct(
         private GoodsReceiptService $service,
         private InventoryReversalService $reversals,
@@ -57,6 +59,8 @@ class GoodsReceiptController extends ApiController
         $po = $goods_receipt->purchase_order_id
             ? PurchaseOrder::query()->find($goods_receipt->purchase_order_id, ['id', 'po_number', 'status'])
             : null;
+
+        $this->attachLineTraceability($goods_receipt->lines);
 
         return $this->success(['grn' => $goods_receipt, 'ledger' => $ledger, 'purchase_order' => $po]);
     }
