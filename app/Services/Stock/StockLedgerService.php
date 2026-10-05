@@ -227,7 +227,7 @@ class StockLedgerService
                 if ($missingCost === null || Decimal::lt((string) $missingCost, '0') || Decimal::gt((string) $missingCost, $event['reconstructed_cost'])) throw new RuntimeException('Historical FIFO missing quantity cost partition unproven');
                 $deltaCost = Decimal::money(Decimal::sub(Decimal::sub($event['reconstructed_cost'], (string) $missingCost), $event['previous_posted_cost']));
                 if (Decimal::isZero($missing) && Decimal::isZero($deltaCost)) continue;
-                if (empty($event['correction_uuid']) || empty($event['unit_conversion']) || empty($event['finance_source_id']) || empty($event['finance_line_id'])) throw new RuntimeException('Historical FIFO correction identity/conversion missing');
+                if (! \Illuminate\Support\Str::isUuid($event['correction_uuid'] ?? '') || empty($event['unit_conversion']) || empty($event['finance_source_id']) || empty($event['finance_line_id'])) throw new RuntimeException('Historical FIFO correction identity/conversion missing');
                 $causal = ['version' => 'historical-fifo.v1', 'correction_uuid' => $event['correction_uuid'], 'batch_id' => $review->batch_id,
                     'plan_sha256' => $review->plan_sha256, 'source_id' => $event['finance_source_id'], 'planner_unique_id' => $event['source_id'],
                     'source_row' => (string) $event['source_row'], 'finance_line_id' => (int) $event['finance_line_id'], 'finance_line_ids' => $event['finance_line_ids'] ?? [(int) $event['finance_line_id']],

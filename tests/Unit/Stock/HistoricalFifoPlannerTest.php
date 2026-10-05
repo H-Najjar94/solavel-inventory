@@ -101,6 +101,17 @@ final class HistoricalFifoPlannerTest extends TestCase
         $this->assertSame('blocked', $plan['events'][1]['status']);
     }
 
+    public function test_explicit_zero_cost_quantity_correction_never_requests_an_empty_journal(): void
+    {
+        $plan = (new HistoricalFifoPlanner)->plan([
+            $this->event('receipt', '2024-01-02', 'receipt', '2', ['acquisition_unit_cost' => '0', 'zero_cost_evidence_reference' => 'reviewed-free-acquisition']),
+            $this->event('free', '2024-01-03', 'out', '1'),
+        ], $this->opening());
+        $this->assertSame('ready', $plan['events'][1]['status']);
+        $this->assertSame('0.00', $plan['events'][1]['cogs_delta']);
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::postsJournalForPayload('stock.historical_fifo_cost_corrected.v1', ['total_inventory_value_change' => '0.00']));
+    }
+
     public function test_duplicate_source_identity_is_rejected(): void
     {
         $this->expectException(\RuntimeException::class);
