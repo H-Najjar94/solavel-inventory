@@ -38,6 +38,76 @@ final class HistoricalFifoCorrectionTest extends TestCase
         return [$item, $wh, $events, $openings, $later];
     }
 
+    public function test_real_correction_outbox_builds_scoped_cost_difference_with_genuine_conversion(): void
+    {
+        [$item, $wh, $events, $openings] = $this->fixture();
+        $db = \Illuminate\Support\Facades\DB::connection('tenant');
+        $db->table('organizations')->insert(['id' => 14, 'central_org_id' => $item->organization_id,
+            'name' => 'Isolated correction Finance', 'setup_status' => 'complete']);
+        $mapping = \App\Models\Tenant\IntegrationOrganizationMapping::create([
+            'mapping_uuid' => (string) Str::uuid(), 'central_client_id' => 7,
+            'central_organization_id' => $item->organization_id, 'tenant_database_identity' => $db->getDatabaseName(),
+            'finance_organization_id' => 14, 'solastock_organization_id' => $item->organization_id,
+            'contract_version' => 'solastock-journal.v2', 'status' => 'verified_hold',
+            'activation_state' => 'maintenance_hold', 'base_currency_code' => 'JOD', 'verified_at' => now(),
+        ]);
+        \App\Models\Tenant\IntegrationSetting::create(['integration' => 'solabooks', 'mode' => 'paused',
+            'solabooks_organization_id' => 14, 'meta' => ['client_id' => 7,
+                'central_organization_id' => $item->organization_id, 'signing_key_id' => 'isolated-correction-key',
+                'transport_enabled_workflows' => ['stock.historical_fifo_cost_corrected.v1'],
+                'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD'],
+                    'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8,
+                    'inventory_valuation_basis' => \App\Services\Integration\FinanceBaseValuation::BASIS]]]);
+        $unit = \App\Models\Tenant\Unit::create(['code' => 'CORRECTION-EA', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item->update(['base_unit_id' => $unit->id]);
+        $identities = [['item', (string) $item->id], ['unit', (string) $unit->id], ['warehouse', (string) $wh->id]];
+        foreach (['inventory_asset' => 100, 'cogs' => 300] as $role => $accountId) {
+            $db->table('accounts')->insert(['id' => $accountId, 'organization_id' => 14, 'code' => (string) $accountId,
+                'name' => $role, 'type' => $role === 'cogs' ? 'expense' : 'asset', 'is_active' => true, 'is_postable' => true]);
+            $account = \App\Models\Tenant\IntegrationAccountMapping::create(['mapping_type' => $role,
+                'integration' => 'solabooks', 'solabooks_account_id' => $accountId, 'status' => 'verified']);
+            $identities[] = ['account_role', (string) $account->id];
+        }
+        foreach ($identities as $index => [$type, $id]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(),
+                'organization_mapping_uuid' => $mapping->mapping_uuid, 'central_client_id' => 7,
+                'central_organization_id' => $item->organization_id, 'finance_organization_id' => 14,
+                'solastock_organization_id' => $item->organization_id, 'entity_type' => $type,
+                'solastock_record_id' => $id, 'solabooks_record_id' => (string) (700 + $index), 'status' => 'verified']);
+        }
+        foreach ($events as &$event) {
+            $normalized = app(\App\Services\Catalog\UnitConversionResolver::class)->normalizeLine([
+                'item_id' => $item->id, 'quantity' => $event['quantity'], 'entered_unit_id' => $unit->id], 'quantity');
+            $event['unit_conversion'] = ['item_id' => $item->id, 'source_quantity' => $normalized['entered_qty'],
+                'source_unit_id' => $normalized['entered_unit_id'], 'base_quantity' => $normalized['quantity'],
+                'base_unit_id' => $normalized['base_unit_id'], 'conversion_id' => $normalized['unit_conversion_id'],
+                'factor' => $normalized['unit_conversion_factor'], 'version' => $normalized['unit_conversion_version'],
+                'hash' => $normalized['unit_conversion_hash'], 'precision' => $normalized['unit_conversion_precision'],
+                'rounding_mode' => $normalized['unit_conversion_rounding_mode']];
+        }
+        unset($event);
+        $review = app(HistoricalFifoReviewService::class)->review((string) Str::uuid(), (string) Str::uuid(), $events, $openings, 337);
+        $result = app(StockLedgerService::class)->applyHistoricalFifo($review);
+        $outbox = \App\Models\Tenant\IntegrationOutboxEvent::query()->where('event_type', 'stock.historical_fifo_cost_corrected.v1')->orderBy('id')->get();
+        $this->assertCount(2, $outbox);
+        foreach ($outbox as $event) {
+            $contract = app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($event);
+            $this->assertSame('JOD', $contract['currency']['transaction_code']);
+            $this->assertCount(2, $contract['lines']);
+            $this->assertSame([300, 100], array_column($contract['lines'], 'account_id'));
+            $causal = $event->payload['historical_fifo_correction'];
+            $this->assertSame($causal, $contract['source']['historical_fifo_correction']);
+            $this->assertTrue($causal['original_quantity_is_reference']);
+            $this->assertSame($causal['cogs_delta'], $contract['lines'][0]['debit']);
+            $this->assertSame($causal['cogs_delta'], $contract['lines'][1]['credit']);
+            $this->assertSame($causal['business_date'], $contract['source']['transaction_date']);
+            $this->assertSame($causal['quantity'], $contract['inventory_quantities'][0]['base_quantity']);
+            $this->assertSame($unit->id, $event->payload['lines'][0]['unit_conversion']['base_unit_id']);
+        }
+        $this->assertSame($result, app(StockLedgerService::class)->applyHistoricalFifo($review));
+        $this->assertSame(2, \App\Models\Tenant\IntegrationOutboxEvent::query()->count());
+    }
+
     public function test_append_only_quantity_and_later_cost_revision_are_atomic_and_idempotent(): void
     {
         [$item, $wh, $events, $openings, $later] = $this->fixture();

@@ -316,7 +316,10 @@ class StockLedgerService
                 $balances[$key]->average_cost = Decimal::isZero($qty) ? '0' : Decimal::cost(Decimal::div($running[$key]['value'], $qty));
                 $balances[$key]->save();
             }
-            foreach ($created as $doc) app(\App\Services\Integration\IntegrationOutboxService::class)->record('stock.historical_fifo_cost_corrected.v1', $doc, 'HistoricalFifoCorrection', $doc->correction_uuid, $doc->causal_payload['business_date']);
+            foreach ($created as $doc) {
+                app(\App\Services\Integration\WorkflowValidationService::class)->assertOperationalDocumentReady($doc, 'stock.historical_fifo_cost_corrected.v1');
+                app(\App\Services\Integration\IntegrationOutboxService::class)->record('stock.historical_fifo_cost_corrected.v1', $doc, 'HistoricalFifoCorrection', $doc->correction_uuid, $doc->causal_payload['business_date']);
+            }
             $result = ['plan_id' => $review->id, 'correction_ids' => array_map(fn ($doc) => (int) $doc->id, $created)];
             $review->status = 'applied'; $review->result = $result; $review->save();
             $this->writeAudit($org, ['action' => 'historical_fifo_projection', 'user_id' => $review->reviewed_by_central_id], 'historical-fifo:'.$review->correction_uuid, count($created));
