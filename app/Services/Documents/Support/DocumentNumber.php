@@ -38,4 +38,32 @@ class DocumentNumber
 
         return sprintf('%s-%06d', $prefix, $seq);
     }
+
+    /**
+     * Keep a caller-derived number (e.g. PICK-<order>) but make it unique in the
+     * organization: the first use keeps it, later ones get -2, -3, … Deleted
+     * documents still hold their number in the unique index, so they count too.
+     *
+     * @param  class-string  $modelClass
+     */
+    public static function unique(?string $base, string $modelClass, string $column, int $orgId, string $connection): ?string
+    {
+        if ($base === null || $base === '') {
+            return $base;
+        }
+        $taken = $modelClass::on($connection)->withoutGlobalScopes()
+            ->where('organization_id', $orgId)
+            ->where(fn ($q) => $q->where($column, $base)->orWhere($column, 'like', $base.'-%'))
+            ->lockForUpdate()
+            ->pluck($column)->all();
+        if (! in_array($base, $taken, true)) {
+            return $base;
+        }
+        $suffix = 2;
+        while (in_array($base.'-'.$suffix, $taken, true)) {
+            $suffix++;
+        }
+
+        return $base.'-'.$suffix;
+    }
 }

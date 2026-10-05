@@ -42,6 +42,7 @@ class PickListService
                 'pick_number' => $attributes['pick_number'] ?? null,
             ], $attributes));
             $pl->organization_id = $orgId;
+            $pl->pick_number = \App\Services\Documents\Support\DocumentNumber::unique($pl->pick_number, PickList::class, 'pick_number', $orgId, $this->conn());
             $pl->sales_order_id = $so->id;
             $pl->warehouse_id = $attributes['warehouse_id'] ?? $so->warehouse_id;
             $pl->save();
