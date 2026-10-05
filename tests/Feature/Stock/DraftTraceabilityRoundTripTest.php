@@ -85,6 +85,33 @@ class DraftTraceabilityRoundTripTest extends TestCase
     }
 
     #[Test]
+    public function opening_stock_draft_edit_keeps_lot_expiry_and_serial(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'RT-OS-WH']);
+        $lotItem = F::lotItem(['sku' => 'RT-OS-LOT']);
+        $serialItem = F::serialItem(['sku' => 'RT-OS-SER']);
+        $service = app(OpeningStockService::class);
+        $entry = $service->createDraft(['entry_number' => 'RT-OS', 'warehouse_id' => $warehouse->id], [
+            ['item_id' => $lotItem->id, 'quantity' => '2', 'unit_cost' => '4', 'lot_code' => 'LOT-RT-O', 'expiry_date' => '2032-02-02'],
+            ['item_id' => $serialItem->id, 'quantity' => '1', 'unit_cost' => '9', 'serials' => ['SER-RT-O']],
+        ]);
+
+        $lines = app(\App\Http\Controllers\Api\V1\OpeningStockController::class)->show($entry)->getData(true)['data']['entry']['lines'];
+        $byItem = collect($lines)->keyBy('item_id');
+        $this->assertSame('LOT-RT-O', $byItem[$lotItem->id]['lot_code']);
+        $this->assertSame('2032-02-02', $byItem[$lotItem->id]['lot_expiry_date']);
+        $this->assertSame('SER-RT-O', $byItem[$serialItem->id]['serial']);
+
+        $service->updateDraft($entry, ['warehouse_id' => $warehouse->id], array_map(fn ($l) => $this->resubmit($l, ['quantity' => $l['quantity'], 'unit_cost' => $l['unit_cost']]), $lines));
+        $fresh = $entry->fresh('lines')->lines->keyBy('item_id');
+        $this->assertSame($byItem[$lotItem->id]['lot_id'], (int) $fresh[$lotItem->id]->lot_id);
+        $this->assertSame($byItem[$serialItem->id]['serial_id'], (int) $fresh[$serialItem->id]->serial_id);
+        $service->post($entry->fresh());
+        $this->assertSame('posted', $entry->fresh()->status);
+    }
+
+    #[Test]
     public function transfer_draft_edit_keeps_lot(): void
     {
         $this->useTenantA();

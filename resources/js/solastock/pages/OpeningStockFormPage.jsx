@@ -40,7 +40,9 @@ export default function OpeningStockFormPage() {
             const e = existing.data.entry;
             if (e.status !== 'draft') { toast.push(t('openingStock.readOnly'), 'error'); nav(`/opening-stock/${id}`); return; }
             setHeader({ entry_number: e.entry_number, opening_date: e.opening_date, warehouse_id: e.warehouse_id, notes: e.notes ?? '' });
-            setLines((e.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, quantity: l.entered_qty ?? l.quantity, entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), lot_code: '', notes: l.notes ?? '' })));
+            setLines((e.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, quantity: l.entered_qty ?? l.quantity, entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), lot_code: '', expiry_date: '', serials: [], notes: l.notes ?? '',
+                // Draft lots/serials already exist: keep them and resend by id.
+                kept: l.lot_id || l.serial_id ? { lot_id: l.lot_id ?? null, serial_id: l.serial_id ?? null, lot_code: l.lot_code ?? null, expiry_date: l.lot_expiry_date ?? null, serial: l.serial ?? null } : null })));
         }
     }, [isEdit, existing.data]);
 
@@ -71,6 +73,7 @@ export default function OpeningStockFormPage() {
                             expiry_date: l.expiry_date || undefined,
                             serials: sl ? l.serials : undefined,
                             notes: l.notes,
+                            ...(l.kept ? { lot_code: undefined, expiry_date: undefined, serials: undefined, lot_id: l.kept.lot_id || undefined, serial_id: l.kept.serial_id || undefined } : {}),
                         };
                     }),
             };
@@ -89,10 +92,10 @@ export default function OpeningStockFormPage() {
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: t('openingStock.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('openingStock.item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v, kept: null })} /> },
         { key: 'bin', label: t('openingStock.bin'), render: (l, i) => <BinPicker warehouseId={header.warehouse_id} value={l.bin_id} onChange={(v) => setLine(i, { bin_id: v })} /> },
         { key: 'qty', label: t('openingStock.quantity'), width: 120, render: (l, i) => tracking.tracksSerial(l.item_id)
-            ? <span className="muted" title={t('openingStock.serialQuantity')}>{(l.serials ?? []).length}</span>
+            && !l.kept ? <span className="muted" title={t('openingStock.serialQuantity')}>{(l.serials ?? []).length}</span>
             : <QuantityInput value={l.quantity} onChange={(v) => setLine(i, { quantity: v })} /> },
         { key: 'unit', label: t('openingStock.unit'), width: 150, render: (l, i) => tracking.tracksSerial(l.item_id)
             ? <span className="muted">{t('openingStock.eachSerial')}</span>
@@ -103,9 +106,10 @@ export default function OpeningStockFormPage() {
             return (
                 <div className="trace-cell">
                     <TraceabilityRequiredBadge trackingType={trackingInfo.tracking_type} tracksExpiry={trackingInfo.tracks_expiry} />
-                    {tracking.tracksLot(l.item_id) && <LotCapture value={{ lot_code: l.lot_code, expiry_date: l.expiry_date }} requireExpiry={!!trackingInfo.tracks_expiry}
+                    {l.kept && <span className="muted">{[l.kept.lot_code && <bdi key="lot">{l.kept.lot_code}{l.kept.expiry_date ? ` · ${l.kept.expiry_date}` : ''}</bdi>, l.kept.serial && <bdi key="serial">{l.kept.serial}</bdi>].filter(Boolean).reduce((all, part) => all.length ? [...all, ' · ', part] : [part], [])}</span>}
+                    {!l.kept && tracking.tracksLot(l.item_id) && <LotCapture value={{ lot_code: l.lot_code, expiry_date: l.expiry_date }} requireExpiry={!!trackingInfo.tracks_expiry}
                         onChange={(v) => setLine(i, { lot_code: v.lot_code, expiry_date: v.expiry_date })} />}
-                    {tracking.tracksSerial(l.item_id) && <SerialNumberListInput value={l.serials ?? []} autoFocus={false}
+                    {!l.kept && tracking.tracksSerial(l.item_id) && <SerialNumberListInput value={l.serials ?? []} autoFocus={false}
                         onChange={(arr) => setLine(i, { serials: arr, quantity: String(arr.length) })} />}
                 </div>
             );

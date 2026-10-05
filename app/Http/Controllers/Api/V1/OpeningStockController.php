@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsLineTraceability;
 use App\Http\Requests\Api\StoreOpeningStockRequest;
 use App\Models\Tenant\Item;
 use App\Models\Tenant\OpeningStockEntry;
@@ -20,7 +21,7 @@ use RuntimeException;
  */
 class OpeningStockController extends ApiController
 {
-    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits;
+    use \App\Http\Controllers\Concerns\EnforcesInventoryLimits, PresentsLineTraceability;
 
     public function __construct(private OpeningStockService $service, private OrganizationContext $context) {}
 
@@ -70,6 +71,7 @@ class OpeningStockController extends ApiController
     {
         $entry->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code']);
         $entry->setAttribute('warehouse_name', $entry->warehouse?->name);
+        $this->attachLineTraceability($entry->lines);
         $ledger = StockLedger::query()
             ->where('source_type', OpeningStockEntry::class)
             ->where('source_id', $entry->id)->get();
