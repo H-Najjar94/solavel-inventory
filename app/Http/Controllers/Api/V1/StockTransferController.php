@@ -77,6 +77,7 @@ class StockTransferController extends ApiController
         try {
             $data = $request->validated();
             $this->warehouseAccess->assertTransferAllowed((int) $data['from_warehouse_id'], (int) $data['to_warehouse_id']);
+            unset($data['transfer_number']);
             $t = $this->service->updateDraft($stock_transfer, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('transfer_update_failed', $e->getMessage(), 422);
