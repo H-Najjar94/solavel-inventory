@@ -64,7 +64,7 @@ export default function PackDetailPage() {
             <div className="panel"><table className="data-table">
                 <thead><tr><th>{t('fulfillment.common.item', 'Item')}</th><th>{t('fulfillment.common.traceability', 'Lot / Serial')}</th><th>{t('fulfillment.common.picked', 'Picked')}</th><th>{t('fulfillment.common.packed', 'Packed')}</th></tr></thead>
                 <tbody>{(pk.lines ?? []).map((l) => (
-                    <tr key={l.id}><td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className=\"muted\"> · <bdi>{l.item_sku}</bdi></span>}</td><td>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.picked_qty}</td>
+                    <tr key={l.id}><td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className="muted"> · <bdi>{l.item_sku}</bdi></span>}</td><td>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.picked_qty}</td>
                         <td>{editable ? <QuantityInput value={packs[l.id] ?? ''} onChange={(v) => setPacks({ ...packs, [l.id]: v })} /> : l.packed_qty}</td></tr>
                 ))}</tbody>
             </table></div>

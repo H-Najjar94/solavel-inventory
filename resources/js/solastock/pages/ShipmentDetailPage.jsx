@@ -163,7 +163,7 @@ export default function ShipmentDetailPage() {
                     const selCount = tracking.tracksSerial(l.item_id) ? (p.serial_ids ?? []).length : (p.lot_id ? 1 : 0);
                     return (
                         <tr key={l.id}>
-                            <td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className=\"muted\"> · <bdi>{l.item_sku}</bdi></span>} <TraceabilityRequiredBadge trackingType={t.tracking_type} tracksExpiry={t.tracks_expiry} /></td>
+                            <td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className="muted"> · <bdi>{l.item_sku}</bdi></span>} <TraceabilityRequiredBadge trackingType={t.tracking_type} tracksExpiry={t.tracks_expiry} /></td>
                             <td>{l.quantity}</td>
                             <td>
                                 {(!t.tracking_type || t.tracking_type === 'none') && <span className="muted">—</span>}

@@ -63,7 +63,7 @@ export default function PickListDetailPage() {
             <div className="panel"><table className="data-table">
                 <thead><tr><th>{t('fulfillment.common.item', 'Item')}</th><th>{t('fulfillment.common.bin', 'Bin')}</th><th>{t('fulfillment.common.traceability', 'Lot / Serial')}</th><th>{t('fulfillment.common.reserved', 'Reserved')}</th><th>{t('fulfillment.common.picked', 'Picked')}</th></tr></thead>
                 <tbody>{(pl.lines ?? []).map((l) => (
-                    <tr key={l.id}><td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className=\"muted\"> · <bdi>{l.item_sku}</bdi></span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.reserved_qty}</td>
+                    <tr key={l.id}><td>{l.item_name ?? <bdi>#{l.item_id}</bdi>}{l.item_sku && <span className="muted"> · <bdi>{l.item_sku}</bdi></span>}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.lot_id ? t('fulfillment.common.lotReference', 'Lot #:reference', { reference: l.lot_id }) : ''}{l.lot_id && l.serial_id ? ' · ' : ''}{l.serial_id ? t('fulfillment.common.serialReference', 'Serial #:reference', { reference: l.serial_id }) : ''}{!l.lot_id && !l.serial_id ? '—' : ''}</td><td>{l.reserved_qty}</td>
                         <td>{editable ? <QuantityInput value={picks[l.id] ?? ''} onChange={(v) => setPicks({ ...picks, [l.id]: v })} /> : l.picked_qty}</td></tr>
                 ))}</tbody>
             </table></div>
