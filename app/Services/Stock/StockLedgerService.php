@@ -202,17 +202,7 @@ class StockLedgerService
                     $direction = $event['kind'] === 'out' ? 'out' : 'in';
                     if (! $row || $row->direction !== $direction || (int) $row->item_id !== (int) $event['stock_item_id'] || (int) $row->warehouse_id !== (int) $event['warehouse_id']
                         || substr((string) $row->moved_at, 0, 10) !== $event['date'] || $row->variant_id || $row->bin_id || $row->lot_id || $row->serial_id) throw new RuntimeException('Historical FIFO native source segment incompatible');
-                    if (isset($event['finance_document_id'])) {
-                        $sourceType = match (class_basename($row->source_type)) { 'GoodsReceipt' => 'goods_receipt', 'Shipment' => 'shipment', 'SalesReturn' => 'sales_return', default => null };
-                        $destinationType = match ($event['finance_document_type']) { 'bill' => 'supplier_bill', 'invoice' => 'customer_invoice', 'credit_note' => 'customer_credit_note', default => null };
-                        $sourceKeys = \App\Models\Tenant\IntegrationOutboxEvent::query()->where('organization_id', $org)->where('aggregate_id', $row->source_id)
-                            ->where('aggregate_type', class_basename($row->source_type))->pluck('idempotency_key')->all();
-                        $allocation = \App\Models\Tenant\IntegrationFinancialLineAllocation::query()->where('solastock_organization_id', $org)
-                            ->where('source_document_type', $sourceType)->where('source_document_id', (string) $row->source_id)->where('source_line_id', $row->source_line_id)
-                            ->where('destination_document_type', $destinationType)->where('destination_document_id', $event['finance_document_id'])
-                            ->whereIn('destination_line_id', $event['finance_line_ids'] ?? [$event['finance_line_id']])->where('state', 'posted')->sum('base_quantity');
-                        if (! $sourceType || ! $destinationType || ! array_intersect($sourceKeys, $event['previous_stock_source_keys'] ?? []) || Decimal::lt((string) $allocation, (string) $segment['quantity'])) throw new RuntimeException('Historical FIFO original Finance/Stock document binding unproven');
-                    }
+                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org);
                     if (! Decimal::gt((string) $segment['quantity'], '0') || Decimal::lt((string) $segment['cost'], '0')) throw new RuntimeException('Historical FIFO invalid source portion');
                     $id = (int) $row->id;
                     $covered[$id] = ['quantity' => Decimal::add($covered[$id]['quantity'] ?? '0', (string) $segment['quantity']), 'cost' => Decimal::add($covered[$id]['cost'] ?? '0', (string) $segment['cost'])];
@@ -221,6 +211,15 @@ class StockLedgerService
                         if (count($event['existing_stock_segments']) !== 1) throw new RuntimeException('Historical FIFO receipt requires one exact native line');
                         $originLayers[$event['stock_item_id'].':'.$event['warehouse_id']][$event['source_id']] = $this->historicalLayerForRow($org, $row);
                     }
+                }
+                foreach ($event['existing_cost_revision_segments'] ?? [] as $segment) {
+                    $row = $native->get((int) $segment['ledger_id']);
+                    if (! $row || ! Decimal::isZero((string) $row->quantity) || $row->source_type !== \App\Models\Tenant\HistoricalFifoCorrection::class || isset($covered[$row->id])) throw new RuntimeException('Historical FIFO invalid or duplicate prior value revision');
+                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org);
+                    if (Decimal::cmp((string) $row->total_cost, (string) $segment['cost']) !== 0) throw new RuntimeException('Historical FIFO prior value revision cost mismatch');
+                    $covered[$row->id] = ['quantity' => '0', 'cost' => (string) $row->total_cost];
+                    $positive = $row->direction === ($event['kind'] === 'out' ? 'out' : 'in');
+                    $cost = $positive ? Decimal::add($cost, (string) $row->total_cost) : Decimal::sub($cost, (string) $row->total_cost);
                 }
                 if (Decimal::gt($qty, $event['quantity']) || Decimal::cmp($cost, $event['previous_posted_cost']) !== 0) throw new RuntimeException('Historical FIFO reviewed previous quantity/cost mismatch');
                 if ($event['kind'] === 'receipt' && (Decimal::cmp($qty, $event['quantity']) !== 0 || Decimal::cmp($cost, $event['reconstructed_cost']) !== 0)) throw new RuntimeException('Historical FIFO purchases require supported native receipt first');
@@ -241,6 +240,7 @@ class StockLedgerService
                 if (! \Illuminate\Support\Str::isUuid($event['correction_uuid'] ?? '') || empty($event['unit_conversion']) || empty($event['finance_source_id']) || empty($event['finance_line_id'])) throw new RuntimeException('Historical FIFO correction identity/conversion missing');
                 $causal = ['version' => 'historical-fifo.v1', 'correction_uuid' => $event['correction_uuid'], 'batch_id' => $review->batch_id,
                     'plan_sha256' => $review->plan_sha256, 'source_id' => $event['finance_source_id'], 'planner_unique_id' => $event['source_id'],
+                    'finance_document_id' => $event['finance_document_id'], 'finance_document_type' => $event['finance_document_type'],
                     'source_row' => (string) $event['source_row'], 'finance_line_id' => (int) $event['finance_line_id'], 'finance_line_ids' => $event['finance_line_ids'] ?? [(int) $event['finance_line_id']],
                     'stock_item_id' => (int) $event['stock_item_id'], 'warehouse_id' => (int) $event['warehouse_id'], 'business_date' => $event['date'],
                     'quantity' => Decimal::qty($event['quantity']), 'original_quantity_is_reference' => true, 'missing_quantity' => $missing,

@@ -17,7 +17,7 @@ final class HistoricalFifoController extends ApiController
             'events.*.finance_document_id' => 'required|integer|min:1', 'events.*.finance_document_type' => 'required|in:invoice,bill,credit_note',
             'events.*.finance_line_id' => 'required|integer|min:1', 'events.*.finance_line_ids' => 'required|array|min:1',
             'events.*.finance_line_ids.*' => 'required|integer|min:1', 'openings' => 'required|array', 'reviewed' => 'required|accepted']);
-        $plan = $reviews->review($data['correction_uuid'], $data['batch_id'], $data['events'], $data['openings'], (int) $request->user()->id);
+        $plan = $reviews->review($data['correction_uuid'], $data['batch_id'], $request->input('events'), $data['openings'], (int) $request->user()->id);
         return $this->success(['plan_id' => $plan->id, 'plan_sha256' => $plan->plan_sha256, 'status' => $plan->status, 'blocked_items' => $plan->plan['blocked_items']]);
     }
     public function apply(Request $request, int $plan, StockLedgerService $stock)
