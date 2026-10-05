@@ -48,8 +48,8 @@ class InventoryAlertService
         foreach ($lowRows as $row) {
             $key = "low-stock:{$row->item_id}:{$row->warehouse_id}";
             $openKeys[] = $key;
-            InventoryAlert::query()->updateOrCreate(
-                ['alert_key' => $key],
+            $this->upsertAlert(
+                $key,
                 [
                     'type' => ((float) $row->available_qty <= 0) ? 'out_of_stock' : 'low_stock',
                     'severity' => ((float) $row->available_qty <= 0) ? 'critical' : 'warning',
@@ -89,8 +89,8 @@ class InventoryAlertService
             $expired = (string) $row->expiry_date < now()->toDateString();
             $key = "expiry:{$row->lot_id}:{$row->warehouse_id}";
             $openKeys[] = $key;
-            InventoryAlert::query()->updateOrCreate(
-                ['alert_key' => $key],
+            $this->upsertAlert(
+                $key,
                 [
                     'type' => $expired ? 'expired_lot' : 'expiring_lot',
                     'severity' => $expired ? 'critical' : 'warning',
@@ -121,6 +121,20 @@ class InventoryAlertService
             ->update(['status' => 'resolved']);
 
         return $this->visibleAlerts();
+    }
+
+    /**
+     * Create or refresh a generated alert. An acknowledgement survives refreshes
+     * while the condition stays the same (same alert type); it reopens when the
+     * condition changes (e.g. low → out of stock) or after it had resolved.
+     */
+    private function upsertAlert(string $key, array $attributes): void
+    {
+        $existing = InventoryAlert::query()->where('alert_key', $key)->first();
+        if ($existing && $existing->status === 'acknowledged' && $existing->type === $attributes['type']) {
+            unset($attributes['status'], $attributes['acknowledged_at'], $attributes['acknowledged_by'], $attributes['triggered_at']);
+        }
+        InventoryAlert::query()->updateOrCreate(['alert_key' => $key], $attributes);
     }
 
     private function visibleAlerts(): Collection

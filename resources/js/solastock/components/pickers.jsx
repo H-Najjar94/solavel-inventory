@@ -22,6 +22,15 @@ export function ItemPicker({ value, onChange, disabled, stockOnly = false }) {
     const params = stockOnly ? { per_page: 200, is_active: true, item_type: 'inventory' } : { per_page: 200, is_active: true };
     const { data } = useApiQuery(stockOnly ? ['items-picker', 'inventory'] : ['items-picker'], () => api.items(params), { fallback: [] });
     const items = Array.isArray(data) ? data : (data?.data ?? []);
+    // An existing line may hold an item the stockOnly list excludes (e.g. a
+    // service line saved before filtering): show that item as a read-only label.
+    const listLoaded = Array.isArray(data) ? data.length > 0 : Boolean(data?.data);
+    const outsideList = stockOnly && value && listLoaded && !items.some((i) => String(i.id) === String(value));
+    const existing = useApiQuery(['item', value], () => api.item(value), { fallback: null, enabled: Boolean(outsideList) });
+    if (outsideList) {
+        const item = existing.data?.item;
+        return <span className="input is-disabled" aria-readonly="true">{item ? <bdi>{`${item.sku} · ${item.name}`}</bdi> : <bdi>#{value}</bdi>}</span>;
+    }
     return <Select value={value} onChange={onChange} options={items} disabled={disabled}
         placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
 }
@@ -41,9 +50,12 @@ export function BinPicker({ warehouseId, value, onChange, disabled, placeholder 
         placeholder={placeholder ?? t('picker.binOptional')} getLabel={(b) => b.code} />;
 }
 
-export function SupplierPicker({ value, onChange, disabled }) {
+// activeOnly: new choices exclude inactive suppliers, but the currently
+// selected supplier stays listed so an existing document still shows it.
+export function SupplierPicker({ value, onChange, disabled, activeOnly = false }) {
     const { data } = useApiQuery(['suppliers-picker'], () => api.suppliers({ per_page: 200 }), { fallback: [] });
-    const list = Array.isArray(data) ? data : (data?.data ?? []);
+    const all = Array.isArray(data) ? data : (data?.data ?? []);
+    const list = activeOnly ? all.filter((s) => s.is_active !== false && s.is_active !== 0 || String(s.id) === String(value)) : all;
     return <Select value={value} onChange={onChange} options={list} disabled={disabled}
         placeholder={t('picker.supplier')} getLabel={(s) => `${s.code} · ${s.name}`} />;
 }

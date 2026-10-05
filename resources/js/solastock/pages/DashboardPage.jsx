@@ -22,7 +22,13 @@ const EMPTY_DASHBOARD = {
 
 const n = (v) => Number(v || 0);
 const num = (v) => n(v).toLocaleString();
-const money = (v) => `$${n(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+// Organization base currency from the API; never a hard-coded "$".
+const money = (v, currency) => {
+    if (currency) {
+        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(n(v)); } catch { /* unknown code */ }
+    }
+    return `${n(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}${currency ? ` ${currency}` : ''}`;
+};
 
 const TONE = { good: '#2f7a4f', warn: '#c97f12', danger: '#d64545', default: 'var(--ink,#222)' };
 const DEFAULT_LAYOUT = [
@@ -160,7 +166,7 @@ export default function DashboardPage() {
     const sections = {
         kpis: (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, marginTop: 4 }}>
-                <Kpi label={t('dashboard.inventoryValue')} value={money(d.inventory_value)} to="/reports" tone="good" icon="fa-coins" sub={t('dashboard.onHandCost')} />
+                <Kpi label={t('dashboard.inventoryValue')} value={money(d.inventory_value, d.currency_code)} to="/reports" tone="good" icon="fa-coins" sub={t('dashboard.onHandCost')} />
                 <Kpi label={t('dashboard.activeSkus')} value={num(d.active_items)} to="/items" icon="fa-tags" sub={t('dashboard.totalSkus', undefined, { count: num(d.total_skus) })} />
                 <Kpi label={t('dashboard.lowStock')} value={num(d.low_stock)} to="/reports" tone={n(d.low_stock) > 0 ? 'warn' : 'default'} icon="fa-triangle-exclamation" sub={t('dashboard.belowReorder')} />
                 <Kpi label={t('dashboard.outOfStock')} value={num(d.out_of_stock)} to="/reports" tone={n(d.out_of_stock) > 0 ? 'danger' : 'default'} icon="fa-circle-xmark" sub={t('dashboard.needsRestocking')} />
@@ -173,7 +179,7 @@ export default function DashboardPage() {
                     {serverAlerts.map((a) => (
                         <div key={a.id} className="banner banner--warn" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
                             <span><strong>{a.title}</strong> · {a.message}</span>
-                            {a.status === 'open' && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>{t('dashboard.acknowledge')}</button>}
+                            {a.status === 'open' && can('inventory.manage_settings') && <button className="btn btn--sm" onClick={() => ackAlert(a.id)}>{t('dashboard.acknowledge')}</button>}
                         </div>
                     ))}
                 </div>}

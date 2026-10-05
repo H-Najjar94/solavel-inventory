@@ -224,7 +224,8 @@ class InventoryReportService
         return $row;
     }
 
-    private function baseCurrency(): string
+    /** The organization's base currency (Central), SAR when unavailable. */
+    public function baseCurrency(): string
     {
         try {
             return (string) (DB::connection(config('tenancy.central_connection', 'mysql'))

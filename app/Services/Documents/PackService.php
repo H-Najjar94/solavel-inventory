@@ -51,6 +51,7 @@ class PackService
                 'package_count' => $attributes['package_count'] ?? 1,
             ], $attributes));
             $pack->organization_id = $orgId;
+            $pack->pack_number = \App\Services\Documents\Support\DocumentNumber::unique($pack->pack_number, Pack::class, 'pack_number', $orgId, $this->conn());
             $pack->sales_order_id = $pl->sales_order_id;
             $pack->pick_list_id = $pl->id;
             $pack->save();

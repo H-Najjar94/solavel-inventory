@@ -92,7 +92,7 @@ class InventoryReversalService
                 throw new RuntimeException("Only a posted adjustment can be reversed (status '{$adjustment->status}').");
             }
             if ($adjustment->lines->contains(fn ($line) => $line->direction === 'increase')) {
-                $this->assertInboundSourceStillReversible('stock_adjustment:'.$adjustment->id.':post');
+                $this->assertInboundSourceStillReversible('stock_adjustment:'.$adjustment->id.':post', 'adjustment');
             }
 
             $this->assertReason($reason);
@@ -210,9 +210,18 @@ class InventoryReversalService
         }
     }
 
-    /** Reject an un-receipt once any downstream outbound touched its coordinates. */
-    private function assertInboundSourceStillReversible(string $namespace): void
+    /**
+     * Reject reversing an inbound source once any downstream outbound touched its
+     * coordinates, whatever the costing method. $document picks the wording
+     * (receipt, adjustment, opening).
+     */
+    public function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt'): void
     {
+        $messagePrefix = match ($document) {
+            'adjustment' => 'inventory.documents.adjustment_',
+            'opening' => 'inventory.documents.opening_',
+            default => 'inventory.documents.',
+        };
         $rows = StockLedger::query()->where('idempotency_key', 'like', $namespace.'#%')->get();
         if ($rows->isEmpty()) {
             throw new RuntimeException(__('inventory.documents.reversal_no_ledger'));
@@ -232,7 +241,7 @@ class InventoryReversalService
                 ->when($row->bin_id, fn ($q) => $q->where('bin_id', $row->bin_id), fn ($q) => $q->whereNull('bin_id'))
                 ->exists();
             if ($downstreamOut) {
-                throw new RuntimeException(__('inventory.documents.reversal_downstream'));
+                throw new RuntimeException(__($messagePrefix.'reversal_downstream'));
             }
 
             $balance = StockBalance::query()
@@ -244,7 +253,7 @@ class InventoryReversalService
                 ->lockForUpdate()
                 ->first();
             if (! $balance || Decimal::lt((string) $balance->on_hand_qty, (string) $row->quantity)) {
-                throw new RuntimeException(__('inventory.documents.reversal_unavailable'));
+                throw new RuntimeException(__($messagePrefix.'reversal_unavailable'));
             }
         }
     }

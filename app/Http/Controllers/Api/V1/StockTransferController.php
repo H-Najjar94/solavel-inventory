@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsLineTraceability;
 use App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 use App\Http\Requests\Api\StoreStockTransferRequest;
 use App\Models\Tenant\StockBalance;
@@ -17,7 +18,7 @@ use RuntimeException;
 
 class StockTransferController extends ApiController
 {
-    use ResolvesTraceOverrides;
+    use ResolvesTraceOverrides, PresentsLineTraceability;
 
     public function __construct(
         private StockTransferService $service,
@@ -54,6 +55,8 @@ class StockTransferController extends ApiController
         $stock_transfer->setAttribute('to_warehouse_name', $stock_transfer->toWarehouse?->name);
         $ledger = StockLedger::query()->where('source_type', StockTransfer::class)->where('source_id', $stock_transfer->id)->get();
 
+        $this->attachLineTraceability($stock_transfer->lines);
+
         return $this->success(['transfer' => $stock_transfer, 'ledger' => $ledger]);
     }
 
@@ -77,6 +80,7 @@ class StockTransferController extends ApiController
         try {
             $data = $request->validated();
             $this->warehouseAccess->assertTransferAllowed((int) $data['from_warehouse_id'], (int) $data['to_warehouse_id']);
+            unset($data['transfer_number']);
             $t = $this->service->updateDraft($stock_transfer, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('transfer_update_failed', $e->getMessage(), 422);

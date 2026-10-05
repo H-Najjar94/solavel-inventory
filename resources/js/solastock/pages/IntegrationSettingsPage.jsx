@@ -63,6 +63,9 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
                 {status.configured_automatically && <div><span>{tr('integration.businessStatus.accountMappings')}</span><strong>{tr('integration.businessStatus.automatic')}</strong></div>}
             </div>
+            <div className="doc-actions">
+                <Link className="btn btn--sm" to="/integrations/solacount/events">{tr('integration.details.viewEvents')}</Link>
+            </div>
             {status.readiness?.can_manage && <details className="assistant-details connection-status-technical"><summary>{tr('integration.assistant.technicalDetails')}</summary>
                 <dl className="kv">
                     <dt>{tr('integration.transport.worker')}</dt><dd>{tr(status.transport?.worker_enabled && status.transport?.worker_running ? 'integration.transport.running' : 'integration.transport.disabled')}</dd>
@@ -208,6 +211,9 @@ export default function IntegrationSettingsPage() {
                 </dl>
                 <button type="button" className="btn btn--secondary" disabled={status.isFetching} onClick={() => status.refetch()}>{tr('integration.retry')}</button>
             </section>}
+            {!status.isLoading && !connectionActivated && <div className="doc-actions">
+                <Link className="btn btn--sm" to="/integrations/solacount/events">{tr('integration.details.viewEvents')}</Link>
+            </div>}
             {connectionActivated && <Tabs tabs={[{ key: 'status', label: tr('integration.tabs.status') }, { key: 'wizard', label: tr('integration.tabs.wizard') }]} active={tab} onChange={setTab} />}
 
             {connectionActivated && tab === 'status' && (status.isLoading ? <Skeleton /> : status.isError ? (

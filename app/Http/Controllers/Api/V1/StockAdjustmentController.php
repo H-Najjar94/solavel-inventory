@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsLineTraceability;
 use App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Models\Tenant\StockAdjustment;
@@ -20,7 +21,7 @@ use RuntimeException;
  */
 class StockAdjustmentController extends ApiController
 {
-    use ResolvesTraceOverrides;
+    use ResolvesTraceOverrides, PresentsLineTraceability;
 
     public function __construct(
         private StockAdjustmentService $service,
@@ -71,6 +72,8 @@ class StockAdjustmentController extends ApiController
             $line->setAttribute('bin_code', $line->bin?->code);
         });
 
+        $this->attachLineTraceability($adjustment->lines);
+
         return $this->success(['adjustment' => $adjustment, 'ledger' => $ledger]);
     }
 
@@ -92,6 +95,7 @@ class StockAdjustmentController extends ApiController
         $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $updated = $this->service->updateDraft($adjustment, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('adjustment_update_failed', $e->getMessage(), 422);

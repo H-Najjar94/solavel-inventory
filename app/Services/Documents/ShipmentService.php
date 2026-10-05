@@ -56,6 +56,7 @@ class ShipmentService
                 'status' => 'draft', 'ship_date' => $attributes['ship_date'] ?? now()->toDateString(),
             ], $attributes));
             $s->organization_id = $orgId;
+            $s->shipment_number = \App\Services\Documents\Support\DocumentNumber::unique($s->shipment_number, Shipment::class, 'shipment_number', $orgId, $this->conn());
             $s->save();
             $this->syncLines($s, $lines, $orgId);
 

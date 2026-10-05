@@ -17,7 +17,7 @@ export default function ShipmentsPage() {
             <p className="muted">{t('fulfillment.shipments.descriptionBeforeEvent', 'Posting a shipment records stock OUT in the inventory ledger and creates the')} <code dir="ltr">{'shipment.posted'}</code> {t('fulfillment.shipments.descriptionAfterEvent', 'integration event. It does not create an invoice or journal entry.')}</p>
             {rows.length === 0 ? <EmptyState title={t('fulfillment.shipments.emptyTitle', 'No shipments')} hint={t('fulfillment.shipments.emptyHint', 'Create a shipment from a reserved sales order.')} /> : (
                 <table className="data-table"><thead><tr><th>{t('fulfillment.shipments.number', 'Shipment #')}</th><th>{t('fulfillment.common.salesOrder', 'Sales order')}</th><th>{t('fulfillment.common.date', 'Date')}</th><th>{t('fulfillment.common.carrier', 'Carrier')}</th><th>{t('fulfillment.common.status', 'Status')}</th></tr></thead>
-                <tbody>{rows.map((s) => (<tr key={s.id}><td><Link to={`/shipments/${s.id}`}>{s.shipment_number}</Link></td><td>#{s.sales_order_id}</td><td>{s.ship_date}</td><td>{s.carrier ?? '—'}</td><td><DocumentStatusBadge status={s.status} /></td></tr>))}</tbody></table>
+                <tbody>{rows.map((s) => (<tr key={s.id}><td><Link to={`/shipments/${s.id}`}>{s.shipment_number}</Link></td><td>{s.sales_order_number ?? <bdi>#{s.sales_order_id}</bdi>}</td><td>{s.ship_date}</td><td>{s.carrier ?? '—'}</td><td><DocumentStatusBadge status={s.status} /></td></tr>))}</tbody></table>
             )}
         </section>
     );

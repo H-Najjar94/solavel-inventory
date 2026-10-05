@@ -90,14 +90,12 @@ class ItemController extends ApiController
         // stock_status filter joins the balances projection.
         if ($request->filled('stock_status')) {
             $status = $request->query('stock_status');
-            $itemIds = StockBalance::query()
-                ->selectRaw('item_id, SUM(on_hand_qty - reserved_qty) avail')
-                ->groupBy('item_id')->get();
-            $match = $itemIds->filter(function ($r) use ($status) {
-                $a = (float) $r->avail;
-
-                return $status === 'out' ? $a <= 0 : ($status === 'low' ? $a > 0 && $a <= 5 : $a > 0);
-            })->pluck('item_id');
+            // Same per-item rule as the dashboard: reorder point (warehouse
+            // rule, else item), never a fixed threshold.
+            $statuses = \App\Services\Stock\Support\StockStatus::byItem(
+                \App\Services\Stock\Support\StockStatus::balanceRows(StockBalance::query()->toBase(), 'stock_balances')
+            );
+            $match = collect($statuses)->filter(fn ($s) => $status === 'in' ? $s !== 'out' : $s === $status)->keys();
             $query->whereIn('id', $match);
         }
 
@@ -372,7 +370,8 @@ class ItemController extends ApiController
             'supplier_sku' => $data['supplier_sku'] ?? null,
             'unit_cost' => $data['unit_cost'],
             'minimum_qty' => $data['minimum_qty'] ?? 1,
-            'currency_code' => strtoupper($data['currency_code'] ?? 'SAR'),
+            // Default to the organization's base currency, never a fixed SAR.
+            'currency_code' => strtoupper($data['currency_code'] ?? app(\App\Services\Reports\InventoryReportService::class)->baseCurrency()),
             'effective_from' => $data['effective_from'] ?? null,
             'effective_to' => $data['effective_to'] ?? null,
             'is_active' => $data['is_active'] ?? true,
@@ -397,6 +396,11 @@ class ItemController extends ApiController
             'is_active' => ['boolean'],
         ]);
         Supplier::query()->whereKey($data['supplier_id'])->firstOrFail();
+        if (empty($data['currency_code'])) {
+            unset($data['currency_code']);
+        } else {
+            $data['currency_code'] = strtoupper($data['currency_code']);
+        }
         $price->fill($data + ['minimum_qty' => 1, 'is_active' => true])->save();
 
         return $this->success($price->fresh('supplier:id,code,name'));
@@ -604,10 +608,40 @@ class ItemController extends ApiController
         $before = $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active']);
         $data = $request->validated();
         $item->update($this->itemAttributes($data));
+        if (array_key_exists('barcode', $data)) {
+            $this->syncPrimaryBarcode($item, $data['barcode']);
+        }
 
         $this->audit('item.updated', $item, $before);
 
         return $this->success($item->fresh());
+    }
+
+    /** The edit form's Barcode field is the item's primary barcode. */
+    private function syncPrimaryBarcode(Item $item, ?string $barcode): void
+    {
+        $barcode = trim((string) $barcode);
+        $primary = ItemBarcode::query()->where('item_id', $item->id)->where('type', 'primary')->first();
+        if ($barcode === '') {
+            $primary?->delete();
+
+            return;
+        }
+        $own = ItemBarcode::query()->where('item_id', $item->id)->where('barcode', $barcode)->first();
+        if ($own) {
+            if ($own->type !== 'primary') {
+                $primary?->forceFill(['type' => 'internal'])->save();
+                $own->forceFill(['type' => 'primary'])->save();
+            }
+
+            return;
+        }
+        if ($primary) {
+            $primary->forceFill(['barcode' => $barcode])->save();
+
+            return;
+        }
+        ItemBarcode::create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'barcode' => $barcode, 'type' => 'primary']);
     }
 
     public function bulkUpdate(Request $request): JsonResponse

@@ -3,8 +3,10 @@ namespace Tests\Feature;
 use App\Models\Tenant\StockBalance;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
+use App\Http\Controllers\Api\V1\StockCountController;
+use App\Http\Requests\Api\StoreStockCountRequest;
 use App\Services\Access\{CentralAppAccess,InventoryPermissionService,WarehouseAccessService};
-use App\Services\Documents\{InventoryReversalService,StockAdjustmentService};
+use App\Services\Documents\{InventoryReversalService,StockAdjustmentService,StockCountService};
 use App\Tenancy\OrganizationContext;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\{DB,Schema,Auth};
@@ -74,6 +76,88 @@ class WarehouseRoleScopeTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
         (new StockAdjustmentController($service, $reversals, app(WarehouseAccessService::class)))->store($request);
+    }
+
+    public function test_adjustment_draft_update_cannot_move_into_an_unassigned_warehouse(): void
+    {
+        $request = \Mockery::mock(StoreStockAdjustmentRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 12,
+            'lines' => [['item_id' => 9, 'direction' => 'increase', 'quantity' => 1]],
+        ]);
+        $service = \Mockery::mock(StockAdjustmentService::class);
+        $service->shouldNotReceive('updateDraft');
+        $adjustment = new \App\Models\Tenant\StockAdjustment;
+        $adjustment->forceFill(['id' => 5, 'warehouse_id' => 11]);
+
+        $this->expectException(AuthorizationException::class);
+        (new StockAdjustmentController($service, \Mockery::mock(InventoryReversalService::class), app(WarehouseAccessService::class)))->update($request, $adjustment);
+    }
+
+    public function test_sales_returns_list_and_detail_respect_warehouse_scope(): void
+    {
+        Schema::connection('tenant')->create('sales_returns', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('return_number'); $t->integer('warehouse_id');
+            $t->integer('customer_id')->nullable(); $t->string('customer_name')->nullable(); $t->string('status')->default('draft');
+            $t->integer('shipment_id')->nullable(); $t->timestamps(); $t->softDeletes();
+        });
+        Schema::connection('tenant')->create('sales_return_lines', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->integer('sales_return_id'); $t->integer('item_id'); $t->integer('warehouse_id')->nullable();
+        });
+        Schema::connection('tenant')->create('customers', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('code')->nullable(); $t->string('name'); $t->string('contact')->nullable();
+        });
+        Schema::connection('tenant')->create('warehouses', function (Blueprint $t) {
+            $t->id(); $t->integer('organization_id'); $t->string('name'); $t->string('code')->nullable(); $t->softDeletes();
+        });
+        DB::table('warehouses')->insert([['id' => 11, 'organization_id' => 101, 'name' => 'Main store'], ['id' => 12, 'organization_id' => 101, 'name' => 'Other store']]);
+        DB::table('sales_returns')->insert([
+            ['id' => 1, 'organization_id' => 101, 'return_number' => 'RMA-OWN', 'warehouse_id' => 11],
+            ['id' => 2, 'organization_id' => 101, 'return_number' => 'RMA-OTHER', 'warehouse_id' => 12],
+            ['id' => 3, 'organization_id' => 101, 'return_number' => 'RMA-MIXED', 'warehouse_id' => 11],
+        ]);
+        DB::table('sales_return_lines')->insert(['organization_id' => 101, 'sales_return_id' => 3, 'item_id' => 9, 'warehouse_id' => 12]);
+        $controller = app(\App\Http\Controllers\Api\V1\SalesReturnController::class);
+
+        $rows = $controller->index(\Illuminate\Http\Request::create('/sales-returns'))->getData(true)['data'];
+        $this->assertSame(['RMA-OWN'], array_column($rows, 'return_number'));
+        $this->assertSame('Main store', $rows[0]['warehouse_name']);
+        foreach ([2, 3] as $id) {
+            try { $controller->show(\App\Models\Tenant\SalesReturn::query()->withoutGlobalScopes()->findOrFail($id)); $this->fail("Return {$id} outside scope was shown"); }
+            catch (AuthorizationException) { $this->assertTrue(true); }
+        }
+    }
+
+    public function test_count_creation_rejects_an_unassigned_warehouse_before_writing(): void
+    {
+        $request = \Mockery::mock(StoreStockCountRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 12,
+            'count_number' => null,
+            'lines' => [['item_id' => 9, 'system_qty' => 0, 'counted_qty' => 1]],
+        ]);
+        $service = \Mockery::mock(StockCountService::class);
+        $service->shouldNotReceive('createDraft');
+
+        $this->expectException(AuthorizationException::class);
+        (new StockCountController($service, app(WarehouseAccessService::class)))->store($request);
+    }
+
+    public function test_count_creation_in_an_assigned_warehouse_reaches_the_service(): void
+    {
+        $request = \Mockery::mock(StoreStockCountRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 11,
+            'count_number' => 'TYPED-1',
+            'lines' => [['item_id' => 9, 'system_qty' => 0, 'counted_qty' => 1]],
+        ]);
+        $service = \Mockery::mock(StockCountService::class);
+        $service->shouldReceive('createDraft')->once()
+            ->with(['warehouse_id' => 11], [['item_id' => 9, 'system_qty' => 0, 'counted_qty' => 1]])
+            ->andReturn(new \App\Models\Tenant\StockCount);
+
+        $response = (new StockCountController($service, app(WarehouseAccessService::class)))->store($request);
+        $this->assertSame(201, $response->getStatusCode());
     }
 
     public function test_signed_export_requires_export_permission_and_only_returns_assigned_warehouse_rows(): void

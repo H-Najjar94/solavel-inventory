@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsFulfilmentNames;
 use App\Http\Requests\Api\StoreShipmentRequest;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\Shipment;
@@ -17,6 +18,7 @@ use RuntimeException;
 
 class ShipmentController extends ApiController
 {
+    use PresentsFulfilmentNames;
     use \App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 
     public function __construct(private ShipmentService $service, private CarrierService $carriers, private WarehouseAccessService $warehouseAccess) {}
@@ -46,7 +48,10 @@ class ShipmentController extends ApiController
             });
         }
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        $page = $query->paginate($perPage)->withQueryString();
+        $this->nameDocuments($page);
+
+        return $this->paginated($page);
     }
 
     public function show(Shipment $shipment): JsonResponse
@@ -71,6 +76,9 @@ class ShipmentController extends ApiController
             $line->setAttribute('source_stock_ledger_id', $costs->get($line->id)?->id);
             $line->setAttribute('unit_cost', $costs->get($line->id)?->unit_cost);
         });
+
+        $this->nameDocuments([$shipment]);
+        $this->nameLines($shipment->lines);
 
         return $this->success(['shipment' => $shipment, 'ledger' => $ledger]);
     }

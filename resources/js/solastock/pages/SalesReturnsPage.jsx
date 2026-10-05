@@ -22,7 +22,7 @@ export default function SalesReturnsPage() {
             <p className="muted">{t('returns.list.description', 'Posting a return puts resellable or quarantined units back into stock through the ledger. Damaged units are recorded without being returned to stock.')}</p>
             {rows.length === 0 ? <EmptyState title={t('returns.list.emptyTitle', 'No sales returns')} hint={t('returns.list.emptyHint', 'Record a customer return to bring eligible units back into stock.')} /> : (
                 <table className="data-table"><thead><tr><th>{t('returns.list.number', 'Return #')}</th><th>{t('returns.common.customer', 'Customer')}</th><th>{t('returns.common.date', 'Date')}</th><th>{t('returns.common.warehouse', 'Warehouse')}</th><th>{t('returns.common.status', 'Status')}</th></tr></thead>
-                <tbody>{rows.map((r) => (<tr key={r.id}><td><Link to={`/sales-returns/${r.id}`}>{r.return_number}</Link></td><td>{r.customer_name ?? '—'}</td><td>{r.return_date}</td><td>#{r.warehouse_id}</td><td><DocumentStatusBadge status={r.status} /></td></tr>))}</tbody></table>
+                <tbody>{rows.map((r) => (<tr key={r.id}><td><Link to={`/sales-returns/${r.id}`}>{r.return_number}</Link></td><td>{r.customer_name ?? '—'}</td><td>{r.return_date}</td><td>{r.warehouse_name ?? <bdi>#{r.warehouse_id}</bdi>}</td><td><DocumentStatusBadge status={r.status} /></td></tr>))}</tbody></table>
             )}
         </section>
     );

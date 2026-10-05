@@ -46,7 +46,7 @@ export default function TransferFormPage() {
             const transfer = existing.data.transfer;
             if (transfer.status !== 'draft') { toast.push(t('transfers.form.draftOnly', 'Only draft transfers can be edited.'), 'error'); nav(`/transfers/${id}`); return; }
             setHeader({ transfer_number: transfer.transfer_number, transfer_date: transfer.transfer_date, from_warehouse_id: transfer.from_warehouse_id, to_warehouse_id: transfer.to_warehouse_id, notes: transfer.notes ?? '' });
-            setLines((transfer.lines ?? []).map((l) => ({ item_id: l.item_id, from_bin_id: l.from_bin_id, to_bin_id: l.to_bin_id, quantity: l.quantity })));
+            setLines((transfer.lines ?? []).map((l) => ({ item_id: l.item_id, from_bin_id: l.from_bin_id, to_bin_id: l.to_bin_id, quantity: l.quantity, lot_id: l.lot_id ?? null, serial_ids: l.serial_id ? [l.serial_id] : [] })));
         }
     }, [isEdit, existing.data, id, nav, t, toast]);
 
@@ -62,8 +62,9 @@ export default function TransferFormPage() {
         savePending.current=true;
         setSaving(true); setErrors({});
         try {
+            const { transfer_number: _serverAssignedNumber, ...editableHeader } = header;
             const payload = {
-                ...header,
+                ...editableHeader,
                 lines: lines
                     .filter((l) => l.item_id && (Number(l.quantity) > 0 || (l.serial_ids ?? []).length > 0))
                     .map((l) => {
@@ -129,7 +130,7 @@ export default function TransferFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label={t('transfers.form.number', 'Transfer number')} required error={errors.transfer_number}><input className="input" value={header.transfer_number} onChange={(e) => setHeader({ ...header, transfer_number: e.target.value })} /></Field>
+                <Field label={t('transfers.form.number', 'Transfer number')} error={errors.transfer_number}><input className="input" readOnly aria-readonly="true" placeholder={t('transfers.form.numberAuto', 'Assigned automatically when saved')} value={header.transfer_number} /></Field>
                 <Field label={t('transfers.form.date', 'Date')} error={errors.transfer_date}><input className="input" type="date" value={header.transfer_date} onChange={(e) => setHeader({ ...header, transfer_date: e.target.value })} /></Field>
                 <Field label={t('transfers.form.sourceWarehouse', 'Source warehouse')} required error={errors.from_warehouse_id}><WarehousePicker value={header.from_warehouse_id} onChange={(v) => setHeader({ ...header, from_warehouse_id: v })} placeholder={t('transfers.form.sourcePlaceholder', 'Select source warehouse…')} /></Field>
                 <Field label={t('transfers.form.destinationWarehouse', 'Destination warehouse')} required error={errors.to_warehouse_id}><WarehousePicker value={header.to_warehouse_id} onChange={(v) => setHeader({ ...header, to_warehouse_id: v })} placeholder={t('transfers.form.destinationPlaceholder', 'Select destination warehouse…')} /></Field>

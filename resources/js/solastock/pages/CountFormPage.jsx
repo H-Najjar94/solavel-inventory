@@ -52,7 +52,7 @@ export default function CountFormPage() {
                 freeze_snapshot: !!c.snapshot_at,
                 notes: c.notes ?? '',
             });
-            setLines((c.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, system_qty: l.system_qty, snapshot_qty: l.snapshot_qty ?? null, counted_qty: l.counted_qty ?? '' })));
+            setLines((c.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id ?? null, system_qty: l.system_qty, snapshot_qty: l.snapshot_qty ?? null, counted_qty: l.counted_qty ?? '' })));
         }
     }, [isEdit, existing.data]);
 
@@ -78,7 +78,8 @@ export default function CountFormPage() {
         savePending.current=true;
         setSaving(true); setErrors({});
         try {
-            const payload = { ...header, lines: lines.filter((l) => l.item_id).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id || undefined, system_qty: l.system_qty || '0', counted_qty: l.counted_qty === '' ? null : l.counted_qty })) };
+            const { count_number: _serverAssignedNumber, ...editableHeader } = header;
+            const payload = { ...editableHeader, lines: lines.filter((l) => l.item_id).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id || undefined, system_qty: l.system_qty ?? undefined, counted_qty: l.counted_qty === '' ? null : l.counted_qty })) };
             if (payload.lines.length === 0) { setErrors({lines:t('counts.form.lineRequired')}); setSaving(false); return; }
             const res = isEdit ? await api.updateCount(id, payload) : await api.createCount(payload);
             const docId = res?.data?.id ?? id;
@@ -110,7 +111,7 @@ export default function CountFormPage() {
             <span>{header.blind_count ? t('counts.form.hidden') : <bdi>{l.snapshot_qty ?? l.system_qty}</bdi>}{!header.blind_count && (l.expected_serials ?? []).length > 0 && <span className="muted" title={(l.expected_serials).map((s) => s.serial).join(', ')}> · {translateCountPlural(locale, 'counts.form.serialCount', (l.expected_serials).length)}</span>}</span>
         ) },
         { key: 'cnt', label: t('counts.form.counted'), width: 110, render: (l, i) => <QuantityInput value={l.counted_qty} onChange={(v) => setLine(i, { counted_qty: v })} /> },
-        { key: 'var', label: t('counts.form.variance'), width: 100, render: (l) => { const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}><bdi>{v === null ? '—' : v}</bdi></span>; } },
+        { key: 'var', label: t('counts.form.variance'), width: 100, render: (l) => { if (header.blind_count) return <span className="muted">{t('counts.form.hidden')}</span>; const v = variance(l); return <span className={v < 0 ? 'var-neg' : v > 0 ? 'var-pos' : 'muted'}><bdi>{v === null ? '—' : v}</bdi></span>; } },
     ];
 
     return (
@@ -120,7 +121,7 @@ export default function CountFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             <div className="form-grid">
-                <Field label={t('counts.form.number')} error={errors.count_number}><input className="input" placeholder={t('counts.form.numberPlaceholder')} value={header.count_number} onChange={(e) => setHeader({ ...header, count_number: e.target.value })} /></Field>
+                <Field label={t('counts.form.number')} error={errors.count_number}><input className="input" readOnly aria-readonly="true" placeholder={t('counts.form.numberPlaceholder')} value={header.count_number} /></Field>
                 <Field label={t('counts.form.type')} error={errors.count_type}>
                     <select className="input" value={header.count_type} onChange={(e) => setHeader({ ...header, count_type: e.target.value })}>
                         <option value="cycle">{t('counts.type.cycle')}</option><option value="full">{t('counts.type.full')}</option>

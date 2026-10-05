@@ -73,6 +73,52 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         return Item::query()->findOrFail($response['data']['id']);
     }
 
+    #[Test]
+    public function supplier_price_without_currency_uses_the_organization_currency(): void
+    {
+        $this->useTenantA();
+        $reports = \Mockery::mock(\App\Services\Reports\InventoryReportService::class);
+        $reports->shouldReceive('baseCurrency')->andReturn('JOD');
+        $this->app->instance(\App\Services\Reports\InventoryReportService::class, $reports);
+        $supplier = Supplier::query()->create(['code' => 'SUP-CUR', 'name' => 'Currency Supplier']);
+        $item = $this->createItem(['sku' => 'CUR-ITEM']);
+
+        $price = app(ItemController::class)->storeSupplierPrice(Request::create("/items/{$item->id}/supplier-prices", 'POST', [
+            'supplier_id' => $supplier->id, 'unit_cost' => '3',
+        ]), $item)->getData(true)['data'];
+
+        $this->assertSame('JOD', $price['currency_code']);
+    }
+
+    #[Test]
+    public function item_expiry_tick_and_edit_barcode_are_saved(): void
+    {
+        $this->useTenantA();
+        $item = $this->createItem(['tracking_type' => null, 'track_lot' => true, 'track_serial' => false, 'track_expiry' => true, 'barcode' => 'EXP-BC-1']);
+        $this->assertTrue((bool) $item->tracks_expiry);
+        $this->assertSame('lot', $item->tracking_type);
+
+        $update = function (array $payload) use ($item) {
+            $request = \App\Http\Requests\Api\UpdateItemRequest::create('/api/v1/items/'.$item->id, 'PUT', $payload);
+            $route = new \Illuminate\Routing\Route('PUT', '/api/v1/items/{item}', []);
+            $route->bind($request);
+            $route->setParameter('item', $item);
+            $request->setRouteResolver(fn () => $route);
+            $request->setContainer(app())->setRedirector(app('redirect'));
+            $request->validateResolved();
+
+            return app(ItemController::class)->update($request, $item->fresh());
+        };
+
+        // Re-saving the unchanged barcode is not a duplicate of itself.
+        $update(['track_lot' => true, 'track_serial' => false, 'track_expiry' => false, 'barcode' => 'EXP-BC-1']);
+        $this->assertFalse((bool) $item->fresh()->tracks_expiry);
+
+        $update(['barcode' => 'EXP-BC-2']);
+        $primary = \App\Models\Tenant\ItemBarcode::query()->where('item_id', $item->id)->where('type', 'primary')->pluck('barcode')->all();
+        $this->assertSame(['EXP-BC-2'], $primary);
+    }
+
     private function formRequest(string $class, string $method, string $uri, array $payload): mixed
     {
         $request = $class::create($uri, $method, $payload);

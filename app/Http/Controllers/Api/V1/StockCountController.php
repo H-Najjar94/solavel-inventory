@@ -49,6 +49,10 @@ class StockCountController extends ApiController
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         $stock_count->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
         $stock_count->setAttribute('warehouse_name', $stock_count->warehouse?->name);
+        if ($stock_count->blind_count && $stock_count->status !== 'posted') {
+            // Blind count: the expected quantity never leaves the server before posting.
+            $stock_count->lines->each(fn ($line) => $line->makeHidden(['system_qty', 'snapshot_qty', 'variance_qty']));
+        }
 
         // Generated adjustment + its ledger (variance posting goes through one adj).
         $adjustment = $stock_count->adjustment_id
@@ -105,6 +109,7 @@ class StockCountController extends ApiController
     public function store(StoreStockCountRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         unset($data['count_number']);
         $count = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
@@ -116,6 +121,8 @@ class StockCountController extends ApiController
         $this->warehouseAccess->assertAllowed((int) $stock_count->warehouse_id);
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
+            unset($data['count_number']);
             $count = $this->service->updateDraft($stock_count, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('count_update_failed', $e->getMessage(), 422);

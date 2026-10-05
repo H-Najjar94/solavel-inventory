@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\Concerns\PresentsFulfilmentNames;
 use App\Models\Tenant\Pack;
 use App\Models\Tenant\PickList;
 use App\Models\Tenant\SalesOrder;
@@ -14,6 +15,7 @@ use RuntimeException;
 
 class PackController extends ApiController
 {
+    use PresentsFulfilmentNames;
     public function __construct(private PackService $service, private WarehouseAccessService $warehouseAccess) {}
 
     public function index(Request $request): JsonResponse
@@ -33,13 +35,20 @@ class PackController extends ApiController
             });
         }
 
-        return $this->paginated($query->paginate($perPage)->withQueryString());
+        $page = $query->paginate($perPage)->withQueryString();
+        $this->nameDocuments($page);
+
+        return $this->paginated($page);
     }
 
     public function show(Pack $pack): JsonResponse
     {
         $this->assertPackScope($pack);
-        return $this->success(['pack' => $pack->load('lines')]);
+        $pack->load('lines');
+        $this->nameDocuments([$pack]);
+        $this->nameLines($pack->lines);
+
+        return $this->success(['pack' => $pack]);
     }
 
     public function store(Request $request): JsonResponse

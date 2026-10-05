@@ -90,9 +90,14 @@ class StockCountService
             ])->toArray();
             $fillable['snapshot_at'] = $freezeSnapshot ? ($count->snapshot_at ?? now()) : null;
             $count->fill($fillable);
+            // Blind counts never send the expected quantity to the client, so a
+            // line without system_qty keeps the quantity already stored for it.
+            $lineKey = fn ($l) => implode(':', [$l['item_id'] ?? '', $l['variant_id'] ?? '', $l['lot_id'] ?? '', $l['serial_id'] ?? '', $l['bin_id'] ?? '']);
+            $stored = $count->lines()->get()->keyBy(fn ($l) => $lineKey($l->toArray()));
             $count->lines()->delete();
             foreach ($lines as $line) {
-                $system = Decimal::qty((string) ($line['system_qty'] ?? '0'));
+                $previous = $stored[$lineKey($line)] ?? null;
+                $system = Decimal::qty((string) ($line['system_qty'] ?? $previous?->system_qty ?? '0'));
                 $counted = isset($line['counted_qty']) && $line['counted_qty'] !== '' ? Decimal::qty((string) $line['counted_qty']) : null;
                 $variance = $counted !== null ? Decimal::sub($counted, $system) : '0';
                 $count->lines()->create([
@@ -103,7 +108,7 @@ class StockCountService
                     'serial_id' => $line['serial_id'] ?? null,
                     'bin_id' => $line['bin_id'] ?? null,
                     'system_qty' => $system,
-                    'snapshot_qty' => $freezeSnapshot ? $system : null,
+                    'snapshot_qty' => $freezeSnapshot ? ($previous?->snapshot_qty ?? $system) : null,
                     'counted_qty' => $counted,
                     'variance_qty' => Decimal::qty($variance),
                 ]);

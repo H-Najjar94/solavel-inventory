@@ -68,7 +68,7 @@ export default function OpeningStockDetailPage() {
             <ConfirmPostModal open={confirmPost} name="opening stock"
                 onConfirm={async () => { if (await act(api.postOpeningStock, t('openingStock.posted'))) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name="opening stock"
-                onConfirm={async () => { if (await act(api.reverseOpeningStock, t('openingStock.reversed'))) setConfirmReverse(false); }} onCancel={() => setConfirmReverse(false)} />
+                onConfirm={async (reason) => { if (await act((entryId) => api.reverseOpeningStock(entryId, reason), t('openingStock.reversed'))) setConfirmReverse(false); }} onCancel={() => setConfirmReverse(false)} />
         </section>
     );
 }

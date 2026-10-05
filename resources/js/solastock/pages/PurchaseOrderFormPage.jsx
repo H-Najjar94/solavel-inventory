@@ -82,7 +82,7 @@ export default function PurchaseOrderFormPage() {
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'qty', label: t('receiving.common.quantity', 'Quantity'), width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
         { key: 'unit', label: t('receiving.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: t('receiving.common.unitCost', 'Unit cost'), width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
@@ -99,7 +99,7 @@ export default function PurchaseOrderFormPage() {
             <div className="form-grid">
                 <DocumentCurrencyPicker value={header.currency_code} onChange={currency_code => setHeader(current => ({...current, currency_code}))} error={errors.currency_code} />
                 <Field label={t('receiving.po.fields.number', 'PO number')} error={errors.po_number}><input className="input" placeholder={t('receiving.po.form.numberPlaceholder', 'Auto-generated if left blank')} value={header.po_number} onChange={(e) => setHeader({ ...header, po_number: e.target.value })} /></Field>
-                <Field label={t('receiving.common.supplier', 'Supplier')} error={errors.supplier_id}><SupplierPicker value={header.supplier_id} onChange={(v) => setHeader({ ...header, supplier_id: v })} /></Field>
+                <Field label={t('receiving.common.supplier', 'Supplier')} error={errors.supplier_id}><SupplierPicker activeOnly value={header.supplier_id} onChange={(v) => setHeader({ ...header, supplier_id: v })} /></Field>
                 <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} /></Field>
                 <Field label={t('receiving.po.fields.orderDate', 'Order date')} error={errors.order_date}><input className="input" type="date" value={header.order_date} onChange={(e) => setHeader({ ...header, order_date: e.target.value })} /></Field>
                 <Field label={t('receiving.po.fields.expectedDate', 'Expected date')} error={errors.expected_date}><input className="input" type="date" value={header.expected_date} onChange={(e) => setHeader({ ...header, expected_date: e.target.value })} /></Field>

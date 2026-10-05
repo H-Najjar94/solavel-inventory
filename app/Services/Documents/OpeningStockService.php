@@ -275,9 +275,9 @@ class OpeningStockService
     }
 
     /** Reverse a posted entry: emit opposite ledger movements and lock as reversed. */
-    public function reverse(OpeningStockEntry $entry): OpeningStockEntry
+    public function reverse(OpeningStockEntry $entry, ?string $reason = null): OpeningStockEntry
     {
-        return DB::connection($this->connection())->transaction(function () use ($entry) {
+        return DB::connection($this->connection())->transaction(function () use ($entry, $reason) {
             $entry = OpeningStockEntry::query()->lockForUpdate()->findOrFail($entry->id);
 
             if ($entry->isReversed()) {
@@ -287,12 +287,16 @@ class OpeningStockService
                 throw new RuntimeException("Only a posted opening stock entry can be reversed (status '{$entry->status}').");
             }
 
+            // Block once the opened stock was consumed — for average cost too,
+            // not only where FIFO layers happen to catch it.
+            app(InventoryReversalService::class)->assertInboundSourceStillReversible($this->postNamespace($entry), 'opening');
+
             $this->ledger->reverse($this->postNamespace($entry), $this->reverseNamespace($entry), [
                 'action' => 'opening_stock.reverse',
                 'entity_type' => 'opening_stock_entry',
                 'entity_id' => $entry->id,
                 'document_ref' => $entry->entry_number,
-            ]);
+            ] + ($reason !== null ? ['reason' => trim($reason)] : []));
 
             $entry->status = 'reversed';
             $entry->reversed_at = now();
