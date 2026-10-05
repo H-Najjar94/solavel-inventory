@@ -50,9 +50,12 @@ export function BinPicker({ warehouseId, value, onChange, disabled, placeholder 
         placeholder={placeholder ?? t('picker.binOptional')} getLabel={(b) => b.code} />;
 }
 
-export function SupplierPicker({ value, onChange, disabled }) {
+// activeOnly: new choices exclude inactive suppliers, but the currently
+// selected supplier stays listed so an existing document still shows it.
+export function SupplierPicker({ value, onChange, disabled, activeOnly = false }) {
     const { data } = useApiQuery(['suppliers-picker'], () => api.suppliers({ per_page: 200 }), { fallback: [] });
-    const list = Array.isArray(data) ? data : (data?.data ?? []);
+    const all = Array.isArray(data) ? data : (data?.data ?? []);
+    const list = activeOnly ? all.filter((s) => s.is_active !== false && s.is_active !== 0 || String(s.id) === String(value)) : all;
     return <Select value={value} onChange={onChange} options={list} disabled={disabled}
         placeholder={t('picker.supplier')} getLabel={(s) => `${s.code} · ${s.name}`} />;
 }
