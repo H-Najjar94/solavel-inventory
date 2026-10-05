@@ -37,6 +37,26 @@ class ShippingAndScannerCompletionTest extends TestCase
     }
 
     #[Test]
+    public function scanner_resolves_the_printed_warehouse_bin_label_format(): void
+    {
+        $this->bootTenant();
+        $warehouse = F::warehouse(['code' => 'LBL-WH']);
+        $other = F::warehouse(['code' => 'LBL-OTHER']);
+        $zone = WarehouseZone::create(['warehouse_id' => $warehouse->id, 'code' => 'Z', 'name' => 'Zone']);
+        $otherZone = WarehouseZone::create(['warehouse_id' => $other->id, 'code' => 'Z', 'name' => 'Zone']);
+        $bin = WarehouseBin::create(['warehouse_id' => $warehouse->id, 'zone_id' => $zone->id, 'code' => 'A-02', 'is_active' => true]);
+        WarehouseBin::create(['warehouse_id' => $other->id, 'zone_id' => $otherZone->id, 'code' => 'A-02', 'is_active' => true]);
+
+        $labels = (new WarehouseStructureController(app(OrganizationContext::class)))->labelSheet($warehouse)->getData(true)['data']['labels'];
+        $this->assertSame('LBL-WH-A-02', $labels[0]['barcode']);
+
+        $scan = (new ScannerController)->lookup(Request::create('/scanner/lookup', 'GET', ['code' => $labels[0]['barcode']]))->getData(true)['data'];
+        $this->assertSame('bin', $scan['type']);
+        $this->assertSame($bin->id, $scan['bin']['id']);
+        $this->assertSame('LBL-WH', $scan['bin']['warehouse_code']);
+    }
+
+    #[Test]
     public function carrier_labels_tracking_scanner_lookup_and_serial_registration_are_complete(): void
     {
         $this->bootTenant();

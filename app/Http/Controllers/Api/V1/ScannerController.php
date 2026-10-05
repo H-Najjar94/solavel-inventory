@@ -45,6 +45,14 @@ class ScannerController extends ApiController
                 $query->where('code', $code)
                     ->orWhere('coords->barcode', $code);
             })->first();
+        // Printed bin labels encode WAREHOUSE-BIN (see warehouse bin labels).
+        // Codes may themselves contain "-", so try every split point.
+        for ($at = strpos($code, '-'); ! $bin && $at !== false; $at = strpos($code, '-', $at + 1)) {
+            $bin = WarehouseBin::query()->with('warehouse:id,code,name')
+                ->where('code', substr($code, $at + 1))
+                ->whereHas('warehouse', fn ($warehouse) => $warehouse->where('code', substr($code, 0, $at)))
+                ->first();
+        }
         if ($bin) {
             return $this->success([
                 'type' => 'bin',
