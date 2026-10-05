@@ -121,10 +121,11 @@ class OpeningStockController extends ApiController
         return $this->success($entry->fresh('lines'));
     }
 
-    public function reverse(OpeningStockEntry $entry): JsonResponse
+    public function reverse(Request $request, OpeningStockEntry $entry): JsonResponse
     {
+        $input = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         try {
-            $entry = $this->service->reverse($entry);
+            $entry = $this->service->reverse($entry, $input['reason']);
         } catch (RuntimeException $e) {
             return $this->error('opening_stock_reverse_failed', $e->getMessage(), 422);
         }

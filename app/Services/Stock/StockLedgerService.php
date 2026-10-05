@@ -684,7 +684,7 @@ class StockLedgerService
             'entity_type' => $audit['entity_type'] ?? 'stock_ledger',
             'entity_id' => $audit['entity_id'] ?? null,
             'before' => null,
-            'after' => ['namespace' => $namespace, 'rows' => $rows],
+            'after' => ['namespace' => $namespace, 'rows' => $rows] + (isset($audit['reason']) ? ['reason' => $audit['reason']] : []),
             'document_ref' => $audit['document_ref'] ?? $namespace,
             'ip' => request()?->ip(),
             'created_at' => now(),

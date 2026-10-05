@@ -136,7 +136,7 @@ export const api = {
     createOpeningStock: (body) => request('/opening-stock', { method: 'POST', body }),
     updateOpeningStock: (id, body) => request(`/opening-stock/${id}`, { method: 'PUT', body }),
     postOpeningStock: (id) => request(`/opening-stock/${id}/post`, { method: 'POST' }),
-    reverseOpeningStock: (id) => request(`/opening-stock/${id}/reverse`, { method: 'POST' }),
+    reverseOpeningStock: (id, reason) => request(`/opening-stock/${id}/reverse`, { method: 'POST', body: { reason } }),
     importOpeningStock: (file, body = {}) => {
         const fd = new FormData();
         fd.append('file', file);
