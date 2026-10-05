@@ -202,7 +202,7 @@ class StockLedgerService
                     $direction = $event['kind'] === 'out' ? 'out' : 'in';
                     if (! $row || $row->direction !== $direction || (int) $row->item_id !== (int) $event['stock_item_id'] || (int) $row->warehouse_id !== (int) $event['warehouse_id']
                         || substr((string) $row->moved_at, 0, 10) !== $event['date'] || $row->variant_id || $row->bin_id || $row->lot_id || $row->serial_id) throw new RuntimeException('Historical FIFO native source segment incompatible');
-                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org);
+                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org, (string) $segment['quantity']);
                     if (! Decimal::gt((string) $segment['quantity'], '0') || Decimal::lt((string) $segment['cost'], '0')) throw new RuntimeException('Historical FIFO invalid source portion');
                     $id = (int) $row->id;
                     $covered[$id] = ['quantity' => Decimal::add($covered[$id]['quantity'] ?? '0', (string) $segment['quantity']), 'cost' => Decimal::add($covered[$id]['cost'] ?? '0', (string) $segment['cost'])];
@@ -215,7 +215,7 @@ class StockLedgerService
                 foreach ($event['existing_cost_revision_segments'] ?? [] as $segment) {
                     $row = $native->get((int) $segment['ledger_id']);
                     if (! $row || ! Decimal::isZero((string) $row->quantity) || $row->source_type !== \App\Models\Tenant\HistoricalFifoCorrection::class || isset($covered[$row->id])) throw new RuntimeException('Historical FIFO invalid or duplicate prior value revision');
-                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org);
+                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org, '0');
                     if (Decimal::cmp((string) $row->total_cost, (string) $segment['cost']) !== 0) throw new RuntimeException('Historical FIFO prior value revision cost mismatch');
                     $covered[$row->id] = ['quantity' => '0', 'cost' => (string) $row->total_cost];
                     $positive = $row->direction === ($event['kind'] === 'out' ? 'out' : 'in');

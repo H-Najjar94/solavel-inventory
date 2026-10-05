@@ -134,7 +134,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
     public function test_review_keeps_planner_fields_when_nested_validation_excludes_unvalidated_keys(): void
     {
         [$item, $wh, $events] = $this->fixture();
-        $request = \Illuminate\Http\Request::create('/historical-fifo/review', 'POST', ['correction_uuid' => (string) Str::uuid(), 'batch_id' => (string) Str::uuid(), 'events' => $events, 'openings' => [], 'reviewed' => true]);
+        $request = \Illuminate\Http\Request::create('/historical-fifo/review', 'POST', ['correction_uuid' => (string) Str::uuid(), 'batch_id' => (string) Str::uuid(), 'events' => $events, 'openings' => [$item->id.':'.$wh->id => null], 'reviewed' => true]);
         $request->attributes->set('verified_workspace_action', 'historical-fifo.review');
         $request->setUserResolver(fn () => (object) ['id' => 337]);
         $response = app(\App\Http\Controllers\Api\V1\HistoricalFifoController::class)->review($request, app(HistoricalFifoReviewService::class));

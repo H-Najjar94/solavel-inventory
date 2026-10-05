@@ -7,7 +7,7 @@ use RuntimeException;
 
 final class HistoricalFifoSourceOwnership
 {
-    public function assert(array $event, StockLedger $row, int $org): void
+    public function assert(array $event, StockLedger $row, int $org, string $segmentQuantity): void
     {
         foreach (['finance_document_id', 'finance_document_type', 'finance_source_id', 'finance_line_id', 'finance_line_ids'] as $key) if (! isset($event[$key])) throw new RuntimeException('Historical FIFO original Finance source identity missing');
         if ($row->source_type === \App\Models\Tenant\HistoricalFifoCorrection::class) {
@@ -26,6 +26,6 @@ final class HistoricalFifoSourceOwnership
                             ->where('source_document_type', $sourceType)->where('source_document_id', (string) $row->source_id)->where('source_line_id', $row->source_line_id)
                             ->where('destination_document_type', $destinationType)->where('destination_document_id', $event['finance_document_id'])
                             ->whereIn('destination_line_id', $event['finance_line_ids'] ?? [$event['finance_line_id']])->where('state', 'posted')->sum('base_quantity');
-                        if (! $sourceType || ! $destinationType || ! array_intersect($sourceKeys, $event['previous_stock_source_keys'] ?? []) || Decimal::lt((string) $allocation, (string) $segment['quantity'])) throw new RuntimeException('Historical FIFO original Finance/Stock document binding unproven');
+                        if (! $sourceType || ! $destinationType || ! array_intersect($sourceKeys, $event['previous_stock_source_keys'] ?? []) || Decimal::lt((string) $allocation, $segmentQuantity)) throw new RuntimeException('Historical FIFO original Finance/Stock document binding unproven');
     }
 }
