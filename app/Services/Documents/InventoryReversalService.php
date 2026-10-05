@@ -210,10 +210,18 @@ class InventoryReversalService
         }
     }
 
-    /** Reject an un-receipt once any downstream outbound touched its coordinates. */
-    private function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt'): void
+    /**
+     * Reject reversing an inbound source once any downstream outbound touched its
+     * coordinates, whatever the costing method. $document picks the wording
+     * (receipt, adjustment, opening).
+     */
+    public function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt'): void
     {
-        $messagePrefix = $document === 'adjustment' ? 'inventory.documents.adjustment_' : 'inventory.documents.';
+        $messagePrefix = match ($document) {
+            'adjustment' => 'inventory.documents.adjustment_',
+            'opening' => 'inventory.documents.opening_',
+            default => 'inventory.documents.',
+        };
         $rows = StockLedger::query()->where('idempotency_key', 'like', $namespace.'#%')->get();
         if ($rows->isEmpty()) {
             throw new RuntimeException(__('inventory.documents.reversal_no_ledger'));

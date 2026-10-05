@@ -172,6 +172,53 @@ class SourceDrivenReversalTest extends TestCase
     }
 
     #[Test]
+    public function average_cost_opening_stock_reversal_is_blocked_after_consumption(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-OS-AVG']);
+        $item = F::averageItem(['sku' => 'REV-OS-AVG-ITEM']);
+        $opening = app(OpeningStockService::class);
+        $entry = $opening->createDraft(['entry_number' => 'REV-OS-AVG', 'warehouse_id' => $warehouse->id], [['item_id' => $item->id, 'quantity' => '10', 'unit_cost' => '5']]);
+        $opening->post($entry);
+        $adjustments = app(StockAdjustmentService::class);
+        $adjustments->post($adjustments->createDraft(['adjustment_number' => 'REV-OS-AVG-USE', 'warehouse_id' => $warehouse->id, 'reason_code' => 'DAMAGE'],
+            [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '3']]));
+
+        try {
+            $opening->reverse($entry->fresh(), 'Opening entered twice');
+            $this->fail('Consumed average-cost opening stock must not be reversible.');
+        } catch (RuntimeException $e) {
+            $this->assertSame(__('inventory.documents.opening_reversal_downstream'), $e->getMessage());
+        }
+        $this->assertSame('posted', $entry->fresh()->status);
+        $this->assertSame('7.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+    }
+
+    #[Test]
+    public function opening_stock_reversal_requires_and_records_the_reason(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-OS-WHY']);
+        $item = F::averageItem(['sku' => 'REV-OS-WHY-ITEM']);
+        $opening = app(OpeningStockService::class);
+        $entry = $opening->createDraft(['entry_number' => 'REV-OS-WHY', 'warehouse_id' => $warehouse->id], [['item_id' => $item->id, 'quantity' => '2', 'unit_cost' => '5']]);
+        $opening->post($entry);
+        $controller = app(\App\Http\Controllers\Api\V1\OpeningStockController::class);
+
+        try {
+            $controller->reverse(Request::create('/', 'POST', []), $entry->fresh());
+            $this->fail('A reversal without a reason must be rejected.');
+        } catch (\Illuminate\Validation\ValidationException) {
+            $this->assertSame('posted', $entry->fresh()->status);
+        }
+
+        $controller->reverse(Request::create('/', 'POST', ['reason' => 'Wrong warehouse']), $entry->fresh());
+        $this->assertSame('reversed', $entry->fresh()->status);
+        $audit = \App\Models\Tenant\InventoryAuditLog::query()->where('action', 'opening_stock.reverse')->where('document_ref', 'REV-OS-WHY')->firstOrFail();
+        $this->assertSame('Wrong warehouse', $audit->after['reason']);
+    }
+
+    #[Test]
     public function increase_adjustment_reversal_blocked_downstream_names_the_adjustment_not_a_receipt(): void
     {
         $this->useTenantA();
