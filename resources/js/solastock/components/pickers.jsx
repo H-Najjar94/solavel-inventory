@@ -22,6 +22,15 @@ export function ItemPicker({ value, onChange, disabled, stockOnly = false }) {
     const params = stockOnly ? { per_page: 200, is_active: true, item_type: 'inventory' } : { per_page: 200, is_active: true };
     const { data } = useApiQuery(stockOnly ? ['items-picker', 'inventory'] : ['items-picker'], () => api.items(params), { fallback: [] });
     const items = Array.isArray(data) ? data : (data?.data ?? []);
+    // An existing line may hold an item the stockOnly list excludes (e.g. a
+    // service line saved before filtering): show that item as a read-only label.
+    const listLoaded = Array.isArray(data) ? data.length > 0 : Boolean(data?.data);
+    const outsideList = stockOnly && value && listLoaded && !items.some((i) => String(i.id) === String(value));
+    const existing = useApiQuery(['item', value], () => api.item(value), { fallback: null, enabled: Boolean(outsideList) });
+    if (outsideList) {
+        const item = existing.data?.item;
+        return <span className="input is-disabled" aria-readonly="true">{item ? <bdi>{`${item.sku} · ${item.name}`}</bdi> : <bdi>#{value}</bdi>}</span>;
+    }
     return <Select value={value} onChange={onChange} options={items} disabled={disabled}
         placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
 }
