@@ -107,7 +107,7 @@ class EventPayloadBuilder
             'document_type' => 'historical_fifo_correction', 'document_id' => (int) $document->id, 'document_number' => $document->correction_uuid,
             'document_date' => $causal['business_date'], 'currency' => $this->currencies->resolve($document, 'historical_fifo_correction', $causal['business_date']),
             'inventory_valuation_basis' => FinanceBaseValuation::BASIS, 'inventory_value_currency' => $valuation['base_currency_code'],
-            'total_inventory_value_change' => Decimal::money($value), 'historical_fifo_correction' => $causal,
+            'total_inventory_value_change' => Decimal::money($value), 'historical_fifo_correction' => $causal, 'original_quantity_is_reference' => true, 'missing_quantity' => $causal['missing_quantity'], 'quantity_delta' => $causal['quantity_delta'],
             'cost_revision_ledger_ids' => $rows->filter(fn ($row) => Decimal::isZero((string) $row->quantity))->pluck('id')->all(),
             'missing_quantity_ledger_ids' => $rows->filter(fn ($row) => Decimal::gt((string) $row->quantity, '0'))->pluck('id')->all(),
             'lines' => [['item_id' => $causal['stock_item_id'], 'warehouse_id' => $causal['warehouse_id'], 'quantity' => $causal['quantity'],

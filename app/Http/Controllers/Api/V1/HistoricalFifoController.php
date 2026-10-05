@@ -14,7 +14,9 @@ final class HistoricalFifoController extends ApiController
     {
         $this->authorized($request, 'historical-fifo.review');
         $data = $request->validate(['correction_uuid' => 'required|uuid', 'batch_id' => 'required|uuid', 'events' => 'required|array|min:1|max:5000',
-            'openings' => 'required|array', 'reviewed' => 'required|accepted']);
+            'events.*.finance_document_id' => 'required|integer|min:1', 'events.*.finance_document_type' => 'required|in:invoice,bill,credit_note',
+            'events.*.finance_line_id' => 'required|integer|min:1', 'events.*.finance_line_ids' => 'required|array|min:1',
+            'events.*.finance_line_ids.*' => 'required|integer|min:1', 'openings' => 'required|array', 'reviewed' => 'required|accepted']);
         $plan = $reviews->review($data['correction_uuid'], $data['batch_id'], $data['events'], $data['openings'], (int) $request->user()->id);
         return $this->success(['plan_id' => $plan->id, 'plan_sha256' => $plan->plan_sha256, 'status' => $plan->status, 'blocked_items' => $plan->plan['blocked_items']]);
     }

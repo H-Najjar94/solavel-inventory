@@ -202,6 +202,17 @@ class StockLedgerService
                     $direction = $event['kind'] === 'out' ? 'out' : 'in';
                     if (! $row || $row->direction !== $direction || (int) $row->item_id !== (int) $event['stock_item_id'] || (int) $row->warehouse_id !== (int) $event['warehouse_id']
                         || substr((string) $row->moved_at, 0, 10) !== $event['date'] || $row->variant_id || $row->bin_id || $row->lot_id || $row->serial_id) throw new RuntimeException('Historical FIFO native source segment incompatible');
+                    if (isset($event['finance_document_id'])) {
+                        $sourceType = match (class_basename($row->source_type)) { 'GoodsReceipt' => 'goods_receipt', 'Shipment' => 'shipment', 'SalesReturn' => 'sales_return', default => null };
+                        $destinationType = match ($event['finance_document_type']) { 'bill' => 'supplier_bill', 'invoice' => 'customer_invoice', 'credit_note' => 'customer_credit_note', default => null };
+                        $sourceKeys = \App\Models\Tenant\IntegrationOutboxEvent::query()->where('organization_id', $org)->where('aggregate_id', $row->source_id)
+                            ->where('aggregate_type', class_basename($row->source_type))->pluck('idempotency_key')->all();
+                        $allocation = \App\Models\Tenant\IntegrationFinancialLineAllocation::query()->where('solastock_organization_id', $org)
+                            ->where('source_document_type', $sourceType)->where('source_document_id', (string) $row->source_id)->where('source_line_id', $row->source_line_id)
+                            ->where('destination_document_type', $destinationType)->where('destination_document_id', $event['finance_document_id'])
+                            ->whereIn('destination_line_id', $event['finance_line_ids'] ?? [$event['finance_line_id']])->where('state', 'posted')->sum('base_quantity');
+                        if (! $sourceType || ! $destinationType || ! array_intersect($sourceKeys, $event['previous_stock_source_keys'] ?? []) || Decimal::lt((string) $allocation, (string) $segment['quantity'])) throw new RuntimeException('Historical FIFO original Finance/Stock document binding unproven');
+                    }
                     if (! Decimal::gt((string) $segment['quantity'], '0') || Decimal::lt((string) $segment['cost'], '0')) throw new RuntimeException('Historical FIFO invalid source portion');
                     $id = (int) $row->id;
                     $covered[$id] = ['quantity' => Decimal::add($covered[$id]['quantity'] ?? '0', (string) $segment['quantity']), 'cost' => Decimal::add($covered[$id]['cost'] ?? '0', (string) $segment['cost'])];
@@ -232,7 +243,8 @@ class StockLedgerService
                     'plan_sha256' => $review->plan_sha256, 'source_id' => $event['finance_source_id'], 'planner_unique_id' => $event['source_id'],
                     'source_row' => (string) $event['source_row'], 'finance_line_id' => (int) $event['finance_line_id'], 'finance_line_ids' => $event['finance_line_ids'] ?? [(int) $event['finance_line_id']],
                     'stock_item_id' => (int) $event['stock_item_id'], 'warehouse_id' => (int) $event['warehouse_id'], 'business_date' => $event['date'],
-                    'quantity' => Decimal::qty($event['quantity']), 'previous_posted_cost' => $event['previous_posted_cost'], 'reconstructed_cost' => $event['reconstructed_cost'],
+                    'quantity' => Decimal::qty($event['quantity']), 'original_quantity_is_reference' => true, 'missing_quantity' => $missing,
+                    'quantity_delta' => $event['kind'] === 'out' ? Decimal::qty(Decimal::sub('0', $missing)) : $missing, 'previous_posted_cost' => $event['previous_posted_cost'], 'reconstructed_cost' => $event['reconstructed_cost'],
                     'cogs_delta' => $event['cogs_delta'], 'inventory_value_delta' => Decimal::money(Decimal::sub('0', $event['cogs_delta'])),
                     'previous_stock_source_keys' => $event['previous_stock_source_keys'] ?? [], 'origin_evidence_references' => $event['origin_evidence_references'] ?? [],
                     'opening_evidence_sha256' => $plan['opening_evidence'][$key]['hash']];
