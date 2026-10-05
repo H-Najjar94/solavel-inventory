@@ -28,10 +28,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     {{-- No-flash theme boot (same key the React theme store uses). --}}
+    <script>{!! file_get_contents(resource_path('js/solavel-display-preferences.js')) !!}</script>
     <script>
         (function () {
-            var t = localStorage.getItem("solastock_theme");
+            var t = window.solavelApplyDisplayPreferences(@json(session('solavel_display_preferences', [])), @json(session('display_preferences_user_id')), 'solastock_theme');
             if (!t) t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+            try { localStorage.setItem("solastock_theme", t); } catch (_) {}
             document.documentElement.setAttribute("data-theme", t);
             window.SOLASTOCK_LOCALE = @json(['locale' => $locale, 'dir' => $dir]);
             window.SOLASTOCK_BASE_PATH = @json(app()->environment('staging') ? '' : '/inventory');

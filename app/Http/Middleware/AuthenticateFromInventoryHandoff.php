@@ -81,6 +81,7 @@ $this->tenants->useTenant($orgId, $this->tenants->resolveDatabaseName($clientId)
         // Seed the session the same way the other Solavel apps do.
         if ($request->hasSession()) {
             $request->session()->put('client_id', $clientId);
+            \App\Support\DisplayPreferences::hydrate($request, $payload['display_preferences'] ?? [], $userId, 'solastock_locale');
             // Persist the SELECTED org from the handoff payload only. Never store
             // the clientId as the org id (different id space → wrong-org bug). If
             // the payload carried no org, LiveTenantResolver resolves the user's
