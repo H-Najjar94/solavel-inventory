@@ -75,7 +75,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
         \App\Models\Tenant\CostLayer::query()->create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'warehouse_id' => $wh->id,
             'received_at' => '2024-01-06 00:00:00', 'unit_cost' => '99', 'original_qty' => '1', 'remaining_qty' => '1',
             'source_ledger_id' => $return->ledger_ids[0], 'superseded_fifo_correction_id' => $review->id]);
-        $this->assertSame([], app(\App\Services\Stock\IntegrityChecker::class)->check('tenant', $item->organization_id));
+        $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant', $item->organization_id)['ok']);
     }
 
     public function test_unmigrated_tenant_schema_keeps_ordinary_fifo_and_reversal_compatible(): void
