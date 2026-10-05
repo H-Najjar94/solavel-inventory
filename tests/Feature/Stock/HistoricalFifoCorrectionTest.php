@@ -71,6 +71,11 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $this->assertSame('2.00', $return->causal_payload['reconstructed_cost']);
         $this->assertSame('-2.00', $return->causal_payload['cogs_delta']);
         $this->assertSame('2.0000', \App\Models\Tenant\CostLayer::query()->whereIn('source_ledger_id', $return->ledger_ids)->firstOrFail()->unit_cost);
+        // Retained superseded layers are audit evidence, never active valuation.
+        \App\Models\Tenant\CostLayer::query()->create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'warehouse_id' => $wh->id,
+            'received_at' => '2024-01-06 00:00:00', 'unit_cost' => '99', 'original_qty' => '1', 'remaining_qty' => '1',
+            'source_ledger_id' => $return->ledger_ids[0], 'superseded_fifo_correction_id' => $review->id]);
+        $this->assertSame([], app(\App\Services\Stock\IntegrityChecker::class)->check('tenant', $item->organization_id));
     }
 
     public function test_unmigrated_tenant_schema_keeps_ordinary_fifo_and_reversal_compatible(): void
