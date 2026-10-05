@@ -32,6 +32,8 @@ test ! -e "$new"
 cp -a "$cur" "$new"
 install -m 755 -o hnajjar -g sharedgroup "$repo/scripts/reconcile-verified-release.sh" "$new/scripts/reconcile-verified-release.sh"
 install -m 755 -o hnajjar -g sharedgroup "$repo/scripts/refresh-verified-stock-pool.py" "$new/scripts/refresh-verified-stock-pool.py"
+install -m 755 -o hnajjar -g sharedgroup "$repo/scripts/refresh-dedicated-worker.sh" "$new/scripts/refresh-dedicated-worker.sh"
+install -m 644 -o hnajjar -g sharedgroup "$repo/scripts/verify-transport-worker-release.php" "$new/scripts/verify-transport-worker-release.php"
 export STOCK_VERIFIED_RELEASE="$new" STOCK_VERIFIED_SHA="$sha"
 php -r '$p=getenv("STOCK_VERIFIED_RELEASE");$s=getenv("STOCK_VERIFIED_SHA");foreach(["RELEASE_SHA",".release-sha"] as $f){chmod("$p/$f",0644);file_put_contents("$p/$f",$s."\n");}file_put_contents("$p/.release-id",basename($p)."\n");'
 chown hnajjar:sharedgroup "$new/RELEASE_SHA" "$new/.release-sha" "$new/.release-id"
@@ -72,6 +74,10 @@ if test "$ok" -lt 8 || test "$before_home" != "$after_home" || test "$before_set
   curl -fsS --max-time 15 "https://solavel.com/inventory/$probe" || true
   rm -f -- "$cur/public/$probe"
   printf 'ROLLED_BACK=%s HEALTH=%s/%s\n' "$cur" "$after_home" "$after_settings"
+  exit 3
+fi
+if ! bash "$new/scripts/refresh-dedicated-worker.sh" "$new" "$sha"; then
+  printf 'DEPLOYMENT_ACTIVATED_WORKERS_UNVERIFIED SHA=%s RELEASE=%s\n' "$sha" "$new" >&2
   exit 3
 fi
 printf 'DEPLOYED=%s ROLLBACK=%s HEALTH=%s/%s FPM_PROOFS=%s\n' "$new" "$cur" "$after_home" "$after_settings" "$ok"
