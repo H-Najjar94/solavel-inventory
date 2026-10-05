@@ -105,6 +105,7 @@ class StockCountController extends ApiController
     public function store(StoreStockCountRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         unset($data['count_number']);
         $count = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
 
@@ -116,6 +117,7 @@ class StockCountController extends ApiController
         $this->warehouseAccess->assertAllowed((int) $stock_count->warehouse_id);
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $count = $this->service->updateDraft($stock_count, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('count_update_failed', $e->getMessage(), 422);

@@ -3,8 +3,10 @@ namespace Tests\Feature;
 use App\Models\Tenant\StockBalance;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
+use App\Http\Controllers\Api\V1\StockCountController;
+use App\Http\Requests\Api\StoreStockCountRequest;
 use App\Services\Access\{CentralAppAccess,InventoryPermissionService,WarehouseAccessService};
-use App\Services\Documents\{InventoryReversalService,StockAdjustmentService};
+use App\Services\Documents\{InventoryReversalService,StockAdjustmentService,StockCountService};
 use App\Tenancy\OrganizationContext;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\{DB,Schema,Auth};
@@ -74,6 +76,38 @@ class WarehouseRoleScopeTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
         (new StockAdjustmentController($service, $reversals, app(WarehouseAccessService::class)))->store($request);
+    }
+
+    public function test_count_creation_rejects_an_unassigned_warehouse_before_writing(): void
+    {
+        $request = \Mockery::mock(StoreStockCountRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 12,
+            'count_number' => null,
+            'lines' => [['item_id' => 9, 'system_qty' => 0, 'counted_qty' => 1]],
+        ]);
+        $service = \Mockery::mock(StockCountService::class);
+        $service->shouldNotReceive('createDraft');
+
+        $this->expectException(AuthorizationException::class);
+        (new StockCountController($service, app(WarehouseAccessService::class)))->store($request);
+    }
+
+    public function test_count_creation_in_an_assigned_warehouse_reaches_the_service(): void
+    {
+        $request = \Mockery::mock(StoreStockCountRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 11,
+            'count_number' => 'TYPED-1',
+            'lines' => [['item_id' => 9, 'system_qty' => 0, 'counted_qty' => 1]],
+        ]);
+        $service = \Mockery::mock(StockCountService::class);
+        $service->shouldReceive('createDraft')->once()
+            ->with(['warehouse_id' => 11], [['item_id' => 9, 'system_qty' => 0, 'counted_qty' => 1]])
+            ->andReturn(new \App\Models\Tenant\StockCount);
+
+        $response = (new StockCountController($service, app(WarehouseAccessService::class)))->store($request);
+        $this->assertSame(201, $response->getStatusCode());
     }
 
     public function test_signed_export_requires_export_permission_and_only_returns_assigned_warehouse_rows(): void
