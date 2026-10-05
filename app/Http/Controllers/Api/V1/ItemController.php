@@ -602,10 +602,40 @@ class ItemController extends ApiController
         $before = $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active']);
         $data = $request->validated();
         $item->update($this->itemAttributes($data));
+        if (array_key_exists('barcode', $data)) {
+            $this->syncPrimaryBarcode($item, $data['barcode']);
+        }
 
         $this->audit('item.updated', $item, $before);
 
         return $this->success($item->fresh());
+    }
+
+    /** The edit form's Barcode field is the item's primary barcode. */
+    private function syncPrimaryBarcode(Item $item, ?string $barcode): void
+    {
+        $barcode = trim((string) $barcode);
+        $primary = ItemBarcode::query()->where('item_id', $item->id)->where('type', 'primary')->first();
+        if ($barcode === '') {
+            $primary?->delete();
+
+            return;
+        }
+        $own = ItemBarcode::query()->where('item_id', $item->id)->where('barcode', $barcode)->first();
+        if ($own) {
+            if ($own->type !== 'primary') {
+                $primary?->forceFill(['type' => 'internal'])->save();
+                $own->forceFill(['type' => 'primary'])->save();
+            }
+
+            return;
+        }
+        if ($primary) {
+            $primary->forceFill(['barcode' => $barcode])->save();
+
+            return;
+        }
+        ItemBarcode::create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'barcode' => $barcode, 'type' => 'primary']);
     }
 
     public function bulkUpdate(Request $request): JsonResponse

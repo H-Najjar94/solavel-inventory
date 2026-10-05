@@ -58,6 +58,8 @@ export default function ItemFormPage() {
                 ...EMPTY, ...it,
                 track_lot: ['lot', 'lot_serial'].includes(it.tracking_type),
                 track_serial: ['serial', 'lot_serial'].includes(it.tracking_type),
+                track_expiry: !!it.tracks_expiry,
+                barcode: existing.data.primary_barcode ?? '',
             });
         }
     }, [isEdit, existing.data]);

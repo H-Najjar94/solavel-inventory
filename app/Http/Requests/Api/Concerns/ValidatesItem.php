@@ -69,6 +69,11 @@ trait ValidatesItem
             };
             $this->merge(['tracking_type' => $type]);
         }
+        // The Expiry tick maps to the tracks_expiry column (expiry needs lots;
+        // the domain rule below rejects expiry without lot tracking).
+        if ($this->has('track_expiry')) {
+            $this->merge(['tracks_expiry' => $this->boolean('track_expiry')]);
+        }
     }
 
     protected function itemId(): ?int
@@ -115,7 +120,8 @@ trait ValidatesItem
             // org-scoped barcode uniqueness (when present) — checks item_barcodes
             if ($barcode && $orgId) {
                 $dup = \Illuminate\Support\Facades\DB::connection($conn)->table('item_barcodes')
-                    ->where('organization_id', $orgId)->where('barcode', $barcode)->exists();
+                    ->where('organization_id', $orgId)->where('barcode', $barcode)
+                    ->when($id, fn ($q) => $q->where('item_id', '!=', $id))->exists();
                 if ($dup) {
                     $v->errors()->add('barcode', __('inventory.validation.barcode_unique'));
                 }
@@ -174,6 +180,7 @@ trait ValidatesItem
             'track_lot' => ['boolean'],
             'track_serial' => ['boolean'],
             'track_expiry' => ['boolean'],
+            'tracks_expiry' => ['boolean'],
             'category_id' => [$partial ? 'sometimes' : 'required', 'integer', $activeForOrg('item_categories')],
             'brand_id' => ['nullable', 'integer'],
             'base_unit_id' => [$partial ? 'sometimes' : 'nullable', 'integer', $activeForOrg('units')],
