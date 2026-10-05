@@ -71,6 +71,11 @@ export const feedback = {
         return result;
     },
     failure(status?: number, mutation = true, statusHref?: string) {
+        // Reads cannot change saved data: keep the current page and focus available.
+        if (!mutation) {
+            feedback.notify(text(status === 403 ? 'forbidden' : status === 401 || status === 419 ? 'expired' : status === 409 ? 'updateAvailable' : 'failed'), 'warning');
+            return Promise.resolve(false);
+        }
         const unknown = mutation && (status === undefined || status >= 500);
         return dialog({ title: text(unknown ? 'unknownTitle' : 'error'), message: text(status === 403 ? 'forbidden' : status === 419 || status === 401 ? 'expired' : unknown ? 'unknown' : 'failed'), tone: unknown ? 'warning' : 'error', checkStatus: status !== 403, statusHref });
     },
