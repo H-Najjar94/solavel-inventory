@@ -49,6 +49,8 @@ return [
             'item_integration_mappings',
         ],
         'solastock_owned' => [
+            'historical_fifo_plans',
+            'historical_fifo_corrections',
             'cost_layer_consumptions',
             'cost_layers',
             'dashboard_layouts',

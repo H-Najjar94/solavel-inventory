@@ -113,6 +113,7 @@ class IntegrityChecker
 
         // 5. FIFO layers reconcile: SUM(remaining_qty) per (item,wh) == on_hand for FIFO items
         $layerAgg = DB::connection($connection)->table('cost_layers')
+            ->when(\Illuminate\Support\Facades\Schema::connection($connection)->hasColumn('cost_layers', 'superseded_fifo_correction_id'), fn ($q) => $q->whereNull('superseded_fifo_correction_id'))
             ->where('organization_id', $organizationId)
             ->selectRaw('item_id, warehouse_id, SUM(remaining_qty) layer_qty')
             ->groupBy('item_id', 'warehouse_id')->get();

@@ -62,6 +62,7 @@ final class WorkflowValidationService
             'pack.packed' => 'pack',
             'shipment.posted' => 'shipment',
             'sales_return.posted' => 'sales_return',
+            'stock.historical_fifo_cost_corrected.v1' => 'historical_fifo_correction',
             default => class_basename($document),
         };
         $date = match ($documentType) {
@@ -70,13 +71,39 @@ final class WorkflowValidationService
             'shipment' => optional($document->ship_date)->toDateString(),
             'sales_return' => optional($document->return_date)->toDateString(),
             'inventory_reversal' => optional($document->reversal_date)->toDateString(),
+            'historical_fifo_correction' => (string) $document->causal_payload['business_date'],
             default => optional($document->updated_at)->toDateString(),
         };
         $this->currencies->resolve($document, $documentType, $date);
 
-        $document->loadMissing('lines');
+        if ($documentType === 'historical_fifo_correction') {
+            // The positive quantity is immutable source provenance, not a new
+            // movement command. Validate its genuine conversion snapshot using
+            // the same scoped catalog/hash guards as ordinary physical lines.
+            $snapshot = (array) $document->conversion_snapshot;
+            if ((int) ($snapshot['item_id'] ?? 0) !== (int) $document->causal_payload['stock_item_id']
+                || Decimal::cmp((string) ($snapshot['base_quantity'] ?? '0'), (string) $document->causal_payload['quantity'], UnitConversionResolver::PRECISION) !== 0) {
+                $this->conversionFailure($eventType, 'unit_conversion_causal_quantity_mismatch');
+            }
+            $lines = collect([(object) [
+                'item_id' => $document->causal_payload['stock_item_id'],
+                'quantity' => $document->causal_payload['quantity'],
+                'entered_qty' => $snapshot['source_quantity'] ?? null,
+                'entered_unit_id' => $snapshot['source_unit_id'] ?? null,
+                'base_unit_id' => $snapshot['base_unit_id'] ?? null,
+                'unit_conversion_id' => $snapshot['conversion_id'] ?? null,
+                'unit_conversion_factor' => $snapshot['factor'] ?? null,
+                'unit_conversion_version' => $snapshot['version'] ?? null,
+                'unit_conversion_hash' => $snapshot['hash'] ?? null,
+                'unit_conversion_precision' => $snapshot['precision'] ?? null,
+                'unit_conversion_rounding_mode' => $snapshot['rounding_mode'] ?? null,
+            ]]);
+        } else {
+            $document->loadMissing('lines');
+            $lines = $document->lines;
+        }
         $required = collect();
-        foreach ($document->lines as $line) {
+        foreach ($lines as $line) {
             if ($documentType === 'sales_order') {
                 // Fulfillment orders store base-unit quantities, not a stock
                 // movement/conversion snapshot. Validate that base unit now;
@@ -91,8 +118,10 @@ final class WorkflowValidationService
             $required->push(['unit', (string) $line->entered_unit_id]);
             $required->push(['unit', (string) $line->base_unit_id]);
         }
-        if ($document->warehouse_id ?? null) {
-            $required->push(['warehouse', (string) $document->warehouse_id]);
+        $warehouseId = $documentType === 'historical_fifo_correction'
+            ? $document->causal_payload['warehouse_id'] : ($document->warehouse_id ?? null);
+        if ($warehouseId) {
+            $required->push(['warehouse', (string) $warehouseId]);
         }
         if ($document->supplier_id ?? null) {
             $required->push(['supplier', (string) $document->supplier_id]);
@@ -120,7 +149,7 @@ final class WorkflowValidationService
                 'code' => 'mapping_review_required',
             ])->values()->all();
 
-        $taxCodes = collect($document->lines)
+        $taxCodes = collect($lines)
             ->pluck('tax_code')->filter()->unique()->values();
         foreach ($taxCodes as $taxCode) {
             $mapped = DB::connection('tenant')->table('integration_tax_mappings')
@@ -147,7 +176,7 @@ final class WorkflowValidationService
                 ], JSON_UNESCAPED_SLASHES)],
             ]);
         }
-        if (in_array($eventType, ['grn.posted', 'shipment.posted', 'sales_return.posted', 'adjustment.posted', 'stock_count.posted'], true)) {
+        if (in_array($eventType, ['grn.posted', 'shipment.posted', 'sales_return.posted', 'adjustment.posted', 'stock_count.posted', 'stock.historical_fifo_cost_corrected.v1'], true)) {
             app(FinanceBaseValuation::class)->contract($orgId);
         }
     }

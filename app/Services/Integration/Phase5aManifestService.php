@@ -152,14 +152,14 @@ final class Phase5aManifestService
             ->groupBy('item_id')->orderBy('item_id')->get();
 
         return $balances->filter(function (object $balance) use ($org): bool {
-            $layerQty = (string) DB::connection('tenant')->table('cost_layers')
+            $layerQty = (string) DB::connection('tenant')->table('cost_layers')->when(Schema::connection('tenant')->hasColumn('cost_layers', 'superseded_fifo_correction_id'), fn ($q) => $q->whereNull('superseded_fifo_correction_id'))
                 ->where('organization_id', $org)->where('item_id', $balance->item_id)->sum('remaining_qty');
 
             return bccomp($this->decimal($balance->quantity), $this->decimal($layerQty), 4) !== 0;
         })->map(function (object $balance) use ($mapping, $org): array {
             $first = DB::connection('tenant')->table('stock_ledger')->where('organization_id', $org)
                 ->where('item_id', $balance->item_id)->orderBy('id')->first();
-            $layers = DB::connection('tenant')->table('cost_layers')->where('organization_id', $org)
+            $layers = DB::connection('tenant')->table('cost_layers')->when(Schema::connection('tenant')->hasColumn('cost_layers', 'superseded_fifo_correction_id'), fn ($q) => $q->whereNull('superseded_fifo_correction_id'))->where('organization_id', $org)
                 ->where('item_id', $balance->item_id)
                 ->selectRaw('COALESCE(SUM(remaining_qty),0) quantity, COALESCE(SUM(remaining_qty * unit_cost),0) value')->first();
             $before = [

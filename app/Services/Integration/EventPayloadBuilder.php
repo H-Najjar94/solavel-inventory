@@ -23,6 +23,7 @@ class EventPayloadBuilder
      */
     public function build(string $eventType, object $document, string $documentType, ?string $number, ?string $date, bool $mappingComplete): array
     {
+        if ($document instanceof \App\Models\Tenant\HistoricalFifoCorrection) return $this->historicalFifo($eventType, $document, $mappingComplete);
         $orgId = $document->organization_id;
         $aggregateType = IntegrationEvents::aggregateType($eventType);
 
@@ -92,6 +93,29 @@ class EventPayloadBuilder
             'mapping_status' => $mappingComplete ? 'complete' : 'incomplete',
             'requires_review' => ! $mappingComplete,
         ]);
+    }
+
+    private function historicalFifo(string $eventType, \App\Models\Tenant\HistoricalFifoCorrection $document, bool $mappingComplete): array
+    {
+        $causal = $document->causal_payload;
+        $valuation = app(FinanceBaseValuation::class)->contract((int) $document->organization_id);
+        $rows = StockLedger::query()->where('organization_id', $document->organization_id)->whereIn('id', $document->ledger_ids)->get();
+        $value = '0';
+        foreach ($rows as $row) $value = Decimal::add($value, $row->direction === 'in' ? (string) $row->total_cost : '-'.$row->total_cost);
+        if (Decimal::cmp($value, $causal['inventory_value_delta']) !== 0) throw new \RuntimeException('Historical FIFO causal/ledger delta mismatch');
+        return ['source_app' => 'solastock', 'event_type' => $eventType, 'organization_id' => (int) $document->organization_id,
+            'document_type' => 'historical_fifo_correction', 'document_id' => (int) $document->id, 'document_number' => $document->correction_uuid,
+            'document_date' => $causal['business_date'], 'currency' => $this->currencies->resolve($document, 'historical_fifo_correction', $causal['business_date']),
+            'inventory_valuation_basis' => FinanceBaseValuation::BASIS, 'inventory_value_currency' => $valuation['base_currency_code'],
+            'total_inventory_value_change' => Decimal::money($value), 'historical_fifo_correction' => $causal, 'original_quantity_is_reference' => true, 'missing_quantity' => $causal['missing_quantity'], 'quantity_delta' => $causal['quantity_delta'],
+            'cost_revision_ledger_ids' => $rows->filter(fn ($row) => Decimal::isZero((string) $row->quantity))->pluck('id')->all(),
+            'missing_quantity_ledger_ids' => $rows->filter(fn ($row) => Decimal::gt((string) $row->quantity, '0'))->pluck('id')->all(),
+            'lines' => [['item_id' => $causal['stock_item_id'], 'warehouse_id' => $causal['warehouse_id'], 'quantity' => $causal['quantity'],
+                'unit_cost' => Decimal::cost(Decimal::div($causal['reconstructed_cost'], $causal['quantity'])), 'total_cost' => $causal['reconstructed_cost'],
+                'movement_direction' => Decimal::gt($causal['cogs_delta'], '0') ? 'out' : 'in', 'ledger_entry_ids' => $document->ledger_ids,
+                'costing_method' => 'fifo', 'lot_id' => null, 'serial_id' => null, 'unit_conversion' => $document->conversion_snapshot]],
+            'original_source' => null, 'mapping_status' => $mappingComplete ? 'complete' : 'incomplete', 'requires_review' => ! $mappingComplete,
+            'suggested_debit_account_mapping' => 'cogs', 'suggested_credit_account_mapping' => 'inventory_asset'];
     }
 
     /** @return array<int,array<string,mixed>> */

@@ -1,5 +1,6 @@
 export const messages = {
     "en": {
+        "updateAvailable": "An application update is available. Your page and unsaved entries remain open. Refresh when you are ready.",
     "exportReady": "Export file is ready.",
         "stockLifecycleBody": "This changes the availability status of this lot or serial. Existing stock restrictions still apply.",
         "fulfillmentCompleteBody": "This completes the current fulfillment step. Review the recorded quantities before continuing.",
@@ -246,6 +247,7 @@ export const messages = {
         "assignRoleBody": "The selected application role will be assigned to this member."
     },
     "ar": {
+        "updateAvailable": "يتوفر تحديث للتطبيق. تبقى صفحتك ومدخلاتك غير المحفوظة مفتوحة. أعد التحميل عندما تكون مستعداً.",
     "exportReady": "ملف التصدير جاهز.",
         "stockLifecycleBody": "سيتم تغيير حالة إتاحة هذه الدفعة أو الرقم التسلسلي. تظل قيود المخزون الحالية سارية.",
         "fulfillmentCompleteBody": "سيتم إكمال خطوة التنفيذ الحالية. راجع الكميات المسجلة قبل المتابعة.",

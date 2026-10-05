@@ -104,6 +104,12 @@ class StockLedgerService
         ?string $reversalSourceType = null,
         ?int $reversalSourceId = null,
     ): array {
+        $affected = StockLedger::query()->where('idempotency_key', 'like', $originalNamespace.'#%')->pluck('id')->all();
+        foreach ((\Illuminate\Support\Facades\Schema::connection($this->connection())->hasTable('historical_fifo_plans') ? \App\Models\Tenant\HistoricalFifoPlan::query()->where('status', 'applied')->get() : []) as $revision) {
+            $refs = [];
+            foreach ($revision->plan['events'] as $event) foreach ($event['existing_stock_segments'] ?? [] as $segment) $refs[] = (int) $segment['ledger_id'];
+            if (array_intersect($affected, $refs)) throw new RuntimeException('This historical projection requires a reviewed compensating correction; ordinary reversal would restore stale original costs.');
+        }
         $orgId = $this->context->idOrFail();
         $connection = $this->connection();
 
@@ -146,6 +152,200 @@ class StockLedgerService
 
             return $created;
         });
+    }
+
+    /**
+     * Apply a reviewed complete historical projection. Original ledger rows and
+     * superseded consumption rows are retained. Missing quantity and cost-only
+     * revisions are appended; no ordinary movement guard is relaxed.
+     */
+    public function applyHistoricalFifo(\App\Models\Tenant\HistoricalFifoPlan $review): array
+    {
+        $org = $this->context->idOrFail();
+        if ((int) $review->organization_id !== $org) throw new RuntimeException('Historical FIFO cross-organization review');
+        if (($review->plan['blocked_items'] ?? []) !== []) throw new RuntimeException('Historical FIFO unresolved origin evidence');
+        return DB::connection($this->connection())->transaction(function () use ($org, $review) {
+            $review = \App\Models\Tenant\HistoricalFifoPlan::query()->where('organization_id', $org)->lockForUpdate()->findOrFail($review->id);
+            if ($review->status === 'applied') return (array) $review->result;
+            $plan = $review->plan;
+            if ($review->status !== 'reviewed' || $plan['blocked_items'] !== []) throw new RuntimeException('Historical FIFO unresolved origin evidence');
+            $withoutHash = $plan; unset($withoutHash['plan_sha256']);
+            if (! hash_equals($review->plan_sha256, \App\Services\Integration\SolaStockJournalContract::payloadHash($withoutHash))) throw new RuntimeException('Historical FIFO reviewed plan changed');
+            $ledger = app(\App\Services\Stock\Historical\HistoricalFifoReviewService::class)->ledgerForPlan($org, $plan, true);
+            if (! hash_equals($review->ledger_sha256, \App\Services\Integration\SolaStockJournalContract::payloadHash(app(\App\Services\Stock\Historical\HistoricalFifoReviewService::class)->projectionSnapshot($org, $plan, true)))) throw new RuntimeException('Historical FIFO ledger changed since review');
+            $native = $ledger->keyBy('id');
+            $covered = $originLayers = $balances = $running = $eventRows = $created = [];
+            foreach (array_keys($plan['layers']) as $key) {
+                [$itemId, $warehouseId] = array_map('intval', explode(':', $key));
+                $item = Item::query()->where('organization_id', $org)->findOrFail($itemId);
+                Warehouse::query()->where('organization_id', $org)->findOrFail($warehouseId);
+                if ($item->effectiveCostingMethod() !== 'fifo' || $item->item_type !== 'inventory' || $item->tracksLots() || $item->tracksSerials()) throw new RuntimeException('Historical FIFO unsupported item policy or tracking');
+                $balance = StockBalance::query()->where('organization_id', $org)->where('item_id', $itemId)->where('warehouse_id', $warehouseId)
+                    ->whereNull('variant_id')->whereNull('lot_id')->whereNull('bin_id')->lockForUpdate()->first();
+                if (! $balance || ! Decimal::isZero((string) $balance->reserved_qty)) throw new RuntimeException('Historical FIFO balance missing or reserved');
+                $balances[$key] = $balance;
+                $running[$key] = ['quantity' => (string) $balance->on_hand_qty, 'value' => (string) $balance->total_value];
+                foreach ($plan['opening_evidence'][$key]['layers'] as $index => $opening) {
+                    $id = (int) ($opening['source_ledger_id'] ?? 0);
+                    $row = $native->get($id);
+                    if (! $row || $row->direction !== 'in' || (int) $row->item_id !== $itemId || (int) $row->warehouse_id !== $warehouseId
+                        || Decimal::cmp((string) $row->quantity, $opening['quantity']) !== 0 || Decimal::cmp((string) $row->unit_cost, $opening['unit_cost']) !== 0) throw new RuntimeException('Historical FIFO opening must reference proved native opening movement');
+                    $covered[$id] = ['quantity' => (string) $row->quantity, 'cost' => (string) $row->total_cost];
+                    $originLayers[$key]['opening:'.$index] = $this->historicalLayerForRow($org, $row);
+                }
+            }
+            // Bind every reviewed source portion to immutable native quantity/cost.
+            foreach ($plan['events'] as $event) {
+                $qty = $cost = '0';
+                foreach ($event['existing_stock_segments'] ?? [] as $segment) {
+                    $row = $native->get((int) $segment['ledger_id']);
+                    $direction = $event['kind'] === 'out' ? 'out' : 'in';
+                    if (! $row || $row->direction !== $direction || (int) $row->item_id !== (int) $event['stock_item_id'] || (int) $row->warehouse_id !== (int) $event['warehouse_id']
+                        || substr((string) $row->moved_at, 0, 10) !== $event['date'] || $row->variant_id || $row->bin_id || $row->lot_id || $row->serial_id) throw new RuntimeException('Historical FIFO native source segment incompatible');
+                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org, (string) $segment['quantity']);
+                    if (! Decimal::gt((string) $segment['quantity'], '0') || Decimal::lt((string) $segment['cost'], '0')) throw new RuntimeException('Historical FIFO invalid source portion');
+                    $id = (int) $row->id;
+                    $covered[$id] = ['quantity' => Decimal::add($covered[$id]['quantity'] ?? '0', (string) $segment['quantity']), 'cost' => Decimal::add($covered[$id]['cost'] ?? '0', (string) $segment['cost'])];
+                    $qty = Decimal::add($qty, (string) $segment['quantity']); $cost = Decimal::add($cost, (string) $segment['cost']);
+                    if ($event['kind'] === 'receipt') {
+                        if (count($event['existing_stock_segments']) !== 1) throw new RuntimeException('Historical FIFO receipt requires one exact native line');
+                        $originLayers[$event['stock_item_id'].':'.$event['warehouse_id']][$event['source_id']] = $this->historicalLayerForRow($org, $row);
+                    }
+                }
+                foreach ($event['existing_cost_revision_segments'] ?? [] as $segment) {
+                    $row = $native->get((int) $segment['ledger_id']);
+                    if (! $row || ! Decimal::isZero((string) $row->quantity) || $row->source_type !== \App\Models\Tenant\HistoricalFifoCorrection::class || isset($covered[$row->id])) throw new RuntimeException('Historical FIFO invalid or duplicate prior value revision');
+                    app(\App\Services\Stock\Historical\HistoricalFifoSourceOwnership::class)->assert($event, $row, $org, '0');
+                    if (Decimal::cmp((string) $row->total_cost, (string) $segment['cost']) !== 0) throw new RuntimeException('Historical FIFO prior value revision cost mismatch');
+                    $covered[$row->id] = ['quantity' => '0', 'cost' => (string) $row->total_cost];
+                    $positive = $row->direction === ($event['kind'] === 'out' ? 'out' : 'in');
+                    $cost = $positive ? Decimal::add($cost, (string) $row->total_cost) : Decimal::sub($cost, (string) $row->total_cost);
+                }
+                if (Decimal::gt($qty, $event['quantity']) || Decimal::cmp($cost, $event['previous_posted_cost']) !== 0) throw new RuntimeException('Historical FIFO reviewed previous quantity/cost mismatch');
+                if ($event['kind'] === 'receipt' && (Decimal::cmp($qty, $event['quantity']) !== 0 || Decimal::cmp($cost, $event['reconstructed_cost']) !== 0)) throw new RuntimeException('Historical FIFO purchases require supported native receipt first');
+            }
+            foreach ($native as $id => $row) {
+                if (! isset($covered[$id]) || Decimal::cmp($covered[$id]['quantity'], (string) $row->quantity) !== 0 || Decimal::cmp($covered[$id]['cost'], (string) $row->total_cost) !== 0) throw new RuntimeException('Historical FIFO incomplete native ledger coverage');
+            }
+            foreach ($plan['events'] as $event) {
+                if ($event['kind'] === 'receipt') continue;
+                $key = $event['stock_item_id'].':'.$event['warehouse_id'];
+                $existingQty = array_reduce($event['existing_stock_segments'] ?? [], fn ($sum, $segment) => Decimal::add($sum, (string) $segment['quantity']), '0');
+                $missing = Decimal::qty(Decimal::sub($event['quantity'], $existingQty));
+                // Mixed partial native coverage must supply an explicit reviewed cost partition.
+                $missingCost = Decimal::isZero($missing) ? '0.00' : (Decimal::isZero($existingQty) ? $event['reconstructed_cost'] : ($event['missing_quantity_cost'] ?? null));
+                if ($missingCost === null || Decimal::lt((string) $missingCost, '0') || Decimal::gt((string) $missingCost, $event['reconstructed_cost'])) throw new RuntimeException('Historical FIFO missing quantity cost partition unproven');
+                $deltaCost = Decimal::money(Decimal::sub(Decimal::sub($event['reconstructed_cost'], (string) $missingCost), $event['previous_posted_cost']));
+                if (Decimal::isZero($missing) && Decimal::isZero($deltaCost)) continue;
+                if (! \Illuminate\Support\Str::isUuid($event['correction_uuid'] ?? '') || empty($event['unit_conversion']) || empty($event['finance_source_id']) || empty($event['finance_line_id'])) throw new RuntimeException('Historical FIFO correction identity/conversion missing');
+                $causal = ['version' => 'historical-fifo.v1', 'correction_uuid' => $event['correction_uuid'], 'batch_id' => $review->batch_id,
+                    'plan_sha256' => $review->plan_sha256, 'source_id' => $event['finance_source_id'], 'planner_unique_id' => $event['source_id'],
+                    'finance_document_id' => $event['finance_document_id'], 'finance_document_type' => $event['finance_document_type'],
+                    'source_row' => (string) $event['source_row'], 'finance_line_id' => (int) $event['finance_line_id'], 'finance_line_ids' => $event['finance_line_ids'] ?? [(int) $event['finance_line_id']],
+                    'stock_item_id' => (int) $event['stock_item_id'], 'warehouse_id' => (int) $event['warehouse_id'], 'business_date' => $event['date'],
+                    'quantity' => Decimal::qty($event['quantity']), 'original_quantity_is_reference' => true, 'missing_quantity' => $missing,
+                    'quantity_delta' => $event['kind'] === 'out' ? Decimal::qty(Decimal::sub('0', $missing)) : $missing, 'previous_posted_cost' => $event['previous_posted_cost'], 'reconstructed_cost' => $event['reconstructed_cost'],
+                    'cogs_delta' => $event['cogs_delta'], 'inventory_value_delta' => Decimal::money(Decimal::sub('0', $event['cogs_delta'])),
+                    'previous_stock_source_keys' => $event['previous_stock_source_keys'] ?? [], 'origin_evidence_references' => $event['origin_evidence_references'] ?? [],
+                    'opening_evidence_sha256' => $plan['opening_evidence'][$key]['hash']];
+                $doc = \App\Models\Tenant\HistoricalFifoCorrection::query()->create(['organization_id' => $org, 'plan_id' => $review->id,
+                    'correction_uuid' => $event['correction_uuid'], 'source_id' => $event['finance_source_id'], 'causal_payload' => $causal,
+                    'conversion_snapshot' => $event['unit_conversion'], 'ledger_ids' => []]);
+                $rows = [];
+                if (! Decimal::isZero($missing)) $rows[] = $this->appendHistoricalFifoRow($org, $doc, $event, $missing, (string) $missingCost, $event['kind'] === 'out' ? 'out' : 'in', $running[$key], 'quantity');
+                if (! Decimal::isZero($deltaCost)) {
+                    $direction = Decimal::gt($deltaCost, '0') ? ($event['kind'] === 'out' ? 'out' : 'in') : ($event['kind'] === 'out' ? 'in' : 'out');
+                    $rows[] = $this->appendHistoricalFifoRow($org, $doc, $event, '0', ltrim($deltaCost, '-'), $direction, $running[$key], 'value');
+                }
+                $doc->ledger_ids = array_map(fn ($row) => (int) $row->id, $rows); $doc->save();
+                $created[] = $doc;
+                $eventRows[$event['source_id']] = $rows;
+            }
+            foreach ($plan['events'] as $event) {
+                if ($event['kind'] !== 'return') continue;
+                $key = $event['stock_item_id'].':'.$event['warehouse_id'];
+                $targets = array_map(fn ($segment) => ['id' => $segment['ledger_id'], 'remaining' => $segment['quantity']], $event['existing_stock_segments'] ?? []);
+                foreach ($eventRows[$event['source_id']] ?? [] as $row) if (Decimal::gt((string) $row->quantity, '0')) $targets[] = ['id' => $row->id, 'remaining' => (string) $row->quantity];
+                CostLayer::query()->whereIn('source_ledger_id', array_column($targets, 'id'))->update(['superseded_fifo_correction_id' => $review->id]);
+                $cursor = 0;
+                foreach ($event['allocations'] as $allocation) {
+                    $remaining = $allocation['quantity'];
+                    while (! Decimal::isZero($remaining)) {
+                        if (! isset($targets[$cursor])) throw new RuntimeException('Historical FIFO return layer quantity unproven');
+                        $take = Decimal::lt($remaining, $targets[$cursor]['remaining']) ? $remaining : $targets[$cursor]['remaining'];
+                        $origin = $event['source_id'].':'.$allocation['origin'];
+                        if (isset($originLayers[$key][$origin])) throw new RuntimeException('Historical FIFO return allocation must have one native receipt segment per origin');
+                        $originLayers[$key][$origin] = CostLayer::query()->create(['organization_id' => $org, 'item_id' => $event['stock_item_id'], 'warehouse_id' => $event['warehouse_id'],
+                            'received_at' => $event['date'].' 00:00:00', 'unit_cost' => $allocation['unit_cost'], 'original_qty' => $take, 'remaining_qty' => $take, 'source_ledger_id' => $targets[$cursor]['id']]);
+                        $remaining = Decimal::sub($remaining, $take); $targets[$cursor]['remaining'] = Decimal::sub($targets[$cursor]['remaining'], $take);
+                        if (Decimal::isZero($targets[$cursor]['remaining'])) $cursor++;
+                    }
+                }
+            }
+            // Replace only the derived allocation projection, retaining every old row.
+            CostLayerConsumption::query()->whereIn('ledger_id', $native->keys()->all())->update(['superseded_fifo_correction_id' => $review->id]);
+            foreach ($plan['events'] as $event) {
+                if ($event['kind'] !== 'out') continue;
+                $key = $event['stock_item_id'].':'.$event['warehouse_id'];
+                $targets = array_map(fn ($s) => ['id' => $s['ledger_id'], 'remaining' => $s['quantity']], $event['existing_stock_segments'] ?? []);
+                foreach ($eventRows[$event['source_id']] ?? [] as $row) if (Decimal::gt((string) $row->quantity, '0')) $targets[] = ['id' => $row->id, 'remaining' => (string) $row->quantity];
+                $cursor = 0;
+                foreach ($event['allocations'] as $allocation) {
+                    $remaining = $allocation['quantity'];
+                    while (! Decimal::isZero($remaining)) {
+                        if (! isset($targets[$cursor])) throw new RuntimeException('Historical FIFO allocation does not cover native quantity');
+                        $take = Decimal::lt($remaining, $targets[$cursor]['remaining']) ? $remaining : $targets[$cursor]['remaining'];
+                        $layer = $originLayers[$key][$allocation['origin']] ?? null;
+                        if (! $layer) throw new RuntimeException('Historical FIFO allocation origin layer missing');
+                        CostLayerConsumption::query()->create(['organization_id' => $org, 'ledger_id' => $targets[$cursor]['id'], 'cost_layer_id' => $layer->id, 'qty' => $take, 'unit_cost' => $allocation['unit_cost']]);
+                        $remaining = Decimal::sub($remaining, $take); $targets[$cursor]['remaining'] = Decimal::sub($targets[$cursor]['remaining'], $take);
+                        if (Decimal::isZero($targets[$cursor]['remaining'])) $cursor++;
+                    }
+                }
+            }
+            foreach ($plan['layers'] as $key => $layers) {
+                $qty = '0';
+                foreach ($layers as $projection) {
+                    $layer = $originLayers[$key][$projection['origin']] ?? null;
+                    if (! $layer) throw new RuntimeException('Historical FIFO return projection requires supported original-cost receipt layer');
+                    if (Decimal::cmp((string) $layer->unit_cost, $projection['unit_cost']) !== 0) throw new RuntimeException('Historical FIFO native layer cost changed');
+                    $layer->remaining_qty = $projection['remaining']; $layer->save(); $qty = Decimal::add($qty, $projection['remaining']);
+                }
+                if (Decimal::cmp($qty, $running[$key]['quantity']) !== 0 || Decimal::lt($running[$key]['value'], '0')) throw new RuntimeException('Historical FIFO projection quantity/value inconsistent');
+                $balances[$key]->on_hand_qty = Decimal::qty($qty); $balances[$key]->total_value = Decimal::money($running[$key]['value']);
+                $balances[$key]->average_cost = Decimal::isZero($qty) ? '0' : Decimal::cost(Decimal::div($running[$key]['value'], $qty));
+                $balances[$key]->save();
+            }
+            foreach ($created as $doc) {
+                app(\App\Services\Integration\WorkflowValidationService::class)->assertOperationalDocumentReady($doc, 'stock.historical_fifo_cost_corrected.v1');
+                app(\App\Services\Integration\IntegrationOutboxService::class)->record('stock.historical_fifo_cost_corrected.v1', $doc, 'HistoricalFifoCorrection', $doc->correction_uuid, $doc->causal_payload['business_date']);
+            }
+            $result = ['plan_id' => $review->id, 'correction_ids' => array_map(fn ($doc) => (int) $doc->id, $created)];
+            $review->status = 'applied'; $review->result = $result; $review->save();
+            $this->writeAudit($org, ['action' => 'historical_fifo_projection', 'user_id' => $review->reviewed_by_central_id], 'historical-fifo:'.$review->correction_uuid, count($created));
+            return $result;
+        });
+    }
+
+    private function historicalLayerForRow(int $org, StockLedger $row): CostLayer
+    {
+        $layer = CostLayer::query()->where('organization_id', $org)->where('source_ledger_id', $row->id)->lockForUpdate()->first();
+        if (! $layer) throw new RuntimeException('Historical FIFO native inbound layer missing');
+        return $layer;
+    }
+
+    private function appendHistoricalFifoRow(int $org, object $doc, array $event, string $qty, string $value, string $direction, array &$running, string $kind): StockLedger
+    {
+        $sign = $direction === 'in' ? '1' : '-1';
+        $running['quantity'] = Decimal::qty(Decimal::add($running['quantity'], Decimal::mul($qty, $sign)));
+        $running['value'] = Decimal::money(Decimal::add($running['value'], Decimal::mul($value, $sign)));
+        if (Decimal::lt($running['quantity'], '0') || Decimal::lt($running['value'], '0')) throw new RuntimeException('Historical FIFO negative current projection');
+        return StockLedger::query()->create(['organization_id' => $org, 'item_id' => $event['stock_item_id'], 'warehouse_id' => $event['warehouse_id'],
+            'direction' => $direction, 'quantity' => Decimal::qty($qty), 'unit_cost' => Decimal::isZero($qty) ? '0' : Decimal::cost(Decimal::div($value, $qty)),
+            'total_cost' => Decimal::money($value), 'costing_method' => 'fifo', 'source_type' => \App\Models\Tenant\HistoricalFifoCorrection::class,
+            'source_id' => $doc->id, 'source_line_id' => $event['finance_line_id'], 'moved_at' => $event['date'].' 00:00:00', 'posted_at' => now(),
+            'idempotency_key' => 'historical-fifo:'.$doc->correction_uuid.':'.$kind, 'balance_qty_after' => $running['quantity'], 'balance_value_after' => $running['value'],
+            'created_by' => auth()->id()]);
     }
 
     /**

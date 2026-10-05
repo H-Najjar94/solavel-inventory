@@ -75,6 +75,7 @@ final class IntegrationReconciliationService
             : null;
         $layers = Schema::connection('tenant')->hasTable('cost_layers')
             ? $db->table('cost_layers')->where('organization_id', $organizationId)
+                ->when(Schema::connection('tenant')->hasColumn('cost_layers', 'superseded_fifo_correction_id'), fn ($q) => $q->whereNull('superseded_fifo_correction_id'))
                 ->selectRaw('COALESCE(SUM(remaining_qty),0) quantity')
                 ->selectRaw('COALESCE(SUM(remaining_qty * unit_cost),0) value')->first()
             : null;

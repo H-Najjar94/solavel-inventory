@@ -31,9 +31,9 @@ function transport(url, options) {
             json = await res.json();
         } catch (error) {
             if (mutation) throw unknown();
-            throw Object.assign(new Error(feedbackText('failed')), {status:res?.status,cause:error});
+            throw Object.assign(new Error(feedbackText('failed')), {status:res?.status,cause:error,mutation:false});
         } finally { clearTimeout(timer); }
-        const metadata = {status:res.status,code:json?.error?.code || json?.code,
+        const metadata = {mutation,status:res.status,code:json?.error?.code || json?.code,
             payload:json?.error || (json?.errors ? {errors:json.errors} : undefined)};
         // Preserve the existing access event independently of presentation and outcome certainty.
         if ((!res.ok || json?.success === false) && json?.app === 'inventory' && json?.code && !['action_forbidden','temporarily_unavailable'].includes(json.code)) {
