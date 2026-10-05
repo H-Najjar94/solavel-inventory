@@ -137,7 +137,7 @@ export default function GoodsReceiptFormPage() {
     const sourcePoLabel = sourcePoNumber ?? (header.purchase_order_id ? t('receiving.grn.form.selectedPurchaseOrder', 'Selected purchase order') : null);
 
     const columns = [
-        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
         ...(fromPo && !blindReceiving ? [
             { key: 'ord', label: t('receiving.po.fields.ordered', 'Ordered'), width: 90, render: (l) => <span>{l.ordered_qty}</span> },
             { key: 'rem', label: t('receiving.common.remaining', 'Remaining'), width: 90, render: (l) => <span>{l.remaining_qty}</span> },
