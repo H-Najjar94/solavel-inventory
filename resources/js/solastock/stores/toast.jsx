@@ -10,6 +10,7 @@ export function ToastProvider({children}){
  },[]);
  const failure=useCallback((error,fallback)=>{
   if(error?.feedbackHandled)return;
+  if(error?.mutation===false){void feedback.failure(error.status,false);return;}
   if(error?.status===422&&error?.payload?.errors){
    requestAnimationFrame(()=>{
     if(document.querySelector('.field[data-feedback-invalid]'))focusInvalid(error.payload.errors);
