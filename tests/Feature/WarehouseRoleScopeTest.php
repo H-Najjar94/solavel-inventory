@@ -78,6 +78,22 @@ class WarehouseRoleScopeTest extends TestCase
         (new StockAdjustmentController($service, $reversals, app(WarehouseAccessService::class)))->store($request);
     }
 
+    public function test_adjustment_draft_update_cannot_move_into_an_unassigned_warehouse(): void
+    {
+        $request = \Mockery::mock(StoreStockAdjustmentRequest::class);
+        $request->shouldReceive('validated')->once()->andReturn([
+            'warehouse_id' => 12,
+            'lines' => [['item_id' => 9, 'direction' => 'increase', 'quantity' => 1]],
+        ]);
+        $service = \Mockery::mock(StockAdjustmentService::class);
+        $service->shouldNotReceive('updateDraft');
+        $adjustment = new \App\Models\Tenant\StockAdjustment;
+        $adjustment->forceFill(['id' => 5, 'warehouse_id' => 11]);
+
+        $this->expectException(AuthorizationException::class);
+        (new StockAdjustmentController($service, \Mockery::mock(InventoryReversalService::class), app(WarehouseAccessService::class)))->update($request, $adjustment);
+    }
+
     public function test_count_creation_rejects_an_unassigned_warehouse_before_writing(): void
     {
         $request = \Mockery::mock(StoreStockCountRequest::class);

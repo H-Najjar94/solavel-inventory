@@ -92,6 +92,7 @@ class StockAdjustmentController extends ApiController
         $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         try {
             $data = $request->validated();
+            $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $updated = $this->service->updateDraft($adjustment, collect($data)->except('lines')->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('adjustment_update_failed', $e->getMessage(), 422);
