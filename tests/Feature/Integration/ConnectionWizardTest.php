@@ -831,6 +831,23 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame('owner_approved', $run['state']);
         $run = $wizard->approveRole(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'], 'accountant', 7002, true);
         $this->assertSame('activation_ready', $run['state']);
+        // Finance may change master data after the frozen review. GET offers recovery,
+        // while the same stale evidence remains forbidden to all approval callers.
+        $accountRow = DB::connection('tenant')->table('accounts')->where('id', 9300)->first();
+        DB::connection('tenant')->table('accounts')->where('id', 9300)->update(['name' => 'Changed after freeze']);
+        $recovery = $wizard->show(TenantTestManager::ORG_A, $run['run_uuid']);
+        $this->assertTrue($recovery['snapshot_stale']);
+        $this->assertFalse($recovery['review_ready']);
+        $this->assertSame('reset_draft', $recovery['recovery']['action']);
+        $this->assertSame($run['lock_version'], $recovery['lock_version']);
+        $this->assertSame($run['cutoff_at'], $recovery['cutoff_at']);
+        try {
+            $wizard->finalPreview(TenantTestManager::ORG_A, $run['run_uuid']);
+            $this->fail('Recovery display must never authorize stale evidence.');
+        } catch (ValidationException) {
+            $this->assertTrue(true);
+        }
+        DB::connection('tenant')->table('accounts')->where('id', 9300)->update(['name' => $accountRow->name]);
         $oldHash = $run['approval_payload_hash'];
         $oldLock = $run['lock_version'];
         $newDate = now()->addDay()->format('Y-m-d\TH:i');
@@ -903,6 +920,31 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame('connected', $again['state']);
         $this->assertSame(7, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
         $this->assertSame(1, DB::connection('tenant')->table('integration_organization_mappings')->count());
+    }
+
+    #[Test]
+    public function stale_frozen_draft_can_explicitly_restart_against_current_discovery(): void
+    {
+        $this->seedConnectionFixture(false);
+        $wizard = app(ConnectionWizardService::class);
+        $run = $wizard->start(TenantTestManager::ORG_A, 7001);
+        $table = DB::connection('tenant')->table('integration_connection_wizard_runs');
+        $table->where('run_uuid', $run['run_uuid'])->update([
+            'state' => 'preview_ready', 'snapshot_frozen_at' => now(),
+            'snapshot_payload' => json_encode($wizard->discover(TenantTestManager::ORG_A)),
+            'cutoff_at' => now(), 'cutoff_reviewed_at' => now(),
+            'owner_approved_at' => now(), 'owner_approval_hash' => str_repeat('a', 64),
+        ]);
+        DB::connection('tenant')->table('inventory_items')->where('organization_id', 14)->update(['name' => 'Updated Finance item']);
+        $recovery = $wizard->show(TenantTestManager::ORG_A, $run['run_uuid']);
+        $this->assertTrue($recovery['snapshot_stale']);
+        $fresh = $wizard->resetDraft(TenantTestManager::ORG_A, $run['run_uuid'], 7001);
+        $this->assertFalse($fresh['snapshot_stale']);
+        $this->assertSame('draft_decisions', $fresh['state']);
+        $this->assertNull($fresh['snapshot_frozen_at']);
+        $this->assertNull($fresh['cutoff_at']);
+        $this->assertNull($fresh['owner_approved_at']);
+        $this->assertSame('Updated Finance item', collect($fresh['comparison'])->firstWhere('entity_type', 'item')['solabooks']['name']);
     }
 
     #[Test]

@@ -275,7 +275,7 @@ final class ConnectionWizardService
             }
         }
 
-        return $this->finalPreview($organizationId, $runUuid);
+        return $this->buildFinalPreview($organizationId, $runUuid, true);
     }
 
     public function decide(
@@ -468,6 +468,11 @@ final class ConnectionWizardService
 
     public function finalPreview(int $organizationId, string $runUuid): array
     {
+        return $this->buildFinalPreview($organizationId, $runUuid, false);
+    }
+
+    private function buildFinalPreview(int $organizationId, string $runUuid, bool $allowRecovery): array
+    {
         $run = $this->runForOrganization($organizationId, $runUuid);
         // A reviewed pre-mapping draft remains bound to its frozen pre-mapping
         // discovery contract while the held immutable scope is provisioned.
@@ -487,10 +492,17 @@ final class ConnectionWizardService
         $frozen = $run->snapshot_frozen_at !== null;
         $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
         $beforeImageHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
-        if ($frozen && $run->state !== 'connected' && (! hash_equals((string) $run->discovery_manifest_hash, $manifestHash)
+        $snapshotStale = $frozen && $run->state !== 'connected' && (! hash_equals((string) $run->discovery_manifest_hash, $manifestHash)
             || ! hash_equals((string) $run->discovery_before_image_hash, $beforeImageHash)
-            || ! hash_equals((string) $run->snapshot_hash, (string) $preview['snapshot_hash']))) {
-            $this->fail('snapshot_or_before_image_changed');
+            || ! hash_equals((string) $run->snapshot_hash, (string) $preview['snapshot_hash']));
+        if ($snapshotStale) {
+            $saved = json_decode((string) $run->snapshot_payload, true);
+            if (! $allowRecovery || ! is_array($saved) || ! isset($saved['identity'], $saved['snapshot_hash'], $saved['comparison'])) {
+                $this->fail('snapshot_or_before_image_changed');
+            }
+            // GET may display immutable evidence and an explicit restart action.
+            // All approval and activation callers use the strict preview above.
+            $preview = $saved;
         }
 
         $decisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
@@ -547,7 +559,7 @@ final class ConnectionWizardService
         $approvalHash = $this->hash($approvalCore);
         if ($run->state === 'connected') $approvalHash = (string) $run->approval_payload_hash;
         $precisionSupported = $valuation === [] || (int) ($valuation['money_scale'] ?? -1) === Decimal::MONEY_SCALE;
-        $ready = $precisionSupported && $blocking->isEmpty() && $frozen && $run->cutoff_reviewed_at !== null
+        $ready = ! $snapshotStale && $precisionSupported && $blocking->isEmpty() && $frozen && $run->cutoff_reviewed_at !== null
             && ($preview['guided_setup']['checks']['base_currency_inherited'] ?? false)
             && ($preview['guided_setup']['checks']['organization_verified'] ?? false);
         $decisionsList = $decisions->sortKeys()->map(fn ($row) => [
@@ -593,6 +605,9 @@ final class ConnectionWizardService
                     || ($validDecisions->has($candidate['fingerprint']) && $validDecisions[$candidate['fingerprint']]->action === 'select_account_role'))->count(),
                 'approved' => $run->accountant_approved_at !== null,
             ],
+            'snapshot_stale' => $snapshotStale,
+            'recovery' => $snapshotStale ? ['action' => 'reset_draft', 'requires_confirmation' => true,
+                'reason' => 'snapshot_or_before_image_changed'] : null,
             'review_ready' => (bool) $ready,
             'activation_available' => false,
             'rollback_behavior' => 'Before activation, reverse decisions and regenerate the snapshot. After activation, pause delivery; operational and accounting reversals remain separate and preserve evidence.',
