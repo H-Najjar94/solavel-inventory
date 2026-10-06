@@ -10,7 +10,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
-import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
+import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker, SupplierPicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, TraceabilityRequiredBadge } from '../components/traceability.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
@@ -18,8 +18,9 @@ const emptyLine = () => ({ item_id: null, received_qty: '', accepted_qty: '', en
 const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
 
 export default function GoodsReceiptFormPage() {
-    const { t } = useI18n();
-    const { id, poId } = useParams();
+    const { t,locale } = useI18n();const ar=locale==='ar';
+    const { id, poId, requestId } = useParams();
+    const fromRequest = !!requestId;
     const isEdit = !!id;
     const fromPo = !!poId;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
@@ -37,13 +38,15 @@ export default function GoodsReceiptFormPage() {
 
     // Prefill from PO
     const poDraft = useApiQuery(['grn-from-po', poId, blindReceiving], () => api.grnDraftFromPo(poId, { blind: blindReceiving ? 1 : 0 }), { fallback: null, enabled: fromPo });
+    const requestDraft = useApiQuery(['grn-from-request',requestId],()=>api.receivingRequest(requestId),{fallback:null,enabled:fromRequest});
+    useEffect(()=>{if(fromRequest&&requestDraft.data){const r=requestDraft.data;setHeader(h=>({...h,receiving_request_id:r.id,supplier_id:r.supplier_id,warehouse_id:r.warehouse_id??null}));setLines(r.lines.filter(l=>Number(l.remaining_qty)>0).map(l=>({...emptyLine(),item_id:l.item_id,receiving_request_line_id:l.id,entered_unit_id:l.entered_unit_id,received_qty:l.remaining_qty,accepted_qty:l.remaining_qty,unit_cost:l.unit_cost})));}},[fromRequest,requestDraft.data]);
     const sourcePo = useApiQuery(['po', poId], () => api.purchaseOrder(poId), { fallback: null, enabled: fromPo });
     useEffect(() => {
         if (fromPo && poDraft.data) {
             const po = poDraft.data.purchase_order;
             setHeader((h) => ({ ...h, purchase_order_id: po.id, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id }));
             setLines((poDraft.data.lines ?? []).map((l) => ({
-                item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
+                item_id: l.item_id, receiving_request_line_id: l.receiving_request_line_id, purchase_order_line_id: l.purchase_order_line_id,
                 ordered_qty: l.ordered_qty ?? null, remaining_qty: l.remaining_qty ?? null,
                 received_qty: l.entered_qty ?? l.received_qty,
                 accepted_qty: l.entered_qty ?? l.received_qty,
@@ -59,10 +62,10 @@ export default function GoodsReceiptFormPage() {
         if (isEdit && existing.data?.grn) {
             const g = existing.data.grn;
             if (g.status !== 'draft') { toast.push(t('receiving.grn.messages.onlyDraftEditable', 'Only draft goods receipts can be edited.'), 'error'); nav(`/goods-receipts/${id}`); return; }
-            setHeader({ grn_number: g.grn_number, purchase_order_id: g.purchase_order_id, supplier_id: g.supplier_id, warehouse_id: g.warehouse_id, receipt_date: g.receipt_date, notes: g.notes ?? '' });
+            setHeader({ grn_number: g.grn_number, purchase_order_id: g.purchase_order_id, supplier_id: g.supplier_id, warehouse_id: g.warehouse_id, receipt_date: g.receipt_date, notes: g.notes ?? '', receiving_request_id:g.receiving_request_id });
             setBlindReceiving(!!g.blind_receiving);
             setLines((g.lines ?? []).map((l) => ({
-                item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
+                item_id: l.item_id, receiving_request_line_id: l.receiving_request_line_id, purchase_order_line_id: l.purchase_order_line_id,
                 received_qty: l.entered_qty ?? l.received_qty, accepted_qty: l.entered_qty ?? l.accepted_qty,
                 rejected_qty: l.rejected_qty ?? '', disposition: l.disposition ?? 'restock',
                 entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor),
@@ -95,7 +98,7 @@ export default function GoodsReceiptFormPage() {
                     const t = trackingOf(l.item_id);
                     const tracksSerial = t.tracking_type === 'serial' || t.tracking_type === 'lot_serial';
                     return {
-                        item_id: l.item_id, purchase_order_line_id: l.purchase_order_line_id,
+                        item_id: l.item_id, receiving_request_line_id: l.receiving_request_line_id, purchase_order_line_id: l.purchase_order_line_id,
                         received_qty: l.received_qty, accepted_qty: l.accepted_qty || l.received_qty,
                         rejected_qty: l.rejected_qty || '0',
                         inspection_status: l.disposition === 'quarantine' ? 'quarantine' : (Number(l.rejected_qty || 0) > 0 ? 'rejected' : 'accepted'),
@@ -118,17 +121,17 @@ export default function GoodsReceiptFormPage() {
             savedDocument=docId;
             if (post) { await api.postGoodsReceipt(docId); toast.push(t('receiving.grn.messages.posted', 'Goods receipt posted. Stock has been received.'), 'success'); }
             else toast.push(isEdit ? t('receiving.grn.messages.draftUpdated', 'Draft updated.') : t('receiving.grn.messages.draftSaved', 'Draft saved.'), 'success');
-            qc.invalidateQueries({ queryKey: ['grns'] }); qc.invalidateQueries({ queryKey: ['po'] });
+            qc.invalidateQueries({ queryKey: ['receiving-requests'] }); qc.invalidateQueries({ queryKey: ['grns'] }); qc.invalidateQueries({ queryKey: ['po'] });
             nav(`/goods-receipts/${docId}`);
         } catch (err) { if(err.outcomeUnknown||(savedDocument && err.status >= 500))setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
         finally { savePending.current=false; setSaving(false); }
     }
 
-    if ((fromPo && poDraft.isLoading) || (isEdit && existing.isLoading)) return <section className="page"><Skeleton /></section>;
+    if ((fromPo && poDraft.isLoading) || (isEdit && existing.isLoading) || (fromRequest && requestDraft.isLoading)) return <section className="page"><Skeleton /></section>;
 
     // Receiving without an approved PO is a valuation/adjustment capability.
     // Operators may receive against approved POs in their assigned warehouses.
-    const approvedPoRequired = gate.allowed && !valuationGate.allowed && !fromPo
+    const approvedPoRequired = gate.allowed && !valuationGate.allowed && !fromPo && !(fromRequest&&requestDraft.data?.approved)
         && (!isEdit || (existing.data?.grn && !existing.data.grn.purchase_order_id));
     if (approvedPoRequired) return <section className="page">
         <Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts'), to: '/goods-receipts' }, { label: t('receiving.grn.form.newTitle', 'New goods receipt') }]} />
@@ -143,7 +146,7 @@ export default function GoodsReceiptFormPage() {
     const sourcePoLabel = sourcePoNumber ?? (header.purchase_order_id ? t('receiving.grn.form.selectedPurchaseOrder', 'Selected purchase order') : null);
 
     const columns = [
-        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || isEdit} /> },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} disabled={fromPo || fromRequest || isEdit} /> },
         ...(fromPo && !blindReceiving ? [
             { key: 'ord', label: t('receiving.po.fields.ordered', 'Ordered'), width: 90, render: (l) => <span>{l.ordered_qty}</span> },
             { key: 'rem', label: t('receiving.common.remaining', 'Remaining'), width: 90, render: (l) => <span>{l.remaining_qty}</span> },
@@ -191,9 +194,11 @@ export default function GoodsReceiptFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             {errors.currency && <div className="banner banner--warn" role="alert">{errors.currency}</div>}
+            {!header.supplier_id&&<div className="banner banner--warn">{ar?'لم تحدد مورداً. يمكن تسجيل الاستلام، لكن لا يمكن إنشاء فاتورة مورد تلقائياً في SolaCount دون مورد فعلي مربوط. اختر المورد الصحيح قبل تأكيد الاستلام.':'No supplier selected. You can record receiving, but SolaCount cannot automatically create a supplier bill without a real mapped supplier. Select the correct supplier before confirming receipt.'}</div>}
             <div className="form-grid">
+                <Field label={t('receiving.common.supplier','Supplier')} error={errors.supplier_id}><SupplierPicker activeOnly value={header.supplier_id} onChange={v=>setHeader({...header,supplier_id:v})} disabled={fromPo||fromRequest}/></Field>
                 <Field label={t('receiving.grn.fields.number', 'GRN number')} required error={errors.grn_number}><input className="input" value={header.grn_number} onChange={(e) => setHeader({ ...header, grn_number: e.target.value })} /></Field>
-                <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} disabled={fromPo} /></Field>
+                <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} disabled={fromPo || (fromRequest&&requestDraft.data?.approved&&!valuationGate.allowed)} /></Field>
                 <Field label={t('receiving.grn.fields.receivedDate', 'Received date')} error={errors.receipt_date}><input className="input" type="date" value={header.receipt_date} onChange={(e) => setHeader({ ...header, receipt_date: e.target.value })} /></Field>
                 <Field label={t('receiving.grn.fields.sourcePo', 'Source PO')} error={errors.purchase_order_id}>{sourcePoLabel ?? <span className="muted">{t('receiving.grn.form.adHocReceipt', 'None (ad-hoc receipt)')}</span>}</Field>
                 <Field label={t('receiving.common.notes', 'Notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>

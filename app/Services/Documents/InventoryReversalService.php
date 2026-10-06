@@ -3,18 +3,20 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
+use App\Models\Tenant\IntegrationFinancialLineAllocation;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\InventoryReversal;
 use App\Models\Tenant\PurchaseOrder;
-use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\SalesReturn;
-use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
-use App\Models\Tenant\IntegrationFinancialLineAllocation;
+use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
+use App\Services\Purchasing\ReceiptHandoffService;
+use App\Services\Purchasing\ReceivingRequestService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -76,6 +78,8 @@ class InventoryReversalService
             $receipt->markSystemTransition()->save();
 
             $this->recordEvent($reversal, 'grn.reversed');
+            app(ReceivingRequestService::class)->posted($receipt, true);
+            app(ReceiptHandoffService::class)->record($receipt, true);
 
             return $reversal->fresh();
         });
@@ -156,6 +160,7 @@ class InventoryReversalService
             $return->reversed_by = auth()->id();
             $return->markSystemTransition()->save();
             $this->recordEvent($reversal, 'sales_return.reversed');
+
             return $reversal->fresh();
         });
     }

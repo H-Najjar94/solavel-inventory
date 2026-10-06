@@ -4,12 +4,12 @@ use App\Http\Controllers\Api\SpaPageViewController;
 use App\Http\Controllers\Api\Tenancy\SyncEventsController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomRoleController;
-use App\Http\Controllers\Api\V1\TeamAccessController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FinanceDocumentSourceController;
 use App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController;
 use App\Http\Controllers\Api\V1\FinancialLineAllocationController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
+use App\Http\Controllers\Api\V1\HistoricalFifoController;
 use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\InventoryAuditController;
 use App\Http\Controllers\Api\V1\ItemAttachmentController;
@@ -18,11 +18,13 @@ use App\Http\Controllers\Api\V1\ItemImageController;
 use App\Http\Controllers\Api\V1\MetaController;
 use App\Http\Controllers\Api\V1\MigrationCatalogController;
 use App\Http\Controllers\Api\V1\MigrationCatalogReferenceController;
+use App\Http\Controllers\Api\V1\MigrationReferenceController;
 use App\Http\Controllers\Api\V1\OpeningStockController;
 use App\Http\Controllers\Api\V1\PackController;
 use App\Http\Controllers\Api\V1\PickListController;
 use App\Http\Controllers\Api\V1\PurchaseOrderController;
 use App\Http\Controllers\Api\V1\RecallController;
+use App\Http\Controllers\Api\V1\ReceivingRequestController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SalesOrderController;
 use App\Http\Controllers\Api\V1\SalesReturnController;
@@ -35,6 +37,7 @@ use App\Http\Controllers\Api\V1\StockCountController;
 use App\Http\Controllers\Api\V1\StockLedgerController;
 use App\Http\Controllers\Api\V1\StockTransferController;
 use App\Http\Controllers\Api\V1\SupplierController;
+use App\Http\Controllers\Api\V1\TeamAccessController;
 use App\Http\Controllers\Api\V1\TenantController;
 use App\Http\Controllers\Api\V1\TraceabilityController;
 use App\Http\Controllers\Api\V1\WarehouseController;
@@ -202,9 +205,9 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     // Migration catalog commands are callable only through the signed workspace.
     Route::post('/migration-catalog/references/ensure', [MigrationCatalogReferenceController::class, 'ensure'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.catalog-references.ensure');
-    Route::post('/historical-fifo/review', [\App\Http\Controllers\Api\V1\HistoricalFifoController::class, 'review'])->middleware('perm:inventory.integration.setup')->name('api.v1.historical-fifo.review');
-    Route::post('/historical-fifo/{plan}/apply', [\App\Http\Controllers\Api\V1\HistoricalFifoController::class, 'apply'])->middleware('perm:inventory.integration.setup')->name('api.v1.historical-fifo.apply');
-    Route::post('/migration-references/link', [\App\Http\Controllers\Api\V1\MigrationReferenceController::class, 'link'])
+    Route::post('/historical-fifo/review', [HistoricalFifoController::class, 'review'])->middleware('perm:inventory.integration.setup')->name('api.v1.historical-fifo.review');
+    Route::post('/historical-fifo/{plan}/apply', [HistoricalFifoController::class, 'apply'])->middleware('perm:inventory.integration.setup')->name('api.v1.historical-fifo.apply');
+    Route::post('/migration-references/link', [MigrationReferenceController::class, 'link'])
         ->middleware('perm:inventory.integration.setup')->name('api.v1.migration-references.link');
     Route::get('/migration-catalog/requirements', [MigrationCatalogController::class, 'requirements'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.migration-requirements');
@@ -303,6 +306,12 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.cancel');
 
     // ── Goods Receipts (GRN → stock IN via service) ──
+    Route::get('/purchasing/requests', [ReceivingRequestController::class, 'index'])->middleware('perm:inventory.receive_goods')->name('api.v1.receiving-requests.index');
+    Route::post('/purchasing/requests/{receiving_request}/approve', [ReceivingRequestController::class, 'approve'])->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.receiving-requests.approve');
+    Route::get('/purchasing/requests/{receiving_request}', [ReceivingRequestController::class, 'show'])->middleware('perm:inventory.receive_goods')->name('api.v1.receiving-requests.show');
+    Route::post('/purchasing/request', [ReceivingRequestController::class, 'upsert'])->middleware('perm:inventory.receive_goods')->name('api.v1.purchasing.request.upsert');
+    Route::get('/purchasing/request/status', [ReceivingRequestController::class, 'status'])->middleware('perm:inventory.receive_goods')->name('api.v1.purchasing.request.status');
+    Route::post('/purchasing/request/cancel', [ReceivingRequestController::class, 'cancel'])->middleware('perm:inventory.receive_goods')->name('api.v1.purchasing.request.cancel');
     Route::get('/finance-sources/suppliers', [FinanceDocumentSourceController::class, 'suppliers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.suppliers');
     Route::get('/finance-sources/customers', [FinanceDocumentSourceController::class, 'customers'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-sources.customers');
     Route::get('/finance-sources/receipts', [FinanceDocumentSourceController::class, 'receipts'])->middleware('perm:inventory.view_stock')->name('api.v1.finance-sources.receipts');

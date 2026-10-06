@@ -1,11 +1,17 @@
 <?php
+
 namespace App\Http\Requests\Api;
+
+use App\Tenancy\OrganizationContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use App\Tenancy\OrganizationContext;
+
 class StoreGoodsReceiptRequest extends FormRequest
 {
-    public function authorize(): bool { return true; }
+    public function authorize(): bool
+    {
+        return true;
+    }
 
     protected function prepareForValidation(): void
     {
@@ -32,38 +38,40 @@ class StoreGoodsReceiptRequest extends FormRequest
     {
         return [
             // Optional: generated server-side if not supplied.
-            'grn_number' => ['nullable','string','max:50'],
+            'grn_number' => ['nullable', 'string', 'max:50'],
             'purchase_order_id' => [
                 'nullable', 'integer',
                 Rule::exists('tenant.inventory_purchase_orders', 'id')
                     ->where('organization_id', app(OrganizationContext::class)->idOrFail())
                     ->whereNull('deleted_at'),
             ],
-            'supplier_id' => ['nullable','integer'],
-            'warehouse_id' => ['required','integer'],
-            'receipt_date' => ['nullable','date'],
-            'blind_receiving' => ['nullable','boolean'],
-            'notes' => ['nullable','string'],
-            'lines' => ['required','array','min:1'],
-            'lines.*.purchase_order_line_id' => ['nullable','integer'],
-            'lines.*.item_id' => ['required','integer'],
-            'lines.*.variant_id' => ['nullable','integer'],
-            'lines.*.received_qty' => ['required','numeric','gt:0'],
-            'lines.*.accepted_qty' => ['nullable','numeric','min:0'],
-            'lines.*.entered_qty' => ['nullable','numeric','gt:0'],
-            'lines.*.entered_unit_id' => ['nullable','integer'],
-            'lines.*.rejected_qty' => ['nullable','numeric','min:0'],
-            'lines.*.inspection_status' => ['nullable','in:accepted,rejected,quarantine'],
-            'lines.*.disposition' => ['nullable','in:restock,reject,quarantine'],
-            'lines.*.quarantine_qty' => ['nullable','numeric','min:0'],
-            'lines.*.unit_cost' => ['nullable','numeric','min:0'],
-            'lines.*.lot_id' => ['nullable','integer'],
-            'lines.*.lot_code' => ['nullable','string','max:100'],
-            'lines.*.serial_id' => ['nullable','integer'],
-            'lines.*.serials' => ['nullable','array'],
-            'lines.*.serials.*' => ['string','max:100'],
-            'lines.*.bin_id' => ['nullable','integer'],
-            'lines.*.expiry_date' => ['nullable','date'],
+            'receiving_request_id' => ['nullable', 'integer', Rule::exists('tenant.purchasing_receiving_requests', 'id')->where('organization_id', app(OrganizationContext::class)->idOrFail())],
+            'lines.*.receiving_request_line_id' => ['nullable', 'integer'],
+            'supplier_id' => ['nullable', 'integer'],
+            'warehouse_id' => ['required', 'integer'],
+            'receipt_date' => ['nullable', 'date'],
+            'blind_receiving' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.purchase_order_line_id' => ['nullable', 'integer'],
+            'lines.*.item_id' => ['required', 'integer'],
+            'lines.*.variant_id' => ['nullable', 'integer'],
+            'lines.*.received_qty' => ['required', 'numeric', 'gt:0'],
+            'lines.*.accepted_qty' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.entered_qty' => ['nullable', 'numeric', 'gt:0'],
+            'lines.*.entered_unit_id' => ['nullable', 'integer'],
+            'lines.*.rejected_qty' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.inspection_status' => ['nullable', 'in:accepted,rejected,quarantine'],
+            'lines.*.disposition' => ['nullable', 'in:restock,reject,quarantine'],
+            'lines.*.quarantine_qty' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.lot_id' => ['nullable', 'integer'],
+            'lines.*.lot_code' => ['nullable', 'string', 'max:100'],
+            'lines.*.serial_id' => ['nullable', 'integer'],
+            'lines.*.serials' => ['nullable', 'array'],
+            'lines.*.serials.*' => ['string', 'max:100'],
+            'lines.*.bin_id' => ['nullable', 'integer'],
+            'lines.*.expiry_date' => ['nullable', 'date'],
         ];
     }
 }

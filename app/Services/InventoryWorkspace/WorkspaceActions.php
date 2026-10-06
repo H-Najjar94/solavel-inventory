@@ -6,6 +6,8 @@ namespace App\Services\InventoryWorkspace;
 final class WorkspaceActions
 {
     public const ALLOWED = [
+        'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',
+        'purchasing.request.upsert', 'purchasing.request.status', 'purchasing.request.cancel',
         'finance-sources.suppliers', 'finance-sources.customers',
         'finance-sources.receipts', 'finance-sources.receipt',
         'finance-sources.shipments', 'finance-sources.shipment',

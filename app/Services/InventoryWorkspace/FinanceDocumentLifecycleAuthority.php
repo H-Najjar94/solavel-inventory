@@ -22,6 +22,8 @@ final class FinanceDocumentLifecycleAuthority
     public const SCOPE = 'finance_document_lifecycle';
 
     public const ACTIONS = [
+        'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',
+        'purchasing.request.upsert', 'purchasing.request.status', 'purchasing.request.cancel',
         'finance-allocations.review-status',
         'finance-allocations.commit',
         'finance-allocations.release',

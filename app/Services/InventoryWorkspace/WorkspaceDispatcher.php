@@ -5,10 +5,15 @@ namespace App\Services\InventoryWorkspace;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\InventoryAuditLog;
+use App\Models\Tenant\Warehouse;
+use App\Models\Tenant\WarehouseBin;
+use App\Models\Tenant\WarehouseReorderRule;
+use App\Models\Tenant\WarehouseZone;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Entitlements\InventoryCommercialEntitlementService;
 use App\Services\Integration\IntegrationSafetyHold;
+use App\Services\Integration\SolaStockJournalContract;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +29,7 @@ final class WorkspaceDispatcher
         $action = $input['action'];
         abort_unless(in_array($action, WorkspaceActions::ALLOWED, true), 404, 'workspace_action_unknown');
         $router = app(Router::class);
-        $native = $router->getRoutes()->getByName('api.v1.'.(['warehouses.show' => 'workspace.warehouse', 'lots.show' => 'workspace.lot', 'serials.show' => 'workspace.serial'][$action] ?? $action));
+        $native = $router->getRoutes()->getByName('api.v1.'.(['purchasing.bill.receipt' => 'finance-sources.receipt', 'purchasing.bill.reserve' => 'finance-allocations.reserve', 'purchasing.bill.cost-adjustment.prepare' => 'finance-allocations.cost-adjustment.prepare', 'warehouses.show' => 'workspace.warehouse', 'lots.show' => 'workspace.lot', 'serials.show' => 'workspace.serial'][$action] ?? $action));
         abort_unless($native, 503, 'workspace_action_unavailable');
         $route = clone $native;
         $write = ! in_array('GET', $route->methods(), true);
@@ -68,10 +73,11 @@ final class WorkspaceDispatcher
         $request->headers->set('Accept', 'application/json');
         $request->setUserResolver($outer->getUserResolver());
         $request->attributes->set('verified_workspace_action', $action);
+        $request->attributes->set('purchasing_authority', $outer->attributes->get('purchasing_authority'));
         $request->attributes->set('tenant_state', $outer->attributes->get('tenant_state'));
         $route->bind($request);
         $request->setRouteResolver(fn () => $route);
-        $requestHash = \App\Services\Integration\SolaStockJournalContract::payloadHash($input);
+        $requestHash = SolaStockJournalContract::payloadHash($input);
         $key = hash('sha256', (string) ($input['idempotency_key'] ?? ''));
         app()->instance('request', $request);
         try {
@@ -86,6 +92,7 @@ final class WorkspaceDispatcher
                         ->where('document_ref', $key)->first();
                     if ($receipt) {
                         abort_unless(hash_equals((string) ($receipt->before['request_hash'] ?? ''), $requestHash), 409, 'workspace_idempotency_conflict');
+
                         return response()->json($receipt->after['body'], (int) $receipt->after['status'])->header('X-Workspace-Replayed', 'true');
                     }
                 }
@@ -93,7 +100,7 @@ final class WorkspaceDispatcher
                 $router->substituteImplicitBindings($route);
                 $models = [];
                 if ($action === 'settings.reorder.store') {
-                    abort_if(\App\Models\Tenant\WarehouseReorderRule::query()->where('item_id', $request->input('item_id'))->where('warehouse_id', $request->input('warehouse_id'))->exists(), 409, 'workspace_existing_rule_requires_revision');
+                    abort_if(WarehouseReorderRule::query()->where('item_id', $request->input('item_id'))->where('warehouse_id', $request->input('warehouse_id'))->exists(), 409, 'workspace_existing_rule_requires_revision');
                 }
                 foreach ($route->parameters() as $name => $value) {
                     if ($value instanceof Model) {
@@ -104,7 +111,7 @@ final class WorkspaceDispatcher
                     }
                 }
                 // Native integer parameters for location updates need the same revision scope.
-                foreach (['zone' => \App\Models\Tenant\WarehouseZone::class, 'bin' => \App\Models\Tenant\WarehouseBin::class] as $name => $class) {
+                foreach (['zone' => WarehouseZone::class, 'bin' => WarehouseBin::class] as $name => $class) {
                     if ($route->hasParameter($name) && ! $route->parameter($name) instanceof Model) {
                         $models[] = $class::query()->whereKey($route->parameter($name))->when($write, fn ($q) => $q->lockForUpdate())->firstOrFail();
                     }
@@ -112,7 +119,9 @@ final class WorkspaceDispatcher
                 if ($write && $models !== []) {
                     abort_unless(isset($input['revision']) && hash_equals($this->revision($models), $input['revision']), 409, 'workspace_revision_conflict');
                 }
-                $this->warehouses($request->all(), $models);
+                if (! str_starts_with($action, 'purchasing.bill.')) {
+                    $this->warehouses($request->all(), $models);
+                }
                 $response = $route->run();
                 abort_unless($response instanceof JsonResponse, 503, 'workspace_response_contract_invalid');
                 if ($response->getStatusCode() >= 400) {
@@ -126,7 +135,7 @@ final class WorkspaceDispatcher
                     // Native location updates use integer bindings. Publish their
                     // exact revisions from bounded owner-side queries, not a hash
                     // of serialized presentation fields.
-                    foreach (['zone' => \App\Models\Tenant\WarehouseZone::class, 'bin' => \App\Models\Tenant\WarehouseBin::class] as $name => $class) {
+                    foreach (['zone' => WarehouseZone::class, 'bin' => WarehouseBin::class] as $name => $class) {
                         foreach ($class::query()->where('warehouse_id', $models[0]->id)->get() as $location) {
                             $body['workspace_revisions'][$name.':'.$location->id] = $this->revision([$location]);
                         }
@@ -143,6 +152,7 @@ final class WorkspaceDispatcher
                         'created_at' => now(),
                     ]);
                 }
+
                 return response()->json($body, $response->getStatusCode());
             }, 3);
         } finally {
@@ -161,6 +171,7 @@ final class WorkspaceDispatcher
             }
             $records[] = $record;
         }
+
         return hash('sha256', json_encode($records, JSON_THROW_ON_ERROR));
     }
 
@@ -169,13 +180,13 @@ final class WorkspaceDispatcher
         $access = app(WarehouseAccessService::class);
         foreach ($models as $model) {
             $this->warehouses($model->getAttributes(), []);
-            if ($model instanceof \App\Models\Tenant\Warehouse) {
+            if ($model instanceof Warehouse) {
                 $access->assertAllowed((int) $model->id);
             }
         }
         foreach (['warehouse_id', 'from_warehouse_id', 'to_warehouse_id'] as $field) {
             if (isset($data[$field])) {
-                \App\Models\Tenant\Warehouse::query()->findOrFail((int) $data[$field]);
+                Warehouse::query()->findOrFail((int) $data[$field]);
                 $access->assertAllowed((int) $data[$field]);
             }
         }

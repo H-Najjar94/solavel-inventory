@@ -1,4 +1,5 @@
 export const en = {
+    'receiving.requests.nav':'Receiving requests',
     'receiving.common.audit': 'Audit',
     'receiving.common.auditTimeline': 'Audit timeline',
     'receiving.common.bin': 'Bin',
@@ -125,6 +126,7 @@ export const en = {
 };
 
 export const ar = {
+    'receiving.requests.nav':'طلبات الاستلام',
     'receiving.common.audit': 'سجل التدقيق',
     'receiving.common.auditTimeline': 'التسلسل الزمني للتدقيق',
     'receiving.common.bin': 'الحاوية',

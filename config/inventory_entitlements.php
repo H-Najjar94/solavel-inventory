@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Tenant\Item;
+use App\Models\Tenant\Warehouse;
+
 return [
     'project_slug' => 'inventory',
     'valid_for_minutes' => (int) env('ENTITLEMENT_SNAPSHOT_VALID_FOR_MINUTES', 240),
@@ -146,6 +149,12 @@ return [
         'api.v1.po.approve' => 'stock.po_approvals',
 
         // Goods receipt against a PO (route group is named grn.*).
+        'api.v1.receiving-requests.index' => 'stock.goods_receipt',
+        'api.v1.receiving-requests.show' => 'stock.goods_receipt',
+        'api.v1.receiving-requests.approve' => 'stock.purchase_orders',
+        'api.v1.purchasing.request.upsert' => 'stock.goods_receipt',
+        'api.v1.purchasing.request.status' => 'stock.goods_receipt',
+        'api.v1.purchasing.request.cancel' => 'stock.goods_receipt',
         'api.v1.grn.store' => 'stock.goods_receipt',
         'api.v1.grn.update' => 'stock.goods_receipt',
         'api.v1.grn.post' => 'stock.goods_receipt',
@@ -192,8 +201,8 @@ return [
     | Free warehouse cap — this is why the gate must count-and-block-new-only.)
     */
     'limit_features' => [
-        'stock.max_items' => \App\Models\Tenant\Item::class,
-        'stock.max_warehouses' => \App\Models\Tenant\Warehouse::class,
+        'stock.max_items' => Item::class,
+        'stock.max_warehouses' => Warehouse::class,
     ],
 
     /*

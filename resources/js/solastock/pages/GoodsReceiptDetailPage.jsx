@@ -10,7 +10,7 @@ import { DocumentStatusBadge, DocumentActions, ConfirmPostModal, ConfirmReverseM
 import { useI18n } from '../i18n/context.jsx';
 
 export default function GoodsReceiptDetailPage() {
-    const { t } = useI18n();
+    const { t,locale } = useI18n();const ar=locale==='ar';
     const { id } = useParams();
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.receive_goods');
@@ -55,6 +55,8 @@ export default function GoodsReceiptDetailPage() {
                 <dt>{t('receiving.common.notes', 'Notes')}</dt><dd>{grn.notes ?? '—'}</dd>
             </dl></div>
 
+            {data?.receiving_request&&<p><Link to="/receiving-requests">{data.receiving_request.number}</Link> · {data.receiving_request.source_bill_number || (ar?'فاتورة مسودة':'Draft bill')}</p>}
+            {(data?.finance_handoff??[]).map((e,i)=><div className="banner" key={i} style={{overflowWrap:'anywhere'}}>{e.event_type==='purchasing.receipt.reversed'?(ar?'أُرسل عكس الاستلام للمحاسب للمراجعة.':'Receipt reversal sent to the accountant for review.'):e.status==='sent'?(e.response?.status==='needs_information'?(ar?'وصل الاستلام إلى SolaCount لكنه يحتاج مراجعة بيانات المورد أو الأصناف. على المحاسب إكمال التفاصيل وإعادة المحاولة.':'Receipt reached SolaCount and needs supplier or product information. The accountant can complete details and retry.'):(ar?'أُرسل الاستلام إلى المحاسب. تظل الفاتورة مسودة حتى يراجعها ويرحّلها.':'Receipt sent to the accountant. The bill stays a draft until reviewed and posted.')):(ar?'إرسال الاستلام إلى SolaCount قيد الانتظار. ستتم إعادة المحاولة تلقائياً، دون استلام إضافي.':'Sending the receipt to SolaCount is pending. It retries automatically without another receipt.')}{e.response?.bill_id&&<span> · {e.response.bill_number || `${ar?'فاتورة':'Bill'} #${e.response.bill_id}`}</span>}</div>)}
             <Tabs tabs={[{ key: 'lines', label: t('receiving.common.lines', 'Lines') }, { key: 'ledger', label: t('receiving.grn.tabs.ledgerResult', 'Ledger result') }, { key: 'audit', label: t('receiving.common.audit', 'Audit') }]} active={tab} onChange={setTab} />
 
             {tab === 'lines' && <div className="panel"><table className="data-table">

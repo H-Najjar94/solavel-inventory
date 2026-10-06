@@ -7,20 +7,26 @@ use App\Http\Controllers\Api\Concerns\PresentsLineTraceability;
 use App\Http\Requests\Api\StoreGoodsReceiptRequest;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\PurchaseOrder;
+use App\Models\Tenant\PurchasingDocumentOutbox;
+use App\Models\Tenant\ReceivingRequest;
 use App\Models\Tenant\StockLedger;
 use App\Services\Access\OperationalReceiving;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Documents\InventoryReversalService;
+use App\Services\Purchasing\ReceivingRequestService;
 use App\Services\Stock\Support\Decimal;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use RuntimeException;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class GoodsReceiptController extends ApiController
 {
     use PresentsLineTraceability;
+
     public function __construct(
         private GoodsReceiptService $service,
         private InventoryReversalService $reversals,
@@ -63,7 +69,7 @@ class GoodsReceiptController extends ApiController
 
         $this->attachLineTraceability($goods_receipt->lines);
 
-        return $this->success(['grn' => $goods_receipt, 'ledger' => $ledger, 'purchase_order' => $po]);
+        return $this->success(['grn' => $goods_receipt, 'ledger' => $ledger, 'purchase_order' => $po, 'receiving_request' => $goods_receipt->receiving_request_id ? app(ReceivingRequestService::class)->status(ReceivingRequest::query()->findOrFail($goods_receipt->receiving_request_id)) : null, 'finance_handoff' => PurchasingDocumentOutbox::query()->where('goods_receipt_id', $goods_receipt->id)->orderByDesc('id')->get()->map(fn ($e) => ['status' => $e->status, 'event_type' => $e->event_type, 'response' => $e->receiver_response, 'message' => $e->last_error])->all()]);
     }
 
     /**
@@ -134,9 +140,9 @@ class GoodsReceiptController extends ApiController
                 unset($data['grn_number']);
             }
             $grn = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        } catch (HttpException $e) {
             throw $e;
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             abort(404);
         } catch (ValidationException $e) {
             return $this->error('validation_failed', collect($e->errors())->flatten()->first(), 422, ['errors' => $e->errors()]);
@@ -154,9 +160,9 @@ class GoodsReceiptController extends ApiController
             $data = app(OperationalReceiving::class)->prepare($request->validated());
             $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
             $grn = $this->service->updateDraft($goods_receipt, collect($data)->except('lines')->toArray(), $data['lines']);
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        } catch (HttpException $e) {
             throw $e;
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             abort(404);
         } catch (ValidationException $e) {
             return $this->error('validation_failed', collect($e->errors())->flatten()->first(), 422, ['errors' => $e->errors()]);

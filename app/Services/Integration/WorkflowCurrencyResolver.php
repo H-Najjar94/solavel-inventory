@@ -5,6 +5,7 @@ namespace App\Services\Integration;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\ReceivingRequest;
 use App\Services\Stock\Support\Decimal;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -126,7 +127,17 @@ final class WorkflowCurrencyResolver
             if (! $parent) {
                 $this->fail('workflow_source_invalid', [], 'purchase_order_id');
             }
+
             return (string) ($parent->integration_currency_code ?: $parent->currency_code);
+        }
+
+        if ($documentType === 'goods_receipt' && ! empty($document->receiving_request_id)) {
+            $request = ReceivingRequest::query()->where('organization_id', $document->organization_id)->find($document->receiving_request_id);
+            if (! $request) {
+                $this->fail('workflow_source_invalid', [], 'receiving_request_id');
+            }
+
+            return (string) $request->currency_code;
         }
 
         $direct = $document->integration_currency_code
@@ -152,6 +163,7 @@ final class WorkflowCurrencyResolver
                 if ($documentType === 'sales_return') {
                     $salesOrderId = DB::connection('tenant')->table($parentTable)
                         ->where('organization_id', $document->organization_id)->where('id', $parentId)->value('sales_order_id');
+
                     return $this->storedCurrency(
                         'inventory_sales_orders',
                         (int) $salesOrderId,
@@ -169,6 +181,7 @@ final class WorkflowCurrencyResolver
             if ($sourceType === 'goods_receipt') {
                 $purchaseOrderId = DB::connection('tenant')->table('goods_receipts')
                     ->where('organization_id', $document->organization_id)->where('id', $document->source_id)->value('purchase_order_id');
+
                 return $this->storedCurrency(
                     'inventory_purchase_orders',
                     (int) $purchaseOrderId,

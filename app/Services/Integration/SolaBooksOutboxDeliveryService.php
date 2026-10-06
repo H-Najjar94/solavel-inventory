@@ -5,11 +5,14 @@ namespace App\Services\Integration;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\PurchasingDocumentOutbox;
+use App\Services\Purchasing\ReceivingRequestService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class SolaBooksOutboxDeliveryService
@@ -167,7 +170,7 @@ class SolaBooksOutboxDeliveryService
             ]);
     }
 
-    private function signedClient(IntegrationOutboxEvent $event, array $payload, string $body): PendingRequest
+    private function signedClient(IntegrationOutboxEvent $event, array $payload, string $body, ?string $targetEndpoint = null): PendingRequest
     {
         $setting = IntegrationSetting::query()
             ->where('organization_id', $this->context->idOrFail())
@@ -180,7 +183,7 @@ class SolaBooksOutboxDeliveryService
             throw new RuntimeException(__('inventory.integration.signing_missing'));
         }
 
-        $endpoint = $this->journalEndpoint();
+        $endpoint = $targetEndpoint ?? $this->journalEndpoint();
         $path = (string) (parse_url($endpoint, PHP_URL_PATH) ?: '/');
         $query = (string) (parse_url($endpoint, PHP_URL_QUERY) ?: '');
         $timestamp = (string) now()->timestamp;
@@ -216,6 +219,47 @@ class SolaBooksOutboxDeliveryService
             'X-Solavel-Central-Organization-Id' => (string) $identity['central_organization_id'],
             'X-Solavel-Integration-Mapping-Id' => (string) $identity['integration_mapping_id'],
         ]);
+    }
+
+    public function authorizePurchasing(int $actorId, int $billId, string $permission): array
+    {
+        $mapping = app(ReceivingRequestService::class)->mapping();
+        $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
+        $key = 'purchasing:authorize:'.Str::uuid();
+        $payload = ['source_app' => 'solastock', 'schema_version' => 'purchasing.v1', 'contract_version' => SolaStockJournalContract::VERSION, 'event_type' => 'purchasing.authorize', 'event_uuid' => (string) Str::uuid(), 'external_source_key' => $key, 'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id, 'identity' => ['central_client_id' => $mapping->central_client_id, 'central_organization_id' => $mapping->central_organization_id, 'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id, 'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid], 'actor_id' => $actorId, 'source_bill_id' => $billId, 'permission' => $permission];
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/authorize', $this->journalEndpoint());
+        if (! $endpoint || $endpoint === $this->journalEndpoint()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $event = new IntegrationOutboxEvent(['organization_id' => $mapping->solastock_organization_id, 'idempotency_key' => $key, 'event_uuid' => $payload['event_uuid']]);
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+        abort_unless($response->successful(), $response->status() === 403 ? 403 : 503, __('inventory.purchasing.authority_unavailable'));
+        $data = (array) $response->json('data');
+        abort_unless(($data['allowed'] ?? false) === true && (int) ($data['actor_id'] ?? 0) === $actorId && (int) ($data['source_bill_id'] ?? 0) === $billId && (int) ($data['finance_organization_id'] ?? 0) === (int) $mapping->finance_organization_id && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id && ($data['permission'] ?? null) === $permission && ($data['organization_mapping_uuid']??null)===$mapping->mapping_uuid, 403);
+
+        return $data;
+    }
+
+    public function sendPurchasingDocument(PurchasingDocumentOutbox $document): array
+    {
+        $this->safety->assertDeliveryEnabledFor((int) $document->organization_id);
+        if ($document->status !== 'processing' || ! $document->lease_token) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $event = new IntegrationOutboxEvent(['organization_id' => $document->organization_id, 'idempotency_key' => $document->source_key, 'event_uuid' => $document->event_uuid]);
+        $payload = $document->payload;
+        if(($payload['schema_version']??null)!=='purchasing.v1'||!in_array($payload['event_type']??null,['purchasing.receipt.confirmed','purchasing.receipt.reversed'],true))throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        if(!$document->lease_expires_at||$document->lease_expires_at->isPast())throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        if(!hash_equals((string)$document->payload_hash,hash('sha256',SolaStockJournalContract::canonicalJson($payload))))throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/receipts', $this->journalEndpoint());
+        if (! $endpoint || $endpoint === $this->journalEndpoint()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+
+        return ['successful' => $response->successful(), 'status' => $response->status(), 'data' => (array) ($response->json('data') ?? [])];
     }
 
     public function rotateSigningKey(): IntegrationSetting

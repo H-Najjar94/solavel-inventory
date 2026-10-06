@@ -22,7 +22,7 @@ const NAV_LABELS = {
     dashboard: 'dashboard', items: 'items', warehouses: 'warehouses', balances: 'currentStock',
     ledger: 'stockLedger', opening: 'openingStock', adjustments: 'adjustments', transfers: 'transfers',
     counts: 'counts', scanner: 'scanner', suppliers: 'suppliers', 'purchase-orders': 'purchaseOrders',
-    'goods-receipts': 'goodsReceipts', customers: 'customers', 'sales-orders': 'salesOrders',
+    'goods-receipts': 'goodsReceipts', 'receiving-requests':'receiving.requests.nav', customers: 'customers', 'sales-orders': 'salesOrders',
     'pick-lists': 'picking', packs: 'packing', shipments: 'shipments', 'sales-returns': 'salesReturns',
     traceability: 'traceability', lots: 'lots', serials: 'serials', recalls: 'recalls', reports: 'reports',
     integration: 'solabooks', 'team-access': 'nav.teamAccess', settings: 'settings',

@@ -10,9 +10,12 @@ use App\Models\Tenant\SerialNumber;
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\Concerns\CapturesTraceability;
 use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\FinanceBaseValuation;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
 use App\Services\Purchasing\PurchaseOrderBackorderService;
+use App\Services\Purchasing\ReceiptHandoffService;
+use App\Services\Purchasing\ReceivingRequestService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
 use App\Services\Stock\Support\Decimal;
@@ -69,6 +72,7 @@ class GoodsReceiptService
 
         return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
             $this->assertSource($attributes['purchase_order_id'] ?? null, $lines);
+            app(ReceivingRequestService::class)->validateReceipt($attributes['receiving_request_id'] ?? null, $attributes, $lines);
 
             // Server-issued GRN number when none was supplied (users don't type it).
             $attributes['grn_number'] = ! empty($attributes['grn_number'])
@@ -106,6 +110,7 @@ class GoodsReceiptService
 
             $this->assertSource(array_key_exists('purchase_order_id', $attributes) ? $attributes['purchase_order_id'] : $grn->purchase_order_id, $lines);
 
+            app(ReceivingRequestService::class)->validateReceipt($grn->receiving_request_id, $attributes, $lines);
             $grn->fill(collect($attributes)->only(['grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'receipt_date', 'blind_receiving', 'notes'])->toArray());
             $grn->lines()->delete();
 
@@ -181,6 +186,7 @@ class GoodsReceiptService
             $base = [
                 'organization_id' => $orgId,
                 'purchase_order_line_id' => $line['purchase_order_line_id'] ?? null,
+                'receiving_request_line_id' => $line['receiving_request_line_id'] ?? null,
                 'item_id' => $line['item_id'],
                 'variant_id' => $line['variant_id'] ?? null,
                 'rejected_qty' => Decimal::qty((string) ($line['rejected_qty'] ?? '0')),
@@ -246,22 +252,19 @@ class GoodsReceiptService
             $grn->loadMissing('lines');
             $this->assertSource($grn->purchase_order_id, $grn->lines->toArray());
             $this->workflowValidation->assertOperationalDocumentReady($grn, 'grn.posted');
+            app(ReceivingRequestService::class)->validateReceipt($grn->receiving_request_id, $grn->toArray(), $grn->lines->toArray());
+            app(ReceivingRequestService::class)->posted($grn);
 
             // Over-receipt guard: a line tied to a PO line cannot accept more than
             // the PO line's remaining (ordered − already received). No tolerance
             // setting yet, so over-receipt is blocked.
-            foreach ($grn->lines as $line) {
-                if ($line->purchase_order_line_id) {
-                    $poLine = PurchaseOrderLine::query()->find($line->purchase_order_line_id);
-                    if ($poLine) {
-                        $remaining = Decimal::sub((string) $poLine->ordered_qty, (string) $poLine->received_qty);
-                        if (Decimal::gt((string) $line->accepted_qty, $remaining)) {
-                            throw new RuntimeException(
-                                "Over-receipt blocked: accepting {$line->accepted_qty} exceeds PO remaining {$remaining} for item #{$line->item_id}."
-                            );
-                        }
-                    }
-                }
+            $poTotals=[];
+            foreach($grn->lines as $line){if($line->purchase_order_line_id)$poTotals[(int)$line->purchase_order_line_id]=Decimal::add($poTotals[(int)$line->purchase_order_line_id]??'0',(string)$line->accepted_qty);}
+            ksort($poTotals);
+            foreach($poTotals as$lineId=>$accepted){
+                $poLine=PurchaseOrderLine::query()->whereKey($lineId)->lockForUpdate()->firstOrFail();
+                $remaining=Decimal::sub((string)$poLine->ordered_qty,(string)$poLine->received_qty);
+                if(Decimal::gt($accepted,$remaining))throw new RuntimeException(__('inventory.purchasing.over_receipt'));
             }
 
             $movements = [];
@@ -281,7 +284,7 @@ class GoodsReceiptService
                     binId: $line->bin_id ? (int) $line->bin_id : null,
                     lotId: $line->lot_id ? (int) $line->lot_id : null,
                     serialId: $line->serial_id ? (int) $line->serial_id : null,
-                    unitCost: app(\App\Services\Integration\FinanceBaseValuation::class)->receiptUnitCost($grn, (string) $line->unit_cost),
+                    unitCost: app(FinanceBaseValuation::class)->receiptUnitCost($grn, (string) $line->unit_cost),
                     movedAt: $grn->receipt_date?->toDateTimeString() ?? now()->toDateTimeString(),
                     expiryDate: $line->expiry_date ? (string) $line->expiry_date : null,
                 );
@@ -312,6 +315,7 @@ class GoodsReceiptService
             $grn->markSystemTransition()->save();
 
             $this->outbox->record('grn.posted', $grn, 'goods_receipt', $grn->grn_number, (string) $grn->receipt_date);
+            app(ReceiptHandoffService::class)->record($grn);
 
             return $grn;
         });

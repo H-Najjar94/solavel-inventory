@@ -6,11 +6,14 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationFinancialLineAllocation;
 use App\Models\Tenant\IntegrationOrganizationMapping;
-use App\Models\Tenant\Shipment;
 use App\Models\Tenant\SalesOrderLine;
 use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\Shipment;
+use App\Models\Tenant\ShipmentLine;
 use App\Services\Access\WarehouseAccessService;
+use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Stock\Support\Decimal;
+use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -37,7 +40,9 @@ final class FinancialLineAllocationService
             $identities = [];
             foreach ($input['allocations'] as $requested) {
                 $identity = implode('|', [$requested['source_document_mapping_uuid'], $requested['source_line_id'], $requested['destination_line_id']]);
-                if (isset($identities[$identity])) $this->fail('A source line may be allocated to a destination line only once per review.');
+                if (isset($identities[$identity])) {
+                    $this->fail('A source line may be allocated to a destination line only once per review.');
+                }
                 $identities[$identity] = true;
                 $rows[] = $this->reserveLine($connection, $input, $requested, $replaceIds);
             }
@@ -49,6 +54,7 @@ final class FinancialLineAllocationService
                 $replaced->updated_by_user_id = auth()->id();
                 $replaced->save();
             }
+
             return ['contract_version' => self::CONTRACT_VERSION, 'allocations' => $rows];
         }, 5);
     }
@@ -64,13 +70,17 @@ final class FinancialLineAllocationService
                 ->where('destination_fingerprint', $input['destination_fingerprint'])
                 ->lockForUpdate();
             $rows = $query->get();
-            if ($rows->isEmpty()) $this->fail('No reserved allocations belong to this financial document.');
+            if ($rows->isEmpty()) {
+                $this->fail('No reserved allocations belong to this financial document.');
+            }
             foreach ($rows as $row) {
                 if (! hash_equals((string) $row->destination_fingerprint, (string) $input['destination_fingerprint'])) {
                     $this->fail('The financial document changed after allocation review.');
                 }
                 if ($to === 'posted') {
-                    if ($row->state === 'posted') continue;
+                    if ($row->state === 'posted') {
+                        continue;
+                    }
                     if ($row->state !== 'draft_reserved' || ($row->reserved_until && $row->reserved_until->isPast())) {
                         $this->fail('The source reservation expired or is no longer postable. Review remaining quantities again.');
                     }
@@ -78,20 +88,29 @@ final class FinancialLineAllocationService
                     $row->posted_at = now();
                     $row->reserved_until = null;
                 } elseif ($to === 'released') {
-                    if ($row->state === 'released') continue;
-                    if ($row->state !== 'draft_reserved') $this->fail('Only a draft reservation can be released.');
+                    if ($row->state === 'released') {
+                        continue;
+                    }
+                    if ($row->state !== 'draft_reserved') {
+                        $this->fail('Only a draft reservation can be released.');
+                    }
                     $row->state = 'released';
                     $row->released_at = now();
                     $row->reserved_until = null;
                 } elseif ($to === 'reversed') {
-                    if ($row->state === 'reversed') continue;
-                    if ($row->state !== 'posted') $this->fail('Only a posted allocation can be reversed.');
+                    if ($row->state === 'reversed') {
+                        continue;
+                    }
+                    if ($row->state !== 'posted') {
+                        $this->fail('Only a posted allocation can be reversed.');
+                    }
                     $row->state = 'reversed';
                     $row->reversed_at = now();
                 }
                 $row->updated_by_user_id = auth()->id();
                 $row->save();
             }
+
             return ['contract_version' => self::CONTRACT_VERSION, 'state' => $to,
                 'allocation_uuids' => $rows->pluck('allocation_uuid')->all()];
         }, 5);
@@ -106,11 +125,15 @@ final class FinancialLineAllocationService
             ->where('source_document_type', $requested['source_document_type'])
             ->where('source_document_id', (string) $requested['source_document_id'])
             ->whereNull('conflict_code')->whereNull('error_state')->lockForUpdate()->first();
-        if (! $source) $this->fail('The selected source identity is unavailable or requires review.');
+        if (! $source) {
+            $this->fail('The selected source identity is unavailable or requires review.');
+        }
 
         $receipt = $requested['source_document_type'] === 'goods_receipt';
         $return = $requested['source_document_type'] === 'sales_return';
-        if (! $receipt && ! $return && $requested['source_document_type'] !== 'shipment') $this->fail('Unsupported financial source type.');
+        if (! $receipt && ! $return && $requested['source_document_type'] !== 'shipment') {
+            $this->fail('Unsupported financial source type.');
+        }
         $expected = $receipt ? ['supplier_bill', 'bill'] : ($return ? ['customer_credit_note', 'customer_credit'] : ['customer_invoice', 'invoice']);
         if ($input['destination_document_type'] !== $expected[0] || $input['allocation_kind'] !== $expected[1]) {
             $this->fail('The source and destination document types are incompatible.');
@@ -127,14 +150,22 @@ final class FinancialLineAllocationService
             || ($return ? ($document->status !== 'posted' || $document->reversed_at) : $document->reversed_at)) {
             $this->fail('The selected source is not posted or was reversed.');
         }
-        app(WarehouseAccessService::class)->assertAllowed((int) $document->warehouse_id);
+        if (! ($receipt && PurchasingBillAuthority::receipt((int) $document->id))) {
+            app(WarehouseAccessService::class)->assertAllowed((int) $document->warehouse_id);
+        }
         $line = $document->lines->firstWhere('id', (int) $requested['source_line_id']);
-        if (! $line) $this->fail('The selected source line does not belong to this document.');
-        if ((int) $line->item_id !== (int) $requested['stock_item_id']) $this->fail('The selected item identity does not match its source line.');
+        if (! $line) {
+            $this->fail('The selected source line does not belong to this document.');
+        }
+        if ((int) $line->item_id !== (int) $requested['stock_item_id']) {
+            $this->fail('The selected item identity does not match its source line.');
+        }
 
         $sourceQty = Decimal::round((string) ($receipt ? $line->accepted_qty : ($return ? $line->returned_qty : $line->quantity)), 8);
         $baseQty = Decimal::round((string) $requested['base_quantity'], 8);
-        if (! Decimal::gt($baseQty, '0')) $this->fail('Allocated quantity must be positive.');
+        if (! Decimal::gt($baseQty, '0')) {
+            $this->fail('Allocated quantity must be positive.');
+        }
         $idempotency = hash('sha256', implode('|', [
             $input['destination_document_type'], $input['destination_document_id'], $requested['destination_line_id'],
             $source->mapping_uuid, $line->id, $input['destination_fingerprint'],
@@ -154,8 +185,12 @@ final class FinancialLineAllocationService
             ->when($replaceIds !== [], fn ($query) => $query->whereNotIn('id', $replaceIds))
             ->when($existing, fn ($query) => $query->where('id', '!=', $existing->id));
         $used = (string) $usedQuery->sum('base_quantity');
-        if (Decimal::gt(Decimal::add($used, $baseQty), $sourceQty)) $this->fail('The allocation exceeds the source line remaining quantity.');
-        if (! empty($line->serial_id) && Decimal::cmp($baseQty, '1', 8) !== 0) $this->fail('Serial-tracked source lines are indivisible.');
+        if (Decimal::gt(Decimal::add($used, $baseQty), $sourceQty)) {
+            $this->fail('The allocation exceeds the source line remaining quantity.');
+        }
+        if (! empty($line->serial_id) && Decimal::cmp($baseQty, '1', 8) !== 0) {
+            $this->fail('Serial-tracked source lines are indivisible.');
+        }
 
         $factor = Decimal::round((string) ($line->unit_conversion_factor ?? 1), 12);
         $enteredQty = Decimal::round((string) $requested['entered_quantity'], 8);
@@ -167,13 +202,15 @@ final class FinancialLineAllocationService
             $this->fail('The financial line must preserve its reviewed unit and quantity.');
         }
         $salesOrderLineId = $return && $line->source_shipment_line_id
-            ? \App\Models\Tenant\ShipmentLine::query()->find($line->source_shipment_line_id)?->sales_order_line_id
+            ? ShipmentLine::query()->find($line->source_shipment_line_id)?->sales_order_line_id
             : ($line->sales_order_line_id ?? null);
         $sourcePriceValue = $receipt ? $line->unit_cost : SalesOrderLine::query()
             ->where('organization_id', $connection->solastock_organization_id)->find($salesOrderLineId)?->unit_price;
         // A recorded free sale is distinct from a missing priced source.
         // Its stock cost still comes exclusively from the physical ledger.
-        if ($sourcePriceValue === null || $sourcePriceValue === '') $this->fail('The selected source line has no valid base-unit price.');
+        if ($sourcePriceValue === null || $sourcePriceValue === '') {
+            $this->fail('The selected source line has no valid base-unit price.');
+        }
         $sourcePrice = Decimal::round((string) $sourcePriceValue, 8);
         if ($receipt ? ! Decimal::gt($sourcePrice, '0') : Decimal::lt($sourcePrice, '0')) {
             $this->fail('The selected source line has no valid base-unit price.');
@@ -200,9 +237,13 @@ final class FinancialLineAllocationService
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
         if ($existing) {
             if ($existing->state === 'released') {
-                $existing->state = 'draft_reserved'; $existing->released_at = null;
-                $existing->reserved_until = now()->addHours(24); $existing->updated_by_user_id = auth()->id(); $existing->save();
+                $existing->state = 'draft_reserved';
+                $existing->released_at = null;
+                $existing->reserved_until = now()->addHours(24);
+                $existing->updated_by_user_id = auth()->id();
+                $existing->save();
             }
+
             return $this->serialize($existing);
         }
 
@@ -235,13 +276,14 @@ final class FinancialLineAllocationService
                 'lot_id' => $line->lot_id ?? null, 'serial_id' => $line->serial_id ?? null,
                 'condition' => $line->condition ?? null, 'disposition' => $line->disposition ?? null],
         ]);
+
         return $this->serialize($row);
     }
 
     private function connection(): IntegrationOrganizationMapping
     {
         return IntegrationOrganizationMapping::query()->where('status', 'verified')->where('activation_state', 'active')
-            ->where('solastock_organization_id', app(\App\Tenancy\OrganizationContext::class)->idOrFail())
+            ->where('solastock_organization_id', app(OrganizationContext::class)->idOrFail())
             ->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())->lockForUpdate()->firstOrFail();
     }
 

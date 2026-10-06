@@ -7,6 +7,7 @@ use App\Services\Integration\ApprovedTransportTargetRegistry;
 use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\SolaStockJournalContract;
 use App\Services\Integration\TransportWorkerHeartbeat;
+use App\Services\Purchasing\ReceiptHandoffService;
 use App\Services\Tenancy\TenantManager;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Console\Command;
@@ -63,6 +64,7 @@ final class SuperviseSolaBooksTransport extends Command
                     $transport->processClaim($event);
                     $processed++;
                 }
+                $processed += app(ReceiptHandoffService::class)->deliverDue(min(25, max(1, (int) $this->option('limit'))));
                 $organizations->forget();
             }
             $heartbeat->write($targets === [] ? 'idle' : 'running', count($targets), $processed);

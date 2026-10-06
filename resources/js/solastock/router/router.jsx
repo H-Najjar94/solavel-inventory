@@ -25,6 +25,7 @@ import LedgerPage from '../pages/LedgerPage.jsx';
 import PurchaseOrdersPage from '../pages/PurchaseOrdersPage.jsx';
 import PurchaseOrderFormPage from '../pages/PurchaseOrderFormPage.jsx';
 import PurchaseOrderDetailPage from '../pages/PurchaseOrderDetailPage.jsx';
+import ReceivingRequestsPage from '../pages/ReceivingRequestsPage.jsx';
 import GoodsReceiptsPage from '../pages/GoodsReceiptsPage.jsx';
 import GoodsReceiptFormPage from '../pages/GoodsReceiptFormPage.jsx';
 import GoodsReceiptDetailPage from '../pages/GoodsReceiptDetailPage.jsx';
@@ -136,6 +137,8 @@ export const router = createBrowserRouter(
                 { path: 'purchase-orders/new', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
                 { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
                 { path: 'purchase-orders/:id/edit', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
+                { path: 'receiving-requests', element: protectedElement(<ReceivingRequestsPage />, 'inventory.receive_goods') },
+                { path: 'goods-receipts/from-request/:requestId', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.receive_goods') },
                 { path: 'goods-receipts', element: <GoodsReceiptsPage /> },
                 { path: 'goods-receipts/new', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.receive_goods') },
                 { path: 'goods-receipts/from-po/:poId', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.receive_goods') },

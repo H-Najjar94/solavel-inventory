@@ -3,47 +3,92 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
-use App\Models\Tenant\{GoodsReceipt, Shipment, SalesReturn, SalesOrder, SalesOrderLine, Supplier, Customer, Item, Unit, IntegrationDocumentLifecycleMapping};
-use App\Services\Access\{WarehouseAccessService, InventoryPermissionService};
+use App\Models\Tenant\Customer;
+use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\Item;
+use App\Models\Tenant\SalesOrder;
+use App\Models\Tenant\SalesOrderLine;
+use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\Shipment;
+use App\Models\Tenant\ShipmentLine;
+use App\Models\Tenant\Supplier;
+use App\Models\Tenant\Unit;
+use App\Services\Access\InventoryPermissionService;
+use App\Services\Access\WarehouseAccessService;
+use App\Services\Purchasing\PurchasingBillAuthority;
+use App\Services\Stock\Support\Decimal;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Http\Request;
 
 /** Read-only Stock-owned source snapshots for explicit Finance document review. */
 final class FinanceDocumentSourceController extends ApiController
 {
-    public function suppliers(Request $request) { return $this->parties($request, Supplier::class); }
-    public function customers(Request $request) { return $this->parties($request, Customer::class); }
+    public function suppliers(Request $request)
+    {
+        return $this->parties($request, Supplier::class);
+    }
+
+    public function customers(Request $request)
+    {
+        return $this->parties($request, Customer::class);
+    }
 
     private function parties(Request $request, string $class)
     {
         $query = $class::query()->where('is_active', true)->orderBy('name');
         $search = mb_substr(trim((string) $request->input('search', '')), 0, 100);
-        if ($search !== '') $query->where(fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('code', 'like', '%'.$search.'%'));
+        if ($search !== '') {
+            $query->where(fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('code', 'like', '%'.$search.'%'));
+        }
+
         return $this->success(['parties' => $query->limit(100)->get(['id', 'name', 'code'])->toArray(),
             'can_review_party' => app(InventoryPermissionService::class)->can($request->user(), 'inventory.integration.setup')]);
     }
 
-    public function receipts(Request $request) { return $this->listing(GoodsReceipt::class, 'grn_number'); }
-    public function shipments(Request $request) { return $this->listing(Shipment::class, 'shipment_number'); }
-    public function receipt(Request $request, GoodsReceipt $goods_receipt) { return $this->snapshot($request, $goods_receipt, true); }
-    public function shipment(Request $request, Shipment $shipment) { return $this->snapshot($request, $shipment, false); }
+    public function receipts(Request $request)
+    {
+        return $this->listing(GoodsReceipt::class, 'grn_number');
+    }
+
+    public function shipments(Request $request)
+    {
+        return $this->listing(Shipment::class, 'shipment_number');
+    }
+
+    public function receipt(Request $request, GoodsReceipt $goods_receipt)
+    {
+        return $this->snapshot($request, $goods_receipt, true);
+    }
+
+    public function shipment(Request $request, Shipment $shipment)
+    {
+        return $this->snapshot($request, $shipment, false);
+    }
+
     public function returns(Request $request)
     {
         $query = SalesReturn::query()->where('status', 'posted')->whereNotNull('posted_at')->orderByDesc('id');
         app(WarehouseAccessService::class)->scope($query);
+
         return $this->success($query->limit(100)->get()->map(fn ($document) => [
             'id' => $document->id, 'number' => $document->return_number ?: (string) $document->id,
             'status' => $document->status, 'warehouse_id' => $document->warehouse_id,
         ])->all());
     }
-    public function salesReturn(Request $request, SalesReturn $sales_return) { return $this->returnSnapshot($request, $sales_return); }
+
+    public function salesReturn(Request $request, SalesReturn $sales_return)
+    {
+        return $this->returnSnapshot($request, $sales_return);
+    }
 
     private function listing(string $class, string $number)
     {
         $query = $class::query()->whereNotNull('posted_at')->whereNull('reversed_at')->orderByDesc('id');
         app(WarehouseAccessService::class)->scope($query);
+
         return $this->success($query->limit(100)->get()->map(fn ($document) => [
             'id' => $document->id, 'number' => $document->{$number} ?: (string) $document->id,
             'status' => $document->status, 'warehouse_id' => $document->warehouse_id,
@@ -52,7 +97,7 @@ final class FinanceDocumentSourceController extends ApiController
 
     private function snapshot(Request $request, GoodsReceipt|Shipment $document, bool $receipt)
     {
-        if ($request->attributes->get('verified_workspace_action') !== 'finance-allocations.review-status') {
+        if ($request->attributes->get('verified_workspace_action') !== 'finance-allocations.review-status' && ! ($receipt && PurchasingBillAuthority::receipt((int) $document->id))) {
             app(WarehouseAccessService::class)->assertAllowed((int) $document->warehouse_id);
         }
         abort_unless($document->posted_at && ! $document->reversed_at, 409, 'finance_source_not_posted_or_reversed');
@@ -69,7 +114,7 @@ final class FinanceDocumentSourceController extends ApiController
         $order = $receipt ? $document->purchaseOrder : SalesOrder::query()->find($document->sales_order_id);
         $partyId = $receipt ? $document->supplier_id : $order?->customer_id;
         $party = $partyId ? ($receipt ? Supplier::query() : Customer::query())->find($partyId) : null;
-        $lines = $document->lines->map(function ($line) use ($request, $receipt, $order, $mapping) {
+        $lines = $document->lines->map(function ($line) use ($request, $receipt, $order, $mapping, $document) {
             $item = Item::query()->findOrFail($line->item_id);
             $salesLine = ! $receipt && $line->sales_order_line_id
                 ? SalesOrderLine::query()->where('sales_order_id', $order?->id)->find($line->sales_order_line_id) : null;
@@ -79,12 +124,13 @@ final class FinanceDocumentSourceController extends ApiController
             $entered = (string) ($line->entered_qty ?? $quantity);
             $enteredUnit = $line->entered_unit_id ? Unit::query()->find($line->entered_unit_id) : null;
             $baseUnit = $line->base_unit_id ? Unit::query()->find($line->base_unit_id) : null;
-            return ['item_id' => $item->id, 'sku' => $item->sku, 'name' => $item->name,
+
+            return [...($receipt&&$document->receiving_request_id?['source_bill_line_id'=>\App\Models\Tenant\ReceivingRequestLine::query()->where('receiving_request_id',$document->receiving_request_id)->whereKey($line->receiving_request_line_id)->value('source_line_id')]:[]), 'item_id' => $item->id, 'sku' => $item->sku, 'name' => $item->name,
                 'quantity' => $quantity, 'entered_quantity' => $entered,
-                'available_base_quantity' => \App\Services\Stock\Support\Decimal::qty(\App\Services\Stock\Support\Decimal::sub($quantity, $consumed)),
+                'available_base_quantity' => Decimal::qty(Decimal::sub($quantity, $consumed)),
                 'unit_price' => $receipt ? (string) $line->unit_cost : ($salesLine ? (string) $salesLine->unit_price : null),
                 'entered_unit_price' => ($receipt ? $line->unit_cost : ($salesLine ? $salesLine->unit_price : null)) === null
-                    ? null : \App\Services\Stock\Support\Decimal::cost(\App\Services\Stock\Support\Decimal::mul(
+                    ? null : Decimal::cost(Decimal::mul(
                         (string) ($receipt ? $line->unit_cost : $salesLine->unit_price), $factor)),
                 'entered_unit_id' => $line->entered_unit_id, 'entered_unit' => $enteredUnit ? ['id' => $enteredUnit->id, 'code' => $enteredUnit->code, 'name' => $enteredUnit->name] : null,
                 'base_unit_id' => $line->base_unit_id, 'base_unit' => $baseUnit ? ['id' => $baseUnit->id, 'code' => $baseUnit->code, 'name' => $baseUnit->name] : null,
@@ -93,6 +139,7 @@ final class FinanceDocumentSourceController extends ApiController
                 'unit_conversion_precision' => $line->unit_conversion_precision, 'unit_conversion_rounding_mode' => $line->unit_conversion_rounding_mode,
                 'source_line_id' => $line->id];
         })->all();
+
         return $this->success([
             'mapping_uuid' => $mapping->mapping_uuid, 'source_key' => $mapping->accounting_source_key,
             'document_type' => $type, 'document_id' => $document->id,
@@ -110,7 +157,7 @@ final class FinanceDocumentSourceController extends ApiController
     private function returnSnapshot(Request $request, SalesReturn $return)
     {
         abort_unless($return->posted_at && $return->status === 'posted', 409, 'finance_source_not_posted');
-        if ($request->attributes->get('verified_workspace_action') !== 'finance-allocations.review-status') {
+        if ($request->attributes->get('verified_workspace_action') !== 'finance-allocations.review-status' && ! ($receipt && PurchasingBillAuthority::receipt((int) $document->id))) {
             app(WarehouseAccessService::class)->assertAllowed((int) $return->warehouse_id);
         }
         $connection = IntegrationOrganizationMapping::query()->where('solastock_organization_id', $return->organization_id)
@@ -124,17 +171,19 @@ final class FinanceDocumentSourceController extends ApiController
         $return->load('lines');
         $lines = $return->lines->map(function ($line) use ($request, $mapping, $order) {
             $item = Item::query()->findOrFail($line->item_id);
-            $shipmentLine = $line->source_shipment_line_id ? \App\Models\Tenant\ShipmentLine::query()->find($line->source_shipment_line_id) : null;
+            $shipmentLine = $line->source_shipment_line_id ? ShipmentLine::query()->find($line->source_shipment_line_id) : null;
             $salesLine = $shipmentLine?->sales_order_line_id ? SalesOrderLine::query()->where('sales_order_id', $order?->id)->find($shipmentLine->sales_order_line_id) : null;
-            $quantity = (string) $line->returned_qty; $factor = (string) ($line->unit_conversion_factor ?? 1);
+            $quantity = (string) $line->returned_qty;
+            $factor = (string) ($line->unit_conversion_factor ?? 1);
             $consumed = $this->consumedQuantity($request, $mapping, (int) $line->id);
             $enteredUnit = $line->entered_unit_id ? Unit::query()->find($line->entered_unit_id) : null;
             $baseUnit = $line->base_unit_id ? Unit::query()->find($line->base_unit_id) : null;
+
             return ['item_id' => $item->id, 'sku' => $item->sku, 'name' => $item->name, 'quantity' => $quantity,
                 'entered_quantity' => (string) ($line->entered_qty ?? $quantity),
-                'available_base_quantity' => \App\Services\Stock\Support\Decimal::qty(\App\Services\Stock\Support\Decimal::sub($quantity, $consumed)),
+                'available_base_quantity' => Decimal::qty(Decimal::sub($quantity, $consumed)),
                 'unit_price' => $salesLine ? (string) $salesLine->unit_price : null,
-                'entered_unit_price' => $salesLine ? \App\Services\Stock\Support\Decimal::cost(\App\Services\Stock\Support\Decimal::mul((string) $salesLine->unit_price, $factor)) : null,
+                'entered_unit_price' => $salesLine ? Decimal::cost(Decimal::mul((string) $salesLine->unit_price, $factor)) : null,
                 'entered_unit_id' => $line->entered_unit_id, 'entered_unit' => $enteredUnit ? ['id' => $enteredUnit->id, 'code' => $enteredUnit->code, 'name' => $enteredUnit->name] : null,
                 'base_unit_id' => $line->base_unit_id, 'base_unit' => $baseUnit ? ['id' => $baseUnit->id, 'code' => $baseUnit->code, 'name' => $baseUnit->name] : null,
                 'unit_conversion_id' => $line->unit_conversion_id, 'conversion_factor' => $factor,
@@ -144,6 +193,7 @@ final class FinanceDocumentSourceController extends ApiController
                 'source_shipment_line_id' => $line->source_shipment_line_id, 'source_stock_ledger_id' => $line->source_stock_ledger_id,
                 'source_line_id' => $line->id];
         })->all();
+
         return $this->success(['mapping_uuid' => $mapping->mapping_uuid, 'source_key' => $mapping->accounting_source_key,
             'document_type' => 'sales_return', 'document_id' => $return->id, 'number' => $return->return_number,
             'organization_id' => $return->organization_id, 'warehouse_id' => $return->warehouse_id,
@@ -160,7 +210,9 @@ final class FinanceDocumentSourceController extends ApiController
      */
     private function consumedQuantity(Request $request, IntegrationDocumentLifecycleMapping $mapping, int $lineId): string
     {
-        if (! Schema::connection('tenant')->hasTable('integration_financial_line_allocations')) return '0';
+        if (! Schema::connection('tenant')->hasTable('integration_financial_line_allocations')) {
+            return '0';
+        }
         $destinationType = (string) $request->input('destination_document_type', '');
         $destinationId = (int) $request->input('destination_document_id', 0);
         $validDestination = in_array($destinationType, ['supplier_bill', 'customer_invoice', 'customer_credit_note'], true)
