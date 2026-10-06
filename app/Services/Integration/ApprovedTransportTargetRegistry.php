@@ -14,7 +14,25 @@ class ApprovedTransportTargetRegistry
     public function targets(): array
     {
         return $this->targetsFromRows(
-            DB::connection('mysql')->table('entitlement_state_snapshots')->orderBy('organization_id')->get()
+            DB::connection('mysql')->table('entitlement_state_snapshots as snapshots')
+                ->join('organizations as organizations', 'organizations.id', '=', 'snapshots.organization_id')
+                ->join('clients as clients', 'clients.id', '=', 'organizations.client_id')
+                ->where('clients.is_active', true)
+                ->where('organizations.is_active', true)
+                ->whereExists(function ($query) {
+                    $query->selectRaw('1')->from('organization_projects as assignments')
+                        ->join('projects as projects', 'projects.id', '=', 'assignments.project_id')
+                        ->whereColumn('assignments.organization_id', 'organizations.id')
+                        ->where('assignments.is_active', true)->whereIn('projects.slug', ['finance', 'accounting', 'construction']);
+                })
+                ->whereExists(function ($query) {
+                    $query->selectRaw('1')->from('organization_projects as assignments')
+                        ->join('projects as projects', 'projects.id', '=', 'assignments.project_id')
+                        ->whereColumn('assignments.organization_id', 'organizations.id')
+                        ->where('assignments.is_active', true)->where('projects.slug', 'inventory');
+                })
+                ->orderBy('snapshots.organization_id')
+                ->get(['snapshots.organization_id', 'snapshots.state_payload', 'organizations.client_id as authoritative_client_id'])
         );
     }
 
@@ -37,6 +55,7 @@ class ApprovedTransportTargetRegistry
 
             if ($clientId < 1 || $organizationId < 1
                 || (int) ($row->organization_id ?? 0) !== $organizationId
+                || (isset($row->authoritative_client_id) && (int) $row->authoritative_client_id !== $clientId)
                 || ! $deliveryApproved
                 || ! in_array('finance', $apps, true)
                 || ! in_array('inventory', $apps, true)) {
