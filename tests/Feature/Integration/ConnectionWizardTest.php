@@ -788,6 +788,10 @@ final class ConnectionWizardTest extends TestCase
     public function empty_workspace_completes_review_without_creating_mappings_or_releasing_events(): void
     {
         $this->seedConnectionFixture(false);
+        // Finance owns its provisioned schema; this regression exercises Stock's draft transitions.
+        $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class, function ($mock) {
+            $mock->shouldReceive('assertComplete')->andReturnNull();
+        });
         DB::connection('tenant')->table('currencies')->insert(['id'=>9901,'code'=>'JOD','name'=>'Jordanian Dinar']);
         DB::connection('tenant')->table('organizations')->where('id',14)->update(['base_currency_id'=>9901]);
         DB::connection('tenant')->table('items')->delete();
@@ -827,6 +831,29 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame('owner_approved', $run['state']);
         $run = $wizard->approveRole(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'], 'accountant', 7002, true);
         $this->assertSame('activation_ready', $run['state']);
+        $oldHash = $run['approval_payload_hash'];
+        $oldLock = $run['lock_version'];
+        $newDate = now()->addDay()->format('Y-m-d\TH:i');
+        $run = $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], $newDate, [], '0', $oldLock, 7001);
+        $this->assertSame('preview_ready', $run['state']);
+        $this->assertNull($run['owner_approved_at']);
+        $this->assertNull($run['accountant_approved_at']);
+        $this->assertNotSame($oldHash, $run['approval_payload_hash']);
+        $this->assertSame($oldLock + 1, $run['lock_version']);
+        $this->assertSame($before, $this->mutationCounters());
+        $same = $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], $newDate, [], '0.00', $run['lock_version'], 7001);
+        $this->assertSame($run['lock_version'], $same['lock_version']);
+        foreach ([[$oldLock, TenantTestManager::ORG_A], [$run['lock_version'], TenantTestManager::ORG_B]] as [$lock, $org]) {
+            try {
+                $wizard->reviewCutoff($org, $run['run_uuid'], $newDate, [], '0', $lock, 7001);
+                $this->fail('Stale or foreign review must be refused.');
+            } catch (ValidationException) {
+                $this->assertTrue(true);
+            }
+        }
+        $run = $wizard->approveRole(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'], 'owner', 7001, true);
+        $run = $wizard->approveRole(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'], 'accountant', 7002, true);
+        $this->assertSame('activation_ready', $run['state']);
         $this->assertFalse($run['activation_available']);
         $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->count());
         $this->assertSame($before, $this->mutationCounters());
@@ -859,6 +886,12 @@ final class ConnectionWizardTest extends TestCase
         $activated = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
             'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
         $this->assertSame('connected', $activated['state']);
+        try {
+            $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], $newDate, [], '0', $activated['lock_version'], 7001);
+            $this->fail('A connected cutoff is immutable.');
+        } catch (ValidationException) {
+            $this->assertTrue(true);
+        }
         $this->assertSame($mapping->mapping_uuid, DB::connection('tenant')->table('integration_connection_wizard_runs')
             ->where('run_uuid', $run['run_uuid'])->value('organization_mapping_uuid'));
         $this->assertSame(7, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());

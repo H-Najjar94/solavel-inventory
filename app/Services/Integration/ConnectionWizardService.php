@@ -708,7 +708,7 @@ final class ConnectionWizardService
         app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $cutoffAt, $physicalCounts, $unexplainedVariance, $expectedLockVersion, $actorUserId): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
-            if ($run->state !== 'cutoff_review' || (int) $run->lock_version !== $expectedLockVersion || $run->snapshot_frozen_at === null) {
+            if (! in_array($run->state, ['cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'], true) || (int) $run->lock_version !== $expectedLockVersion || $run->snapshot_frozen_at === null) {
                 $this->fail('frozen_snapshot_cutoff_review_required');
             }
             $variance = Decimal::money($unexplainedVariance);
@@ -716,10 +716,19 @@ final class ConnectionWizardService
             $choices['physical_counts'] = collect($physicalCounts)->map(fn ($row) => collect((array) $row)
                 ->only(['item_id', 'warehouse_id', 'quantity', 'counted_at', 'reference'])->all())->values()->all();
             $choices['unexplained_variance'] = $variance;
+            $cutoffAt = \Carbon\Carbon::parse($cutoffAt)->format('Y-m-d H:i:s');
+            if ($run->cutoff_reviewed_at !== null && (string) $run->cutoff_at === $cutoffAt
+                && $this->canonicalJson(json_decode($run->authority_choices ?: '{}', true)) === $this->canonicalJson($choices)) {
+                return;
+            }
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
                 'cutoff_at' => $cutoffAt, 'cutoff_reviewed_at' => now(),
                 'authority_choices' => json_encode($choices),
                 'state' => Decimal::isZero($variance, 2) ? 'preview_ready' : 'cutoff_review',
+                // Approvals bind the reviewed date and counts; changed inputs require new approval.
+                'owner_approved_by_user_id' => null, 'owner_approved_at' => null, 'owner_approval_hash' => null,
+                'accountant_approved_by_user_id' => null, 'accountant_approved_at' => null, 'accountant_approval_hash' => null,
+                'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null,
                 'lock_version' => DB::raw('lock_version + 1'), 'updated_at' => now(),
             ]);
             $this->audit($runUuid, null, 'cutoff_reviewed', null, [
