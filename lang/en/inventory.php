@@ -47,6 +47,7 @@ return [
         'non_stock_item' => 'Item :sku is a service or non-inventory item; it cannot have stock movements.',
         'movement_positive' => 'Movement quantity must be greater than zero.',
         'cross_item' => 'Cross-organization item reference rejected.',
+        'warehouse_unavailable' => 'Choose an active warehouse in this organization before posting.',
         'cross_warehouse' => 'Cross-organization warehouse reference rejected.',
         'inbound_cost' => 'Inbound movements require a unit cost.',
         'bin_not_found' => 'Selected bin was not found in this organization.',

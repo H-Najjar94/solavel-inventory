@@ -121,7 +121,17 @@ final class WorkflowValidationService
         $warehouseId = $documentType === 'historical_fifo_correction'
             ? $document->causal_payload['warehouse_id'] : ($document->warehouse_id ?? null);
         if ($warehouseId) {
-            $required->push(['warehouse', (string) $warehouseId]);
+            // Physical warehouses belong to Stock. The connection review and
+            // signed Finance quantity contract do not require Finance locations.
+            // Validate the authoritative record before any ledger mutation.
+            $warehouse = \App\Models\Tenant\Warehouse::query()
+                ->where('organization_id', $orgId)->where('id', $warehouseId)
+                ->where('is_active', true)->first();
+            if (! $warehouse) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => [__('inventory.stock.warehouse_unavailable')],
+                ]);
+            }
         }
         if ($document->supplier_id ?? null) {
             $required->push(['supplier', (string) $document->supplier_id]);

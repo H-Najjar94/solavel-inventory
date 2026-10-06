@@ -354,11 +354,15 @@ final class Phase3WorkflowContractTest extends TestCase
     {
         $po = $this->purchaseOrder('JOD');
         $po->update(['status' => 'draft']);
+        $unit = \App\Models\Tenant\Unit::create(['code' => 'UNMAPPED-BASE', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = F::fifoItem(['base_unit_id' => $unit->id]);
+        $po->lines()->create(app(\App\Services\Catalog\UnitConversionResolver::class)->normalizeLine(
+            ['item_id' => $item->id, 'ordered_qty' => '1', 'unit_price' => '1'], 'ordered_qty'));
         $beforeEvents = IntegrationOutboxEvent::query()->count();
         try {
             app(WorkflowValidationService::class)
                 ->assertOperationalDocumentReady($po->fresh('lines'), 'purchase_order.approved');
-            $this->fail('Missing warehouse mapping must fail closed.');
+            $this->fail('Missing item and unit mappings must fail closed.');
         } catch (ValidationException $exception) {
             $this->assertStringContainsString('mapping_review_required', $exception->getMessage());
         }
@@ -499,7 +503,7 @@ final class Phase3WorkflowContractTest extends TestCase
         }
         $unit = \App\Models\Tenant\Unit::create(['code' => 'BASE-FX', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
         $item = F::fifoItem(['base_unit_id' => $unit->id]);
-        $identities = [['item', (string) $item->id], ['unit', (string) $unit->id], ['warehouse', (string) $po->warehouse_id]];
+        $identities = [['item', (string) $item->id], ['unit', (string) $unit->id]];
         foreach (['inventory_asset' => 100, 'grni' => 200, 'cogs' => 300] as $role => $accountId) {
             DB::connection('tenant')->table('accounts')->insert(['id' => $accountId, 'organization_id' => 14, 'code' => (string) $accountId, 'name' => $role, 'type' => ['inventory_asset'=>'asset','grni'=>'liability','cogs'=>'expense'][$role], 'is_active'=>true,'is_postable'=>true]);
             $accountMapping = \App\Models\Tenant\IntegrationAccountMapping::create(['mapping_type' => $role, 'integration' => 'solabooks',
@@ -577,6 +581,70 @@ final class Phase3WorkflowContractTest extends TestCase
         $this->assertSame(['cogs', 'inventory_asset'], array_column($returnJournal['lines'], 'account_role'));
         $this->assertSame('5.0000', \App\Models\Tenant\StockBalance::query()->where('item_id', $item->id)->sum('on_hand_qty'));
 
+    }
+
+    public function test_connected_standalone_receipt_uses_stock_warehouse_without_finance_location_mapping(): void
+    {
+        [$warehouse, $item] = $this->stockAuthorityReceiptFixture();
+        $receipts = app(\App\Services\Documents\GoodsReceiptService::class);
+        $receipt = $receipts->createDraft(['warehouse_id' => $warehouse->id, 'receipt_date' => '2026-07-30'],
+            [['item_id' => $item->id, 'received_qty' => '1', 'accepted_qty' => '1', 'unit_cost' => '2']]);
+        $receipts->post($receipt);
+        $receipts->post($receipt->fresh());
+        $this->assertSame('posted', $receipt->fresh()->status);
+        $this->assertSame(1, \App\Models\Tenant\StockLedger::query()->where('source_type', get_class($receipt))->where('source_id', $receipt->id)->count());
+        $event = IntegrationOutboxEvent::query()->where('event_type', 'grn.posted')->where('aggregate_id', $receipt->id)->sole();
+        $this->assertSame('JOD', $event->payload['currency']['code']);
+        $this->assertSame('1', $event->payload['currency']['exchange_rate']);
+        $this->assertSame(0, \App\Models\Tenant\IntegrationMasterDataMapping::query()->where('entity_type', 'warehouse')->count());
+    }
+
+    public function test_connected_receipt_rejects_cross_organization_inactive_and_deleted_stock_warehouses_before_movements(): void
+    {
+        [, $item] = $this->stockAuthorityReceiptFixture();
+        $receipts = app(\App\Services\Documents\GoodsReceiptService::class);
+        foreach ([['organization_id' => TenantTestManager::ORG_B], ['is_active' => false], ['deleted_at' => now()]] as $attributes) {
+            $warehouse = F::warehouse(array_diff_key($attributes, ['organization_id' => true]));
+            if (isset($attributes['organization_id'])) {
+                // Deliberately construct a foreign fixture without weakening the model write guard.
+                DB::connection('tenant')->table('warehouses')->where('id', $warehouse->id)
+                    ->update(['organization_id' => $attributes['organization_id']]);
+            }
+            $receipt = $receipts->createDraft(['warehouse_id' => $warehouse->id, 'receipt_date' => '2026-07-30'],
+                [['item_id' => $item->id, 'received_qty' => '1', 'accepted_qty' => '1', 'unit_cost' => '2']]);
+            try { $receipts->post($receipt); $this->fail('An unavailable or foreign warehouse must be rejected.'); }
+            catch (ValidationException $exception) { $this->assertArrayHasKey('warehouse_id', $exception->errors()); }
+            $this->assertSame('draft', $receipt->fresh()->status);
+            $this->assertSame(0, \App\Models\Tenant\StockLedger::query()->where('source_id', $receipt->id)->count());
+            $this->assertSame(0, IntegrationOutboxEvent::query()->where('aggregate_id', $receipt->id)->count());
+        }
+    }
+
+    private function stockAuthorityReceiptFixture(): array
+    {
+        $setting = IntegrationSetting::query()->firstOrFail();
+        $meta = $setting->meta;
+        $meta['finance_currency_contract']['inventory_valuation_basis'] = \App\Services\Integration\FinanceBaseValuation::BASIS;
+        $setting->update(['meta' => $meta]);
+        $warehouse = F::warehouse();
+        $unit = \App\Models\Tenant\Unit::create(['code' => 'AUTH-BASE', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = F::fifoItem(['base_unit_id' => $unit->id]);
+        $identities = [['item', (string) $item->id], ['unit', (string) $unit->id]];
+        foreach (['inventory_asset' => 100, 'grni' => 200] as $role => $accountId) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $accountId, 'organization_id' => 14, 'code' => (string) $accountId,
+                'name' => $role, 'type' => $role === 'inventory_asset' ? 'asset' : 'liability', 'is_active' => true, 'is_postable' => true]);
+            $account = \App\Models\Tenant\IntegrationAccountMapping::create(['mapping_type' => $role, 'integration' => 'solabooks',
+                'solabooks_account_id' => $accountId, 'status' => 'verified']);
+            $identities[] = ['account_role', (string) $account->id];
+        }
+        foreach ($identities as $index => [$type, $id]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(),
+                'organization_mapping_uuid' => $this->organizationMapping->mapping_uuid, 'central_client_id' => 7,
+                'central_organization_id' => TenantTestManager::ORG_A, 'finance_organization_id' => 14,
+                'solastock_organization_id' => TenantTestManager::ORG_A, 'entity_type' => $type,
+                'solastock_record_id' => $id, 'solabooks_record_id' => (string) (700 + $index), 'status' => 'verified']);
+        }
+        return [$warehouse, $item];
     }
 
     private function purchaseOrder(string $currency): PurchaseOrder
