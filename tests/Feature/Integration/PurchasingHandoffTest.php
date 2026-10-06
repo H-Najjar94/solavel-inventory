@@ -573,9 +573,29 @@ final class PurchasingHandoffTest extends TestCase
             'lines' => [['source_bill_line_id' => 801, 'request_line_id' => $source->lines()->sole()->id,
                 'quantity' => '1', 'unit_id' => $this->unit->id, 'unit_cost' => '2.5']]];
         $service = app(FinanceReceivingService::class);
+        $unprepared = $data;
+        $unprepared['operation_uuid'] = (string) Str::uuid();
+        $this->assertSame('abandoned', $service->abandon($unprepared)['status']);
+        try {
+            $service->execute($unprepared);
+            $this->fail('Delayed unprepared operation executed after abandonment.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame(0, GoodsReceipt::count());
         $this->assertSame('prepared', $service->prepare($data)['status']);
         $this->assertSame(0, GoodsReceipt::count());
         $this->assertSame(0, StockLedger::count());
+        $this->assertSame('abandoned', $service->abandon($data)['status']);
+        $this->assertSame('abandoned', $service->abandon($data)['status']);
+        try {
+            $service->execute($data);
+            $this->fail('Abandoned operation was executed.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame(0, GoodsReceipt::count());
+        $data['operation_uuid'] = (string) Str::uuid();
         $one = $service->execute($data);
         $two = $service->execute($data);
         $this->assertSame($one['goods_receipt_id'], $two['goods_receipt_id']);
@@ -584,6 +604,14 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame(1, StockLedger::count());
         $this->assertSame(1, PurchasingDocumentOutbox::count());
         $this->assertSame('partial', $source->fresh()->status);
+        try {
+            $service->abandon($data);
+            $this->fail('Posted receipt command was abandoned.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame(1, GoodsReceipt::count());
+        $this->assertSame(1, StockLedger::count());
         $changed = $data;
         $changed['lines'][0]['quantity'] = '2';
         $this->expectException(HttpException::class);

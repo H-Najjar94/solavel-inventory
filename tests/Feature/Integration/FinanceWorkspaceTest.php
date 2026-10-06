@@ -652,6 +652,20 @@ final class FinanceWorkspaceTest extends TestCase
             'receipt_line_id' => $receipt->lines()->sole()->id, 'receipt_mapping_uuid' => $lifecycle->mapping_uuid,
             'receipt_journal_key' => IntegrationOutboxEvent::where('event_type', 'grn.posted')->sole()->idempotency_key,
             'quantity' => '8', 'invoice_net_unit_cost' => '6', 'nonrecoverable_tax_unit_cost' => '1'];
+        // Real shared-Finance lifecycle projection, without implicit DDL commits.
+        $projection = DB::connection('tenant');
+        foreach ([
+            'bills' => 'id BIGINT, organization_id BIGINT, journal_entry_id BIGINT',
+            'journal_entries' => 'id BIGINT, organization_id BIGINT, status VARCHAR(30), posted_at DATETIME, voided_at DATETIME NULL, deleted_at DATETIME NULL',
+            'finance_purchase_positions' => 'position_uuid CHAR(36), organization_id BIGINT, organization_mapping_uuid CHAR(36), bill_id BIGINT, bill_journal_id BIGINT, bill_line_id BIGINT, bill_revision CHAR(64), state VARCHAR(30)',
+        ] as $table => $columns) {
+            $projection->statement("CREATE TEMPORARY TABLE `$table` ($columns)");
+        }
+        $projection->table('bills')->insert(['id' => 900, 'organization_id' => 14, 'journal_entry_id' => 901]);
+        $projection->table('journal_entries')->insert(['id' => 901, 'organization_id' => 14, 'status' => 'posted', 'posted_at' => now()]);
+        $projection->table('finance_purchase_positions')->insert(['position_uuid' => $facts['position_uuid'], 'organization_id' => 14,
+            'organization_mapping_uuid' => $mapping->mapping_uuid, 'bill_id' => 900, 'bill_journal_id' => 901,
+            'bill_line_id' => 902, 'bill_revision' => $facts['bill_revision'], 'state' => 'active']);
         $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizePurchaseSettlement')
             ->andReturnUsing(fn ($input, $operation) => $input + ['allowed' => true, 'operation' => $operation,
                 'bill_id' => 900, 'bill_line_id' => 902, 'item_external_id' => 901, 'unit_external_id' => 902,
@@ -686,16 +700,44 @@ final class FinanceWorkspaceTest extends TestCase
         }
         $this->assertSame(0, PurchaseValuationHold::count());
         $legacy->update(['state' => 'released']);
+        // A once-valid remote authority response cannot publish a hold after reversal starts.
+        $projection->table('finance_purchase_positions')->update(['state' => 'reversal_pending']);
+        try {
+            $call('prepare', $facts);
+            $this->fail('Stale forward proof published a hold during reversal.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame(0, PurchaseValuationHold::count());
+        $projection->table('finance_purchase_positions')->update(['state' => 'active']);
+        $projection->table('journal_entries')->update(['voided_at' => now()]);
+        try {
+            $call('prepare', $facts);
+            $this->fail('Inactive financial journal published a hold.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $projection->table('journal_entries')->update(['voided_at' => null]);
         $quote = $call('prepare', $facts);
         $this->assertSame('40.00', $quote['receipt_base_amount']);
         $this->assertSame('56.00', $quote['invoice_acquisition_at_receipt_base']);
         $this->assertSame('active', PurchaseValuationHold::sole()->state);
         $apply = $facts + ['plan_fingerprint' => $quote['plan_fingerprint']];
+        $projection->table('finance_purchase_positions')->update(['state' => 'reversal_pending']);
+        try {
+            $call('apply', $apply);
+            $this->fail('Stale forward proof applied valuation during reversal.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+        $this->assertSame('50.00', StockBalance::sole()->total_value);
+        $projection->table('finance_purchase_positions')->update(['state' => 'active']);
         $call('apply', $apply);
         $call('apply', $apply);
         $this->assertSame('10.0000', StockBalance::sole()->on_hand_qty);
         $this->assertSame('66.00', StockBalance::sole()->total_value);
         $this->assertSame(1, StockLedger::count());
+        $projection->table('finance_purchase_positions')->update(['state' => 'reversal_pending']);
         $reverse = $call('prepare', $facts + ['direction' => 'reverse']);
         $call('reverse', $facts + ['plan_fingerprint' => $reverse['plan_fingerprint']]);
         $this->assertSame('50.00', StockBalance::sole()->total_value);

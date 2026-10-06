@@ -81,6 +81,7 @@ final class FinanceReceivingService
             ReceivingRequest::query()->whereKey($source->id)->lockForUpdate()->firstOrFail();
             $command = PurchasingReceivingCommand::query()->where('operation_uuid', $data['operation_uuid'])->first();
             if ($command) {
+                abort_unless($command->status !== 'abandoned', 409, __('receiving.operation_abandoned'));
                 abort_unless((int) $command->actor_id === (int) request()->user()->id && hash_equals($command->payload_hash, $hash), 409, __('inventory.purchasing.source_mismatch'));
             } else {
                 $command = PurchasingReceivingCommand::query()->create([
@@ -144,6 +145,41 @@ final class FinanceReceivingService
             app(OperationalReceiving::class)->posting($receipt);
             $receipt = app(GoodsReceiptService::class)->post($receipt);
             $command->update(['status' => 'posted', 'goods_receipt_id' => $receipt->id]);
+
+            return $this->result($command);
+        });
+    }
+
+    /** Close only an operation proven not to have committed any receiving. */
+    public function abandon(array $data): array
+    {
+        $source = $this->source($data);
+
+        return DB::connection('tenant')->transaction(function () use ($source, $data) {
+            // Same lock ordering as execute: this waits for uncertain execution.
+            ReceivingRequest::query()->whereKey($source->id)->lockForUpdate()->firstOrFail();
+            $command = PurchasingReceivingCommand::query()->where('operation_uuid', $data['operation_uuid'])
+                ->lockForUpdate()->first();
+            if (! $command) {
+                // A validation failure may precede prepare. A durable tombstone also
+                // prevents a delayed original prepare/execute from receiving later.
+                $payload = ['abandoned_before_prepare' => true, 'command_identity' => $data];
+                $command = PurchasingReceivingCommand::query()->create([
+                    'organization_id' => app(OrganizationContext::class)->idOrFail(),
+                    'operation_uuid' => $data['operation_uuid'], 'receiving_request_id' => $source->id,
+                    'source_bill_id' => $source->source_bill_id, 'actor_id' => request()->user()->id,
+                    'payload_hash' => SolaStockJournalContract::payloadHash($payload),
+                    'payload' => $payload, 'status' => 'abandoned',
+                ]);
+            }
+            abort_unless((int) $command->receiving_request_id === (int) $source->id
+                && (int) $command->source_bill_id === (int) $source->source_bill_id
+                && (int) $command->actor_id === (int) request()->user()->id, 409);
+            abort_unless(in_array($command->status, ['prepared', 'abandoned'], true)
+                && $command->goods_receipt_id === null, 409, __('receiving.operation_already_received'));
+            if ($command->status !== 'abandoned') {
+                $command->update(['status' => 'abandoned']);
+            }
 
             return $this->result($command);
         });

@@ -82,6 +82,27 @@ final class PostedPurchaseSettlementService
         abort_unless((int) ($authority['plan_revision'] ?? 1) === (int) ($facts['plan_revision'] ?? 1), 403);
 
         return DB::connection('tenant')->transaction(function () use ($facts, $authority, $mapping, $setting, $organization, $input, $operation): array {
+            // The remote proof can precede a concurrent Bill reversal. Serialize
+            // publication with the native shared Finance lifecycle, in its lock order.
+            $bill = DB::connection('tenant')->table('bills')->where('organization_id', $mapping->finance_organization_id)
+                ->where('id', $facts['source_bill_id'])->lockForUpdate()->first();
+            abort_unless($bill && (int) $bill->journal_entry_id === (int) $facts['bill_journal_id'], 409, __('receiving.valuation_changed'));
+            $position = DB::connection('tenant')->table('finance_purchase_positions')
+                ->where('organization_id', $mapping->finance_organization_id)->where('organization_mapping_uuid', $mapping->mapping_uuid)
+                ->where('position_uuid', $facts['position_uuid'])->where('bill_id', $facts['source_bill_id'])
+                ->where('bill_journal_id', $facts['bill_journal_id'])->where('bill_line_id', $authority['bill_line_id'])
+                ->where('bill_revision', $facts['bill_revision'])->lockForUpdate()->first();
+            abort_unless($position, 409, __('receiving.valuation_changed'));
+            $financialJournal = DB::connection('tenant')->table('journal_entries')
+                ->where('organization_id', $mapping->finance_organization_id)->where('id', $facts['bill_journal_id'])
+                ->where('status', 'posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->lockForUpdate()->first();
+            abort_unless($financialJournal, 409, __('receiving.valuation_changed'));
+            $reverseOperation = $operation === 'reverse' || ($operation === 'prepare' && ($facts['direction'] ?? null) === 'reverse');
+            if ($reverseOperation) {
+                abort_unless($position->state === 'reversal_pending', 409, __('receiving.valuation_changed'));
+            } elseif ($operation === 'apply' || $operation === 'prepare') {
+                abort_unless(! in_array($position->state, ['reversal_pending', 'reversed'], true), 409, __('receiving.valuation_changed'));
+            }
             $lifecycle = IntegrationDocumentLifecycleMapping::query()->where('mapping_uuid', $facts['receipt_mapping_uuid'])
                 ->where('organization_mapping_uuid', $mapping->mapping_uuid)->where('source_document_type', 'goods_receipt')
                 ->where('source_document_id', (string) $facts['receipt_id'])->firstOrFail();

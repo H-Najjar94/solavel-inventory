@@ -107,7 +107,7 @@ final class FinanceWorkspaceController
             if (str_starts_with($input['action'], 'purchasing.request.') || str_starts_with($input['action'], 'purchasing.bill.') || str_starts_with($input['action'], 'purchasing.receiving.')) {
                 $billId = (int) data_get($input, 'data.source_bill_id');
                 abort_unless($billId > 0, 422);
-                $permission = $input['action'] === 'purchasing.bill.cost-adjustment.prepare' ? 'post' : (in_array($input['action'], ['purchasing.request.status', 'purchasing.bill.receipt', 'purchasing.bill.context', 'purchasing.receiving.options', 'purchasing.receiving.prepare', 'purchasing.receiving.execute', 'purchasing.receiving.status', 'purchasing.receiving.approve'], true) ? 'view' : 'edit_draft');
+                $permission = $input['action'] === 'purchasing.bill.cost-adjustment.prepare' ? 'post' : (in_array($input['action'], ['purchasing.request.status', 'purchasing.bill.receipt', 'purchasing.bill.context', 'purchasing.receiving.options', 'purchasing.receiving.prepare', 'purchasing.receiving.execute', 'purchasing.receiving.status', 'purchasing.receiving.approve', 'purchasing.receiving.abandon'], true) ? 'view' : 'edit_draft');
                 $postedRequest = in_array($input['action'], ['purchasing.request.upsert', 'purchasing.request.cancel'], true) && data_get($input, 'data.source_status') === 'posted';
                 if ($postedRequest) {
                     $permission = 'post';
@@ -198,8 +198,8 @@ final class FinanceWorkspaceController
                 $rules = ['source_bill_id' => 'required|integer|min:1', 'request_uuid' => 'required|uuid',
                     'bill_revision' => 'required|string|size:64', 'request_revision' => 'sometimes|string|size:64'];
                 $action = substr($input['action'], strlen('purchasing.receiving.'));
-                abort_unless(in_array($action, ['options', 'prepare', 'execute', 'status', 'approve'], true), 422);
-                if (in_array($action, ['prepare', 'execute', 'status'], true)) {
+                abort_unless(in_array($action, ['options', 'prepare', 'execute', 'status', 'approve', 'abandon'], true), 422);
+                if (in_array($action, ['prepare', 'execute', 'status', 'abandon'], true)) {
                     $rules['operation_uuid'] = 'required|uuid';
                 }
                 if (in_array($action, ['prepare', 'execute'], true)) {
