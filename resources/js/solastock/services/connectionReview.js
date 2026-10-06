@@ -3,12 +3,21 @@ import { mayAcceptCanonicalDraft, unwrapCanonicalDraft } from './wizardDraftSync
 export function cutoffInputValue(value) {
     return String(value || '').replace(' ', 'T').slice(0, 16);
 }
+/** A local proposal only; persistence still requires the user's Continue action. */
+export function proposedCutoffValue(saved, now = new Date()) {
+    if (saved) return cutoffInputValue(saved);
+    const pad = value => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+export function validCutoffValue(value) {
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) && !Number.isNaN(new Date(value).getTime());
+}
 export function accountSelectionDirty(proposal, saved) {
     return Boolean(proposal && String(proposal.id) !== String(saved?.id));
 }
 /** Prepare only review metadata; approvals and activation remain explicit actions. */
 export async function prepareConnectionReview(api, initial, cutoffAt, errorMessage) {
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(cutoffAt)) throw new Error(errorMessage);
+    if (!validCutoffValue(cutoffAt)) throw new Error(errorMessage);
     let draft = initial;
     const accept = response => {
         let next;

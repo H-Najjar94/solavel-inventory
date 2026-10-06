@@ -1,4 +1,4 @@
-import { prepareConnectionReview } from '../services/connectionReview.js';
+import { prepareConnectionReview, validCutoffValue } from '../services/connectionReview.js';
 import {ConfirmedActionButton} from './ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -811,13 +811,14 @@ export default function GuidedConnectionAssistant({
             <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.startDateTitle')}</h2>
             <p>{tr('integration.focus.startDateExplanation')}</p>
             {[...cutoffRows, ...historyRows].map(row => <div className="wizard-account-row" key={row.fingerprint}><div><strong>{recordText(row.solabooks?.name || row.solastock?.name || row.solabooks?.code || row.solastock?.code, locale)}</strong><small>{row.safe_details?.document_type || row.safe_details?.event_type} · {row.safe_details?.status}</small></div><p>{row.entity_type === 'historical_event' ? tr("integration.review.this_event_stays_excluded_it_will_not") : tr("integration.review.review_this_existing_document_against_the_connection")}</p><button type="button" className="btn" disabled={!gate.allowed || saving || !editableState || confirmedDecisions.has(row.fingerprint)} onClick={() => choose(row, row.entity_type === 'historical_event' ? 'retain_historical_exclusion' : 'review_cutoff_document')}>{confirmedDecisions.has(row.fingerprint) ? tr("integration.review.reviewed") : tr("integration.review.confirm_review")}</button></div>)}
-            <div className="focus-attention"><strong>{tr('integration.focus.openDocuments', { count: cutoffRows.length })}</strong><p>{tr('integration.focus.openDocumentsText')}</p></div>
+            {cutoffRows.length > 0 && <div className="focus-attention"><strong>{tr('integration.focus.openDocuments', { count: cutoffRows.length })}</strong><p>{tr('integration.focus.openDocumentsText')}</p></div>}
             <label className="field"><span className="field-label">{tr('integration.focus.startDateLabel')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label>
+            {!view.cutoff_at && <p className="focus-draft-note">{tr('integration.focus.proposedStartDate')}</p>}
             {run.data?.state !== 'cutoff_review' && <p className="focus-draft-note">{tr('integration.focus.startDatePrerequisites')}</p>}
             {footer(tr('integration.focus.continue'), async () => {
-                const prepared = await runAction(() => prepareConnectionReview(api, run.data, cutoffAt, tr('integration.records.startDateFirst')), 'integration.focus.reviewPrepared');
+                const prepared = await runAction(() => prepareConnectionReview(api, run.data, cutoffAt, tr('integration.focus.validStartDateFirst')), 'integration.focus.reviewPrepared');
                 if (prepared) go(6);
-            }, { reason: tr('integration.records.startDateFirst'), disabled: saving || cutoffPending.length > 0 || !cutoffAt })}
+            }, { reason: tr(cutoffPending.length ? 'integration.focus.reviewDocumentsFirst' : 'integration.focus.validStartDateFirst'), disabled: saving || cutoffPending.length > 0 || !validCutoffValue(cutoffAt) })}
         </section>;
 
         const blockers = [

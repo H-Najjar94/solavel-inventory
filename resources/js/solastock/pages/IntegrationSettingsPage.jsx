@@ -1,4 +1,4 @@
-import { cutoffInputValue } from '../services/connectionReview.js';
+import { proposedCutoffValue } from '../services/connectionReview.js';
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import { diagnosticReason } from '../services/connectionDiagnostics.js';
@@ -392,11 +392,11 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
     const runView = canonicalRun || run.data;
     const cutoffInitialized = useRef(null);
     useEffect(() => {
-        if (runView?.cutoff_at && cutoffInitialized.current !== runUuid) {
+        if (runUuid && runView?.run_uuid === runUuid && cutoffInitialized.current !== runUuid) {
             cutoffInitialized.current = runUuid;
-            setCutoffAt(value => value || cutoffInputValue(runView.cutoff_at));
+            setCutoffAt(proposedCutoffValue(runView.cutoff_at));
         }
-    }, [runUuid, runView?.cutoff_at]);
+    }, [runUuid, runView?.run_uuid, runView?.cutoff_at]);
     const runHandle = { ...run, data: runView };
     const view = runUuid ? runView : discovery.data;
     useEffect(() => {
@@ -570,7 +570,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             title={tr('integration.focus.refreshReview')} message={tr('integration.focus.refreshReviewConfirmation')} action={tr('integration.focus.refreshReview')}
             onConfirm={async () => {
                 if (await runAction(() => api.resetIntegrationWizardDraft(runUuid), 'integration.wizard.resetDone')) {
-                    setCutoffAt(''); cutoffInitialized.current = null; setConfirmation(''); setAssistantStep(1);
+                    setCutoffAt(proposedCutoffValue(null)); cutoffInitialized.current = runUuid; setConfirmation(''); setAssistantStep(1);
                 }
             }}>{tr('integration.focus.refreshReview')}</ConfirmedActionButton>
     </section>;

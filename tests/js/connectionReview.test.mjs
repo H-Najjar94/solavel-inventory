@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareConnectionReview, cutoffInputValue, accountSelectionDirty } from '../../resources/js/solastock/services/connectionReview.js';
+import { prepareConnectionReview, cutoffInputValue, accountSelectionDirty, proposedCutoffValue, validCutoffValue } from '../../resources/js/solastock/services/connectionReview.js';
 const draft = (state, lock_version = 1, extra = {}) => ({run_uuid:'test',state,lock_version,identity:{client_id:87,central_organization_id:165},...extra});
 const date = '2026-10-06T13:08';
 test('Continue sequences only metadata with returned optimistic locks', async () => {
@@ -34,4 +34,11 @@ test('blank date and connected runs cannot silently advance or write',async()=>{
 });
 test('server date retains organization wall time and only changed selections are dirty',()=>{
  assert.equal(cutoffInputValue('2026-10-06 13:08:00'),date);assert.equal(accountSelectionDirty({id:2},{id:'2'}),false);assert.equal(accountSelectionDirty({id:3},{id:2}),true);assert.equal(accountSelectionDirty(undefined,{id:2}),false);
+});
+
+test('fresh default uses device-local minute without persisting and saved canonical wins',()=>{
+ const localDate = new Date(2026, 9, 6, 16, 42, 55);
+ assert.equal(proposedCutoffValue(null,localDate),'2026-10-06T16:42');
+ assert.equal(proposedCutoffValue('2025-01-02 09:03:00',localDate),'2025-01-02T09:03');
+ assert.equal(validCutoffValue(''),false);assert.equal(validCutoffValue('2026-10-06T16:42'),true);
 });
