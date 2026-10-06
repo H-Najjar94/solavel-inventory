@@ -59,9 +59,20 @@ final class PurchaseCostAdjustmentPlanner
             'allocated_base_difference'=>$posted, 'rounding_residual'=>$residual, 'rounding_bound'=>$bound, 'components'=>$serialized];
     }
 
+    /** A scoped Finance purchase may inspect only its receipt's cost provenance. */
+    private function ledgerQuery(IntegrationFinancialLineAllocation $allocation): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = StockLedger::query();
+        if ($allocation->source_document_type === 'goods_receipt' && \App\Services\Purchasing\PurchasingBillAuthority::receipt((int) $allocation->source_document_id)) {
+            $query->withoutGlobalScope('warehouse_access');
+        }
+
+        return $query;
+    }
+
     private function allocationComponents(IntegrationFinancialLineAllocation $allocation, string $difference): Collection
     {
-        $receipt = StockLedger::query()->where('organization_id', $allocation->solastock_organization_id)
+        $receipt = $this->ledgerQuery($allocation)->where('organization_id', $allocation->solastock_organization_id)
             ->where('source_type', \App\Models\Tenant\GoodsReceipt::class)->where('source_id', $allocation->source_document_id)
             ->where('source_line_id', $allocation->source_line_id)->orderBy('id')->first();
         if (! $receipt) $this->fail('The receipt valuation ledger provenance is missing.');
@@ -87,7 +98,7 @@ final class PurchaseCostAdjustmentPlanner
             if (! Decimal::gt($left,'0')) break;
             $qty=Decimal::mul($allocatedQty,Decimal::div((string)$consumption->qty,(string)$receipt->quantity,10),8);
             if(Decimal::cmp($qty,$left,8)>0)$qty=$left;
-            $ledger=StockLedger::query()->find($consumption->ledger_id);
+            $ledger=$this->ledgerQuery($allocation)->where('organization_id',$receipt->organization_id)->where('warehouse_id',$receipt->warehouse_id)->find($consumption->ledger_id);
             if (!$ledger) $this->fail('FIFO disposition ledger provenance is missing.');
             $role=$this->role($ledger);
             $parts->push($this->component($allocation,$ledger,$role,$qty,Decimal::mul($delta,Decimal::div($qty,$allocatedQty),8),['cost_layer_id'=>$layer->id,'consumption_id'=>$consumption->id]));
@@ -101,7 +112,7 @@ final class PurchaseCostAdjustmentPlanner
     {
         $influence=$difference;
         $parts=collect();
-        $later=StockLedger::query()->where('organization_id',$receipt->organization_id)->where('item_id',$receipt->item_id)
+        $later=$this->ledgerQuery($allocation)->where('organization_id',$receipt->organization_id)->where('item_id',$receipt->item_id)
             ->where('warehouse_id',$receipt->warehouse_id)->where('id','>',$receipt->id)->orderBy('id')->get();
         foreach($later as $ledger){
             if($ledger->direction!=='out'||Decimal::isZero($influence,8)) continue;

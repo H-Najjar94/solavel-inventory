@@ -318,6 +318,69 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertFalse(PurchasingBillAuthority::receipt($g->id));
     }
 
+    public function test_finance_only_bound_receipt_dispatch_preserves_organization_scope_without_stock_warehouse_access(): void
+    {
+        app(ReceivingRequestService::class)->upsert($this->data());
+        $g = $this->draft(ReceivingRequest::sole(), '1');
+        app(GoodsReceiptService::class)->post($g);
+        $life = IntegrationDocumentLifecycleMapping::where('source_document_type', 'goods_receipt')->where('source_document_id', (string) $g->id)->sole();
+        $authority = ['organization_mapping_uuid' => $this->mapping->mapping_uuid, 'finance_organization_id' => 14, 'receipt_ids' => [$g->id], 'receipt_mapping_uuids' => [$life->mapping_uuid]];
+        $outer = \Illuminate\Http\Request::create('/api/finance-workspace', 'POST');
+        $actor = new \Illuminate\Auth\GenericUser(['id' => 335]);
+        $this->actingAs($actor);
+        $outer->setUserResolver(fn () => $actor);
+        $outer->attributes->set('purchasing_authority', $authority);
+        $access = $this->createStub(\App\Services\Access\CentralAppAccess::class);
+        $access->method('decision')->willReturnCallback(fn ($id, $org, $app) => ['allowed' => $app === 'finance']);
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class, $access);
+        $commercial = $this->createStub(\App\Services\Entitlements\InventoryCommercialEntitlementService::class);
+        $commercial->method('checkPermission')->willReturn(['allowed' => true, 'reason_code' => 'allowed']);
+        $this->app->instance(\App\Services\Entitlements\InventoryCommercialEntitlementService::class, $commercial);
+        $warehouses = $this->createStub(\App\Services\Access\WarehouseAccessService::class);
+        $warehouses->method('allowedIds')->willReturn([]);
+        $warehouses->method('scope')->willReturnCallback(fn ($query, $column = 'warehouse_id') => $query->whereRaw('1 = 0'));
+        $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $warehouses);
+        $this->assertSame(0, GoodsReceipt::whereKey($g->id)->count());
+        $input = ['action' => 'purchasing.bill.receipt', 'parameters' => ['goods_receipt' => $g->id], 'data' => ['source_bill_id' => 800, 'destination_document_type' => 'supplier_bill', 'destination_document_id' => 800]];
+        $dispatcher = app(\App\Services\InventoryWorkspace\WorkspaceDispatcher::class);
+        $response = $dispatcher->dispatch($outer, $input, $this->mapping, IntegrationSetting::sole());
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame($g->id, $response->getData(true)['data']['document_id']);
+        $this->assertSame(0, GoodsReceipt::whereKey($g->id)->count());
+        $outer->attributes->set('verified_workspace_action', 'purchasing.bill.reserve');
+        $allocationInput = ['destination_document_type' => 'supplier_bill', 'destination_document_id' => 800,
+            'destination_revision' => str_repeat('a', 64), 'destination_fingerprint' => str_repeat('a', 64),
+            'allocation_kind' => 'bill', 'currency_code' => 'JOD', 'base_currency_code' => 'JOD', 'exchange_rate' => '1',
+            'allocations' => [['source_document_mapping_uuid' => $life->mapping_uuid, 'source_document_type' => 'goods_receipt',
+                'source_document_id' => $g->id, 'source_line_id' => $g->lines()->sole()->id, 'stock_item_id' => $this->item->id,
+                'destination_line_id' => 801, 'entered_quantity' => '1', 'base_quantity' => '1', 'destination_quantity' => '1',
+                'destination_unit_id' => 702, 'destination_unit_price' => '2.5', 'destination_gross' => '2.5',
+                'line_discount_allocated' => '0', 'document_discount_allocated' => '0', 'destination_net' => '2.5']]];
+        $this->app->instance('request', $outer);
+        $reservation = app(\App\Services\Integration\FinancialLineAllocationService::class)->reserve($allocationInput);
+        $this->assertCount(1, $reservation['allocations']);
+        $this->assertSame(0, GoodsReceipt::whereKey($g->id)->count());
+        foreach (['receipt_mapping_uuids' => [(string) Str::uuid()], 'receipt_ids' => [$g->id + 1], 'organization_mapping_uuid' => (string) Str::uuid()] as $key => $value) {
+            $outer->attributes->set('purchasing_authority', array_replace($authority, [$key => $value]));
+            try {
+                $dispatcher->dispatch($outer, $input, $this->mapping, IntegrationSetting::sole());
+                $this->fail('Unbound receipt scope accepted');
+            } catch (HttpException $e) {
+                $this->assertSame(404, $e->getStatusCode());
+            }
+        }
+        $outer->attributes->set('purchasing_authority', $authority);
+        app(OrganizationContext::class)->set(TenantTestManager::ORG_B);
+        try {
+            $dispatcher->dispatch($outer, $input, $this->mapping, IntegrationSetting::withoutGlobalScopes()->where('organization_id', TenantTestManager::ORG_A)->sole());
+            $this->fail('Cross-organization receipt accepted');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->assertTrue(true);
+        } finally {
+            app(OrganizationContext::class)->set(TenantTestManager::ORG_A);
+        }
+    }
+
     public function test_entered_box_units_preserve_partial_status_cost_and_physical_base_quantity(): void
     {
         $box = Unit::create(['code' => 'PUR-BOX', 'name' => 'Box', 'kind' => 'count', 'is_active' => true]);

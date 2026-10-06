@@ -143,8 +143,11 @@ final class FinancialLineAllocationService
             || Decimal::cmp((string) $source->exchange_rate, (string) $input['exchange_rate'], 12) !== 0) {
             $this->fail('Source and destination currency snapshots do not match.');
         }
-        $document = ($receipt ? GoodsReceipt::query() : ($return ? SalesReturn::query() : Shipment::query()))
-            ->where('organization_id', $connection->solastock_organization_id)
+        $documentQuery = ($receipt ? GoodsReceipt::query() : ($return ? SalesReturn::query() : Shipment::query()));
+        if ($receipt && PurchasingBillAuthority::receipt((int) $requested['source_document_id'])) {
+            $documentQuery->withoutGlobalScope('warehouse_access');
+        }
+        $document = $documentQuery->where('organization_id', $connection->solastock_organization_id)
             ->with('lines')->lockForUpdate()->find($requested['source_document_id']);
         if (! $document || ! $document->posted_at
             || ($return ? ($document->status !== 'posted' || $document->reversed_at) : $document->reversed_at)) {

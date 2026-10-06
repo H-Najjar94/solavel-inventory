@@ -2,6 +2,8 @@
 
 namespace App\Services\InventoryWorkspace;
 
+use App\Models\Tenant\GoodsReceipt;
+use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationSetting;
 use App\Models\Tenant\InventoryAuditLog;
@@ -96,6 +98,16 @@ final class WorkspaceDispatcher
                         return response()->json($receipt->after['body'], (int) $receipt->after['status'])->header('X-Workspace-Replayed', 'true');
                     }
                 }
+                // Finance-only accountants may read only the independently
+                // authorized, handoff-bound receipt. Implicit binding otherwise
+                // applies Stock warehouse scope before the controller can verify
+                // this closed purchase authority. Keep organization scope intact.
+                if ($action === 'purchasing.bill.receipt') {
+                    $receiptId = (int) $route->parameter('goods_receipt');
+                    abort_unless(PurchasingBillAuthority::receipt($receiptId), 404);
+                    $route->setParameter('goods_receipt', GoodsReceipt::withoutGlobalScope('warehouse_access')
+                        ->whereKey($receiptId)->firstOrFail());
+                }
                 $router->substituteBindings($route);
                 $router->substituteImplicitBindings($route);
                 $models = [];
@@ -104,7 +116,12 @@ final class WorkspaceDispatcher
                 }
                 foreach ($route->parameters() as $name => $value) {
                     if ($value instanceof Model) {
-                        $model = $value->newQuery()->whereKey($value->getKey())->when($write, fn ($q) => $q->lockForUpdate())->firstOrFail();
+                        $query = $value->newQuery();
+                        if ($action === 'purchasing.bill.receipt' && $value instanceof GoodsReceipt
+                            && PurchasingBillAuthority::receipt((int) $value->getKey())) {
+                            $query->withoutGlobalScope('warehouse_access');
+                        }
+                        $model = $query->whereKey($value->getKey())->when($write, fn ($q) => $q->lockForUpdate())->firstOrFail();
                         abort_unless((int) $model->organization_id === (int) $mapping->solastock_organization_id, 404);
                         $route->setParameter($name, $model);
                         $models[] = $model;

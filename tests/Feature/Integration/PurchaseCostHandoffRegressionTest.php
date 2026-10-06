@@ -82,7 +82,17 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         $this->exerciseCostDifference('fifo');
     }
 
-    private function exerciseCostDifference(string $method): void
+    public function test_finance_only_average_cost_review_preserves_consumed_cogs_provenance(): void
+    {
+        $this->exerciseCostDifference('average', true);
+    }
+
+    public function test_finance_only_fifo_cost_review_preserves_consumed_cogs_provenance(): void
+    {
+        $this->exerciseCostDifference('fifo', true);
+    }
+
+    private function exerciseCostDifference(string $method, bool $financeOnly = false): void
     {
         $this->item->update(['costing_method' => $method]);
         DB::connection('tenant')->table('exchange_rates')->insert(['organization_id' => 14, 'base_currency_code' => 'JOD', 'quote_currency_code' => 'USD', 'rate' => '2', 'rate_date' => '2026-10-06', 'source' => 'manual']);
@@ -101,6 +111,20 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         // Persist real reviewed allocation evidence. The planner and transition services are native, never mocked.
         IntegrationFinancialLineAllocation::create(['allocation_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $this->mapping->mapping_uuid, 'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'tenant_database_identity' => DB::connection('tenant')->getDatabaseName(), 'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A, 'source_document_mapping_uuid' => $life->mapping_uuid, 'source_document_type' => 'goods_receipt', 'source_document_id' => (string) $grn->id, 'source_line_id' => $grn->lines()->sole()->id, 'destination_document_type' => 'supplier_bill', 'destination_document_id' => 800, 'destination_line_id' => 801, 'allocation_kind' => 'bill', 'entered_quantity' => '10', 'entered_unit_id' => $this->unit->id, 'base_quantity' => '10', 'base_unit_id' => $this->unit->id, 'destination_quantity' => '10', 'destination_unit_id' => $this->unit->id, 'source_unit_price' => '10', 'destination_unit_price' => '12', 'source_gross' => '100', 'destination_gross' => '120', 'source_net' => '100', 'destination_net' => '120', 'price_difference' => '20', 'currency_code' => 'USD', 'base_currency_code' => 'JOD', 'exchange_rate' => '2', 'state' => 'draft_reserved', 'destination_revision' => $fingerprint, 'source_fingerprint' => str_repeat('e', 64), 'destination_fingerprint' => $fingerprint, 'idempotency_key' => 'qa-cost-allocation']);
         $input = ['organization_mapping_uuid' => $this->mapping->mapping_uuid, 'destination_document_id' => 800, 'destination_fingerprint' => $fingerprint, 'currency_code' => 'USD', 'base_currency_code' => 'JOD', 'exchange_rate' => '2', 'finance_money_scale' => 2];
+        if ($financeOnly) {
+            request()->attributes->set('verified_workspace_action', 'purchasing.bill.cost-adjustment.prepare');
+            request()->attributes->set('purchasing_authority', ['organization_mapping_uuid' => $this->mapping->mapping_uuid,
+                'finance_organization_id' => 14, 'receipt_ids' => [$grn->id], 'receipt_mapping_uuids' => [$life->mapping_uuid]]);
+            $warehouseScope = $this->createStub(\App\Services\Access\WarehouseAccessService::class);
+            $warehouseScope->method('allowedIds')->willReturn([]);
+            // The actor cannot read physical Stock. Permit ordinary balance assertions,
+            // while hiding all ledger provenance exactly as the live warehouse scope does.
+            $warehouseScope->method('scope')->willReturnCallback(function ($query, $column = 'warehouse_id') {
+                return $query->getModel() instanceof StockLedger ? $query->whereRaw('1 = 0') : $query;
+            });
+            $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $warehouseScope);
+            $this->assertSame(0, StockLedger::count());
+        }
         $service = app(PurchaseCostAdjustmentService::class);
         $plan = $service->prepare($input);
         $again = $service->prepare($input);
@@ -133,7 +157,7 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         if ($method === 'fifo') {
             $this->assertSame('6.0000', CostLayer::sole()->unit_cost);
         }
-        $this->assertSame(2, StockLedger::count());
+        $this->assertSame(2, StockLedger::withoutGlobalScope('warehouse_access')->count());
         $this->assertSame(1, IntegrationPurchaseCostAdjustment::count());
         $this->assertSame(2, IntegrationPurchaseCostAdjustmentComponent::count());
         $service->reverse($input);
@@ -146,7 +170,7 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         }
         $this->assertSame('5.0000', $receipt->fresh()->unit_cost);
         $this->assertSame('20.00', $consumed->fresh()->total_cost);
-        $this->assertSame(2, StockLedger::count());
+        $this->assertSame(2, StockLedger::withoutGlobalScope('warehouse_access')->count());
         $this->assertSame('reversed', IntegrationPurchaseCostAdjustment::sole()->state);
         $this->assertSame('2.000000000000', IntegrationPurchaseCostAdjustment::sole()->exchange_rate);
     }
