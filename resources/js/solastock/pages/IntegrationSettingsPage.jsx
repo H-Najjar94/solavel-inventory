@@ -563,6 +563,17 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
     const totals = view.totals || {};
     const accounting = view.accounting || {};
     const rows = view.comparison || [];
+    if (view.snapshot_stale) return <section className="focus-card" role="alert">
+        <h2>{tr('integration.focus.staleReviewTitle')}</h2>
+        <p>{tr('integration.focus.staleReviewText')}</p>
+        <ConfirmedActionButton type="button" className="btn btn--primary" disabled={!gate.allowed || saving}
+            title={tr('integration.focus.refreshReview')} message={tr('integration.focus.refreshReviewConfirmation')} action={tr('integration.focus.refreshReview')}
+            onConfirm={async () => {
+                if (await runAction(() => api.resetIntegrationWizardDraft(runUuid), 'integration.wizard.resetDone')) {
+                    setCutoffAt(''); cutoffInitialized.current = null; setConfirmation(''); setAssistantStep(1);
+                }
+            }}>{tr('integration.focus.refreshReview')}</ConfirmedActionButton>
+    </section>;
     if (view.guided_setup) {
         return <GuidedConnectionAssistant
             loadError={run.error || discovery.error} retryLoad={() => (runUuid ? run.refetch() : discovery.refetch())}
