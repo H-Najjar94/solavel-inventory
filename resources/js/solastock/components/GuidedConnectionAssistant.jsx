@@ -1,3 +1,4 @@
+import { actionableDecisionError } from '../services/decisionErrors.js';
 import { prepareConnectionReview, validCutoffValue } from '../services/connectionReview.js';
 import {ConfirmedActionButton} from './ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
@@ -32,7 +33,7 @@ export default function GuidedConnectionAssistant({
     assistantStep, setAssistantStep, allowedActions, canEdit, editableState,
     decide, undoDecision, bulkSelection, toggleBulk, bulk, exportComparison,
     start, runAction, cutoffAt, setCutoffAt, saveState, retrySave, reloadLatest,
-    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad,
+    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad, decisionErrors = {},
 }) {
     const { locale } = useI18n();
     const guided = view.guided_setup || {};
@@ -119,6 +120,27 @@ export default function GuidedConnectionAssistant({
     // get for customers and suppliers.
     ].filter(([section, sectionRows]) => sectionRows.length > 0
         || ['customers', 'suppliers', 'units', 'categories'].includes(section));
+    // Route only real, visible review records to their section; diagnostics never become editable fields.
+    const errorTarget = actionableDecisionError(decisionErrors, ownerSections, PAGE_SIZE);
+    useEffect(() => {
+        if (!errorTarget) return;
+        setTask(2);
+        setOpenOwnerSection(errorTarget.section);
+        setItemFilter('all');
+        setSectionQuery('');
+        setSectionPage(errorTarget.page);
+    }, [decisionErrors]);
+    useEffect(() => {
+        if (!errorTarget || task !== 2 || openOwnerSection !== errorTarget.section) return;
+        setSectionPage(errorTarget.page);
+        const timer = setTimeout(() => {
+            const element = document.getElementById(`wizard-error-${errorTarget.fingerprint}`);
+            element?.focus({ preventScroll: true });
+            element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 0);
+        return () => clearTimeout(timer);
+    }, [decisionErrors, task, openOwnerSection, sectionPage]);
+
     const firstIncompleteSection = ownerSections.find(([, sectionRows]) =>
         sectionRows.some((row) => !confirmedDecisions.has(row.fingerprint)))?.[0];
     const activeOwnerSection = ownerSections.find(([section]) => section === openOwnerSection) || ownerSections[0];
@@ -145,7 +167,7 @@ export default function GuidedConnectionAssistant({
 
     useEffect(() => {
         setAssistantStep(task);
-        requestAnimationFrame(() => headingRef.current?.focus());
+        if (!errorTarget) requestAnimationFrame(() => headingRef.current?.focus());
     }, [task]);
 
     useEffect(() => {
@@ -435,7 +457,14 @@ export default function GuidedConnectionAssistant({
         const decisionEffect = selectedChoice?.[2] || tr('integration.focus.decisionNotApplied');
         const brokenFinanceUnit = row.entity_type === 'unit'
             && row.safe_details?.source === 'dangling_finance_item_unit_reference';
-        return <div className="focus-list-row" key={row.fingerprint}>
+        return <div className={`focus-list-row ${decisionErrors[row.fingerprint] ? 'is-error' : ''}`} key={row.fingerprint}
+            aria-invalid={decisionErrors[row.fingerprint] ? true : undefined}
+            aria-describedby={decisionErrors[row.fingerprint] ? `wizard-error-${row.fingerprint}` : undefined}
+            style={decisionErrors[row.fingerprint] ? { outline: '2px solid var(--danger, #b42318)', outlineOffset: 2 } : undefined}>
+            {decisionErrors[row.fingerprint] && <p className="is-error" role="alert" tabIndex={-1}
+                id={`wizard-error-${row.fingerprint}`} style={{ gridColumn: '1 / -1', overflowWrap: 'anywhere', color: 'var(--red, #b42318)'  }}>
+                {decisionErrors[row.fingerprint]}
+            </p>}
             <div className={`focus-list-record ${comparedMaster ? 'focus-item-comparison' : ''}`}>
                 {comparedMaster ? <>
                     <div className="focus-app-record is-original">

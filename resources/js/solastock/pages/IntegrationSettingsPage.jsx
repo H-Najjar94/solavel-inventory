@@ -1,3 +1,4 @@
+import { decisionFieldErrors } from '../services/decisionErrors.js';
 import { proposedCutoffValue } from '../services/connectionReview.js';
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
@@ -360,6 +361,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
     const [saveState, setSaveState] = useState('idle');
     const [pendingDecisions, setPendingDecisions] = useState(new Map());
     const [failedDecision, setFailedDecision] = useState(null);
+    const [decisionErrors, setDecisionErrors] = useState({});
     const [canonicalRun, setCanonicalRun] = useState(null);
     const canonicalRunRef = useRef(null);
     const saveQueueRef = useRef(createSerializedMutationQueue());
@@ -384,6 +386,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         setCanonicalRun(null);
         setPendingDecisions(new Map());
         setFailedDecision(null);
+        setDecisionErrors({});
         setSaveState('idle');
     }, [runUuid]);
     useEffect(() => {
@@ -461,6 +464,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             if (!acceptCanonicalRun(confirmed)) throw new Error('wizard_stale_save_response');
             setPendingDecisions((current) => { const next = new Map(current); next.delete(row.fingerprint); return next; });
             setFailedDecision(null);
+            setDecisionErrors({});
             setSaveState('saved');
             return confirmed;
           } catch (error) {
@@ -471,6 +475,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             }));
             setFailedDecision({ row, action, extraSafeDetails, mutationSequence });
             setSaveState(conflict ? 'conflict' : 'failed');
+            setDecisionErrors(decisionFieldErrors(error));
             toast.failure(error, error.message || tr('settings.common.errorFallback'));
             throw error;
           } finally { setSaving(false); }
@@ -484,6 +489,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         if (discardUnsaved) {
             setPendingDecisions(new Map());
             setFailedDecision(null);
+            setDecisionErrors({});
             setSaveState('idle');
         }
     }
@@ -508,11 +514,12 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         setSaving(true);
         try {
             await callback();
+            setDecisionErrors({});
             await reconcileLatest();
             setConfirmation('');
             toast.push(tr(successKey), 'success');
             return true;
-        } catch (error) { await reconcileLatest().catch(() => undefined); toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
+        } catch (error) { setDecisionErrors(decisionFieldErrors(error)); await reconcileLatest().catch(() => undefined); toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
         finally { setSaving(false); }
     }
 
@@ -586,7 +593,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             toggleBulk={toggleBulk} bulk={bulk} exportComparison={exportComparison} start={start}
             runAction={runAction} cutoffAt={cutoffAt} setCutoffAt={setCutoffAt}
             confirmation={confirmation} setConfirmation={setConfirmation}
-            saveState={saveState}
+            saveState={saveState} decisionErrors={decisionErrors}
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
             organizationName={organizationName}
