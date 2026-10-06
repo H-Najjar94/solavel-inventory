@@ -726,6 +726,8 @@ final class ConnectionWizardService
             if (! in_array($run->state, ['cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'], true) || (int) $run->lock_version !== $expectedLockVersion || $run->snapshot_frozen_at === null) {
                 $this->fail('frozen_snapshot_cutoff_review_required');
             }
+            // Refuse stale evidence before persisting changed review inputs.
+            $this->finalPreview($organizationId, $runUuid);
             $variance = Decimal::money($unexplainedVariance);
             $choices = json_decode($run->authority_choices ?: '{}', true);
             $choices['physical_counts'] = collect($physicalCounts)->map(fn ($row) => collect((array) $row)

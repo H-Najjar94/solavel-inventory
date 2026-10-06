@@ -938,6 +938,16 @@ final class ConnectionWizardTest extends TestCase
         DB::connection('tenant')->table('inventory_items')->where('organization_id', 14)->update(['name' => 'Updated Finance item']);
         $recovery = $wizard->show(TenantTestManager::ORG_A, $run['run_uuid']);
         $this->assertTrue($recovery['snapshot_stale']);
+        $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class, function ($mock) {
+            $mock->shouldReceive('assertComplete')->andReturnNull();
+        });
+        $before = (array) $table->where('run_uuid', $run['run_uuid'])->first();
+        try {
+            $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], now()->addDay()->toDateTimeString(), [], '0', $run['lock_version'], 7001);
+            $this->fail('Stale review must fail before any persisted change.');
+        } catch (ValidationException) {
+            $this->assertSame($before, (array) $table->where('run_uuid', $run['run_uuid'])->first());
+        }
         $fresh = $wizard->resetDraft(TenantTestManager::ORG_A, $run['run_uuid'], 7001);
         $this->assertFalse($fresh['snapshot_stale']);
         $this->assertSame('draft_decisions', $fresh['state']);
