@@ -15,6 +15,7 @@ use App\Models\Tenant\Supplier;
 use App\Models\Tenant\Unit;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Integration\SolaStockJournalContract;
 use App\Services\Integration\WorkflowValidationService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -62,6 +63,36 @@ final class ReceivingRequestService
             }
             if ($r && $r->source_revision === $d['source_revision']) {
                 return $this->status($r);
+            }
+            if ($r && ($d['source_status'] ?? null) === 'posted'
+                && ($d['billing_policy'] ?? null) === 'billed-unreceived-v1'
+                && (int) ($d['posted_bill_journal_id'] ?? 0) > 0) {
+                $keys = array_flip(['supplier_external_id', 'currency_code', 'lines']);
+                $old = array_intersect_key((array) $r->source_payload, $keys);
+                $new = array_intersect_key($d, $keys);
+                if (hash_equals(SolaStockJournalContract::payloadHash($old),
+                    SolaStockJournalContract::payloadHash($new))) {
+                    $reopening = $r->status === 'cancelled';
+                    if ($reopening) {
+                        $previousJournal = (int) data_get($r->source_payload, 'posted_bill_journal_id');
+                        abort_unless($previousJournal > 0
+                            && (int) ($d['reopened_from_bill_journal_id'] ?? 0) === $previousJournal
+                            && (int) $d['posted_bill_journal_id'] !== $previousJournal, 409);
+                    }
+                    $changes = ['source_revision' => $d['source_revision'], 'source_payload' => $d,
+                        'source_bill_number' => $d['source_bill_number']];
+                    if ($reopening) {
+                        $all = $r->lines->every(fn ($line) => ! Decimal::lt((string) $line->received_qty, (string) $line->requested_qty));
+                        $any = $r->lines->contains(fn ($line) => Decimal::gt((string) $line->received_qty, '0'));
+                        $changes += ['status' => $all ? 'complete' : ($any ? 'partial' : 'pending'),
+                            'approved_by' => null, 'approved_at' => null, 'approved_revision' => null];
+                    } elseif ($r->approved_revision === $r->source_revision) {
+                        $changes['approved_revision'] = $d['source_revision'];
+                    }
+                    $r->update($changes);
+
+                    return $this->status($r->fresh());
+                }
             }
             if ($r) {
                 if ($r->status === 'cancelled' || GoodsReceipt::query()->where('receiving_request_id', $r->id)->exists()) {

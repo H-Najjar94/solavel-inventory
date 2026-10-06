@@ -11,7 +11,7 @@ final class PurchasingBillAuthority
         $a = request()->attributes->get('purchasing_authority');
         $action = request()->attributes->get('verified_workspace_action');
 
-        if (! is_array($a) || ! str_starts_with((string) $action, 'purchasing.bill.')) {
+        if (! is_array($a) || ! (str_starts_with((string) $action, 'purchasing.bill.') || str_starts_with((string) $action, 'purchasing.settlement.'))) {
             return false;
         }
         $ids = array_values(array_map('intval', (array) ($a['receipt_ids'] ?? [])));

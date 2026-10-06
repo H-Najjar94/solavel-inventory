@@ -17,6 +17,7 @@ use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Supplier;
 use App\Models\Tenant\Unit;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Integration\FinanceBaseValuation;
 use App\Services\Purchasing\ReceivingRequestService;
@@ -92,7 +93,17 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         $this->exerciseCostDifference('fifo', true);
     }
 
-    private function exerciseCostDifference(string $method, bool $financeOnly = false): void
+    public function test_posted_settlement_average_provenance_uses_no_reservation_and_reverses_once(): void
+    {
+        $this->exerciseCostDifference('average', true, true);
+    }
+
+    public function test_posted_settlement_fifo_provenance_uses_no_reservation_and_reverses_once(): void
+    {
+        $this->exerciseCostDifference('fifo', true, true);
+    }
+
+    private function exerciseCostDifference(string $method, bool $financeOnly = false, bool $settlement = false): void
     {
         $this->item->update(['costing_method' => $method]);
         DB::connection('tenant')->table('exchange_rates')->insert(['organization_id' => 14, 'base_currency_code' => 'JOD', 'quote_currency_code' => 'USD', 'rate' => '2', 'rate_date' => '2026-10-06', 'source' => 'manual']);
@@ -109,20 +120,28 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         $life = IntegrationDocumentLifecycleMapping::where('source_document_type', 'goods_receipt')->where('source_document_id', (string) $grn->id)->sole();
         $fingerprint = str_repeat('d', 64);
         // Persist real reviewed allocation evidence. The planner and transition services are native, never mocked.
-        IntegrationFinancialLineAllocation::create(['allocation_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $this->mapping->mapping_uuid, 'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'tenant_database_identity' => DB::connection('tenant')->getDatabaseName(), 'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A, 'source_document_mapping_uuid' => $life->mapping_uuid, 'source_document_type' => 'goods_receipt', 'source_document_id' => (string) $grn->id, 'source_line_id' => $grn->lines()->sole()->id, 'destination_document_type' => 'supplier_bill', 'destination_document_id' => 800, 'destination_line_id' => 801, 'allocation_kind' => 'bill', 'entered_quantity' => '10', 'entered_unit_id' => $this->unit->id, 'base_quantity' => '10', 'base_unit_id' => $this->unit->id, 'destination_quantity' => '10', 'destination_unit_id' => $this->unit->id, 'source_unit_price' => '10', 'destination_unit_price' => '12', 'source_gross' => '100', 'destination_gross' => '120', 'source_net' => '100', 'destination_net' => '120', 'price_difference' => '20', 'currency_code' => 'USD', 'base_currency_code' => 'JOD', 'exchange_rate' => '2', 'state' => 'draft_reserved', 'destination_revision' => $fingerprint, 'source_fingerprint' => str_repeat('e', 64), 'destination_fingerprint' => $fingerprint, 'idempotency_key' => 'qa-cost-allocation']);
+        $allocation = new IntegrationFinancialLineAllocation(['allocation_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $this->mapping->mapping_uuid, 'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'tenant_database_identity' => DB::connection('tenant')->getDatabaseName(), 'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A, 'source_document_mapping_uuid' => $life->mapping_uuid, 'source_document_type' => 'goods_receipt', 'source_document_id' => (string) $grn->id, 'source_line_id' => $grn->lines()->sole()->id, 'destination_document_type' => 'supplier_bill', 'destination_document_id' => 800, 'destination_line_id' => 801, 'allocation_kind' => 'bill', 'entered_quantity' => '10', 'entered_unit_id' => $this->unit->id, 'base_quantity' => '10', 'base_unit_id' => $this->unit->id, 'destination_quantity' => '10', 'destination_unit_id' => $this->unit->id, 'source_unit_price' => '10', 'destination_unit_price' => '12', 'source_gross' => '100', 'destination_gross' => '120', 'source_net' => '100', 'destination_net' => '120', 'price_difference' => '20', 'currency_code' => 'USD', 'base_currency_code' => 'JOD', 'exchange_rate' => '2', 'state' => 'draft_reserved', 'destination_revision' => $fingerprint, 'source_fingerprint' => str_repeat('e', 64), 'destination_fingerprint' => $fingerprint, 'idempotency_key' => 'qa-cost-allocation']);
+        if ($settlement) {
+            request()->attributes->set('posted_purchase_settlement_allocation', $allocation);
+            request()->attributes->set('verified_workspace_action', 'purchasing.settlement.prepare');
+            $this->assertSame(0, IntegrationFinancialLineAllocation::count());
+        } else {
+            $allocation->save();
+        }
+
         $input = ['organization_mapping_uuid' => $this->mapping->mapping_uuid, 'destination_document_id' => 800, 'destination_fingerprint' => $fingerprint, 'currency_code' => 'USD', 'base_currency_code' => 'JOD', 'exchange_rate' => '2', 'finance_money_scale' => 2];
         if ($financeOnly) {
-            request()->attributes->set('verified_workspace_action', 'purchasing.bill.cost-adjustment.prepare');
+            request()->attributes->set('verified_workspace_action', $settlement ? 'purchasing.settlement.prepare' : 'purchasing.bill.cost-adjustment.prepare');
             request()->attributes->set('purchasing_authority', ['organization_mapping_uuid' => $this->mapping->mapping_uuid,
                 'finance_organization_id' => 14, 'receipt_ids' => [$grn->id], 'receipt_mapping_uuids' => [$life->mapping_uuid]]);
-            $warehouseScope = $this->createStub(\App\Services\Access\WarehouseAccessService::class);
+            $warehouseScope = $this->createStub(WarehouseAccessService::class);
             $warehouseScope->method('allowedIds')->willReturn([]);
             // The actor cannot read physical Stock. Permit ordinary balance assertions,
             // while hiding all ledger provenance exactly as the live warehouse scope does.
             $warehouseScope->method('scope')->willReturnCallback(function ($query, $column = 'warehouse_id') {
                 return $query->getModel() instanceof StockLedger ? $query->whereRaw('1 = 0') : $query;
             });
-            $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $warehouseScope);
+            $this->app->instance(WarehouseAccessService::class, $warehouseScope);
             $this->assertSame(0, StockLedger::count());
         }
         $service = app(PurchaseCostAdjustmentService::class);

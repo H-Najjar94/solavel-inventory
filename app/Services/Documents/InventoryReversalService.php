@@ -15,6 +15,7 @@ use App\Models\Tenant\StockLedger;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Integration\WorkflowValidationService;
+use App\Services\Purchasing\PostedPurchaseReversalGuard;
 use App\Services\Purchasing\ReceiptHandoffService;
 use App\Services\Purchasing\ReceivingRequestService;
 use App\Services\Stock\StockLedgerService;
@@ -52,6 +53,8 @@ class InventoryReversalService
             if ($receipt->status !== 'posted') {
                 throw new RuntimeException("Only a posted goods receipt can be reversed (status '{$receipt->status}').");
             }
+
+            app(PostedPurchaseReversalGuard::class)->assertReceiptReversible($receipt);
 
             $this->workflowValidation->assertOperationalDocumentReady($receipt, 'grn.reversed');
             $this->assertReason($reason);

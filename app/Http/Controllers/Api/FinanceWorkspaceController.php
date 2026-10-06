@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\ReceivingRequest;
 use App\Models\User;
 use App\Services\Access\CentralAppAccess;
 use App\Services\Access\InventoryPermissionService;
@@ -18,6 +19,9 @@ use App\Services\Integration\SolaStockJournalContract;
 use App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority;
 use App\Services\InventoryWorkspace\WorkspaceContext;
 use App\Services\InventoryWorkspace\WorkspaceDispatcher;
+use App\Services\Purchasing\FinanceReceivingService;
+use App\Services\Purchasing\PostedPurchaseSettlementService;
+use App\Services\Purchasing\ReceivingRequestService;
 use App\Services\Tenancy\TenantManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,7 +34,7 @@ final class FinanceWorkspaceController
     {
         $input = $request->validate([
             'client_id' => 'required|integer|min:1', 'organization_id' => 'required|integer|min:1',
-            'finance_organization_id' => 'required|integer|min:1', 'actor_id' => 'required|integer|min:1',
+            'finance_organization_id' => 'required|integer|min:1', 'actor_id' => 'required|integer|min:0', 'authority_kind' => 'sometimes|string|max:64',
             'action' => 'required|string|max:100', 'parameters' => 'sometimes|array', 'data' => 'sometimes|array',
             'idempotency_key' => 'sometimes|string|min:16|max:128', 'revision' => 'sometimes|string|size:64',
         ]);
@@ -39,6 +43,12 @@ final class FinanceWorkspaceController
             ->where('client_id', $input['client_id'])->where('is_active', true)->whereNull('deleted_at')->first();
         abort_unless($org && $central->table('clients')->where('id', $input['client_id'])
             ->where('is_active', true)->whereNull('deleted_at')->exists(), 403, 'workspace_organization_unavailable');
+        if ((int) $input['actor_id'] === 0) {
+            abort_unless(str_starts_with($input['action'], 'purchasing.settlement.'), 403);
+            $result = app(PostedPurchaseSettlementService::class)->dispatch($input, $org);
+
+            return response()->json(['success' => true, 'data' => $result]);
+        }
         // Membership is the user_organizations row checked below, not the member's
         // home client. An invited member keeps the client of the account they
         // registered with, so matching it to the organization's client reported
@@ -94,13 +104,34 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
-            if (str_starts_with($input['action'], 'purchasing.request.') || str_starts_with($input['action'], 'purchasing.bill.')) {
+            if (str_starts_with($input['action'], 'purchasing.request.') || str_starts_with($input['action'], 'purchasing.bill.') || str_starts_with($input['action'], 'purchasing.receiving.')) {
                 $billId = (int) data_get($input, 'data.source_bill_id');
                 abort_unless($billId > 0, 422);
-                $permission = $input['action'] === 'purchasing.bill.cost-adjustment.prepare' ? 'post' : (in_array($input['action'], ['purchasing.request.status', 'purchasing.bill.receipt', 'purchasing.bill.context'], true) ? 'view' : 'edit_draft');
-                $authority = app(SolaBooksOutboxDeliveryService::class)->authorizePurchasing((int) $actor->id, $billId, $permission);
+                $permission = $input['action'] === 'purchasing.bill.cost-adjustment.prepare' ? 'post' : (in_array($input['action'], ['purchasing.request.status', 'purchasing.bill.receipt', 'purchasing.bill.context', 'purchasing.receiving.options', 'purchasing.receiving.prepare', 'purchasing.receiving.execute', 'purchasing.receiving.status', 'purchasing.receiving.approve'], true) ? 'view' : 'edit_draft');
+                $postedRequest = in_array($input['action'], ['purchasing.request.upsert', 'purchasing.request.cancel'], true) && data_get($input, 'data.source_status') === 'posted';
+                if ($postedRequest) {
+                    $permission = 'post';
+                }
+                $closurePermission = data_get($input, 'data.close_permission');
+                $closing = $input['action'] === 'purchasing.request.cancel' && in_array($closurePermission, ['unpost', 'void'], true);
+                if ($closing) {
+                    $permission = $closurePermission;
+                }
+                $authority = app(SolaBooksOutboxDeliveryService::class)->authorizePurchasing((int) $actor->id, $billId, $permission, $closing ? (array) $input['data'] : []);
+                if ($closing) {
+                    abort_unless(($authority['closure_permission'] ?? null) === $closurePermission
+                        && (int) data_get($input, 'data.closing_bill_journal_id') > 0
+                        && (int) ($authority['closing_bill_journal_id'] ?? 0) === (int) data_get($input, 'data.closing_bill_journal_id')
+                        && (int) ($authority['bill_journal_id'] ?? 0) === (int) data_get($input, 'data.closing_bill_journal_id'), 403);
+                }
+                if ($postedRequest && $input['action'] === 'purchasing.request.cancel') {
+                    abort_unless(($authority['status'] ?? null) === 'posted' && (int) ($authority['bill_journal_id'] ?? 0) > 0 && (int) $authority['bill_journal_id'] === (int) data_get($input, 'data.posted_bill_journal_id') && data_get($input, 'data.billing_policy') === 'billed-unreceived-v1', 403);
+                }
                 if ($input['action'] === 'purchasing.request.upsert') {
-                    abort_unless(($authority['status'] ?? null) === 'draft' && ! empty($authority['request_revision']) && hash_equals((string) $authority['request_revision'], (string) data_get($input, 'data.source_revision')), 409, __('inventory.purchasing.refresh_required'));
+                    abort_unless(($authority['status'] ?? null) === ($postedRequest ? 'posted' : 'draft') && ! empty($authority['request_revision']) && hash_equals((string) $authority['request_revision'], (string) data_get($input, 'data.source_revision')), 409, __('inventory.purchasing.refresh_required'));
+                    if ($postedRequest) {
+                        abort_unless((int) ($authority['bill_journal_id'] ?? 0) > 0 && (int) $authority['bill_journal_id'] === (int) data_get($input, 'data.posted_bill_journal_id') && data_get($input, 'data.billing_policy') === 'billed-unreceived-v1', 403);
+                    }
                     $facts = (array) ($authority['receiving_payload'] ?? []);
                     abort_unless($facts !== [], 503);
                     $provided = array_intersect_key((array) ($input['data'] ?? []), $facts);
@@ -158,6 +189,43 @@ final class FinanceWorkspaceController
                 abort_unless(app(InventoryPermissionService::class)->can($actor, 'inventory.integration.view'), 403, 'workspace_permission_required');
 
                 return response()->json(['success' => true, 'data' => app(ConnectionWizardService::class)->discover((int) $org->id)]);
+            }
+            if (str_starts_with($input['action'], 'purchasing.receiving.')) {
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(hash_equals((string) ($request->attributes->get('purchasing_authority')['source_revision'] ?? ''), (string) data_get($input, 'data.bill_revision')), 409, __('inventory.purchasing.refresh_required'));
+                $data = (array) ($input['data'] ?? []);
+                $rules = ['source_bill_id' => 'required|integer|min:1', 'request_uuid' => 'required|uuid',
+                    'bill_revision' => 'required|string|size:64', 'request_revision' => 'sometimes|string|size:64'];
+                $action = substr($input['action'], strlen('purchasing.receiving.'));
+                abort_unless(in_array($action, ['options', 'prepare', 'execute', 'status', 'approve'], true), 422);
+                if (in_array($action, ['prepare', 'execute', 'status'], true)) {
+                    $rules['operation_uuid'] = 'required|uuid';
+                }
+                if (in_array($action, ['prepare', 'execute'], true)) {
+                    $rules += ['warehouse_id' => 'required|integer|min:1', 'receipt_date' => 'required|date',
+                        'lines' => 'required|array|min:1', 'lines.*.source_bill_line_id' => 'required|integer|min:1|distinct',
+                        'lines.*.request_line_id' => 'required|integer|min:1|distinct',
+                        'lines.*.quantity' => 'required|numeric|gt:0', 'lines.*.unit_id' => 'required|integer|min:1',
+                        'lines.*.unit_cost' => 'nullable|numeric|min:0', 'lines.*.lot_code' => 'nullable|string|max:100',
+                        'lines.*.expiry_date' => 'nullable|date', 'lines.*.serials' => 'nullable|array',
+                        'lines.*.serials.*' => 'string|max:100', 'lines.*.bin_id' => 'nullable|integer|min:1', 'lines.*.variant_id' => 'nullable|integer|min:1'];
+                }
+                if ($action === 'approve') {
+                    $rules['warehouse_id'] = 'required|integer|min:1';
+                }
+                $data = validator($data, $rules)->validate();
+                if ($action === 'approve') {
+                    abort_unless(app(InventoryPermissionService::class)->can($actor, 'inventory.approve_purchase_orders'), 403);
+                    $source = ReceivingRequest::query()->where('request_uuid', $data['request_uuid'])
+                        ->where('source_bill_id', $data['source_bill_id'])->firstOrFail();
+                    abort_unless(hash_equals($source->source_revision, (string) ($request->attributes->get('purchasing_authority')['request_revision'] ?? '')), 409);
+                    $result = app(ReceivingRequestService::class)->approve($source, $data['warehouse_id']);
+                } else {
+                    $result = app(FinanceReceivingService::class)->{$action}($data);
+                }
+
+                return response()->json(['success' => true, 'data' => $result]);
             }
             $readiness = app(WorkspaceContext::class)->read($request, (int) $org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active');
             abort_unless($readiness['ready'], 409, 'workspace_connection_not_ready');

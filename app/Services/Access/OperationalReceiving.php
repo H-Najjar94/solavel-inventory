@@ -64,8 +64,8 @@ final class OperationalReceiving
             app(WarehouseAccessService::class)->assertAllowed((int) $r->warehouse_id);
             foreach ($receipt->lines as $line) {
                 $source = $r->lines()->whereKey($line->receiving_request_line_id)->firstOrFail();
-                $cost = Decimal::cost(Decimal::mul((string) $line->unit_cost, (string) ($line->unit_conversion_factor ?: '1')));
-                abort_unless((int) $source->item_id === (int) $line->item_id && (int) $source->entered_unit_id === (int) $line->entered_unit_id && Decimal::cmp((string) $source->unit_cost, $cost) === 0, 403);
+                $cost = Decimal::cost(Decimal::div((string) $source->unit_cost, (string) ($line->unit_conversion_factor ?: '1')));
+                abort_unless((int) $source->item_id === (int) $line->item_id && (int) $source->entered_unit_id === (int) $line->entered_unit_id && Decimal::cmp((string) $line->unit_cost, $cost) === 0, 403);
             }
 
             return;

@@ -18,17 +18,27 @@ use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Supplier;
 use App\Models\Tenant\Unit;
 use App\Models\Tenant\UnitConversion;
+use App\Models\User;
+use App\Services\Access\CentralAppAccess;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\OperationalReceiving;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\GoodsReceiptService;
 use App\Services\Documents\InventoryReversalService;
+use App\Services\Entitlements\InventoryCommercialEntitlementService;
 use App\Services\Integration\FinanceBaseValuation;
+use App\Services\Integration\FinancialLineAllocationService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Services\Integration\SolaStockJournalContract;
+use App\Services\InventoryWorkspace\WorkspaceDispatcher;
+use App\Services\Purchasing\FinanceReceivingService;
 use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Purchasing\ReceivingRequestService;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Auth\GenericUser;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -325,24 +335,24 @@ final class PurchasingHandoffTest extends TestCase
         app(GoodsReceiptService::class)->post($g);
         $life = IntegrationDocumentLifecycleMapping::where('source_document_type', 'goods_receipt')->where('source_document_id', (string) $g->id)->sole();
         $authority = ['organization_mapping_uuid' => $this->mapping->mapping_uuid, 'finance_organization_id' => 14, 'receipt_ids' => [$g->id], 'receipt_mapping_uuids' => [$life->mapping_uuid]];
-        $outer = \Illuminate\Http\Request::create('/api/finance-workspace', 'POST');
-        $actor = new \Illuminate\Auth\GenericUser(['id' => 335]);
+        $outer = Request::create('/api/finance-workspace', 'POST');
+        $actor = new GenericUser(['id' => 335]);
         $this->actingAs($actor);
         $outer->setUserResolver(fn () => $actor);
         $outer->attributes->set('purchasing_authority', $authority);
-        $access = $this->createStub(\App\Services\Access\CentralAppAccess::class);
+        $access = $this->createStub(CentralAppAccess::class);
         $access->method('decision')->willReturnCallback(fn ($id, $org, $app) => ['allowed' => $app === 'finance']);
-        $this->app->instance(\App\Services\Access\CentralAppAccess::class, $access);
-        $commercial = $this->createStub(\App\Services\Entitlements\InventoryCommercialEntitlementService::class);
+        $this->app->instance(CentralAppAccess::class, $access);
+        $commercial = $this->createStub(InventoryCommercialEntitlementService::class);
         $commercial->method('checkPermission')->willReturn(['allowed' => true, 'reason_code' => 'allowed']);
-        $this->app->instance(\App\Services\Entitlements\InventoryCommercialEntitlementService::class, $commercial);
-        $warehouses = $this->createStub(\App\Services\Access\WarehouseAccessService::class);
+        $this->app->instance(InventoryCommercialEntitlementService::class, $commercial);
+        $warehouses = $this->createStub(WarehouseAccessService::class);
         $warehouses->method('allowedIds')->willReturn([]);
         $warehouses->method('scope')->willReturnCallback(fn ($query, $column = 'warehouse_id') => $query->whereRaw('1 = 0'));
-        $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $warehouses);
+        $this->app->instance(WarehouseAccessService::class, $warehouses);
         $this->assertSame(0, GoodsReceipt::whereKey($g->id)->count());
         $input = ['action' => 'purchasing.bill.receipt', 'parameters' => ['goods_receipt' => $g->id], 'data' => ['source_bill_id' => 800, 'destination_document_type' => 'supplier_bill', 'destination_document_id' => 800]];
-        $dispatcher = app(\App\Services\InventoryWorkspace\WorkspaceDispatcher::class);
+        $dispatcher = app(WorkspaceDispatcher::class);
         $response = $dispatcher->dispatch($outer, $input, $this->mapping, IntegrationSetting::sole());
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame($g->id, $response->getData(true)['data']['document_id']);
@@ -357,7 +367,7 @@ final class PurchasingHandoffTest extends TestCase
                 'destination_unit_id' => 702, 'destination_unit_price' => '2.5', 'destination_gross' => '2.5',
                 'line_discount_allocated' => '0', 'document_discount_allocated' => '0', 'destination_net' => '2.5']]];
         $this->app->instance('request', $outer);
-        $reservation = app(\App\Services\Integration\FinancialLineAllocationService::class)->reserve($allocationInput);
+        $reservation = app(FinancialLineAllocationService::class)->reserve($allocationInput);
         $this->assertCount(1, $reservation['allocations']);
         $this->assertSame(0, GoodsReceipt::whereKey($g->id)->count());
         foreach (['receipt_mapping_uuids' => [(string) Str::uuid()], 'receipt_ids' => [$g->id + 1], 'organization_mapping_uuid' => (string) Str::uuid()] as $key => $value) {
@@ -374,7 +384,7 @@ final class PurchasingHandoffTest extends TestCase
         try {
             $dispatcher->dispatch($outer, $input, $this->mapping, IntegrationSetting::withoutGlobalScopes()->where('organization_id', TenantTestManager::ORG_A)->sole());
             $this->fail('Cross-organization receipt accepted');
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
             $this->assertTrue(true);
         } finally {
             app(OrganizationContext::class)->set(TenantTestManager::ORG_A);
@@ -540,5 +550,131 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame(1, PurchasingDocumentOutbox::count());
         $this->assertSame('ready', PurchasingDocumentOutbox::sole()->status);
         $this->assertSame(800, PurchasingDocumentOutbox::sole()->payload['receipt']['source_bill_id']);
+    }
+
+    public function test_finance_native_receiving_command_is_durable_and_replays_exact_native_receipt(): void
+    {
+        app(ReceivingRequestService::class)->upsert($this->data());
+        $source = ReceivingRequest::sole();
+        app(ReceivingRequestService::class)->approve($source, $this->warehouse->id);
+        $actor = new User;
+        $actor->id = 812;
+        request()->setUserResolver(fn () => $actor);
+        request()->attributes->set('purchasing_authority', ['allowed' => true, 'source_revision' => $source->source_revision, 'request_revision' => $source->source_revision]);
+        $this->mock(InventoryPermissionService::class, fn ($mock) => $mock->shouldReceive('can')->andReturn(true));
+        $this->mock(WarehouseAccessService::class, function ($mock) {
+            $mock->shouldReceive('assertAllowed')->andReturnNull();
+            $mock->shouldReceive('allowedIds')->andReturn(null);
+            $mock->shouldReceive('scope')->andReturnUsing(fn ($query) => $query);
+        });
+        $data = ['source_bill_id' => $source->source_bill_id, 'request_uuid' => $source->request_uuid,
+            'bill_revision' => $source->source_revision, 'operation_uuid' => (string) Str::uuid(),
+            'warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06',
+            'lines' => [['source_bill_line_id' => 801, 'request_line_id' => $source->lines()->sole()->id,
+                'quantity' => '1', 'unit_id' => $this->unit->id, 'unit_cost' => '2.5']]];
+        $service = app(FinanceReceivingService::class);
+        $this->assertSame('prepared', $service->prepare($data)['status']);
+        $this->assertSame(0, GoodsReceipt::count());
+        $this->assertSame(0, StockLedger::count());
+        $one = $service->execute($data);
+        $two = $service->execute($data);
+        $this->assertSame($one['goods_receipt_id'], $two['goods_receipt_id']);
+        $this->assertSame('posted', $one['status']);
+        $this->assertSame(1, GoodsReceipt::count());
+        $this->assertSame(1, StockLedger::count());
+        $this->assertSame(1, PurchasingDocumentOutbox::count());
+        $this->assertSame('partial', $source->fresh()->status);
+        $changed = $data;
+        $changed['lines'][0]['quantity'] = '2';
+        $this->expectException(HttpException::class);
+        $service->execute($changed);
+    }
+
+    public function test_posted_promotion_preserves_approved_partial_request_and_original_line_identity(): void
+    {
+        $service = app(ReceivingRequestService::class);
+        $data = $this->data();
+        $service->upsert($data);
+        $source = ReceivingRequest::sole();
+        $service->approve($source, $this->warehouse->id);
+        $lineId = $source->lines()->sole()->id;
+        app(GoodsReceiptService::class)->post($this->draft($source, '1'));
+        $data += ['source_status' => 'posted', 'billing_policy' => 'billed-unreceived-v1', 'posted_bill_journal_id' => 102];
+        $data['source_revision'] = str_repeat('b', 64);
+        $service->upsert($data);
+        $this->assertSame('partial', $source->fresh()->status);
+        $this->assertSame($lineId, $source->lines()->sole()->id);
+        $this->assertSame('1.0000', $source->lines()->sole()->received_qty);
+        $this->assertSame(str_repeat('b', 64), $source->fresh()->approved_revision);
+        $this->assertSame(1, GoodsReceipt::count());
+        $data['source_revision'] = str_repeat('c', 64);
+        $data['lines'][0]['quantity'] = '5';
+        $this->expectException(ValidationException::class);
+        $service->upsert($data);
+    }
+
+    public function test_cancelled_posted_request_reopens_only_for_new_journal_and_requires_reapproval(): void
+    {
+        $service = app(ReceivingRequestService::class);
+        $data = $this->data() + ['source_status' => 'posted', 'billing_policy' => 'billed-unreceived-v1', 'posted_bill_journal_id' => 102];
+        $service->upsert($data);
+        $source = ReceivingRequest::sole();
+        $service->approve($source, $this->warehouse->id);
+        app(GoodsReceiptService::class)->post($this->draft($source, '1'));
+        $line = $source->lines()->sole();
+        $service->cancel($source, $source->source_revision);
+        $data['source_revision'] = str_repeat('d', 64);
+        $data['posted_bill_journal_id'] = 103;
+        $data['reopened_from_bill_journal_id'] = 102;
+        $service->upsert($data);
+        $this->assertSame('partial', $source->fresh()->status);
+        $this->assertNull($source->fresh()->approved_at);
+        $this->assertSame($line->id, $source->lines()->sole()->id);
+        $this->assertSame('1.0000', $source->lines()->sole()->received_qty);
+        $service->cancel($source->fresh(), $data['source_revision']);
+        $data['source_revision'] = str_repeat('e', 64);
+        $this->expectException(HttpException::class);
+        $service->upsert($data);
+    }
+
+    public function test_receiver_approved_box_cost_is_compared_in_normalized_base_units(): void
+    {
+        $box = Unit::create(['code' => 'ROUND-BOX', 'name' => 'Box', 'kind' => 'count', 'is_active' => true]);
+        $this->master('unit', $box->id, 704);
+        UnitConversion::create(['item_id' => $this->item->id, 'from_unit_id' => $box->id, 'to_unit_id' => $this->unit->id, 'factor' => '6']);
+        $data = $this->data();
+        $data['lines'][0] = ['source_line_id' => $data['lines'][0]['source_line_id'], 'item_external_id' => $data['lines'][0]['item_external_id'], 'unit_external_id' => 704, 'quantity' => '2', 'unit_cost' => '12.1'];
+        app(ReceivingRequestService::class)->upsert($data);
+        $source = ReceivingRequest::sole();
+        app(ReceivingRequestService::class)->approve($source, $this->warehouse->id);
+        $receipt = app(GoodsReceiptService::class)->createDraft(['receiving_request_id' => $source->id, 'supplier_id' => $source->supplier_id, 'warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06'], [['receiving_request_line_id' => $source->lines()->sole()->id, 'item_id' => $this->item->id, 'entered_unit_id' => $box->id, 'received_qty' => '1', 'accepted_qty' => '1', 'unit_cost' => '12.1']]);
+        $this->mock(InventoryPermissionService::class)->shouldReceive('can')->andReturn(false);
+        app(OperationalReceiving::class)->posting($receipt->load('lines'));
+        app(GoodsReceiptService::class)->post($receipt);
+        $this->assertSame('6.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('2.0167', $receipt->lines()->sole()->unit_cost);
+    }
+
+    public function test_native_standalone_stock_has_no_finance_outbox_without_connection_identity(): void
+    {
+        $this->useTenantB();
+        $warehouse = F::warehouse();
+        $item = F::averageItem();
+        $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $warehouse->id, 'receipt_date' => '2026-10-06'],
+            [['item_id' => $item->id, 'received_qty' => '2', 'accepted_qty' => '2', 'unit_cost' => '5']]);
+        app(GoodsReceiptService::class)->post($receipt);
+        $this->assertSame(1, StockLedger::count());
+        $this->assertSame(0, IntegrationOutboxEvent::count());
+        $this->assertSame(0, PurchasingDocumentOutbox::count());
+    }
+
+    public function test_disconnected_existing_identity_retains_pending_finance_ownership(): void
+    {
+        IntegrationSetting::sole()->update(['mode' => 'disconnected']);
+        $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06'],
+            [['item_id' => $this->item->id, 'received_qty' => '2', 'accepted_qty' => '2', 'unit_cost' => '5']]);
+        app(GoodsReceiptService::class)->post($receipt);
+        $this->assertSame('pending', IntegrationOutboxEvent::sole()->status);
+        $this->assertSame(1, StockLedger::count());
     }
 }

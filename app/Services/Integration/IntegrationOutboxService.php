@@ -2,7 +2,7 @@
 
 namespace App\Services\Integration;
 
-use App\Models\Tenant\IntegrationAccountMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Tenancy\OrganizationContext;
@@ -45,6 +45,17 @@ class IntegrationOutboxService
             return $existing;
         }
 
+        $mode = $this->mode($orgId);
+        $hasOwnership = IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', $orgId)
+            ->where('tenant_database_identity', \DB::connection('tenant')->getDatabaseName())->exists();
+        if ($mode === 'disconnected' && ! $hasOwnership) {
+            // A native standalone receipt has no Finance job. Historical events
+            // above remain recoverable; an existing connection identity retains
+            // ownership even while disconnected and must never silently fall back.
+            return null;
+        }
+
         $mappingComplete = $this->coreMappingsComplete($orgId, $eventType);
         $payload = $this->payloads->build($eventType, $document, $documentType, $number, $date, $mappingComplete);
 
@@ -54,7 +65,7 @@ class IntegrationOutboxService
         $transportEligible = $postsJournal && $mappingComplete
             && $this->transportEnabled($orgId, $eventType);
         $status = match (true) {
-            $mode === 'disconnected' || ! $postsJournal => 'ignored',
+            ! $postsJournal => 'ignored',
             $transportEligible => 'ready',
             // Creation never guesses whether an unresolved mapping is
             // permanent. A reviewed promotion classifies it later; historical
@@ -98,7 +109,6 @@ class IntegrationOutboxService
             // document/physical movement transaction instead of stranding it.
             app(SolaStockJournalContractBuilder::class)->build($event);
         }
-
 
         return $event;
     }

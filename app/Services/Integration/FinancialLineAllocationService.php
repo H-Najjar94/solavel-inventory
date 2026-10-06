@@ -11,6 +11,7 @@ use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\Shipment;
 use App\Models\Tenant\ShipmentLine;
 use App\Services\Access\WarehouseAccessService;
+use App\Services\Purchasing\PurchaseSourceOwnership;
 use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -188,6 +189,10 @@ final class FinancialLineAllocationService
             ->when($replaceIds !== [], fn ($query) => $query->whereNotIn('id', $replaceIds))
             ->when($existing, fn ($query) => $query->where('id', '!=', $existing->id));
         $used = (string) $usedQuery->sum('base_quantity');
+        if ($receipt) {
+            $used = Decimal::add($used, app(PurchaseSourceOwnership::class)
+                ->newUsedBase($connection, (int) $document->id, (int) $line->id, (string) ($line->unit_conversion_factor ?: '1')), 8);
+        }
         if (Decimal::gt(Decimal::add($used, $baseQty), $sourceQty)) {
             $this->fail('The allocation exceeds the source line remaining quantity.');
         }
