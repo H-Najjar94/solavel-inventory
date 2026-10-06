@@ -1,3 +1,4 @@
+import { cutoffInputValue } from '../services/connectionReview.js';
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import { diagnosticReason } from '../services/connectionDiagnostics.js';
@@ -389,6 +390,13 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         if (runUuid && run.data) acceptCanonicalRun(run.data);
     }, [runUuid, run.data]);
     const runView = canonicalRun || run.data;
+    const cutoffInitialized = useRef(null);
+    useEffect(() => {
+        if (runView?.cutoff_at && cutoffInitialized.current !== runUuid) {
+            cutoffInitialized.current = runUuid;
+            setCutoffAt(value => value || cutoffInputValue(runView.cutoff_at));
+        }
+    }, [runUuid, runView?.cutoff_at]);
     const runHandle = { ...run, data: runView };
     const view = runUuid ? runView : discovery.data;
     useEffect(() => {
@@ -504,7 +512,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             setConfirmation('');
             toast.push(tr(successKey), 'success');
             return true;
-        } catch (error) { toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
+        } catch (error) { await reconcileLatest().catch(() => undefined); toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
         finally { setSaving(false); }
     }
 

@@ -1,3 +1,4 @@
+import { accountSelectionDirty } from '../services/connectionReview.js';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -79,10 +80,12 @@ function AccountPicker({ accounts, selected, onSelect, disabled, label, locale }
         {!filtered.length && <p role="status">{arabic ? 'لا توجد حسابات مطابقة' : 'No matching accounts'}</p>}
     </div>, document.body)}</>;
 }
-export default function AccountingMappingTable({ rows, decisions, choose, canEdit, saving }) {
+export default function AccountingMappingTable({ rows, decisions, choose, canEdit, saving, onDirtyChange }) {
     const { locale } = useI18n();
     const ar = locale === 'ar';
     const [proposals, setProposals] = useState({});
+    const dirtyCount = rows.filter(row => accountSelectionDirty(proposals[row.fingerprint], savedAccount(row, decisions))).length;
+    useEffect(() => { onDirtyChange?.(dirtyCount); }, [dirtyCount, onDirtyChange]);
     const [failed, setFailed] = useState(null);
     const [pending, setPending] = useState(null);
     return <div className="wizard-account-table"><p className="wizard-account-note">{ar ? 'الاقتراحات ليست اختيارات محفوظة. راجع الحساب واحفظه؛ تبقى الموافقة المحاسبية النهائية خطوة منفصلة.' : 'Proposals are not saved selections. Review and save each account; final accounting approval remains a separate step.'}</p>
@@ -94,7 +97,7 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
             const proposed = proposals[row.fingerprint] || saved || detail.recommended_account;
             const choices = detail.available_finance_accounts || [];
             const invalid = detail.current_mapping_invalid || (decisions.has(row.fingerprint) && !saved);
-            const state = !saved && detail.account_proposal ? (detail.account_proposal.kind === 'code_conflict_requires_review' ? (ar ? 'تعارض في رمز الحساب — يلزم المراجعة' : 'Account code conflict — review required') : (ar ? 'حساب افتراضي مفقود — راجع الاقتراح' : 'Missing default — review proposal')) : detail.required === false && !saved ? (ar ? 'اختياري — غير مطلوب للعمليات الحالية' : 'Optional — not required for current operations') : saved ? (ar ? 'اختيار محفوظ' : 'Saved selection') : invalid ? (ar ? 'غير صالح — يلزم المراجعة' : 'Invalid — review required') : !choices.length ? (ar ? 'حساب مطلوب غير متاح' : 'Missing account') : proposed ? (ar ? 'اقتراح للمراجعة' : 'Proposed for review') : (ar ? 'خيارات متعددة — اختر حساباً' : 'Ambiguous — select an account');
+            const state = accountSelectionDirty(proposals[row.fingerprint], saved) ? (ar ? 'تغيير غير محفوظ' : 'Unsaved change') : !saved && detail.account_proposal ? (detail.account_proposal.kind === 'code_conflict_requires_review' ? (ar ? 'تعارض في رمز الحساب — يلزم المراجعة' : 'Account code conflict — review required') : (ar ? 'حساب افتراضي مفقود — راجع الاقتراح' : 'Missing default — review proposal')) : detail.required === false && !saved ? (ar ? 'اختياري — غير مطلوب للعمليات الحالية' : 'Optional — not required for current operations') : saved ? (ar ? 'اختيار محفوظ' : 'Saved selection') : invalid ? (ar ? 'غير صالح — يلزم المراجعة' : 'Invalid — review required') : !choices.length ? (ar ? 'حساب مطلوب غير متاح' : 'Missing account') : proposed ? (ar ? 'اقتراح للمراجعة' : 'Proposed for review') : (ar ? 'خيارات متعددة — اختر حساباً' : 'Ambiguous — select an account');
             return <section className="wizard-account-row" key={row.fingerprint} aria-label={label}>
                 <div><strong>{label}</strong><small>{detail.required === false ? (ar ? 'اختياري للعمليات الحالية' : 'Optional for current operations') : (ar ? 'مطلوب للعمليات المفعلة' : 'Required for enabled operations')}</small><small>{copy?.[ar ? 3 : 2]}</small>
 {detail.current_mapping && <small>{ar ? 'الربط الحالي: ' : 'Current mapping: '}<bdi>{detail.current_mapping.code}</bdi> · {recordText(detail.current_mapping.name, locale)}</small>}</div>
