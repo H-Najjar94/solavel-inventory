@@ -43,14 +43,24 @@ final class FinanceReceivingService
         $source = $this->source($data);
         $permissions = app(InventoryPermissionService::class);
 
+        $warehouses = Warehouse::query()->where('is_active', true)->get(['id', 'name']);
+        $approved = $source->approved_at !== null && $source->approved_revision === $source->source_revision;
+        $reason = $source->status === 'cancelled' ? 'cancelled'
+            : ($source->status === 'complete' || ! $source->lines->contains(fn ($line) => Decimal::gt(Decimal::sub($line->requested_qty, $line->received_qty), '0')) ? 'complete'
+                : (! $approved ? 'approval_required'
+                    : (! $warehouses->contains(fn ($warehouse) => (int) $warehouse->id === (int) $source->warehouse_id) ? 'warehouse_unavailable' : 'ready')));
+
         return [
             'request' => app(ReceivingRequestService::class)->status($source),
-            'warehouses' => Warehouse::query()->where('is_active', true)->get(['id', 'name'])->map(fn ($warehouse) => [
+            'warehouses' => $warehouses->map(fn ($warehouse) => [
                 'id' => $warehouse->id, 'name' => $warehouse->name, 'requires_bin' => false,
                 'bins' => WarehouseBin::query()->where('warehouse_id', $warehouse->id)
                     ->where('is_active', true)->get()->map(fn ($bin) => ['id' => $bin->id, 'label' => $bin->name ?: $bin->code])->all(),
             ])->all(),
-            'can_receive' => true,
+            'can_receive' => $reason === 'ready',
+            'receiving_ready' => $reason === 'ready',
+            'receiving_block_reason' => $reason === 'ready' ? null : $reason,
+            'receiving_block_message' => $reason === 'ready' ? null : __('receiving.readiness_'.$reason),
             'can_approve' => $permissions->can(request()->user(), 'inventory.approve_purchase_orders'),
             'can_edit_receipt_cost' => $permissions->can(request()->user(), 'inventory.manage_adjustments'),
             'lines' => $source->lines->map(function ($line) {

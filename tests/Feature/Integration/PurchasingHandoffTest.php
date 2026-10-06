@@ -552,6 +552,55 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame(800, PurchasingDocumentOutbox::sole()->payload['receipt']['source_bill_id']);
     }
 
+    public function test_finance_receiving_options_reflect_native_approval_warehouse_and_remaining_state(): void
+    {
+        $data = $this->data() + ['source_status' => 'posted', 'billing_policy' => 'billed-unreceived-v1', 'posted_bill_journal_id' => 102];
+        app(ReceivingRequestService::class)->upsert($data);
+        $source = ReceivingRequest::sole();
+        $actor = new User;
+        $actor->id = 812;
+        request()->setUserResolver(fn () => $actor);
+        $this->mock(InventoryPermissionService::class, fn ($mock) => $mock->shouldReceive('can')->andReturn(true));
+        $hideWarehouse = false;
+        $this->mock(WarehouseAccessService::class, function ($mock) use (&$hideWarehouse) {
+            $mock->shouldReceive('assertAllowed')->andReturnNull();
+            $mock->shouldReceive('allowedIds')->andReturn(null);
+            $mock->shouldReceive('scope')->andReturnUsing(function ($query) use (&$hideWarehouse) {
+                return $hideWarehouse ? $query->whereRaw('1 = 0') : $query;
+            });
+        });
+        $service = app(FinanceReceivingService::class);
+        $context = ['source_bill_id' => $source->source_bill_id, 'request_uuid' => $source->request_uuid,
+            'bill_revision' => $source->source_revision];
+        request()->attributes->set('purchasing_authority', ['source_revision' => $source->source_revision, 'request_revision' => $source->source_revision]);
+        $unapproved = $service->options($context);
+        $this->assertFalse($unapproved['can_receive']);
+        $this->assertTrue($unapproved['can_approve']);
+        $this->assertSame('approval_required', $unapproved['receiving_block_reason']);
+        $this->assertNotEmpty($unapproved['receiving_block_message']);
+        app(ReceivingRequestService::class)->approve($source, $this->warehouse->id);
+        $this->assertTrue($service->options($context)['can_receive']);
+        $hideWarehouse = true;
+        $this->assertSame('warehouse_unavailable', $service->options($context)['receiving_block_reason']);
+        $hideWarehouse = false;
+        app(ReceivingRequestService::class)->cancel($source, $source->source_revision);
+        $this->assertFalse($service->options($context)['can_receive']);
+        $this->assertSame('cancelled', $service->options($context)['receiving_block_reason']);
+        $data['source_revision'] = str_repeat('b', 64);
+        $data['posted_bill_journal_id'] = 103;
+        $data['reopened_from_bill_journal_id'] = 102;
+        app(ReceivingRequestService::class)->upsert($data);
+        $context['bill_revision'] = $data['source_revision'];
+        request()->attributes->set('purchasing_authority', ['source_revision' => $data['source_revision'], 'request_revision' => $data['source_revision']]);
+        $this->assertFalse($service->options($context)['can_receive']);
+        $this->assertSame('approval_required', $service->options($context)['receiving_block_reason']);
+        app(ReceivingRequestService::class)->approve($source->fresh(), $this->warehouse->id);
+        $source->lines()->sole()->update(['received_qty' => $source->lines()->sole()->requested_qty]);
+        $source->update(['status' => 'complete']);
+        $this->assertFalse($service->options($context)['can_receive']);
+        $this->assertSame('complete', $service->options($context)['receiving_block_reason']);
+    }
+
     public function test_finance_native_receiving_command_is_durable_and_replays_exact_native_receipt(): void
     {
         app(ReceivingRequestService::class)->upsert($this->data());

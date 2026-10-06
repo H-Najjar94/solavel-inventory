@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'readiness_approval_required' => 'This receiving request needs approval before goods can be received.',
+    'readiness_warehouse_unavailable' => 'The approved warehouse is unavailable to your account. Ask the purchasing approver to review the warehouse assignment.',
+    'readiness_cancelled' => 'This receiving request is closed. No further goods can be received against it.',
+    'readiness_complete' => 'All requested goods have already been received. Review the linked receipts.',
+
     'operation_abandoned' => 'This receiving attempt was closed without receiving goods. Start a new attempt with the corrected details.',
     'operation_already_received' => 'This receiving attempt already recorded goods. Review the linked receipt instead of starting another attempt.',
     'receipt_already_billed' => 'This receipt quantity is already reserved or billed by another financial matching. Review the existing bill references before continuing.',
