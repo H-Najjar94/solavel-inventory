@@ -3,12 +3,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\StoreItemRequest;
-use App\Models\Tenant\{IntegrationMasterDataMapping,IntegrationOrganizationMapping,InventoryAuditLog,Item};
+use App\Models\Tenant\{IntegrationMasterDataMapping,IntegrationOrganizationMapping,InventoryAuditLog,Item,IntegrationSetting};
 use App\Services\InventoryWorkspace\MigrationCatalogScope;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\{Request,JsonResponse};
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /** Durable owner creation precedes Finance projection; explicit linking completes the saga. */
 final class MigrationCatalogController extends ApiController
@@ -27,6 +28,8 @@ final class MigrationCatalogController extends ApiController
             'name'=>'required|string|max:191','sku'=>'required|string|max:50','barcode'=>'nullable|string|max:50',
             'finance_category_id'=>'required|integer|min:1','finance_unit_id'=>'required|integer|min:1',
             'unit_price'=>['nullable','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D'],
+            'purchase_price'=>['string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','required_with:purchase_currency_code'],
+            'purchase_currency_code'=>['string','regex:/^[A-Z]{3}$/D','required_with:purchase_price'],
             'item_type'=>'required|in:inventory','valuation_method'=>'required|in:fifo']);
         $references=[];
         foreach (['category'=>'finance_category_id','unit'=>'finance_unit_id'] as $type=>$field) {
@@ -39,6 +42,20 @@ final class MigrationCatalogController extends ApiController
         $native=['name'=>$data['name'],'sku'=>$data['sku'],'barcode'=>$data['barcode']??null,
             'category_id'=>$references['category']['stock_id'],'base_unit_id'=>$references['unit']['stock_id'],
             'item_type'=>'inventory','tracking_type'=>'none','costing_method'=>'fifo','sales_price'=>$data['unit_price']??'0','is_active'=>true];
+        if (array_key_exists('purchase_price',$data)) {
+            $setting=IntegrationSetting::query()->where('organization_id',$mapping->solastock_organization_id)
+                ->where('integration','solabooks')->where('mode','active')->first();
+            $authority=(array)data_get($setting?->meta,'finance_currency_contract',[]);
+            $base=(string)($authority['base_currency_code']??'');
+            $valid=$mapping->integration==='solabooks' && $mapping->currency_verified_at!==null
+                && $setting && (int)$setting->solabooks_organization_id===(int)$mapping->finance_organization_id
+                && preg_match('/^[A-Z]{3}$/D',$base) && in_array($base,(array)($authority['enabled_currency_codes']??[]),true)
+                && $base===(string)$mapping->base_currency_code && $base===$data['purchase_currency_code'];
+            if (!$valid) {
+                throw ValidationException::withMessages(['purchase_currency_code'=>'The purchase default must use the verified Finance base currency. Review the organization connection currency settings.']);
+            }
+            $native['purchase_price']=$data['purchase_price'];
+        }
         $form=StoreItemRequest::createFrom($request);
         $form->replace($native); $form->setContainer(app()); $form->setRedirector(app('redirect'));
         $form->validateResolved(); // Exactly the native SKU/barcode, category, unit and item-domain rules.
@@ -46,6 +63,7 @@ final class MigrationCatalogController extends ApiController
             'central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,
             'finance_organization_id'=>$mapping->finance_organization_id,'stock_organization_id'=>$mapping->solastock_organization_id,
             'references'=>$references,'native'=>$form->validated()];
+        if (array_key_exists('purchase_price',$data)) $facts['purchase_currency_code']=$data['purchase_currency_code'];
         return [$facts+['version'=>hash('sha256',json_encode($facts,JSON_THROW_ON_ERROR))],$form];
     }
 

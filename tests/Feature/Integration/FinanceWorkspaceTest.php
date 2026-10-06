@@ -446,6 +446,58 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send(['action' => 'opening.index'])->assertForbidden()->assertJsonPath('message', 'workspace_integration_not_entitled');
     }
 
+    public function test_migration_purchase_default_requires_same_verified_base_and_replays_without_movements(): void
+    {
+        $category=\App\Models\Tenant\ItemCategory::create(['name'=>'Migration category','code'=>'MIG-CAT','is_active'=>true]);
+        $unit=\App\Models\Tenant\Unit::create(['name'=>'Each','code'=>'MIG-EACH','kind'=>'count','is_active'=>true]);
+        $org=TenantTestManager::ORG_A;
+        foreach (['category'=>[$category->id,991],'unit'=>[$unit->id,992]] as $type=>[$stockId,$financeId]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),
+                'organization_mapping_uuid'=>IntegrationOrganizationMapping::query()->firstOrFail()->mapping_uuid,
+                'central_client_id'=>self::CLIENT,'central_organization_id'=>$org,'finance_organization_id'=>14,'solastock_organization_id'=>$org,
+                'entity_type'=>$type,'solastock_record_id'=>(string)$stockId,'solabooks_record_id'=>(string)$financeId,'status'=>'verified']);
+        }
+        $mapping=IntegrationOrganizationMapping::query()->firstOrFail();
+        $mapping->update(['currency_verified_at'=>now()]);
+        $setting=IntegrationSetting::query()->firstOrFail();
+        $setting->update(['meta'=>['transport_enabled_workflows'=>[], 'finance_currency_contract'=>[
+            'base_currency_code'=>'JOD','enabled_currency_codes'=>['JOD','USD']]]]);
+        $data=['source_hash'=>hash('sha256','purchase source'),'name'=>'Purchase default','sku'=>'MIG-COST-001',
+            'finance_category_id'=>991,'finance_unit_id'=>992,'unit_price'=>'500.0000',
+            'purchase_price'=>'490.1234','purchase_currency_code'=>'JOD','item_type'=>'inventory','valuation_method'=>'fifo'];
+        $this->send(['action'=>'items.migration-requirements','data'=>array_replace($data,['purchase_currency_code'=>'USD'])])->assertUnprocessable();
+        $this->send(['action'=>'items.migration-requirements','data'=>array_replace($data,['purchase_currency_code'=>'XYZ'])])->assertUnprocessable();
+        $missing=$data; unset($missing['purchase_currency_code']);
+        $this->send(['action'=>'items.migration-requirements','data'=>$missing])->assertUnprocessable();
+        $missing=$data; unset($missing['purchase_price']);
+        $this->send(['action'=>'items.migration-requirements','data'=>$missing])->assertUnprocessable();
+        $this->send(['action'=>'items.migration-requirements','data'=>array_replace($data,['purchase_price'=>'490.12345'])])->assertUnprocessable();
+        $setting->update(['solabooks_organization_id'=>999]);
+        $this->send(['action'=>'items.migration-requirements','data'=>$data])->assertConflict();
+        $setting->update(['solabooks_organization_id'=>14]);
+        $mapping->update(['base_currency_code'=>'USD']);
+        $this->send(['action'=>'items.migration-requirements','data'=>$data])->assertUnprocessable();
+        $mapping->update(['base_currency_code'=>'JOD']);
+        $mapping->update(['currency_verified_at'=>null]);
+        $this->send(['action'=>'items.migration-requirements','data'=>$data])->assertUnprocessable();
+        $mapping->update(['currency_verified_at'=>now()]);
+        $facts=$this->send(['action'=>'items.migration-requirements','data'=>$data])->assertOk()->json('data');
+        $this->assertSame('JOD',$facts['purchase_currency_code']);
+        $changed=$this->send(['action'=>'items.migration-requirements','data'=>array_replace($data,['purchase_price'=>'491.0000'])])->assertOk()->json('data');
+        $this->assertNotSame($facts['version'],$changed['version']);
+        $command=['action'=>'items.migration-create','data'=>$data+['requirements_version'=>$facts['version']],
+            'idempotency_key'=>'migration-cost-default-command-001'];
+        $created=$this->send($command)->assertCreated(); $id=$created->json('data.stock_item_id');
+        $this->send($command)->assertCreated()->assertHeader('X-Workspace-Replayed','true')->assertJsonPath('data.stock_item_id',$id);
+        $item=\App\Models\Tenant\Item::findOrFail($id);
+        $this->assertSame('490.1234',$item->purchase_price);
+        $this->assertSame('500.0000',$item->sales_price);
+        $this->assertSame(1,\App\Models\Tenant\Item::where('sku','MIG-COST-001')->count());
+        $this->assertSame(0,\App\Models\Tenant\StockLedger::where('item_id',$id)->count());
+        $this->assertSame(0,DB::connection('tenant')->table('stock_balances')->where('item_id',$id)->count());
+        $this->assertSame(0,DB::connection('tenant')->table('integration_outbox_events')->count());
+    }
+
     public function test_migration_catalog_uses_native_creation_then_durable_explicit_mapping(): void
     {
         $category=\App\Models\Tenant\ItemCategory::create(['name'=>'Migration category','code'=>'MIG-CAT','is_active'=>true]);
@@ -469,6 +521,7 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send($command)->assertCreated()->assertHeader('X-Workspace-Replayed','true')->assertJsonPath('data.stock_item_id',$id);
         $this->assertSame(1,\App\Models\Tenant\Item::where('sku','MIG-00001')->count());
         $this->assertSame('37.2410',\App\Models\Tenant\Item::findOrFail($id)->sales_price);
+        $this->assertSame('0.0000',\App\Models\Tenant\Item::findOrFail($id)->purchase_price);
         $this->assertSame(1,\App\Models\Tenant\ItemBarcode::where('item_id',$id)->where('barcode','0000987654321')->count());
         $this->assertSame(0,\App\Models\Tenant\StockLedger::where('item_id',$id)->count());
         $this->assertSame(0,\App\Models\Tenant\IntegrationMasterDataMapping::where('entity_type','item')->count());
