@@ -260,6 +260,13 @@ final class ConnectionWizardService
         return $this->finalPreview($organizationId, $runUuid);
     }
 
+    public function discoveryPresentation(int $organizationId): array
+    {
+        $preview = $this->discover($organizationId);
+        $preview['guided_setup'] = $this->guidedPresentation($preview, $organizationId);
+        return $preview;
+    }
+
     public function show(int $organizationId, string $runUuid): array
     {
         // Drafts created by an older release may predate automatic standard
@@ -317,6 +324,9 @@ final class ConnectionWizardService
             $reviewerRole = $candidate['decision_class'] === 'accountant_decision' ? 'accountant' : 'owner';
             if (! in_array($action, $this->allowedActionsForCandidate($candidate), true)) {
                 $this->fail('wizard_decision_not_valid_for_candidate');
+            }
+            if ($action === 'select_warehouse' && empty($candidate['solastock_record_ids'])) {
+                $this->exactRecordDecisionError($fingerprint);
             }
             $availableStockUnits = collect($candidate['safe_details']['available_stock_units'] ?? [])
                 ->keyBy(fn (array $unit) => (string) ($unit['id'] ?? ''));
@@ -416,7 +426,8 @@ final class ConnectionWizardService
                 ->pluck('candidate_fingerprint')->all();
             $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])->merge($preview['guided_setup']['automatic_exclusions'] ?? [])->pluck('fingerprint')->all();
             $required = collect($preview['comparison'])->whereNotNull('blocking_reason')
-                ->reject(fn (array $candidate) => in_array($candidate['fingerprint'], $automatic, true))
+                ->reject(fn (array $candidate) => in_array($candidate['fingerprint'], $automatic, true)
+                    || $this->isFinanceOnlyWarehouseDiagnostic($candidate, $organizationId))
                 ->pluck('fingerprint')->all();
             $complete = count(array_diff($required, $selected)) === 0;
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)
@@ -512,8 +523,8 @@ final class ConnectionWizardService
             $decision, $candidatesByFingerprint->get($fingerprint)
         ));
         $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])->merge($preview['guided_setup']['automatic_exclusions'] ?? [])->pluck('fingerprint');
-        $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($validDecisions, $automatic): bool {
-            if ($candidate['blocking_reason'] === null) {
+        $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($validDecisions, $automatic, $organizationId): bool {
+            if ($candidate['blocking_reason'] === null || $this->isFinanceOnlyWarehouseDiagnostic($candidate, $organizationId)) {
                 return false;
             }
             if ($automatic->contains($candidate['fingerprint'])) {
@@ -592,7 +603,7 @@ final class ConnectionWizardService
             'accounting' => $preview['accounting'] ?? ['accounts' => [], 'complete' => false],
             'master_data' => $preview['master_data'] ?? null,
             'readiness' => $preview['readiness'] ?? null,
-            'guided_setup' => $preview['guided_setup'] ?? null,
+            'guided_setup' => $this->guidedPresentation($preview, $organizationId),
             'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock currently supports Finance money precision 2; this organization requires a qualified precision upgrade before activation.']),
             'blocking' => $blocking->all(),
             'snapshot_frozen_at' => $run->snapshot_frozen_at,
@@ -987,6 +998,9 @@ final class ConnectionWizardService
         });
 
         foreach ($decisions as $decision) {
+            if ($this->isApprovedWarehouseDiagnostic($decision, $approvedCandidates->get($decision->candidate_fingerprint), $organizationMapping)) {
+                continue; // Immutable legacy schema diagnostic: no record exists to bind or create.
+            }
             if ($decision->action === 'select_account_role') {
                 $details = json_decode($decision->safe_details ?: '{}', true);
                 $accountId = (int) ($details['selected_record_id'] ?? 0);
@@ -1043,7 +1057,7 @@ final class ConnectionWizardService
             if (($createsStock && (count($booksIds) !== 1 || $stockIds !== []))
                 || ($createsBooks && (count($stockIds) !== 1 || $booksIds !== []))
                 || (! $createsStock && ! $createsBooks && (count($booksIds) !== 1 || count($stockIds) !== 1))) {
-                $this->fail('mapping_decision_requires_exact_records');
+                $this->exactRecordDecisionError((string) $decision->candidate_fingerprint);
             }
 
             $booksId = $createsBooks
@@ -2449,11 +2463,72 @@ final class ConnectionWizardService
         ];
     }
 
-    /**
-     * The wizard API never accepts a free-form action for a candidate type. This
-     * keeps draft writes expressive without allowing them to become operational
-     * master-data commands through a direct request.
-     */
+    /** Finance location schemas are irrelevant to Stock-owned warehouses. Never
+     * exempt an actual identity, a missing Stock schema, or a different entity. */
+    private function isFinanceOnlyWarehouseDiagnostic(array $candidate, int $organizationId): bool
+    {
+        if (($candidate['entity_type'] ?? null) !== 'warehouse'
+            || ($candidate['classification'] ?? null) !== 'incompatible_schema'
+            || ($candidate['blocking_reason'] ?? null) !== 'incompatible_schema'
+            || ($candidate['solastock_record_ids'] ?? null) !== []
+            || ($candidate['solabooks_record_ids'] ?? null) !== []
+            || ! empty($candidate['solastock']) || ! empty($candidate['solabooks'])) return false;
+        $schema = Schema::connection('tenant');
+        if (! $schema->hasTable('warehouses') || ! $schema->hasTable('inventory_locations')) return false;
+        foreach (['id', 'organization_id', 'name', 'is_active', 'deleted_at'] as $column) {
+            if (! $schema->hasColumn('warehouses', $column)) return false;
+        }
+        // Recognize only the provisioned legacy Finance location schema.
+        if (! $schema->hasColumn('inventory_locations', 'organization_id')
+            || ! $schema->hasColumn('inventory_locations', 'name')
+            || $schema->hasColumn('inventory_locations', 'location_name')) return false;
+        $mapping = $this->mappingOrNull($organizationId);
+        return $mapping !== null && (int) $mapping->central_organization_id === $organizationId
+            && (int) $mapping->solastock_organization_id === $organizationId
+            && DB::connection('tenant')->table('organizations')->where('id', $mapping->finance_organization_id)
+                ->where('central_org_id', $organizationId)->exists();
+    }
+
+    private function isApprovedWarehouseDiagnostic(object $decision, ?array $candidate, IntegrationOrganizationMapping $mapping): bool
+    {
+        $verified = $this->mappingOrNull((int) $mapping->solastock_organization_id);
+        return $verified !== null && $verified->mapping_uuid === $mapping->mapping_uuid
+            && (int) $verified->finance_organization_id === (int) $mapping->finance_organization_id
+            && (int) $mapping->central_organization_id === (int) $mapping->solastock_organization_id
+            && (string) $mapping->tenant_database_identity === (string) DB::connection('tenant')->getDatabaseName()
+            && $this->mappingOrNull((int) $mapping->solastock_organization_id)?->mapping_uuid === $mapping->mapping_uuid
+            && $candidate !== null && $decision->entity_type === 'warehouse'
+            && $decision->action === 'select_warehouse'
+            && (string) $decision->candidate_fingerprint === (string) ($candidate['fingerprint'] ?? '')
+            && hash_equals($this->hash($candidate), (string) $decision->candidate_before_hash)
+            && (json_decode($decision->safe_details ?: '{}', true)['reason'] ?? null) === 'incompatible_schema'
+            && json_decode($decision->solastock_record_ids ?: '[]', true) === []
+            && json_decode($decision->solabooks_record_ids ?: '[]', true) === []
+            && $this->isFinanceOnlyWarehouseDiagnostic($candidate, (int) $mapping->solastock_organization_id);
+    }
+
+    private function exactRecordDecisionError(string $fingerprint): never
+    {
+        throw ValidationException::withMessages([
+            'decisions.'.$fingerprint => __('inventory.integration.mapping_choice_required'),
+        ]);
+    }
+
+    /** Presentation only: do not change the frozen discovery or approval hash. */
+    private function guidedPresentation(array $preview, int $organizationId): ?array
+    {
+        $guided = $preview['guided_setup'] ?? null;
+        if (! is_array($guided)) return $guided;
+        $ignored = collect($preview['comparison'])->filter(fn (array $row) =>
+            $this->isFinanceOnlyWarehouseDiagnostic($row, $organizationId))->pluck('fingerprint')->all();
+        foreach ($guided['exception_groups'] ?? [] as $group => $fingerprints) {
+            $guided['exception_groups'][$group] = array_values(array_diff($fingerprints, $ignored));
+        }
+        $guided['visible_exception_fingerprints'] = array_values(array_diff($guided['visible_exception_fingerprints'] ?? [], $ignored));
+        return $guided;
+    }
+
+    /** Draft choices cannot become free-form operational master-data commands. */
     private function allowedActionsForCandidate(array $candidate): array
     {
         return match ($candidate['entity_type']) {

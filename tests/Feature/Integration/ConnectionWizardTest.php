@@ -787,7 +787,39 @@ final class ConnectionWizardTest extends TestCase
     #[Test]
     public function empty_workspace_completes_review_without_creating_mappings_or_releasing_events(): void
     {
-        $this->seedConnectionFixture(false);
+        $this->completeEmptyWorkspace(false);
+    }
+
+    #[Test]
+    public function approved_legacy_finance_warehouse_diagnostic_connects_without_changing_approved_evidence(): void
+    {
+        $connection = DB::connection('tenant');
+        $schema = \Illuminate\Support\Facades\Schema::connection('tenant');
+        $this->assertFalse($schema->hasTable('inventory_locations'));
+        // DDL is only on the disposable schema, outside the fixture transaction.
+        $connection->rollBack();
+        $schema->create('inventory_locations', function ($table) {
+            $table->id(); $table->unsignedBigInteger('organization_id'); $table->string('name'); $table->timestamps();
+        });
+        $connection->beginTransaction();
+        try {
+            $this->completeEmptyWorkspace(true);
+        } finally {
+            while ($connection->transactionLevel() > 0) $connection->rollBack();
+            $schema->drop('inventory_locations');
+            $connection->beginTransaction();
+        }
+    }
+
+    private function completeEmptyWorkspace(bool $legacyDiagnostic): void
+    {
+        [$mapping] = $this->seedConnectionFixture($legacyDiagnostic);
+        if ($legacyDiagnostic) {
+            DB::connection('tenant')->table('warehouses')->delete();
+            foreach (['units', 'item_categories', 'inventory_units', 'inventory_categories'] as $table) {
+                DB::connection('tenant')->table($table)->delete();
+            }
+        }
         // Finance owns its provisioned schema; this regression exercises Stock's draft transitions.
         $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class, function ($mock) {
             $mock->shouldReceive('assertComplete')->andReturnNull();
@@ -814,6 +846,34 @@ final class ConnectionWizardTest extends TestCase
         // with no records in either app this is the fresh path (safeguards still apply).
         $this->assertSame('fresh_workspace', $run['guided_setup']['setup_path']);
         $this->assertTrue($run['guided_setup']['finance_setup_started']);
+        if ($legacyDiagnostic) {
+            $candidate = collect($run['comparison'])->firstWhere('entity_type', 'warehouse');
+            $this->assertSame('incompatible_schema', $candidate['classification']);
+            $this->assertNotContains($candidate['fingerprint'], $run['guided_setup']['visible_exception_fingerprints']);
+            $raw = $wizard->discover(TenantTestManager::ORG_A);
+            $presented = $wizard->discoveryPresentation(TenantTestManager::ORG_A);
+            $this->assertSame($raw['snapshot_hash'], $presented['snapshot_hash']);
+            $this->assertSame($raw['guided_setup']['source_invalidation_hash'], $presented['guided_setup']['source_invalidation_hash']);
+            $this->assertNotContains($candidate['fingerprint'], $presented['guided_setup']['visible_exception_fingerprints']);
+
+            try {
+                $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
+                    'select_warehouse', [], [], ['reason'=>'incompatible_schema'], 7001, $run['lock_version'],
+                    $candidate['candidate_before_hash'], true, false);
+                $this->fail('A new identity-free warehouse selector must not be saved.');
+            } catch (ValidationException $e) {
+                $this->assertArrayHasKey('decisions.'.$candidate['fingerprint'], $e->errors());
+            }
+            // Simulate the exact immutable selector accepted by the previous release.
+            DB::connection('tenant')->table('integration_connection_wizard_decisions')->insert([
+                'decision_uuid'=>(string) Str::uuid(), 'run_uuid'=>$run['run_uuid'],
+                'candidate_fingerprint'=>$candidate['fingerprint'], 'entity_type'=>'warehouse',
+                'action'=>'select_warehouse', 'solastock_record_ids'=>'[]', 'solabooks_record_ids'=>'[]',
+                'candidate_before_hash'=>$candidate['candidate_before_hash'], 'safe_details'=>'{"reason":"incompatible_schema"}',
+                'status'=>'selected', 'actor_user_id'=>7001, 'reviewer_role'=>'owner', 'decision_version'=>2,
+                'reviewed_by_user_id'=>7001, 'reviewed_at'=>now(), 'created_at'=>now(), 'updated_at'=>now(),
+            ]);
+        }
         foreach ($run['comparison'] as $candidate) {
             if ($candidate['entity_type'] !== 'account_role') continue;
             $run = $wizard->decide(TenantTestManager::ORG_A, $run['run_uuid'], $candidate['fingerprint'],
@@ -821,7 +881,7 @@ final class ConnectionWizardTest extends TestCase
                 ['selected_record_id'=>$ids[$candidate['safe_details']['role']]], 7002, $run['lock_version'],
                 $candidate['candidate_before_hash'], false, true);
         }
-        $this->assertSame('decisions_complete', $run['state']);
+        $this->assertSame('decisions_complete', $run['state'], json_encode($run['blocking']));
         $this->assertSame(6, $run['accounting_selections']['valid_saved']);
         $this->assertSame(6, $run['accounting_selections']['required']);
         $run = $wizard->requestSnapshot(TenantTestManager::ORG_A, $run['run_uuid'], $run['lock_version'], 7001);
@@ -875,7 +935,7 @@ final class ConnectionWizardTest extends TestCase
         $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->count());
         $this->assertSame($before, $this->mutationCounters());
 
-        $mapping = IntegrationOrganizationMapping::query()->create([
+        $mapping ??= IntegrationOrganizationMapping::query()->create([
             'mapping_uuid' => (string) Str::uuid(), 'central_client_id' => 860001,
             'central_organization_id' => TenantTestManager::ORG_A,
             'tenant_database_identity' => (string) DB::connection('tenant')->getDatabaseName(),
@@ -898,11 +958,39 @@ final class ConnectionWizardTest extends TestCase
         }
         $this->assertSame(0, DB::connection('tenant')->table('integration_account_mappings')->where('status', 'verified')->count());
 
+        $immutableBefore = (array) DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $run['run_uuid'])
+            ->first(['snapshot_hash', 'snapshot_payload', 'owner_approval_hash', 'accountant_approval_hash']);
+        if ($legacyDiagnostic) {
+            $decision = DB::connection('tenant')->table('integration_connection_wizard_decisions')->where('run_uuid', $run['run_uuid'])->where('entity_type','warehouse')->first();
+            $snapshot = json_decode($immutableBefore['snapshot_payload'], true);
+            $candidate = collect($snapshot['comparison'])->firstWhere('entity_type','warehouse');
+            $proof = new \ReflectionMethod(ConnectionWizardService::class, 'isApprovedWarehouseDiagnostic');
+            $this->assertTrue($proof->invoke($wizard, $decision, $candidate, $mapping));
+            foreach (['candidate_fingerprint'=>'bad-fingerprint', 'entity_type'=>'item', 'solastock_record_ids'=>'["1"]',
+                'solabooks_record_ids'=>'["1"]', 'candidate_before_hash'=>str_repeat('a',64), 'safe_details'=>'{"reason":"missing_solastock_table"}'] as $field=>$value) {
+                $invalid = clone $decision; $invalid->$field = $value;
+                $this->assertFalse($proof->invoke($wizard, $invalid, $candidate, $mapping), $field);
+            }
+            $foreign = clone $mapping; $foreign->solastock_organization_id = TenantTestManager::ORG_B;
+            $this->assertFalse($proof->invoke($wizard, $decision, $candidate, $foreign));
+            $foreignFinance = clone $mapping; $foreignFinance->finance_organization_id = 15;
+            $this->assertFalse($proof->invoke($wizard, $decision, $candidate, $foreignFinance));
+            $invalid = $candidate; $invalid['classification']='missing_solastock_table';
+            $this->assertFalse($proof->invoke($wizard, $decision, $invalid, $mapping));
+        }
         // SolaCount Premium + separately purchased SolaStock Premium: Central entitles it and activation connects.
         $this->commercialApproval(true);
         $activated = $wizard->activate(TenantTestManager::ORG_A, $run['run_uuid'], $run['approval_payload_hash'],
             'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
         $this->assertSame('connected', $activated['state']);
+        $immutableAfter = (array) DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $run['run_uuid'])
+            ->first(['snapshot_hash', 'snapshot_payload', 'owner_approval_hash', 'accountant_approval_hash']);
+        $this->assertSame($immutableBefore, $immutableAfter);
+        if ($legacyDiagnostic) {
+            $this->assertSame(0, DB::connection('tenant')->table('integration_master_data_mappings')->where('entity_type','warehouse')->count());
+            $this->assertSame(0, DB::connection('tenant')->table('warehouses')->count());
+        }
+
         try {
             $wizard->reviewCutoff(TenantTestManager::ORG_A, $run['run_uuid'], $newDate, [], '0', $activated['lock_version'], 7001);
             $this->fail('A connected cutoff is immutable.');

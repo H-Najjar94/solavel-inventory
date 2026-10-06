@@ -108,6 +108,7 @@ return [
         'warehouse_scope' => 'Every assigned warehouse must belong to the active organization.',
     ],
     'integration' => [
+        'mapping_choice_required' => 'Choose the specific record for this review item, then save it and review the connection again. No changes were applied.',
         'finance_setup_required' => 'Complete Finance setup before configuring or activating financial integration.',
         'wizard' => [
             'setupUnavailable' => 'Connection setup requires active Finance and Inventory access for this organization.',

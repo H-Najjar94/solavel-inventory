@@ -86,7 +86,7 @@ class IntegrationController extends ApiController
 
     public function wizardDiscovery(ConnectionWizardService $wizard): JsonResponse
     {
-        return $this->success($wizard->discover($this->context->idOrFail()));
+        return $this->success($wizard->discoveryPresentation($this->context->idOrFail()));
     }
 
     public function connectionManagementAccess(ConnectionManagementPolicy $policy): JsonResponse
