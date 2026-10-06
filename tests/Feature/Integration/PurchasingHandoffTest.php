@@ -4,6 +4,7 @@ namespace Tests\Feature\Integration;
 
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationAccountMapping;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationMasterDataMapping;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
@@ -296,12 +297,25 @@ final class PurchasingHandoffTest extends TestCase
 
     public function test_purchasing_bill_receipt_scope_never_authorizes_unbound_sources(): void
     {
+        app(ReceivingRequestService::class)->upsert($this->data());
+        $g = $this->draft(ReceivingRequest::sole(), '1');
+        app(GoodsReceiptService::class)->post($g);
+        $life = IntegrationDocumentLifecycleMapping::where('source_document_type', 'goods_receipt')->where('source_document_id', (string) $g->id)->sole();
+        $authority = ['organization_mapping_uuid' => $this->mapping->mapping_uuid, 'finance_organization_id' => 14, 'receipt_ids' => [$g->id], 'receipt_mapping_uuids' => [$life->mapping_uuid]];
         request()->attributes->set('verified_workspace_action', 'purchasing.bill.receipt');
-        request()->attributes->set('purchasing_authority', ['receipt_ids' => [17]]);
-        $this->assertTrue(PurchasingBillAuthority::receipt(17));
-        $this->assertFalse(PurchasingBillAuthority::receipt(18));
+        request()->attributes->set('purchasing_authority', $authority);
+        $this->assertTrue(PurchasingBillAuthority::receipt($g->id));
+        $this->assertFalse(PurchasingBillAuthority::receipt($g->id + 1));
+        foreach (['receipt_mapping_uuids' => [(string) Str::uuid()], 'organization_mapping_uuid' => (string) Str::uuid(), 'finance_organization_id' => 99] as $key => $value) {
+            request()->attributes->set('purchasing_authority', array_replace($authority, [$key => $value]));
+            $this->assertFalse(PurchasingBillAuthority::receipt($g->id));
+        }
+        request()->attributes->set('purchasing_authority', $authority);
         request()->attributes->set('verified_workspace_action', 'finance-sources.receipt');
-        $this->assertFalse(PurchasingBillAuthority::receipt(17));
+        $this->assertFalse(PurchasingBillAuthority::receipt($g->id));
+        request()->attributes->set('verified_workspace_action', 'purchasing.bill.receipt');
+        $life->update(['lifecycle_status' => 'reversed']);
+        $this->assertFalse(PurchasingBillAuthority::receipt($g->id));
     }
 
     public function test_entered_box_units_preserve_partial_status_cost_and_physical_base_quantity(): void
