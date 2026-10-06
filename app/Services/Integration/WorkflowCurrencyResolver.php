@@ -15,8 +15,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Resolves workflow currency from the operational document chain and the
  * Finance-authoritative currency snapshot installed with the immutable mapping.
- * It never substitutes a global or organization default for a missing
- * transaction currency.
+ * Standalone receipts use the organization base currency; linked receipts
+ * retain their source transaction currency and dated Finance FX checks.
  */
 final class WorkflowCurrencyResolver
 {
@@ -56,11 +56,19 @@ final class WorkflowCurrencyResolver
         $enabled = (array) ($authority['enabled_currency_codes'] ?? []);
         // Inventory-only documents are explicitly valued in the reviewed Finance
         // base pool. They have no sales/purchase transaction currency to inherit.
-        // Never apply this rule to receipts, shipments or linked documents.
+        // Receipts resolve separately below; linked documents always retain their source currency.
         $baseValued = in_array($documentType, ['historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock'], true);
         $code = $baseValued
             ? (string) (app(FinanceBaseValuation::class)->contract($orgId)['base_currency_code'] ?? '')
             : $this->documentCurrency($document, $documentType, true);
+        // A standalone GRN has no transaction currency input or source document.
+        // Its costs are entered in the organization's authoritative base currency.
+        if ($documentType === 'goods_receipt' && empty($document->purchase_order_id) && $code === '') {
+            $code = $base;
+        }
+        $currencyField = $documentType === 'goods_receipt' && ! empty($document->purchase_order_id)
+            ? 'purchase_order_id' : 'currency';
+        $dateField = $documentType === 'goods_receipt' ? 'receipt_date' : 'currency';
         $transactionDate = $this->normalizeDate($date);
 
         if (! preg_match('/^[A-Z]{3}$/', $base)
@@ -71,7 +79,7 @@ final class WorkflowCurrencyResolver
                 'transaction_currency' => $code ?: null,
                 'base_currency' => $base ?: null,
                 'transaction_date' => $transactionDate,
-            ]);
+            ], $transactionDate ? $currencyField : $dateField);
         }
         if ($base !== (string) $mapping->base_currency_code) {
             $this->fail('workflow_currency_authority_mismatch');
@@ -98,7 +106,7 @@ final class WorkflowCurrencyResolver
             $this->fail('workflow_exchange_rate_missing_or_invalid', [
                 'transaction_currency' => $code,
                 'transaction_date' => $transactionDate,
-            ]);
+            ], $dateField);
         }
 
         return [
@@ -111,6 +119,16 @@ final class WorkflowCurrencyResolver
 
     private function documentCurrency(object $document, string $documentType, bool $strictContract = false): string
     {
+        if ($documentType === 'goods_receipt' && ! empty($document->purchase_order_id)) {
+            $parent = DB::connection('tenant')->table('inventory_purchase_orders')
+                ->where('organization_id', $document->organization_id)
+                ->where('id', $document->purchase_order_id)->whereNull('deleted_at')->first();
+            if (! $parent) {
+                $this->fail('workflow_source_invalid', [], 'purchase_order_id');
+            }
+            return (string) ($parent->integration_currency_code ?: $parent->currency_code);
+        }
+
         $direct = $document->integration_currency_code
             ?? ($strictContract ? null : ($document->currency_code ?? null));
         if (is_string($direct) && $direct !== '') {
@@ -203,10 +221,10 @@ final class WorkflowCurrencyResolver
         return $matches[1];
     }
 
-    private function fail(string $code, array $context = []): never
+    private function fail(string $code, array $context = [], string $field = 'currency'): never
     {
         throw ValidationException::withMessages([
-            'currency' => [json_encode(['code' => $code] + $context, JSON_UNESCAPED_SLASHES)],
+            $field => [__('inventory.workflow_currency.'.$code, $context)],
         ]);
     }
 }

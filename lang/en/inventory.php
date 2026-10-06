@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'workflow_currency' => [
+        'workflow_currency_invalid' => 'The document currency is missing or is not enabled for this organization. Check the source purchase order or organization currency settings.',
+        'workflow_currency_authority_mismatch' => 'The organization currency settings do not match the verified Finance connection. Review the connection before posting.',
+        'workflow_exchange_rate_missing_or_invalid' => 'No valid Finance exchange rate is available for :transaction_currency on :transaction_date. Add the rate in Finance or select a receipt date with a valid rate.',
+        'original_workflow_currency_missing' => 'The original document currency evidence is unavailable. Review the Finance connection before reversing.',
+        'workflow_source_invalid' => 'Select a purchase order belonging to this organization.',
+        'workflow_source_line_invalid' => 'Select a line from the source purchase order with the same item.',
+    ],
     'common' => [
         'resource_not_found' => 'Resource not found.',
         'plan_limit' => 'Your plan limit for this resource has been reached. Upgrade to add more.',

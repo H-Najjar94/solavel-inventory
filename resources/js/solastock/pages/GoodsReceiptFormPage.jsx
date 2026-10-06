@@ -30,6 +30,7 @@ export default function GoodsReceiptFormPage() {
     const [lines, setLines] = useState([emptyLine()]);
     const [blindReceiving, setBlindReceiving] = useState(false);
     const [errors, setErrors] = useState({});
+    const savedDraftId = useRef(id ?? null);
     const [saving, setSaving] = useState(false);
     const savePending=useRef(false);
     const [statusCheck,setStatusCheck]=useState(null);
@@ -111,14 +112,15 @@ export default function GoodsReceiptFormPage() {
                 }),
             };
             if (payload.lines.length === 0) { setErrors({lines:t('receiving.grn.validation.lineRequired', 'Add at least one line with a received quantity.')}); setSaving(false); return; }
-            const res = isEdit ? await api.updateGoodsReceipt(id, payload) : await api.createGoodsReceipt(payload);
-            const docId = res?.data?.id ?? id;
+            const res = savedDraftId.current ? await api.updateGoodsReceipt(savedDraftId.current, payload) : await api.createGoodsReceipt(payload);
+            const docId = res?.data?.id ?? savedDraftId.current;
+            savedDraftId.current = docId;
             savedDocument=docId;
             if (post) { await api.postGoodsReceipt(docId); toast.push(t('receiving.grn.messages.posted', 'Goods receipt posted. Stock has been received.'), 'success'); }
             else toast.push(isEdit ? t('receiving.grn.messages.draftUpdated', 'Draft updated.') : t('receiving.grn.messages.draftSaved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['grns'] }); qc.invalidateQueries({ queryKey: ['po'] });
             nav(`/goods-receipts/${docId}`);
-        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
+        } catch (err) { if(err.outcomeUnknown||(savedDocument && err.status >= 500))setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('receiving.common.saveFailed', 'Save failed.')); }
         finally { savePending.current=false; setSaving(false); }
     }
 
@@ -188,11 +190,12 @@ export default function GoodsReceiptFormPage() {
             <header className="page-head"><h1>{isEdit ? t('receiving.grn.form.editTitle', 'Edit goods receipt') : t('receiving.grn.form.newTitle', 'New goods receipt')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
+            {errors.currency && <div className="banner banner--warn" role="alert">{errors.currency}</div>}
             <div className="form-grid">
                 <Field label={t('receiving.grn.fields.number', 'GRN number')} required error={errors.grn_number}><input className="input" value={header.grn_number} onChange={(e) => setHeader({ ...header, grn_number: e.target.value })} /></Field>
                 <Field label={t('receiving.common.warehouse', 'Warehouse')} required error={errors.warehouse_id}><WarehousePicker value={header.warehouse_id} onChange={(v) => setHeader({ ...header, warehouse_id: v })} disabled={fromPo} /></Field>
                 <Field label={t('receiving.grn.fields.receivedDate', 'Received date')} error={errors.receipt_date}><input className="input" type="date" value={header.receipt_date} onChange={(e) => setHeader({ ...header, receipt_date: e.target.value })} /></Field>
-                <Field label={t('receiving.grn.fields.sourcePo', 'Source PO')}>{sourcePoLabel ?? <span className="muted">{t('receiving.grn.form.adHocReceipt', 'None (ad-hoc receipt)')}</span>}</Field>
+                <Field label={t('receiving.grn.fields.sourcePo', 'Source PO')} error={errors.purchase_order_id}>{sourcePoLabel ?? <span className="muted">{t('receiving.grn.form.adHocReceipt', 'None (ad-hoc receipt)')}</span>}</Field>
                 <Field label={t('receiving.common.notes', 'Notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
             </div>
             {fromPo && <label className="checkline">

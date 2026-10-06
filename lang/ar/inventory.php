@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'workflow_currency' => [
+        'workflow_currency_invalid' => 'عملة المستند غير محددة أو غير مفعلة لهذه المؤسسة. تحقق من أمر الشراء المصدر أو إعدادات عملة المؤسسة.',
+        'workflow_currency_authority_mismatch' => 'إعدادات عملة المؤسسة لا تطابق الربط المعتمد مع المالية. راجع الربط قبل الترحيل.',
+        'workflow_exchange_rate_missing_or_invalid' => 'لا يوجد سعر صرف صالح في المالية للعملة :transaction_currency بتاريخ :transaction_date. أضف السعر في المالية أو اختر تاريخ استلام يتوفر له سعر صالح.',
+        'original_workflow_currency_missing' => 'بيانات عملة المستند الأصلي غير متاحة. راجع الربط مع المالية قبل العكس.',
+        'workflow_source_invalid' => 'اختر أمر شراء تابعاً لهذه المؤسسة.',
+        'workflow_source_line_invalid' => 'اختر سطراً من أمر الشراء المصدر للصنف نفسه.',
+    ],
     'common' => [
         'resource_not_found' => 'المورد المطلوب غير موجود.',
         'plan_limit' => 'تم بلوغ الحد المسموح لهذا المورد ضمن خطتك. قم بترقية الخطة لإضافة المزيد.',

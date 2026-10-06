@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Requests\Api;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use App\Tenancy\OrganizationContext;
 class StoreGoodsReceiptRequest extends FormRequest
 {
     public function authorize(): bool { return true; }
@@ -21,12 +23,22 @@ class StoreGoodsReceiptRequest extends FormRequest
         }
     }
 
+    public function messages(): array
+    {
+        return ['purchase_order_id.exists' => __('inventory.workflow_currency.workflow_source_invalid')];
+    }
+
     public function rules(): array
     {
         return [
             // Optional: generated server-side if not supplied.
             'grn_number' => ['nullable','string','max:50'],
-            'purchase_order_id' => ['nullable','integer'],
+            'purchase_order_id' => [
+                'nullable', 'integer',
+                Rule::exists('tenant.inventory_purchase_orders', 'id')
+                    ->where('organization_id', app(OrganizationContext::class)->idOrFail())
+                    ->whereNull('deleted_at'),
+            ],
             'supplier_id' => ['nullable','integer'],
             'warehouse_id' => ['required','integer'],
             'receipt_date' => ['nullable','date'],

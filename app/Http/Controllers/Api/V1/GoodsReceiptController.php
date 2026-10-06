@@ -16,6 +16,7 @@ use App\Services\Stock\Support\Decimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 class GoodsReceiptController extends ApiController
 {
@@ -137,6 +138,8 @@ class GoodsReceiptController extends ApiController
             throw $e;
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             abort(404);
+        } catch (ValidationException $e) {
+            return $this->error('validation_failed', collect($e->errors())->flatten()->first(), 422, ['errors' => $e->errors()]);
         } catch (RuntimeException $e) {
             return $this->error('grn_create_failed', $e->getMessage(), 422);
         }
@@ -155,6 +158,8 @@ class GoodsReceiptController extends ApiController
             throw $e;
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             abort(404);
+        } catch (ValidationException $e) {
+            return $this->error('validation_failed', collect($e->errors())->flatten()->first(), 422, ['errors' => $e->errors()]);
         } catch (RuntimeException $e) {
             return $this->error('grn_update_failed', $e->getMessage(), 422);
         }
@@ -168,6 +173,8 @@ class GoodsReceiptController extends ApiController
         $this->warehouseAccess->assertAllowed((int) $goods_receipt->warehouse_id);
         try {
             $grn = $this->service->post($goods_receipt);
+        } catch (ValidationException $e) {
+            return $this->error('validation_failed', collect($e->errors())->flatten()->first(), 422, ['errors' => $e->errors()]);
         } catch (RuntimeException $e) {
             return $this->error('grn_post_failed', $e->getMessage(), 422);
         }
@@ -181,6 +188,8 @@ class GoodsReceiptController extends ApiController
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         try {
             $reversal = $this->reversals->reverseGoodsReceipt($goods_receipt, $data['reason']);
+        } catch (ValidationException $e) {
+            return $this->error('validation_failed', collect($e->errors())->flatten()->first(), 422, ['errors' => $e->errors()]);
         } catch (RuntimeException $e) {
             return $this->error('grn_reverse_failed', $e->getMessage(), 422);
         }

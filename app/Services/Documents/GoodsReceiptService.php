@@ -20,6 +20,7 @@ use App\Services\Traceability\LotService;
 use App\Services\Traceability\SerialService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
@@ -67,6 +68,8 @@ class GoodsReceiptService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
+            $this->assertSource($attributes['purchase_order_id'] ?? null, $lines);
+
             // Server-issued GRN number when none was supplied (users don't type it).
             $attributes['grn_number'] = ! empty($attributes['grn_number'])
                 ? $attributes['grn_number']
@@ -101,6 +104,8 @@ class GoodsReceiptService
                 throw new RuntimeException("Only a draft GRN can be edited (status '{$grn->status}').");
             }
 
+            $this->assertSource(array_key_exists('purchase_order_id', $attributes) ? $attributes['purchase_order_id'] : $grn->purchase_order_id, $lines);
+
             $grn->fill(collect($attributes)->only(['grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'receipt_date', 'blind_receiving', 'notes'])->toArray());
             $grn->lines()->delete();
 
@@ -111,6 +116,24 @@ class GoodsReceiptService
 
             return $grn->fresh('lines');
         });
+    }
+
+    private function assertSource(?int $purchaseOrderId, array $lines): void
+    {
+        $po = $purchaseOrderId ? PurchaseOrder::query()->find($purchaseOrderId) : null;
+        if ($purchaseOrderId && ! $po) {
+            throw ValidationException::withMessages(['purchase_order_id' => __('inventory.workflow_currency.workflow_source_invalid')]);
+        }
+        foreach ($lines as $index => $line) {
+            if (empty($line['purchase_order_line_id'])) {
+                continue;
+            }
+            $valid = $po && $po->lines()->where('id', $line['purchase_order_line_id'])
+                ->where('item_id', $line['item_id'])->exists();
+            if (! $valid) {
+                throw ValidationException::withMessages(["lines.$index.purchase_order_line_id" => __('inventory.workflow_currency.workflow_source_line_invalid')]);
+            }
+        }
     }
 
     /**
@@ -221,6 +244,7 @@ class GoodsReceiptService
             }
 
             $grn->loadMissing('lines');
+            $this->assertSource($grn->purchase_order_id, $grn->lines->toArray());
             $this->workflowValidation->assertOperationalDocumentReady($grn, 'grn.posted');
 
             // Over-receipt guard: a line tied to a PO line cannot accept more than

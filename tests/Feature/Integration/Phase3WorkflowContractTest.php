@@ -85,12 +85,172 @@ final class Phase3WorkflowContractTest extends TestCase
             $currency = $resolver->resolve($document, $type, '2026-09-07');
             $this->assertSame(['code' => 'JOD', 'exchange_rate' => '1', 'rate_date' => '2026-09-07', 'rate_source' => 'identity'], $currency);
         }
-        try { $resolver->resolve($document, 'goods_receipt', '2026-09-07'); $this->fail('A receipt must not inherit base currency without document evidence.'); }
-        catch (ValidationException $e) { $this->assertArrayHasKey('currency', $e->errors()); }
+        $this->assertSame('JOD', $resolver->resolve($document, 'goods_receipt', '2026-09-07')['code']);
         unset($meta['finance_currency_contract']['inventory_valuation_basis']);
         $setting->update(['meta' => $meta]);
         $this->expectException(ValidationException::class);
         $resolver->resolve($document, 'stock_adjustment', '2026-09-07');
+    }
+
+    public function test_grn_request_validation_creation_and_source_line_scope(): void
+    {
+        $permissions = \Mockery::mock(\App\Services\Access\InventoryPermissionService::class);
+        $permissions->shouldReceive('can')->withAnyArgs()->andReturn(true);
+        $this->app->instance(\App\Services\Access\InventoryPermissionService::class, $permissions);
+        $po = $this->purchaseOrder('USD');
+        $item = F::fifoItem();
+        $sourceLine = $po->lines()->create(['item_id' => $item->id, 'ordered_qty' => '10', 'unit_price' => '10']);
+        foreach ([null, $po->id] as $sourceId) {
+            $request = \App\Http\Requests\Api\StoreGoodsReceiptRequest::create('/api/v1/goods-receipts', 'POST', [
+                'warehouse_id' => $po->warehouse_id, 'purchase_order_id' => $sourceId, 'receipt_date' => '',
+                'lines' => [['item_id' => $item->id, 'received_qty' => '2', 'unit_cost' => '10', 'purchase_order_line_id' => $sourceId ? $sourceLine->id : null]],
+            ]);
+            $request->setContainer($this->app)->setRedirector($this->app->make('redirect'));
+            $request->validateResolved();
+            $response = app(\App\Http\Controllers\Api\V1\GoodsReceiptController::class)->store($request);
+            $this->assertSame(201, $response->status());
+            $receipt = \App\Models\Tenant\GoodsReceipt::findOrFail($response->getData(true)['data']['id']);
+            $this->assertSame($sourceId, $receipt->purchase_order_id);
+            $this->assertSame(now()->toDateString(), $receipt->receipt_date->toDateString());
+        }
+        $before = \App\Models\Tenant\GoodsReceipt::count();
+        try {
+            app(\App\Services\Documents\GoodsReceiptService::class)->createDraft(['warehouse_id' => $po->warehouse_id], [
+                ['item_id' => $item->id, 'purchase_order_line_id' => $sourceLine->id, 'received_qty' => '1'],
+            ]);
+            $this->fail('An unlinked receipt cannot reference another PO line.');
+        } catch (ValidationException $e) { $this->assertArrayHasKey('lines.0.purchase_order_line_id', $e->errors()); }
+        $this->assertSame($before, \App\Models\Tenant\GoodsReceipt::count());
+    }
+
+    public function test_explicit_foreign_currency_is_preserved_and_fx_is_scoped_to_finance_date_and_org(): void
+    {
+        $document = (object) ['organization_id' => TenantTestManager::ORG_A, 'integration_currency_code' => 'USD'];
+        $resolver = app(WorkflowCurrencyResolver::class);
+        \App\Models\Tenant\InventoryCurrencyRate::create(['currency_code' => 'USD', 'effective_date' => '2026-10-06', 'rate_to_base' => '2']);
+        DB::connection('tenant')->table('organizations')->insert(['id' => 15, 'central_org_id' => TenantTestManager::ORG_B, 'name' => 'Other Finance']);
+        foreach ([[15, '2026-10-06', '2'], [14, '2026-10-05', '2'], [14, '2026-10-06', '0']] as [$org, $date, $rate]) {
+            DB::connection('tenant')->table('exchange_rates')->insert(['organization_id' => $org, 'base_currency_code' => 'JOD', 'quote_currency_code' => 'USD', 'rate_date' => $date, 'rate' => $rate, 'source' => 'manual']);
+        }
+        try { $resolver->resolve($document, 'goods_receipt', '2026-10-06'); $this->fail('Unqualified rates must not be used.'); }
+        catch (ValidationException $e) { $this->assertArrayHasKey('receipt_date', $e->errors()); }
+        DB::connection('tenant')->table('exchange_rates')->where('organization_id', 14)->where('rate_date', '2026-10-06')->update(['rate' => '2']);
+        $this->assertSame('USD', $resolver->resolve($document, 'goods_receipt', '2026-10-06')['code']);
+        $this->assertSame('2.00000000', $resolver->resolve($document, 'goods_receipt', '2026-10-06')['exchange_rate']);
+    }
+
+    public function test_standalone_and_linked_receipts_create_and_post_idempotently(): void
+    {
+        $setting = IntegrationSetting::query()->firstOrFail();
+        $meta = $setting->meta;
+        $meta['finance_currency_contract']['inventory_valuation_basis'] = \App\Services\Integration\FinanceBaseValuation::BASIS;
+        $setting->update(['meta' => $meta]);
+        $unit = \App\Models\Tenant\Unit::create(['code' => 'GRN-EA', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = F::fifoItem(['base_unit_id' => $unit->id]);
+        $warehouse = F::warehouse();
+        $identities = [['item', $item->id], ['unit', $unit->id], ['warehouse', $warehouse->id]];
+        foreach (['inventory_asset' => 100, 'grni' => 200] as $role => $account) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $account, 'organization_id' => 14, 'code' => (string) $account, 'name' => $role, 'type' => $role === 'inventory_asset' ? 'asset' : 'liability', 'is_active' => true, 'is_postable' => true]);
+            $accountMapping = \App\Models\Tenant\IntegrationAccountMapping::create([
+                'integration' => 'solabooks', 'mapping_type' => $role,
+                'solabooks_account_id' => $account, 'status' => 'mapped',
+            ]);
+            $identities[] = ['account_role', $accountMapping->id];
+        }
+        foreach ($identities as [$type, $id]) {
+            \App\Models\Tenant\IntegrationMasterDataMapping::create([
+                'mapping_uuid' => (string) Str::uuid(),
+                'organization_mapping_uuid' => $this->organizationMapping->mapping_uuid,
+                'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A,
+                'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A,
+                'entity_type' => $type, 'solastock_record_id' => (string) $id,
+                'solabooks_record_id' => (string) $id, 'status' => 'mapped',
+            ]);
+        }
+        DB::connection('tenant')->table('exchange_rates')->insert([
+            'organization_id' => 14, 'base_currency_code' => 'JOD', 'quote_currency_code' => 'USD',
+            'rate' => '2', 'rate_date' => '2026-10-06', 'source' => 'manual',
+        ]);
+        $po = $this->purchaseOrder('USD');
+        // Older purchase orders keep their valid transaction currency.
+        $po->update(['integration_currency_code' => null]);
+        $service = app(\App\Services\Documents\GoodsReceiptService::class);
+        foreach ([[null, 'JOD'], [$po->id, 'USD']] as [$poId, $expected]) {
+            $receipt = $service->createDraft([
+                'purchase_order_id' => $poId ?: null, 'warehouse_id' => $warehouse->id,
+                'receipt_date' => '2026-10-06',
+            ], [['item_id' => $item->id, 'received_qty' => '2', 'unit_cost' => '10']]);
+            $this->assertSame('draft', $receipt->status);
+            $this->assertSame($expected, app(WorkflowCurrencyResolver::class)->resolve($receipt, 'goods_receipt', '2026-10-06')['code']);
+            $this->assertSame(0, \App\Models\Tenant\StockLedger::where('source_type', $receipt::class)->where('source_id', $receipt->id)->count());
+            $service->post($receipt);
+            $service->post($receipt->fresh());
+            $this->assertSame('posted', $receipt->fresh()->status);
+            $movements = \App\Models\Tenant\StockLedger::where('source_type', $receipt::class)->where('source_id', $receipt->id)->get();
+            $this->assertCount(1, $movements);
+            $this->assertSame($expected === 'USD' ? '5.0000' : '10.0000', (string) $movements->first()->unit_cost);
+            $events = IntegrationOutboxEvent::where('aggregate_id', $receipt->id)->where('event_type', 'grn.posted')->get();
+            $this->assertCount(1, $events);
+            $this->assertSame($expected, data_get($events->first()->payload, 'currency.code'));
+        }
+    }
+
+    public function test_receipt_currency_errors_are_localized_and_fx_failure_does_not_move_stock(): void
+    {
+        $permissions = \Mockery::mock(\App\Services\Access\InventoryPermissionService::class);
+        $permissions->shouldReceive('can')->withAnyArgs()->andReturn(true);
+        $this->app->instance(\App\Services\Access\InventoryPermissionService::class, $permissions);
+        foreach (['inventory_asset' => 100, 'grni' => 200] as $role => $account) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $account, 'organization_id' => 14, 'code' => (string) $account, 'name' => $role, 'type' => $role === 'inventory_asset' ? 'asset' : 'liability', 'is_active' => true, 'is_postable' => true]);
+            \App\Models\Tenant\IntegrationAccountMapping::create(['integration' => 'solabooks', 'mapping_type' => $role, 'solabooks_account_id' => $account, 'status' => 'mapped']);
+        }
+        $po = $this->purchaseOrder('USD');
+        $receipt = app(\App\Services\Documents\GoodsReceiptService::class)->createDraft([
+            'purchase_order_id' => $po->id, 'warehouse_id' => $po->warehouse_id, 'receipt_date' => '2026-10-06',
+        ], [['item_id' => F::fifoItem()->id, 'received_qty' => '1', 'unit_cost' => '10']]);
+        foreach (['en', 'ar'] as $locale) {
+            app()->setLocale($locale);
+            $response = app(\App\Http\Controllers\Api\V1\GoodsReceiptController::class)->post($receipt);
+            $this->assertSame(422, $response->status());
+            $error = $response->getData(true)['error'];
+            $this->assertArrayHasKey('receipt_date', $error['errors'], json_encode($error));
+            $this->assertSame(__('inventory.workflow_currency.workflow_exchange_rate_missing_or_invalid', ['transaction_currency' => 'USD', 'transaction_date' => '2026-10-06']), $error['message']);
+            $this->assertStringNotContainsString('{', $error['message']);
+        }
+        $this->assertSame('draft', $receipt->fresh()->status);
+        $this->assertSame(0, \App\Models\Tenant\StockLedger::query()->count());
+        $this->assertSame(0, IntegrationOutboxEvent::query()->count());
+    }
+
+    public function test_linked_receipt_rejects_foreign_deleted_and_unresolved_source_without_base_fallback(): void
+    {
+        $po = $this->purchaseOrder('USD');
+        $resolver = app(WorkflowCurrencyResolver::class);
+        $document = (object) ['organization_id' => TenantTestManager::ORG_A, 'purchase_order_id' => $po->id];
+        foreach (['disabled', 'missing', 'deleted', 'foreign'] as $case) {
+            DB::connection('tenant')->table('inventory_purchase_orders')->where('id', $po->id)->update([
+                'integration_currency_code' => $case === 'disabled' ? 'CAD' : null,
+                'currency_code' => $case === 'missing' ? '' : 'USD',
+                'deleted_at' => $case === 'deleted' ? now() : null,
+                'organization_id' => $case === 'foreign' ? TenantTestManager::ORG_B : TenantTestManager::ORG_A,
+            ]);
+            try { $resolver->resolve($document, 'goods_receipt', '2026-10-06'); $this->fail('Invalid source must fail closed.'); }
+            catch (ValidationException $e) { $this->assertArrayHasKey('purchase_order_id', $e->errors()); }
+        }
+        $before = \App\Models\Tenant\GoodsReceipt::query()->count();
+        try {
+            app(\App\Services\Documents\GoodsReceiptService::class)->createDraft([
+                'purchase_order_id' => $po->id, 'warehouse_id' => $po->warehouse_id,
+            ], [['item_id' => F::fifoItem()->id, 'received_qty' => '1']]);
+            $this->fail('Cross-organization source must be rejected before persistence.');
+        } catch (ValidationException $e) { $this->assertArrayHasKey('purchase_order_id', $e->errors()); }
+        $this->assertSame($before, \App\Models\Tenant\GoodsReceipt::query()->count());
+        $this->useTenantB();
+        $this->assertNull(\App\Models\Tenant\GoodsReceipt::query()->first());
+        try {
+            $resolver->resolve((object) ['organization_id' => TenantTestManager::ORG_B, 'purchase_order_id' => $po->id], 'goods_receipt', '2026-10-06');
+            $this->fail('A source ID from another tenant database must not resolve.');
+        } catch (ValidationException $e) { $this->assertArrayHasKey('purchase_order_id', $e->errors()); }
     }
 
     #[Test]
