@@ -38,6 +38,9 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $add('expenses','status',fn($t,$n)=>$t->string($n)->nullable());
         $add('finance_document_requests','state',fn($t,$n)=>$t->string($n)->nullable());
         $add('finance_document_requests','response',fn($t,$n)=>$t->json($n)->nullable());
+        foreach(['command_actor_id','command_central_actor_id','closing_source_journal_id']as$name)$add('finance_document_requests',$name,fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
+        $add('finance_document_requests','closure_permission',fn($t,$n)=>$t->string($n)->nullable());
+        $add('finance_document_requests','command_expected_revision',fn($t,$n)=>$t->char($n,64)->nullable());
         $add('journal_entries','source_key',fn($t,$n)=>$t->string($n)->nullable());
         $add('journal_entries','reverses_entry_id',fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
         // DDL commits native fixture transactions; reacquire tenant context before all business fixture rows.
@@ -103,9 +106,16 @@ final class FinancialOriginReceiptCostTest extends TestCase
         \App\Models\Tenant\PurchaseValuationHold::query()->where('settlement_uuid',$a->holdUuid($source['item_id'],$source['warehouse_id']))->sole()->update(['state'=>'released']);
         $reverseOperation=(string)Str::uuid();
         $reverseSnapshot=['phase'=>'match_inverse_before_expense_unpost','original_source_journal_id'=>95,'original_match_journal_id'=>97,'match_inverse_journal_id'=>null,'reversal_operation_uuid'=>$reverseOperation,'request_uuid'=>$id['request_uuid'],'source_revision'=>$id['source_revision'],'reverse_actor_id'=>4,'reverse_central_actor_id'=>338,'closure_permission'=>'unpost','cancel_request_uuid'=>$id['request_uuid'],'cancel_source_revision'=>$id['source_revision'],'cancel_state'=>'cancelled','cancel_command'=>'cancel'];
-        $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->update(['command'=>'cancel','state'=>'cancelled','response'=>json_encode(['status'=>'cancelled','request_uuid'=>$id['request_uuid'],'source_revision'=>$id['source_revision'],'source_document_id'=>850,'source_journal_id'=>95])]);
+        $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->update(['command'=>'cancel','state'=>'cancelled','command_actor_id'=>4,'command_central_actor_id'=>338,'closure_permission'=>'unpost','closing_source_journal_id'=>95,'command_expected_revision'=>$id['source_revision'],'response'=>json_encode(['status'=>'cancelled','request_uuid'=>$id['request_uuid'],'source_revision'=>$id['source_revision'],'source_document_id'=>850,'source_journal_id'=>95])]);
         $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->update(['state'=>'settled','reversal_operation_uuid'=>$reverseOperation,'reverse_actor_id'=>4,'reverse_central_actor_id'=>338,'closure_permission'=>'unpost','reverse_state'=>'prepared','reversal_snapshot'=>json_encode($reverseSnapshot)]);
         $reverseId=array_replace($id,['direction'=>'reverse']);$reverseProof=array_replace($proof,['operation'=>'prepare','direction'=>'reverse','actor_id'=>338,'closure_permission'=>'unpost','match_state'=>'settled']);
+        foreach(['command_central_actor_id'=>337,'command_actor_id'=>5,'closing_source_journal_id'=>96,'closure_permission'=>'post']as$field=>$wrong){
+            $correct=$db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->value($field);
+            $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->update([$field=>$wrong]);
+            try{OriginReceiptCostAuthority::fromLockedNativeProvenance($reverseId,$reverseProof,$this->mapping,'prepare',338);$this->fail('Foreign closure command accepted');}
+            catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+            $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->update([$field=>$correct]);
+        }
         $reverseAuthority=OriginReceiptCostAuthority::fromLockedNativeProvenance($reverseId,$reverseProof,$this->mapping,'prepare',338);
         $reversePlan=app(PurchaseCostAdjustmentPlanner::class)->planFinancialOrigin($reverseAuthority);
         $reverseFingerprint=SolaStockJournalContract::payloadHash(['authority'=>$reverseAuthority->fingerprint(),'purpose'=>'origin_reverse','plan_revision'=>1,'native_plan'=>$reversePlan]);

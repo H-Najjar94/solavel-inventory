@@ -108,6 +108,13 @@ final readonly class OriginReceiptCostAuthority
         }
         if ($direction === 'reverse' && $action !== 'release') {
             abort_unless($actor > 0 && (int) ($match->reverse_central_actor_id ?? 0) === $actor && ($match->closure_permission ?? null) === 'unpost' && ($proof['closure_permission'] ?? null) === 'unpost', 403);
+            // The cancellation/closure actor is a separate durable command identity;
+            // the original posting actor is immutable and grants no reversal authority.
+            abort_unless((int) ($request->command_central_actor_id ?? 0) === $actor
+                && (int) ($request->command_actor_id ?? 0) === (int) ($match->reverse_actor_id ?? 0)
+                && (int) ($request->command_actor_id ?? 0) > 0
+                && ($request->closure_permission ?? null) === 'unpost'
+                && (int) ($request->closing_source_journal_id ?? 0) === (int) $sourceJE->id, 403);
             $reverse = json_decode($match->reversal_snapshot ?? 'null', true, 512, JSON_THROW_ON_ERROR);
             abort_unless(($reverse['phase'] ?? null) === 'match_inverse_before_expense_unpost' && (int) ($reverse['original_source_journal_id'] ?? 0) === (int) $sourceJE->id && (int) ($reverse['original_match_journal_id'] ?? 0) === (int) $match->journal_entry_id && ($reverse['reversal_operation_uuid'] ?? null) === ($match->reversal_operation_uuid ?? null) && ($reverse['request_uuid'] ?? null) === $request->request_uuid && ($reverse['source_revision'] ?? null) === $request->source_revision && (int) ($reverse['reverse_actor_id'] ?? 0) === (int) $match->reverse_actor_id && (int) ($reverse['reverse_central_actor_id'] ?? 0) === $actor && ($reverse['closure_permission'] ?? null) === 'unpost', 409);
             $cancel = json_decode($request->response ?? 'null', true, 512, JSON_THROW_ON_ERROR);
