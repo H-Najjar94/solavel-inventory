@@ -66,6 +66,22 @@ function requestForm(path,formData) {
 }
 
 export const api = {
+    financialOriginRequests: (side, state='active', page=1) => request('/financial-origin-requests', {params:{side,state,page}}),
+    financialOriginOptions: (uuid) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/options`),
+    approveFinancialOrigin: (uuid, body) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/approve`, {method:'POST',body}),
+    prepareFinancialOrigin: (uuid, body) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/prepare`, {method:'POST',body}),
+    executeFinancialOrigin: (uuid, body) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/execute`, {method:'POST',body}),
+    financialOriginStatus: async (uuid, operation_uuid) => {
+        const result = await request(`/financial-origin-requests/${encodeURIComponent(uuid)}/status`, {params:{operation_uuid}});
+        const command = result?.data;
+        if (result.success === true && command?.operation_uuid === operation_uuid && ['prepared','completed','abandoned'].includes(command.status)) {
+            for (const action of ['prepare','execute','abandon']) {
+                uncertain.delete(`${organizationScope}:POST:${new URL(BASE+`/financial-origin-requests/${encodeURIComponent(uuid)}/${action}`,window.location.origin).toString()}`);
+            }
+        }
+        return result;
+    },
+
     approveReceivingRequest: (id,body) => request(`/purchasing/requests/${id}/approve`,{method:'POST',body}),
     receivingRequests: (status = 'active') => request(`/purchasing/requests?status=${encodeURIComponent(status)}`),
     receivingRequest: (id) => request(`/purchasing/requests/${id}`),
