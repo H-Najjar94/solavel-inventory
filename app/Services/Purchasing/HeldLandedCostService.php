@@ -51,20 +51,19 @@ final class HeldLandedCostService
             $service = app(PurchaseCostAdjustmentService::class);
             $reverse = $authority->reverse();
             $purpose = $reverse ? 'landed_reverse' : 'landed_apply';
-            $quoteKey = $reverse ? 'reverse_quote' : 'forward_quote';
             $row = IntegrationPurchaseCostAdjustment::query()->where('organization_id', $authority->organizationId())
                 ->where('organization_mapping_uuid', $authority->mappingUuid())->where('destination_document_type', 'landed_cost')
                 ->where('destination_document_id', $authority->landedCostId())->where('destination_fingerprint', $authority->fingerprint())
                 ->lockForUpdate()->first();
-            $quote = $row ? data_get($row->safe_metadata, 'landed_cost.'.$quoteKey) : null;
-            if ($operation === 'prepare' && !$quote) {
+            $quote = $authority->storedQuote();
+            if ($operation === 'prepare') {
                 $plan = app(PurchaseCostAdjustmentPlanner::class)->planLandedCost($authority);
                 if (!$reverse) {
                     $previous = $service->prepareLandedCost($authority, $plan);
                     $row = IntegrationPurchaseCostAdjustment::query()->where('adjustment_uuid', $previous['adjustment_uuid'])->lockForUpdate()->firstOrFail();
                 } else {
                     abort_unless($row && $row->state === 'applied', 409);
-                    $original = data_get($row->safe_metadata, 'landed_cost.forward_quote');
+                    $original = $authority->forwardQuote();
                     // Native Finance inverse undoes its original classification; changed provenance needs review.
                     abort_unless($original && $this->components($original['native_plan']['components']) === $this->components($plan['components']), 409, __('receiving.valuation_changed'));
                 }
@@ -72,12 +71,15 @@ final class HeldLandedCostService
                 $quote = ['operation_uuid' => $authority->operationUuid(), 'plan_revision' => 1, 'plan_fingerprint' => $fingerprint,
                     'direction' => $authority->direction(), 'total_delta_base' => $plan['allocated_base_difference'],
                     'components' => $plan['components'], 'native_plan' => $plan];
-                $metadata = $row->safe_metadata;
-                $metadata['landed_cost'][$quoteKey] = $quote;
-                $row->update(['safe_metadata' => $metadata]);
             }
             abort_unless($row && is_array($quote), 409, __('receiving.valuation_pending'));
             $fingerprint = $quote['plan_fingerprint'];
+            abort_unless(is_array($quote['native_plan'] ?? null) && hash_equals((string) $fingerprint, SolaStockJournalContract::payloadHash([
+                'authority' => $authority->fingerprint(), 'purpose' => $purpose, 'plan_revision' => 1, 'native_plan' => $quote['native_plan'],
+            ])), 409);
+            abort_unless(($quote['native_plan']['direction'] ?? null) === $authority->direction()
+                && ($quote['native_plan']['destination_fingerprint'] ?? null) === $authority->fingerprint()
+                && ($quote['native_plan']['operation_uuid'] ?? null) === $authority->operationUuid(), 409);
             $complete = (!$reverse && $row->state === 'applied') || ($reverse && $row->state === 'reversed');
             $pools = [];
             foreach ($authority->sourceAllocations() as $source) $pools[$source['item_id'].'|'.$source['warehouse_id']] = $source;

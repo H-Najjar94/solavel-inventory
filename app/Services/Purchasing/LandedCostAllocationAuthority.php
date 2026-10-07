@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Ramsey\Uuid\Uuid;
 /** Immutable value-only provenance. Construction rechecks native facts under their lifecycle locks. */
 final readonly class LandedCostAllocationAuthority {
- private function __construct(private array $facts,private array $sources,private array $proof,private int $stockOrg,private int $financeOrg,private int $scale){}
+ private function __construct(private array $facts,private array $sources,private array $proof,private int $stockOrg,private int $financeOrg,private int $scale,private ?array $quote,private ?array $forwardQuote){}
  public static function fromLockedNativeProvenance(array $identity,array $proof,IntegrationOrganizationMapping $mapping,string $action,int $actor):self {
   $direction=$identity['direction']??'forward';abort_unless(in_array($direction,['forward','reverse'],true)&&($proof['direction']??'forward')===$direction,403);
   $db=DB::connection('tenant');$org=app(OrganizationContext::class)->idOrFail();abort_unless($db->transactionLevel()>0&&in_array($action,['prepare','apply','reverse','release','status'],true)&&$actor>0,403);
@@ -47,9 +47,10 @@ final readonly class LandedCostAllocationAuthority {
   if($action==='reverse'){abort_unless($direction==='reverse'&&$quote&&!empty($quote['plan_fingerprint'])&&(int)$op->reversal_journal_id>0&&(int)($proof['reversal_journal_id']??0)===(int)$op->reversal_journal_id,409);$inverse=$db->table('journal_entries')->where('organization_id',$mapping->finance_organization_id)->where('id',$op->reversal_journal_id)->where('source','AP-LANDED-COST')->where('source_type','App\\Models\\LandedCost')->where('source_id',$cost->id)->where('source_key','landed-cost-reversal:'.$identity['operation_uuid'])->lockForUpdate()->first();self::activeJournal($inverse);abort_unless((int)($inverse->reverses_entry_id??0)===(int)$op->journal_entry_id,409);}
   if($action==='release')abort_unless(($quote['abandoned']??false)===true&&!empty($quote['plan_fingerprint'])&&($direction==='reverse'?!$op->reversal_journal_id:!$op->journal_entry_id),409);
   $scale=$payload['finance_money_scale']??null;abort_unless(is_int($scale)&&$scale>=0&&$scale<=6,409);
-  return new self($payload,$sources,$proof,$org,(int)$mapping->finance_organization_id,$scale);
+  return new self($payload,$sources,$proof,$org,(int)$mapping->finance_organization_id,$scale,$quote,$storedPlan);
  }
  private static function activeJournal(?object $journal):void{abort_unless($journal&&$journal->status==='posted'&&!empty($journal->posted_at)&&empty($journal->voided_at)&&empty($journal->deleted_at),409);}
+ public function storedQuote():?array{return$this->quote;} public function forwardQuote():?array{return$this->forwardQuote;}
  public function operationUuid():string{return$this->facts['operation_uuid'];} public function organizationId():int{return$this->stockOrg;} public function financeOrganizationId():int{return$this->financeOrg;} public function mappingUuid():string{return$this->facts['organization_mapping_uuid'];}
  public function landedCostId():int{return(int)$this->facts['landed_cost_id'];} public function sourceBillId():int{return(int)$this->facts['source_bill_id'];} public function billJournalId():int{return(int)$this->facts['bill_journal_id'];} public function actorId():int{return(int)$this->proof['actor_id'];} public function action():string{return$this->proof['operation'];} public function direction():string{return$this->proof['direction']??'forward';} public function reverse():bool{return$this->direction()==='reverse';}
  public function payloadHash():string{return$this->proof['payload_hash'];} public function fingerprint():string{return hash('sha256','landed-cost|'.$this->mappingUuid().'|'.$this->operationUuid().'|'.$this->payloadHash());}
