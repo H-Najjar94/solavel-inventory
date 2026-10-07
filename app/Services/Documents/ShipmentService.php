@@ -324,9 +324,10 @@ class ShipmentService
                 : null;
             // Legacy manual entry may omit the reference: recover only an exact unique native line.
             if (empty($line['sales_order_line_id']) && $s->sales_order_id) {
+                $unitId = $line['entered_unit_id'] ?? $line['unit_id'] ?? Item::query()->findOrFail((int) ($line['item_id'] ?? 0))->base_unit_id;
                 $matches = SalesOrderLine::query()->where('organization_id', $orgId)
                     ->where('sales_order_id', $s->sales_order_id)->where('item_id', (int) ($line['item_id'] ?? 0))
-                    ->where('entered_unit_id', (int) ($line['entered_unit_id'] ?? $line['unit_id'] ?? Item::query()->findOrFail((int) ($line['item_id'] ?? 0))->base_unit_id))
+                    ->when($unitId !== null, fn ($q) => $q->where('entered_unit_id', (int) $unitId), fn ($q) => $q->whereNull('entered_unit_id'))
                     ->where('variant_id', $line['variant_id'] ?? null)->limit(2)->get();
                 if ($matches->count() !== 1) {
                     throw new RuntimeException(__('inventory.sales_handoff.source_line_invalid'));

@@ -55,6 +55,7 @@ final class FulfillmentRequestService
   $invoice=DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$data['source_invoice_id'])->lockForUpdate()->first();abort_unless($invoice,404);
   $intent=DB::connection('tenant')->table('finance_sales_requests')->where('organization_id',$mapping->finance_organization_id)->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('invoice_id',$data['source_invoice_id'])->where('request_uuid',$data['request_uuid'])->lockForUpdate()->first();
   abort_unless($intent&&$intent->command===$command&&$intent->source_revision===$data['source_revision'],409,__('inventory.purchasing.source_changed'));
+  if($command==='upsert'&&($data['source_status']??null)==='posted')abort_unless((int)($intent->invoice_journal_id??0)>0,409);
   if((int)($intent->invoice_journal_id??0)>0){
    $journalId=(int)$intent->invoice_journal_id;abort_unless((int)($data['posted_invoice_journal_id']??$data['closing_invoice_journal_id']??0)===$journalId,409);
    $journal=DB::connection('tenant')->table('journal_entries')->where('organization_id',$mapping->finance_organization_id)->where('id',$journalId)->where('source_type','App\\Models\\Invoice')->where('source_id',$invoice->id)->lockForUpdate()->first();

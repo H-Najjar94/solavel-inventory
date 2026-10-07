@@ -12,14 +12,8 @@ use Tests\Support\TenantTestManager;
 use Tests\TestCase;
 use Tests\Traits\TenantAware;
 final class FulfillmentHandoffTest extends TestCase {
- use TenantAware;private $mapping;private $item;private $unit;private $customer;
- protected function setUp():void {parent::setUp();$this->useTenantA();$this->mapping=IntegrationOrganizationMapping::create(['mapping_uuid'=>(string)Str::uuid(),'central_client_id'=>7,'central_organization_id'=>TenantTestManager::ORG_A,'tenant_database_identity'=>DB::connection('tenant')->getDatabaseName(),'finance_organization_id'=>14,'solastock_organization_id'=>TenantTestManager::ORG_A,'contract_version'=>'solastock-journal.v2','status'=>'verified','activation_state'=>'active','base_currency_code'=>'JOD','verified_at'=>now()]);$this->unit=Unit::create(['code'=>'SALE-EACH','name'=>'Each','kind'=>'count','is_active'=>true]);$this->item=F::averageItem(['base_unit_id'=>$this->unit->id]);$this->customer=Customer::create(['code'=>'QA-SALE-CUST','name'=>'QA customer','is_active'=>true]);foreach(['item'=>[$this->item->id,701],'unit'=>[$this->unit->id,702],'customer'=>[$this->customer->id,703]]as$type=>[$local,$remote])IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>TenantTestManager::ORG_A,'finance_organization_id'=>14,'solastock_organization_id'=>TenantTestManager::ORG_A,'entity_type'=>$type,'solastock_record_id'=>(string)$local,'solabooks_record_id'=>(string)$remote,'status'=>'verified']);}
- private function data():array{return['request_uuid'=>(string)Str::uuid(),'source_invoice_id'=>800,'source_invoice_number'=>'QA-800','source_revision'=>str_repeat('a',64),'source_status'=>'draft','pricing_mode'=>'exclusive','customer_external_id'=>703,'invoice_date'=>'2026-10-07','currency_code'=>'JOD','base_currency_code'=>'JOD','exchange_rate'=>'1','exchange_rate_date'=>'2026-10-07','lines'=>[['source_line_id'=>'801','item_external_id'=>701,'unit_external_id'=>702,'quantity'=>'4','unit_price'=>'7']]];}
- private function authority(array$d,array$overrides=[],string $command='upsert'):void {
-  $schema=DB::connection('tenant')->getSchemaBuilder();if(!$schema->hasTable('finance_sales_requests'))$schema->create('finance_sales_requests',function(\Illuminate\Database\Schema\Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->unsignedBigInteger('invoice_id');$t->unsignedBigInteger('invoice_journal_id')->nullable();$t->string('source_revision');$t->string('command');});
-  DB::connection('tenant')->table('invoices')->updateOrInsert(['id'=>800],['organization_id'=>14]);
-  DB::connection('tenant')->table('finance_sales_requests')->updateOrInsert(['organization_id'=>14,'invoice_id'=>800,'request_uuid'=>$d['request_uuid']],['organization_mapping_uuid'=>$this->mapping->mapping_uuid,'source_revision'=>$d['source_revision'],'command'=>$command]);
-$canonical=$d;unset($canonical['expected_revision']);$this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'edit_draft')->andReturn(array_replace(['allowed'=>true,'request_revision'=>$d['source_revision'],'fulfillment_payload'=>$canonical],$overrides));}
+ use TenantAware;use \Tests\Support\SalesHandoffFixture;
+ protected function setUp():void {parent::setUp();$this->initializeSalesFixture();}
  public function test_invoice_handoff_and_replay_create_only_one_pending_request_without_order_or_stock():void {$d=$this->data();$this->authority($d);$service=app(FulfillmentRequestService::class);$one=$service->upsert($d,323);$two=$service->upsert($d,323);$this->assertSame($one['id'],$two['id']);$this->assertSame('pending',$one['status']);$this->assertNull($one['warehouse_id']);$this->assertNull($one['sales_order_id']);$this->assertSame(1,FulfillmentRequest::query()->count());$this->assertSame(0,SalesOrder::query()->count());$this->assertSame(0,StockLedger::query()->count());$this->assertSame('801',$one['lines'][0]['source_line_id']);}
  public function test_authenticated_invoice_payload_cannot_be_changed_by_signed_caller():void {$d=$this->data();$canonical=$d;$canonical['customer_external_id']=999;$this->authority($d,['fulfillment_payload'=>$canonical]);try{app(FulfillmentRequestService::class)->upsert($d,323);$this->fail('Forged customer accepted');}catch(HttpException$e){$this->assertSame(403,$e->getStatusCode());}$this->assertSame(0,FulfillmentRequest::query()->count());}
  public function test_missing_unit_mapping_is_actionable_and_resumes_same_uuid_after_review():void {$d=$this->data();$this->authority($d);$pair=IntegrationMasterDataMapping::query()->where('entity_type','unit')->sole();$pair->update(['status'=>'pending']);try{app(FulfillmentRequestService::class)->upsert($d,323);$this->fail('Missing unit accepted');}catch(ValidationException$e){$this->assertArrayHasKey('lines.0.unit_external_id',$e->errors());$this->assertSame('unit',$e->response->getData(true)['dependency']['entity_type']);$this->assertSame(702,$e->response->getData(true)['dependency']['source_id']);}$pair->update(['status'=>'verified']);$r=app(FulfillmentRequestService::class)->upsert($d,323);$this->assertSame($d['request_uuid'],$r['request_uuid']);$this->assertSame(0,StockLedger::query()->count());}
@@ -48,6 +42,28 @@ $canonical=$d;unset($canonical['expected_revision']);$this->mock(SolaBooksOutbox
   $data=$this->data();$this->authority($data);DB::connection('tenant')->table('finance_sales_requests')->where('request_uuid',$data['request_uuid'])->update(['command'=>'cancel']);
   try{app(FulfillmentRequestService::class)->upsert($data,323);$this->fail('Stale callback published request after cancellation');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
   $this->assertSame(0,FulfillmentRequest::count());$this->assertSame(0,StockLedger::count());
+ }
+
+ public function test_posted_invoice_request_requires_exact_native_active_journal_and_stale_callback_cannot_publish(): void {
+  $data=$this->data();$data['source_status']='posted';$data['posted_invoice_journal_id']=99;
+  DB::connection('tenant')->table('journal_entries')->insert(['id'=>99,'organization_id'=>14,'status'=>'posted','source_type'=>'App\\Models\\Invoice','source_id'=>800]);
+  $this->authority($data);$service=app(FulfillmentRequestService::class);$service->upsert($data,323);
+  DB::connection('tenant')->table('journal_entries')->where('id',99)->update(['voided_at'=>now()]);
+  try{$service->upsert($data,323);$this->fail('Stale authorized journal published after native reversal');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  $this->assertSame(1,FulfillmentRequest::count());$this->assertSame(0,StockLedger::count());$this->assertSame(0,SalesOrder::count());
+ }
+ public function test_invoice_void_closure_requires_its_own_permission_and_exact_original_journal_proof(): void {
+  $data=$this->data();$data['source_status']='posted';$data['posted_invoice_journal_id']=99;
+  DB::connection('tenant')->table('journal_entries')->insert(['id'=>99,'organization_id'=>14,'status'=>'posted','source_type'=>'App\\Models\\Invoice','source_id'=>800]);
+  $this->authority($data);$service=app(FulfillmentRequestService::class);$service->upsert($data,323);
+  $cancel=$data+['expected_revision'=>$data['source_revision'],'close_permission'=>'void','closing_invoice_journal_id'=>99];$this->authority($cancel,[],'cancel');
+  $reply=['command'=>'cancel','request_uuid'=>$data['request_uuid'],'command_source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision'],'closure_permission'=>'unpost','closing_invoice_journal_id'=>99];
+  $review=['command'=>'cancel','request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision'],'closing_invoice_journal_id'=>99];
+  $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'void',$review)->andReturn($reply);
+  try{$service->cancel($cancel,323);$this->fail('Borrowed closure permission accepted');}catch(HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+  $this->assertSame('pending',FulfillmentRequest::sole()->status);
+  $reply['closure_permission']='void';$this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'void',$review)->andReturn($reply);
+  $this->assertSame('cancelled',$service->cancel($cancel,323)['status']);$this->assertSame(0,StockLedger::count());
  }
 
 }
