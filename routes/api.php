@@ -308,6 +308,13 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.cancel');
 
     // ── Goods Receipts (GRN → stock IN via service) ──
+    Route::get('/supplier-returns', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'index'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.index');
+    Route::get('/supplier-returns/source/{goods_receipt}', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'source'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.source');
+    Route::get('/supplier-returns/{supplier_return}', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'show'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.show');
+    Route::post('/supplier-returns', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'store'])->middleware('perm:inventory.manage_purchase_returns')->name('api.v1.supplier-returns.store');
+    Route::post('/supplier-returns/{supplier_return}/post', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'post'])->middleware('perm:inventory.manage_purchase_returns')->name('api.v1.supplier-returns.post');
+    Route::post('/supplier-returns/{supplier_return}/reverse', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'reverse'])->middleware('perm:inventory.manage_purchase_returns')->name('api.v1.supplier-returns.reverse');
+
     Route::get('/purchasing/requests', [ReceivingRequestController::class, 'index'])->middleware('perm:inventory.receive_goods')->name('api.v1.receiving-requests.index');
     Route::post('/purchasing/requests/{receiving_request}/approve', [ReceivingRequestController::class, 'approve'])->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.receiving-requests.approve');
     Route::get('/purchasing/requests/{receiving_request}', [ReceivingRequestController::class, 'show'])->middleware('perm:inventory.receive_goods')->name('api.v1.receiving-requests.show');
