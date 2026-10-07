@@ -39,7 +39,7 @@ final class SalesNotificationTransitionTest extends TestCase
         $queue->invoke($publisher, (int) $request->organization_id, (int) $request->id);
         $queue->invoke($publisher, (int) $request->organization_id, (int) $request->id);
         $this->assertSame(3, DB::connection('tenant')->table('sales_notification_outbox')->count());
-        $this->assertSame(0, DB::connection('tenant')->table('stock_ledgers')->count());
+        $this->assertSame(0, \App\Models\Tenant\StockLedger::count());
         $this->assertSame(0, DB::connection('tenant')->table('sales_notification_outbox')->where('state', 'sent')->count());
     }
 }
