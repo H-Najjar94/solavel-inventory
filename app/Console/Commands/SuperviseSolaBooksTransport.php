@@ -69,6 +69,7 @@ final class SuperviseSolaBooksTransport extends Command
                 // Mixed-version tenants may not yet have the additive sales outbox.
                 if (\Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('sales_document_outbox')) {
                     $processed += app(\App\Services\Sales\ShipmentHandoffService::class)->deliverDue(1);
+                    $processed += app(\App\Services\Sales\SalesNotificationPublisher::class)->process(1);
                 }
                 $processed += app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1);
                 $organizations->forget();
