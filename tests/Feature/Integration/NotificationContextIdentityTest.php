@@ -18,8 +18,11 @@ final class NotificationContextIdentityTest extends TestCase
     use TenantAware;
     public function test_both_signed_contexts_use_verified_identity_and_restore_existing_attributes_on_exception():void
     {
-        $this->useTenantA();
-        $org=Organization::findOrFail(TenantTestManager::ORG_A);
+        // Private read-only callback projection: only columns queried by the native landlord model.
+        config(['database.connections.notification_context_fixture'=>['driver'=>'sqlite','database'=>':memory:','prefix'=>''], 'tenancy.central_connection'=>'notification_context_fixture']);
+        \Illuminate\Support\Facades\DB::connection('notification_context_fixture')->statement('CREATE TABLE organizations (id INTEGER PRIMARY KEY, client_id INTEGER, is_active INTEGER, deleted_at TEXT)');
+        \Illuminate\Support\Facades\DB::connection('notification_context_fixture')->table('organizations')->insert(['id'=>990010,'client_id'=>990002,'is_active'=>1]);
+        $org=Organization::findOrFail(990010);
         foreach([SalesNotificationContextController::class,PurchasingNotificationContextController::class] as $controller){
             foreach([false,true] as $existing){
                 $request=Request::create('/signed-context','POST',['client_id'=>$org->client_id,'organization_id'=>$org->id,'request_id'=>1,'nonce'=>(string)Str::uuid()]);
