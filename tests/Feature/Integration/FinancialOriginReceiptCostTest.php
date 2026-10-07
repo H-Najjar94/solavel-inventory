@@ -123,4 +123,37 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $this->assertSame('posted',$db->table('journal_entries')->where('id',95)->value('status'));
     }
 
+    public function test_held_release_requires_durable_abandon_and_replays_without_quote_rewrite_or_stock_movement():void
+    {
+        [$id,$proof]=$this->fixture();$db=DB::connection('tenant');$database=$db->getDatabaseName();
+        // Reserved-database switch and remote/commercial authority are explicit seams; native locked factory/holds remain real.
+        $this->mock(\App\Services\Tenancy\TenantManager::class)->shouldReceive('resolveDatabaseName')->with(7)->andReturn($database)->getMock()->shouldReceive('useTenant')->with($this->mapping->central_organization_id,$database)->andReturn($database);
+        $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class)->shouldReceive('assertComplete')->andReturnNull();
+        $this->mock(\App\Services\Integration\FinanceInventoryCapability::class)->shouldReceive('allows')->with(7,$this->mapping->central_organization_id)->andReturnTrue();
+        $this->mock(\App\Services\Entitlements\EntitlementsCache::class)->shouldReceive('getProjectSnapshot')->andReturn([]);
+        $this->mock(\App\Services\Entitlements\EntitlementAccessDecision::class)->shouldReceive('decide')->andReturn(['reason'=>\App\Services\Entitlements\EntitlementAccessDecision::DENY_NOT_IN_PLAN]);
+        $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOriginSettlement')->andReturnUsing(function($facts,$operation,$actor)use($id,$proof){
+            $match=DB::connection('tenant')->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->first();$quote=json_decode($match->value_plan??'null',true);
+            return array_replace($proof,['operation'=>$operation,'actor_id'=>$actor,'match_state'=>$match->state,'value_plan_hash'=>$quote?SolaStockJournalContract::payloadHash($quote):null,'plan_fingerprint'=>$quote['plan_fingerprint']??null]);
+        });
+        $service=app(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class);$organization=(object)['id'=>$this->mapping->central_organization_id,'client_id'=>7];
+        $input=['action'=>'financial-origin.settlement.prepare','actor_id'=>0,'authority_kind'=>'posted_financial_origin_settlement','finance_organization_id'=>14,'data'=>$id];
+        $quantity=\App\Models\Tenant\StockBalance::sole()->on_hand_qty;$value=\App\Models\Tenant\StockBalance::sole()->total_value;$ledgers=StockLedger::count();$journals=$db->table('journal_entries')->count();
+        $prepared=$service->dispatch($input,$organization);$quote=array_diff_key($prepared,array_flip(['state','adjustment_uuid']));
+        $this->assertSame('prepared',$prepared['state']);$this->assertSame('active',\App\Models\Tenant\PurchaseValuationHold::sole()->state);
+        $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->update(['value_plan'=>json_encode($quote),'plan_fingerprint'=>$quote['plan_fingerprint']]);
+        $input['action']='financial-origin.settlement.release';$input['data']['plan_fingerprint']=$quote['plan_fingerprint'];
+        try {$service->dispatch($input,$organization);$this->fail('Caller release flag unlocked a nonabandoned match');}
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {$this->assertSame(409,$e->getStatusCode());}
+        $this->assertSame('active',\App\Models\Tenant\PurchaseValuationHold::sole()->state);
+        $releaseUuid=(string)Str::uuid();$releaseQuote=$quote+['abandoned'=>true];
+        $release=['purpose'=>'abandon_match','direction'=>'forward','operation_uuid'=>$id['operation_uuid'],'release_operation_uuid'=>$releaseUuid,'source_revision'=>$id['source_revision'],'source_journal_id'=>95,'abandoned_at'=>'2026-10-07 00:00:00','hold_fingerprint'=>$quote['plan_fingerprint'],'quote'=>$releaseQuote];
+        $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->update(['state'=>'abandoned','release_state'=>'pending','release_operation_uuid'=>$releaseUuid,'release_snapshot'=>json_encode($release)]);
+        $released=$service->dispatch($input,$organization);$this->assertSame('abandoned',$released['state']);$this->assertSame($released,$service->dispatch($input,$organization));
+        $this->assertSame('released',\App\Models\Tenant\PurchaseValuationHold::sole()->state);
+        $this->assertSame($quote,json_decode($db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->value('value_plan'),true));
+        $balance=\App\Models\Tenant\StockBalance::sole();$this->assertSame($quantity,$balance->on_hand_qty);$this->assertSame($value,$balance->total_value);
+        $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
+    }
+
 }
