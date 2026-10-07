@@ -148,4 +148,39 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame(0,Supplier::count());
  }
 
+ public function test_new_customer_dependency_replays_one_counterpart_without_supplier_mapping():void {
+  DB::connection('tenant')->table('customers')->insert(['id'=>991,'organization_id'=>14,'name'=>'New customer after activation','is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);
+  $service=app(ContinuousPartySync::class);
+  $one=$service->materialize($this->mapping,'finance','customer',991);
+  $two=$service->materialize($this->mapping,'finance','customer',991);
+  $this->assertSame('synced',$one['status']);
+  $this->assertSame($one['target_id'],$two['target_id']);
+  $this->assertSame(1,\App\Models\Tenant\Customer::count());
+  $this->assertSame(0,Supplier::count());
+  $this->assertSame('customer',IntegrationMasterDataMapping::query()->sole()->entity_type);
+ }
+ public function test_customer_review_excludes_supplier_candidates_and_preserves_exact_customer_link():void {
+  DB::connection('tenant')->table('customers')->insert(['id'=>992,'organization_id'=>14,'name'=>'Reviewed customer','is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);
+  Supplier::create(['code'=>'SUPPLIER-ONLY','name'=>'Reviewed customer','is_active'=>true]);
+  $target=\App\Models\Tenant\Customer::create(['code'=>'CUSTOMER-ONLY','name'=>'Reviewed customer','is_active'=>true]);
+  $ledger=app(PartySyncLedger::class);
+  $facts=['entity_type'=>'customer','source_id'=>992,'source_revision'=>$ledger->revision($ledger->fields($this->mapping,'finance','customer',992)),'native_actor_id'=>990001];
+  $review=app(\App\Services\Integration\PartyIdentityReview::class);
+  $choices=$review->choices($this->mapping,$facts)['candidates'];
+  $this->assertCount(1,$choices);$this->assertSame('CUSTOMER-ONLY',$choices[0]['code']);
+  $one=$review->resolve($this->mapping,$facts,$target->id,$choices[0]['selection_fingerprint']);
+  $this->assertSame('synced',$one['status']);$this->assertSame($target->id,$one['target_id']);
+  $this->assertSame('customer',IntegrationMasterDataMapping::query()->sole()->entity_type);
+  $this->assertSame(1,\App\Models\Tenant\Customer::count());
+ }
+ public function test_invoice_dependency_does_not_accept_another_customer_or_organization():void {
+  $db=DB::connection('tenant');$db->table('invoices')->insert(['id'=>81,'organization_id'=>14,'customer_id'=>991,'status'=>'draft']);
+  $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class,fn($mock)=>$mock->shouldNotReceive('authorizeSales'));
+  try{app(ContinuousPartySync::class)->authorizeInvoiceDependency($this->mapping,['source_id'=>992,'source_invoice_id'=>81,'native_actor_id'=>990001]);$this->fail('Foreign customer accepted.');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+  $db->table('invoices')->where('id',81)->update(['organization_id'=>15]);
+  try{app(ContinuousPartySync::class)->authorizeInvoiceDependency($this->mapping,['source_id'=>991,'source_invoice_id'=>81,'native_actor_id'=>990001]);$this->fail('Foreign organization accepted.');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+ }
+
 }
