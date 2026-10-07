@@ -55,6 +55,50 @@ final class FinancialOriginRequestController extends Controller
         return response()->json(['success'=>true, 'data'=>app(OriginRequestService::class)->approveNative($data, (int)$request->user()->id)]);
     }
 
+    public function prepare(Request $request, string $uuid)
+    {
+        $data = $this->physicalPayload($request, $uuid);
+        return response()->json(['success'=>true, 'data'=>app(OriginDispatchService::class)->prepareNative($data, (int)$request->user()->id)]);
+    }
+
+    public function execute(Request $request, string $uuid)
+    {
+        $data = $this->physicalPayload($request, $uuid);
+        return response()->json(['success'=>true, 'data'=>app(OriginDispatchService::class)->executeNative($data, (int)$request->user()->id)]);
+    }
+
+    public function status(Request $request, string $uuid)
+    {
+        $data = $this->identity($request, $uuid) + $request->validate(['operation_uuid'=>'required|uuid']);
+        return response()->json(['success'=>true, 'data'=>app(OriginDispatchService::class)->statusNative($data, (int)$request->user()->id)]);
+    }
+
+    public function abandon(Request $request, string $uuid)
+    {
+        $data = $this->identity($request, $uuid) + $request->validate(['operation_uuid'=>'required|uuid']);
+        return response()->json(['success'=>true, 'data'=>app(OriginDispatchService::class)->abandonNative($data, (int)$request->user()->id)]);
+    }
+
+    private function physicalPayload(Request $request, string $uuid): array
+    {
+        $identity = $this->identity($request, $uuid);
+        $data = $request->validate([
+            'arrival_confirmed'=>'required|accepted', 'operation_uuid'=>'required|uuid',
+            'request_revision'=>'required|string|size:64', 'warehouse_id'=>'required|integer|min:1',
+            'physical_date'=>'required|date_format:Y-m-d', 'reserve_stock'=>'sometimes|boolean',
+            'lines'=>'required|array|min:1', 'lines.*.request_line_id'=>'required|integer|min:1|distinct',
+            'lines.*.source_document_line_id'=>'required|integer|min:1|distinct', 'lines.*.unit_id'=>'required|integer|min:1',
+            'lines.*.quantity'=>'required|numeric|gt:0', 'lines.*.bin_id'=>'nullable|integer|min:1',
+            'lines.*.lot_id'=>'nullable|integer|min:1', 'lines.*.variant_id'=>'nullable|integer|min:1',
+            'lines.*.serial_ids'=>'nullable|array', 'lines.*.serial_ids.*'=>'integer|min:1|distinct',
+            'lines.*.serials'=>'nullable|array', 'lines.*.serials.*'=>'string|max:255|distinct',
+            'lines.*.lot_code'=>'nullable|string|max:255', 'lines.*.expiry_date'=>'nullable|date_format:Y-m-d',
+            'lines.*.unit_cost'=>'nullable|numeric|min:0',
+        ]);
+        unset($data['arrival_confirmed']);
+        return $identity + $data;
+    }
+
     private function identity(Request $request, string $uuid): array
     {
         abort_unless(Schema::connection('tenant')->hasTable('stock_financial_origin_requests'), 503);

@@ -312,6 +312,11 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::get('/financial-origin-requests/{uuid}/options', [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, 'options'])->whereUuid('uuid')->name('api.v1.financial-origin-requests.options');
     Route::post('/financial-origin-requests/{uuid}/approve', [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, 'approve'])->whereUuid('uuid')->name('api.v1.financial-origin-requests.approve');
 
+    foreach (['prepare', 'execute', 'abandon'] as $action) {
+        Route::post('/financial-origin-requests/{uuid}/'.$action, [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, $action])->whereUuid('uuid')->name('api.v1.financial-origin-requests.'.$action);
+    }
+    Route::get('/financial-origin-requests/{uuid}/status', [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, 'status'])->whereUuid('uuid')->name('api.v1.financial-origin-requests.status');
+
     // ── Goods Receipts (GRN → stock IN via service) ──
     Route::get('/supplier-returns', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'index'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.index');
     Route::get('/supplier-returns/source/{goods_receipt}', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'source'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.source');
