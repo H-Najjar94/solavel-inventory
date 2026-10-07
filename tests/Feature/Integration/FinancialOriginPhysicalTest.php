@@ -62,6 +62,8 @@ final class FinancialOriginPhysicalTest extends TestCase
         $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->meta=$meta;$setting->save();
         $result=$service->executeNative($context+['operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'physical_date'=>'2026-10-07','lines'=>[['request_line_id'=>$request['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]],336);
         $this->assertSame('partial',$result['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame(1,FinancialOriginOutbox::count());
+        $this->assertSame(FinancialOriginCommand::sole()->operation_uuid,FinancialOriginOutbox::sole()->payload['operation_uuid']);
+        $this->assertFalse($service->optionsNative($context,336)['can_reserve']);
         // Render the native human GET outside the testing wrapper's transaction, as live HTTP does.
         $db=DB::connection('tenant');while($db->transactionLevel()>0)$db->commit();
         $documents=app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents'];
@@ -71,7 +73,7 @@ final class FinancialOriginPhysicalTest extends TestCase
     }
     public function test_native_operation_status_needs_no_finance_access_but_preserves_actor_revision_and_warehouse_scope():void
     {
-        [,,$op]=$this->admitted('expense');$service=app(OriginDispatchService::class);$before=StockLedger::count();
+        [,,$op]=$this->admitted(tracking:'serial');$service=app(OriginDispatchService::class);$before=StockLedger::count();
         $this->assertFalse(app(CentralAppAccess::class)->decision(336,FinancialOriginRequest::sole()->organization_id,'finance')['allowed']);
         $this->item->update(['is_variant_parent'=>true,'tracks_expiry'=>true]);
         $variant=\App\Models\Tenant\ItemVariant::create(['item_id'=>$this->item->id,'sku'=>'QA-VISIBLE-VARIANT','variant_attributes'=>['size'=>'S'],'is_active'=>true]);
@@ -80,8 +82,16 @@ final class FinancialOriginPhysicalTest extends TestCase
         \App\Models\Tenant\ItemVariant::create(['item_id'=>$other->id,'sku'=>'QA-OTHER-PARENT-VARIANT','is_active'=>true]);
         $prepared=$service->prepareNative($op,336);$this->assertSame('prepared',$prepared['status']);
         $this->assertSame($prepared,$service->statusNative($op,336));
+        $serial=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->firstOrFail();
+        $blocked=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->skip(1)->firstOrFail();$blocked->update(['status'=>'quarantined']);
+        $lot=\App\Models\Tenant\Lot::create(['item_id'=>$this->item->id,'lot_code'=>'QA-AVAILABLE','status'=>'active','expiry_date'=>now()->addYear()->toDateString()]);
+        $expired=\App\Models\Tenant\Lot::create(['item_id'=>$this->item->id,'lot_code'=>'QA-EXPIRED','status'=>'active','expiry_date'=>now()->subDay()->toDateString()]);
+        $balance=StockBalance::query()->firstOrFail();foreach([$lot,$expired]as$trace){$copy=$balance->replicate();$copy->lot_id=$trace->id;$copy->serial_id=null;$copy->on_hand_qty='2';$copy->reserved_qty='0';$copy->save();}
         $options=$service->optionsNative($op,336);$this->assertCount(1,$options['operations']);$this->assertSame($op,$options['operations'][0]['payload']);
         $this->assertSame([$variant->id],array_column($options['lines'][0]['variant_choices'],'id'));
+        $this->assertSame([$lot->id],array_column($options['lines'][0]['lot_choices'],'id'));
+        $this->assertContains($serial->id,array_column($options['lines'][0]['serial_choices'],'id'));$this->assertNotContains($blocked->id,array_column($options['lines'][0]['serial_choices'],'id'));
+        $this->assertSame(app(InventoryPermissionService::class)->can(request()->user(),'inventory.manage_reservations'),$options['can_reserve']);
         $this->assertTrue($options['lines'][0]['requires_expiry']);$this->assertSame($this->unit->name,$options['lines'][0]['unit_name']);
         $changed=$op;$changed['request_revision']=str_repeat('b',64);
         try{$service->statusNative($changed,336);$this->fail('Stale operation revision disclosed');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
