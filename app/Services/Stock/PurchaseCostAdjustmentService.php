@@ -71,7 +71,7 @@ final class PurchaseCostAdjustmentService
                     'state' => 'prepared', 'idempotency_key' => $key, 'safe_metadata' => ['contract_version' => 'solastock-landed-cost.v1',
                         'landed_cost' => ['operation_uuid' => $authority->operationUuid(), 'source_bill_id' => $authority->sourceBillId(), 'source_bill_journal_id' => $authority->billJournalId()]],
                 ]);
-                foreach ($plan['components'] as $component) IntegrationPurchaseCostAdjustmentComponent::create($component + ['adjustment_uuid' => $row->adjustment_uuid, 'organization_id' => $row->organization_id]);
+                foreach ($plan['components'] as $component) { unset($component['receipt_line_id']); IntegrationPurchaseCostAdjustmentComponent::create($component + ['adjustment_uuid' => $row->adjustment_uuid, 'organization_id' => $row->organization_id]); }
             }
             abort_unless($row->destination_document_type === 'landed_cost' && hash_equals($row->destination_fingerprint, $authority->fingerprint()), 409);
             return $this->serialize($row);
