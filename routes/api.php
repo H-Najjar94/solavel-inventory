@@ -71,6 +71,7 @@ Route::prefix('v1/tenant')->group(function () {
 });
 
 Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
+    Route::post('purchasing-notification-context', \App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class)->name('api.tenancy.purchasing-notification-context');
     Route::post('sync/events', SyncEventsController::class)
         ->name('api.tenancy.sync.events');
 });
@@ -81,6 +82,8 @@ Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
 // SOLASTOCK_FEATURE_ENFORCEMENT=true. Runs alongside perm:, never replacing role
 // auth; routes with no mapped feature pass straight through.
 Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(function () {
+    Route::get('/purchasing/notifications', [\App\Http\Controllers\Api\V1\PurchasingNotificationController::class,'index'])->name('api.v1.purchasing.notifications.index');
+    Route::post('/purchasing/notifications/{notification}/read', [\App\Http\Controllers\Api\V1\PurchasingNotificationController::class,'read'])->name('api.v1.purchasing.notifications.read');
 
     // Client-side SPA navigation tracking: forwards one page_view per
     // react-router move to the central event log (source_app=inventory) so
