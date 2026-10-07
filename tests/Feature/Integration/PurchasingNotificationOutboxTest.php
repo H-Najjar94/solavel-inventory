@@ -26,4 +26,8 @@ final class PurchasingNotificationOutboxTest extends TestCase {
  public function test_unexpired_claim_is_not_delivered_by_second_worker():void {
   [, $rr]=$this->fixture();$this->queue($rr);DB::connection('tenant')->table('purchasing_notification_outbox')->update(['state'=>'processing','lease_token'=>(string)Str::uuid(),'lease_until'=>now()->addMinute()]);Http::fake();$this->assertSame(0,app(PurchasingNotificationPublisher::class)->process(1));Http::assertNothingSent();
  }
+ public function test_exhausted_publish_requires_intervention_without_reinsert_or_financial_effects():void {
+  [, $rr]=$this->fixture();$this->queue($rr);DB::connection('tenant')->table('purchasing_notification_outbox')->update(['attempts'=>39]);Http::fake(fn()=>Http::response([],503));$publisher=app(PurchasingNotificationPublisher::class);$this->assertSame(1,$publisher->process(1));$row=DB::connection('tenant')->table('purchasing_notification_outbox')->sole();$this->assertSame('intervention',$row->state);$this->assertSame(40,(int)$row->attempts);$this->queue($rr);$this->assertSame(0,$publisher->process(1));$this->assertSame(1,DB::connection('tenant')->table('purchasing_notification_outbox')->count());$this->assertSame(0,DB::connection('tenant')->table('stock_ledger')->count());$this->assertSame(0,DB::connection('tenant')->table('integration_outbox_events')->count());
+ }
+
 }
