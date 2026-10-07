@@ -86,7 +86,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $blocked=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->skip(1)->firstOrFail();$blocked->update(['status'=>'quarantined']);
         $lot=\App\Models\Tenant\Lot::create(['item_id'=>$this->item->id,'lot_code'=>'QA-AVAILABLE','status'=>'active','expiry_date'=>now()->addYear()->toDateString()]);
         $expired=\App\Models\Tenant\Lot::create(['item_id'=>$this->item->id,'lot_code'=>'QA-EXPIRED','status'=>'active','expiry_date'=>now()->subDay()->toDateString()]);
-        $balance=StockBalance::query()->firstOrFail();foreach([$lot,$expired]as$trace){$copy=$balance->replicate();$copy->lot_id=$trace->id;$copy->on_hand_qty='2';$copy->reserved_qty='0';$copy->save();}
+        $balance=StockBalance::query()->firstOrFail();foreach([$lot,$expired]as$trace){$copy=$balance->replicate(['lot_key','bin_key','variant_key']);$copy->lot_id=$trace->id;$copy->on_hand_qty='2';$copy->reserved_qty='0';$copy->save();}
         $reserve=app(\App\Services\Stock\StockReservationService::class);$order=\App\Models\Tenant\SalesOrder::findOrFail(FinancialOriginRequest::sole()->sales_order_id);
         $reserve->reserveSerial($this->item->id,$this->warehouse->id,$serial->id,'sales_order',$order->id);
         $foreign=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->skip(2)->firstOrFail();
