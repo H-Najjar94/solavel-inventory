@@ -13,6 +13,8 @@ use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\StockTransfer;
 use App\Services\Purchasing\PurchasingBillAuthority;
+use App\Services\Purchasing\LandedCostAllocationAuthority;
+use App\Services\Stock\Support\LandedCostReceiptProvenance;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -89,18 +91,51 @@ final class PurchaseCostAdjustmentPlanner
             'allocated_base_difference' => $posted, 'rounding_residual' => $residual, 'rounding_bound' => $bound, 'components' => $serialized];
     }
 
+    /** Capitalize already frozen base-currency costs using native receipt disposition. */
+    public function planLandedCost(LandedCostAllocationAuthority $authority): array
+    {
+        abort_unless($authority->organizationId() === app(OrganizationContext::class)->idOrFail(), 403);
+        $components = collect();
+        $exact = '0';
+        foreach ($authority->sourceAllocations() as $source) {
+            $difference = (string) $source['delta_base'];
+            $exact = Decimal::add($exact, $difference, 8);
+            if (!Decimal::isZero($difference, 8)) {
+                $components = $components->concat($this->allocationComponents(LandedCostReceiptProvenance::fromAuthority($authority, $source), $difference));
+            }
+        }
+        $posted = '0';
+        $serialized = $components->map(function (array $component) use (&$posted, $authority): array {
+            $scale = $component['destination_role'] === 'inventory_asset' ? 2 : $authority->moneyScale();
+            $component['posted_base_amount'] = Decimal::round($component['exact_base_amount'], $scale);
+            $posted = Decimal::add($posted, $component['posted_base_amount'], 8);
+            return $component;
+        })->values()->all();
+        $residual = Decimal::round(Decimal::sub($exact, $posted, 8), $authority->moneyScale());
+        $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.005'), 6);
+        if (Decimal::gt(ltrim($residual, '-'), $bound, 6)) $this->fail('Cumulative valuation rounding exceeds its deterministic bound.');
+        return ['contract_version' => 'solastock-landed-cost.v1', 'organization_mapping_uuid' => $authority->mappingUuid(),
+            'destination_document_type' => 'landed_cost', 'destination_document_id' => $authority->landedCostId(),
+            'destination_fingerprint' => $authority->fingerprint(), 'operation_uuid' => $authority->operationUuid(),
+            'source_bill_id' => $authority->sourceBillId(), 'source_bill_journal_id' => $authority->billJournalId(),
+            'currency_code' => $authority->currencyCode(), 'base_currency_code' => $authority->baseCurrencyCode(),
+            'exchange_rate' => $authority->exchangeRate(), 'finance_money_scale' => $authority->moneyScale(), 'stock_money_scale' => 2,
+            'exact_base_difference' => $exact, 'allocated_base_difference' => $posted, 'rounding_residual' => $residual,
+            'rounding_bound' => $bound, 'components' => $serialized];
+    }
+
     /** A scoped Finance purchase may inspect only its receipt's cost provenance. */
-    private function ledgerQuery(IntegrationFinancialLineAllocation $allocation): Builder
+    private function ledgerQuery(IntegrationFinancialLineAllocation|LandedCostReceiptProvenance $allocation): Builder
     {
         $query = StockLedger::query();
-        if ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id)) {
+        if ($allocation instanceof LandedCostReceiptProvenance || ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id))) {
             $query->withoutGlobalScope('warehouse_access');
         }
 
         return $query;
     }
 
-    private function allocationComponents(IntegrationFinancialLineAllocation $allocation, string $difference): Collection
+    private function allocationComponents(IntegrationFinancialLineAllocation|LandedCostReceiptProvenance $allocation, string $difference): Collection
     {
         $receipt = $this->ledgerQuery($allocation)->where('organization_id', $allocation->solastock_organization_id)
             ->where('source_type', GoodsReceipt::class)->where('source_id', $allocation->source_document_id)
