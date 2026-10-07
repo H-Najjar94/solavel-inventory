@@ -45,6 +45,7 @@ final class SupplierReturnDocumentBuilder
      'supplier_id'=>$return->supplier_id,'source_bill_id'=>$receiptFacts['source_bill_id']??null,'currency_code'=>$receiptFacts['currency_code'],
      'base_currency_code'=>$mapping->base_currency_code,'receipt_exchange_rate'=>$receiptFacts['exchange_rate'],'receipt_exchange_rate_date'=>$receiptFacts['exchange_rate_date'],
      'journal_idempotency_key'=>$journal->idempotency_key,'lines'=>$lines]];
+   if($reversed){$payload['return']['reversal_id']=$reversal->id;$payload['return']['original_event_uuid']=$reversal->original_event_uuid;}
    return PurchasingDocumentOutbox::create(['organization_id'=>$org,'goods_receipt_id'=>$return->goods_receipt_id,'event_uuid'=>$uuid,'event_type'=>$payload['event_type'],
     'source_key'=>$key,'payload'=>$payload,'payload_hash'=>hash('sha256',SolaStockJournalContract::canonicalJson($payload))]);
   });
