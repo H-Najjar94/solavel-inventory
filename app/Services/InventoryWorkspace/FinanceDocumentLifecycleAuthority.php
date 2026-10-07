@@ -53,6 +53,13 @@ final class FinanceDocumentLifecycleAuthority
         'purchasing.return_request.options', 'purchasing.return_request.create', 'purchasing.return_request.status',
     ];
 
+    /** Value-only matching of a genuine posted inventory Expense, never physical access. */
+    public const FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS = [
+        'financial-origin.settlement.prepare', 'financial-origin.settlement.apply',
+        'financial-origin.settlement.reverse', 'financial-origin.settlement.status',
+        'financial-origin.settlement.release',
+    ];
+
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
@@ -71,7 +78,7 @@ final class FinanceDocumentLifecycleAuthority
 
     public static function scopeFor(string $action): ?string
     {
-        return (in_array($action, self::ACTIONS, true) || in_array($action, self::LANDED_COST_ACTIONS, true) || in_array($action, self::RETURN_REQUEST_ACTIONS, true)) ? self::SCOPE
+        return (in_array($action, self::ACTIONS, true) || in_array($action, self::LANDED_COST_ACTIONS, true) || in_array($action, self::RETURN_REQUEST_ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS, true)) ? self::SCOPE
             : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 
