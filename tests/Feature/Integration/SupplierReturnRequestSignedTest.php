@@ -287,4 +287,14 @@ final class SupplierReturnRequestSignedTest extends TestCase {
         $payload['reason']='Changed without native source hash';$db->table('supplier_return_requests')->where('operation_uuid',$payload['operation_uuid'])->update(['payload'=>json_encode($payload,JSON_THROW_ON_ERROR)]);$response=$controller->index($request)->getData(true);$this->assertTrue($response['success']);$this->assertSame([],$response['data']);
     }
 
+    /** Standalone/pre-installation schema boundary only; permission remains checked first. */
+    public function test_native_human_request_projection_handles_uninstalled_request_schema_without_queries_or_writes():void {
+        $user=\App\Models\User::findOrFail(self::ACTOR);$request=\Illuminate\Http\Request::create('/inventory/api/v1/supplier-return-requests');$request->setUserResolver(fn()=>$user);
+        $permissions=\Mockery::mock(InventoryPermissionService::class);$permissions->shouldReceive('can')->with($user,'inventory.view_stock')->andReturn(true);$permissions->shouldReceive('can')->with($user,'inventory.manage_purchase_returns')->andReturn(true);$this->app->instance(InventoryPermissionService::class,$permissions);
+        $warehouses=\Mockery::mock(\App\Services\Access\WarehouseAccessService::class);$warehouses->shouldReceive('allowedIds')->with(self::ACTOR)->andReturn([]);$this->app->instance(\App\Services\Access\WarehouseAccessService::class,$warehouses);
+        $schema=\Mockery::mock();$schema->shouldReceive('hasTable')->with('supplier_return_requests')->twice()->andReturn(false);Schema::shouldReceive('connection')->with('tenant')->twice()->andReturn($schema);
+        $controller=app(\App\Http\Controllers\Api\V1\SupplierReturnRequestController::class);$response=$controller->index($request)->getData(true);$this->assertTrue($response['success']);$this->assertFalse($response['available']);$this->assertSame([],$response['data']);
+        $request->merge(['arrival_confirmed'=>true]);try{$controller->post($request,'00000000-0000-4000-8000-000000000001');$this->fail('Missing schema must not allow physical posting.');}catch(\Symfony\Component\HttpKernel\Exception\HttpException$e){$this->assertSame(503,$e->getStatusCode());}
+    }
+
 }
