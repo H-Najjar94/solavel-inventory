@@ -13,7 +13,7 @@ use Tests\Traits\TenantAware;
 /** Actual native SO/shipment/outbox/ledger; remote Finance Invoice authority is an explicit projection seam. */
 final class StockBornOrderReuseTest extends TestCase {
  use TenantAware,SalesHandoffFixture;
- private function setupReuse():array {
+ private function setupReuse(bool $historical=false):array {
   $this->useTenantA();
   (require base_path('database/migrations/tenant/2026_10_08_195000_add_stock_born_fulfillment_baselines.php'))->up();
   $this->tenantTestManager->cleanup();$this->initializeSalesFixture(true);
@@ -23,11 +23,15 @@ final class StockBornOrderReuseTest extends TestCase {
   $shipments=app(ShipmentService::class);$source=$order->lines->first();
   $shipment=$shipments->post($shipments->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07'],[['sales_order_line_id'=>$source->id,'item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'4']]));
   $event=SalesDocumentOutbox::query()->where('payload->shipment->id',$shipment->id)->where('event_type','sales.shipment.confirmed')->sole();
+  if($historical){ // Private historical packet fixture; no production event is rewritten.
+   $packet=$event->payload;unset($packet['shipment']['warehouse_id']);$event->update(['payload'=>$packet,'payload_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($packet)]);
+  }
   $data=$this->data();$data['source_status']='posted';$data['posted_invoice_journal_id']=95;
   // Native Finance source/AR metadata is the declared projection seam, not a Finance posting claim.
   DB::connection('tenant')->table('journal_entries')->insert(['id'=>95,'organization_id'=>14,'source_type'=>\App\Models\Invoice::class,'source_id'=>800,'status'=>'posted']);
   $data['lines'][0]['quantity']='6';$data['lines'][0]['original_sales_order_line_id']=$source->id;
   $data['origin_order']=['sales_order_id'=>$order->id,'warehouse_id'=>$this->warehouse->id,'source_shipment_refs'=>[['mapping_uuid'=>$event->payload['shipment']['mapping_uuid'],'id'=>$shipment->id,'event_uuid'=>$event->event_uuid,'payload_hash'=>$event->payload_hash]]];
+  if($historical)$data['origin_order']['warehouse_id']=null;
   $this->authority($data);$summary=app(FulfillmentRequestService::class)->upsert($data,323);
   return [$order,$data,FulfillmentRequest::findOrFail($summary['id']),$shipment];
  }
@@ -48,4 +52,22 @@ final class StockBornOrderReuseTest extends TestCase {
   try{app(FulfillmentRequestService::class)->approve($request,$this->warehouse->id);$this->fail('Changed source shipment set/capacity accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
   $this->assertNull($request->fresh()->sales_order_id);$this->assertSame($after,StockLedger::count());$this->assertSame(1,SalesOrder::count());
  }
+ public function test_historical_packet_without_warehouse_reuses_only_locked_native_original_order():void {
+  [$order,$data,$request,$shipment]=$this->setupReuse(true);$event=SalesDocumentOutbox::sole();$packet=$event->getRawOriginal('payload');$hash=$event->payload_hash;$before=StockLedger::count();
+  $summary=app(FulfillmentRequestService::class)->approve($request,$this->warehouse->id);
+  $this->assertSame($order->id,$summary['sales_order_id']);$this->assertSame(1,SalesOrder::count());$this->assertSame($before,StockLedger::count());
+  $this->assertSame($packet,$event->fresh()->getRawOriginal('payload'));$this->assertSame($hash,$event->fresh()->payload_hash);$this->assertSame([],$summary['shipment_ids']);
+ }
+ public function test_historical_packet_rejects_claimed_warehouse_and_changed_native_shipment_line_without_effects():void {
+  [$order,$data,$request,$shipment]=$this->setupReuse(true);$before=StockLedger::count();$service=app(FulfillmentRequestService::class);
+  foreach([0,-1,'malformed',(int)$this->warehouse->id+999]as$invalid){$bad=$data;$bad['origin_order']['warehouse_id']=$invalid;$request->update(['source_payload'=>$bad]);
+   try{$service->approve($request,$this->warehouse->id);$this->fail('Invalid claimed warehouse accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  }
+  $request->update(['source_payload'=>$data]);$native=$shipment->lines()->sole();$quantity=$native->quantity;$native->update(['quantity'=>'3']);
+  try{$service->approve($request,$this->warehouse->id);$this->fail('Changed native shipment quantity accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  $native->update(['quantity'=>$quantity]);$shipment->update(['warehouse_id'=>(int)$this->warehouse->id+999]);
+  try{$service->approve($request,$this->warehouse->id);$this->fail('Changed native shipment warehouse accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  $this->assertNull($request->fresh()->sales_order_id);$this->assertSame(1,SalesOrder::count());$this->assertSame($before,StockLedger::count());
+ }
+
 }
