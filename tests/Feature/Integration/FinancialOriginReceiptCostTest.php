@@ -84,7 +84,7 @@ final class FinancialOriginReceiptCostTest extends TestCase
         try {OriginReceiptCostAuthority::fromLockedNativeProvenance($id,$proof,$this->mapping,'prepare',0);$this->fail('Partial native ledger was accepted');}
         catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {$this->assertSame(409,$e->getStatusCode());}
     }
-    public function test_native_cost_apply_and_replay_change_value_once_without_quantity_or_financial_journal_mutation():void
+    public function test_native_cost_apply_inverse_and_replay_change_value_once_without_quantity_or_financial_journal_mutation():void
     {
         [$id,$proof]=$this->fixture();$db=DB::connection('tenant');
         $a=OriginReceiptCostAuthority::fromLockedNativeProvenance($id,$proof,$this->mapping,'prepare',0);
@@ -100,6 +100,27 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $result=$service->applyFinancialOrigin($a);$this->assertSame('applied',$result['state']);$this->assertSame($result,$service->applyFinancialOrigin($a));
         $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame(\App\Services\Stock\Support\Decimal::money(\App\Services\Stock\Support\Decimal::add($value,'6')),$balance->fresh()->total_value);
         $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
+        \App\Models\Tenant\PurchaseValuationHold::query()->where('settlement_uuid',$a->holdUuid($source['item_id'],$source['warehouse_id']))->sole()->update(['state'=>'released']);
+        $reverseOperation=(string)Str::uuid();
+        $reverseSnapshot=['phase'=>'match_inverse_before_expense_unpost','original_source_journal_id'=>95,'original_match_journal_id'=>97,'match_inverse_journal_id'=>null,'reversal_operation_uuid'=>$reverseOperation,'request_uuid'=>$id['request_uuid'],'source_revision'=>$id['source_revision'],'reverse_actor_id'=>4,'reverse_central_actor_id'=>338,'closure_permission'=>'unpost','cancel_request_uuid'=>$id['request_uuid'],'cancel_source_revision'=>$id['source_revision'],'cancel_state'=>'cancelled','cancel_command'=>'cancel'];
+        $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->update(['command'=>'cancel','state'=>'cancelled','response'=>json_encode(['status'=>'cancelled','request_uuid'=>$id['request_uuid'],'source_revision'=>$id['source_revision'],'source_document_id'=>850,'source_journal_id'=>95])]);
+        $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->update(['state'=>'settled','reversal_operation_uuid'=>$reverseOperation,'reverse_actor_id'=>4,'reverse_central_actor_id'=>338,'closure_permission'=>'unpost','reverse_state'=>'prepared','reversal_snapshot'=>json_encode($reverseSnapshot)]);
+        $reverseId=array_replace($id,['direction'=>'reverse']);$reverseProof=array_replace($proof,['operation'=>'prepare','direction'=>'reverse','actor_id'=>338,'closure_permission'=>'unpost','match_state'=>'settled']);
+        $reverseAuthority=OriginReceiptCostAuthority::fromLockedNativeProvenance($reverseId,$reverseProof,$this->mapping,'prepare',338);
+        $reversePlan=app(PurchaseCostAdjustmentPlanner::class)->planFinancialOrigin($reverseAuthority);
+        $reverseFingerprint=SolaStockJournalContract::payloadHash(['authority'=>$reverseAuthority->fingerprint(),'purpose'=>'origin_reverse','plan_revision'=>1,'native_plan'=>$reversePlan]);
+        $reverseQuote=['operation_uuid'=>$id['operation_uuid'],'plan_revision'=>1,'plan_fingerprint'=>$reverseFingerprint,'direction'=>'reverse','native_plan'=>$reversePlan,'components'=>$reversePlan['components']];
+        $quote['reverse_plan']=$reverseQuote;$reverseSnapshot['match_inverse_journal_id']=98;$reverseSnapshot['hold_fingerprint']=$reverseFingerprint;
+        $db->table('journal_entries')->insert(['id'=>98,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>\App\Models\Expense::class,'source_id'=>850,'source_key'=>'financial-origin-match-reversal:'.$id['operation_uuid'],'reverses_entry_id'=>97,'status'=>'posted','posted_at'=>now()]);
+        $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->update(['reversal_journal_id'=>98,'reversal_snapshot'=>json_encode($reverseSnapshot),'value_plan'=>json_encode($quote)]);
+        $reverseProof=array_replace($reverseProof,['operation'=>'reverse','reversal_journal_id'=>98,'plan_fingerprint'=>$reverseFingerprint,'value_plan_hash'=>SolaStockJournalContract::payloadHash($quote)]);
+        $reverseAuthority=OriginReceiptCostAuthority::fromLockedNativeProvenance($reverseId,$reverseProof,$this->mapping,'reverse',338);
+        app(\App\Services\Purchasing\PurchaseValuationHoldService::class)->acquire(['settlement_uuid'=>$reverseAuthority->holdUuid($source['item_id'],$source['warehouse_id'],'reverse'),'purpose'=>'origin_reverse','plan_revision'=>1,'item_id'=>$source['item_id'],'warehouse_id'=>$source['warehouse_id'],'receipt_id'=>$source['receipt_id'],'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>850,'source_journal_id'=>95],$reverseFingerprint);
+        $journals=$db->table('journal_entries')->count();$inverse=$service->reverseFinancialOrigin($reverseAuthority);
+        $this->assertSame('reversed',$inverse['state']);$this->assertSame($inverse,$service->reverseFinancialOrigin($reverseAuthority));
+        $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame($value,$balance->fresh()->total_value);
+        $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
+        $this->assertSame('posted',$db->table('journal_entries')->where('id',95)->value('status'));
     }
 
 }
