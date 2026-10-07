@@ -208,4 +208,27 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $this->assertSame($quote,json_decode($db->table('finance_document_reverse_generations')->where('generation',1)->value('reverse_quote'),true));
     }
 
+    /** Canonical Finance192 migration copied verbatim; no generated Finance economic facts in this schema-only case. */
+    public function test_reverse_generation_schema_repairs_partial_creation_and_preserves_unique_identity():void
+    {
+        $this->useTenantA();$db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
+        $migration=require base_path('tests/Support/FinancialOriginReverseGenerationSchema.php');$migration->up();
+        $schema->table('finance_document_reverse_generations',function($table){
+            $table->dropUnique('fin_origin_reverse_uuid_unique');$table->dropUnique('fin_origin_reverse_generation_unique');$table->dropIndex('fin_origin_reverse_request_idx');
+        });
+        $migration->up();$migration->up();
+        $indexes=collect($schema->getIndexes('finance_document_reverse_generations'))->keyBy('name');
+        $this->assertTrue($indexes['fin_origin_reverse_uuid_unique']['unique']);
+        $this->assertTrue($indexes['fin_origin_reverse_generation_unique']['unique']);
+        $this->assertArrayHasKey('fin_origin_reverse_request_idx',$indexes->all());
+        $row=['organization_id'=>14,'operation_uuid'=>(string)Str::uuid(),'generation'=>1,'reversal_operation_uuid'=>(string)Str::uuid(),'request_uuid'=>(string)Str::uuid(),'source_revision'=>str_repeat('a',64),'source_journal_id'=>95,'original_match_journal_id'=>97,'actor_id'=>4,'central_actor_id'=>323,'closure_permission'=>'unpost','state'=>'prepared','snapshot'=>'{}'];
+        $db->table('finance_document_reverse_generations')->insert($row);
+        foreach(['uuid','generation']as$duplicate){
+            $next=$row;if($duplicate==='uuid')$next['generation']=2;else $next['reversal_operation_uuid']=(string)Str::uuid();
+            try{$db->table('finance_document_reverse_generations')->insert($next);$this->fail('Duplicate '.$duplicate.' accepted');}
+            catch(\Illuminate\Database\QueryException $e){$this->assertSame('23000',(string)$e->getCode());}
+        }
+        $this->assertSame(1,$db->table('finance_document_reverse_generations')->count());
+    }
+
 }

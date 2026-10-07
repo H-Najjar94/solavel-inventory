@@ -22,6 +22,21 @@ return new class extends Migration {
                 $table->index(['organization_id', 'request_uuid'], 'fin_origin_reverse_request_idx');
             });
         }
+        // CREATE TABLE can survive an index failure in MySQL. A retry repairs
+        // only missing indexes; duplicate historical identities fail closed.
+        $schema = Schema::connection('tenant');
+        foreach ([
+            ['fin_origin_reverse_uuid_unique', ['reversal_operation_uuid'], 'unique'],
+            ['fin_origin_reverse_generation_unique', ['organization_id', 'operation_uuid', 'generation'], 'unique'],
+            ['fin_origin_reverse_request_idx', ['organization_id', 'request_uuid'], 'index'],
+        ] as [$name, $columns, $kind]) {
+            if (!$schema->hasIndex('finance_document_reverse_generations', $name, $kind === 'unique' ? 'unique' : null)) {
+                $schema->table('finance_document_reverse_generations', function (Blueprint $table) use ($name, $columns, $kind) {
+                    if ($kind === 'unique') $table->unique($columns, $name);
+                    else $table->index($columns, $name);
+                });
+            }
+        }
         if (Schema::connection('tenant')->hasTable('finance_document_matches')
             && !Schema::connection('tenant')->hasColumn('finance_document_matches', 'reversal_generation')) {
             Schema::connection('tenant')->table('finance_document_matches', function (Blueprint $table) {
