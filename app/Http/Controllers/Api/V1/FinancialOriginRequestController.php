@@ -15,7 +15,7 @@ final class FinancialOriginRequestController extends Controller
 {
     public function index(Request $request)
     {
-        $data = $request->validate(['side'=>'required|in:purchase,sales', 'state'=>'sometimes|in:active,history,cancelled']);
+        $data = $request->validate(['side'=>'required|in:purchase,sales', 'state'=>'sometimes|in:active,history,cancelled', 'request_uuid'=>'sometimes|uuid']);
         $permissions = app(InventoryPermissionService::class);
         $side = $data['side'];
         abort_unless($permissions->can($request->user(), $side === 'sales' ? 'inventory.view_sales' : 'inventory.view_stock'), 403);
@@ -33,7 +33,8 @@ final class FinancialOriginRequestController extends Controller
             });
         }
         $state = $data['state'] ?? 'active';
-        $query->whereIn('status', match ($state) {
+        if (!empty($data['request_uuid'])) $query->where('request_uuid', $data['request_uuid']);
+        else $query->whereIn('status', match ($state) {
             'cancelled'=>['cancelled'], 'history'=>['complete', 'cancelled'], default=>['pending', 'partial'],
         });
         $rows = $query->latest('id')->paginate(25);
