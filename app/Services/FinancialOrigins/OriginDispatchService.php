@@ -79,6 +79,22 @@ final class OriginDispatchService
         $c=FinancialOriginCommand::query()->where('request_uuid',$r->request_uuid)->where('operation_uuid',$data['operation_uuid']??'')->where('actor_id',$actor)->firstOrFail();return $this->commandSummary($c);
     }
 
+    /** Warehouse-owned operation lookup; no Finance application access is borrowed. */
+    public function statusNative(array $data,int $actor):array
+    {
+        $r=app(OriginRequestService::class)->find($data);
+        $admission=OriginSourceAdmission::stock($r,$actor,$r->side==='sales'?'inventory.view_sales':'inventory.view_stock');
+        return DB::connection('tenant')->transaction(function()use($r,$admission,$data,$actor){
+            $admission->lock($r);
+            $r=$r->newQuery()->whereKey($r->id)->lockForUpdate()->firstOrFail();
+            abort_unless(($data['request_revision']??null)===$r->source_revision,409);
+            $c=FinancialOriginCommand::query()->where('organization_id',$r->organization_id)
+                ->where('request_uuid',$r->request_uuid)->where('operation_uuid',$data['operation_uuid']??'')
+                ->where('actor_id',$actor)->firstOrFail();
+            return $this->commandSummary($c);
+        },3);
+    }
+
     public function abandon(array $data,int $actor):array
     {
         $r=app(OriginRequestService::class)->find($data);return $this->abandonAdmitted($data,$actor,OriginSourceAdmission::finance($r,$actor));
