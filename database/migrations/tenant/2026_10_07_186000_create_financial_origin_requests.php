@@ -33,7 +33,7 @@ return new class extends Migration {
             $t->index(['organization_id','request_uuid'],'sfoc_request_index');
         });
         if(!$schema->hasTable('stock_financial_origin_outbox')) $schema->create('stock_financial_origin_outbox',function(Blueprint $t){
-            $t->id(); $t->unsignedBigInteger('organization_id'); $t->uuid('event_uuid'); $t->uuid('operation_uuid'); $t->string('event_type',64);
+            $t->id(); $t->unsignedBigInteger('organization_id'); $t->uuid('organization_mapping_uuid'); $t->uuid('event_uuid'); $t->uuid('operation_uuid'); $t->string('event_type',64);
             $t->string('source_document_type',32); $t->unsignedBigInteger('source_document_id'); $t->unsignedBigInteger('source_journal_id');
             $t->string('physical_document_type',32); $t->unsignedBigInteger('physical_document_id'); $t->string('external_source_key',191);
             $t->char('payload_hash',64); $t->json('payload'); $t->string('status',32)->default('pending'); $t->unsignedInteger('attempts')->default(0);
