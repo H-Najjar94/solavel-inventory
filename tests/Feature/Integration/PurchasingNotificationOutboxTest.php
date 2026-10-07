@@ -37,7 +37,7 @@ final class PurchasingNotificationOutboxTest extends TestCase {
  public function test_revoked_current_receiving_authority_never_fetches_stored_alert_bodies():void {
   $this->fixture();$user=new \App\Models\User;$user->id=1007;$request=\Illuminate\Http\Request::create('/inventory/api/v1/purchasing/notifications');$request->setUserResolver(fn()=>$user);
   // Explicit remote/canonical permission seam: current authority revoked.
-  $this->mock(\App\Services\Access\InventoryPermissionService::class,fn($mock)=>$mock->shouldReceive('can')->with($user,'inventory.receive_goods')->once()->andReturn(false));Http::fake();
+  $this->mock(\App\Services\Access\InventoryPermissionService::class,function($mock)use($user){$mock->shouldReceive('can')->with($user,'inventory.receive_goods')->once()->andReturn(false);$mock->shouldReceive('can')->with($user,'inventory.manage_shipments')->once()->andReturn(false);});Http::fake();
   try {app(\App\Http\Controllers\Api\V1\PurchasingNotificationController::class)->index($request,app(OrganizationContext::class));$this->fail('Revoked receiving permission accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}Http::assertNothingSent();
  }
 
