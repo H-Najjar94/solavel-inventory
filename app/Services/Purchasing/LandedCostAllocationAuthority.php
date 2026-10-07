@@ -19,6 +19,7 @@ final readonly class LandedCostAllocationAuthority {
   abort_unless(hash_equals((string)$op->payload_hash,hash('sha256',$op->payload))&&hash_equals((string)$op->payload_hash,(string)($proof['payload_hash']??'')),409);$payload=json_decode($op->payload,true,512,JSON_THROW_ON_ERROR);
   abort_unless(SolaStockJournalContract::payloadHash($payload)===SolaStockJournalContract::payloadHash($proof['canonical_payload']??[]),403);
   abort_unless(substr((string)$cost->date,0,10)===($payload['date']??null)&&Decimal::cmp((string)$cost->exchange_rate,(string)$payload['exchange_rate'],12)===0&&Decimal::cmp((string)$cost->total_additional_cost,(string)$payload['amount'],8)===0&&empty($cost->deleted_at),409);
+  abort_unless(isset($payload['document_hash'])&&hash_equals((string)$payload['document_hash'],self::costSnapshotHash($cost)),409);
   foreach(['operation_uuid'=>$identity['operation_uuid'],'landed_cost_id'=>$cost->id,'source_bill_id'=>$bill->id,'bill_journal_id'=>$bill->journal_entry_id,'organization_mapping_uuid'=>$mapping->mapping_uuid]as$key=>$value)abort_unless((string)($payload[$key]??'')===(string)$value,409);
   abort_unless(($payload['schema_version']??null)==='purchasing.landed_cost.v1'&&($payload['base_currency_code']??null)===$mapping->base_currency_code&&Decimal::gt((string)($payload['exchange_rate']??'0'),'0')&&Decimal::gt((string)($payload['amount_base']??'0'),'0'),409);
   $nativeJournal=$db->table('journal_entries')->where('organization_id',$mapping->finance_organization_id)->where('id',$bill->journal_entry_id)->where('source_type','App\\Models\\Bill')->where('source_id',$bill->id)->lockForUpdate()->first();self::activeJournal($nativeJournal);
@@ -48,6 +49,12 @@ final readonly class LandedCostAllocationAuthority {
   if($action==='release')abort_unless(($quote['abandoned']??false)===true&&!empty($quote['plan_fingerprint'])&&($direction==='reverse'?!$op->reversal_journal_id:!$op->journal_entry_id),409);
   $scale=$payload['finance_money_scale']??null;abort_unless(is_int($scale)&&$scale>=0&&$scale<=6,409);
   return new self($payload,$sources,$proof,$org,(int)$mapping->finance_organization_id,$scale,$quote,$storedPlan);
+ }
+ private static function costSnapshotHash(object $cost):string {
+  $db=DB::connection('tenant');
+  $lines=$db->table('landed_cost_lines')->where('landed_cost_id',$cost->id)->orderBy('id')->lockForUpdate()->get()->map(fn($line)=>[(int)$line->id,(int)$line->expense_account_id,Decimal::round((string)$line->amount,2)])->all();
+  $allocations=$db->table('landed_cost_allocations')->where('landed_cost_id',$cost->id)->orderBy('id')->lockForUpdate()->get()->map(fn($line)=>[(int)$line->id,(int)$line->inventory_item_id,(string)(int)$line->quantity,Decimal::round((string)$line->allocated_amount,2)])->all();
+  return hash('sha256',json_encode(['bill_id'=>(int)$cost->bill_id,'purchase_order_id'=>$cost->purchase_order_id===null?null:(int)$cost->purchase_order_id,'date'=>substr((string)$cost->date,0,10),'currency_id'=>$cost->currency_id===null?null:(int)$cost->currency_id,'exchange_rate'=>Decimal::round((string)$cost->exchange_rate,8),'total'=>Decimal::round((string)$cost->total_additional_cost,2),'lines'=>$lines,'allocations'=>$allocations],JSON_THROW_ON_ERROR));
  }
  private static function activeJournal(?object $journal):void{abort_unless($journal&&$journal->status==='posted'&&!empty($journal->posted_at)&&empty($journal->voided_at)&&empty($journal->deleted_at),409);}
  public function storedQuote():?array{return$this->quote;} public function forwardQuote():?array{return$this->forwardQuote;}

@@ -31,8 +31,15 @@ final class LandedCostNativeValuationTest extends TestCase
         if (!$schema->hasColumn('journal_entries', 'reverses_entry_id')) $schema->table('journal_entries', fn (Blueprint $t) => $t->unsignedBigInteger('reverses_entry_id')->nullable());
         if (!$schema->hasTable('landed_costs')) $schema->create('landed_costs', function (Blueprint $t) {
             $t->id(); $t->unsignedBigInteger('org_id'); $t->unsignedBigInteger('bill_id'); $t->date('date');
+            $t->unsignedBigInteger('purchase_order_id')->nullable(); $t->unsignedBigInteger('currency_id')->nullable();
             $t->decimal('exchange_rate', 20, 12); $t->decimal('total_additional_cost', 20, 8);
             $t->string('status'); $t->unsignedBigInteger('journal_entry_id')->nullable(); $t->softDeletes();
+        });
+        if (!$schema->hasTable('landed_cost_lines')) $schema->create('landed_cost_lines', function (Blueprint $t) {
+            $t->id(); $t->unsignedBigInteger('landed_cost_id'); $t->unsignedBigInteger('expense_account_id'); $t->decimal('amount', 18, 2);
+        });
+        if (!$schema->hasTable('landed_cost_allocations')) $schema->create('landed_cost_allocations', function (Blueprint $t) {
+            $t->id(); $t->unsignedBigInteger('landed_cost_id'); $t->unsignedBigInteger('inventory_item_id'); $t->decimal('quantity', 15, 4); $t->decimal('allocated_amount', 18, 2);
         });
         if (!$schema->hasTable('finance_landed_cost_operations')) $schema->create('finance_landed_cost_operations', function (Blueprint $t) {
             $t->id(); $t->unsignedBigInteger('organization_id'); $t->uuid('organization_mapping_uuid'); $t->unsignedBigInteger('landed_cost_id');
@@ -77,6 +84,8 @@ final class LandedCostNativeValuationTest extends TestCase
             'source_bill_id' => 800, 'bill_journal_id' => 96, 'organization_mapping_uuid' => $this->mapping->mapping_uuid,
             'date' => '2026-10-07', 'currency_code' => 'JOD', 'base_currency_code' => 'JOD', 'exchange_rate' => '1',
             'amount' => '10', 'amount_base' => '10', 'finance_money_scale' => 2,
+            'document_hash' => hash('sha256', json_encode(['bill_id' => 800, 'purchase_order_id' => null, 'date' => '2026-10-07', 'currency_id' => null,
+                'exchange_rate' => '1.00000000', 'total' => '10.00', 'lines' => [[1, 300, '10.00']], 'allocations' => [[1, 701, '10', '10.00']]], JSON_THROW_ON_ERROR)),
             'sources' => [['position_uuid' => $position, 'bill_line_id' => 801, 'receipt_id' => $receipt->id, 'receipt_line_id' => $line->id,
                 'receipt_mapping_uuid' => $life->mapping_uuid, 'receipt_journal_key' => $journal->idempotency_key,
                 'item_external_id' => 701, 'unit_external_id' => 702, 'quantity' => '10', 'base_quantity' => '10',
@@ -84,6 +93,8 @@ final class LandedCostNativeValuationTest extends TestCase
         $db = DB::connection('tenant');
         $db->table('bills')->insert(['id' => 800, 'organization_id' => 14, 'journal_entry_id' => 96]);
         $db->table('landed_costs')->insert(['id' => 700, 'org_id' => 14, 'bill_id' => 800, 'date' => '2026-10-07', 'exchange_rate' => 1, 'total_additional_cost' => 10, 'status' => 'draft']);
+        $db->table('landed_cost_lines')->insert(['id' => 1, 'landed_cost_id' => 700, 'expense_account_id' => 300, 'amount' => 10]);
+        $db->table('landed_cost_allocations')->insert(['id' => 1, 'landed_cost_id' => 700, 'inventory_item_id' => 701, 'quantity' => 10, 'allocated_amount' => 10]);
         foreach ([95 => ['external-api:'.hash('sha256', $journal->idempotency_key), null, null], 96 => ['private-bill-800', 'App\\Models\\Bill', 800]] as $id => [$key, $type, $source])
             $db->table('journal_entries')->insert(['id' => $id, 'organization_id' => 14, 'number' => 'LANDED-'.$id, 'entry_date' => '2026-10-07',
                 'source_key' => $key, 'source_type' => $type, 'source_id' => $source, 'status' => 'posted', 'posted_at' => now()]);
