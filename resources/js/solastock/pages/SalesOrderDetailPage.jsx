@@ -146,7 +146,7 @@ export default function SalesOrderDetailPage() {
                 {canShipNow && <button className="btn btn--primary" disabled={!canShip.allowed || busy} onClick={createShipment}>{t('salesOrders.actions.createShipment', 'Create shipment')}</button>}
                 {!isDraft && !closed && <ConfirmedActionButton className="btn btn--danger" disabled={!canSO.allowed || busy} onConfirm={() => act(() => api.cancelSalesOrder(id), t('salesOrders.messages.cancelled', 'Sales order cancelled.'))} title={feedbackText('cancelSalesOrder')} message={feedbackText('cancelSalesOrderBody')} action={feedbackText('cancelSalesOrder')}>{t('salesOrders.actions.cancelOrder', 'Cancel order')}</ConfirmedActionButton>}
             </div>
-            <p className="muted">{t('salesOrders.detail.shippingNoticeBeforeEvent', 'Shipping posts stock OUT through the canonical ledger and records a')} <code dir="ltr">{'shipment.posted'}</code> {t('salesOrders.detail.shippingNoticeAfterEvent', 'outbox event for SolaCount. No invoice or journal entry is created here.')}</p>
+            <p className="muted">{t('salesOrders.detail.shippingNotice', 'Posting a shipment confirms physical dispatch. When connected to SolaCount, the shipment creates or links an invoice draft for accountant review.')}</p>
         </section>
     );
 }

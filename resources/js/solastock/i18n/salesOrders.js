@@ -80,8 +80,7 @@ export const salesOrdersEn = {
     'salesOrders.messages.nothingToShip': 'Nothing remains to ship for this order.',
     'salesOrders.messages.shipmentCreated': 'Draft shipment created — review it, then post it to ship.',
     'salesOrders.messages.cancelled': 'Sales order cancelled.',
-    'salesOrders.detail.shippingNoticeBeforeEvent': 'Shipping posts stock OUT through the canonical ledger and records a',
-    'salesOrders.detail.shippingNoticeAfterEvent': 'outbox event for SolaCount. No invoice or journal entry is created here.',
+    'salesOrders.detail.shippingNotice': 'Posting a shipment confirms physical dispatch. When connected to SolaCount, the shipment creates or links an invoice draft for accountant review.',
 };
 
 export const salesOrdersAr = {
@@ -166,8 +165,7 @@ export const salesOrdersAr = {
     'salesOrders.messages.nothingToShip': 'لا توجد كمية متبقية لشحنها في هذا الأمر.',
     'salesOrders.messages.shipmentCreated': 'تم إنشاء مسودة الشحنة — راجعها ثم رحّلها للشحن.',
     'salesOrders.messages.cancelled': 'تم إلغاء أمر البيع.',
-    'salesOrders.detail.shippingNoticeBeforeEvent': 'يؤدي ترحيل الشحنة إلى إخراج المخزون عبر سجل المخزون المعتمد، ويسجل حدث',
-    'salesOrders.detail.shippingNoticeAfterEvent': 'في صندوق الصادر الخاص بـ SolaCount. ولا تُنشأ هنا فاتورة أو قيد يومية.',
+    'salesOrders.detail.shippingNotice': 'ترحيل الشحنة يؤكد خروج البضاعة فعليًا. عند الاتصال بـ SolaCount، تنشئ الشحنة مسودة فاتورة أو ترتبط بفاتورة موجودة لمراجعة المحاسب.',
 };
 
 // Conventional aliases used by the aggregate dictionary loader.
