@@ -14,6 +14,7 @@ return [
         'inventory.receive_goods' => 'Receive approved purchase orders without changing valuation',
         'inventory.manage_purchase_orders' => 'Create and edit purchase orders in assigned warehouses',
         'inventory.approve_purchase_orders' => 'Approve and cancel purchase orders in assigned warehouses',
+        'inventory.manage_purchase_returns' => 'Create, post and reverse supplier returns in assigned warehouses',
         'inventory.transfer_stock' => 'Transfer stock between assigned warehouses',
         'inventory.manage_warehouse_structure' => 'Manage zones and bins in assigned warehouses',
         'inventory.view_dashboard' => 'View the inventory dashboard',
