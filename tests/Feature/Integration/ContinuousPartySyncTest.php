@@ -106,4 +106,46 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame(101,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
  }
 
+ private function reviewFacts():array {
+  config(['finance_workspace.secret'=>str_repeat('k',48)]);
+  return ['source_id'=>901,'source_revision'=>app(PartySyncLedger::class)->revision(app(PartySyncLedger::class)->fields($this->mapping,'finance','supplier',901)),'native_actor_id'=>990001];
+ }
+ public function test_explicit_identity_choice_links_existing_supplier_and_preserves_local_name():void {
+  $this->source();$target=Supplier::create(['code'=>'REVIEW-LOCAL','name'=>'Reviewed warehouse name','is_active'=>true]);
+  $review=app(\App\Services\Integration\PartyIdentityReview::class);$facts=$this->reviewFacts();$choice=$review->choices($this->mapping,$facts)['candidates'][0];
+  $r=$review->resolve($this->mapping,$facts,$target->id,$choice['selection_fingerprint']);
+  $this->assertSame('synced',$r['status']);$this->assertSame($target->id,$r['target_id']);$this->assertSame(1,Supplier::count());$this->assertSame('Reviewed warehouse name',$target->fresh()->name);
+  $this->assertSame(1,DB::connection('tenant')->table('inventory_audit_logs')->where('action','integration.party.identity_resolved')->count());
+ }
+ public function test_stale_selection_fingerprint_cannot_link_a_changed_target():void {
+  $this->source();$target=Supplier::create(['code'=>'STALE-LOCAL','name'=>'Before change','is_active'=>true]);
+  $review=app(\App\Services\Integration\PartyIdentityReview::class);$facts=$this->reviewFacts();$choice=$review->choices($this->mapping,$facts)['candidates'][0];$target->update(['name'=>'Changed after preview']);
+  try{$review->resolve($this->mapping,$facts,$target->id,$choice['selection_fingerprint']);$this->fail('Stale review accepted.');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  $this->assertSame(0,IntegrationMasterDataMapping::count());
+ }
+ public function test_explicit_choice_cannot_replace_an_existing_party_identity():void {
+  $this->source();$this->source(902,'Other canonical supplier');$other=$this->ensure(902);
+  $review=app(\App\Services\Integration\PartyIdentityReview::class);$facts=$this->reviewFacts();$choice=$review->choices($this->mapping,$facts)['candidates'][0];
+  try{$review->resolve($this->mapping,$facts,$other['target_id'],$choice['selection_fingerprint']);$this->fail('Conflicting immutable identity overwritten.');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  $this->assertSame('902',IntegrationMasterDataMapping::query()->sole()->solabooks_record_id);
+ }
+
+ public function test_native_unpaid_and_paid_bills_use_posted_dependency_authority():void {
+  $this->source();$db=DB::connection('tenant');
+  $db->table('bills')->insert([['id'=>71,'organization_id'=>14,'supplier_id'=>901,'status'=>'unpaid','journal_entry_id'=>6],['id'=>72,'organization_id'=>14,'supplier_id'=>901,'status'=>'paid','journal_entry_id'=>4]]);
+  // The remote signature/Finance JE proof remains the explicit isolated boundary.
+  // Selecting draft authority would reject both real native persisted states.
+  $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class,function($mock){
+   $mock->shouldReceive('authorizePurchasing')->with(990001,71,'post',[])->once()->andReturn(['allowed'=>true,'bill_journal_id'=>6]);
+   $mock->shouldReceive('authorizePurchasing')->with(990001,72,'post',[])->once()->andReturn(['allowed'=>true,'bill_journal_id'=>4]);
+  });
+  $service=app(ContinuousPartySync::class);
+  $one=$service->authorizeBillDependency($this->mapping,['source_id'=>901,'source_bill_id'=>71,'native_actor_id'=>990001]);
+  $two=$service->authorizeBillDependency($this->mapping,['source_id'=>901,'source_bill_id'=>72,'native_actor_id'=>990001]);
+  $this->assertSame(6,$one['bill_journal_id']);$this->assertSame(4,$two['bill_journal_id']);
+  $this->assertSame(0,Supplier::count());
+ }
+
 }
