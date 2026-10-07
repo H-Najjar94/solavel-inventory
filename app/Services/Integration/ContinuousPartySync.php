@@ -6,6 +6,35 @@ use App\Services\Tenancy\TenantManager;
 use Illuminate\Support\Facades\DB;
 /** Closed signed party dependency; no interactive Stock assignment is implied. */
 final class ContinuousPartySync {
+ /** Closed metadata dependency for a real saved SR/Expense, never a physical operation. */
+ public function dispatchFinancialOrigin(array $input,object $organization):array {
+  abort_unless(($input['authority_kind']??null)==='continuous_party_sync' && (int)$input['actor_id']===0 && $input['action']==='financial-origin.party.ensure',403);
+  $central=DB::connection((string)config('tenancy.central_connection','mysql'));
+  foreach([['finance','accounting','construction'],['inventory']] as $slugs)
+   abort_unless($central->table('organization_projects as a')->join('projects','projects.id','=','a.project_id')->where('a.organization_id',$organization->id)->where('a.is_active',true)->where('projects.is_active',true)->whereIn('projects.slug',$slugs)->exists(),403);
+  $tenants=app(TenantManager::class);$tenants->useTenant((int)$organization->id,$tenants->resolveDatabaseName((int)$organization->client_id));
+  $mapping=app(ReceivingRequestService::class)->mapping();
+  abort_unless((int)$mapping->finance_organization_id===(int)$input['finance_organization_id'] && (int)$mapping->central_client_id===(int)$organization->client_id && (int)$mapping->central_organization_id===(int)$organization->id,403);
+  app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+  $facts=validator((array)($input['data']??[]),[
+   'entity_type'=>'required|in:customer,supplier','source_app'=>'required|in:finance','source_id'=>'required|integer|min:1',
+   'source_document_type'=>'required|in:sales_receipt,expense','source_document_id'=>'required|integer|min:1','source_journal_id'=>'required|integer|min:1',
+   'request_uuid'=>'required|uuid','document_revision'=>'required|string|size:64','source_revision'=>'required|string|size:64','native_actor_id'=>'required|integer|min:1',
+  ])->validate();
+  $origin=\App\Services\FinancialOrigins\FinancialOrigin::fromPayload($facts);
+  $type=$origin->type==='expense'?'supplier':'customer';abort_unless($type===$facts['entity_type'],403);
+  $authority=app(SolaBooksOutboxDeliveryService::class)->authorizeOrigin((int)$facts['native_actor_id'],$origin,'post',[
+   'request_uuid'=>$facts['request_uuid'],'source_revision'=>$facts['document_revision'],
+  ]);
+  $payload=(array)($authority['canonical_payload']??[]);
+  abort_unless(($authority['request_uuid']??null)===$facts['request_uuid'] && ($authority['request_revision']??null)===$facts['document_revision']
+   && ($payload['source_document_type']??null)===$origin->type && (int)($payload['source_document_id']??0)===$origin->documentId
+   && (int)($payload['source_journal_id']??0)===$origin->journalId
+   && (int)($payload[$type==='supplier'?'supplier_external_id':'customer_external_id']??0)===(int)$facts['source_id'],403);
+  $ledger=app(PartySyncLedger::class);$fields=$ledger->fields($mapping,'finance',$type,(int)$facts['source_id']);
+  abort_unless($fields && hash_equals($ledger->revision($fields),$facts['source_revision']),409);
+  return $this->materialize($mapping,'finance',$type,(int)$facts['source_id'],$facts['source_revision']);
+ }
  public function dispatch(array $input,object $organization):array {
   abort_unless(($input['authority_kind']??null)==='continuous_party_sync' && (int)$input['actor_id']===0
    && in_array($input['action'],['purchasing.party.ensure','purchasing.party.status','purchasing.party.choices','purchasing.party.resolve','sales.party.ensure','sales.party.status','sales.party.choices','sales.party.resolve'],true),403);
