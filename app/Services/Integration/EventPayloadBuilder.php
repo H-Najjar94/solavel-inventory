@@ -144,6 +144,7 @@ class EventPayloadBuilder
             'OpeningStockEntry' => 'opening_stock_entry_lines',
             'Shipment' => 'shipment_lines',
             'SalesReturn' => 'sales_return_lines',
+            'SupplierReturn' => 'supplier_return_lines',
             'StockAdjustment' => 'stock_adjustment_lines',
             'StockTransfer' => 'stock_transfer_lines',
             default => null,
