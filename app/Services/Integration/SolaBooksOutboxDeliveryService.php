@@ -295,6 +295,46 @@ class SolaBooksOutboxDeliveryService
         return $data;
     }
 
+    /** Closed value-only Expense authority; does not authorize human receipt or financial posting. */
+    public function authorizeOriginSettlement(array $facts, string $operation, int $actor): array
+    {
+        abort_unless(in_array($operation, ['prepare', 'apply', 'reverse', 'status', 'release'], true) && $actor >= 0, 403);
+        $facts = validator($facts, [
+            'source_document_id' => 'required|integer|min:1', 'source_journal_id' => 'required|integer|min:1',
+            'request_uuid' => 'required|uuid', 'operation_uuid' => 'required|uuid', 'position_uuid' => 'required|uuid',
+            'source_revision' => 'required|string|size:64', 'direction' => 'required|in:forward,reverse',
+            'plan_fingerprint' => 'sometimes|string|size:64',
+        ])->validate();
+        abort_unless($operation !== 'reverse' || ($facts['direction'] === 'reverse' && $actor > 0), 403);
+        $mapping = app(ReceivingRequestService::class)->mapping();
+        $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
+        $key = 'financial-origin:settlement-authorize:'.Str::uuid();
+        $payload = ['source_app' => 'solastock', 'schema_version' => 'financial-origin.v1', 'contract_version' => SolaStockJournalContract::VERSION,
+            'event_type' => 'financial-origin.settlement.authorize', 'event_uuid' => (string) Str::uuid(), 'external_source_key' => $key,
+            'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id,
+            'identity' => ['central_client_id' => $mapping->central_client_id, 'central_organization_id' => $mapping->central_organization_id,
+                'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id,
+                'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid],
+            'authority_kind' => 'posted_financial_origin_settlement', 'source_document_type' => 'expense',
+            'actor_id' => $actor, 'operation' => $operation, 'settlement' => $facts];
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/financial-origins/settlements/authorize', $this->journalEndpoint());
+        if (!$endpoint || $endpoint === $this->journalEndpoint()) throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        $event = new IntegrationOutboxEvent(['organization_id' => $mapping->solastock_organization_id, 'idempotency_key' => $key, 'event_uuid' => $payload['event_uuid']]);
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+        abort_unless($response->successful(), in_array($response->status(), [403, 404], true) ? 403 : 503, __('inventory.purchasing.authority_unavailable'));
+        $data = (array) $response->json('data');
+        abort_unless(($data['allowed'] ?? false) === true && ($data['schema_version'] ?? null) === 'financial-origin.v1'
+            && ($data['authority_kind'] ?? null) === 'posted_financial_origin_settlement' && ($data['source_document_type'] ?? null) === 'expense'
+            && ($data['operation'] ?? null) === $operation && ($data['direction'] ?? null) === $facts['direction']
+            && array_key_exists('actor_id', $data) && (int) $data['actor_id'] === $actor
+            && (int) ($data['finance_organization_id'] ?? 0) === (int) $mapping->finance_organization_id
+            && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id
+            && ($data['organization_mapping_uuid'] ?? null) === $mapping->mapping_uuid, 403);
+        foreach (['source_document_id', 'source_journal_id', 'request_uuid', 'operation_uuid', 'position_uuid', 'source_revision'] as $field) abort_unless((string) ($data[$field] ?? '') === (string) $facts[$field], 403);
+        return $data;
+    }
+
     public function authorizePurchaseSettlement(array $facts, string $operation): array
     {
         $mapping = app(ReceivingRequestService::class)->mapping();
