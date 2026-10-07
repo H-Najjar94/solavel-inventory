@@ -159,6 +159,9 @@ final class OriginRequestService
     /** Human Stock history exposes physical facts, never another actor's operation payload. */
     private function physicalDocuments(FinancialOriginRequest $request):array
     {
+        // Human presentation may require canonical access introspection. Never add remote
+        // authorization to transactional source ACKs or immutable physical event production.
+        if(DB::connection('tenant')->transactionLevel()>0)return [];
         $user=request()->user();
         if(!$user || !app(InventoryPermissionService::class)->can($user,$request->side==='sales'?'inventory.view_sales':'inventory.view_stock'))return [];
         $allowed=app(WarehouseAccessService::class)->allowedIds();if($allowed===[])return [];
