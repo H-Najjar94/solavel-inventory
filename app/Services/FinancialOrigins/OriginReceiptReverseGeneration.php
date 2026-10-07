@@ -81,8 +81,10 @@ final readonly class OriginReceiptReverseGeneration
                 'reversal_generation' => (int) $prior->generation, 'reversal_operation_uuid' => $prior->reversal_operation_uuid,
                 'plan_fingerprint' => $prior->plan_fingerprint] as $key => $value) abort_unless(is_array($ack) && ($ack[$key] ?? null) === $value, 409);
             $uuid = Uuid::uuid5(Uuid::NAMESPACE_URL, 'financial-origin|'.$mappingUuid.'|'.$prior->reversal_operation_uuid.'|'.$item.'|'.$warehouse.'|reverse')->toString();
+            // Native released holds are terminal/immutable. Read without acquiring a hold-before-item
+            // lock; the Held service retains the existing item -> current hold lock order.
             $hold = $db->table('purchase_valuation_holds')->where('organization_id', $stockOrg)->where('settlement_uuid', $uuid)
-                ->where('purpose', 'origin_reverse')->where('plan_revision', 1)->lockForUpdate()->first();
+                ->where('purpose', 'origin_reverse')->where('plan_revision', 1)->first();
             abort_unless($hold && $hold->state === 'released' && $hold->plan_fingerprint === $prior->plan_fingerprint
                 && (int) $hold->item_id === $item && (int) $hold->warehouse_id === $warehouse && (int) $hold->receipt_id === $receipt
                 && $hold->source_document_type === 'expense' && (int) $hold->source_document_id === (int) $request->source_document_id
