@@ -66,6 +66,10 @@ final class SuperviseSolaBooksTransport extends Command
                     $processed++;
                 }
                 $processed += app(ReceiptHandoffService::class)->deliverDue(min(25, max(1, (int) $this->option('limit'))));
+                // Mixed-version tenants may not yet have the additive sales outbox.
+                if (\Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('sales_document_outbox')) {
+                    $processed += app(\App\Services\Sales\ShipmentHandoffService::class)->deliverDue(1);
+                }
                 $processed += app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1);
                 $organizations->forget();
             }
