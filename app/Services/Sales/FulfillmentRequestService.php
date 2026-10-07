@@ -20,6 +20,7 @@ final class FulfillmentRequestService
   }return(int)$pair->solastock_record_id;
  }
  public function upsert(array $data,int $actor):array {
+  \Illuminate\Support\Facades\Validator::make($data,['request_uuid'=>'required|uuid','source_invoice_id'=>'required|integer|min:1','source_revision'=>'required|string|size:64','source_status'=>'required|in:draft,posted','customer_external_id'=>'required|integer|min:1','invoice_date'=>'required|date_format:Y-m-d','currency_code'=>'required|string|size:3','base_currency_code'=>'required|string|size:3','lines'=>'required|array|min:1','lines.*.source_line_id'=>'required','lines.*.item_external_id'=>'required|integer|min:1','lines.*.unit_external_id'=>'required|integer|min:1','lines.*.quantity'=>'required|numeric|gt:0','lines.*.unit_price'=>'required|numeric|min:0'])->validate();
   $permission=($data['source_status']??null)==='posted'?'post':'edit_draft';
   $authority=app(SolaBooksOutboxDeliveryService::class)->authorizeSales($actor,(int)$data['source_invoice_id'],$permission);
   abort_unless(($authority['request_revision']??null)===$data['source_revision'],409,__('inventory.purchasing.source_changed'));
@@ -56,7 +57,8 @@ final class FulfillmentRequestService
   },3);
  }
  public function cancel(array $data,int $actor):array {
-  $authority=app(SolaBooksOutboxDeliveryService::class)->authorizeSales($actor,(int)$data['source_invoice_id'],'post',['command'=>'cancel','request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'expected_revision'=>$data['expected_revision']??null]);
+  $known=FulfillmentRequest::query()->where('request_uuid',$data['request_uuid'])->where('source_invoice_id',$data['source_invoice_id'])->firstOrFail();
+  $authority=app(SolaBooksOutboxDeliveryService::class)->authorizeSales($actor,(int)$data['source_invoice_id'],$known->source_status==='posted'?'post':'edit_draft',['command'=>'cancel','request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'expected_revision'=>$data['expected_revision']??null]);
   abort_unless(($authority['request_uuid']??null)===$data['request_uuid']&&($authority['command']??null)==='cancel',403);
   return DB::connection('tenant')->transaction(function()use($data){$r=FulfillmentRequest::query()->where('request_uuid',$data['request_uuid'])->where('source_invoice_id',$data['source_invoice_id'])->lockForUpdate()->firstOrFail();
    abort_unless(($data['expected_revision']??$data['source_revision'])===$r->source_revision,409);
