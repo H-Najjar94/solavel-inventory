@@ -107,6 +107,15 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if (in_array($input['action'], array_merge(FinanceDocumentLifecycleAuthority::RETURN_REQUEST_ACTIONS, ['purchasing.return_request.post']), true)) {
+                abort_unless(($input['authority_kind'] ?? null) === 'supplier_return_request', 403);
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(class_exists(\App\Services\Purchasing\SupplierReturnRequestService::class)
+                    && Schema::connection('tenant')->hasTable('supplier_return_requests'), 409, 'workspace_schema_not_ready');
+                $result = app(\App\Services\Purchasing\SupplierReturnRequestService::class)->dispatch($input, $org);
+                return response()->json(['success' => true, 'data' => $result]);
+            }
             if (in_array($input['action'], FinanceDocumentLifecycleAuthority::LANDED_COST_ACTIONS, true)) {
                 abort_unless(($input['authority_kind'] ?? null) === 'posted_landed_cost', 403);
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'

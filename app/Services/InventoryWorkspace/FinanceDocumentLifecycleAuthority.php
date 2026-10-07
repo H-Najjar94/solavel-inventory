@@ -48,6 +48,11 @@ final class FinanceDocumentLifecycleAuthority
         'purchasing.landed_cost.release',
     ];
 
+    /** Nonphysical return intent only; physical posting still requires Stock access. */
+    public const RETURN_REQUEST_ACTIONS = [
+        'purchasing.return_request.options', 'purchasing.return_request.create', 'purchasing.return_request.status',
+    ];
+
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
@@ -66,7 +71,7 @@ final class FinanceDocumentLifecycleAuthority
 
     public static function scopeFor(string $action): ?string
     {
-        return (in_array($action, self::ACTIONS, true) || in_array($action, self::LANDED_COST_ACTIONS, true)) ? self::SCOPE
+        return (in_array($action, self::ACTIONS, true) || in_array($action, self::LANDED_COST_ACTIONS, true) || in_array($action, self::RETURN_REQUEST_ACTIONS, true)) ? self::SCOPE
             : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 
