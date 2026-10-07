@@ -224,7 +224,7 @@ final class SupplierReturnRequestSignedTest extends TestCase {
         DB::connection('tenant')->table('bills')->insert(['id'=>990,'organization_id'=>14,'supplier_id'=>903,'status'=>'posted','journal_entry_id'=>991]);
         DB::connection('tenant')->table('journal_entries')->insert(['id'=>991,'organization_id'=>14,'source'=>'AP','source_type'=>'App\\Models\\Bill','source_id'=>990,'source_key'=>'synthetic-signed-return-bill','status'=>'posted','posted_at'=>now()]);
         $json=json_encode($payload,JSON_THROW_ON_ERROR);
-        DB::connection('tenant')->table('finance_supplier_return_requests')->insert(['organization_id'=>14,'organization_mapping_uuid'=>$mapping->mapping_uuid,'operation_uuid'=>$uuid,'bill_id'=>990,'bill_journal_id'=>991,'payload_hash'=>hash('sha256',$json),'payload'=>$json]);
+        DB::connection('tenant')->table('finance_supplier_return_requests')->insert(['organization_id'=>14,'organization_mapping_uuid'=>$mapping->mapping_uuid,'operation_uuid'=>$uuid,'bill_id'=>990,'bill_journal_id'=>991,'finance_receipt_id'=>992,'stock_receipt_id'=>$receipt->id,'receipt_mapping_uuid'=>$lifecycle->mapping_uuid,'actor_id'=>self::ACTOR,'payload_hash'=>hash('sha256',$json),'payload'=>$json]);
         $transport=$this->createMock(SolaBooksOutboxDeliveryService::class);
         $transport->method('authorizeSupplierReturnRequest')->willReturnCallback(fn($data,$action,$actor)=>['allowed'=>true,'contract'=>'purchasing.return_request.v1','actor_id'=>$actor,'request_actor_id'=>self::ACTOR,'operation'=>$action,'canonical_payload'=>$payload]);
         $this->app->instance(SolaBooksOutboxDeliveryService::class,$transport);
