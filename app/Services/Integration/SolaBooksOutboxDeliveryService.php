@@ -242,6 +242,7 @@ class SolaBooksOutboxDeliveryService
         $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
         $key = 'purchasing:authorize:'.Str::uuid();
         $payload = ['source_app' => 'solastock', 'schema_version' => 'purchasing.v1', 'contract_version' => SolaStockJournalContract::VERSION, 'event_type' => 'purchasing.authorize', 'event_uuid' => (string) Str::uuid(), 'external_source_key' => $key, 'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id, 'identity' => ['central_client_id' => $mapping->central_client_id, 'central_organization_id' => $mapping->central_organization_id, 'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id, 'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid], 'actor_id' => $actorId, 'source_bill_id' => $billId, 'permission' => $permission];
+        if(isset($closureFacts['party_command']))$payload+=array_intersect_key($closureFacts,array_flip(['party_command','party_supplier_id']));
         if (in_array($permission, ['unpost', 'void'], true) || ($closureFacts['command']??null)==='cancel') {
             $payload += array_intersect_key($closureFacts, array_flip(['closing_bill_journal_id', 'request_uuid', 'source_revision','expected_revision','command']));
         }
