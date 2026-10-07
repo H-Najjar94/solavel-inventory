@@ -26,7 +26,8 @@ final class SupplierReturnRequestController extends Controller {
     $warehouse=(int)($source->warehouse_id?:$row->warehouse_id);$warehouses[]=$warehouse;
     if($allowed!==null&&!in_array($warehouse,$allowed,true)){$complete=false;continue;}
     $unitId=(int)($source->entered_unit_id??0);$unit=$db->table('units')->where('id',$unitId)->where(fn($q)=>$q->where('organization_id',$org)->orWhereNull('organization_id'))->value('name');
-    $lines[]=['source_receipt_line_id'=>(int)$source->id,'item_name'=>(string)($line['item_name']??''),'entered_quantity'=>(string)($line['entered_quantity']??''),'unit_id'=>$unitId,'unit_name'=>$unit];
+    $itemName=trim((string)($line['item_name']??''));if($itemName==='')$itemName=(string)$db->table('items')->where('organization_id',$org)->where('id',$source->item_id)->value('name');
+    $lines[]=['source_receipt_line_id'=>(int)$source->id,'item_name'=>$itemName,'entered_quantity'=>(string)($line['entered_quantity']??''),'unit_id'=>$unitId,'unit_name'=>$unit];
    }
    // A mixed-warehouse source is one resource: never expose a partial unauthorized review.
    if(!$complete)continue;
