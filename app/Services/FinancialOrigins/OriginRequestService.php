@@ -152,8 +152,32 @@ final class OriginRequestService
         $r->loadMissing('lines');return ['id'=>$r->id,'request_uuid'=>$r->request_uuid,'source_document_type'=>$r->source_document_type,
             'source_document_id'=>(int)$r->source_document_id,'source_document_number'=>$r->source_document_number,'source_journal_id'=>(int)$r->source_journal_id,
             'source_revision'=>$r->source_revision,'status'=>$r->status,'warehouse_id'=>$r->warehouse_id,'sales_order_id'=>$r->sales_order_id,
-            'approved_at'=>$r->approved_at?->toIso8601String(),'approved_revision'=>$r->approved_revision,
+            'approved_at'=>$r->approved_at?->toIso8601String(),'approved_revision'=>$r->approved_revision,'physical_documents'=>$this->physicalDocuments($r),
             'lines'=>$r->lines->map(fn($l)=>['id'=>$l->id,'source_document_line_id'=>(int)$l->source_document_line_id,'item_id'=>(int)$l->item_id,'unit_id'=>(int)$l->unit_id,
                 'requested_quantity'=>$l->requested_quantity,'fulfilled_quantity'=>$l->fulfilled_quantity,'unit_conversion_factor'=>$l->unit_conversion_factor])->all()];
     }
+    /** Human Stock history exposes physical facts, never another actor's operation payload. */
+    private function physicalDocuments(FinancialOriginRequest $request):array
+    {
+        $user=request()->user();
+        if(!$user || !app(InventoryPermissionService::class)->can($user,$request->side==='sales'?'inventory.view_sales':'inventory.view_stock'))return [];
+        $allowed=app(WarehouseAccessService::class)->allowedIds();if($allowed===[])return [];
+        $commands=\App\Models\Tenant\FinancialOriginCommand::query()->where('organization_id',$request->organization_id)
+            ->where('request_uuid',$request->request_uuid)->where('source_document_type',$request->source_document_type)
+            ->where('source_document_id',$request->source_document_id)->where('source_journal_id',$request->source_journal_id)
+            ->where('status','completed')->orderByDesc('id')->limit(25)->get();
+        $documents=[];
+        foreach($commands as$command){
+            $shipment=$request->side==='sales';$id=$shipment?$command->shipment_id:$command->goods_receipt_id;if(!$id)continue;
+            $class=$shipment?\App\Models\Tenant\Shipment::class:\App\Models\Tenant\GoodsReceipt::class;
+            $document=$class::query()->where('organization_id',$request->organization_id)->whereKey($id)
+                ->when($allowed!==null,fn($query)=>$query->whereIn('warehouse_id',$allowed))->first();
+            if(!$document || !in_array($document->status,['posted','reversed'],true))continue;
+            $documents[]=['type'=>$shipment?'shipment':'goods_receipt','id'=>(int)$document->id,
+                'number'=>$shipment?$document->shipment_number:$document->grn_number,'status'=>$document->status,
+                'warehouse_id'=>(int)$document->warehouse_id,'operation_uuid'=>$command->operation_uuid];
+        }
+        return $documents;
+    }
+
 }
