@@ -24,7 +24,7 @@ final class SupplierReturnRequestController extends Controller {
    $payload=json_decode($row->payload,true,512,JSON_THROW_ON_ERROR);$nativeLines=$db->table('goods_receipt_lines')->where('organization_id',$org)->where('goods_receipt_id',$row->goods_receipt_id)->get()->keyBy('id');$lines=[];$warehouses=[(int)$row->warehouse_id];$complete=true;
    foreach((array)($payload['lines']??[])as$line){
     $source=$nativeLines->get((int)($line['source_receipt_line_id']??0));if(!$source){$complete=false;continue;}
-    $warehouse=(int)($source->warehouse_id?:$row->warehouse_id);$warehouses[]=$warehouse;
+    $warehouse=(int)(($source->warehouse_id??null)?:$row->warehouse_id);$warehouses[]=$warehouse;
     if($allowed!==null&&!in_array($warehouse,$allowed,true)){$complete=false;continue;}
     $unitId=(int)($source->entered_unit_id??0);$unit=$db->table('units')->where('id',$unitId)->where(fn($q)=>$q->where('organization_id',$org)->orWhereNull('organization_id'))->value('name');
     $itemName=trim((string)($line['item_name']??''));if($itemName==='')$itemName=(string)$db->table('items')->where('organization_id',$org)->where('id',$source->item_id)->value('name');
