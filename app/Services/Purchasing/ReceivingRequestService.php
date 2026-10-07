@@ -35,14 +35,18 @@ final class ReceivingRequestService
     {
         $mapping = IntegrationMasterDataMapping::query()->where('organization_mapping_uuid', $m->mapping_uuid)->where('central_client_id', $m->central_client_id)->where('central_organization_id', $m->central_organization_id)->where('finance_organization_id', $m->finance_organization_id)->where('solastock_organization_id', $m->solastock_organization_id)->whereNull('conflict_code')->whereNull('error_state')->where('solastock_archived', false)->where('solabooks_archived', false)->where('entity_type', $type)->where('status', 'verified')->where('solabooks_record_id', (string) $id)->first();
         if (! $mapping) {
-            throw ValidationException::withMessages([$field => __('inventory.purchasing.mapping_required')]);
+            $exception = ValidationException::withMessages([$field => __('inventory.purchasing.mapping_required')]);
+            $exception->response = response()->json(['message'=>__('inventory.purchasing.mapping_required'),'errors'=>$exception->errors(),'dependency'=>['entity_type'=>$type,'source_id'=>$id,'field'=>$field,'reason'=>'mapping_required']],422);
+            throw $exception;
         }
         $local = (int) $mapping->solastock_record_id;
         $class = match ($type) {
             'item' => Item::class,'supplier' => Supplier::class,'unit' => Unit::class
         };
         if (! $class::query()->whereKey($local)->where('is_active', true)->exists()) {
-            throw ValidationException::withMessages([$field => __('inventory.purchasing.mapping_required')]);
+            $exception = ValidationException::withMessages([$field => __('inventory.purchasing.mapping_required')]);
+            $exception->response = response()->json(['message'=>__('inventory.purchasing.mapping_required'),'errors'=>$exception->errors(),'dependency'=>['entity_type'=>$type,'source_id'=>$id,'field'=>$field,'reason'=>'mapping_required']],422);
+            throw $exception;
         }
 
         return $local;

@@ -100,6 +100,22 @@ final class PurchasingHandoffTest extends TestCase
         return app(GoodsReceiptService::class)->createDraft(['receiving_request_id' => $r->id, 'warehouse_id' => $this->warehouse->id, 'supplier_id' => $r->supplier_id, 'receipt_date' => '2026-10-06'], [['receiving_request_line_id' => $r->lines()->sole()->id, 'item_id' => $this->item->id, 'entered_unit_id' => $this->unit->id, 'received_qty' => $qty, 'accepted_qty' => $qty, 'unit_cost' => '2.5000']]);
     }
 
+    public function test_missing_item_mapping_is_structured_and_same_request_resumes_after_mapping_repair(): void
+    {
+        $data=$this->data();$mapping=IntegrationMasterDataMapping::where('organization_mapping_uuid',$this->mapping->mapping_uuid)->where('entity_type','item')->sole();$mapping->update(['status'=>'pending']);
+        try { app(ReceivingRequestService::class)->upsert($data);$this->fail('Missing mapping accepted'); }
+        catch(ValidationException $e){$body=$e->response->getData(true);$this->assertSame('item',$body['dependency']['entity_type']);$this->assertSame(701,$body['dependency']['source_id']);$this->assertSame('lines.0.item_external_id',$body['dependency']['field']);}
+        $this->assertSame(0,ReceivingRequest::count());$mapping->update(['status'=>'verified']);$result=app(ReceivingRequestService::class)->upsert($data);$this->assertSame($data['request_uuid'],$result['request_uuid']);$this->assertSame(1,ReceivingRequest::count());$this->assertSame(0,StockLedger::count());
+    }
+
+    public function test_missing_unit_mapping_has_exact_source_identity_without_creating_units(): void
+    {
+        $data=$this->data();$before=Unit::count();IntegrationMasterDataMapping::where('organization_mapping_uuid',$this->mapping->mapping_uuid)->where('entity_type','unit')->update(['status'=>'pending']);
+        try {app(ReceivingRequestService::class)->upsert($data);$this->fail('Unmapped unit accepted');}
+        catch(ValidationException $e){$body=$e->response->getData(true);$this->assertSame('unit',$body['dependency']['entity_type']);$this->assertSame(702,$body['dependency']['source_id']);}
+        $this->assertSame($before,Unit::count());$this->assertSame(0,ReceivingRequest::count());
+    }
+
     public function test_bill_request_is_idempotent_and_moves_no_stock_or_journal(): void
     {
         $s = app(ReceivingRequestService::class);
