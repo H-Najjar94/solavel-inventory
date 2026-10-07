@@ -349,6 +349,35 @@ class SolaBooksOutboxDeliveryService
         return ['successful' => $response->successful(), 'status' => $response->status(), 'data' => (array) ($response->json('data') ?? [])];
     }
 
+    /** Dedicated immutable sales documents; never treats their delivery as an accounting journal. */
+    public function sendSalesDocument(\App\Models\Tenant\SalesDocumentOutbox $document): array
+    {
+        $this->safety->assertDeliveryEnabledFor((int) $document->organization_id);
+        if ($document->status !== 'processing' || ! $document->lease_token
+            || ! $document->lease_expires_at || $document->lease_expires_at->isPast()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $payload = $document->payload;
+        if (($payload['schema_version'] ?? null) !== 'sales.v1'
+            || ! in_array($payload['event_type'] ?? null, ['sales.shipment.confirmed', 'sales.shipment.reversed', 'sales.return.confirmed', 'sales.return.reversed'], true)
+            || ($payload['external_source_key'] ?? null) !== $document->source_key
+            || ($payload['event_uuid'] ?? null) !== $document->event_uuid
+            || (int) ($payload['inventory_organization_id'] ?? 0) !== (int) $document->organization_id
+            || ($payload['identity']['organization_mapping_uuid'] ?? null) !== $document->organization_mapping_uuid
+            || ! hash_equals((string) $document->payload_hash, hash('sha256', SolaStockJournalContract::canonicalJson($payload)))) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/sales/documents', $this->journalEndpoint());
+        if (! $endpoint || $endpoint === $this->journalEndpoint()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $event = new IntegrationOutboxEvent(['organization_id' => $document->organization_id, 'idempotency_key' => $document->source_key, 'event_uuid' => $document->event_uuid]);
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+
+        return ['successful' => $response->successful(), 'status' => $response->status(), 'data' => (array) ($response->json('data') ?? [])];
+    }
+
     public function rotateSigningKey(): IntegrationSetting
     {
         $orgId = $this->context->idOrFail();
