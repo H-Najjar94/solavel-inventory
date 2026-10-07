@@ -1,3 +1,4 @@
+import PurchasingNotificationBell from '../components/PurchasingNotificationBell.jsx';
 import {FeedbackNavigation} from '../components/FeedbackNavigation';
 import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
@@ -244,6 +245,7 @@ export default function AppShell() {
                         <OrgSwitcher tenant={tenant} />
                     </div>
                     <div className="topbar-right">
+                        <PurchasingNotificationBell organizationId={tenant.organization_id} />
                         {tenant.loading ? (
                             <span className="badge badge--muted">{t('shell.loading')}</span>
                         ) : !tenant.isLive && (<>
