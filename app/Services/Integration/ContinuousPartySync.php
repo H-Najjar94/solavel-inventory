@@ -43,7 +43,12 @@ final class ContinuousPartySync {
  public function authorizeInvoiceDependency(object $mapping,array $facts,array $review=[]):array {
   $invoice=DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$facts['source_invoice_id'])->first();
   abort_unless($invoice && (int)$invoice->customer_id===(int)$facts['source_id'],403);
-  return app(SolaBooksOutboxDeliveryService::class)->authorizeSales((int)$facts['native_actor_id'],(int)$invoice->id,(int)($invoice->journal_entry_id??0)>0?'post':'edit_draft',$review);
+  // Finance invoices identify their journal by native source identity, not a journal_entry_id column.
+  $posted=DB::connection('tenant')->table('journal_entries')->where('organization_id',$mapping->finance_organization_id)
+   ->where('source','AR')->where('source_type','App\\Models\\Invoice')->where('source_id',$invoice->id)
+   ->where('status','posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->exists();
+  abort_unless($posted ? $invoice->status!=='draft' : $invoice->status==='draft',409);
+  return app(SolaBooksOutboxDeliveryService::class)->authorizeSales((int)$facts['native_actor_id'],(int)$invoice->id,$posted?'post':'edit_draft',$review);
  }
  public function authorizeBillDependency(object $mapping,array $facts,array $review=[]):array {
   $bill=DB::connection('tenant')->table('bills')->where('organization_id',$mapping->finance_organization_id)->where('id',$facts['source_bill_id'])->first();
