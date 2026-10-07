@@ -12,12 +12,17 @@ final class SalesReturnFinancialReversalGuard
     {
         $db=DB::connection('tenant');
         if(!$db->getSchemaBuilder()->hasTable('finance_sales_returns'))return;
-        $mapping=IntegrationOrganizationMapping::query()->where('solastock_organization_id',$return->organization_id)
-            ->where('tenant_database_identity',$db->getDatabaseName())->first();
-        if(!$mapping)return;
+        $sources=$db->table('finance_sales_returns as r')->join('integration_organization_mappings as m',function($join){
+            $join->on('m.mapping_uuid','=','r.organization_mapping_uuid')->on('m.finance_organization_id','=','r.organization_id');
+        })->where('m.solastock_organization_id',$return->organization_id)->where('m.tenant_database_identity',$db->getDatabaseName())
+            ->where('r.stock_return_id',$return->id)->get(['r.*']);
+        if($sources->isEmpty())return;
+        if($sources->count()!==1)$this->review();
+        $hint=$sources->sole();
+        $mapping=IntegrationOrganizationMapping::query()->where('mapping_uuid',$hint->organization_mapping_uuid)
+            ->where('solastock_organization_id',$return->organization_id)->where('tenant_database_identity',$db->getDatabaseName())->firstOrFail();
         $sourceQuery=fn()=>$db->table('finance_sales_returns')->where('organization_id',$mapping->finance_organization_id)
             ->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('stock_return_id',$return->id);
-        $hint=$sourceQuery()->first();if(!$hint)return;
         if($hint->invoice_id){
             $invoice=$db->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$hint->invoice_id)->lockForUpdate()->first();
             if(!$invoice)$this->review();
