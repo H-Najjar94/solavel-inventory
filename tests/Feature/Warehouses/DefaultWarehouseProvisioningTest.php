@@ -88,7 +88,7 @@ final class DefaultWarehouseProvisioningTest extends TestCase
         $org = app(OrganizationContext::class)->idOrFail();
         $service = app(DefaultWarehouseService::class);
         $id = $service->ensure($org)['default_warehouse_id'];
-        Auth::login(new GenericUser(['id' => 943]));
+        Auth::login(new GenericUser(['id' => 943, 'remember_token' => null]));
         // Canonical app admission is the remote boundary; native resource rows/scopes are real.
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->with(943, $org, 'inventory')->andReturn(['allowed' => true, 'owner' => false, 'roles' => []]);
         $this->assertNull($service->authorizedId());
