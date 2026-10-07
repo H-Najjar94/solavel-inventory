@@ -41,6 +41,13 @@ final class FinanceDocumentLifecycleAuthority
      * saga itself only accepts reviewed category/unit mappings and native item rules, and
      * opens no browsing, editing, stock or warehouse operation.
      */
+    /** Value-only operations backed by an exact posted native LandedCost proof. */
+    public const LANDED_COST_ACTIONS = [
+        'purchasing.landed_cost.prepare', 'purchasing.landed_cost.apply',
+        'purchasing.landed_cost.reverse', 'purchasing.landed_cost.status',
+        'purchasing.landed_cost.release',
+    ];
+
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
@@ -59,7 +66,7 @@ final class FinanceDocumentLifecycleAuthority
 
     public static function scopeFor(string $action): ?string
     {
-        return in_array($action, self::ACTIONS, true) ? self::SCOPE
+        return (in_array($action, self::ACTIONS, true) || in_array($action, self::LANDED_COST_ACTIONS, true)) ? self::SCOPE
             : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 
