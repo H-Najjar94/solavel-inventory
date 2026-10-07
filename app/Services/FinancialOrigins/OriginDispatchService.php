@@ -27,17 +27,26 @@ final class OriginDispatchService
         $dto=OriginRequestPayload::fromArray($r->source_payload);
         DB::connection('tenant')->transaction(fn()=>$admission->lock($r));
         $allowed=app(WarehouseAccessService::class)->allowedIds();$warehouses=Warehouse::query()->where('is_active',true)->when($allowed!==null,fn($q)=>$q->whereIn('id',$allowed))->get();
-        $ids=$warehouses->pluck('id')->all();$canMove=app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_shipments':'inventory.receive_goods');
+        $ids=$warehouses->pluck('id')->all();
+        if($r->warehouse_id)app(WarehouseAccessService::class)->assertAllowed((int)$r->warehouse_id);
+        else abort_unless($ids && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods'),403);
+        $operations=FinancialOriginCommand::query()->where('organization_id',$r->organization_id)->where('request_uuid',$r->request_uuid)
+            ->where('source_document_type',$r->source_document_type)->where('source_document_id',$r->source_document_id)->where('source_journal_id',$r->source_journal_id)
+            ->where('actor_id',$actor)->whereIn('status',['pending','completed'])->where('payload->request_revision',$r->source_revision)
+            ->orderByDesc('id')->limit(25)->get()->map(fn($command)=>$this->commandSummary($command)+['payload'=>$command->payload])->all();
+        $canMove=app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_shipments':'inventory.receive_goods');
         $ready=$canMove && $r->approved_at && $r->approved_revision===$r->source_revision && in_array($r->status,['pending','partial'],true) && in_array((int)$r->warehouse_id,$ids,true);
         $default=(int)(\App\Models\Tenant\InventorySetting::query()->first()?->default_warehouse_id??0);
         return ['request'=>app(OriginRequestService::class)->summary($r),'request_revision'=>$r->source_revision,'can_execute'=>(bool)$ready,
             'can_approve'=>!$r->approved_at && $r->status==='pending' && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods'),
-            'default_warehouse_id'=>in_array($default,$ids,true)?$default:null,
+            'default_warehouse_id'=>in_array($default,$ids,true)?$default:null,'operations'=>$operations,
             'warehouses'=>$warehouses->map(fn($w)=>['id'=>$w->id,'name'=>$w->name,'bins'=>\App\Models\Tenant\WarehouseBin::query()->where('warehouse_id',$w->id)->where('is_active',true)->get(['id','code','name'])->toArray()])->all(),
             'lines'=>$r->lines()->get()->map(function($l){$item=Item::query()->where('is_active',true)->findOrFail($l->item_id);return ['request_line_id'=>$l->id,'source_document_line_id'=>$l->source_document_line_id,
                 'item_id'=>$l->item_id,'item_name'=>$item->name,'unit_id'=>$l->unit_id,'unit_conversion_factor'=>$l->unit_conversion_factor,
                 'remaining_quantity'=>Decimal::sub(Decimal::sub((string)$l->requested_quantity,(string)$l->fulfilled_quantity),(string)$l->cancelled_quantity),
-                'unit_price'=>$l->unit_price,'requires_lot'=>$item->tracksLots(),'requires_serials'=>$item->tracksSerials(),'requires_variant'=>(bool)$item->is_variant_parent];})->all()];
+                'unit_name'=>\App\Models\Tenant\Unit::withoutGlobalScope(\App\Tenancy\Scopes\OrganizationScope::class)->whereKey($l->unit_id)->where(fn($q)=>$q->where('organization_id',$l->organization_id)->orWhereNull('organization_id'))->value('name'),
+                'variant_choices'=>\App\Models\Tenant\ItemVariant::query()->where('organization_id',$l->organization_id)->where('item_id',$item->id)->where('is_active',true)->orderBy('id')->get(['id','sku','variant_attributes'])->toArray(),
+                'unit_price'=>$l->unit_price,'requires_expiry'=>$item->tracksExpiry(),'requires_lot'=>$item->tracksLots(),'requires_serials'=>$item->tracksSerials(),'requires_variant'=>(bool)$item->is_variant_parent];})->all()];
     }
 
     public function prepare(array $data,int $actor):array
