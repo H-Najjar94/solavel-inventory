@@ -101,7 +101,11 @@ final class PurchaseCostAdjustmentPlanner
             $difference = (string) $source['delta_base'];
             $exact = Decimal::add($exact, $difference, 8);
             if (!Decimal::isZero($difference, 8)) {
-                $components = $components->concat($this->allocationComponents(LandedCostReceiptProvenance::fromAuthority($authority, $source), $difference));
+                $components = $components->concat($this->allocationComponents(LandedCostReceiptProvenance::fromAuthority($authority, $source), $difference)->map(function (array $component) use ($source): array {
+                    $component['receipt_line_id'] = (int) $source['receipt_line_id'];
+                    $component['provenance']['landed_cost_source'] = ['receipt_id' => (int) $source['receipt_id'], 'receipt_line_id' => (int) $source['receipt_line_id'], 'position_uuid' => $source['position_uuid']];
+                    return $component;
+                }));
             }
         }
         $posted = '0';
