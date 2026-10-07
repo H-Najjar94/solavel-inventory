@@ -42,7 +42,7 @@ final class CreditDemandReversalService {
    if($data['purpose']==='reverse_status')return$this->result($c,$r,$scope);
    abort_unless(($data['hold_fingerprint']??null)===$c->reverse_hold_fingerprint&&($proof['hold_fingerprint']??null)===$c->reverse_hold_fingerprint,403);
    if($data['purpose']==='reverse_abandon'){
-    abort_unless($c->state==='reverse_prepared'&&in_array($intent->reversal_state??null,['reverse_abandon_pending','reverse_abandoned'],true)&&$original->status==='posted'&&empty($original->voided_at)&&$credit->status!=='void',409);
+    abort_unless(in_array($c->state,['reverse_prepared','committed'],true)&&in_array($intent->reversal_state??null,['reverse_abandon_pending','reverse_abandoned'],true)&&$original->status==='posted'&&empty($original->voided_at)&&$credit->status!=='void',409);
     $c->update(['state'=>'committed']);return$this->result($c,$r,$scope);
    }
    if($c->state==='reversed')return$this->result($c,$r,$scope);
