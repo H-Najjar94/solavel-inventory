@@ -314,6 +314,7 @@ class SolaBooksOutboxDeliveryService
         $payload=['source_app'=>'solastock','schema_version'=>'financial-origin.v1','contract_version'=>SolaStockJournalContract::VERSION,
             'event_type'=>'financial-origin.physical-reversal.authorize','event_uuid'=>(string)Str::uuid(),'external_source_key'=>$key,
             'authority_kind'=>'posted_financial_origin_physical_reversal','actor_id'=>0,
+            'source_document_type'=>$facts['source_document_type'],
             'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
             'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,
                 'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
