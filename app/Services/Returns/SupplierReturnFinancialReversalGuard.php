@@ -12,7 +12,8 @@ final class SupplierReturnFinancialReversalGuard
   $db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
   $maps=$db->table('integration_organization_mappings')->where('solastock_organization_id',$return->organization_id)->where('tenant_database_identity',$db->getDatabaseName());
   if(!(clone$maps)->exists())return null;
-  foreach(['finance_supplier_returns','finance_supplier_return_lines','finance_supplier_return_credit_allocations','bills','debit_notes','journal_entries','action_logs','debit_allocations','supplier_refunds','integration_outbox_events','integration_document_lifecycle_mappings']as$table)if(!$schema->hasTable($table))$this->review();
+  foreach(['finance_supplier_returns','finance_supplier_return_lines','finance_supplier_return_credit_allocations','bills','debit_notes','journal_entries','action_logs','debit_allocations','supplier_refunds','integration_outbox_events','integration_document_lifecycle_mappings','finance_supplier_return_reversals']as$table)if(!$schema->hasTable($table))$this->review();
+  if(!$schema->hasColumns('finance_supplier_return_reversals',['id','organization_id','organization_mapping_uuid','supplier_return_id','return_mapping_uuid','stock_return_id','stock_reversal_id','original_event_uuid','original_out_journal_id','inverse_import_journal_id','debit_note_id','voided_note_journal_id','source_key','source_hash','payload','created_at','updated_at']))$this->review();
   $sources=$db->table('finance_supplier_returns as r')->join('integration_organization_mappings as m',function($j){$j->on('m.mapping_uuid','=','r.organization_mapping_uuid')->on('m.finance_organization_id','=','r.organization_id');})
    ->where('m.solastock_organization_id',$return->organization_id)->where('m.tenant_database_identity',$db->getDatabaseName())->where('r.stock_return_id',$return->id)->get(['r.*']);
   if($sources->count()!==1)$this->review();$hint=$sources->sole();
@@ -39,7 +40,7 @@ final class SupplierReturnFinancialReversalGuard
   $allocations=$db->table('finance_supplier_return_credit_allocations')->where('organization_id',$org)->where('debit_note_id',$note->id)->lockForUpdate()->get();
   $lines=$db->table('finance_supplier_return_lines')->where('organization_id',$org)->where('supplier_return_id',$source->id)->get()->keyBy('id');
   if($allocations->isEmpty()||$allocations->count()!==$lines->count()||$allocations->pluck('supplier_return_line_id')->unique()->count()!==$lines->count())$this->review();
-  foreach($allocations as$a)if($a->state!=='voided'||$a->branch!=='matched_physical'||$a->journal_entry_id!=$void->id||!$lines->has($a->supplier_return_line_id)||bccomp((string)$a->quantity,(string)$lines[$a->supplier_return_line_id]->entered_quantity,8)!==0)$this->review();
+  foreach($allocations as$a)if($a->state!=='voided'||$a->branch!=='matched_physical'||$a->supplier_return_id!=$source->id||$a->bill_id!=$bill->id||$a->bill_journal_id!=$source->bill_journal_id||$a->journal_entry_id!=$void->id||!$lines->has($a->supplier_return_line_id)||bccomp((string)$a->quantity,(string)$lines[$a->supplier_return_line_id]->entered_quantity,8)!==0||$a->debit_note_line_id!=$lines[$a->supplier_return_line_id]->debit_note_line_id||bccomp((string)$a->actual_out_base,(string)$lines[$a->supplier_return_line_id]->actual_out_base,6)!==0)$this->review();
   if($db->table('debit_allocations')->where('organization_id',$org)->where('debit_note_id',$note->id)->lockForUpdate()->exists()||$db->table('supplier_refunds')->where('organization_id',$org)->where('debit_note_id',$note->id)->whereNotIn('status',['draft','void','cancelled'])->lockForUpdate()->exists())$this->review();
   return $mapping;
  }
