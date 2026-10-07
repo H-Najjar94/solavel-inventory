@@ -88,6 +88,7 @@ final class OriginDispatchService
             $admission->lock($r);
             $r=$r->newQuery()->whereKey($r->id)->lockForUpdate()->firstOrFail();
             abort_unless(($data['request_revision']??null)===$r->source_revision,409);
+            if($r->warehouse_id)app(WarehouseAccessService::class)->assertAllowed((int)$r->warehouse_id);
             $c=FinancialOriginCommand::query()->where('organization_id',$r->organization_id)
                 ->where('request_uuid',$r->request_uuid)->where('operation_uuid',$data['operation_uuid']??'')
                 ->where('actor_id',$actor)->firstOrFail();
