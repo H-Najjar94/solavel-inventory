@@ -307,6 +307,11 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::post('/purchase-orders/{purchase_order}/cancel', [PurchaseOrderController::class, 'cancel'])
         ->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.po.cancel');
 
+    // Genuine cash-sale/expense requests use native membership, tenant and operation checks.
+    Route::get('/financial-origin-requests', [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, 'index'])->name('api.v1.financial-origin-requests.index');
+    Route::get('/financial-origin-requests/{uuid}/options', [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, 'options'])->whereUuid('uuid')->name('api.v1.financial-origin-requests.options');
+    Route::post('/financial-origin-requests/{uuid}/approve', [\App\Http\Controllers\Api\V1\FinancialOriginRequestController::class, 'approve'])->whereUuid('uuid')->name('api.v1.financial-origin-requests.approve');
+
     // ── Goods Receipts (GRN → stock IN via service) ──
     Route::get('/supplier-returns', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'index'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.index');
     Route::get('/supplier-returns/source/{goods_receipt}', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'source'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-returns.source');
