@@ -82,7 +82,7 @@ final class FulfillmentRequestService
   if(!$orderId)return;
   $known=FulfillmentRequest::query()->where('sales_order_id',$orderId)->first();if(!$known)return;
   $mapping=\App\Models\Tenant\IntegrationOrganizationMapping::query()->where('solastock_organization_id',$known->organization_id)->where('mapping_uuid',$known->organization_mapping_uuid)->firstOrFail();
-  DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$known->source_invoice_id)->lockForUpdate()->firstOrFail();
+  DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$known->source_invoice_id)->lockForUpdate()->sole();
   $request=FulfillmentRequest::query()->whereKey($known->id)->lockForUpdate()->firstOrFail();
   if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->whereIn('state',['prepared','reverse_prepared'])->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
  }
