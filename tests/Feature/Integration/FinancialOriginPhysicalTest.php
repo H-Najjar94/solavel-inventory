@@ -87,10 +87,16 @@ final class FinancialOriginPhysicalTest extends TestCase
         $lot=\App\Models\Tenant\Lot::create(['item_id'=>$this->item->id,'lot_code'=>'QA-AVAILABLE','status'=>'active','expiry_date'=>now()->addYear()->toDateString()]);
         $expired=\App\Models\Tenant\Lot::create(['item_id'=>$this->item->id,'lot_code'=>'QA-EXPIRED','status'=>'active','expiry_date'=>now()->subDay()->toDateString()]);
         $balance=StockBalance::query()->firstOrFail();foreach([$lot,$expired]as$trace){$copy=$balance->replicate();$copy->lot_id=$trace->id;$copy->serial_id=null;$copy->on_hand_qty='2';$copy->reserved_qty='0';$copy->save();}
+        $reserve=app(\App\Services\Stock\StockReservationService::class);$order=\App\Models\Tenant\SalesOrder::findOrFail(FinancialOriginRequest::sole()->sales_order_id);
+        $reserve->reserveSerial($this->item->id,$this->warehouse->id,$serial->id,'sales_order',$order->id);
+        $foreign=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->skip(2)->firstOrFail();
+        $otherOrder=app(\App\Services\Documents\SalesOrderService::class)->createDraft(['warehouse_id'=>$this->warehouse->id,'customer_id'=>$order->customer_id,'order_date'=>'2026-10-07','currency_code'=>'JOD'],[['item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'ordered_qty'=>'1','unit_price'=>'7']]);
+        $reserve->reserveSerial($this->item->id,$this->warehouse->id,$foreign->id,'sales_order',$otherOrder->id);
         $options=$service->optionsNative($op,336);$this->assertCount(1,$options['operations']);$this->assertSame($op,$options['operations'][0]['payload']);
         $this->assertSame([$variant->id],array_column($options['lines'][0]['variant_choices'],'id'));
         $this->assertSame([$lot->id],array_column($options['lines'][0]['lot_choices'],'id'));
         $this->assertContains($serial->id,array_column($options['lines'][0]['serial_choices'],'id'));$this->assertNotContains($blocked->id,array_column($options['lines'][0]['serial_choices'],'id'));
+        $this->assertNotContains($foreign->id,array_column($options['lines'][0]['serial_choices'],'id'));$this->assertTrue(collect($options['lines'][0]['serial_choices'])->firstWhere('id',$serial->id)['reserved_for_order']);
         $this->assertSame(app(InventoryPermissionService::class)->can(request()->user(),'inventory.manage_reservations'),$options['can_reserve']);
         $this->assertTrue($options['lines'][0]['requires_expiry']);$this->assertSame($this->unit->name,$options['lines'][0]['unit_name']);
         $changed=$op;$changed['request_revision']=str_repeat('b',64);
