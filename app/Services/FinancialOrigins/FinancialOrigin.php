@@ -30,7 +30,7 @@ final readonly class FinancialOrigin
     public function documentTable(): string { return match ($this->type) { 'invoice' => 'invoices', 'sales_receipt' => 'sales_receipts', 'expense' => 'expenses' }; }
     public function lineTable(): string { return match ($this->type) { 'invoice' => 'invoice_lines', 'sales_receipt' => 'sales_receipt_lines', 'expense' => 'expense_lines' }; }
     public function lineParent(): string { return match ($this->type) { 'invoice' => 'invoice_id', 'sales_receipt' => 'sales_receipt_id', 'expense' => 'expense_id' }; }
-    public function modelClass(): string { return match ($this->type) { 'invoice' => 'App\\Models\\Invoice', 'sales_receipt' => 'App\\Models\\SalesReceipt', 'expense' => 'App\\Models\\Expense' }; }
+    public function modelClass(): string { return match ($this->type) { 'invoice' => \App\Models\Invoice::class, 'sales_receipt' => \App\Models\SalesReceipt::class, 'expense' => \App\Models\Expense::class }; }
     public function journalSource(): string { return match ($this->type) { 'invoice' => 'AR', 'sales_receipt' => 'SR', 'expense' => 'AP-EXPENSE' }; }
     public function domain(): string { return $this->type === 'expense' ? 'acquisition' : 'sales'; }
     public function key(): string { return $this->type.':'.$this->documentId.':journal:'.$this->journalId; }

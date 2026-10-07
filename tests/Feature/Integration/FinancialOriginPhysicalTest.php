@@ -126,7 +126,11 @@ final class FinancialOriginPhysicalTest extends TestCase
             'allowed'=>true,'actor_id'=>0,'authority_kind'=>'posted_financial_origin_physical_reversal','finance_organization_id'=>14,'central_organization_id'=>$this->mapping->central_organization_id,
             'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'matches'=>[['operation_uuid'=>$match,'position_uuid'=>$position,'closure_state'=>'completed',
                 'closure_snapshot_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($snapshot)]]]);
-        return GoodsReceipt::sole();
+        $grn=GoodsReceipt::sole();
+        // This case runs alone in a fresh disposable schema: commit the native fixture baseline
+        // so the actual remote-proof phase is genuinely outside every SQL transaction.
+        while($db->transactionLevel()>0)$db->commit();
+        return $grn;
     }
 
     public function test_typed_expense_native_inverse_and_repeat_preserve_gross_history_and_emit_no_bill():void

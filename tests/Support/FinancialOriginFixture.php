@@ -32,7 +32,7 @@ trait FinancialOriginFixture
         $attrs=['organization_id'=>14,$o->type==='expense'?'vendor_id':'customer_id'=>$data[$o->type==='expense'?'supplier_external_id':'customer_external_id']];
         $db->table($o->documentTable())->updateOrInsert(['id'=>850],$attrs);
         $db->table($o->lineTable())->updateOrInsert(['id'=>851],[$o->lineParent()=>850,'inventory_item_id'=>701,'qty'=>'4','unit'=>'Each','item_usage'=>'inventory']);
-        $db->table('journal_entries')->updateOrInsert(['id'=>95],['organization_id'=>14,'source'=>$o->journalSource(),'source_type'=>$o->modelClass(),'source_id'=>850,'status'=>'posted']);
+        $db->table('journal_entries')->updateOrInsert(['id'=>95],['organization_id'=>14,'source'=>$o->journalSource(),'source_type'=>match($o->type){'expense'=>\App\Models\Expense::class,'sales_receipt'=>\App\Models\SalesReceipt::class,'invoice'=>\App\Models\Invoice::class},'source_id'=>850,'status'=>'posted']);
         $db->table('finance_document_requests')->updateOrInsert(['organization_id'=>14,'request_uuid'=>$data['request_uuid']],['organization_mapping_uuid'=>$this->mapping->mapping_uuid,
             'source_document_type'=>$o->type,'source_document_id'=>850,'source_journal_id'=>95,'source_revision'=>$data['source_revision'],'side'=>$o->domain()==='sales'?'sales':'purchase','command'=>$command,'payload'=>json_encode($data)]);
         $proof=array_replace(['allowed'=>true,'actor_id'=>323,'source_document_type'=>$o->type,'source_document_id'=>850,'source_journal_id'=>95,
