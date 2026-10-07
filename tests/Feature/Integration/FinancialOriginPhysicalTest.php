@@ -83,4 +83,68 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());$this->assertSame(0,FinancialOriginOutbox::count());
         $this->assertSame(1,FinancialOriginCommand::count());
     }
+
+    /** Explicit Finance closure projection seam; Stock GRN, inverse ledger and immutable events are native. */
+    private function reversedExpenseFixture():GoodsReceipt
+    {
+        [,,$op]=$this->admitted('expense');
+        $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;
+        $meta['transport_enabled_workflows']=array_merge($meta['transport_enabled_workflows'],['grn.posted','grn.reversed']);$setting->meta=$meta;$setting->save();
+        app(OriginDispatchService::class)->executeNative($op,336);$this->actor(323,true);
+        $db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
+        $add=function($table,$name,$callback)use($schema){if(!$schema->hasColumn($table,$name))$schema->table($table,fn($t)=>$callback($t,$name));};
+        $add('expenses','status',fn($t,$n)=>$t->string($n)->nullable());
+        $add('finance_document_requests','state',fn($t,$n)=>$t->string($n)->nullable());
+        foreach(['source_key']as$n)$add('journal_entries',$n,fn($t,$n)=>$t->string($n)->nullable());
+        foreach(['posted_at','voided_at','deleted_at']as$n)$add('journal_entries',$n,fn($t,$n)=>$t->timestamp($n)->nullable());
+        foreach(['voided_by','reverses_entry_id']as$n)$add('journal_entries',$n,fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
+        if(!$schema->hasTable('users'))$schema->create('users',function($t){$t->id();$t->unsignedBigInteger('central_user_id');});
+        if(!$schema->hasTable('action_logs'))$schema->create('action_logs',function($t){$t->id();$t->string('controller');$t->string('method');$t->unsignedBigInteger('user_id');$t->json('data');});
+        if(!$schema->hasTable('finance_document_positions'))$schema->create('finance_document_positions',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('position_uuid');$t->string('side');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->unsignedBigInteger('source_document_line_id');});
+        if(!$schema->hasTable('finance_document_matches'))$schema->create('finance_document_matches',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('operation_uuid');$t->uuid('position_uuid');$t->uuid('reversal_operation_uuid');$t->unsignedBigInteger('source_document_line_id');$t->unsignedBigInteger('journal_entry_id');$t->unsignedBigInteger('reversal_journal_id');$t->string('state');$t->string('reverse_state');$t->string('closure_state');$t->json('closure_snapshot');});
+        $r=FinancialOriginRequest::sole();$r->update(['status'=>'cancelled']);
+        $db->table('finance_document_requests')->where('request_uuid',$r->request_uuid)->update(['command'=>'cancel','state'=>'cancelled']);
+        $db->table('expenses')->where('id',850)->update(['status'=>'draft']);
+        $at='2026-10-07 12:00:00';$db->table('journal_entries')->where('id',95)->update(['status'=>'voided','voided_at'=>$at,'voided_by'=>701]);
+        $db->table('users')->insert(['id'=>701,'central_user_id'=>323]);
+        $db->table('action_logs')->insert(['id'=>701,'controller'=>'ReversalEngine','method'=>'unpostExpense','user_id'=>701,'data'=>json_encode(['document_type'=>'App\\Models\\Expense','document_id'=>850,'voided_journal_entry_id'=>95])]);
+        $position=(string)Str::uuid();$match=(string)Str::uuid();$reverse=(string)Str::uuid();
+        $db->table('finance_document_positions')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'position_uuid'=>$position,'side'=>'purchase','source_document_type'=>'expense','source_document_id'=>850,'source_journal_id'=>95,'source_document_line_id'=>851]);
+        foreach([96,97]as$id)$db->table('journal_entries')->insert(['id'=>$id,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>'App\\Models\\Expense','source_id'=>850,'source_key'=>($id===96?'financial-origin-match:':'financial-origin-match-reversal:').$match,'status'=>'posted','posted_at'=>$at,'reverses_entry_id'=>$id===97?96:null]);
+        $snapshot=['phase'=>'expense_unposted_after_value_ack','request_uuid'=>$r->request_uuid,'source_revision'=>$r->source_revision,'reversal_operation_uuid'=>$reverse,
+            'original_source_journal_id'=>95,'original_match_journal_id'=>96,'match_inverse_journal_id'=>97,'unpost_audit_id'=>701,'unpost_actor_id'=>701,
+            'unpost_central_actor_id'=>323,'unpost_audit_controller'=>'ReversalEngine','unpost_audit_method'=>'unpostExpense','source_document_type'=>'App\\Models\\Expense',
+            'source_document_id'=>850,'source_status'=>'draft','source_voided_by'=>701,'source_voided_at'=>$at];
+        $db->table('finance_document_matches')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'operation_uuid'=>$match,'position_uuid'=>$position,
+            'reversal_operation_uuid'=>$reverse,'source_document_line_id'=>851,'journal_entry_id'=>96,'reversal_journal_id'=>97,'state'=>'reversed','reverse_state'=>'committed','closure_state'=>'completed','closure_snapshot'=>json_encode($snapshot)]);
+        $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOriginPhysicalReversal')->andReturnUsing(fn($facts)=>$facts+[
+            'allowed'=>true,'actor_id'=>0,'authority_kind'=>'posted_financial_origin_physical_reversal','finance_organization_id'=>14,'central_organization_id'=>1,
+            'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'matches'=>[['operation_uuid'=>$match,'position_uuid'=>$position,'closure_state'=>'completed',
+                'closure_snapshot_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($snapshot)]]]);
+        return GoodsReceipt::sole();
+    }
+
+    public function test_typed_expense_native_inverse_and_repeat_preserve_gross_history_and_emit_no_bill():void
+    {
+        $grn=$this->reversedExpenseFixture();$before=StockLedger::count();$service=app(\App\Services\Documents\InventoryReversalService::class);
+        $inverse=$service->reverseGoodsReceipt($grn,'QA exact typed audited reversal');
+        $this->assertSame($inverse->id,$service->reverseGoodsReceipt($grn->fresh(),'QA repeat')->id);
+        $this->assertSame($before+1,StockLedger::count());$this->assertSame('20.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame('cancelled',FinancialOriginRequest::sole()->status);$this->assertSame('2.0000',FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity);
+        $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(0,\App\Models\Tenant\PurchasingDocumentOutbox::count());
+        $event=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.reversed')->sole()->payload;
+        $this->assertSame(850,$event['source_document_id']);$this->assertSame(95,$event['source_journal_id']);$this->assertSame($inverse->id,$event['reversal']['id']);
+        $this->assertNotEmpty($event['original_payload_hash']);$this->assertNotEmpty($event['reversal']['journal_key']);
+    }
+
+    public function test_typed_expense_inverse_rejects_uncertain_cost_ack_and_foreign_audit_without_movement():void
+    {
+        $grn=$this->reversedExpenseFixture();$db=DB::connection('tenant');$before=StockLedger::count();
+        $db->table('finance_document_matches')->update(['reverse_state'=>'pending']);
+        try{app(\App\Services\Documents\InventoryReversalService::class)->reverseGoodsReceipt($grn,'QA pending');$this->fail('Uncertain valuation allowed reversal');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+        $db->table('finance_document_matches')->update(['reverse_state'=>'committed']);
+        $db->table('action_logs')->where('id',701)->update(['data'=>json_encode(['document_type'=>'App\\Models\\Expense','document_id'=>999,'voided_journal_entry_id'=>95])]);
+        try{app(\App\Services\Documents\InventoryReversalService::class)->reverseGoodsReceipt($grn,'QA foreign audit');$this->fail('Foreign audit allowed reversal');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+        $this->assertSame($before,StockLedger::count());$this->assertNull($grn->fresh()->reversal_id);$this->assertSame(1,FinancialOriginOutbox::count());
+    }
 }
