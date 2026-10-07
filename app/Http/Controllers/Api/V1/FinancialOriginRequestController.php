@@ -95,7 +95,7 @@ final class FinancialOriginRequestController extends Controller
             'lines.*.lot_code'=>'nullable|string|max:255', 'lines.*.expiry_date'=>'nullable|date_format:Y-m-d',
             'lines.*.unit_cost'=>'nullable|numeric|min:0',
         ]);
-        unset($data['arrival_confirmed']);
+        $data['arrival_confirmed'] = true;
         return $identity + $data;
     }
 
