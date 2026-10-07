@@ -119,7 +119,7 @@ final class HeldLandedCostService
     private function components(array $components): array
     {
         $rows = array_map(static fn ($c) => [(string) $c['destination_role'], (string) $c['destination_source_type'],
-            (int) $c['destination_source_id'], (string) $c['base_quantity'], (string) $c['posted_base_amount']], $components);
+            (int) $c['destination_source_id'], (int) $c['receipt_line_id'], (string) $c['base_quantity'], (string) $c['posted_base_amount']], $components);
         sort($rows);
         return $rows;
     }
