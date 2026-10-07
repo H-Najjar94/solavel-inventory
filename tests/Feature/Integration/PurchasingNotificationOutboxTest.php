@@ -30,4 +30,8 @@ final class PurchasingNotificationOutboxTest extends TestCase {
   [, $rr]=$this->fixture();$this->queue($rr);DB::connection('tenant')->table('purchasing_notification_outbox')->update(['attempts'=>39]);Http::fake(fn()=>Http::response([],503));$publisher=app(PurchasingNotificationPublisher::class);$this->assertSame(1,$publisher->process(1));$row=DB::connection('tenant')->table('purchasing_notification_outbox')->sole();$this->assertSame('intervention',$row->state);$this->assertSame(40,(int)$row->attempts);$this->queue($rr);$this->assertSame(0,$publisher->process(1));$this->assertSame(1,DB::connection('tenant')->table('purchasing_notification_outbox')->count());$this->assertSame(0,DB::connection('tenant')->table('stock_ledger')->count());$this->assertSame(0,DB::connection('tenant')->table('integration_outbox_events')->count());
  }
 
+ public function test_notification_ready_requires_approval_of_the_current_native_revision():void {
+  [, $rr]=$this->fixture();$rr->update(['approved_at'=>now(),'approved_revision'=>$rr->source_revision]);$method=new \ReflectionMethod(\App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class,'approved');$controller=app(\App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class);$this->assertTrue($method->invoke($controller,$rr->fresh()));$this->queue($rr);$rr->update(['source_revision'=>str_repeat('b',64)]);$this->assertFalse($method->invoke($controller,$rr->fresh()));$this->queue($rr);$this->assertSame(2,DB::connection('tenant')->table('purchasing_notification_outbox')->count());
+ }
+
 }
