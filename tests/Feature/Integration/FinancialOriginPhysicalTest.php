@@ -102,6 +102,8 @@ final class FinancialOriginPhysicalTest extends TestCase
         if(!$schema->hasTable('finance_document_matches'))$schema->create('finance_document_matches',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('operation_uuid');$t->uuid('position_uuid');$t->uuid('reversal_operation_uuid');$t->unsignedBigInteger('source_document_line_id');$t->unsignedBigInteger('journal_entry_id');$t->unsignedBigInteger('reversal_journal_id');$t->string('state');$t->string('reverse_state');$t->string('closure_state');$t->json('closure_snapshot');});
         $this->tenantTestManager->cleanup();
         [,,$op]=$this->admitted('expense');
+        // Tenant re-entry replaces the PDO; never write closure facts through the retired DDL connection.
+        $db=DB::connection('tenant');
         $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;
         $meta['transport_enabled_workflows']=array_merge($meta['transport_enabled_workflows'],['grn.posted','grn.reversed']);$setting->meta=$meta;$setting->save();
         app(OriginDispatchService::class)->executeNative($op,336);$this->actor(323,true);
