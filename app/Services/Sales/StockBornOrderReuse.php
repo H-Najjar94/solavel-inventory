@@ -25,7 +25,8 @@ final class StockBornOrderReuse
             abort_unless(hash_equals((string)$event->payload_hash,(string)($ref['payload_hash']??'')) && hash_equals($event->payload_hash,SolaStockJournalContract::payloadHash($event->payload))
                 && (int)data_get($event->payload,'shipment.id')===(int)($ref['id']??0)
                 && data_get($event->payload,'shipment.mapping_uuid')===($ref['mapping_uuid']??null)
-                && (int)data_get($event->payload,'shipment.sales_order_id')===(int)$origin['sales_order_id'],409);
+                && (int)data_get($event->payload,'shipment.sales_order_id')===(int)$origin['sales_order_id']
+                && (int)data_get($event->payload,'shipment.warehouse_id')===$warehouse,409);
             abort_unless(Shipment::query()->where('organization_id',$request->organization_id)->where('sales_order_id',$origin['sales_order_id'])->whereKey($ref['id'])->where('status','posted')->whereNull('reversal_sales_return_id')->exists(),409);
             foreach((array)data_get($event->payload,'shipment.lines',[])as$line){
                 $id=(int)($line['sales_order_line_id']??0);abort_unless($id>0,409);$proven[$id]=true;$mappedLines[$id][]=$line;
