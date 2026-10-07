@@ -17,8 +17,10 @@ use Tests\Traits\TenantAware;
 final class WarehouseNotificationVisibilityTest extends TestCase
 {
     use TenantAware;
+    private static int $fixtureSequence = 800;
     private function fixture(): array
     {
+        $sourceBill = ++self::$fixtureSequence;
         $this->useTenantA();
         // Private controller fixture only; no producer service or production migration is simulated.
         if (! Schema::connection('tenant')->hasTable('sales_fulfillment_requests')) {
@@ -37,7 +39,7 @@ final class WarehouseNotificationVisibilityTest extends TestCase
         $supplier = Supplier::create(['code' => 'VIS-'.Str::random(5), 'name' => 'Synthetic supplier', 'is_active' => true]);
         $revision = str_repeat('a', 64);
         $purchase = ReceivingRequest::create(['organization_mapping_uuid' => (string) Str::uuid(), 'finance_organization_id' => 14,
-            'request_uuid' => (string) Str::uuid(), 'source_bill_id' => 800, 'source_bill_number' => 'QA-BILL-800', 'source_revision' => $revision,
+            'request_uuid' => (string) Str::uuid(), 'source_bill_id' => $sourceBill, 'source_bill_number' => 'QA-BILL-'.$sourceBill, 'source_revision' => $revision,
             'supplier_id' => $supplier->id, 'currency_code' => 'JOD', 'status' => 'pending', 'source_payload' => [],
             'warehouse_id' => $warehouse->id, 'approved_at' => now(), 'approved_revision' => $revision]);
         $sales = DB::connection('tenant')->table('sales_fulfillment_requests')->insertGetId([
