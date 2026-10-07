@@ -56,6 +56,7 @@ final class SuperviseSolaBooksTransport extends Command
                     continue;
                 }
                 $organizations->set((int) $mapping->solastock_organization_id);
+                $processed += app(\App\Services\Integration\ContinuousPartySync::class)->process($mapping, 2);
                 for ($i = 0, $limit = min(250, max(1, (int) $this->option('limit'))); $i < $limit; $i++) {
                     $event = $transport->claim((int) $mapping->solastock_organization_id, gethostname().':'.getmypid());
                     if (! $event) {
@@ -65,6 +66,7 @@ final class SuperviseSolaBooksTransport extends Command
                     $processed++;
                 }
                 $processed += app(ReceiptHandoffService::class)->deliverDue(min(25, max(1, (int) $this->option('limit'))));
+                $processed += app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1);
                 $organizations->forget();
             }
             $heartbeat->write($targets === [] ? 'idle' : 'running', count($targets), $processed);

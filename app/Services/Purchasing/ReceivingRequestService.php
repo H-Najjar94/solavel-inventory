@@ -53,6 +53,9 @@ final class ReceivingRequestService
         return DB::connection('tenant')->transaction(function () use ($d) {
             $m = $this->mapping();
             IntegrationOrganizationMapping::query()->whereKey($m->id)->lockForUpdate()->firstOrFail();
+            if(DB::connection('tenant')->table('purchasing_receiving_cancellations')->where('organization_mapping_uuid',$m->mapping_uuid)->where('request_uuid',$d['request_uuid'])->exists()){
+                throw ValidationException::withMessages(['request_uuid'=>__('inventory.purchasing.cancelled')]);
+            }
             $r = ReceivingRequest::query()->where('request_uuid', $d['request_uuid'])->lockForUpdate()->first();
             $sameBill = ReceivingRequest::query()->where('source_bill_id', $d['source_bill_id'])->first();
             if ($sameBill && (! $r || $sameBill->id !== $r->id)) {
@@ -62,7 +65,7 @@ final class ReceivingRequestService
                 abort(404);
             }
             if ($r && $r->source_revision === $d['source_revision']) {
-                return $this->status($r);
+                return $this->changedStatus($r);
             }
             if ($r && ($d['source_status'] ?? null) === 'posted'
                 && ($d['billing_policy'] ?? null) === 'billed-unreceived-v1'
@@ -91,7 +94,7 @@ final class ReceivingRequestService
                     }
                     $r->update($changes);
 
-                    return $this->status($r->fresh());
+                    return $this->changedStatus($r->fresh());
                 }
             }
             if ($r) {
@@ -116,8 +119,14 @@ final class ReceivingRequestService
             }
             $r->lines()->createMany($lines);
 
-            return $this->status($r->fresh());
+            return $this->changedStatus($r->fresh());
         });
+    }
+
+    private function changedStatus(ReceivingRequest $request): array
+    {
+        app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->changed($request);
+        return $this->status($request);
     }
 
     public function status(ReceivingRequest $r): array
@@ -128,6 +137,32 @@ final class ReceivingRequestService
         return ['request_uuid' => $r->request_uuid, 'id' => $r->id, 'number' => 'RR-'.$r->id, 'source_revision' => $r->source_revision, 'source_bill_id' => $r->source_bill_id, 'source_bill_number' => $r->source_bill_number, 'status' => $r->status, 'supplier_id' => $r->supplier_id, 'warehouse_id' => $r->warehouse_id, 'approved' => $r->approved_at !== null && $r->approved_revision === $r->source_revision, 'currency_code' => $r->currency_code, 'lines' => $r->lines->map(fn ($l) => ['id' => $l->id, 'source_line_id' => $l->source_line_id, 'item_id' => $l->item_id, 'item_name' => Item::query()->find($l->item_id)?->name, 'entered_unit_id' => $l->entered_unit_id, 'requested_qty' => $l->requested_qty, 'received_qty' => $l->received_qty, 'remaining_qty' => Decimal::sub((string) $l->requested_qty, (string) $l->received_qty), 'unit_cost' => $l->unit_cost])->all(), 'receipts' => $receipts->map(fn ($g) => ['id' => $g->id, 'number' => $g->grn_number, 'mapping_uuid' => IntegrationDocumentLifecycleMapping::query()->where('organization_mapping_uuid', $r->organization_mapping_uuid)->where('source_document_type', 'goods_receipt')->where('source_document_id', (string) $g->id)->value('mapping_uuid'), 'status' => $g->reversal_id ? 'reversed' : $g->status, 'lines' => $g->lines->map(fn ($l) => ['source_line_id' => $r->lines->firstWhere('id', $l->receiving_request_line_id)?->source_line_id, 'received_qty' => Decimal::qty(Decimal::div((string) $l->accepted_qty, (string) ($l->unit_conversion_factor ?: '1'))), 'received_base_qty' => $l->accepted_qty, 'entered_unit_id' => $l->entered_unit_id, 'base_unit_id' => $l->base_unit_id])->all()])->all()];
     }
 
+    public function cancelAuthorized(array $data, array $authority): array
+    {
+        $mapping=$this->mapping();
+        abort_unless(($authority['command']??null)==='cancel'
+            && ($authority['request_uuid']??null)===$data['request_uuid']
+            && hash_equals((string)($authority['command_source_revision']??''),$data['source_revision'])
+            && ($authority['expected_revision']??null)===($data['expected_revision']??null)
+            && (int)($authority['source_bill_id']??0)===(int)$data['source_bill_id'],403);
+        return DB::connection('tenant')->transaction(function()use($mapping,$data,$authority){
+            $locked=IntegrationOrganizationMapping::query()->whereKey($mapping->id)->lockForUpdate()->firstOrFail();
+            abort_unless($locked->status==='verified' && $locked->activation_state==='active',409);
+            $r=ReceivingRequest::query()->where('request_uuid',$data['request_uuid'])->lockForUpdate()->first();
+            if($r){
+                abort_unless((int)$r->source_bill_id===(int)$data['source_bill_id'] && $r->organization_mapping_uuid===$mapping->mapping_uuid,403);
+                return $this->cancel($r,(string)($data['expected_revision']??$data['source_revision']));
+            }
+            $db=DB::connection('tenant');
+            abort_if($db->table('purchasing_receiving_commands')->where('organization_id',$mapping->solastock_organization_id)->where('source_bill_id',$data['source_bill_id'])->where('status','!=','abandoned')->exists(),409);
+            $identity=['organization_mapping_uuid'=>$mapping->mapping_uuid,'request_uuid'=>$data['request_uuid']];
+            $row=$db->table('purchasing_receiving_cancellations')->where($identity)->lockForUpdate()->first();
+            if($row)abort_unless((int)$row->source_bill_id===(int)$data['source_bill_id'] && hash_equals($row->source_revision,$data['source_revision']),409);
+            else $db->table('purchasing_receiving_cancellations')->insert($identity+['organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,'source_bill_id'=>$data['source_bill_id'],'source_revision'=>$data['source_revision'],'expected_revision'=>$data['expected_revision']??null,'actor_id'=>(int)auth()->id(),'permission'=>$authority['permission'],'authority'=>json_encode($authority),'created_at'=>now(),'updated_at'=>now()]);
+            return ['request_uuid'=>$data['request_uuid'],'source_bill_id'=>(int)$data['source_bill_id'],'source_revision'=>$data['source_revision'],'status'=>'cancelled','id'=>null,'receipts'=>[],'lines'=>[]];
+        });
+    }
+
     public function cancel(ReceivingRequest $r, string $revision): array
     {
         return DB::connection('tenant')->transaction(function () use ($r, $revision) {
@@ -136,7 +171,7 @@ final class ReceivingRequestService
                 throw ValidationException::withMessages(['source_revision' => __('inventory.purchasing.refresh_required')]);
             }$r->update(['status' => 'cancelled']);
 
-            return $this->status($r);
+            return $this->changedStatus($r);
         });
     }
 
@@ -164,7 +199,7 @@ final class ReceivingRequestService
             $r->update(['warehouse_id' => $warehouseId, 'approved_at' => now(), 'approved_by' => auth()->id(), 'approved_revision' => $r->source_revision]);
             InventoryAuditLog::create(['organization_id' => $r->organization_id, 'actor_user_id' => auth()->id(), 'action' => 'receiving_request.approved', 'entity_type' => ReceivingRequest::class, 'entity_id' => $r->id, 'document_ref' => $r->request_uuid, 'after' => ['source_revision' => $r->source_revision, 'warehouse_id' => $warehouseId]]);
 
-            return $this->status($r);
+            return $this->changedStatus($r);
         });
     }
 
@@ -228,5 +263,6 @@ final class ReceivingRequestService
         if ($r->status !== 'cancelled') {
             $r->update(['status' => $all ? 'complete' : ($any ? 'partial' : 'pending')]);
         }
+        app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->changed($r->fresh());
     }
 }

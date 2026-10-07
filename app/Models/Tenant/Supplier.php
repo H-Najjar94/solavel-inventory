@@ -8,6 +8,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Supplier extends Model
 {
+    protected static function booted(): void
+    {
+        $record = static fn ($party) => app(\App\Services\Integration\PartySyncLedger::class)->changed($party, 'stock', 'supplier');
+        static::saved($record);
+        static::deleted($record);
+        static::registerModelEvent('restored', $record);
+    }
+
     use BelongsToOrganization;
     use SoftDeletes;
 

@@ -44,6 +44,9 @@ final class FinanceWorkspaceController
         abort_unless($org && $central->table('clients')->where('id', $input['client_id'])
             ->where('is_active', true)->whereNull('deleted_at')->exists(), 403, 'workspace_organization_unavailable');
         if ((int) $input['actor_id'] === 0) {
+            if (in_array($input['action'], ['purchasing.party.ensure', 'purchasing.party.status'], true)) {
+                return response()->json(['success'=>true,'data'=>app(\App\Services\Integration\ContinuousPartySync::class)->dispatch($input,$org)]);
+            }
             abort_unless(str_starts_with($input['action'], 'purchasing.settlement.'), 403);
             $result = app(PostedPurchaseSettlementService::class)->dispatch($input, $org);
 
@@ -117,7 +120,7 @@ final class FinanceWorkspaceController
                 if ($closing) {
                     $permission = $closurePermission;
                 }
-                $authority = app(SolaBooksOutboxDeliveryService::class)->authorizePurchasing((int) $actor->id, $billId, $permission, $closing ? (array) $input['data'] : []);
+                $authority = app(SolaBooksOutboxDeliveryService::class)->authorizePurchasing((int) $actor->id, $billId, $permission, $input['action']==='purchasing.request.cancel' ? ((array)$input['data']+['command'=>'cancel']) : []);
                 if ($closing) {
                     abort_unless(($authority['closure_permission'] ?? null) === $closurePermission
                         && (int) data_get($input, 'data.closing_bill_journal_id') > 0

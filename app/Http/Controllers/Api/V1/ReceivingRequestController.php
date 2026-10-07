@@ -69,9 +69,7 @@ final class ReceivingRequestController extends ApiController
     public function cancel(Request $request)
     {
         abort_unless($request->attributes->get('purchasing_authority'), 403);
-        $d = $request->validate(['request_uuid' => 'required|uuid', 'source_bill_id' => 'required|integer|min:1', 'source_revision' => 'required|string|size:64']);
-        $r = ReceivingRequest::query()->where('request_uuid', $d['request_uuid'])->where('source_bill_id', $d['source_bill_id'])->firstOrFail();
-
-        return $this->success($this->requests->cancel($r, $d['source_revision']));
+        $d = $request->validate(['request_uuid' => 'required|uuid', 'source_bill_id' => 'required|integer|min:1', 'source_revision' => 'required|string|size:64','expected_revision'=>'nullable|string|size:64']);
+        return $this->success($this->requests->cancelAuthorized($d,(array)$request->attributes->get('purchasing_authority')));
     }
 }
