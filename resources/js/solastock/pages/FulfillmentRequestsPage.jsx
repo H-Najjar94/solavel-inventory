@@ -7,7 +7,7 @@ import {useCan} from '../stores/meta';
 import {useTenant} from '../stores/tenant';
 import {useI18n} from '../i18n/context';
 export default function FulfillmentRequestsPage() {
- const tenant=useTenant();const {locale}=useI18n();const ar=locale==='ar';const canApprove=useCan('inventory.manage_sales_orders');const [params,setParams]=useSearchParams();const filter=['active','cancelled','history'].includes(params.get('status'))?params.get('status'):'active';const selected=/^\d+$/.test(params.get('request')??'')?Number(params.get('request')):null;
+ const tenant=useTenant();const {locale}=useI18n();const ar=locale==='ar';const can=useCan();const canApprove=can('inventory.manage_sales_orders');const [params,setParams]=useSearchParams();const filter=['active','cancelled','history'].includes(params.get('status'))?params.get('status'):'active';const selected=/^\d+$/.test(params.get('request')??'')?Number(params.get('request')):null;
  const [warehouses,setWarehouses]=useState({});const [error,setError]=useState('');const query=useApiQuery(['fulfillment-requests',tenant.organization_id,filter,selected],()=>selected?api.fulfillmentRequest(selected):api.fulfillmentRequests(filter),{fallback:[]});const rows=selected&&query.data?[query.data]:Array.isArray(query.data)?query.data:[];
  const statuses={pending:ar?'بانتظار التسليم':'Pending dispatch',partial:ar?'تسليم جزئي':'Partially dispatched',complete:ar?'مكتمل':'Fully dispatched',cancelled:ar?'ملغى':'Cancelled'};
  async function approve(request){try{await api.approveFulfillmentRequest(request.id,{warehouse_id:warehouses[request.id]});setError('');query.refetch();}catch(e){setError(e.message);}}

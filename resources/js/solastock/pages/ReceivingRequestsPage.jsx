@@ -6,7 +6,7 @@ import {useApiQuery} from '../hooks/useApiQuery';
 import {useCan} from '../stores/meta';
 import {useI18n} from '../i18n/context';
 export default function ReceivingRequestsPage(){
- const {t,locale}=useI18n();const ar=locale==='ar'||document.documentElement.lang==='ar';const canValue=useCan('inventory.manage_adjustments');const canApprove=useCan('inventory.approve_purchase_orders');const [warehouses,setWarehouses]=useState({});const [error,setError]=useState('');
+ const {t,locale}=useI18n();const ar=locale==='ar'||document.documentElement.lang==='ar';const can=useCan();const canValue=can('inventory.manage_adjustments');const canApprove=can('inventory.approve_purchase_orders');const [warehouses,setWarehouses]=useState({});const [error,setError]=useState('');
  async function approve(r){try{await api.approveReceivingRequest(r.id,{warehouse_id:warehouses[r.id]});query.refetch();setError('');}catch(e){setError(e.message);}}
  const [searchParams,setSearchParams]=useSearchParams();const status=['active','cancelled','history'].includes(searchParams.get('status'))?searchParams.get('status'):'active';const selected=searchParams.get('request');const selectedId=selected&&/^\d+$/.test(selected)?Number(selected):null;
  const query=useApiQuery(['receiving-requests',selectedId,status],()=>selectedId?api.receivingRequest(selectedId):api.receivingRequests(status),{fallback:[]});const data=selectedId&&query.data?[query.data]:(Array.isArray(query.data)?query.data:[]);
