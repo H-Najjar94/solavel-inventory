@@ -1,6 +1,6 @@
 <?php
 namespace App\Services\Sales;
-use App\Models\Tenant\{SupplierReturn,IntegrationOrganizationMapping,IntegrationDocumentLifecycleMapping,IntegrationOutboxEvent,IntegrationSetting,PurchasingDocumentOutbox};
+use App\Models\Tenant\{SupplierReturn,InventoryReversal,IntegrationOrganizationMapping,IntegrationDocumentLifecycleMapping,IntegrationOutboxEvent,IntegrationSetting,PurchasingDocumentOutbox};
 use App\Services\Integration\{IntegrationEvents,SolaStockJournalContract};
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
@@ -22,8 +22,9 @@ final class SupplierReturnDocumentBuilder
    $parent=IntegrationDocumentLifecycleMapping::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_document_type','goods_receipt')->where('source_document_id',(string)$return->goods_receipt_id)->firstOrFail();
    $key='purchasing:return:'.$life->mapping_uuid.':'.($reversed?'reversed':'confirmed');
    if($existing=PurchasingDocumentOutbox::query()->where('organization_id',$org)->where('source_key',$key)->first())return$existing;
+   $reversal=$reversed?InventoryReversal::query()->where('organization_id',$org)->whereKey($return->reversal_id)->firstOrFail():null;
    $journal=IntegrationOutboxEvent::query()->where('organization_id',$org)->where('event_type',$reversed?'supplier_return.reversed':'supplier_return.posted')
-    ->where('aggregate_id',$return->id)->latest('id')->firstOrFail();
+    ->where('aggregate_id',$reversed?$reversal->id:$return->id)->latest('id')->firstOrFail();
    $original=PurchasingDocumentOutbox::query()->where('organization_id',$org)->where('goods_receipt_id',$return->goods_receipt_id)->where('event_type','purchasing.receipt.confirmed')->oldest('id')->first();
    abort_unless($original,409);$receiptFacts=$original->payload['receipt'];
    $lines=[];foreach($return->lines as$line){
@@ -39,7 +40,7 @@ final class SupplierReturnDocumentBuilder
     'inventory_organization_id'=>$org,'finance_organization_id'=>$mapping->finance_organization_id,
     'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
      'inventory_organization_id'=>$org,'integration_mapping_id'=>$mapping->id,'organization_mapping_uuid'=>$mapping->mapping_uuid,'signing_key_id'=>data_get($setting->meta,'signing_key_id')],
-    'return'=>['mapping_uuid'=>$life->mapping_uuid,'id'=>$return->id,'number'=>$return->return_number,'date'=>$return->return_date->format('Y-m-d'),
+    'return'=>['mapping_uuid'=>$life->mapping_uuid,'id'=>$return->id,'number'=>$return->return_number,'date'=>$reversed?$reversal->reversal_date->format('Y-m-d'):$return->return_date->format('Y-m-d'),
      'receipt_id'=>$return->goods_receipt_id,'receipt_mapping_uuid'=>$parent->mapping_uuid,'receipt_event_uuid'=>$original->event_uuid,
      'supplier_id'=>$return->supplier_id,'source_bill_id'=>$receiptFacts['source_bill_id']??null,'currency_code'=>$receiptFacts['currency_code'],
      'base_currency_code'=>$mapping->base_currency_code,'receipt_exchange_rate'=>$receiptFacts['exchange_rate'],'receipt_exchange_rate_date'=>$receiptFacts['exchange_rate_date'],
