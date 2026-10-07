@@ -30,6 +30,8 @@ final class FinancialOriginReceiptCostTest extends TestCase
         if(!$schema->hasTable('expenses'))$schema->create('expenses',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('vendor_id')->nullable();});
         if(!$schema->hasTable('finance_document_requests'))$schema->create('finance_document_requests',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->string('side');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->char('source_revision',64);$t->string('command');$t->json('payload');});
         (require base_path('tests/Support/FinancialOriginCostProjectionSchema.php'))->up();
+        (require base_path('database/migrations/tenant/2026_10_07_081000_create_purchase_valuation_holds.php'))->up();
+        (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->up();
         $add=function($table,$name,$callback)use($schema){if(!$schema->hasColumn($table,$name))$schema->table($table,fn($t)=>$callback($t,$name));};
         $add('expenses','journal_entry_id',fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
         $add('expenses','posted_at',fn($t,$n)=>$t->timestamp($n)->nullable());
@@ -82,4 +84,22 @@ final class FinancialOriginReceiptCostTest extends TestCase
         try {OriginReceiptCostAuthority::fromLockedNativeProvenance($id,$proof,$this->mapping,'prepare',0);$this->fail('Partial native ledger was accepted');}
         catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {$this->assertSame(409,$e->getStatusCode());}
     }
+    public function test_native_cost_apply_and_replay_change_value_once_without_quantity_or_financial_journal_mutation():void
+    {
+        [$id,$proof]=$this->fixture();$db=DB::connection('tenant');
+        $a=OriginReceiptCostAuthority::fromLockedNativeProvenance($id,$proof,$this->mapping,'prepare',0);
+        $plan=app(PurchaseCostAdjustmentPlanner::class)->planFinancialOrigin($a);$service=app(PurchaseCostAdjustmentService::class);$service->prepareFinancialOrigin($a,$plan);
+        $fingerprint=SolaStockJournalContract::payloadHash(['authority'=>$a->fingerprint(),'purpose'=>'origin_apply','plan_revision'=>1,'native_plan'=>$plan]);
+        $quote=['operation_uuid'=>$id['operation_uuid'],'plan_revision'=>1,'plan_fingerprint'=>$fingerprint,'direction'=>'forward','native_plan'=>$plan,'components'=>$plan['components']];
+        $db->table('journal_entries')->insert(['id'=>97,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>\App\Models\Expense::class,'source_id'=>850,'source_key'=>'financial-origin-match:'.$id['operation_uuid'],'status'=>'posted','posted_at'=>now()]);
+        $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->update(['journal_entry_id'=>97,'value_plan'=>json_encode($quote),'plan_fingerprint'=>$fingerprint]);
+        $proof=array_replace($proof,['operation'=>'apply','finance_journal_id'=>97,'value_plan_hash'=>SolaStockJournalContract::payloadHash($quote),'plan_fingerprint'=>$fingerprint]);
+        $a=OriginReceiptCostAuthority::fromLockedNativeProvenance($id,$proof,$this->mapping,'apply',0);
+        $source=$a->sourceAllocations()[0];app(\App\Services\Purchasing\PurchaseValuationHoldService::class)->acquire(['settlement_uuid'=>$a->holdUuid($source['item_id'],$source['warehouse_id']),'purpose'=>'origin_apply','plan_revision'=>1,'item_id'=>$source['item_id'],'warehouse_id'=>$source['warehouse_id'],'receipt_id'=>$source['receipt_id'],'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>850,'source_journal_id'=>95],$fingerprint);
+        $balance=\App\Models\Tenant\StockBalance::sole();$quantity=$balance->on_hand_qty;$value=$balance->total_value;$ledgers=StockLedger::count();$journals=$db->table('journal_entries')->count();
+        $result=$service->applyFinancialOrigin($a);$this->assertSame('applied',$result['state']);$this->assertSame($result,$service->applyFinancialOrigin($a));
+        $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame(\App\Services\Stock\Support\Decimal::money(\App\Services\Stock\Support\Decimal::add($value,'6')),$balance->fresh()->total_value);
+        $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
+    }
+
 }
