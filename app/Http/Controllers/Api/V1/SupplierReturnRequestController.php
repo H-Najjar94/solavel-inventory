@@ -5,12 +5,13 @@ use App\Services\Access\{InventoryPermissionService,WarehouseAccessService};
 use App\Services\Purchasing\SupplierReturnRequestService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\{DB,Schema};
 final class SupplierReturnRequestController extends Controller {
  public function __construct(private OrganizationContext$context,private WarehouseAccessService$warehouses,private SupplierReturnRequestService$service){}
  private function actor(Request$r):int{abort_unless(app(InventoryPermissionService::class)->can($r->user(),'inventory.view_stock'),403);return (int)$r->user()->id;}
  public function index(Request$r){
   $actor=$this->actor($r);$org=$this->context->idOrFail();$allowed=$this->warehouses->allowedIds($actor);$db=DB::connection('tenant');
+  if(!Schema::connection('tenant')->hasTable('supplier_return_requests'))return response()->json(['success'=>true,'data'=>[],'available'=>false]);
   $rows=$db->table('supplier_return_requests as requests')->join('goods_receipts as receipts',function($join){$join->on('receipts.id','=','requests.goods_receipt_id')->on('receipts.organization_id','=','requests.organization_id');})
    ->leftJoin('supplier_returns as returns',function($join){$join->on('returns.id','=','requests.supplier_return_id')->on('returns.organization_id','=','requests.organization_id');})
    ->where('requests.organization_id',$org)->whereNull('receipts.deleted_at')->when($allowed!==null,fn($q)=>$q->whereIn('receipts.warehouse_id',$allowed))
@@ -38,7 +39,7 @@ final class SupplierReturnRequestController extends Controller {
   }
   return response()->json(['success'=>true,'data'=>$result]);
  }
- public function post(Request$r,string$uuid){$actor=$this->actor($r);abort_unless(app(InventoryPermissionService::class)->can($r->user(),'inventory.manage_purchase_returns'),403);$r->validate(['arrival_confirmed'=>'accepted']);$org=$this->context->idOrFail();$row=DB::connection('tenant')->table('supplier_return_requests')->where('organization_id',$org)->where('operation_uuid',$uuid)->first();abort_unless($row,404);
+ public function post(Request$r,string$uuid){$actor=$this->actor($r);abort_unless(app(InventoryPermissionService::class)->can($r->user(),'inventory.manage_purchase_returns'),403);$r->validate(['arrival_confirmed'=>'accepted']);$org=$this->context->idOrFail();abort_unless(Schema::connection('tenant')->hasTable('supplier_return_requests'),503,'Supplier return requests are not installed for this tenant.');$row=DB::connection('tenant')->table('supplier_return_requests')->where('organization_id',$org)->where('operation_uuid',$uuid)->first();abort_unless($row,404);
   $result=$this->service->dispatch(['action'=>'purchasing.return_request.post','authority_kind'=>'supplier_return_request','actor_id'=>$actor,'data'=>['operation_uuid'=>$uuid,'organization_mapping_uuid'=>$row->organization_mapping_uuid,'source_bill_id'=>$row->source_bill_id,'finance_receipt_id'=>$row->finance_receipt_id,'arrival_confirmed'=>true]],(object)['id'=>$org]);return response()->json(['success'=>true,'data'=>$result]);
  }
 }
