@@ -20,7 +20,7 @@ final class CreditDemandHandoffTest extends TestCase {
   if(!$schema->hasColumn('journal_entries','source'))$schema->table('journal_entries',fn($t)=>$t->string('source')->nullable());
   $this->initializeSalesFixture(true);$data=$this->data();$data['source_status']='posted';$data['posted_invoice_journal_id']=70;
   DB::connection('tenant')->table('journal_entries')->insert(['id'=>70,'organization_id'=>14,'source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted']);$this->authority($data);
-  $actor=new User;$actor->id=323;Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);$r=app(FulfillmentRequestService::class)->upsert($data,323);app(FulfillmentRequestService::class)->approve(FulfillmentRequest::sole(),$this->warehouse->id);
+  $actor=new User;$actor->id=323;Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);$this->mock(\App\Services\Access\CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed'=>true,'owner'=>true,'roles'=>[]]);$this->app->forgetInstance(\App\Services\Access\InventoryPermissionService::class);$r=app(FulfillmentRequestService::class)->upsert($data,323);app(FulfillmentRequestService::class)->approve(FulfillmentRequest::sole(),$this->warehouse->id);
   $order=SalesOrder::sole();app(SalesOrderService::class)->reserve($order);
   DB::connection('tenant')->table('credit_notes')->insert(['id'=>90,'organization_id'=>14,'invoice_id'=>800]);
   $command=['source_invoice_id'=>800,'request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'credit_note_id'=>90,'operation_uuid'=>(string)Str::uuid(),'credit_revision'=>str_repeat('c',64),'purpose'=>'prepare','lines'=>[['source_invoice_line_id'=>'801','credit_note_line_id'=>91,'unfulfilled_quantity'=>'1']]];
