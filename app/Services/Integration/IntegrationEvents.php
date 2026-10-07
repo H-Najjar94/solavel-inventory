@@ -21,6 +21,8 @@ final class IntegrationEvents
         'adjustment.reversed' => ['InventoryReversal', 'adjustment_gain', 'inventory_asset'],
         'grn.posted' => ['GoodsReceipt', 'inventory_asset', 'grni'],
         'grn.reversed' => ['InventoryReversal', 'grni', 'inventory_asset'],
+        'supplier_return.posted' => ['SupplierReturn', 'supplier_return_clearing', 'inventory_asset'],
+        'supplier_return.reversed' => ['InventoryReversal', 'inventory_asset', 'supplier_return_clearing'],
         'transfer.posted' => ['StockTransfer', 'inventory_asset', 'transfer_clearing'],
         'stock_count.posted' => ['StockCount', 'inventory_asset', 'adjustment_gain'],
 
@@ -47,7 +49,7 @@ final class IntegrationEvents
         return in_array($type, [
             'opening_stock.posted', 'opening_stock.reversed',
             'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed',
-            'stock.historical_fifo_cost_corrected.v1', 'stock_count.posted', 'shipment.posted', 'sales_return.posted', 'sales_return.reversed',
+            'supplier_return.posted', 'supplier_return.reversed', 'stock.historical_fifo_cost_corrected.v1', 'stock_count.posted', 'shipment.posted', 'sales_return.posted', 'sales_return.reversed',
         ], true);
     }
 
@@ -57,7 +59,7 @@ final class IntegrationEvents
         if (! self::postsJournal($type)) {
             return false;
         }
-        if (in_array($type, ['stock.historical_fifo_cost_corrected.v1', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
+        if (in_array($type, ['supplier_return.posted', 'supplier_return.reversed', 'stock.historical_fifo_cost_corrected.v1', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
             return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;
         }
 
