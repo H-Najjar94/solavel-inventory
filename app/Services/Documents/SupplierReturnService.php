@@ -73,7 +73,10 @@ final class SupplierReturnService
             $this->assertReceipt($receipt);
             $connected = IntegrationOrganizationMapping::query()->where('solastock_organization_id', $org)
                 ->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())->exists();
-            if ($connected && ! IntegrationEvents::exists('supplier_return.posted')) {
+            // Connected activation remains disabled until canonical reviewed_supplier_returns_v1
+            // capability and the actual Finance allocation consumer are independently qualified.
+            // Registering an event type alone never authorizes this accounting workflow.
+            if ($connected) {
                 throw ValidationException::withMessages(['integration' => 'Supplier-return accounting must be configured before goods can be returned.']);
             }
             $movements = []; $currentByReceiptLine = [];
