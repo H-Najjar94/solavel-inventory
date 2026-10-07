@@ -19,6 +19,9 @@ final class SalesReturnFinancialReversalGuardTest extends TestCase {
    'finance_sales_returns'=>function(Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('return_mapping_uuid');$t->unsignedBigInteger('stock_return_id');$t->unsignedBigInteger('invoice_id')->nullable();$t->unsignedBigInteger('credit_note_id')->nullable();},
    'finance_sales_credit_allocations'=>function(Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('return_mapping_uuid');$t->unsignedBigInteger('credit_note_id');$t->unsignedBigInteger('journal_entry_id');$t->string('state');}]
    as$name=>$build)if(!Schema::connection('tenant')->hasTable($name))Schema::connection('tenant')->create($name,$build);
+  foreach(['source','source_type','source_id']as$field)if(!Schema::connection('tenant')->hasColumn('journal_entries',$field))Schema::connection('tenant')->table('journal_entries',function(Blueprint$t)use($field){if($field==='source_id')$t->unsignedBigInteger($field)->nullable();else$t->string($field)->nullable();});
+  // MySQL DDL implicitly commits. Re-enter the native reserved-tenant transaction before fixture writes.
+  $this->tenantTestManager->cleanup();$this->setUpTenantAware();$this->useTenantA();$db=DB::connection('tenant');
   $mapping=IntegrationOrganizationMapping::create(['mapping_uuid'=>(string)Str::uuid(),'central_client_id'=>7,'central_organization_id'=>$org,'solastock_organization_id'=>$org,'finance_organization_id'=>14,
    'tenant_database_identity'=>$db->getDatabaseName(),'integration'=>'solabooks','contract_version'=>'solastock-journal.v2','status'=>'verified','activation_state'=>'active','base_currency_code'=>'JOD']);
   $db->table('invoices')->insert(['id'=>21,'organization_id'=>14]);$db->table('credit_notes')->insert(['id'=>22,'organization_id'=>14]);
