@@ -167,6 +167,7 @@ class ShipmentService
                 throw new RuntimeException("Shipment {$s->id} cannot be posted from status '{$s->status}'.");
             }
 
+            $this->assertOrderCapacity($s);
             $this->workflowValidation->assertOperationalDocumentReady($s, 'shipment.posted');
             $this->validateReservedSerials($s);
 
@@ -257,6 +258,32 @@ class ShipmentService
         }
     }
 
+    /** Lock the parent before its lines so concurrent partial shipments cannot over-dispatch. */
+    private function assertOrderCapacity(Shipment $shipment): void
+    {
+        if (! $shipment->sales_order_id) {
+            return;
+        }
+        $order = SalesOrder::query()->where('organization_id', $shipment->organization_id)
+            ->lockForUpdate()->findOrFail($shipment->sales_order_id);
+        $sources = SalesOrderLine::query()->where('organization_id', $shipment->organization_id)
+            ->where('sales_order_id', $order->id)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+        $quantities = [];
+        foreach ($shipment->lines as $line) {
+            $source = $sources->get($line->sales_order_line_id);
+            if (! $source || (int) $source->item_id !== (int) $line->item_id) {
+                throw new RuntimeException(__('inventory.sales_handoff.source_line_invalid'));
+            }
+            $quantities[$source->id] = Decimal::add($quantities[$source->id] ?? '0', (string) $line->quantity);
+        }
+        foreach ($quantities as $id => $quantity) {
+            $source = $sources->get($id);
+            if (Decimal::gt($quantity, Decimal::sub((string) $source->ordered_qty, (string) $source->shipped_qty))) {
+                throw new RuntimeException(__('inventory.sales_handoff.exceeds_remaining'));
+            }
+        }
+    }
+
     private function rollUpSalesOrder(Shipment $s): void
     {
         if (! $s->sales_order_id) {
@@ -286,7 +313,7 @@ class ShipmentService
     {
         foreach ($lines as $line) {
             $sourceLine = ! empty($line['sales_order_line_id'])
-                ? SalesOrderLine::query()->where('organization_id', $orgId)->find((int) $line['sales_order_line_id'])
+                ? SalesOrderLine::query()->where('organization_id', $orgId)->where('sales_order_id', $s->sales_order_id)->where('item_id', (int) ($line['item_id'] ?? 0))->find((int) $line['sales_order_line_id'])
                 : null;
             if (! empty($line['sales_order_line_id']) && ! $sourceLine) {
                 throw new RuntimeException('The sales-order source line is unavailable in this organization.');
