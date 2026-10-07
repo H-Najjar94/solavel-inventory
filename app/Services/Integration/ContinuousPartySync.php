@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 final class ContinuousPartySync {
  public function dispatch(array $input,object $organization):array {
   abort_unless(($input['authority_kind']??null)==='continuous_party_sync' && (int)$input['actor_id']===0
-   && in_array($input['action'],['purchasing.party.ensure','purchasing.party.status','purchasing.party.choices','purchasing.party.resolve'],true),403);
+   && in_array($input['action'],['purchasing.party.ensure','purchasing.party.status','purchasing.party.choices','purchasing.party.resolve','sales.party.ensure','sales.party.status','sales.party.choices','sales.party.resolve'],true),403);
   $central=DB::connection((string)config('tenancy.central_connection','mysql'));
   foreach([['finance','accounting','construction'],['inventory']]as$slugs)
    abort_unless($central->table('organization_projects as a')->join('projects','projects.id','=','a.project_id')->where('a.organization_id',$organization->id)->where('a.is_active',true)->where('projects.is_active',true)->whereIn('projects.slug',$slugs)->exists(),403);
@@ -16,25 +16,34 @@ final class ContinuousPartySync {
   $mapping=app(ReceivingRequestService::class)->mapping();
   abort_unless((int)$mapping->finance_organization_id===(int)$input['finance_organization_id'] && (int)$mapping->central_client_id===(int)$organization->client_id && (int)$mapping->central_organization_id===(int)$organization->id,403);
   app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
-  $facts=validator((array)($input['data']??[]),['entity_type'=>'required|in:supplier','source_app'=>'required|in:finance','source_id'=>'required|integer|min:1','source_bill_id'=>'required|integer|min:1','native_actor_id'=>'required|integer|min:1','source_revision'=>'required|string|size:64'])->validate();
-  $review=in_array($input['action'],['purchasing.party.choices','purchasing.party.resolve'],true);
-  $authority=$this->authorizeBillDependency($mapping,$facts,$review?['party_command'=>$input['action'],'party_supplier_id'=>(int)$facts['source_id']]:[]);
+  $sales=str_starts_with($input['action'],'sales.party.');
+  $type=$sales?'customer':'supplier';
+  $sourceKey=$sales?'source_invoice_id':'source_bill_id';
+  $facts=validator((array)($input['data']??[]),['entity_type'=>'required|in:'.$type,'source_app'=>'required|in:finance','source_id'=>'required|integer|min:1',$sourceKey=>'required|integer|min:1','native_actor_id'=>'required|integer|min:1','source_revision'=>'required|string|size:64'])->validate();
+  $review=in_array($input['action'],['purchasing.party.choices','purchasing.party.resolve','sales.party.choices','sales.party.resolve'],true);
+  $reviewFacts=$review?['party_command'=>$input['action'],$sales?'party_customer_id':'party_supplier_id'=>(int)$facts['source_id']]:[];
+  $authority=$sales?$this->authorizeInvoiceDependency($mapping,$facts,$reviewFacts):$this->authorizeBillDependency($mapping,$facts,$reviewFacts);
   if($review){
    $owner=$central->table('user_organizations')->where('organization_id',$organization->id)->where('user_id',$facts['native_actor_id'])->whereIn('role',['owner','client_owner'])->where(fn($q)=>$q->whereNull('status')->orWhere('status','active'))->exists();
    abort_unless($owner || ($authority['party_link_allowed']??false)===true,403);
   }
-  $ledger=app(PartySyncLedger::class);$fields=$ledger->fields($mapping,'finance','supplier',(int)$facts['source_id']);
+  $ledger=app(PartySyncLedger::class);$fields=$ledger->fields($mapping,'finance',$type,(int)$facts['source_id']);
   abort_unless($fields && hash_equals($ledger->revision($fields),$facts['source_revision']),409);
-  if($input['action']==='purchasing.party.choices')return app(PartyIdentityReview::class)->choices($mapping,$facts);
-  if($input['action']==='purchasing.party.resolve'){
+  if(in_array($input['action'],['purchasing.party.choices','sales.party.choices'],true))return app(PartyIdentityReview::class)->choices($mapping,$facts);
+  if(in_array($input['action'],['purchasing.party.resolve','sales.party.resolve'],true)){
    $choice=validator((array)$input['data'],['target_id'=>'required|integer|min:1','selection_fingerprint'=>'required|string|size:64'])->validate();
    return app(PartyIdentityReview::class)->resolve($mapping,$facts,(int)$choice['target_id'],$choice['selection_fingerprint']);
   }
-  if($input['action']==='purchasing.party.status'){
-   $row=DB::connection('tenant')->table('integration_party_sync_states')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type','supplier')->where('source_app','finance')->where('source_id',$facts['source_id'])->first();
+  if(in_array($input['action'],['purchasing.party.status','sales.party.status'],true)){
+   $row=DB::connection('tenant')->table('integration_party_sync_states')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where('source_app','finance')->where('source_id',$facts['source_id'])->first();
    return app(PartySyncMaterializer::class)->result($row?->status??'pending',(int)$facts['source_id'],$row?->target_id?(int)$row->target_id:null,$row?->mapping_uuid,$row?->last_error??($row?null:'party_connection_pending'));
   }
-  return $this->materialize($mapping,'finance','supplier',(int)$facts['source_id'],$facts['source_revision']);
+  return $this->materialize($mapping,'finance',$type,(int)$facts['source_id'],$facts['source_revision']);
+ }
+ public function authorizeInvoiceDependency(object $mapping,array $facts,array $review=[]):array {
+  $invoice=DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$facts['source_invoice_id'])->first();
+  abort_unless($invoice && (int)$invoice->customer_id===(int)$facts['source_id'],403);
+  return app(SolaBooksOutboxDeliveryService::class)->authorizeSales((int)$facts['native_actor_id'],(int)$invoice->id,(int)($invoice->journal_entry_id??0)>0?'post':'edit_draft',$review);
  }
  public function authorizeBillDependency(object $mapping,array $facts,array $review=[]):array {
   $bill=DB::connection('tenant')->table('bills')->where('organization_id',$mapping->finance_organization_id)->where('id',$facts['source_bill_id'])->first();

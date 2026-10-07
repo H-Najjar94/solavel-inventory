@@ -44,7 +44,7 @@ final class FinanceWorkspaceController
         abort_unless($org && $central->table('clients')->where('id', $input['client_id'])
             ->where('is_active', true)->whereNull('deleted_at')->exists(), 403, 'workspace_organization_unavailable');
         if ((int) $input['actor_id'] === 0) {
-            if (in_array($input['action'], ['purchasing.party.ensure', 'purchasing.party.status', 'purchasing.party.choices', 'purchasing.party.resolve'], true)) {
+            if (in_array($input['action'], ['purchasing.party.ensure', 'purchasing.party.status', 'purchasing.party.choices', 'purchasing.party.resolve', 'sales.party.ensure', 'sales.party.status', 'sales.party.choices', 'sales.party.resolve'], true)) {
                 return response()->json(['success'=>true,'data'=>app(\App\Services\Integration\ContinuousPartySync::class)->dispatch($input,$org)]);
             }
             abort_unless(str_starts_with($input['action'], 'purchasing.settlement.'), 403);
