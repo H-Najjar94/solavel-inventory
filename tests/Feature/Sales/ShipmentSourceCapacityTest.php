@@ -91,7 +91,7 @@ class ShipmentSourceCapacityTest extends TestCase
         $service->post($create($serials[1]));
         $this->assertSame('shipped',$order->fresh()->status);$this->assertSame('2.0000',(string)$source->fresh()->shipped_qty);
         $this->assertSame(0,\App\Models\Tenant\Reservation::query()->where('source_id',$order->id)->where('status','active')->count());
-        $this->assertSame(2,\App\Models\Tenant\SerialNumber::query()->where('item_id',$item->id)->where('status','shipped')->count());
+        $this->assertSame(2,\App\Models\Tenant\SerialNumber::query()->where('item_id',$item->id)->where('status','sold')->count());
     }
 
 }

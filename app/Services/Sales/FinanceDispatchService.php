@@ -156,7 +156,7 @@ final class FinanceDispatchService
             if($c){abort_unless((int)$c->fulfillment_request_id===(int)$r->id && $c->status!=='abandoned' && (int)$c->actor_id===(int)request()->user()->getAuthIdentifier() && hash_equals($c->payload_hash,$hash),409);}
             else {
                 $this->shipmentLines($r,$data);
-                $c=FulfillmentCommand::create(['organization_id'=>app(OrganizationContext::class)->idOrFail(),'operation_uuid'=>$data['operation_uuid'],'fulfillment_request_id'=>$r->id,'source_invoice_id'=>$r->source_invoice_id,'actor_id'=>request()->user()->getAuthIdentifier(),'payload_hash'=>$hash,'payload'=>$data]);
+                $c=FulfillmentCommand::create(['organization_id'=>app(OrganizationContext::class)->idOrFail(),'operation_uuid'=>$data['operation_uuid'],'fulfillment_request_id'=>$r->id,'source_invoice_id'=>$r->source_invoice_id,'actor_id'=>request()->user()->getAuthIdentifier(),'payload_hash'=>$hash,'payload'=>$data,'status'=>'prepared']);
             }
             return $this->result($c);
         },3);

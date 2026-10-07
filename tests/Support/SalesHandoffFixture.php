@@ -26,7 +26,7 @@ trait SalesHandoffFixture
         if($physical){
             $this->warehouse=StockTestFactory::warehouse();
             $line=['item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'20','unit_cost'=>'3'];
-            if($tracking==='serial')$line['serials']=array_map(fn($n)=>'QA-DISPATCH-S-'.$n,range(1,20));
+            if($tracking==='serial'){unset($line['entered_unit_id']);$line['serials']=array_map(fn($n)=>'QA-DISPATCH-S-'.$n,range(1,20));}
             if($tracking==='lot')$line+=['lot_code'=>'QA-DISPATCH-LOT','expiry_date'=>now()->addYear()->toDateString()];
             $opening=app(OpeningStockService::class);$opening->post($opening->createDraft(['warehouse_id'=>$this->warehouse->id],[$line]));
         }

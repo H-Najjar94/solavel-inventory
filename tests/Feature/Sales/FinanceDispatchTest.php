@@ -19,7 +19,7 @@ final class FinanceDispatchTest extends TestCase
 {
     use TenantAware, SalesHandoffFixture;
     private function actor(bool $owner=true, bool $stock=true): void {
-        $actor=new User;$actor->id=323;Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);
+        config(['inventory.demo_tenant.enabled'=>false]);$actor=new User;$actor->id=323;Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed'=>$stock,'owner'=>$owner,'roles'=>$owner?[]:['warehouse_operator']]);
         $this->app->forgetInstance(InventoryPermissionService::class);
     }
@@ -37,7 +37,7 @@ final class FinanceDispatchTest extends TestCase
     public function test_prepare_dispatch_partial_final_and_unknown_outcome_replay_use_one_native_shipment_per_command(): void {
         [,,$operation]=$this->fixture();$service=app(FinanceDispatchService::class);$before=StockLedger::count();$one=$service->prepare($operation);
         $this->assertSame('prepared',$one['status']);$this->assertSame(0,Shipment::count());$this->assertSame($before,StockLedger::count());
-        $partial=$service->execute($operation);$again=$service->execute($operation);$this->assertSame($partial,$again);$this->assertSame('partial',$partial['fulfillment_request']['status']);$this->assertSame('2.0000',$partial['fulfillment_request']['fulfilled_quantity']);
+        $partial=$service->execute($operation);$again=$service->execute($operation);$this->assertSame($partial,$again);$this->assertSame('partial',$partial['fulfillment_request']['status']);$this->assertSame('2.0000000000',$partial['fulfillment_request']['fulfilled_quantity']);
         $this->assertSame(1,Shipment::count());$this->assertSame($before+1,StockLedger::count());$this->assertSame(1,SalesDocumentOutbox::count());
         $event=SalesDocumentOutbox::sole()->payload;$this->assertSame(800,$event['shipment']['source_invoice_id']);$this->assertSame('801',$event['shipment']['lines'][0]['source_invoice_line_id']);$this->assertSame('partial',$event['shipment']['fulfillment_request']['status']);$this->assertNotEmpty($event['shipment']['journal_idempotency_key']);
         $final=array_replace($operation,['operation_uuid'=>(string)Str::uuid()]);$complete=$service->execute($final);$this->assertSame('complete',$complete['fulfillment_request']['status']);$this->assertCount(2,$complete['fulfillment_request']['shipment_ids']);
@@ -53,8 +53,8 @@ final class FinanceDispatchTest extends TestCase
     }
     public function test_serial_details_reserve_only_selected_serials_and_split_native_physical_lines(): void {
         [,,$operation]=$this->fixture('serial');$serials=SerialNumber::where('item_id',$this->item->id)->orderBy('id')->get();$operation['lines'][0]['serial_ids']=$serials->take(2)->pluck('id')->all();$operation['reserve_stock']=true;
-        $service=app(FinanceDispatchService::class);$before=StockLedger::count();$result=$service->execute($operation);$this->assertSame($before+2,StockLedger::count());$this->assertSame(2,Shipment::sole()->lines()->count());$this->assertSame(2,SerialNumber::where('status','shipped')->count());
-        $final=$operation;$final['operation_uuid']=(string)Str::uuid();$final['lines'][0]['serial_ids']=$serials->slice(2,2)->pluck('id')->all();$service->execute($final);$this->assertSame('complete',FulfillmentRequest::sole()->status);$this->assertSame(4,SerialNumber::where('status','shipped')->count());$this->assertSame(0,Reservation::where('status','active')->count());
+        $service=app(FinanceDispatchService::class);$before=StockLedger::count();$result=$service->execute($operation);$this->assertSame($before+2,StockLedger::count());$this->assertSame(2,Shipment::sole()->lines()->count());$this->assertSame(2,SerialNumber::where('status','sold')->count());
+        $final=$operation;$final['operation_uuid']=(string)Str::uuid();$final['lines'][0]['serial_ids']=$serials->slice(2,2)->pluck('id')->all();$service->execute($final);$this->assertSame('complete',FulfillmentRequest::sole()->status);$this->assertSame(4,SerialNumber::where('status','sold')->count());$this->assertSame(0,Reservation::where('status','active')->count());
         $this->assertSame($result['shipment_id'],$service->status($operation)['shipment_id']);
     }
     public function test_lot_and_serial_fields_are_native_required_before_command_publication(): void {
@@ -78,7 +78,7 @@ final class FinanceDispatchTest extends TestCase
         [$data,,$operation]=$this->fixture();$service=app(FinanceDispatchService::class);$partial=$service->execute($operation);$before=StockLedger::count();$cancel=$data+['expected_revision'=>$data['source_revision'],'command'=>'cancel'];
         DB::connection('tenant')->table('finance_sales_requests')->where('request_uuid',$data['request_uuid'])->update(['command'=>'cancel']);
         $client=$this->mock(SolaBooksOutboxDeliveryService::class);$client->shouldReceive('authorizeSales')->with(323,800,'edit_draft',['command'=>'cancel','request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision']])->andReturn(['command'=>'cancel','request_uuid'=>$data['request_uuid'],'command_source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision']]);
-        $cancelled=app(FulfillmentRequestService::class)->cancel($cancel,323);$this->assertSame('cancelled',$cancelled['status']);$this->assertSame('2.0000',$cancelled['fulfilled_quantity']);$this->assertSame([$partial['shipment_id']],$cancelled['shipment_ids']);
+        $cancelled=app(FulfillmentRequestService::class)->cancel($cancel,323);$this->assertSame('cancelled',$cancelled['status']);$this->assertSame('2.0000000000',$cancelled['fulfilled_quantity']);$this->assertSame([$partial['shipment_id']],$cancelled['shipment_ids']);
         $this->viewAuthority($data);$next=$operation;$next['operation_uuid']=(string)Str::uuid();try{$service->execute($next);$this->fail('Late dispatch after cancellation accepted');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}$this->assertSame($before,StockLedger::count());$this->assertSame(1,Shipment::count());
     }
 }
