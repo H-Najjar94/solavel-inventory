@@ -129,6 +129,42 @@ final class FinanceWorkspaceController
                 $result = app(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class)->dispatch($input, $org);
                 return response()->json(['success' => true, 'data' => $result]);
             }
+            // Typed native documents remain separate from Bill/Invoice identities.
+            // Only financial demand waives Stock assignment; physical actions below do not.
+            if (in_array($input['action'], FinanceDocumentLifecycleAuthority::FINANCIAL_ORIGIN_REQUEST_ACTIONS, true)
+                || in_array($input['action'], ['financial-origin.dispatch.options', 'financial-origin.dispatch.approve',
+                    'financial-origin.dispatch.prepare', 'financial-origin.dispatch.execute',
+                    'financial-origin.dispatch.status', 'financial-origin.dispatch.abandon'], true)) {
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(Schema::connection('tenant')->hasTable('stock_financial_origin_requests')
+                    && class_exists(\App\Services\FinancialOrigins\OriginRequestService::class), 409, 'workspace_schema_not_ready');
+                $data = (array) ($input['data'] ?? []);
+                validator($data, ['source_document_type'=>'required|in:sales_receipt,expense',
+                    'source_document_id'=>'required|integer|min:1','source_journal_id'=>'required|integer|min:1',
+                    'request_uuid'=>'required|uuid'])->validate();
+                if (in_array($input['action'], FinanceDocumentLifecycleAuthority::FINANCIAL_ORIGIN_REQUEST_ACTIONS, true)) {
+                    $service = app(\App\Services\FinancialOrigins\OriginRequestService::class);
+                    $result = match ($input['action']) {
+                        'financial-origin.request.upsert'=>$service->upsert($data, (int)$actor->id),
+                        'financial-origin.request.cancel'=>$service->cancel($data, (int)$actor->id),
+                        'financial-origin.request.status'=>$service->sourceStatus($data, (int)$actor->id),
+                    };
+                } else {
+                    validator($data, ['request_revision'=>'required|string|size:64'])->validate();
+                    $action = substr($input['action'], strlen('financial-origin.dispatch.'));
+                    if (in_array($action, ['prepare','execute','status','abandon'], true)) {
+                        validator($data, ['operation_uuid'=>'required|uuid'])->validate();
+                    }
+                    if ($action === 'approve') {
+                        validator($data, ['warehouse_id'=>'required|integer|min:1'])->validate();
+                        $result = app(\App\Services\FinancialOrigins\OriginRequestService::class)->approve($data, (int)$actor->id);
+                    } else {
+                        $result = app(\App\Services\FinancialOrigins\OriginDispatchService::class)->{$action}($data, (int)$actor->id);
+                    }
+                }
+                return response()->json(['success'=>true,'data'=>$result]);
+            }
             // Financial demand creation is a closed Finance capability. Physical
             // dispatch separately requires current Stock access and native permissions.
             if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand',
