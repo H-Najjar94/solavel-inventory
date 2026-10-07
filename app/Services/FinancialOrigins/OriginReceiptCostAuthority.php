@@ -94,6 +94,7 @@ final readonly class OriginReceiptCostAuthority
         abort_unless(($plan === null && ($proof['value_plan_hash'] ?? null) === null) || ($plan !== null && hash_equals(SolaStockJournalContract::payloadHash($plan), (string) ($proof['value_plan_hash'] ?? ''))), 409);
         $generation = $direction === 'reverse' && ($match->reversal_generation ?? null) !== null
             ? OriginReceiptReverseGeneration::lock($db, $match, $request, $identity, $proof, $action) : null;
+        if ($generation) $generation->assertPredecessorsReleased($db, $match, $request, $org, $mapping->mapping_uuid, (int) $line->item_id, (int) $grn->warehouse_id, (int) $grn->id);
         $quote = $direction === 'reverse' ? ($generation ? $generation->quote() : ($plan['reverse_plan'] ?? null)) : $plan;
         if ($generation) $match = $generation->lifecycleMatch($match);
         if ($quote) abort_unless(hash_equals((string) $quote['plan_fingerprint'], (string) ($proof['plan_fingerprint'] ?? '')), 409);

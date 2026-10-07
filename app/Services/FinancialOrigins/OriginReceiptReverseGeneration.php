@@ -2,6 +2,7 @@
 namespace App\Services\FinancialOrigins;
 
 use App\Services\Integration\SolaStockJournalContract;
+use Ramsey\Uuid\Uuid;
 
 /** A locked canonical Finance generation, never a caller-selected hold rearm. */
 final readonly class OriginReceiptReverseGeneration
@@ -51,6 +52,42 @@ final readonly class OriginReceiptReverseGeneration
                 && array_key_exists('unpost_audit_id',$release) && $release['unpost_audit_id']===null,409);
         }
         return new self($row,$snapshot,$quote);
+    }
+    /** Every earlier generation must have a durable ACK and its original native hold released. */
+    public function assertPredecessorsReleased($db, object $match, object $request, int $stockOrg, string $mappingUuid, int $item, int $warehouse, int $receipt): void
+    {
+        if ($this->number() === 1) return;
+        $rows = $db->table('finance_document_reverse_generations')->where('organization_id', $match->organization_id)
+            ->where('operation_uuid', $match->operation_uuid)->where('generation', '<', $this->number())
+            ->orderBy('generation')->lockForUpdate()->get();
+        abort_unless($rows->count() === $this->number() - 1, 409);
+        foreach ($rows as $offset => $prior) {
+            abort_unless((int) $prior->generation === $offset + 1 && $prior->state === 'released' && $prior->released_at
+                && !$prior->inverse_journal_id && $prior->request_uuid === $request->request_uuid
+                && $prior->source_revision === $request->source_revision && (int) $prior->source_journal_id === (int) $request->source_journal_id
+                && (int) $prior->original_match_journal_id === (int) $match->journal_entry_id, 409);
+            $release = json_decode($prior->release_snapshot ?? 'null', true, 512, JSON_THROW_ON_ERROR);
+            $quote = json_decode($prior->reverse_quote ?? 'null', true, 512, JSON_THROW_ON_ERROR);
+            abort_unless(is_array($release) && is_array($quote) && $prior->plan_fingerprint
+                && ($release['purpose'] ?? null) === 'abandon_match' && ($release['direction'] ?? null) === 'reverse'
+                && ($release['release_operation_uuid'] ?? null) === $prior->release_operation_uuid
+                && ($release['reverse_hold_fingerprint'] ?? null) === $prior->plan_fingerprint
+                && ($quote['plan_fingerprint'] ?? null) === $prior->plan_fingerprint
+                && ($release['quote']['abandoned'] ?? null) === true, 409);
+            $abandoned = $release['quote']; unset($abandoned['abandoned']);
+            abort_unless(SolaStockJournalContract::canonicalJson($abandoned) === SolaStockJournalContract::canonicalJson($quote), 409);
+            $ack = $release['acknowledgement'] ?? null;
+            foreach (['state' => 'abandoned', 'operation_uuid' => $match->operation_uuid,
+                'reversal_generation' => (int) $prior->generation, 'reversal_operation_uuid' => $prior->reversal_operation_uuid,
+                'plan_fingerprint' => $prior->plan_fingerprint] as $key => $value) abort_unless(is_array($ack) && ($ack[$key] ?? null) === $value, 409);
+            $uuid = Uuid::uuid5(Uuid::NAMESPACE_URL, 'financial-origin|'.$mappingUuid.'|'.$prior->reversal_operation_uuid.'|'.$item.'|'.$warehouse.'|reverse')->toString();
+            $hold = $db->table('purchase_valuation_holds')->where('organization_id', $stockOrg)->where('settlement_uuid', $uuid)
+                ->where('purpose', 'origin_reverse')->where('plan_revision', 1)->lockForUpdate()->first();
+            abort_unless($hold && $hold->state === 'released' && $hold->plan_fingerprint === $prior->plan_fingerprint
+                && (int) $hold->item_id === $item && (int) $hold->warehouse_id === $warehouse && (int) $hold->receipt_id === $receipt
+                && $hold->source_document_type === 'expense' && (int) $hold->source_document_id === (int) $request->source_document_id
+                && (int) $hold->source_journal_id === (int) $request->source_journal_id && $hold->source_bill_id === null, 409);
+        }
     }
     public function number():int{return (int)$this->row->generation;}
     public function operationUuid():string{return $this->row->reversal_operation_uuid;}
