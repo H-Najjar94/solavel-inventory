@@ -29,14 +29,14 @@ class ShipmentSourceCapacityTest extends TestCase
         [$warehouse,$item,$order]=$this->fixture();$sales=app(SalesOrderService::class);
         $other=$sales->createDraft(['warehouse_id'=>$warehouse->id],[['item_id'=>$item->id,'ordered_qty'=>'5','unit_price'=>'7']]);
         $before=StockLedger::query()->count();
-        try{app(ShipmentService::class)->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[['sales_order_line_id'=>$other->lines->first()->id,'item_id'=>$item->id,'quantity'=>'1']]);$this->fail('Foreign source accepted');}
+        try{app(ShipmentService::class)->createDraft(['shipment_number'=>'QA-SHIP-'.\Illuminate\Support\Str::uuid(),'sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[['sales_order_line_id'=>$other->lines->first()->id,'item_id'=>$item->id,'quantity'=>'1']]);$this->fail('Foreign source accepted');}
         catch(\RuntimeException $e){$this->assertStringContainsString('source line',$e->getMessage());}
         $this->assertSame($before,StockLedger::query()->count());
     }
     public function test_partial_shipments_and_replay_preserve_exact_order_capacity(): void
     {
         [$warehouse,$item,$order]=$this->fixture();$service=app(ShipmentService::class);$source=$order->lines->first();
-        $create=fn($quantity)=>$service->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[['sales_order_line_id'=>$source->id,'item_id'=>$item->id,'quantity'=>$quantity]]);
+        $create=fn($quantity)=>$service->createDraft(['shipment_number'=>'QA-SHIP-'.\Illuminate\Support\Str::uuid(),'sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[['sales_order_line_id'=>$source->id,'item_id'=>$item->id,'quantity'=>$quantity]]);
         $first=$service->post($create('2'));$count=StockLedger::query()->count();$service->post($first);
         $this->assertSame($count,StockLedger::query()->count());$this->assertSame('2.0000',(string)$source->fresh()->shipped_qty);
         $tooMuch=$create('4');try{$service->post($tooMuch);$this->fail('Overdispatch accepted');}catch(\RuntimeException $e){$this->assertSame(__('inventory.sales_handoff.exceeds_remaining'),$e->getMessage());}
@@ -48,7 +48,7 @@ class ShipmentSourceCapacityTest extends TestCase
     {
         [$warehouse,$item,$order]=$this->fixture();$source=$order->lines->first();$service=app(ShipmentService::class);
         $line=['sales_order_line_id'=>$source->id,'item_id'=>$item->id,'quantity'=>'3'];
-        $draft=$service->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[$line,$line]);$before=StockLedger::query()->count();
+        $draft=$service->createDraft(['shipment_number'=>'QA-SHIP-'.\Illuminate\Support\Str::uuid(),'sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[$line,$line]);$before=StockLedger::query()->count();
         try{$service->post($draft);$this->fail('Duplicate lines exceeded remaining');}catch(\RuntimeException $e){$this->assertSame(__('inventory.sales_handoff.exceeds_remaining'),$e->getMessage());}
         $this->assertSame($before,StockLedger::query()->count());$this->assertSame('0.0000',(string)$source->fresh()->shipped_qty);
     }
