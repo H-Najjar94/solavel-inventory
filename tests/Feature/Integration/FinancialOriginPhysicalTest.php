@@ -37,6 +37,32 @@ final class FinancialOriginPhysicalTest extends TestCase
             'lines'=>[['request_line_id'=>$r['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]];
         return [$data,$context,$op];
     }
+    public function test_expense_receiver_can_assign_and_receive_but_adjustment_authority_cannot_replace_receiving_permission():void
+    {
+        $this->initializeOriginFixture(true);
+        $supplier=Supplier::create(['code'=>'QA-RECEIVER-APPROVAL','name'=>'QA receiver approval','is_active'=>true]);$this->master('supplier',$supplier->id,704);
+        DB::connection('tenant')->table('accounts')->insert(['id'=>300,'organization_id'=>14,'code'=>'300','name'=>'GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
+        $account=IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>300,'status'=>'verified']);$this->master('account_role',$account->id,300);
+        $data=$this->typed('expense');$this->proof($data);$request=app(OriginRequestService::class)->upsert($data,323);
+        $context=array_intersect_key($data,array_flip(['source_document_type','source_document_id','source_document_number','source_journal_id','request_uuid']))+['request_revision'=>$data['source_revision']];
+        $this->actor(338,true);
+        $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed'=>true,'owner'=>true,'roles'=>[],'grants'=>[['effect'=>'deny','permission_key'=>'inventory.receive_goods','scope_type'=>'organization']]]);
+        $this->app->forgetInstance(InventoryPermissionService::class);
+        $this->assertTrue(app(InventoryPermissionService::class)->can(request()->user(),'inventory.manage_adjustments'));
+        $this->assertFalse(app(InventoryPermissionService::class)->can(request()->user(),'inventory.receive_goods'));
+        try { app(OriginRequestService::class)->approveNative($context+['warehouse_id'=>$this->warehouse->id],338);$this->fail('Adjustment authority replaced receiving authority'); }
+        catch(HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+        $this->assertNull(FinancialOriginRequest::sole()->approved_at);$this->assertSame(0,GoodsReceipt::count());
+        InventoryUserWarehouse::create(['user_id'=>336,'warehouse_id'=>$this->warehouse->id,'assigned_by'=>323]);$this->actor(336);
+        $this->assertTrue(app(InventoryPermissionService::class)->can(request()->user(),'inventory.receive_goods'));
+        $this->assertFalse(app(InventoryPermissionService::class)->can(request()->user(),'inventory.manage_adjustments'));
+        $service=app(OriginDispatchService::class);$this->assertTrue($service->optionsNative($context,336)['can_approve']);
+        app(OriginRequestService::class)->approveNative($context+['warehouse_id'=>$this->warehouse->id],336);
+        $this->assertTrue($service->optionsNative($context,336)['can_execute']);
+        $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->meta=$meta;$setting->save();
+        $result=$service->executeNative($context+['operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'physical_date'=>'2026-10-07','lines'=>[['request_line_id'=>$request['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]],336);
+        $this->assertSame('partial',$result['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame(1,FinancialOriginOutbox::count());
+    }
     public function test_stock_only_cash_dispatch_partial_final_and_replay_emit_typed_events_without_new_invoice_draft():void
     {
         [,,$op]=$this->admitted();$service=app(OriginDispatchService::class);$before=StockLedger::count();
