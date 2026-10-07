@@ -207,6 +207,9 @@ export const api = {
     countPrefill: (warehouseId, binId) => request('/counts-prefill', { params: { warehouse_id: warehouseId, bin_id: binId } }),
 
     // ── Sales Fulfillment ──
+    fulfillmentRequests: (status='active') => request('/sales/requests', {params:{status}}),
+    fulfillmentRequest: (id) => request(`/sales/requests/${id}`),
+    approveFulfillmentRequest: (id, body) => request(`/sales/requests/${id}/approve`, {method:'POST',body}),
     salesOrders: (params) => request('/sales-orders', { params }),
     salesOrder: (id) => request(`/sales-orders/${id}`),
     createSalesOrder: (body) => request('/sales-orders', { method: 'POST', body }),

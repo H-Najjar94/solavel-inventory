@@ -3,6 +3,7 @@
 namespace App\Services\Documents;
 
 use App\Models\Tenant\Reservation;
+use App\Models\Tenant\Item;
 use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\SalesOrderLine;
 use App\Models\Tenant\SerialNumber;
@@ -167,13 +168,15 @@ class ShipmentService
                 throw new RuntimeException("Shipment {$s->id} cannot be posted from status '{$s->status}'.");
             }
 
+            app(\App\Services\Sales\FulfillmentRequestService::class)->validateShipment($s);
+            $this->assertOrderCapacity($s);
             $this->workflowValidation->assertOperationalDocumentReady($s, 'shipment.posted');
             $this->validateReservedSerials($s);
 
             // Release the SO reservation first so the OUT does not trip the
             // negative-stock check against still-reserved quantity.
             if ($s->sales_order_id) {
-                $this->reservations->consume('sales_order', (int) $s->sales_order_id);
+                $this->reservations->consumeForShipment($s);
             }
 
             $movements = [];
@@ -227,6 +230,8 @@ class ShipmentService
             $s->markSystemTransition()->save();
 
             $this->outbox->record('shipment.posted', $s, 'shipment', $s->shipment_number, (string) $s->ship_date);
+            app(\App\Services\Sales\FulfillmentRequestService::class)->posted($s);
+            app(\App\Services\Sales\ShipmentHandoffService::class)->record($s);
 
             return $s->fresh('lines');
         });
@@ -254,6 +259,35 @@ class ShipmentService
             $serial->owner_ref = $owner;
             $serial->warranty_until = $warrantyUntil;
             $serial->save();
+        }
+    }
+
+    /** Lock the parent before its lines so concurrent partial shipments cannot over-dispatch. */
+    private function assertOrderCapacity(Shipment $shipment): void
+    {
+        if (! $shipment->sales_order_id) {
+            return;
+        }
+        $order = SalesOrder::query()->where('organization_id', $shipment->organization_id)
+            ->lockForUpdate()->findOrFail($shipment->sales_order_id);
+        if ($order->status === 'cancelled') {
+            throw new RuntimeException(__('inventory.sales_handoff.order_not_dispatchable'));
+        }
+        $sources = SalesOrderLine::query()->where('organization_id', $shipment->organization_id)
+            ->where('sales_order_id', $order->id)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+        $quantities = [];
+        foreach ($shipment->lines as $line) {
+            $source = $sources->get($line->sales_order_line_id);
+            if (! $source || (int) $source->item_id !== (int) $line->item_id) {
+                throw new RuntimeException(__('inventory.sales_handoff.source_line_invalid'));
+            }
+            $quantities[$source->id] = Decimal::add($quantities[$source->id] ?? '0', (string) $line->quantity);
+        }
+        foreach ($quantities as $id => $quantity) {
+            $source = $sources->get($id);
+            if (Decimal::gt($quantity, Decimal::sub(Decimal::sub((string) $source->ordered_qty, (string) $source->shipped_qty), (string) ($source->cancelled_qty ?? '0')))) {
+                throw new RuntimeException(__('inventory.sales_handoff.exceeds_remaining'));
+            }
         }
     }
 
@@ -286,8 +320,21 @@ class ShipmentService
     {
         foreach ($lines as $line) {
             $sourceLine = ! empty($line['sales_order_line_id'])
-                ? SalesOrderLine::query()->where('organization_id', $orgId)->find((int) $line['sales_order_line_id'])
+                ? SalesOrderLine::query()->where('organization_id', $orgId)->where('sales_order_id', $s->sales_order_id)->where('item_id', (int) ($line['item_id'] ?? 0))->find((int) $line['sales_order_line_id'])
                 : null;
+            // Legacy manual entry may omit the reference: recover only an exact unique native line.
+            if (empty($line['sales_order_line_id']) && $s->sales_order_id) {
+                $unitId = $line['entered_unit_id'] ?? $line['unit_id'] ?? Item::query()->findOrFail((int) ($line['item_id'] ?? 0))->base_unit_id;
+                $matches = SalesOrderLine::query()->where('organization_id', $orgId)
+                    ->where('sales_order_id', $s->sales_order_id)->where('item_id', (int) ($line['item_id'] ?? 0))
+                    ->when($unitId !== null, fn ($q) => $q->where('entered_unit_id', (int) $unitId), fn ($q) => $q->whereNull('entered_unit_id'))
+                    ->where('variant_id', $line['variant_id'] ?? null)->limit(2)->get();
+                if ($matches->count() !== 1) {
+                    throw new RuntimeException(__('inventory.sales_handoff.source_line_invalid'));
+                }
+                $sourceLine = $matches->first();
+                $line['sales_order_line_id'] = $sourceLine->id;
+            }
             if (! empty($line['sales_order_line_id']) && ! $sourceLine) {
                 throw new RuntimeException('The sales-order source line is unavailable in this organization.');
             }

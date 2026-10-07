@@ -420,6 +420,11 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::post('/packs/{pack}/packed', [PackController::class, 'markPacked'])
         ->middleware('perm:inventory.manage_packing')->name('api.v1.packs.packed');
 
+    // Durable Finance-origin requests; ordinary Stock permissions remain authoritative.
+    Route::get('/sales/requests', [\App\Http\Controllers\Api\V1\FulfillmentRequestController::class, 'index'])->middleware('perm:inventory.view_sales')->name('api.v1.sales.requests.index');
+    Route::get('/sales/requests/{fulfillment_request}', [\App\Http\Controllers\Api\V1\FulfillmentRequestController::class, 'show'])->middleware('perm:inventory.view_sales')->name('api.v1.sales.requests.show');
+    Route::post('/sales/requests/{fulfillment_request}/approve', [\App\Http\Controllers\Api\V1\FulfillmentRequestController::class, 'approve'])->middleware('perm:inventory.manage_sales_orders')->name('api.v1.sales.requests.approve');
+
     // ── Sales Fulfillment: Shipments (post = stock OUT via StockLedgerService) ──
     Route::get('/shipments', [ShipmentController::class, 'index'])
         ->middleware('perm:inventory.view_sales')->name('api.v1.shipments.index');

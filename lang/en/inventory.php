@@ -2,6 +2,15 @@
 
 return [
     'warehouse_setup' => ['default_name' => 'Main Warehouse', 'initialization_failed' => 'Warehouse setup could not be completed. Check the organization’s Stock activation and try again.'],
+    'sales_handoff' => [
+        'credit_quantity_precision' => 'The credited quantity cannot be represented in the Stock product unit. Review the credit quantity and unit with the accountant before posting.',
+        'credit_demand_pending' => 'A credit is updating undelivered demand. Retry dispatch after the credit finishes, or ask the accountant to resume it.',
+        'tracking_required' => 'Choose the required lot, serial number, or variant for this product before dispatching.',
+        'order_not_dispatchable' => 'Confirm the sales order before dispatching its remaining quantities.',
+        'source_line_invalid' => 'A shipment line does not belong to this sales order and product. Reopen the shipment from its sales order.',
+        'exceeds_remaining' => 'The shipment quantity exceeds the quantity remaining on this sales order. Refresh the order and enter the actual remaining quantity.',
+    ],
+
     'purchasing' => [
         'resubmit_unavailable' => 'A new receiving request is available only for a cancellation before Stock accepted any request or receiving operation. Existing history is preserved.','connection_review_required' => 'The purchasing connection needs review. Ask the integration manager to check the connection, then retry.','conversion_review_required' => 'The unit conversion changed after purchase approval. Ask the purchasing approver to review the receiving request, then refresh this receipt.','approval_needed' => 'This receiving request needs approval by an authorized purchasing approver and an assigned warehouse before receiving.', 'authority_unavailable' => 'Your bill permission could not be confirmed. Refresh and try again, or contact your administrator.', 'delivery_pending' => 'The receiving document is saved. Finance handoff is pending; it will retry automatically. Contact the integration manager if it remains pending.', 'mapping_required' => 'This supplier, product or unit needs a verified connection mapping. Ask the organization integration manager to review it.', 'identity_conflict' => 'This bill already has another receiving request. Refresh the bill.', 'edits_locked' => 'Receiving has started. Review the existing receipts before changing or cancelling this purchase.', 'refresh_required' => 'The purchase changed. Refresh and review the latest version.', 'cancel_received' => 'A receipt is already confirmed. Reverse it using the normal authorized reversal process before cancelling receiving.', 'cancelled' => 'This receiving request was cancelled.', 'source_mismatch' => 'The supplier, product or unit differs from the linked purchase.', 'over_receipt' => 'The actual accepted quantity exceeds the purchase quantity remaining to receive.'],
     'workflow_currency' => [

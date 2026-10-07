@@ -36,6 +36,7 @@ class PickListService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($so, $attributes, $orgId) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->with(['lines.item', 'reservations'])->findOrFail($so->id);
             $pl = new PickList(array_merge([
                 'status' => 'draft',
@@ -92,6 +93,7 @@ class PickListService
     public function updatePicks(PickList $pl, array $picks): PickList
     {
         return DB::connection($this->conn())->transaction(function () use ($pl, $picks) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pl->sales_order_id);
             $pl = PickList::query()->lockForUpdate()->with('lines')->findOrFail($pl->id);
             if (in_array($pl->status, ['picked', 'cancelled'], true)) {
                 throw new RuntimeException("Pick list {$pl->id} is {$pl->status} and cannot be edited.");
@@ -120,6 +122,7 @@ class PickListService
     public function markPicked(PickList $pl): PickList
     {
         return DB::connection($this->conn())->transaction(function () use ($pl) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pl->sales_order_id);
             $pl = PickList::query()->lockForUpdate()->with('lines')->findOrFail($pl->id);
             if ($pl->status === 'picked') {
                 return $pl;

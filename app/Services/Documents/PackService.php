@@ -37,6 +37,7 @@ class PackService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($pl, $attributes, $orgId) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pl->sales_order_id);
             $pl = PickList::query()->lockForUpdate()->with('lines')->findOrFail($pl->id);
             if ($pl->status !== 'picked') {
                 throw new RuntimeException("Pick list {$pl->id} must be picked before packing (status '{$pl->status}').");
@@ -82,6 +83,7 @@ class PackService
     public function updatePacks(Pack $pack, array $packs, array $attributes = []): Pack
     {
         return DB::connection($this->conn())->transaction(function () use ($pack, $packs, $attributes) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pack->sales_order_id);
             $pack = Pack::query()->lockForUpdate()->with('lines')->findOrFail($pack->id);
             if (in_array($pack->status, ['packed', 'cancelled'], true)) {
                 throw new RuntimeException("Pack {$pack->id} is {$pack->status} and cannot be edited.");
@@ -109,6 +111,7 @@ class PackService
     public function markPacked(Pack $pack): Pack
     {
         return DB::connection($this->conn())->transaction(function () use ($pack) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pack->sales_order_id);
             $pack = Pack::query()->lockForUpdate()->with('lines')->findOrFail($pack->id);
             if ($pack->status === 'packed') {
                 return $pack;
