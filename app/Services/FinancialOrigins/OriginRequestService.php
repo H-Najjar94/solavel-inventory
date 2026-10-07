@@ -69,12 +69,12 @@ final class OriginRequestService
     }
     public function approveNative(array $data,int $actor):array
     {
-        $r=$this->find($data);return $this->approveAdmitted($data,$actor,OriginSourceAdmission::stock($r,$actor,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.manage_adjustments'));
+        $r=$this->find($data);return $this->approveAdmitted($data,$actor,OriginSourceAdmission::stock($r,$actor,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods'));
     }
     private function approveAdmitted(array $data,int $actor,OriginSourceAdmission $admission):array
     {
         $r=$this->find($data);abort_unless(($data['request_revision']??null)===$r->source_revision,409); $dto=OriginRequestPayload::fromArray($r->source_payload);
-        $user=request()->user();$key=$r->side==='sales'?'inventory.manage_sales_orders':'inventory.manage_adjustments';
+        $user=request()->user();$key=$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods';
         abort_unless($user && (int)$user->getAuthIdentifier()===$actor && app(InventoryPermissionService::class)->can($user,$key),403);
         $warehouse=(int)($data['warehouse_id']??0);app(WarehouseAccessService::class)->assertAllowed($warehouse);
         Warehouse::query()->where('is_active',true)->findOrFail($warehouse);

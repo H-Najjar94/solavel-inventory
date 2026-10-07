@@ -31,7 +31,7 @@ final class OriginDispatchService
         $ready=$canMove && $r->approved_at && $r->approved_revision===$r->source_revision && in_array($r->status,['pending','partial'],true) && in_array((int)$r->warehouse_id,$ids,true);
         $default=(int)(\App\Models\Tenant\InventorySetting::query()->first()?->default_warehouse_id??0);
         return ['request'=>app(OriginRequestService::class)->summary($r),'request_revision'=>$r->source_revision,'can_execute'=>(bool)$ready,
-            'can_approve'=>!$r->approved_at && $r->status==='pending' && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.manage_adjustments'),
+            'can_approve'=>!$r->approved_at && $r->status==='pending' && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods'),
             'default_warehouse_id'=>in_array($default,$ids,true)?$default:null,
             'warehouses'=>$warehouses->map(fn($w)=>['id'=>$w->id,'name'=>$w->name,'bins'=>\App\Models\Tenant\WarehouseBin::query()->where('warehouse_id',$w->id)->where('is_active',true)->get(['id','code','name'])->toArray()])->all(),
             'lines'=>$r->lines()->get()->map(function($l){$item=Item::query()->where('is_active',true)->findOrFail($l->item_id);return ['request_line_id'=>$l->id,'source_document_line_id'=>$l->source_document_line_id,
