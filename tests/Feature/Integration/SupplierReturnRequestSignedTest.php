@@ -275,14 +275,16 @@ final class SupplierReturnRequestSignedTest extends TestCase {
         $db->table('warehouses')->where('id',$receipt->warehouse_id)->update(['is_active'=>false]);$this->assertFalse($controller->index($request)->getData(true)['data'][0]['can_post']);
         $allowed=[];$this->assertSame([],$controller->index($request)->getData(true)['data']);
     }
-    /** Protocol-only successful physical result seam; no physical posting is claimed by this case. */
-    public function test_native_human_post_response_uses_success_protocol_without_claiming_a_stock_movement():void {
+
+    /** Reader protocol and immutable snapshot integrity; no physical success is fabricated. */
+    public function test_native_human_request_projection_returns_success_and_excludes_changed_snapshot():void {
         [$receipt,$payload]=$this->source();$json=json_encode($payload,JSON_THROW_ON_ERROR);$db=DB::connection('tenant');
         $db->table('supplier_return_requests')->insert(['organization_id'=>TenantTestManager::ORG_A,'organization_mapping_uuid'=>$payload['organization_mapping_uuid'],'operation_uuid'=>$payload['operation_uuid'],'finance_organization_id'=>14,'source_bill_id'=>990,'bill_journal_id'=>991,'finance_receipt_id'=>992,'goods_receipt_id'=>$receipt->id,'receipt_mapping_uuid'=>$payload['receipt_mapping_uuid'],'request_actor_id'=>self::ACTOR,'state'=>'requested','payload_hash'=>hash('sha256',$json),'payload'=>$json]);
-        $user=\App\Models\User::findOrFail(self::ACTOR);$request=\Illuminate\Http\Request::create('/inventory/api/v1/supplier-return-requests/'.$payload['operation_uuid'].'/post','POST',['arrival_confirmed'=>'1']);$request->setUserResolver(fn()=>$user);
-        $permissions=\Mockery::mock(InventoryPermissionService::class);$permissions->shouldReceive('can')->with($user,'inventory.view_stock')->andReturn(true);$permissions->shouldReceive('can')->with($user,'inventory.manage_purchase_returns')->andReturn(true);$this->app->instance(InventoryPermissionService::class,$permissions);
-        $service=\Mockery::mock(SupplierReturnRequestService::class);$service->shouldReceive('dispatch')->once()->andReturn(['operation_uuid'=>$payload['operation_uuid'],'state'=>'posted','return_id'=>900]);$this->app->instance(SupplierReturnRequestService::class,$service);
-        $before=StockLedger::withoutGlobalScope('warehouse_access')->count();$response=app(\App\Http\Controllers\Api\V1\SupplierReturnRequestController::class)->post($request,$payload['operation_uuid'])->getData(true);$this->assertTrue($response['success']);$this->assertSame('posted',$response['data']['state']);$this->assertSame($before,StockLedger::withoutGlobalScope('warehouse_access')->count());
+        $user=\App\Models\User::findOrFail(self::ACTOR);$request=\Illuminate\Http\Request::create('/inventory/api/v1/supplier-return-requests');$request->setUserResolver(fn()=>$user);
+        $permissions=\Mockery::mock(InventoryPermissionService::class);$permissions->shouldReceive('can')->with($user,'inventory.view_stock')->andReturn(true);$permissions->shouldReceive('can')->with($user,'inventory.manage_purchase_returns')->andReturn(false);$this->app->instance(InventoryPermissionService::class,$permissions);
+        $warehouses=\Mockery::mock(\App\Services\Access\WarehouseAccessService::class);$warehouses->shouldReceive('allowedIds')->with(self::ACTOR)->andReturn([$receipt->warehouse_id]);$this->app->instance(\App\Services\Access\WarehouseAccessService::class,$warehouses);
+        $controller=app(\App\Http\Controllers\Api\V1\SupplierReturnRequestController::class);$response=$controller->index($request)->getData(true);$this->assertTrue($response['success']);$this->assertCount(1,$response['data']);$this->assertFalse($response['data'][0]['can_post']);
+        $payload['reason']='Changed without native source hash';$db->table('supplier_return_requests')->where('operation_uuid',$payload['operation_uuid'])->update(['payload'=>json_encode($payload,JSON_THROW_ON_ERROR)]);$response=$controller->index($request)->getData(true);$this->assertTrue($response['success']);$this->assertSame([],$response['data']);
     }
 
 }
