@@ -282,6 +282,12 @@ class TenantController extends ApiController
             // Local counterparts make SolaStock item creation usable immediately.
             // Connection setup binds these to Finance's shared references without
             // presenting them as customer reconciliation decisions.
+            // Explicit setup POST only; a warehouse-scoped viewer cannot create metadata.
+            if (app(\App\Services\Access\InventoryPermissionService::class)->can($request->user(), 'inventory.manage_warehouses')
+                && app(\App\Services\Access\WarehouseAccessService::class)->allowedIds() === null) {
+                $result['default_warehouse'] = app(\App\Services\Warehouses\DefaultWarehouseService::class)
+                    ->ensure((int) $s['organization_id']);
+            }
             $result['finance_reference_defaults'] = ($referenceDefaults
                 ?? app(\App\Services\Catalog\FinanceReferenceDefaultsService::class))
                 ->sync((int) $s['organization_id'], true);

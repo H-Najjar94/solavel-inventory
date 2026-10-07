@@ -52,6 +52,7 @@ final class FinanceReceivingService
 
         return [
             'request' => app(ReceivingRequestService::class)->status($source),
+            'default_warehouse_id' => app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId(),
             'warehouses' => $warehouses->map(fn ($warehouse) => [
                 'id' => $warehouse->id, 'name' => $warehouse->name, 'requires_bin' => false,
                 'bins' => WarehouseBin::query()->where('warehouse_id', $warehouse->id)

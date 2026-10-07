@@ -29,6 +29,7 @@ class MetaController extends ApiController
         return $this->success([
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
             'organization_id' => $organizationId,
+            'default_warehouse_id' => app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId(),
             'permissions' => $permissions->permissionsFor($request->user()),
             'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],
             'can_schedule_reports' => app(WarehouseAccessService::class)->allowedIds() === null && $permissions->can($request->user(), 'inventory.export_reports'),

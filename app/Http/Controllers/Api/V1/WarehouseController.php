@@ -24,6 +24,7 @@ class WarehouseController extends ApiController
 
     public function index(Request $request): JsonResponse
     {
+        $default = app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId();
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = Warehouse::query()
             ->with('primaryImage:id,warehouse_id,is_primary')
@@ -33,7 +34,8 @@ class WarehouseController extends ApiController
         $this->warehouseAccess->scope($query, 'id');
 
         return $this->paginated(
-            $query->paginate($perPage)->withQueryString()->through(function ($w) {
+            $query->paginate($perPage)->withQueryString()->through(function ($w) use ($default) {
+                $w->setAttribute('is_default', (int) $w->id === (int) $default);
                 $w->setAttribute('primary_image_url',
                     $w->primaryImage ? "/inventory/api/v1/warehouse-images/{$w->primaryImage->id}" : null);
                 $w->unsetRelation('primaryImage');
@@ -90,7 +92,7 @@ class WarehouseController extends ApiController
         // already over the Free cap of 1 and must not be locked out of theirs.
         $this->enforceLimit('stock.max_warehouses', Warehouse::query()->count());
 
-        return $this->success(Warehouse::create($request->validated())->fresh(), 201);
+        return $this->success(app(\App\Services\Warehouses\DefaultWarehouseService::class)->create($request->validated())->fresh(), 201);
     }
 
     public function update(UpdateWarehouseRequest $request, Warehouse $warehouse): JsonResponse
