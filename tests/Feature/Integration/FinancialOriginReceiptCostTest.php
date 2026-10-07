@@ -171,6 +171,8 @@ final class FinancialOriginReceiptCostTest extends TestCase
     {
         [$id] = $this->fixture(); $db = DB::connection('tenant');
         (require base_path('tests/Support/FinancialOriginReverseGenerationSchema.php'))->up();
+        $indexes=$db->getSchemaBuilder()->getIndexes('finance_document_reverse_generations');
+        $this->assertTrue(collect($indexes)->contains(fn($index)=>$index['name']==='fin_origin_reverse_uuid_unique' && $index['unique']));
         $request = $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->first();
         $match = $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->first();
         $match->journal_entry_id = 97; $match->reversal_generation = 2;
@@ -188,12 +190,13 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $generation = \App\Services\FinancialOrigins\OriginReceiptReverseGeneration::lock($db,$match,$request,$identity,$proof,'prepare');
         $grn = GoodsReceipt::sole(); $line = $grn->lines()->sole();
         $holdUuid = \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL,'financial-origin|'.$this->mapping->mapping_uuid.'|'.$original.'|'.$line->item_id.'|'.$grn->warehouse_id.'|reverse')->toString();
-        $hold = \App\Models\Tenant\PurchaseValuationHold::create(['organization_id'=>$grn->organization_id,'settlement_uuid'=>$holdUuid,'purpose'=>'origin_reverse','plan_revision'=>1,'item_id'=>$line->item_id,'warehouse_id'=>$grn->warehouse_id,'receipt_id'=>$grn->id,'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,'plan_fingerprint'=>$fp,'state'=>'released']);
+        $hold = \App\Models\Tenant\PurchaseValuationHold::create(['organization_id'=>$grn->organization_id,'settlement_uuid'=>$holdUuid,'purpose'=>'origin_reverse','plan_revision'=>1,'item_id'=>$line->item_id,'warehouse_id'=>$grn->warehouse_id,'receipt_id'=>$grn->id,'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,'plan_fingerprint'=>$fp,'state'=>'active']);
         $assert = fn()=>$generation->assertPredecessorsReleased($db,$match,$request,(int)$grn->organization_id,$this->mapping->mapping_uuid,(int)$line->item_id,(int)$grn->warehouse_id,(int)$grn->id);
+        try {$assert();$this->fail('Active predecessor hold admitted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+        $hold->update(['state'=>'released']);
         $assert(); $this->assertSame(2,$generation->number()); $this->assertSame($current,$generation->operationUuid());
         $quantity = StockLedger::sum('quantity'); $ledgerCount = StockLedger::count(); $holdCount = $db->table('purchase_valuation_holds')->count();
-        foreach (['active_hold','unknown_ack','prior_inverse','stale_generation'] as $failure) {
-            if ($failure==='active_hold') $hold->update(['state'=>'active']);
+        foreach (['unknown_ack','prior_inverse','stale_generation'] as $failure) {
             if ($failure==='unknown_ack') { $bad=$release;unset($bad['acknowledgement']);$db->table('finance_document_reverse_generations')->where('generation',1)->update(['release_snapshot'=>json_encode($bad)]); }
             if ($failure==='prior_inverse') $db->table('finance_document_reverse_generations')->where('generation',1)->update(['inverse_journal_id'=>98]);
             try { if ($failure==='stale_generation') \App\Services\FinancialOrigins\OriginReceiptReverseGeneration::lock($db,$match,$request,['reversal_generation'=>1,'reversal_operation_uuid'=>$original],$proof,'prepare'); else $assert(); $this->fail('Unsafe generation admitted: '.$failure); }
