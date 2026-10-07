@@ -144,11 +144,13 @@ final class SupplierReturnRequestSignedTest extends TestCase {
         $timestamp = (string) time();
         $nonce ??= bin2hex(random_bytes(24));
 
-        return $this->call('POST', WorkspaceSignature::PATH, [], [], [], [
+        $response = $this->call('POST', WorkspaceSignature::PATH, [], [], [], [
             'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_X_WORKSPACE_TIMESTAMP' => $timestamp, 'HTTP_X_WORKSPACE_NONCE' => $nonce,
             'HTTP_X_WORKSPACE_SIGNATURE' => WorkspaceSignature::sign($body, $timestamp, $nonce, self::SECRET),
         ], $body);
+        if(is_dir('/evidence'))file_put_contents('/evidence/response-diagnostics.jsonl',json_encode(['action'=>$payload['action']??null,'status'=>$response->getStatusCode(),'response'=>json_decode($response->getContent(),true)]).PHP_EOL,FILE_APPEND);
+        return $response;
     }
     private function centralFixtureSchema(): void
     {
@@ -234,27 +236,27 @@ final class SupplierReturnRequestSignedTest extends TestCase {
         return ['action'=>'purchasing.return_request.'.$action,'authority_kind'=>'supplier_return_request','idempotency_key'=>'return-request-'.$payload['operation_uuid'].'-'.$action,'data'=>['operation_uuid'=>$payload['operation_uuid'],'arrival_confirmed'=>true]];
     }
     public function test_signed_nonphysical_request_reuses_one_intent_without_a_return_draft_or_movement():void {
-        [$receipt,$p]=$this->source();$before=StockLedger::count();$journals=IntegrationOutboxEvent::count();
+        [$receipt,$p]=$this->source();$before=StockLedger::withoutGlobalScope('warehouse_access')->count();$journals=IntegrationOutboxEvent::count();
         $project=DB::connection('mysql')->table('projects')->where('slug','inventory')->value('id');DB::connection('mysql')->table('user_projects')->where('user_id',self::ACTOR)->where('project_id',$project)->update(['is_active'=>false]);
         $this->send($this->envelope($p,'create'))->assertOk()->assertJsonPath('data.state','requested');
         $this->send($this->envelope($p,'status'))->assertOk()->assertJsonPath('data.state','requested');
-        $this->assertSame(1,DB::connection('tenant')->table('supplier_return_requests')->count());$this->assertSame(0,SupplierReturn::count());$this->assertSame($before,StockLedger::count());$this->assertSame($journals,IntegrationOutboxEvent::count());
+        $this->assertSame(1,DB::connection('tenant')->table('supplier_return_requests')->count());$this->assertSame(0,SupplierReturn::count());$this->assertSame($before,StockLedger::withoutGlobalScope('warehouse_access')->count());$this->assertSame($journals,IntegrationOutboxEvent::count());
     }
     public function test_signed_physical_post_requires_current_stock_admission_before_draft_creation():void {
         [, $p]=$this->source();$this->send($this->envelope($p,'create'))->assertOk();
         $project=DB::connection('mysql')->table('projects')->where('slug','inventory')->value('id');DB::connection('mysql')->table('user_projects')->where('user_id',self::ACTOR)->where('project_id',$project)->update(['is_active'=>false]);
-        $before=StockLedger::count();$this->send($this->envelope($p,'post'))->assertForbidden();$this->assertSame(0,SupplierReturn::count());$this->assertSame($before,StockLedger::count());
+        $before=StockLedger::withoutGlobalScope('warehouse_access')->count();$this->send($this->envelope($p,'post'))->assertForbidden();$this->assertSame(0,SupplierReturn::count());$this->assertSame($before,StockLedger::withoutGlobalScope('warehouse_access')->count());
     }
     public function test_signed_foreign_organization_is_denied_without_return_intent_or_movement():void {
-        [, $p]=$this->source();$before=StockLedger::count();$this->send($this->envelope($p,'create')+['organization_id'=>TenantTestManager::ORG_B])->assertForbidden();$this->assertSame(0,DB::connection('tenant')->table('supplier_return_requests')->count());$this->assertSame($before,StockLedger::count());
+        [, $p]=$this->source();$before=StockLedger::withoutGlobalScope('warehouse_access')->count();$this->send($this->envelope($p,'create')+['organization_id'=>TenantTestManager::ORG_B])->assertForbidden();$this->assertSame(0,DB::connection('tenant')->table('supplier_return_requests')->count());$this->assertSame($before,StockLedger::withoutGlobalScope('warehouse_access')->count());
     }
     public function test_failed_physical_post_retains_one_committed_draft_identity_on_replay():void {
-        [, $p]=$this->source();$this->send($this->envelope($p,'create'))->assertOk();$before=StockLedger::count();
+        [, $p]=$this->source();$this->send($this->envelope($p,'create'))->assertOk();$before=StockLedger::withoutGlobalScope('warehouse_access')->count();
         // Current connected accounting capability remains deliberately unavailable; this is a real native post rejection, not fabricated network success.
         $this->send($this->envelope($p,'post'))->assertStatus(422);
         $row=DB::connection('tenant')->table('supplier_return_requests')->sole();$this->assertSame('physical_pending',$row->state);$this->assertNotNull($row->supplier_return_id);$id=$row->supplier_return_id;
         $this->send($this->envelope($p,'post'))->assertStatus(422);
-        $this->assertSame($id,DB::connection('tenant')->table('supplier_return_requests')->sole()->supplier_return_id);$this->assertSame(1,SupplierReturn::count());$this->assertSame('draft',SupplierReturn::sole()->status);$this->assertSame($before,StockLedger::count());
+        $this->assertSame($id,DB::connection('tenant')->table('supplier_return_requests')->sole()->supplier_return_id);$this->assertSame(1,SupplierReturn::count());$this->assertSame('draft',SupplierReturn::sole()->status);$this->assertSame($before,StockLedger::withoutGlobalScope('warehouse_access')->count());
     }
 
 }
