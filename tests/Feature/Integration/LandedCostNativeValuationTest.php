@@ -266,7 +266,7 @@ final class LandedCostNativeValuationTest extends TestCase
         });
         $central = DB::connection('mysql'); $central->beginTransaction(); $this->centralTransaction = true;
         $central->table('clients')->updateOrInsert(['id' => 7], ['is_active' => true]);
-        $central->table('organizations')->updateOrInsert(['id' => TenantTestManager::ORG_A], ['client_id' => 7, 'name' => 'Landed native fixture', 'is_active' => true]);
+        $central->table('organizations')->updateOrInsert(['id' => TenantTestManager::ORG_A], ['client_id' => 7, 'name' => 'Landed native fixture', 'database_name' => 'solastock_test_a', 'is_active' => true]);
         $central->table('users')->insert(['id' => 323, 'client_id' => 7, 'name' => 'Finance-only fixture', 'email' => 'landed-finance@example.invalid', 'password' => 'not-a-login', 'status' => 'active']);
         $central->table('user_organizations')->insert(['user_id' => 323, 'organization_id' => TenantTestManager::ORG_A, 'role' => 'accountant', 'status' => 'active']);
         foreach (['finance' => 78001, 'inventory' => 78002] as $slug => $id) {
