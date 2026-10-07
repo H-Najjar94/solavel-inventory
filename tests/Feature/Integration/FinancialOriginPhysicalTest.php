@@ -62,19 +62,32 @@ final class FinancialOriginPhysicalTest extends TestCase
         $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->meta=$meta;$setting->save();
         $result=$service->executeNative($context+['operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'physical_date'=>'2026-10-07','lines'=>[['request_line_id'=>$request['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]],336);
         $this->assertSame('partial',$result['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame(1,FinancialOriginOutbox::count());
+        $documents=app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents'];
+        $this->assertSame(GoodsReceipt::sole()->grn_number,$documents[0]['number']);$this->assertSame('goods_receipt',$documents[0]['type']);
+        $this->actor(337);$this->assertSame([],app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents']);
     }
     public function test_native_operation_status_needs_no_finance_access_but_preserves_actor_revision_and_warehouse_scope():void
     {
         [,,$op]=$this->admitted('expense');$service=app(OriginDispatchService::class);$before=StockLedger::count();
         $this->assertFalse(app(CentralAppAccess::class)->decision(336,FinancialOriginRequest::sole()->organization_id,'finance')['allowed']);
+        $this->item->update(['is_variant_parent'=>true,'tracks_expiry'=>true]);
+        $variant=\App\Models\Tenant\ItemVariant::create(['item_id'=>$this->item->id,'sku'=>'QA-VISIBLE-VARIANT','variant_attributes'=>['size'=>'S'],'is_active'=>true]);
+        \App\Models\Tenant\ItemVariant::create(['item_id'=>$this->item->id,'sku'=>'QA-INACTIVE-VARIANT','is_active'=>false]);
+        $other=\Tests\Support\StockTestFactory::averageItem(['base_unit_id'=>$this->unit->id]);
+        \App\Models\Tenant\ItemVariant::create(['item_id'=>$other->id,'sku'=>'QA-OTHER-PARENT-VARIANT','is_active'=>true]);
         $prepared=$service->prepareNative($op,336);$this->assertSame('prepared',$prepared['status']);
         $this->assertSame($prepared,$service->statusNative($op,336));
+        $options=$service->optionsNative($op,336);$this->assertCount(1,$options['operations']);$this->assertSame($op,$options['operations'][0]['payload']);
+        $this->assertSame([$variant->id],array_column($options['lines'][0]['variant_choices'],'id'));
+        $this->assertTrue($options['lines'][0]['requires_expiry']);$this->assertSame($this->unit->name,$options['lines'][0]['unit_name']);
         $changed=$op;$changed['request_revision']=str_repeat('b',64);
         try{$service->statusNative($changed,336);$this->fail('Stale operation revision disclosed');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
         $this->actor(337);InventoryUserWarehouse::create(['user_id'=>337,'warehouse_id'=>$this->warehouse->id,'assigned_by'=>323]);
+        $this->assertSame([],$service->optionsNative($op,337)['operations']);
         try{$service->statusNative($op,337);$this->fail('Different actor disclosed captured operation');}catch(\Illuminate\Database\Eloquent\ModelNotFoundException $e){$this->assertNotEmpty($e->getMessage());}
         $this->actor(336);InventoryUserWarehouse::query()->where('user_id',336)->delete();$this->app->forgetInstance(\App\Services\Access\WarehouseAccessService::class);
         try{$service->statusNative($op,336);$this->fail('Revoked warehouse assignment disclosed operation');}catch(\Illuminate\Auth\Access\AuthorizationException $e){$this->assertNotEmpty($e->getMessage());}
+        try{$service->optionsNative($op,336);$this->fail('Revoked warehouse disclosed source options');}catch(\Illuminate\Auth\Access\AuthorizationException $e){$this->assertNotEmpty($e->getMessage());}
         $this->assertSame($before,StockLedger::count());$this->assertSame(0,GoodsReceipt::count());$this->assertSame(0,FinancialOriginOutbox::count());
     }
     public function test_stock_only_cash_dispatch_partial_final_and_replay_emit_typed_events_without_new_invoice_draft():void
