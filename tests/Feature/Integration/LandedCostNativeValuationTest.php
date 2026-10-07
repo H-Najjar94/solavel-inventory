@@ -16,7 +16,16 @@ use Tests\Traits\TenantAware;
 /** Native Stock valuation; Finance signed authorization/posted-JE projections are an explicit fixture boundary. */
 final class LandedCostNativeValuationTest extends TestCase
 {
-    use TenantAware, SalesHandoffFixture;
+    use TenantAware { tearDown as tenantTearDown; }
+    use SalesHandoffFixture;
+
+    private bool $centralTransaction = false;
+
+    protected function tearDown(): void
+    {
+        if ($this->centralTransaction) DB::connection('mysql')->rollBack();
+        $this->tenantTearDown();
+    }
 
     private array $landedPayload;
     private array $landedIdentity;
@@ -212,5 +221,97 @@ final class LandedCostNativeValuationTest extends TestCase
         }
         $this->assertSame(2, StockLedger::count());
         $this->assertSame('30.00', StockBalance::sole()->total_value);
+    }
+
+    public function test_actual_signed_finance_only_actor_publishes_real_landed_quote_and_replays_without_stock_privileges(): void
+    {
+        $this->signedFixture();
+        $first = $this->signed($this->landedIdentity)->assertOk();
+        $fingerprint = $first->json('data.plan_fingerprint');
+        $this->assertSame(64, strlen($fingerprint));
+        $this->assertSame('prepared', $first->json('data.state'));
+        $this->signed($this->landedIdentity)->assertOk()->assertJsonPath('data.plan_fingerprint', $fingerprint);
+        $this->assertSame(1, PurchaseValuationHold::count());
+        $this->assertSame('landed_apply', PurchaseValuationHold::sole()->purpose);
+        $this->assertSame('30.00', StockBalance::withoutGlobalScope('warehouse_access')->sole()->total_value);
+        $this->assertSame(2, StockLedger::withoutGlobalScope('warehouse_access')->count());
+        $this->assertFalse(app(\App\Services\Access\CentralAppAccess::class)->decision(323, TenantTestManager::ORG_A, 'inventory')['allowed']);
+        $this->assertFalse(DB::connection('mysql')->table('user_projects')->where('user_id', 323)->where('project_id', 78002)->exists());
+    }
+
+    public function test_actual_signed_landed_admission_rejects_wrong_source_org_actor_and_purpose_without_changes(): void
+    {
+        $this->signedFixture();
+        $this->signed(array_replace($this->landedIdentity, ['source_bill_id' => 801]))->assertForbidden();
+        $this->signed($this->landedIdentity, ['organization_id' => TenantTestManager::ORG_B])->assertForbidden();
+        $this->signed($this->landedIdentity, ['actor_id' => 324])->assertForbidden();
+        $this->signed($this->landedIdentity, ['authority_kind' => 'posted_purchase_settlement'])->assertForbidden();
+        $this->signed($this->landedIdentity, ['actor_id' => 0])->assertForbidden();
+        $this->assertSame(0, PurchaseValuationHold::count());
+        $this->assertSame(0, \App\Models\Tenant\IntegrationPurchaseCostAdjustment::count());
+        $this->assertSame(2, StockLedger::count());
+        $this->assertSame('30.00', StockBalance::sole()->total_value);
+    }
+
+    /** Central HTTP, Finance authorization and fixed disposable DB resolution are explicit remote/isolation seams. */
+    private function signedFixture(): void
+    {
+        $schema = \Illuminate\Support\Facades\Schema::connection('mysql');
+        if (!$schema->hasColumn('users', 'deleted_at')) $schema->table('users', fn (Blueprint $t) => $t->softDeletes());
+        foreach (['clients', 'projects', 'organization_projects', 'user_projects'] as $name) if (!$schema->hasTable($name)) $schema->create($name, function (Blueprint $t) use ($name) {
+            $t->id(); $t->boolean('is_active')->default(true); $t->softDeletes();
+            if ($name === 'projects') $t->string('slug');
+            if (in_array($name, ['organization_projects', 'user_projects'], true)) { $t->unsignedBigInteger('project_id'); $t->unsignedBigInteger('organization_id'); }
+            if ($name === 'user_projects') $t->unsignedBigInteger('user_id');
+        });
+        $central = DB::connection('mysql'); $central->beginTransaction(); $this->centralTransaction = true;
+        $central->table('clients')->updateOrInsert(['id' => 7], ['is_active' => true]);
+        $central->table('organizations')->updateOrInsert(['id' => TenantTestManager::ORG_A], ['client_id' => 7, 'name' => 'Landed native fixture', 'is_active' => true]);
+        $central->table('users')->insert(['id' => 323, 'client_id' => 7, 'name' => 'Finance-only fixture', 'email' => 'landed-finance@example.invalid', 'password' => 'not-a-login', 'status' => 'active']);
+        $central->table('user_organizations')->insert(['user_id' => 323, 'organization_id' => TenantTestManager::ORG_A, 'role' => 'accountant', 'status' => 'active']);
+        foreach (['finance' => 78001, 'inventory' => 78002] as $slug => $id) {
+            $central->table('projects')->insert(['id' => $id, 'slug' => $slug, 'is_active' => true]);
+            $central->table('organization_projects')->insert(['project_id' => $id, 'organization_id' => TenantTestManager::ORG_A, 'is_active' => true]);
+            if ($slug === 'finance') $central->table('user_projects')->insert(['project_id' => $id, 'organization_id' => TenantTestManager::ORG_A, 'user_id' => 323, 'is_active' => true]);
+        }
+        $central->table('entitlement_state_snapshots')->updateOrInsert(['organization_id' => TenantTestManager::ORG_A], [
+            'underlying_subscription_state' => 'paid_active', 'effective_access_state' => 'paid_active', 'state_hash' => str_repeat('a', 64),
+            'state_payload' => json_encode(['client_id' => 7, 'organization_id' => TenantTestManager::ORG_A,
+                'integration_capabilities' => ['connection_activation_delivery_entitled' => true],
+                'applications' => ['finance' => ['accessible' => true, 'commercially_entitled' => true], 'inventory' => ['accessible' => true, 'commercially_entitled' => true]]]),
+        ]);
+        $cache = $this->createStub(\App\Services\Entitlements\EntitlementsCache::class);
+        $cache->method('currentClientId')->willReturn(7);
+        $cache->method('getProjectSnapshot')->willReturn(['accessible' => true, 'commercially_entitled' => true, 'tier' => 'enterprise', 'access_until' => now()->addMonth()->toIso8601String(), 'allowed_features' => []]);
+        $this->app->instance(\App\Services\Entitlements\EntitlementsCache::class, $cache);
+        $access = $this->createStub(\App\Services\Access\CentralAppAccess::class);
+        $access->method('decision')->willReturnCallback(function ($actor, $org, $slug) use ($central) {
+            $project = $central->table('projects')->where('slug', $slug)->where('is_active', true)->value('id');
+            $allowed = $central->table('user_organizations')->where('user_id', $actor)->where('organization_id', $org)->where('status', 'active')->exists()
+                && $central->table('user_projects')->where('project_id', $project)->where('user_id', $actor)->where('organization_id', $org)->where('is_active', true)->exists();
+            return ['allowed' => $allowed, 'reason' => $allowed ? 'allowed' : 'user_not_assigned_to_project', 'owner' => false, 'roles' => []];
+        });
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class, $access);
+        $tenants = $this->createMock(\App\Services\Tenancy\TenantManager::class);
+        $tenants->method('resolveDatabaseName')->with(7)->willReturn('solastock_test_a');
+        $tenants->method('useTenant')->with(TenantTestManager::ORG_A, 'solastock_test_a');
+        $this->app->instance(\App\Services\Tenancy\TenantManager::class, $tenants);
+        $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeLandedCost')->andReturnUsing(function ($facts, $action, $actor) {
+            abort_unless($actor === 323 && $facts['source_bill_id'] === 800 && $facts['bill_journal_id'] === 96 && $facts['landed_cost_id'] === 700, 403);
+            return $this->landedProof;
+        });
+        config(['finance_workspace.secret' => str_repeat('s', 48), 'cache.default' => 'array', 'inventory.demo_tenant.enabled' => false,
+            'integration_safety.solabooks_delivery_enabled' => true, 'inventory_entitlements.feature_enforcement' => true]);
+    }
+
+    private function signed(array $data, array $overrides = [])
+    {
+        $body = json_encode(array_replace(['client_id' => 7, 'organization_id' => TenantTestManager::ORG_A, 'finance_organization_id' => 14,
+            'actor_id' => 323, 'authority_kind' => 'posted_landed_cost', 'action' => 'purchasing.landed_cost.prepare', 'data' => $data], $overrides));
+        $timestamp = (string) time(); $nonce = bin2hex(random_bytes(24));
+        return $this->call('POST', \App\Services\InventoryWorkspace\WorkspaceSignature::PATH, [], [], [], [
+            'HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json', 'HTTP_X_WORKSPACE_TIMESTAMP' => $timestamp,
+            'HTTP_X_WORKSPACE_NONCE' => $nonce, 'HTTP_X_WORKSPACE_SIGNATURE' => \App\Services\InventoryWorkspace\WorkspaceSignature::sign($body, $timestamp, $nonce, str_repeat('s', 48)),
+        ], $body);
     }
 }
