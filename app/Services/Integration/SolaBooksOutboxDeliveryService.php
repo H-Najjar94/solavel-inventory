@@ -322,6 +322,33 @@ class SolaBooksOutboxDeliveryService
         return $data;
     }
 
+    /** Signed read-only consumer admission; registry or commercial entitlement alone is insufficient. */
+    public function supplierReturnCapability(): array
+    {
+        $mapping=app(ReceivingRequestService::class)->mapping();
+        $this->safety->assertDeliveryEnabledFor((int)$mapping->solastock_organization_id);
+        $setting=IntegrationSetting::query()->where('organization_id',$this->context->idOrFail())->where('integration','solabooks')->firstOrFail();
+        $key='purchasing:return-capability:'.Str::uuid();
+        $payload=['source_app'=>'solastock','schema_version'=>'purchasing.v1','contract_version'=>SolaStockJournalContract::VERSION,
+            'event_type'=>'purchasing.return.capability','event_uuid'=>(string)Str::uuid(),'external_source_key'=>$key,
+            'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
+            'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,
+                'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
+                'integration_mapping_id'=>$mapping->id,'signing_key_id'=>(string)data_get($setting->meta,'signing_key_id'),'organization_mapping_uuid'=>$mapping->mapping_uuid]];
+        $body=SolaStockJournalContract::canonicalJson($payload);
+        $endpoint=preg_replace('~/journal-entries(?:\\?.*)?$~','/purchasing/returns/capability',$this->journalEndpoint());
+        abort_unless($endpoint && $endpoint!==$this->journalEndpoint(),409,__('inventory.purchasing.connection_review_required'));
+        $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
+        $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
+        abort_unless($response->successful(),$response->status()===403?403:503,__('inventory.purchasing.authority_unavailable'));
+        $data=(array)$response->json('data');
+        abort_unless(($data['contract']??null)==='purchasing.return.v1'
+            && (int)($data['finance_organization_id']??0)===(int)$mapping->finance_organization_id
+            && (int)($data['central_organization_id']??0)===(int)$mapping->central_organization_id
+            && ($data['organization_mapping_uuid']??null)===$mapping->mapping_uuid,403);
+        return $data;
+    }
+
     public function sendPurchasingDocument(PurchasingDocumentOutbox $document): array
     {
         $this->safety->assertDeliveryEnabledFor((int) $document->organization_id);
