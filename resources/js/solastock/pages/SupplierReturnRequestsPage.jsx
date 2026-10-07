@@ -3,14 +3,14 @@ import {Link} from 'react-router-dom';
 import {api} from '../services/api';
 import {useApiQuery} from '../hooks/useApiQuery';
 import {useTenant} from '../stores/tenant';
-import {useCan} from '../stores/meta';
+import {useCan, useMeta} from '../stores/meta';
 import {useI18n} from '../i18n/context';
 import {EmptyState, Skeleton} from '../components/ui';
 
 export default function SupplierReturnRequestsPage() {
  const tenant=useTenant(), {locale}=useI18n(), ar=locale==='ar';
- const can=useCan(), mayPost=can('inventory.manage_purchase_returns');
- const query=useApiQuery(['supplier-return-requests',tenant.organization_id],()=>api.supplierReturnRequests(),{fallback:[]});
+ const meta=useMeta(), can=useCan(), mayPost=can('inventory.manage_purchase_returns');
+ const query=useApiQuery(['supplier-return-requests',tenant.organization_id],()=>api.supplierReturnRequests(),{fallback:[],enabled:meta.supplier_return_requests_available===true});
  const [confirmed,setConfirmed]=useState({}),[busy,setBusy]=useState(null),[error,setError]=useState(''),lock=useRef(false);
  const rows=Array.isArray(query.data)?query.data:[];
  const states={requested:ar?'بانتظار الإرجاع الفعلي':'Awaiting physical return',physical_pending:ar?'تأكيد الإرجاع قيد المتابعة':'Return confirmation pending',posted:ar?'تم تأكيد الإرجاع':'Return confirmed',cancelled:ar?'ملغى':'Cancelled',reversed:ar?'معكوس':'Reversed'};
@@ -23,6 +23,7 @@ export default function SupplierReturnRequestsPage() {
  }
  return <section className="page"><header className="page-head"><h1>{ar?'طلبات إرجاع المورد':'Supplier return requests'}</h1></header>
  <p>{ar?'راجع الأصناف والكميات ثم أكّد تسليم البضاعة المرتجعة للمورد. إشعار الخصم والاسترداد المالي إجراءات منفصلة.':'Review the items and quantities, then confirm the goods were physically returned to the supplier. Supplier credit and refund are separate actions.'}</p>
+ {meta.supplier_return_requests_available!==true&&!meta.isPlaceholderData&&<div className="banner">{ar?'طلبات المحاسب غير متاحة لهذا الاتصال. عمليات إرجاع المورد العادية تبقى متاحة.':'Accountant return requests are unavailable for this connection. Native supplier returns remain available.'} <Link to="/supplier-returns">{ar?'إرجاع المورد':'Supplier returns'}</Link></div>}
  {error&&<div role="alert" className="banner banner--warn">{error}</div>}
  {query.isError?<div role="alert" className="banner banner--warn">{ar?'تعذر تحميل الطلبات. تحقق من صلاحياتك وأعد المحاولة.':'Requests could not be loaded. Check your access and retry.'}<button type="button" className="btn" onClick={()=>query.refetch()}>{ar?'إعادة المحاولة':'Retry'}</button></div>:query.isLoading?<Skeleton/>:rows.length===0?<EmptyState title={ar?'لا توجد طلبات إرجاع':'No supplier return requests'} hint={ar?'تظهر هنا طلبات المحاسب المصرح لك بمستودعاتها.':'Requests from the accountant appear here when you have access to their warehouses.'}/>:rows.map(row=><article className="card" key={row.operation_uuid} style={{padding:16,marginBottom:16,overflowWrap:'anywhere'}}>
  <h2>{ar?'فاتورة المورد':'Supplier bill'} {row.source_bill_number||`#${row.source_bill_id}`}</h2><p>{states[row.state]??(ar?'يلزم المراجعة':'Needs review')} · {row.return_date}</p>

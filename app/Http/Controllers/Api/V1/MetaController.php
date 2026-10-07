@@ -26,6 +26,14 @@ class MetaController extends ApiController
         $connection = IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
         $currency = (array) data_get($connection?->meta, 'finance_currency_contract', []);
 
+        $schema = \Illuminate\Support\Facades\DB::connection('tenant')->getSchemaBuilder();
+        $returnRequests = $schema->hasTable('supplier_return_requests') && (
+            \Illuminate\Support\Facades\DB::connection('tenant')->table('supplier_return_requests')->where('organization_id', $organizationId)->exists()
+            || ($schema->hasTable('integration_organization_mappings') && \App\Models\Tenant\IntegrationOrganizationMapping::query()
+                ->where('solastock_organization_id', $organizationId)->where('tenant_database_identity', \Illuminate\Support\Facades\DB::connection('tenant')->getDatabaseName())
+                ->where('status', 'verified')->where('activation_state', 'active')->exists())
+        );
+
         $default = app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId();
         $settings = InventorySetting::query()->first();
         $settings?->setAttribute('default_warehouse_id', $default);
@@ -33,6 +41,7 @@ class MetaController extends ApiController
         return $this->success([
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
             'organization_id' => $organizationId,
+            'supplier_return_requests_available' => $returnRequests,
             'default_warehouse_id' => $default,
             'permissions' => $permissions->permissionsFor($request->user()),
             'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],

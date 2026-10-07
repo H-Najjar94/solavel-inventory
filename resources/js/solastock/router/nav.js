@@ -35,7 +35,7 @@ export const NAV = [
     { key: 'settings', label: 'Settings', path: '/settings', icon: 'fa-solid fa-gear', perm: 'inventory.manage_settings', group: 'Admin' },
 ];
 
-export function visibleNav(permissions = []) {
+export function visibleNav(permissions = [], availability = {}) {
     const set = new Set(permissions);
-    return NAV.filter((n) => !n.perm || set.has(n.perm));
+    return NAV.filter((n) => (!n.perm || set.has(n.perm)) && (n.key !== 'supplier-return-requests' || availability.supplier_return_requests_available === true));
 }
