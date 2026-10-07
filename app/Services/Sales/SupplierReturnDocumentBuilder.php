@@ -40,7 +40,7 @@ final class SupplierReturnDocumentBuilder
     'inventory_organization_id'=>$org,'finance_organization_id'=>$mapping->finance_organization_id,
     'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
      'inventory_organization_id'=>$org,'integration_mapping_id'=>$mapping->id,'organization_mapping_uuid'=>$mapping->mapping_uuid,'signing_key_id'=>data_get($setting->meta,'signing_key_id')],
-    'return'=>['mapping_uuid'=>$life->mapping_uuid,'id'=>$return->id,'number'=>$return->return_number,'date'=>$reversed?$reversal->reversal_date->format('Y-m-d'):$return->return_date->format('Y-m-d'),
+    'return'=>['mapping_uuid'=>$life->mapping_uuid,'document_uuid'=>$return->return_uuid,'id'=>$return->id,'number'=>$return->return_number,'date'=>$reversed?$reversal->reversal_date->format('Y-m-d'):$return->return_date->format('Y-m-d'),
      'receipt_id'=>$return->goods_receipt_id,'receipt_mapping_uuid'=>$parent->mapping_uuid,'receipt_event_uuid'=>$original->event_uuid,
      'supplier_id'=>$return->supplier_id,'source_bill_id'=>$receiptFacts['source_bill_id']??null,'currency_code'=>$receiptFacts['currency_code'],
      'base_currency_code'=>$mapping->base_currency_code,'receipt_exchange_rate'=>$receiptFacts['exchange_rate'],'receipt_exchange_rate_date'=>$receiptFacts['exchange_rate_date'],
