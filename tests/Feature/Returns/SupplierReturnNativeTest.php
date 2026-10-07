@@ -1,0 +1,87 @@
+<?php
+namespace Tests\Feature\Returns;
+
+use App\Models\Tenant\{StockBalance, StockLedger, Supplier, SupplierReturn, Unit};
+use App\Services\Access\WarehouseAccessService;
+use App\Services\Documents\{GoodsReceiptService, SupplierReturnService};
+use Illuminate\Validation\ValidationException;
+use Tests\Support\StockTestFactory as F;
+use Tests\TestCase;
+use Tests\Traits\TenantAware;
+
+/** Real native GRN and FIFO/AVG ledger persistence. Warehouse permission is the isolated boundary. */
+final class SupplierReturnNativeTest extends TestCase
+{
+    use TenantAware;
+    private $warehouse;
+    private $unit;
+    private $item;
+    private $supplier;
+
+    protected function setUp(): void
+    {
+        parent::setUp(); $this->useTenantA();
+        $warehouseScope = $this->createStub(WarehouseAccessService::class);
+        $warehouseScope->method('scope')->willReturnCallback(fn ($query) => $query);
+        $this->app->instance(WarehouseAccessService::class, $warehouseScope);
+        $this->warehouse = F::warehouse();
+        $this->unit = Unit::create(['code' => 'RETURN-EACH', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $this->item = F::averageItem(['base_unit_id' => $this->unit->id]);
+        $this->supplier = Supplier::create(['code' => 'RETURN-SUP', 'name' => 'Synthetic return supplier', 'is_active' => true]);
+    }
+
+    private function receipt(string $quantity = '10', string $cost = '5')
+    {
+        $service = app(GoodsReceiptService::class);
+        $draft = $service->createDraft(['supplier_id' => $this->supplier->id, 'warehouse_id' => $this->warehouse->id,
+            'receipt_date' => '2026-10-07', 'currency_code' => 'JOD'], [['item_id' => $this->item->id,
+            'entered_unit_id' => $this->unit->id, 'received_qty' => $quantity, 'accepted_qty' => $quantity, 'unit_cost' => $cost]]);
+        return $service->post($draft)->fresh('lines');
+    }
+
+    private function draft($receipt, string $qty)
+    {
+        return app(SupplierReturnService::class)->createDraft(['goods_receipt_id' => $receipt->id, 'return_date' => '2026-10-07',
+            'reason' => 'Synthetic supplier return'], [['goods_receipt_line_id' => $receipt->lines->sole()->id, 'entered_qty' => $qty]]);
+    }
+
+    public function test_supplier_return_uses_native_current_average_cost_and_has_no_draft_or_replay_movements(): void
+    {
+        $source = $this->receipt(); $this->receipt('20', '10');
+        $before = StockBalance::query()->where('item_id', $this->item->id)->sole();
+        $ledgerBefore = StockLedger::count(); $draft = $this->draft($source, '2');
+        $this->assertSame($ledgerBefore, StockLedger::count());
+        $this->assertSame(30.0, (float) $before->on_hand_qty);
+        $posted = app(SupplierReturnService::class)->post($draft);
+        $movement = StockLedger::query()->where('source_type', SupplierReturn::class)->where('source_id', $posted->id)->sole();
+        $after = StockBalance::query()->where('item_id', $this->item->id)->sole();
+        $this->assertSame('out', $movement->direction);
+        $this->assertSame(2.0, (float) $movement->quantity);
+        $this->assertGreaterThan(10.0, (float) $movement->total_cost, 'Return OUT follows current average, not historical receipt unit price.');
+        $this->assertSame(28.0, (float) $after->on_hand_qty);
+        $this->assertEqualsWithDelta((float) $before->total_value - (float) $movement->total_cost, (float) $after->total_value, 0.000001);
+        $this->assertEqualsWithDelta((float) $movement->total_cost, (float) $posted->lines->sole()->actual_return_cost_base, 0.000001);
+        $this->assertSame($source->lines->sole()->id, $posted->lines->sole()->goods_receipt_line_id);
+        app(SupplierReturnService::class)->post($posted);
+        $this->assertSame($ledgerBefore + 1, StockLedger::count());
+        $this->assertSame(28.0, (float) $after->fresh()->on_hand_qty);
+    }
+
+    public function test_prior_supplier_return_bounds_reject_an_overlapping_draft_without_partial_effects(): void
+    {
+        $source = $this->receipt(); $first = $this->draft($source, '6'); $second = $this->draft($source, '5');
+        app(SupplierReturnService::class)->post($first); $before = StockLedger::count();
+        try { app(SupplierReturnService::class)->post($second); $this->fail('A quantity already returned was returned twice.'); }
+        catch (ValidationException $exception) { $this->assertArrayHasKey('lines', $exception->errors()); }
+        $this->assertSame('draft', $second->fresh()->status); $this->assertSame($before, StockLedger::count());
+        $this->assertSame(4.0, (float) StockBalance::query()->where('item_id', $this->item->id)->sole()->on_hand_qty);
+    }
+
+    public function test_cross_tenant_receipt_cannot_create_a_supplier_return(): void
+    {
+        $source = $this->receipt(); $this->useTenantB();
+        try { $this->draft($source, '1'); $this->fail('Another tenant receipt was accepted.'); }
+        catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) { $this->assertSame(0, SupplierReturn::count()); }
+        $this->assertSame(0, StockLedger::count());
+    }
+}
