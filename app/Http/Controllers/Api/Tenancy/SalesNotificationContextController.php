@@ -37,7 +37,7 @@ final class SalesNotificationContextController
                 if ($warehouse>0 && !DB::connection('tenant')->table('warehouses')->where('organization_id',$org->id)->where('id',$warehouse)->where('is_active',true)->exists()) continue;
                 $recipients[]=(int)$user->id;
             }
-            $lines=$rr->lines->map(fn($line)=>['id'=>(int)$line->id,'requested'=>(string)$line->requested_qty,'dispatched'=>(string)$line->fulfilled_qty])->sortBy('id')->values()->all();
+            $lines=$rr->lines->map(fn($line)=>['id'=>(int)$line->id,'requested'=>(string)$line->requested_qty,'dispatched'=>(string)$line->fulfilled_qty,'credited_undelivered'=>(string)($line->cancelled_qty??'0')])->sortBy('id')->values()->all();
             $facts=['request_uuid'=>(string)$rr->request_uuid,'source_revision'=>(string)$rr->source_revision,'status'=>(string)$rr->status,'source_invoice_id'=>(int)$rr->source_invoice_id,'source_invoice_number'=>(string)$rr->source_invoice_number,'warehouse_id'=>$warehouse,'approved'=>$this->approved($rr),'warehouse_setup_required'=>!$activeWarehouseExists,'lines'=>$lines];
             return response()->json(['client_id'=>(int)$data['client_id'],'organization_id'=>(int)$org->id,'request_id'=>(int)$rr->id,'app_key'=>'inventory','facts'=>$facts,'fingerprint'=>hash('sha256',json_encode($facts,JSON_THROW_ON_ERROR)),'eligible_user_ids'=>$recipients])->header('Cache-Control','no-store');
         } finally {
