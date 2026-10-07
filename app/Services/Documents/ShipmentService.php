@@ -266,6 +266,9 @@ class ShipmentService
         }
         $order = SalesOrder::query()->where('organization_id', $shipment->organization_id)
             ->lockForUpdate()->findOrFail($shipment->sales_order_id);
+        if ($order->status === 'cancelled') {
+            throw new RuntimeException(__('inventory.sales_handoff.order_not_dispatchable'));
+        }
         $sources = SalesOrderLine::query()->where('organization_id', $shipment->organization_id)
             ->where('sales_order_id', $order->id)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
         $quantities = [];
