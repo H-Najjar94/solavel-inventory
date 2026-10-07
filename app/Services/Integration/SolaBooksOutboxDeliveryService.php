@@ -221,14 +221,29 @@ class SolaBooksOutboxDeliveryService
         ]);
     }
 
+    public function sendPartyChange(object $mapping, object $state): array
+    {
+        $setting=IntegrationSetting::query()->where('organization_id',$mapping->solastock_organization_id)->where('integration','solabooks')->firstOrFail();
+        abort_unless($setting->mode==='active',409);
+        $key='party:'.hash('sha256',$mapping->mapping_uuid.'|'.$state->entity_type.'|stock|'.$state->source_id.'|'.$state->source_revision);
+        $payload=['source_app'=>'solastock','schema_version'=>'purchasing.parties.v1','contract_version'=>SolaStockJournalContract::VERSION,'event_type'=>'purchasing.party.changed','event_uuid'=>(string)Str::uuid(),'external_source_key'=>$key,'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,'integration_mapping_id'=>$mapping->id,'signing_key_id'=>(string)data_get($setting->meta,'signing_key_id'),'organization_mapping_uuid'=>$mapping->mapping_uuid],'party'=>['source_app'=>'stock','entity_type'=>$state->entity_type,'source_id'=>(int)$state->source_id,'source_revision'=>$state->source_revision]];
+        $body=SolaStockJournalContract::canonicalJson($payload);
+        $endpoint=preg_replace('~/journal-entries(?:\\?.*)?$~','/purchasing/parties',$this->journalEndpoint());
+        if(!$endpoint||$endpoint===$this->journalEndpoint())throw new RuntimeException('party_connection_pending');
+        $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
+        $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
+        if(!$response->successful())throw new RuntimeException('party_connection_pending');
+        return (array)$response->json('data');
+    }
+
     public function authorizePurchasing(int $actorId, int $billId, string $permission, array $closureFacts = []): array
     {
         $mapping = app(ReceivingRequestService::class)->mapping();
         $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
         $key = 'purchasing:authorize:'.Str::uuid();
         $payload = ['source_app' => 'solastock', 'schema_version' => 'purchasing.v1', 'contract_version' => SolaStockJournalContract::VERSION, 'event_type' => 'purchasing.authorize', 'event_uuid' => (string) Str::uuid(), 'external_source_key' => $key, 'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id, 'identity' => ['central_client_id' => $mapping->central_client_id, 'central_organization_id' => $mapping->central_organization_id, 'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id, 'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid], 'actor_id' => $actorId, 'source_bill_id' => $billId, 'permission' => $permission];
-        if (in_array($permission, ['unpost', 'void'], true)) {
-            $payload += array_intersect_key($closureFacts, array_flip(['closing_bill_journal_id', 'request_uuid', 'source_revision']));
+        if (in_array($permission, ['unpost', 'void'], true) || ($closureFacts['command']??null)==='cancel') {
+            $payload += array_intersect_key($closureFacts, array_flip(['closing_bill_journal_id', 'request_uuid', 'source_revision','expected_revision','command']));
         }
         $body = SolaStockJournalContract::canonicalJson($payload);
         $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/authorize', $this->journalEndpoint());
