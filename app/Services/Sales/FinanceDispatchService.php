@@ -26,6 +26,26 @@ final class FinanceDispatchService
         return $r;
     }
 
+    /** Read-only operation admission, independent of document creation or arrival. */
+    public function capabilities(): array
+    {
+        $user = request()->user();
+        $permissions = app(InventoryPermissionService::class);
+        $commercial = app(\App\Services\Entitlements\InventoryCommercialEntitlementService::class);
+        $allowed = app(WarehouseAccessService::class)->allowedIds();
+        $hasWarehouse = Warehouse::query()->where('is_active', true)
+            ->when($allowed !== null, fn ($query) => $query->whereIn('id', $allowed))->exists();
+        $canView = $permissions->can($user, 'inventory.view_sales');
+        return [
+            'can_dispatch_operation' => $canView && $hasWarehouse
+                && $permissions->can($user, 'inventory.manage_shipments')
+                && ($commercial->checkPermission('inventory.manage_shipments')['allowed'] ?? false) === true,
+            'can_approve' => $canView && $hasWarehouse
+                && $permissions->can($user, 'inventory.manage_sales_orders')
+                && ($commercial->checkPermission('inventory.manage_sales_orders')['allowed'] ?? false) === true,
+        ];
+    }
+
     public function options(array $data): array
     {
         $r = $this->source($data, 'inventory.view_sales');

@@ -107,6 +107,14 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if ($input['action'] === 'sales.fulfillment.capabilities') {
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                validator((array) ($input['data'] ?? []), ['source_invoice_id' => 'required|integer|min:1'])->validate();
+                // Both app assignments and canonical membership were checked above.
+                // This read creates no request, approval, reservation, or shipment.
+                return response()->json(['success' => true, 'data' => app(\App\Services\Sales\FinanceDispatchService::class)->capabilities()]);
+            }
             // Financial demand creation is a closed Finance capability. Physical
             // dispatch separately requires current Stock access and native permissions.
             if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand',
