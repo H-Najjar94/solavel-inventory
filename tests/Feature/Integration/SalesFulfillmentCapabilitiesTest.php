@@ -61,9 +61,9 @@ final class SalesFulfillmentCapabilitiesTest extends TestCase
     {
         $this->fixture();$before=$this->counts();$this->access=['allowed'=>true,'owner'=>true,'roles'=>[]];$this->app->forgetInstance(InventoryPermissionService::class);
         $this->assertSame(['can_dispatch_operation'=>true,'can_approve'=>true],$this->caps());
-        $this->snapshot['allowed_features']=[];
+        $this->snapshot['blocked_features']=['stock.sales_fulfillment'];
         $this->assertSame(['can_dispatch_operation'=>false,'can_approve'=>false],$this->caps());
-        $this->snapshot['allowed_features']=['stock.sales_fulfillment'];$this->snapshot['accessible']=false;
+        $this->snapshot['blocked_features']=[];$this->snapshot['accessible']=false;
         $this->assertSame(['can_dispatch_operation'=>false,'can_approve'=>false],$this->caps());
         $this->assertSame(['can_dispatch_operation','can_approve'],array_keys($this->caps()));
         $this->assertSame($before,$this->counts());
@@ -90,7 +90,7 @@ final class SalesFulfillmentCapabilitiesTest extends TestCase
         IntegrationSetting::create(['integration'=>'solabooks','mode'=>'active','solabooks_organization_id'=>14]);
         $this->mock(\App\Services\Tenancy\TenantManager::class)->shouldReceive('resolveDatabaseName')->with(7)->andReturn($database)->getMock()->shouldReceive('useTenant')->with($org,$database)->andReturn($database);
         $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class)->shouldReceive('assertComplete')->andReturnNull();
-        $this->mock(\App\Services\Integration\ApprovedFinanceIntegrationEntitlement::class)->shouldReceive('assertApproved')->andReturnNull();
+        $this->mock(\App\Services\Integration\FinanceInventoryCapability::class)->shouldReceive('allows')->with(7,$org)->andReturnTrue();
         $body=['client_id'=>7,'organization_id'=>$org,'finance_organization_id'=>14,'actor_id'=>335,'action'=>'sales.fulfillment.capabilities','data'=>['source_invoice_id'=>987654]];$before=$this->counts();
         $this->signed($body)->assertOk()->assertExactJson(['success'=>true,'data'=>['can_dispatch_operation'=>true,'can_approve'=>false]]);
         $this->stockAccess=false;$this->signed($body)->assertStatus(403);
