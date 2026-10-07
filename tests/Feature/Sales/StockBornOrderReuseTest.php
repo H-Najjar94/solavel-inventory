@@ -34,7 +34,9 @@ final class StockBornOrderReuseTest extends TestCase {
  public function test_partial_stock_born_approval_reuses_order_and_counts_only_new_shipments():void {
   [$order,$data,$request,$old]=$this->setupReuse();$before=StockLedger::count();$service=app(FulfillmentRequestService::class);
   $approved=$service->approve($request,$this->warehouse->id);$this->assertSame($order->id,$approved['sales_order_id']);$this->assertSame(1,SalesOrder::count());$this->assertSame([],$approved['shipment_ids']);$this->assertSame('0.0000',$approved['fulfilled_quantity']);$this->assertSame($before,StockLedger::count());
-  $this->assertSame('4.0000',(string)$request->lines()->sole()->source_shipped_qty_base);
+  $baseline=$request->lines()->sole();$this->assertSame('4.0000',(string)$baseline->source_shipped_qty_base);
+  try{$baseline->update(['source_shipped_qty_base'=>'0']);$this->fail('Immutable shipped baseline changed');}catch(\RuntimeException $e){$this->assertNotEmpty($e->getMessage());}
+  $this->assertSame('4.0000',(string)$baseline->fresh()->source_shipped_qty_base);
   $line=$order->lines()->sole();$shipments=app(ShipmentService::class);$new=$shipments->post($shipments->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07'],[['sales_order_line_id'=>$line->id,'item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'2']]));
   $summary=$service->status($request->fresh('lines'));$this->assertSame('partial',$summary['status']);$this->assertSame('2.0000',$summary['fulfilled_quantity']);$this->assertSame([$new->id],$summary['shipment_ids']);$this->assertSame(1,SalesOrder::count());$this->assertSame($before+1,StockLedger::count());
  }
@@ -42,5 +44,8 @@ final class StockBornOrderReuseTest extends TestCase {
   [$order,$data,$request]=$this->setupReuse();$before=StockLedger::count();$payload=$request->source_payload;$payload['origin_order']['source_shipment_refs'][0]['payload_hash']=str_repeat('f',64);$request->update(['source_payload'=>$payload]);
   try{app(FulfillmentRequestService::class)->approve($request,$this->warehouse->id);$this->fail('Tampered source accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
   $this->assertNull($request->fresh()->sales_order_id);$this->assertSame(1,SalesOrder::count());$this->assertSame($before,StockLedger::count());
+  $request->update(['source_payload'=>$data]);$line=$order->lines()->sole();$shipments=app(ShipmentService::class);$shipments->post($shipments->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07'],[['sales_order_line_id'=>$line->id,'item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'1']]));$after=StockLedger::count();
+  try{app(FulfillmentRequestService::class)->approve($request,$this->warehouse->id);$this->fail('Changed source shipment set/capacity accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+  $this->assertNull($request->fresh()->sales_order_id);$this->assertSame($after,StockLedger::count());$this->assertSame(1,SalesOrder::count());
  }
 }
