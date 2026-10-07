@@ -9,13 +9,14 @@ use Illuminate\Support\Str;
 /** Immutable supplier return facts use the existing durable purchasing channel, never a second financial journal. */
 final class SupplierReturnDocumentBuilder
 {
- public function record(SupplierReturn$return,bool$reversed=false):?PurchasingDocumentOutbox
+ public function record(SupplierReturn$return,bool$reversed=false,?string$mappingUuid=null):?PurchasingDocumentOutbox
  {
-  return DB::connection('tenant')->transaction(function()use($return,$reversed){
+  return DB::connection('tenant')->transaction(function()use($return,$reversed,$mappingUuid){
    $org=(int)$return->organization_id;
    $mapping=IntegrationOrganizationMapping::query()->where('solastock_organization_id',$org)->where('tenant_database_identity',DB::connection('tenant')->getDatabaseName())
-    ->whereIn('status',['verified','verified_hold'])->whereIn('activation_state',['active','maintenance_hold'])->lockForUpdate()->first();
-   if(!$mapping)return null;
+    ->whereIn('status',['verified','verified_hold'])->whereIn('activation_state',['active','maintenance_hold'])
+    ->when($mappingUuid,fn($q)=>$q->where('mapping_uuid',$mappingUuid))->when(!$reversed,fn($q)=>$q->lockForUpdate())->first();
+   if(!$mapping){abort_if($reversed,409);return null;}
    $return=SupplierReturn::query()->where('organization_id',$org)->whereKey($return->id)->lockForUpdate()->with(['lines','goodsReceipt.lines'])->firstOrFail();
    abort_unless($reversed?$return->reversed_at:$return->status==='posted',409);
    $life=IntegrationDocumentLifecycleMapping::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_document_type','supplier_return')->where('source_document_id',(string)$return->id)->firstOrFail();
