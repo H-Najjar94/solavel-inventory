@@ -42,7 +42,7 @@ class SettingsController extends ApiController
         $orgId = $this->context->idOrFail();
 
         return $this->success([
-            'settings' => InventorySetting::query()->firstOrNew(['organization_id' => $orgId]),
+            'settings' => app(\App\Services\Warehouses\DefaultWarehouseService::class)->present(InventorySetting::query()->firstOrNew(['organization_id' => $orgId])),
             'units' => Unit::query()->orderBy('name')->get(),
             'unit_conversions' => UnitConversion::query()
                 ->with(['item:id,sku,name', 'fromUnit:id,code,name,symbol', 'toUnit:id,code,name,symbol'])
@@ -102,7 +102,7 @@ class SettingsController extends ApiController
             'created_at' => now(),
         ]);
 
-        return $this->success($settings);
+        return $this->success(app(\App\Services\Warehouses\DefaultWarehouseService::class)->present($settings));
     }
 
     public function updateTaxes(Request $request): JsonResponse
@@ -151,7 +151,7 @@ class SettingsController extends ApiController
             'entity_id' => $settings->id, 'after' => ['tax_codes' => $codes->values()->all()], 'created_at' => now(),
         ]);
 
-        return $this->success($settings);
+        return $this->success(app(\App\Services\Warehouses\DefaultWarehouseService::class)->present($settings));
     }
 
     public function warehouseAssignments(int $userId): JsonResponse

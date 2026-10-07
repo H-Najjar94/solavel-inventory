@@ -72,6 +72,13 @@ final class DefaultWarehouseService
         });
     }
 
+    public function present(InventorySetting $settings): InventorySetting
+    {
+        $settings->setAttribute('default_warehouse_id', $this->authorizedId());
+
+        return $settings;
+    }
+
     /** Read-only; global native organization and warehouse scopes remain enforced. */
     public function authorizedId(): ?int
     {

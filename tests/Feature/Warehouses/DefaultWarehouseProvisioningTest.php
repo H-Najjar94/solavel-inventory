@@ -99,6 +99,16 @@ final class DefaultWarehouseProvisioningTest extends TestCase
         $this->assertNull($meta['default_warehouse_id']);
         $this->assertNull($meta['settings']['default_warehouse_id']);
         $this->assertSame($id, (int) InventorySetting::first()->default_warehouse_id);
+        // Settings admission is middleware-owned; response privacy remains native resource-scoped.
+        $controller = app(\App\Http\Controllers\Api\V1\SettingsController::class);
+        $shown = $controller->show()->getData(true)['data'];
+        $this->assertNull($shown['settings']['default_warehouse_id']);
+        $this->assertSame([], $shown['warehouses']);
+        $updated = $controller->updateSettings(\Illuminate\Http\Request::create('/settings', 'PUT', ['default_costing_method' => 'average']))->getData(true)['data'];
+        $this->assertNull($updated['default_warehouse_id']);
+        $taxes = $controller->updateTaxes(\Illuminate\Http\Request::create('/settings/taxes', 'PUT', ['taxes' => []]))->getData(true)['data'];
+        $this->assertNull($taxes['default_warehouse_id']);
+        $this->assertSame($id, (int) InventorySetting::first()->default_warehouse_id);
         InventoryUserWarehouse::create(['user_id' => 943, 'warehouse_id' => $id, 'assigned_by' => 943]);
         $this->assertSame($id, $service->authorizedId());
         Warehouse::findOrFail($id)->update(['is_active' => false]);
