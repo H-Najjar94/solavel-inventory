@@ -235,6 +235,7 @@ final class SupplierReturnRequestSignedTest extends TestCase {
     }
     public function test_signed_nonphysical_request_reuses_one_intent_without_a_return_draft_or_movement():void {
         [$receipt,$p]=$this->source();$before=StockLedger::count();$journals=IntegrationOutboxEvent::count();
+        $project=DB::connection('mysql')->table('projects')->where('slug','inventory')->value('id');DB::connection('mysql')->table('user_projects')->where('user_id',self::ACTOR)->where('project_id',$project)->update(['is_active'=>false]);
         $this->send($this->envelope($p,'create'))->assertOk()->assertJsonPath('data.state','requested');
         $this->send($this->envelope($p,'status'))->assertOk()->assertJsonPath('data.state','requested');
         $this->assertSame(1,DB::connection('tenant')->table('supplier_return_requests')->count());$this->assertSame(0,SupplierReturn::count());$this->assertSame($before,StockLedger::count());$this->assertSame($journals,IntegrationOutboxEvent::count());
