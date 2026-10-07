@@ -67,7 +67,7 @@ function requestForm(path,formData) {
 
 export const api = {
     approveReceivingRequest: (id,body) => request(`/purchasing/requests/${id}/approve`,{method:'POST',body}),
-    receivingRequests: () => request('/purchasing/requests'),
+    receivingRequests: (status = 'active') => request(`/purchasing/requests?status=${encodeURIComponent(status)}`),
     receivingRequest: (id) => request(`/purchasing/requests/${id}`),
     meta: () => request('/meta'),
 

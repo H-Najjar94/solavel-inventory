@@ -95,6 +95,64 @@ final class PurchasingHandoffTest extends TestCase
         return ['request_uuid' => (string) Str::uuid(), 'source_bill_id' => 800, 'source_bill_number' => 'DRAFT-800', 'source_revision' => str_repeat('a', 64), 'supplier_external_id' => 703, 'currency_code' => 'JOD', 'lines' => [['source_line_id' => '801', 'item_external_id' => 701, 'unit_external_id' => 702, 'quantity' => '4.0000', 'unit_cost' => '2.5000']]];
     }
 
+    private function cancelledGeneration(): array
+    {
+        $old = $this->data() + ['source_status'=>'posted','billing_policy'=>'billed-unreceived-v1','posted_bill_journal_id'=>99];
+        $proof = ['command'=>'cancel','request_uuid'=>$old['request_uuid'],'command_source_revision'=>$old['source_revision'],'source_bill_id'=>$old['source_bill_id'],'permission'=>'post','status'=>'posted','bill_journal_id'=>99,'receiving_payload'=>$old];
+        app(ReceivingRequestService::class)->cancelAuthorized($old, $proof);
+        DB::connection('tenant')->table('journal_entries')->insert(['id'=>99,'organization_id'=>14,'number'=>'QA-GEN-99','entry_date'=>'2026-10-07','status'=>'posted','posted_at'=>now()]);
+        DB::connection('tenant')->table('bills')->insert(['id'=>800,'organization_id'=>14,'supplier_id'=>703,'status'=>'paid','journal_entry_id'=>99]);
+        $new = array_replace($old, ['request_uuid'=>(string) Str::uuid(),'source_revision'=>str_repeat('b',64),'receiving_generation'=>1,'previous_request_uuid'=>$old['request_uuid']]);
+        // Native signed Finance authorization is the remote boundary; local Stock facts remain real.
+        request()->attributes->set('purchasing_authority', ['resubmission_allowed'=>true,'receiving_request_uuid'=>$new['request_uuid'],'receiving_request_generation'=>1,'previous_request_uuid'=>$old['request_uuid'],'source_bill_id'=>$old['source_bill_id'],'status'=>'posted','permission'=>'post','bill_journal_id'=>99]);
+        return [$old, $new];
+    }
+
+    public function test_cancelled_undelivered_generation_creates_one_new_request_and_preserves_old_replay_denial(): void
+    {
+        [$old,$new]=$this->cancelledGeneration();$service=app(ReceivingRequestService::class);
+        $one=$service->upsert($new);$two=$service->upsert($new);
+        $this->assertSame($one['id'],$two['id']);$this->assertSame('pending',$one['status']);
+        $this->assertSame(1,ReceivingRequest::query()->count());$this->assertSame(1,DB::connection('tenant')->table('purchasing_receiving_cancellations')->count());
+        $this->assertSame(0,StockLedger::query()->count());$this->assertSame(0,GoodsReceipt::query()->count());
+        try{$service->upsert($old);$this->fail('Cancelled predecessor was resurrected.');}catch(ValidationException $e){$this->assertArrayHasKey('request_uuid',$e->errors());}
+        $this->assertSame($new['request_uuid'],ReceivingRequest::query()->sole()->request_uuid);
+    }
+
+    public function test_new_generation_requires_current_authority_and_exact_cancelled_predecessor(): void
+    {
+        [$old,$new]=$this->cancelledGeneration();$proof=request()->attributes->get('purchasing_authority');
+        request()->attributes->set('purchasing_authority',array_replace($proof,['bill_journal_id'=>100]));
+        try{app(ReceivingRequestService::class)->upsert($new);$this->fail('Wrong active journal proof accepted.');}catch(HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+        request()->attributes->set('purchasing_authority',array_replace($proof,['previous_request_uuid'=>(string)Str::uuid()]));
+        try{app(ReceivingRequestService::class)->upsert($new);$this->fail('Wrong cancellation identity accepted.');}catch(HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+        $this->assertSame(0,ReceivingRequest::query()->count());
+    }
+
+    public function test_generation_keeps_mapping_guards_and_competing_uuid_cannot_create_second_request(): void
+    {
+        [$old,$new]=$this->cancelledGeneration();$supplier=IntegrationMasterDataMapping::query()->where('entity_type','supplier')->sole();$supplier->update(['status'=>'pending']);
+        try{app(ReceivingRequestService::class)->upsert($new);$this->fail('Missing supplier mapping accepted.');}catch(ValidationException $e){$this->assertArrayHasKey('supplier_external_id',$e->errors());}
+        $this->assertSame(0,ReceivingRequest::query()->count());$supplier->update(['status'=>'verified']);
+        app(ReceivingRequestService::class)->upsert($new);$competing=array_replace($new,['request_uuid'=>(string)Str::uuid()]);
+        request()->attributes->set('purchasing_authority',array_replace(request()->attributes->get('purchasing_authority'),['receiving_request_uuid'=>$competing['request_uuid']]));
+        try{app(ReceivingRequestService::class)->upsert($competing);$this->fail('Competing command duplicated the bill request.');}catch(ValidationException $e){$this->assertArrayHasKey('request_uuid',$e->errors());}
+        $this->assertSame(1,ReceivingRequest::query()->count());$this->assertSame(0,StockLedger::query()->count());
+    }
+
+    public function test_cancelled_command_history_is_not_a_receipt_and_is_tenant_scoped(): void
+    {
+        [$old,$new]=$this->cancelledGeneration();
+        DB::connection('tenant')->table('purchasing_receiving_commands')->insert(['organization_id'=>TenantTestManager::ORG_A,'operation_uuid'=>(string)Str::uuid(),'receiving_request_id'=>0,'source_bill_id'=>800,'actor_id'=>1,'payload_hash'=>str_repeat('c',64),'payload'=>'{}','status'=>'prepared','created_at'=>now(),'updated_at'=>now()]);
+        try{app(ReceivingRequestService::class)->upsert($new);$this->fail('Uncertain receiving operation was ignored.');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+        $this->assertSame(0,ReceivingRequest::query()->count());
+        $rows=app(\App\Services\Purchasing\ReceivingCancellationHistory::class)->rows();
+        $this->assertCount(1,$rows);$this->assertNull($rows[0]['id']);$this->assertNull($rows[0]['number']);
+        $this->assertSame('cancelled_before_delivery',$rows[0]['kind']);$this->assertSame($old['request_uuid'],$rows[0]['request_uuid']);
+        $this->assertSame('4.0000',$rows[0]['lines'][0]['requested_qty']);$this->assertSame([],$rows[0]['receipts']);
+        $this->useTenantB();$this->assertSame([],app(\App\Services\Purchasing\ReceivingCancellationHistory::class)->rows());
+    }
+
     private function draft(ReceivingRequest $r, string $qty): GoodsReceipt
     {
         return app(GoodsReceiptService::class)->createDraft(['receiving_request_id' => $r->id, 'warehouse_id' => $this->warehouse->id, 'supplier_id' => $r->supplier_id, 'receipt_date' => '2026-10-06'], [['receiving_request_line_id' => $r->lines()->sole()->id, 'item_id' => $this->item->id, 'entered_unit_id' => $this->unit->id, 'received_qty' => $qty, 'accepted_qty' => $qty, 'unit_cost' => '2.5000']]);

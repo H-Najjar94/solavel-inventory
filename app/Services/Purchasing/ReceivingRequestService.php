@@ -56,7 +56,25 @@ final class ReceivingRequestService
     {
         return DB::connection('tenant')->transaction(function () use ($d) {
             $m = $this->mapping();
-            IntegrationOrganizationMapping::query()->whereKey($m->id)->lockForUpdate()->firstOrFail();
+            if ((int) ($d['receiving_generation'] ?? 0) > 0) {
+                // Lock the owning bill before the mapping, as native Finance reversal does.
+                // The remote permission proof was obtained before this transaction.
+                $bill = DB::connection('tenant')->table('bills')->where('organization_id', $m->finance_organization_id)
+                    ->where('id', $d['source_bill_id'])->lockForUpdate()->first();
+                abort_unless($bill && (int) $bill->journal_entry_id === (int) ($d['posted_bill_journal_id'] ?? 0)
+                    && ! in_array($bill->status, ['draft', 'void'], true), 409, __('inventory.purchasing.resubmit_unavailable'));
+                $journal = DB::connection('tenant')->table('journal_entries')->where('organization_id', $m->finance_organization_id)
+                    ->where('id', $bill->journal_entry_id)->lockForUpdate()->first();
+                abort_unless($journal && $journal->status === 'posted' && empty($journal->voided_at)
+                    && empty($journal->deleted_at), 409, __('inventory.purchasing.resubmit_unavailable'));
+            }
+            $lockedMapping = IntegrationOrganizationMapping::query()->whereKey($m->id)->lockForUpdate()->firstOrFail();
+            if ((int) ($d['receiving_generation'] ?? 0) > 0) {
+                abort_unless($lockedMapping->status === 'verified' && $lockedMapping->activation_state === 'active'
+                    && $lockedMapping->mapping_uuid === $m->mapping_uuid
+                    && (int) $lockedMapping->finance_organization_id === (int) $m->finance_organization_id
+                    && (int) $lockedMapping->solastock_organization_id === $this->context->idOrFail(), 409);
+            }
             if(DB::connection('tenant')->table('purchasing_receiving_cancellations')->where('organization_mapping_uuid',$m->mapping_uuid)->where('request_uuid',$d['request_uuid'])->exists()){
                 throw ValidationException::withMessages(['request_uuid'=>__('inventory.purchasing.cancelled')]);
             }
@@ -67,6 +85,41 @@ final class ReceivingRequestService
             }
             if ($r && ((int) $r->source_bill_id !== (int) $d['source_bill_id'] || $r->organization_mapping_uuid !== $m->mapping_uuid)) {
                 abort(404);
+            }
+            if ((int) ($d['receiving_generation'] ?? 0) > 0) {
+                $authority = (array) request()->attributes->get('purchasing_authority', []);
+                abort_unless(($r || ($authority['resubmission_allowed'] ?? false) === true)
+                    && ($authority['receiving_request_uuid'] ?? null) === $d['request_uuid']
+                    && (int) ($authority['receiving_request_generation'] ?? 0) === (int) $d['receiving_generation']
+                    && ($authority['previous_request_uuid'] ?? null) === ($d['previous_request_uuid'] ?? null)
+                    && (int) ($authority['source_bill_id'] ?? 0) === (int) $d['source_bill_id']
+                    && ($authority['status'] ?? null) === 'posted'
+                    && ($authority['permission'] ?? null) === 'post'
+                    && (int) ($authority['bill_journal_id'] ?? 0) > 0
+                    && (int) $authority['bill_journal_id'] === (int) ($d['posted_bill_journal_id'] ?? 0), 403);
+                $predecessor = DB::connection('tenant')->table('purchasing_receiving_cancellations')
+                    ->where('organization_id', $m->solastock_organization_id)
+                    ->where('organization_mapping_uuid', $m->mapping_uuid)
+                    ->where('finance_organization_id', $m->finance_organization_id)
+                    ->where('source_bill_id', $d['source_bill_id'])
+                    ->where('request_uuid', $d['previous_request_uuid'])->lockForUpdate()->first();
+                abort_unless($predecessor && $d['previous_request_uuid'] !== $d['request_uuid'], 409, __('inventory.purchasing.resubmit_unavailable'));
+                $priorAuthority = json_decode($predecessor->authority, true);
+                abort_unless((int) ($priorAuthority['bill_journal_id'] ?? 0) === (int) $d['posted_bill_journal_id'], 409, __('inventory.purchasing.resubmit_unavailable'));
+                // Only a cancellation before any Stock request was accepted is supported.
+                abort_if(ReceivingRequest::query()->where('request_uuid', $d['previous_request_uuid'])->exists(), 409, __('inventory.purchasing.resubmit_unavailable'));
+                if (! $r) {
+                    abort_if(DB::connection('tenant')->table('purchasing_receiving_commands')
+                        ->where('organization_id', $m->solastock_organization_id)->where('source_bill_id', $d['source_bill_id'])->exists()
+                        || DB::connection('tenant')->table('finance_purchase_receipts')
+                        ->where('organization_id', $m->finance_organization_id)->where('organization_mapping_uuid', $m->mapping_uuid)
+                        ->where('bill_id', $d['source_bill_id'])->exists(), 409, __('inventory.purchasing.resubmit_unavailable'));
+                } else {
+                    abort_unless((int) data_get($r->source_payload, 'receiving_generation') === (int) $d['receiving_generation']
+                        && data_get($r->source_payload, 'previous_request_uuid') === $d['previous_request_uuid'], 409);
+                }
+            } elseif (! empty($d['previous_request_uuid'])) {
+                abort(422);
             }
             if ($r && $r->source_revision === $d['source_revision']) {
                 return $this->changedStatus($r);

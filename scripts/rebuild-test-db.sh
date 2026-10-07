@@ -215,6 +215,22 @@ CREATE TABLE IF NOT EXISTS bills (
   status VARCHAR(30) NOT NULL,
   journal_entry_id BIGINT UNSIGNED NULL
 );
+CREATE TABLE IF NOT EXISTS journal_entries (
+  id BIGINT UNSIGNED PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NOT NULL,
+  number VARCHAR(100) NULL,
+  entry_date DATE NULL,
+  status VARCHAR(30) NOT NULL,
+  posted_at TIMESTAMP NULL,
+  voided_at TIMESTAMP NULL,
+  deleted_at TIMESTAMP NULL
+);
+CREATE TABLE IF NOT EXISTS finance_purchase_receipts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NOT NULL,
+  organization_mapping_uuid CHAR(36) NOT NULL,
+  bill_id BIGINT UNSIGNED NULL
+);
 CREATE TABLE IF NOT EXISTS suppliers (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   organization_id BIGINT UNSIGNED NOT NULL,

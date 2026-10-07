@@ -131,6 +131,14 @@ final class FinanceWorkspaceController
                     abort_unless(($authority['status'] ?? null) === 'posted' && (int) ($authority['bill_journal_id'] ?? 0) > 0 && (int) $authority['bill_journal_id'] === (int) data_get($input, 'data.posted_bill_journal_id') && data_get($input, 'data.billing_policy') === 'billed-unreceived-v1', 403);
                 }
                 if ($input['action'] === 'purchasing.request.upsert') {
+                    if ((int) data_get($input, 'data.receiving_generation', 0) > 0) {
+                        abort_unless($postedRequest
+                            && ($authority['receiving_request_uuid'] ?? null) === data_get($input, 'data.request_uuid')
+                            && (int) ($authority['receiving_request_generation'] ?? 0) === (int) data_get($input, 'data.receiving_generation')
+                            && ($authority['previous_request_uuid'] ?? null) === data_get($input, 'data.previous_request_uuid'), 403);
+                    } else {
+                        abort_if(data_get($input, 'data.previous_request_uuid') !== null, 422);
+                    }
                     abort_unless(($authority['status'] ?? null) === ($postedRequest ? 'posted' : 'draft') && ! empty($authority['request_revision']) && hash_equals((string) $authority['request_revision'], (string) data_get($input, 'data.source_revision')), 409, __('inventory.purchasing.refresh_required'));
                     if ($postedRequest) {
                         abort_unless((int) ($authority['bill_journal_id'] ?? 0) > 0 && (int) $authority['bill_journal_id'] === (int) data_get($input, 'data.posted_bill_journal_id') && data_get($input, 'data.billing_policy') === 'billed-unreceived-v1', 403);
