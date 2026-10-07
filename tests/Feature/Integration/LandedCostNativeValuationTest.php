@@ -117,6 +117,52 @@ final class LandedCostNativeValuationTest extends TestCase
         $this->assertSame('30.00', StockBalance::sole()->total_value);
         $this->assertSame(2, StockLedger::count());
         $this->assertSame(0, PurchaseValuationHold::count()); // Coordinator publishes the separate durable pool holds.
+        $db = DB::connection('tenant');
+        $fingerprint = str_repeat('e', 64);
+        $holds = app(PurchaseValuationHoldService::class);
+        $holds->lockItems([$this->item->id]);
+        $hold = $holds->acquire(['settlement_uuid' => $authority->holdUuid($this->item->id, $this->warehouse->id),
+            'purpose' => 'landed_apply', 'plan_revision' => 1, 'item_id' => $this->item->id, 'warehouse_id' => $this->warehouse->id,
+            'receipt_id' => $this->landedPayload['sources'][0]['receipt_id'], 'source_bill_id' => 800], $fingerprint);
+        $db->table('journal_entries')->insert(['id' => 97, 'organization_id' => 14, 'number' => 'LANDED-97', 'entry_date' => '2026-10-07',
+            'source' => 'AP-LANDED-COST', 'source_type' => 'App\\Models\\LandedCost', 'source_id' => 700,
+            'source_key' => 'landed-cost:'.$authority->operationUuid(), 'status' => 'posted', 'posted_at' => now()]);
+        $db->table('landed_costs')->where('id', 700)->update(['status' => 'posted', 'journal_entry_id' => 97]);
+        $db->table('finance_landed_cost_operations')->where('operation_uuid', $authority->operationUuid())->update([
+            'state' => 'valuation_pending', 'journal_entry_id' => 97, 'plan_fingerprint' => $fingerprint,
+            'cost_plan' => json_encode(['plan_fingerprint' => $fingerprint, 'native_plan' => $plan])]);
+        $applyProof = array_replace($this->landedProof, ['operation' => 'apply', 'state' => 'valuation_pending',
+            'landed_cost_journal_id' => 97, 'plan_fingerprint' => $fingerprint]);
+        $apply = LandedCostAllocationAuthority::fromLockedNativeProvenance($this->landedIdentity, $applyProof, $this->mapping, 'apply', 323);
+        $service = app(PurchaseCostAdjustmentService::class);
+        $this->assertSame('applied', $service->applyLandedCost($apply, $plan)['state']);
+        $this->assertSame('applied', $service->applyLandedCost($apply, $plan)['state']);
+        $hold->update(['state' => 'released']);
+        $this->assertSame('36.00', StockBalance::sole()->total_value);
+        $this->assertSame('6.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame(2, StockLedger::count());
+
+        $reverseFingerprint = str_repeat('f', 64);
+        $db->table('journal_entries')->insert(['id' => 98, 'organization_id' => 14, 'number' => 'LANDED-98', 'entry_date' => '2026-10-07',
+            'source' => 'AP-LANDED-COST', 'source_type' => 'App\\Models\\LandedCost', 'source_id' => 700, 'reverses_entry_id' => 97,
+            'source_key' => 'landed-cost-reversal:'.$authority->operationUuid(), 'status' => 'posted', 'posted_at' => now()]);
+        $db->table('finance_landed_cost_operations')->where('operation_uuid', $authority->operationUuid())->update([
+            'state' => 'valuation_reverse_pending', 'reversal_journal_id' => 98,
+            'cost_plan' => json_encode(['plan_fingerprint' => $fingerprint, 'native_plan' => $plan,
+                'reverse_plan' => ['plan_fingerprint' => $reverseFingerprint]])]);
+        $reverseProof = array_replace($applyProof, ['operation' => 'reverse', 'direction' => 'reverse',
+            'state' => 'valuation_reverse_pending', 'plan_fingerprint' => $reverseFingerprint, 'reversal_journal_id' => 98]);
+        $reverse = LandedCostAllocationAuthority::fromLockedNativeProvenance(array_replace($this->landedIdentity, ['direction' => 'reverse']),
+            $reverseProof, $this->mapping, 'reverse', 323);
+        $inverseHold = $holds->acquire(['settlement_uuid' => $reverse->holdUuid($this->item->id, $this->warehouse->id, 'reverse'),
+            'purpose' => 'landed_reverse', 'plan_revision' => 1, 'item_id' => $this->item->id, 'warehouse_id' => $this->warehouse->id,
+            'receipt_id' => $this->landedPayload['sources'][0]['receipt_id'], 'source_bill_id' => 800], $reverseFingerprint);
+        $this->assertSame('reversed', $service->reverseLandedCost($reverse, $plan)['state']);
+        $this->assertSame('reversed', $service->reverseLandedCost($reverse, $plan)['state']);
+        $inverseHold->update(['state' => 'released']);
+        $this->assertSame('30.00', StockBalance::sole()->total_value);
+        $this->assertSame('6.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame(2, StockLedger::count());
     }
 
     public function test_locked_landed_factory_rejects_a_paused_mapping_without_valuation_or_physical_changes(): void
