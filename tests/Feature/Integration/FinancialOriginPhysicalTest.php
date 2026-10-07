@@ -54,7 +54,7 @@ final class FinancialOriginPhysicalTest extends TestCase
     }
     public function test_anonymous_cash_serial_dispatch_retains_null_customer_and_exact_serial_source_links():void
     {
-        [,,$op]=$this->admitted(tracking:'serial',anonymous:true);$serials=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->limit(2)->pluck('id')->all();$op['lines'][0]['serial_ids']=$serials;
+        [,,$op]=$this->admitted(tracking:'serial',anonymous:true);$serials=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->limit(2)->pluck('id')->all();$op['lines'][0]['serial_ids']=$serials;$op['reserve_stock']=true;
         $before=StockLedger::count();app(OriginDispatchService::class)->executeNative($op,336);
         $this->assertNull(\App\Models\Tenant\SalesOrder::sole()->customer_id);$this->assertSame(2,Shipment::sole()->lines()->count());$this->assertSame($before+2,StockLedger::count());
         $event=FinancialOriginOutbox::sole()->payload;$this->assertCount(2,$event['physical']['lines']);foreach($event['physical']['lines']as$line){$this->assertSame(851,$line['source_document_line_id']);$this->assertSame('1.0000',$line['quantity']);}

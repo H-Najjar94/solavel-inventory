@@ -111,7 +111,7 @@ final class OriginDispatchService
     private function executeAdmitted(array $data,int $actor,OriginSourceAdmission $admission):array
     {
         Validator::make($data,['operation_uuid'=>'required|uuid','request_uuid'=>'required|uuid','request_revision'=>'required|string|size:64','warehouse_id'=>'required|integer|min:1',
-            'physical_date'=>'required|date_format:Y-m-d','lines'=>'required|array|min:1','lines.*.request_line_id'=>'required|integer|min:1|distinct',
+            'physical_date'=>'required|date_format:Y-m-d','reserve_stock'=>'nullable|boolean','lines'=>'required|array|min:1','lines.*.request_line_id'=>'required|integer|min:1|distinct',
             'lines.*.source_document_line_id'=>'required|integer|min:1|distinct','lines.*.quantity'=>'required|numeric|gt:0',
             'lines.*.unit_id'=>'required|integer|min:1','lines.*.bin_id'=>'nullable|integer|min:1','lines.*.lot_id'=>'nullable|integer|min:1',
             'lines.*.variant_id'=>'nullable|integer|min:1','lines.*.serial_ids'=>'nullable|array','lines.*.serial_ids.*'=>'integer|min:1|distinct'])->validate();
@@ -140,21 +140,34 @@ final class OriginDispatchService
                 if($r->side==='sales'){
                     $base=$trace+['sales_order_line_id'=>$source->sales_order_line_id,'item_id'=>$source->item_id,'entered_unit_id'=>$source->unit_id,'quantity'=>$line['quantity']];
                     unset($base['serial_ids']);
-                    if($item->tracksSerials())foreach($line['serial_ids']??[]as$serial)$nativeLines[]=array_replace($base,['serial_id'=>$serial,'quantity'=>Decimal::div('1',(string)$source->unit_conversion_factor)]);
+                    if($item->tracksSerials()){
+                        $one=Decimal::qty(Decimal::div('1',(string)$source->unit_conversion_factor));abort_unless(Decimal::cmp(Decimal::qty(Decimal::mul($one,(string)$source->unit_conversion_factor)),'1')===0,422);
+                        foreach($line['serial_ids']??[]as$serial)$nativeLines[]=array_replace($base,['serial_id'=>$serial,'quantity'=>$one]);
+                    }
                     else $nativeLines[]=$base;
                 }
                 else {
                     $cost=(string)($line['unit_cost']??$source->unit_price);
                     abort_unless(Decimal::cmp($cost,(string)$source->unit_price)===0 || app(InventoryPermissionService::class)->can(request()->user(),'inventory.manage_adjustments'),403);
                     abort_unless(Decimal::cmp($cost,'0')>=0,422);
-                    $nativeLines[]=$trace+['item_id'=>$source->item_id,'entered_unit_id'=>$source->unit_id,'accepted_qty'=>$line['quantity'],'unit_cost'=>$cost];
+                    $nativeLines[]=$trace+['item_id'=>$source->item_id,'entered_unit_id'=>$source->unit_id,'received_qty'=>$line['quantity'],'accepted_qty'=>$line['quantity'],'unit_cost'=>$cost];
                 }
                 if($item->tracksSerials())abort_unless(Decimal::cmp(Decimal::mul((string)$line['quantity'],(string)$source->unit_conversion_factor),(string)count($line['serial_ids']??$line['serials']??[]))===0,422);
             }
             if(!$command)$command=FinancialOriginCommand::create(['organization_id'=>$r->organization_id,'operation_uuid'=>$data['operation_uuid'],'request_uuid'=>$r->request_uuid,
                 'source_document_type'=>$r->source_document_type,'source_document_id'=>$r->source_document_id,'source_journal_id'=>$r->source_journal_id,'actor_id'=>$actor,'payload_hash'=>$hash,'payload'=>$data,'status'=>'pending']);
             if($r->side==='sales'){
-                SalesOrder::query()->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail();
+                $order=SalesOrder::query()->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail();
+                if(!empty($data['reserve_stock'])){
+                    abort_unless(app(InventoryPermissionService::class)->can(request()->user(),'inventory.manage_reservations'),403);
+                    app(\App\Services\Integration\WorkflowValidationService::class)->assertOperationalDocumentReady($order,'stock_reserved');
+                    foreach($nativeLines as$line){
+                        if(empty($line['serial_id']))continue;
+                        $exists=\App\Models\Tenant\Reservation::query()->where('source_type','sales_order')->where('source_id',$order->id)->where('serial_id',$line['serial_id'])->where('status','active')->exists();
+                        if(!$exists)app(\App\Services\Stock\StockReservationService::class)->reserveSerial((int)$line['item_id'],(int)$data['warehouse_id'],(int)$line['serial_id'],'sales_order',(int)$order->id);
+                    }
+                    app(\App\Services\Integration\IntegrationOutboxService::class)->record('stock_reserved',$order,'sales_order',$order->order_number,$order->order_date?->toDateString());
+                }
                 $native=app(ShipmentService::class);$document=$native->createDraft(['shipment_number'=>'SHIP-'.$data['operation_uuid'],'sales_order_id'=>$r->sales_order_id,'warehouse_id'=>$r->warehouse_id,'ship_date'=>$data['physical_date']],$nativeLines);
                 $command->update(['shipment_id'=>$document->id]);app(OriginPhysicalService::class)->bindNativeLines($command,$document,$r);$document=$native->post($document);
             }else{
