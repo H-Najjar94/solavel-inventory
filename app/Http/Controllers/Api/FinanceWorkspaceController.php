@@ -109,7 +109,7 @@ final class FinanceWorkspaceController
         try {
             // Financial demand creation is a closed Finance capability. Physical
             // dispatch separately requires current Stock access and native permissions.
-            if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status',
+            if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand',
                 'sales.fulfillment.options','sales.fulfillment.approve','sales.fulfillment.prepare',
                 'sales.fulfillment.execute','sales.fulfillment.status','sales.fulfillment.abandon'], true)) {
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
@@ -117,7 +117,11 @@ final class FinanceWorkspaceController
                 abort_unless(Schema::connection('tenant')->hasTable('sales_fulfillment_requests'), 409, 'workspace_schema_not_ready');
                 $data = (array) ($input['data'] ?? []);
                 validator($data, ['source_invoice_id'=>'required|integer|min:1','request_uuid'=>'required|uuid'])->validate();
-                if (str_starts_with($input['action'], 'sales.request.')) {
+                if ($input['action'] === 'sales.request.reduce-demand') {
+                    // The native credit command validates its closed DTO and fresh
+                    // credit_notes.post proof; this scope grants no warehouse operation.
+                    $result = app(\App\Services\Sales\CreditDemandService::class)->dispatch($data, (int) $actor->id);
+                } elseif (str_starts_with($input['action'], 'sales.request.')) {
                     $service=app(\App\Services\Sales\FulfillmentRequestService::class);
                     $result=match ($input['action']) {
                         'sales.request.upsert'=>$service->upsert($data,(int)$actor->id),
