@@ -46,26 +46,33 @@ final class OriginDispatchService
                 'item_id'=>$l->item_id,'item_name'=>$item->name,'unit_id'=>$l->unit_id,'unit_conversion_factor'=>$l->unit_conversion_factor,
                 'remaining_quantity'=>Decimal::sub(Decimal::sub((string)$l->requested_quantity,(string)$l->fulfilled_quantity),(string)$l->cancelled_quantity),
                 'unit_name'=>\App\Models\Tenant\Unit::withoutGlobalScope(\App\Tenancy\Scopes\OrganizationScope::class)->whereKey($l->unit_id)->where(fn($q)=>$q->where('organization_id',$l->organization_id)->orWhereNull('organization_id'))->value('name'),
-                'lot_choices'=>$r->side==='sales'?$this->saleTrackingChoices((int)$item->id,$ids,'lots'):[],
-                'serial_choices'=>$r->side==='sales'?$this->saleTrackingChoices((int)$item->id,$ids,'serials'):[],
+                'lot_choices'=>$r->side==='sales'?$this->saleTrackingChoices((int)$item->id,$ids,'lots',(int)$r->sales_order_id):[],
+                'serial_choices'=>$r->side==='sales'?$this->saleTrackingChoices((int)$item->id,$ids,'serials',(int)$r->sales_order_id):[],
                 'variant_choices'=>\App\Models\Tenant\ItemVariant::query()->where('organization_id',$l->organization_id)->where('item_id',$item->id)->where('is_active',true)->orderBy('id')->get(['id','sku','variant_attributes'])->toArray(),
                 'unit_price'=>$l->unit_price,'requires_expiry'=>$item->tracksExpiry(),'requires_lot'=>$item->tracksLots(),'requires_serials'=>$item->tracksSerials(),'requires_variant'=>(bool)$item->is_variant_parent];})->all()];
     }
 
     /** Read-only native availability; every lookup has an explicit authorized active warehouse. */
-    private function saleTrackingChoices(int $itemId,array $warehouseIds,string $kind):array
+    private function saleTrackingChoices(int $itemId,array $warehouseIds,string $kind,int $orderId):array
     {
+        $own=\App\Models\Tenant\Reservation::query()->where('item_id',$itemId)->whereIn('warehouse_id',$warehouseIds)->where('source_type','sales_order')->where('source_id',$orderId)->where('status','active')->where(fn($q)=>$q->whereNull('expires_at')->orWhere('expires_at','>',now()))->get();
         $trace=app(\App\Services\Traceability\TraceabilityService::class);$choices=[];
         foreach($warehouseIds as $warehouseId){
             if($kind==='lots'){
                 foreach($trace->lotAvailability($itemId,(int)$warehouseId) as $lot){
-                    if($lot->status!=='active' || !Decimal::gt(Decimal::sub((string)$lot->on_hand_qty,(string)$lot->reserved_qty),'0'))continue;
-                    $choices[]=['id'=>(int)$lot->lot_id,'lot_code'=>$lot->lot_code,'warehouse_id'=>(int)$warehouseId,'bin_id'=>$lot->bin_id,'expiry_date'=>$lot->expiry_date,'available_quantity'=>Decimal::sub((string)$lot->on_hand_qty,(string)$lot->reserved_qty)];
+                    $owned=$own->filter(fn($r)=>(int)$r->warehouse_id===(int)$warehouseId && (int)$r->lot_id===(int)$lot->lot_id && (int)$r->bin_id===(int)$lot->bin_id)->reduce(fn($sum,$r)=>Decimal::add($sum,(string)$r->qty),'0');
+                    $available=Decimal::add(Decimal::sub((string)$lot->on_hand_qty,(string)$lot->reserved_qty),$owned);
+                    if($lot->status!=='active' || !Decimal::gt($available,'0'))continue;
+                    $choices[]=['id'=>(int)$lot->lot_id,'lot_code'=>$lot->lot_code,'warehouse_id'=>(int)$warehouseId,'bin_id'=>$lot->bin_id,'expiry_date'=>$lot->expiry_date,'available_quantity'=>$available,'reserved_for_order'=>Decimal::gt($owned,'0')];
                 }
             }else{
-                foreach($trace->serialAvailability($itemId,(int)$warehouseId) as $serial){
+                $free=collect($trace->serialAvailability($itemId,(int)$warehouseId));
+                $ownedSerialIds=$own->where('warehouse_id',$warehouseId)->pluck('serial_id')->filter()->all();
+                $others=\App\Models\Tenant\Reservation::query()->where('status','active')->whereIn('serial_id',$ownedSerialIds)->where(fn($q)=>$q->where('source_type','!=','sales_order')->orWhere('source_id','!=',$orderId))->pluck('serial_id');
+                $reserved=\App\Models\Tenant\SerialNumber::query()->where('item_id',$itemId)->where('warehouse_id',$warehouseId)->whereIn('id',$ownedSerialIds)->whereNotIn('id',$others)->whereIn('status',['available','in_stock','returned','reserved'])->get();
+                foreach($free->concat($reserved)->unique('id') as $serial){
                     if($serial->lot_id){$lot=\App\Models\Tenant\Lot::query()->where('item_id',$itemId)->find($serial->lot_id);if(!$lot || $lot->effectiveStatus()!=='active')continue;}
-                    $choices[]=['id'=>(int)$serial->id,'serial'=>$serial->serial,'warehouse_id'=>(int)$warehouseId,'bin_id'=>$serial->bin_id,'lot_id'=>$serial->lot_id,'variant_id'=>$serial->variant_id];
+                    $choices[]=['id'=>(int)$serial->id,'serial'=>$serial->serial,'warehouse_id'=>(int)$warehouseId,'bin_id'=>$serial->bin_id,'lot_id'=>$serial->lot_id,'variant_id'=>$serial->variant_id,'reserved_for_order'=>in_array($serial->id,$ownedSerialIds,true)];
                 }
             }
         }
