@@ -413,6 +413,44 @@ class SolaBooksOutboxDeliveryService
         return ['successful' => $response->successful(), 'status' => $response->status(), 'data' => (array) ($response->json('data') ?? [])];
     }
 
+    /** Supplier-return intent authority forwards identity only; canonical economics are independently fetched. */
+    public function authorizeSupplierReturnRequest(array $data, string $operation, int $capturedCentralActor): array
+    {
+        abort_unless($capturedCentralActor > 0 && in_array($operation, ['options', 'create', 'status', 'post'], true), 403);
+        $mapping = app(ReceivingRequestService::class)->mapping();
+        $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
+        $key = 'purchasing:return-request-authorize:'.Str::uuid();
+        $facts = (array) ($data['canonical_payload'] ?? $data);
+        $payload = ['source_app'=>'solastock', 'schema_version'=>'purchasing.return_request.v1', 'contract_version'=>SolaStockJournalContract::VERSION,
+            'event_type'=>'purchasing.return_request.authorize', 'event_uuid'=>(string) Str::uuid(), 'external_source_key'=>$key,
+            'inventory_organization_id'=>$mapping->solastock_organization_id, 'finance_organization_id'=>$mapping->finance_organization_id,
+            'identity'=>['central_client_id'=>$mapping->central_client_id, 'central_organization_id'=>$mapping->central_organization_id,
+                'inventory_organization_id'=>$mapping->solastock_organization_id, 'finance_organization_id'=>$mapping->finance_organization_id,
+                'integration_mapping_id'=>$mapping->id, 'signing_key_id'=>(string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid'=>$mapping->mapping_uuid],
+            'actor_id'=>$capturedCentralActor, 'operation'=>$operation];
+        if ($operation === 'options') {
+            abort_unless((int) ($facts['source_bill_id'] ?? 0)>0 && (int) ($facts['finance_receipt_id'] ?? 0)>0,422);
+            $payload += ['source_bill_id'=>(int) $facts['source_bill_id'], 'finance_receipt_id'=>(int) $facts['finance_receipt_id']];
+        } else {
+            $uuid = $data['operation_uuid'] ?? $facts['operation_uuid'] ?? null;
+            \Illuminate\Support\Facades\Validator::make(['operation_uuid'=>$uuid], ['operation_uuid'=>'required|uuid'])->validate();
+            $payload['operation_uuid']=$uuid;
+        }
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/return-requests/authorize', $this->journalEndpoint());
+        if (!$endpoint || $endpoint === $this->journalEndpoint()) throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        $event = new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
+        $response = $this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
+        abort_unless($response->successful(), in_array($response->status(),[403,404],true)?403:503, __('inventory.purchasing.authority_unavailable'));
+        $proof = (array) $response->json('data');
+        abort_unless(($proof['allowed']??false)===true && ($proof['contract']??null)==='purchasing.return_request.v1' && ($proof['operation']??null)===$operation
+            && (int) ($proof['actor_id']??0)===$capturedCentralActor && (int) ($proof['finance_organization_id']??0)===(int) $mapping->finance_organization_id
+            && (int) ($proof['central_organization_id']??0)===(int) $mapping->central_organization_id
+            && data_get($proof,'canonical_payload.organization_mapping_uuid')===$mapping->mapping_uuid,403);
+        if ($operation !== 'options') abort_unless(($proof['operation_uuid']??null)===$payload['operation_uuid'] && ($proof['organization_mapping_uuid']??null)===$mapping->mapping_uuid,403);
+        return $proof;
+    }
+
     public function rotateSigningKey(): IntegrationSetting
     {
         $orgId = $this->context->idOrFail();
