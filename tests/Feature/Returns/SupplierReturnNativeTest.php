@@ -100,6 +100,19 @@ final class SupplierReturnNativeTest extends TestCase
         $this->assertSame($before,StockLedger::count());$this->assertSame($documents,SupplierReturn::count());
     }
 
+    public function test_supplier_return_controller_requires_purchase_return_authority_not_sales_return_authority(): void
+    {
+        $source=$this->receipt();$permission=$this->createMock(\App\Services\Access\InventoryPermissionService::class);
+        $permission->method('can')->willReturnCallback(fn($user,$key)=>in_array($key,['inventory.view_stock','inventory.manage_returns'],true));
+        $request=\Illuminate\Http\Request::create('/supplier-returns','POST',['goods_receipt_id'=>$source->id,'return_date'=>'2026-10-07','reason'=>'Synthetic return','lines'=>[]]);
+        $request->setUserResolver(fn()=>(object)['id'=>337]);
+        $controller=new \App\Http\Controllers\Api\V1\SupplierReturnController(app(SupplierReturnService::class),app(WarehouseAccessService::class),$permission);
+        $before=SupplierReturn::count();$ledger=StockLedger::count();
+        try{$controller->store($request);$this->fail('Customer-return authority granted supplier OUT.');}
+        catch(\Symfony\Component\HttpKernel\Exception\HttpException $error){$this->assertSame(403,$error->getStatusCode());}
+        $this->assertSame($before,SupplierReturn::count());$this->assertSame($ledger,StockLedger::count());
+    }
+
     public function test_cross_tenant_receipt_cannot_create_a_supplier_return(): void
     {
         $source = $this->receipt(); $this->useTenantB();
