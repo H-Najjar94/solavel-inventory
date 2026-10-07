@@ -7,6 +7,44 @@ use Illuminate\Support\Facades\DB;
 /** Native posting hooks use exact durable command links, never source-name or number heuristics. */
 final class OriginPhysicalService
 {
+    public function beforeReverse(GoodsReceipt|Shipment $document):?OriginPhysicalReversalContext
+    {
+        $db=DB::connection('tenant');abort_unless($db->transactionLevel()===0,409);
+        if(!$db->getSchemaBuilder()->hasTable('stock_financial_origin_commands'))return null;
+        $field=$document instanceof Shipment?'shipment_id':'goods_receipt_id';
+        $command=FinancialOriginCommand::query()->where('organization_id',$document->organization_id)->where($field,$document->id)->first();
+        if(!$command)return null;
+        abort_unless($command->status==='completed',409);
+        $request=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)->where('request_uuid',$command->request_uuid)->firstOrFail();
+        OriginSourceAdmission::stock($request,(int)(request()->user()?->getAuthIdentifier()??0),
+            $document instanceof Shipment?'inventory.manage_shipments':'inventory.manage_adjustments');
+        $event=\App\Models\Tenant\FinancialOriginOutbox::query()->where('organization_id',$document->organization_id)
+            ->where('operation_uuid',$command->operation_uuid)->where('physical_document_id',$document->id)
+            ->where('event_type',$document instanceof Shipment?'financial-origin.shipment.confirmed':'financial-origin.receipt.confirmed')->firstOrFail();
+        abort_unless($event->payload_hash===\App\Services\Integration\SolaStockJournalContract::payloadHash($event->payload),409);
+        $facts=['source_document_type'=>$request->source_document_type,'source_document_id'=>(int)$request->source_document_id,
+            'source_journal_id'=>(int)$request->source_journal_id,'request_uuid'=>$request->request_uuid,'source_revision'=>$request->source_revision,
+            'physical_document_type'=>$event->physical_document_type,'physical_document_id'=>(int)$document->id,
+            'physical_mapping_uuid'=>data_get($event->payload,'physical.mapping_uuid'),'physical_journal_key'=>data_get($event->payload,'physical.journal_key'),
+            'physical_journal_event_uuid'=>data_get($event->payload,'physical.journal_event_uuid'),
+            'physical_journal_payload_hash'=>data_get($event->payload,'physical.journal_payload_hash')];
+        $proof=app(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->authorizeOriginPhysicalReversal($facts);
+        return OriginPhysicalReversalContext::fromProof($facts,$proof,(int)$document->organization_id,(int)$command->id);
+    }
+
+    public function reversed(GoodsReceipt|Shipment $document,\App\Models\Tenant\InventoryReversal|\App\Models\Tenant\SalesReturn $inverse):?array
+    {
+        abort_unless(DB::connection('tenant')->transactionLevel()>0,409);
+        if(!DB::connection('tenant')->getSchemaBuilder()->hasTable('stock_financial_origin_commands'))return null;
+        $field=$document instanceof Shipment?'shipment_id':'goods_receipt_id';
+        $command=FinancialOriginCommand::query()->where('organization_id',$document->organization_id)->where($field,$document->id)->lockForUpdate()->first();
+        if(!$command)return null;
+        $request=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)->where('request_uuid',$command->request_uuid)->firstOrFail();
+        $event=app(OriginDocumentBuilder::class)->recordReversed($request,$command,$document,$inverse);
+        // Fulfilled is gross physical history: reversal never reopens demand or reserves stock.
+        return ['event_uuid'=>$event->event_uuid,'event_type'=>$event->event_type,'request'=>app(OriginRequestService::class)->summary($request)];
+    }
+
     public function lockAndValidateDocument(GoodsReceipt|Shipment $document): ?FinancialOriginRequest
     {
         abort_unless(DB::connection('tenant')->transactionLevel()>0,409);

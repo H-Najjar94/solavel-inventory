@@ -9,6 +9,47 @@ use Illuminate\Support\Str;
 /** No HTTP or financial document creation inside physical posting. */
 final class OriginDocumentBuilder
 {
+    /** Full source reversal preserves the original financial and conversion snapshots. */
+    public function recordReversed(FinancialOriginRequest $request,FinancialOriginCommand $command,GoodsReceipt|Shipment $document,\App\Models\Tenant\InventoryReversal|\App\Models\Tenant\SalesReturn $inverse):FinancialOriginOutbox
+    {
+        abort_unless(DB::connection('tenant')->transactionLevel()>0 && $command->status==='completed' && $inverse->status==='posted'
+            && (int)$inverse->organization_id===(int)$request->organization_id,409);
+        $shipment=$document instanceof Shipment;
+        abort_unless(($shipment && $inverse instanceof \App\Models\Tenant\SalesReturn && $inverse->is_source_reversal
+            && (int)$inverse->source_reversal_shipment_id===(int)$document->id && (int)$document->reversal_sales_return_id===(int)$inverse->id)
+            || (!$shipment && $inverse instanceof \App\Models\Tenant\InventoryReversal && $inverse->source_type==='goods_receipt'
+            && (int)$inverse->source_id===(int)$document->id && (int)$document->reversal_id===(int)$inverse->id),409);
+        $original=FinancialOriginOutbox::query()->where('organization_id',$request->organization_id)->where('operation_uuid',$command->operation_uuid)
+            ->where('physical_document_id',$document->id)->where('event_type',$shipment?'financial-origin.shipment.confirmed':'financial-origin.receipt.confirmed')->firstOrFail();
+        abort_unless(SolaStockJournalContract::payloadHash($original->payload)===$original->payload_hash,409);
+        $key=$original->external_source_key.':reversed:'.$inverse->id;
+        if($existing=FinancialOriginOutbox::query()->where('organization_id',$request->organization_id)->where('external_source_key',$key)->first())return $existing;
+        $journal=IntegrationOutboxEvent::query()->where('organization_id',$request->organization_id)->where('aggregate_id',$inverse->id)
+            ->where('event_type',$shipment?'sales_return.posted':'grn.reversed')->firstOrFail();
+        if(!$shipment)abort_unless($inverse->original_event_uuid===data_get($original->payload,'physical.journal_event_uuid'),409);
+        else {
+            $returns=$inverse->lines()->get()->groupBy('source_shipment_line_id');
+            foreach(data_get($original->payload,'physical.lines',[])as$line){
+                $actual=$returns->get($line['physical_line_id']);abort_unless($actual,409);
+                $quantity=$actual->reduce(fn($sum,$row)=>Decimal::add($sum,(string)$row->returned_qty),'0');
+                abort_unless(Decimal::cmp($quantity,(string)$line['base_quantity'])===0,409);
+            }
+            abort_unless($returns->count()===count(data_get($original->payload,'physical.lines',[])),409);
+        }
+        $payload=$original->payload;$uuid=(string)Str::uuid();$event=$shipment?'financial-origin.shipment.reversed':'financial-origin.receipt.reversed';
+        $payload['event_type']=$event;$payload['event_uuid']=$uuid;$payload['external_source_key']=$key;
+        $payload['original_event_uuid']=$original->event_uuid;$payload['original_payload_hash']=$original->payload_hash;
+        $payload['reversal']=['type'=>$shipment?'sales_return':'inventory_reversal','id'=>(int)$inverse->id,
+            'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,
+            'journal_payload_hash'=>SolaStockJournalContract::payloadHash($journal->payload),'currency'=>(array)data_get($journal->payload,'currency',[])];
+        $payload['request']=app(OriginRequestService::class)->summary($request->fresh('lines'));
+        return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$request->organization_mapping_uuid,
+            'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,'event_type'=>$event,'source_document_type'=>$request->source_document_type,
+            'source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,
+            'physical_document_type'=>$original->physical_document_type,'physical_document_id'=>$document->id,'external_source_key'=>$key,
+            'payload_hash'=>SolaStockJournalContract::payloadHash($payload),'payload'=>$payload,'status'=>'pending']);
+    }
+
     public function record(FinancialOriginRequest $request,FinancialOriginCommand $command,GoodsReceipt|Shipment $document):FinancialOriginOutbox
     {
         abort_unless(DB::connection('tenant')->transactionLevel()>0 && $document->status==='posted' && $command->status==='completed',409);

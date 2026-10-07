@@ -295,6 +295,46 @@ class SolaBooksOutboxDeliveryService
         return $data;
     }
 
+    /** Read-only accounting proof; the warehouse actor is authorized separately by native Stock. */
+    public function authorizeOriginPhysicalReversal(array $facts): array
+    {
+        abort_unless(DB::connection('tenant')->transactionLevel()===0,409);
+        $facts=validator($facts,[
+            'source_document_type'=>'required|in:sales_receipt,expense','source_document_id'=>'required|integer|min:1',
+            'source_journal_id'=>'required|integer|min:1','request_uuid'=>'required|uuid','source_revision'=>'required|string|size:64',
+            'physical_document_type'=>'required|in:shipment,goods_receipt','physical_document_id'=>'required|integer|min:1',
+            'physical_mapping_uuid'=>'required|uuid','physical_journal_key'=>'required|string|max:191',
+            'physical_journal_event_uuid'=>'required|uuid','physical_journal_payload_hash'=>'required|string|size:64',
+        ])->validate();
+        abort_unless(($facts['source_document_type']==='expense' && $facts['physical_document_type']==='goods_receipt')
+            || ($facts['source_document_type']==='sales_receipt' && $facts['physical_document_type']==='shipment'),403);
+        $mapping=app(ReceivingRequestService::class)->mapping();
+        $setting=IntegrationSetting::query()->where('organization_id',$this->context->idOrFail())->where('integration','solabooks')->firstOrFail();
+        $key='origin:physical-reversal:'.Str::uuid();
+        $payload=['source_app'=>'solastock','schema_version'=>'financial-origin.v1','contract_version'=>SolaStockJournalContract::VERSION,
+            'event_type'=>'financial-origin.physical-reversal.authorize','event_uuid'=>(string)Str::uuid(),'external_source_key'=>$key,
+            'authority_kind'=>'posted_financial_origin_physical_reversal','actor_id'=>0,
+            'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
+            'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,
+                'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
+                'organization_mapping_uuid'=>$mapping->mapping_uuid,'integration_mapping_id'=>$mapping->id,
+                'signing_key_id'=>(string)data_get($setting->meta,'signing_key_id')],'physical_reversal'=>$facts];
+        $body=SolaStockJournalContract::canonicalJson($payload);
+        $endpoint=preg_replace('~/journal-entries(?:\\?.*)?$~','/financial-origins/physical-reversals/authorize',$this->journalEndpoint());
+        abort_unless($endpoint && $endpoint!==$this->journalEndpoint(),503);
+        $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
+        $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
+        abort_unless($response->successful(),in_array($response->status(),[403,404],true)?403:503);
+        $data=(array)$response->json('data');
+        abort_unless(($data['allowed']??false)===true && ($data['schema_version']??null)==='financial-origin.v1'
+            && ($data['authority_kind']??null)==='posted_financial_origin_physical_reversal' && ($data['actor_id']??null)===0
+            && (int)($data['finance_organization_id']??0)===(int)$mapping->finance_organization_id
+            && (int)($data['central_organization_id']??0)===(int)$mapping->central_organization_id
+            && ($data['organization_mapping_uuid']??null)===$mapping->mapping_uuid,403);
+        foreach($facts as$field=>$value)abort_unless(array_key_exists($field,$data) && (string)$data[$field]===(string)$value,403);
+        return $data;
+    }
+
     public function authorizeOrigin(int $actorId, \App\Services\FinancialOrigins\FinancialOrigin $origin, string $permission, array $reviewFacts = []): array
     {
         abort_unless($actorId > 0 && $origin->documentId > 0 && in_array($permission, ['view', 'post', 'unpost', 'void'], true), 403);
