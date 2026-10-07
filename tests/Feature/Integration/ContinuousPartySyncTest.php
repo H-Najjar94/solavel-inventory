@@ -184,4 +184,16 @@ final class ContinuousPartySyncTest extends TestCase {
   catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}
  }
 
+ public function test_paid_invoice_dependency_uses_only_active_native_ar_journal_authority():void {
+  $db=DB::connection('tenant');
+  $db->table('invoices')->insert(['id'=>83,'organization_id'=>14,'customer_id'=>993,'status'=>'paid']);
+  $db->table('journal_entries')->insert(['id'=>83,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>83,'status'=>'posted','posted_at'=>now()]);
+  $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class,fn($mock)=>$mock->shouldReceive('authorizeSales')->once()->with(990001,83,'post',[])->andReturn(['allowed'=>true,'invoice_journal_id'=>83]));
+  $r=app(ContinuousPartySync::class)->authorizeInvoiceDependency($this->mapping,['source_id'=>993,'source_invoice_id'=>83,'native_actor_id'=>990001]);
+  $this->assertSame(83,$r['invoice_journal_id']);
+  $db->table('journal_entries')->where('id',83)->update(['status'=>'voided','voided_at'=>now()]);
+  try{app(ContinuousPartySync::class)->authorizeInvoiceDependency($this->mapping,['source_id'=>993,'source_invoice_id'=>83,'native_actor_id'=>990001]);$this->fail('Paid invoice with no active journal accepted.');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(409,$e->getStatusCode());}
+ }
+
 }
