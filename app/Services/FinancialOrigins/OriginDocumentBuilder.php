@@ -30,7 +30,7 @@ final class OriginDocumentBuilder
                 'item_external_id'=>(int)$sourceLine['item_external_id'],'unit_external_id'=>(int)$sourceLine['unit_external_id'],
                 'quantity'=>Decimal::qty(Decimal::div($base,$factor)),'base_quantity'=>$base,'unit_conversion_factor'=>$factor,
                 'base_unit_id'=>$actual->base_unit_id,'unit_conversion_hash'=>$actual->unit_conversion_hash,
-                'unit_price'=>$sourceLine['unit_price'],'stock_item_id'=>$actual->item_id,'stock_unit_id'=>$actual->entered_unit_id];
+                'unit_price'=>$sourceLine['unit_price'],'unit_cost'=>$shipment?null:Decimal::mul((string)$actual->unit_cost,$factor,8),'stock_item_id'=>$actual->item_id,'stock_unit_id'=>$actual->entered_unit_id];
         }
         abort_unless(count($lines)===$native->count(),409);
         $uuid=(string)Str::uuid();$setting=IntegrationSetting::query()->where('organization_id',$request->organization_id)->where('integration','solabooks')->firstOrFail();
@@ -48,7 +48,7 @@ final class OriginDocumentBuilder
                 'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,'journal_payload_hash'=>SolaStockJournalContract::payloadHash($journal->payload),
                 'currency'=>(array)data_get($journal->payload,'currency',[]),'lines'=>$lines],
             'request'=>app(OriginRequestService::class)->summary($request)];
-        return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,
+        return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$mapping->mapping_uuid,'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,
             'event_type'=>$event,'source_document_type'=>$request->source_document_type,'source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,
             'physical_document_type'=>$type,'physical_document_id'=>$document->id,'external_source_key'=>$key,'payload_hash'=>SolaStockJournalContract::payloadHash($payload),'payload'=>$payload,'status'=>'pending']);
     }

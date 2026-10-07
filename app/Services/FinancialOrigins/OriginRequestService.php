@@ -65,14 +65,21 @@ final class OriginRequestService
     /** Fresh remote proof is obtained before native locks; approval moves no stock. */
     public function approve(array $data,int $actor):array
     {
-        $r=$this->find($data); $dto=OriginRequestPayload::fromArray($r->source_payload);
-        $authority=app(SolaBooksOutboxDeliveryService::class)->authorizeOrigin($actor,$dto->origin,'view',['request_uuid'=>$r->request_uuid]);
+        $r=$this->find($data);return $this->approveAdmitted($data,$actor,OriginSourceAdmission::finance($r,$actor));
+    }
+    public function approveNative(array $data,int $actor):array
+    {
+        $r=$this->find($data);return $this->approveAdmitted($data,$actor,OriginSourceAdmission::stock($r,$actor,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.manage_adjustments'));
+    }
+    private function approveAdmitted(array $data,int $actor,OriginSourceAdmission $admission):array
+    {
+        $r=$this->find($data);abort_unless(($data['request_revision']??null)===$r->source_revision,409); $dto=OriginRequestPayload::fromArray($r->source_payload);
         $user=request()->user();$key=$r->side==='sales'?'inventory.manage_sales_orders':'inventory.manage_adjustments';
         abort_unless($user && (int)$user->getAuthIdentifier()===$actor && app(InventoryPermissionService::class)->can($user,$key),403);
         $warehouse=(int)($data['warehouse_id']??0);app(WarehouseAccessService::class)->assertAllowed($warehouse);
         Warehouse::query()->where('is_active',true)->findOrFail($warehouse);
-        return DB::connection('tenant')->transaction(function()use($r,$dto,$authority,$actor,$warehouse){
-            LockedOriginProof::verify($dto,app(ReceivingRequestService::class)->mapping(),$authority,$actor);
+        return DB::connection('tenant')->transaction(function()use($r,$admission,$actor,$warehouse){
+            $admission->lock($r);
             $r=FinancialOriginRequest::query()->whereKey($r->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($r->status,['pending','partial'],true),409);
             if($r->approved_at){abort_unless((int)$r->warehouse_id===$warehouse && $r->approved_revision===$r->source_revision,409);return $this->summary($r);}

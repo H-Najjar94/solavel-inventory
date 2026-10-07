@@ -331,6 +331,36 @@ class SolaBooksOutboxDeliveryService
         return $data;
     }
 
+    public function sendOriginDocument(\App\Models\Tenant\FinancialOriginOutbox $document): array
+    {
+        $this->safety->assertDeliveryEnabledFor((int) $document->organization_id);
+        if ($document->status !== 'processing' || ! $document->lease_uuid
+            || ! $document->lease_expires_at || $document->lease_expires_at->isPast()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $payload = $document->payload;
+        if (($payload['schema_version'] ?? null) !== 'financial-origin.v1'
+            || ! in_array($payload['event_type'] ?? null, ['financial-origin.shipment.confirmed', 'financial-origin.shipment.reversed', 'financial-origin.receipt.confirmed', 'financial-origin.receipt.reversed'], true)
+            || ($payload['external_source_key'] ?? null) !== $document->external_source_key
+            || ($payload['event_uuid'] ?? null) !== $document->event_uuid
+            || (int) ($payload['inventory_organization_id'] ?? 0) !== (int) $document->organization_id
+            || ($payload['identity']['organization_mapping_uuid'] ?? null) !== $document->organization_mapping_uuid
+            || ! hash_equals((string) $document->payload_hash, hash('sha256', SolaStockJournalContract::canonicalJson($payload)))) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        abort_unless(($payload['source_document_type'] ?? null) === $document->source_document_type && (int) ($payload['source_document_id'] ?? 0) === (int) $document->source_document_id && (int) ($payload['source_journal_id'] ?? 0) === (int) $document->source_journal_id
+            && (($document->source_document_type === 'sales_receipt' && str_starts_with($document->event_type, 'financial-origin.shipment.')) || ($document->source_document_type === 'expense' && str_starts_with($document->event_type, 'financial-origin.receipt.'))), 403);
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/financial-origins/documents', $this->journalEndpoint());
+        if (! $endpoint || $endpoint === $this->journalEndpoint()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $event = new IntegrationOutboxEvent(['organization_id' => $document->organization_id, 'idempotency_key' => $document->external_source_key, 'event_uuid' => $document->event_uuid]);
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+
+        return ['successful' => $response->successful(), 'status' => $response->status(), 'data' => (array) ($response->json('data') ?? [])];
+    }
+
     public function authorizeOriginSettlement(array $facts, string $operation, int $actor): array
     {
         abort_unless(in_array($operation, ['prepare', 'apply', 'reverse', 'status', 'release'], true) && $actor >= 0, 403);
