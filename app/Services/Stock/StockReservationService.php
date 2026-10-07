@@ -5,6 +5,8 @@ namespace App\Services\Stock;
 use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\Reservation;
 use App\Models\Tenant\SalesOrder;
+use App\Models\Tenant\Shipment;
+use App\Models\Tenant\Item;
 use App\Models\Tenant\SerialNumber;
 use App\Models\Tenant\StockBalance;
 use App\Services\Stock\Support\Decimal;
@@ -370,6 +372,51 @@ class StockReservationService
 
             $this->syncSourceProjection($sourceType, $sourceId);
 
+            return $count;
+        });
+    }
+
+    /** Release only this shipment's held coordinates; unshipped SO reservations stay active. */
+    public function consumeForShipment(Shipment $shipment): int
+    {
+        $orgId = $this->context->idOrFail();
+        if (! $shipment->sales_order_id) return 0;
+        return DB::connection($this->conn())->transaction(function () use ($shipment, $orgId) {
+            SalesOrder::query()->where('organization_id', $orgId)->whereKey($shipment->sales_order_id)->lockForUpdate()->firstOrFail();
+            $shipment->loadMissing('lines');
+            $coordinates = [];
+            foreach ($shipment->lines as $line) {
+                $key = implode(':', [$line->item_id, $shipment->warehouse_id, $line->bin_id ?: '', $line->lot_id ?: '', $line->serial_id ?: '']);
+                $coordinates[$key] ??= ['item'=>$line->item_id, 'warehouse'=>$shipment->warehouse_id, 'bin'=>$line->bin_id, 'lot'=>$line->lot_id, 'serial'=>$line->serial_id, 'qty'=>'0'];
+                $coordinates[$key]['qty'] = Decimal::add($coordinates[$key]['qty'], (string) $line->quantity);
+            }
+            $itemIds = collect($coordinates)->pluck('item')->unique()->sort()->values()->all();
+            Item::query()->where('organization_id', $orgId)->whereIn('id', $itemIds)->orderBy('id')->lockForUpdate()->get();
+            ksort($coordinates);
+            $count = 0;
+            foreach ($coordinates as $coordinate) {
+                $query = Reservation::query()->where('organization_id', $orgId)->where('source_type', 'sales_order')->where('source_id', $shipment->sales_order_id)->where('status', 'active')->where('item_id', $coordinate['item'])->where('warehouse_id', $coordinate['warehouse']);
+                foreach (['bin'=>'bin_id', 'lot'=>'lot_id', 'serial'=>'serial_id'] as $field=>$column) {
+                    $coordinate[$field] ? $query->where($column, $coordinate[$field]) : $query->whereNull($column);
+                }
+                $remaining = $coordinate['qty'];
+                foreach ($query->orderBy('id')->lockForUpdate()->get() as $reservation) {
+                    if (! Decimal::gt($remaining, '0')) break;
+                    $consumed = Decimal::lt($remaining, (string) $reservation->qty) ? $remaining : (string) $reservation->qty;
+                    $balance = $this->lockBalance($orgId, (int) $reservation->item_id, (int) $reservation->warehouse_id, $reservation->bin_id ? (int) $reservation->bin_id : null, $reservation->lot_id ? (int) $reservation->lot_id : null);
+                    $balance->reserved_qty = Decimal::qty(Decimal::sub((string) $balance->reserved_qty, $consumed));
+                    $balance->save();
+                    $reservation->qty = Decimal::qty(Decimal::sub((string) $reservation->qty, $consumed));
+                    if (! Decimal::gt((string) $reservation->qty, '0')) {
+                        $reservation->status = 'consumed';
+                        $reservation->released_at = now();
+                    }
+                    $reservation->save();
+                    $remaining = Decimal::sub($remaining, $consumed);
+                    $count++;
+                }
+            }
+            $this->syncSourceProjection('sales_order', (int) $shipment->sales_order_id);
             return $count;
         });
     }

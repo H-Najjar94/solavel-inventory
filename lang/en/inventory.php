@@ -2,6 +2,7 @@
 
 return [
     'sales_handoff' => [
+        'tracking_required' => 'Choose the required lot, serial number, or variant for this product before dispatching.',
         'order_not_dispatchable' => 'Confirm the sales order before dispatching its remaining quantities.',
         'source_line_invalid' => 'A shipment line does not belong to this sales order and product. Reopen the shipment from its sales order.',
         'exceeds_remaining' => 'The shipment quantity exceeds the quantity remaining on this sales order. Refresh the order and enter the actual remaining quantity.',

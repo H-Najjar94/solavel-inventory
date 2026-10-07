@@ -18,6 +18,7 @@ export const NAV = [
     { key: 'receiving-requests', label: 'Receiving Requests', path: '/receiving-requests', icon: 'fa-solid fa-dolly', perm: 'inventory.receive_goods', group: 'Purchasing' },
     { key: 'goods-receipts', label: 'Goods Receipts', path: '/goods-receipts', icon: 'fa-solid fa-dolly', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'customers', label: 'Customers', path: '/customers', icon: 'fa-solid fa-address-book', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
+    { key: 'fulfillment-requests', label: 'Fulfillment Requests', path: '/fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'sales-orders', label: 'Sales Orders', path: '/sales-orders', icon: 'fa-solid fa-cart-shopping', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'pick-lists', label: 'Picking', path: '/pick-lists', icon: 'fa-solid fa-hand', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'packs', label: 'Packing', path: '/packs', icon: 'fa-solid fa-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
