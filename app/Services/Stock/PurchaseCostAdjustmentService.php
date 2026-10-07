@@ -8,6 +8,7 @@ use App\Models\Tenant\IntegrationPurchaseCostAdjustment;
 use App\Models\Tenant\IntegrationPurchaseCostAdjustmentComponent;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
+use App\Services\FinancialOrigins\OriginReceiptCostAuthority;
 use App\Services\Purchasing\PurchaseValuationHoldService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -51,12 +52,63 @@ final class PurchaseCostAdjustmentService
         }, 5);
     }
 
+    public function prepareFinancialOrigin(OriginReceiptCostAuthority $authority, array $plan): array
+    {
+        return DB::connection('tenant')->transaction(function () use ($authority, $plan): array {
+            abort_unless($authority->action() === 'prepare' && !$authority->reverse(), 403);
+            $canonical = $this->planner->planFinancialOrigin($authority);
+            abort_unless($canonical === $plan, 409);
+            $key = hash('sha256', 'financial_origin|'.$authority->mappingUuid().'|'.$authority->operationUuid());
+            $row = IntegrationPurchaseCostAdjustment::query()->where('organization_id', $authority->organizationId())->where('organization_mapping_uuid', $authority->mappingUuid())->where('idempotency_key', $key)->lockForUpdate()->first();
+            if (!$row) {
+                $row = IntegrationPurchaseCostAdjustment::create([
+                    'adjustment_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $authority->mappingUuid(),
+                    'organization_id' => $authority->organizationId(), 'destination_document_type' => 'expense',
+                    'destination_document_id' => $authority->sourceDocumentId(), 'destination_fingerprint' => $authority->fingerprint(),
+                    'currency_code' => $authority->currencyCode(), 'base_currency_code' => $authority->baseCurrencyCode(), 'exchange_rate' => $authority->exchangeRate(),
+                    'finance_money_scale' => $authority->moneyScale(), 'stock_money_scale' => 2, 'exact_base_difference' => $plan['exact_base_difference'],
+                    'allocated_base_difference' => $plan['allocated_base_difference'], 'rounding_residual' => $plan['rounding_residual'], 'rounding_bound' => $plan['rounding_bound'],
+                    'state' => 'prepared', 'idempotency_key' => $key, 'safe_metadata' => ['contract_version' => 'financial-origin.settlement.v1',
+                        'financial_origin' => ['operation_uuid' => $authority->operationUuid(), 'source_document_type' => 'expense', 'source_document_id' => $authority->sourceDocumentId(), 'source_journal_id' => $authority->sourceJournalId()]],
+                ]);
+                foreach ($plan['components'] as $component) { unset($component['receipt_line_id']); IntegrationPurchaseCostAdjustmentComponent::create($component + ['adjustment_uuid' => $row->adjustment_uuid, 'organization_id' => $row->organization_id]); }
+            }
+            abort_unless($row->destination_document_type === 'expense' && hash_equals($row->destination_fingerprint, $authority->fingerprint()), 409);
+            return $this->serialize($row);
+        }, 5);
+    }
+
+    public function applyFinancialOrigin(OriginReceiptCostAuthority $authority, ?array $plan = null): array
+    {
+        abort_unless($authority->action() === 'apply' && !$authority->reverse(), 403);
+        return $this->transition($this->originInput($authority), false, $authority);
+    }
+
+    public function reverseFinancialOrigin(OriginReceiptCostAuthority $authority, ?array $plan = null): array
+    {
+        abort_unless($authority->action() === 'reverse' && $authority->reverse(), 403);
+        return $this->transition($this->originInput($authority), true, $authority);
+    }
+
+    public function statusFinancialOrigin(OriginReceiptCostAuthority $authority): array
+    {
+        $input = $this->originInput($authority);
+        $row = IntegrationPurchaseCostAdjustment::query()->where('organization_id', $authority->organizationId())->where('organization_mapping_uuid', $authority->mappingUuid())
+            ->where('destination_document_type', 'expense')->where('destination_document_id', $authority->sourceDocumentId())->where('destination_fingerprint', $authority->fingerprint())->firstOrFail();
+        return $this->serialize($row);
+    }
+
+    private function originInput(OriginReceiptCostAuthority $authority): array
+    {
+        return ['organization_mapping_uuid' => $authority->mappingUuid(), 'destination_document_id' => $authority->sourceDocumentId(), 'destination_fingerprint' => $authority->fingerprint()];
+    }
+
     public function status(array $input): array
     {
         $row = IntegrationPurchaseCostAdjustment::query()
             ->where('organization_id', app(OrganizationContext::class)->idOrFail())
             ->where('organization_mapping_uuid', $input['organization_mapping_uuid'])
-            ->where('destination_document_id', $input['destination_document_id'])
+            ->where('destination_document_type', 'supplier_bill')->where('destination_document_id', $input['destination_document_id'])
             ->where('destination_fingerprint', $input['destination_fingerprint'])->firstOrFail();
 
         return $this->serialize($row);
@@ -72,9 +124,9 @@ final class PurchaseCostAdjustmentService
         return $this->transition($input, true);
     }
 
-    private function transition(array $input, bool $reverse): array
+    private function transition(array $input, bool $reverse, ?OriginReceiptCostAuthority $authority = null): array
     {
-        return DB::connection('tenant')->transaction(function () use ($input, $reverse): array {
+        return DB::connection('tenant')->transaction(function () use ($input, $reverse, $authority): array {
             $organizationId = app(OrganizationContext::class)->idOrFail();
             $active = IntegrationOrganizationMapping::query()->where('mapping_uuid', $input['organization_mapping_uuid'])
                 ->where('solastock_organization_id', $organizationId)->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())
@@ -83,7 +135,7 @@ final class PurchaseCostAdjustmentService
                 $this->fail('The connection is not active for this organization.');
             }
             $row = IntegrationPurchaseCostAdjustment::query()->where('organization_id', $organizationId)->where('organization_mapping_uuid', $input['organization_mapping_uuid'])
-                ->where('destination_document_id', $input['destination_document_id'])->where('destination_fingerprint', $input['destination_fingerprint'])
+                ->where('destination_document_type', $authority ? 'expense' : 'supplier_bill')->where('destination_document_id', $input['destination_document_id'])->where('destination_fingerprint', $input['destination_fingerprint'])
                 ->lockForUpdate()->firstOrFail();
             if (data_get($row->safe_metadata, 'purchase_settlement.settlement_uuid')
                 && ! str_starts_with((string) request()->attributes->get('verified_workspace_action'), 'purchasing.settlement.')) {
@@ -100,7 +152,15 @@ final class PurchaseCostAdjustmentService
             $holdService = app(PurchaseValuationHoldService::class);
             $holdService->lockItems($components->pluck('item_id')->all());
             $allowedHold = request()->attributes->get('validated_settlement_hold');
+            if ($authority) {
+                abort_unless(hash_equals((string) data_get($row->safe_metadata, 'financial_origin.operation_uuid'), $authority->operationUuid()) && (int) $row->organization_id === $authority->organizationId(), 403);
+                abort_unless($reverse ? $authority->reversalJournalId() !== null : $authority->financeJournalId() !== null, 409);
+            }
             foreach ($components as $component) {
+                if ($authority) {
+                    $allowedHold = ['settlement_uuid' => $authority->holdUuid((int) $component->item_id, (int) $component->warehouse_id, $reverse ? 'reverse' : 'apply'),
+                        'purpose' => $reverse ? 'origin_reverse' : 'origin_apply', 'plan_revision' => $authority->planRevision(), 'plan_fingerprint' => $authority->planFingerprint()];
+                }
                 $holdService->assertMovable((int) $component->item_id, (int) $component->warehouse_id,
                     is_array($allowedHold) ? $allowedHold : null);
             }
