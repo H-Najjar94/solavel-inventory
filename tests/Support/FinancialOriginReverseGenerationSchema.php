@@ -9,7 +9,7 @@ return new class extends Migration {
         if (!Schema::connection('tenant')->hasTable('finance_document_reverse_generations')) {
             Schema::connection('tenant')->create('finance_document_reverse_generations', function (Blueprint $table) {
                 $table->id(); $table->unsignedBigInteger('organization_id'); $table->uuid('operation_uuid');
-                $table->unsignedInteger('generation'); $table->uuid('reversal_operation_uuid')->unique();
+                $table->unsignedInteger('generation'); $table->uuid('reversal_operation_uuid')->unique('fin_origin_reverse_uuid_unique');
                 $table->uuid('request_uuid'); $table->char('source_revision', 64);
                 $table->unsignedBigInteger('source_journal_id'); $table->unsignedBigInteger('original_match_journal_id');
                 $table->unsignedBigInteger('actor_id'); $table->unsignedBigInteger('central_actor_id');
