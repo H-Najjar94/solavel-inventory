@@ -166,13 +166,14 @@ final class OriginRequestService
             ->where('request_uuid',$request->request_uuid)->where('source_document_type',$request->source_document_type)
             ->where('source_document_id',$request->source_document_id)->where('source_journal_id',$request->source_journal_id)
             ->where('status','completed')->orderByDesc('id')->limit(25)->get();
+        $shipment=$request->side==='sales';$column=$shipment?'shipment_id':'goods_receipt_id';
+        $class=$shipment?\App\Models\Tenant\Shipment::class:\App\Models\Tenant\GoodsReceipt::class;
+        $ids=$commands->pluck($column)->filter()->unique()->all();if(!$ids)return [];
+        $native=$class::query()->where('organization_id',$request->organization_id)->whereIn('id',$ids)
+            ->when($allowed!==null,fn($query)=>$query->whereIn('warehouse_id',$allowed))->whereIn('status',['posted','reversed'])->get()->keyBy('id');
         $documents=[];
         foreach($commands as$command){
-            $shipment=$request->side==='sales';$id=$shipment?$command->shipment_id:$command->goods_receipt_id;if(!$id)continue;
-            $class=$shipment?\App\Models\Tenant\Shipment::class:\App\Models\Tenant\GoodsReceipt::class;
-            $document=$class::query()->where('organization_id',$request->organization_id)->whereKey($id)
-                ->when($allowed!==null,fn($query)=>$query->whereIn('warehouse_id',$allowed))->first();
-            if(!$document || !in_array($document->status,['posted','reversed'],true))continue;
+            $document=$native->get($command->{$column});if(!$document)continue;
             $documents[]=['type'=>$shipment?'shipment':'goods_receipt','id'=>(int)$document->id,
                 'number'=>$shipment?$document->shipment_number:$document->grn_number,'status'=>$document->status,
                 'warehouse_id'=>(int)$document->warehouse_id,'operation_uuid'=>$command->operation_uuid];
