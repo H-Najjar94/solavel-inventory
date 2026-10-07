@@ -295,6 +295,41 @@ class SolaBooksOutboxDeliveryService
         return $data;
     }
 
+    /** Closed landed-cost proof; economics are read independently from the immutable Finance operation. */
+    public function authorizeLandedCost(array $facts, string $operation, int $capturedActor): array
+    {
+        abort_unless($capturedActor > 0 && in_array($operation, ['prepare', 'apply', 'reverse', 'release', 'status'], true), 403);
+        $facts = validator($facts, ['operation_uuid' => 'required|uuid', 'landed_cost_id' => 'required|integer|min:1',
+            'source_bill_id' => 'required|integer|min:1', 'bill_journal_id' => 'required|integer|min:1',
+            'direction' => 'sometimes|in:forward,reverse', 'plan_fingerprint' => 'nullable|string|size:64'])->validate();
+        $mapping = app(ReceivingRequestService::class)->mapping();
+        $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
+        $key = 'purchasing:landed-cost-authorize:'.Str::uuid();
+        $payload = ['source_app' => 'solastock', 'schema_version' => 'purchasing.landed_cost.v1', 'contract_version' => SolaStockJournalContract::VERSION,
+            'event_type' => 'purchasing.landed_cost.authorize', 'event_uuid' => (string) Str::uuid(), 'external_source_key' => $key,
+            'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id,
+            'identity' => ['central_client_id' => $mapping->central_client_id, 'central_organization_id' => $mapping->central_organization_id,
+                'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id,
+                'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid],
+            'actor_id' => $capturedActor, 'operation_uuid' => $facts['operation_uuid'], 'operation' => $operation,
+            'direction' => $facts['direction'] ?? 'forward', 'plan_fingerprint' => $facts['plan_fingerprint'] ?? null];
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/landed-costs/authorize', $this->journalEndpoint());
+        if (! $endpoint || $endpoint === $this->journalEndpoint()) throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        $event = new IntegrationOutboxEvent(['organization_id' => $mapping->solastock_organization_id, 'idempotency_key' => $key, 'event_uuid' => $payload['event_uuid']]);
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+        abort_unless($response->successful(), in_array($response->status(), [403,404], true) ? 403 : (in_array($response->status(), [409,422], true) ? $response->status() : 503), __('inventory.purchasing.authority_unavailable'));
+        $data = (array) $response->json('data');
+        abort_unless(($data['allowed'] ?? false) === true && ($data['operation'] ?? null) === $operation
+            && ($data['direction'] ?? null) === $payload['direction'] && (int) ($data['actor_id'] ?? 0) === $capturedActor
+            && ($data['operation_uuid'] ?? null) === $facts['operation_uuid'] && (int) ($data['landed_cost_id'] ?? 0) === (int) $facts['landed_cost_id']
+            && (int) ($data['source_bill_id'] ?? 0) === (int) $facts['source_bill_id'] && (int) ($data['bill_journal_id'] ?? 0) === (int) $facts['bill_journal_id']
+            && (int) ($data['finance_organization_id'] ?? 0) === (int) $mapping->finance_organization_id
+            && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id
+            && ($data['organization_mapping_uuid'] ?? null) === $mapping->mapping_uuid, 403);
+        return $data;
+    }
+
     public function authorizePurchaseSettlement(array $facts, string $operation): array
     {
         $mapping = app(ReceivingRequestService::class)->mapping();
