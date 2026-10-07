@@ -131,6 +131,7 @@ class InventoryReversalService
     public function reverseSalesReturn(SalesReturn $return, string $reason): InventoryReversal
     {
         return DB::connection($this->connection())->transaction(function () use ($return, $reason) {
+            app(\App\Services\Sales\SalesReturnFinancialReversalGuard::class)->lockAndAssert($return);
             $return = SalesReturn::query()->with('lines')->lockForUpdate()->findOrFail($return->id);
             if ($return->reversal_id) {
                 return InventoryReversal::query()->findOrFail($return->reversal_id);
