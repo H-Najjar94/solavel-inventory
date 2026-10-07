@@ -99,18 +99,18 @@ final class FinancialOriginSettlementAdmissionTest extends TestCase
     }
     public function test_actual_signed_service_admission_reaches_native_factory_and_rejects_foreign_identity_and_scope():void
     {
-        $body=$this->admissionFixture();$ledgers=StockLedger::count();$quantity=\App\Models\Tenant\StockBalance::sole()->on_hand_qty;
+        $body=$this->admissionFixture();$ledgers=DB::connection('tenant')->table('stock_ledger')->where('organization_id',$body['organization_id'])->count();$quantity=DB::connection('tenant')->table('stock_balances')->where('organization_id',$body['organization_id'])->sole()->on_hand_qty;
         $response=$this->signed($body);$response->assertOk()->assertJsonPath('data.state','prepared');
-        $this->assertSame(1,\App\Models\Tenant\PurchaseValuationHold::count());$this->assertSame($ledgers,StockLedger::count());$this->assertSame($quantity,\App\Models\Tenant\StockBalance::sole()->on_hand_qty);
+        $this->assertSame(1,\App\Models\Tenant\PurchaseValuationHold::count());$this->assertSame($ledgers,DB::connection('tenant')->table('stock_ledger')->where('organization_id',$body['organization_id'])->count());$this->assertSame($quantity,DB::connection('tenant')->table('stock_balances')->where('organization_id',$body['organization_id'])->sole()->on_hand_qty);
         $this->assertFalse(request()->attributes->has('tenant_state'));
         $foreign=$body;$foreign['data']['source_document_id']=851;$this->signed($foreign)->assertStatus(403);
         $wrong=$body;$wrong['client_id']=8;$this->signed($wrong)->assertStatus(403);
         $wrong=$body;$wrong['organization_id']++;$this->signed($wrong)->assertStatus(403);
-        $this->assertSame(1,\App\Models\Tenant\PurchaseValuationHold::count());$this->assertSame($ledgers,StockLedger::count());
+        $this->assertSame(1,\App\Models\Tenant\PurchaseValuationHold::count());$this->assertSame($ledgers,DB::connection('tenant')->table('stock_ledger')->where('organization_id',$body['organization_id'])->count());
     }
     public function test_signed_value_scope_never_grants_actor_zero_reverse_or_finance_only_physical_access():void
     {
-        $body=$this->admissionFixture();$ledgers=StockLedger::count();
+        $body=$this->admissionFixture();$ledgers=DB::connection('tenant')->table('stock_ledger')->where('organization_id',$body['organization_id'])->count();
         $this->postJson(\App\Services\InventoryWorkspace\WorkspaceSignature::PATH,$body)->assertStatus(403);
         $bad=$body;$bad['authority_kind']='posted_purchase_settlement';$this->signed($bad)->assertStatus(403);
         $bad=$body;$bad['action']='financial-origin.settlement.reverse';$bad['data']['direction']='reverse';$this->signed($bad)->assertStatus(403);
@@ -118,6 +118,6 @@ final class FinancialOriginSettlementAdmissionTest extends TestCase
         $bad=$body;$bad['actor_id']=335;$bad['action']='warehouses.store';$this->signed($bad)->assertStatus(403);
         $this->assertFalse(\App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::covers('warehouses.store'));
         $this->assertFalse(\App\Services\InventoryWorkspace\FinanceDocumentLifecycleAuthority::covers('sales.fulfillment.execute'));
-        $this->assertSame(0,\App\Models\Tenant\PurchaseValuationHold::count());$this->assertSame($ledgers,StockLedger::count());
+        $this->assertSame(0,\App\Models\Tenant\PurchaseValuationHold::count());$this->assertSame($ledgers,DB::connection('tenant')->table('stock_ledger')->where('organization_id',$body['organization_id'])->count());
     }
 }
