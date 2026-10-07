@@ -9,7 +9,7 @@ import {EmptyState, Skeleton} from '../components/ui';
 
 export default function SupplierReturnRequestsPage() {
  const tenant=useTenant(), {locale}=useI18n(), ar=locale==='ar';
- const mayPost=useCan('inventory.manage_purchase_returns');
+ const can=useCan(), mayPost=can('inventory.manage_purchase_returns');
  const query=useApiQuery(['supplier-return-requests',tenant.organization_id],()=>api.supplierReturnRequests(),{fallback:[]});
  const [confirmed,setConfirmed]=useState({}),[busy,setBusy]=useState(null),[error,setError]=useState(''),lock=useRef(false);
  const rows=Array.isArray(query.data)?query.data:[];
