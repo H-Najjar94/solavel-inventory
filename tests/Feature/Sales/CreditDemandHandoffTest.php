@@ -1,0 +1,40 @@
+<?php
+namespace Tests\Feature\Sales;
+use App\Models\Tenant\{FulfillmentDemandCommand,FulfillmentRequest,Reservation,SalesOrder,StockLedger};
+use App\Models\User;
+use App\Services\Documents\SalesOrderService;
+use App\Services\Integration\SolaBooksOutboxDeliveryService;
+use App\Services\Sales\{CreditDemandService,FulfillmentRequestService};
+use Illuminate\Support\Facades\{Auth,DB};
+use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\Support\SalesHandoffFixture;
+use Tests\TestCase;
+use Tests\Traits\TenantAware;
+final class CreditDemandHandoffTest extends TestCase {
+ use TenantAware,SalesHandoffFixture;
+ private function setupDemand():array {
+  $this->useTenantA();$schema=DB::connection('tenant')->getSchemaBuilder();
+  if(!$schema->hasTable('credit_notes'))$schema->create('credit_notes',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('invoice_id')->nullable();});
+  if(!$schema->hasTable('finance_sales_credit_demands'))$schema->create('finance_sales_credit_demands',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('invoice_id');$t->unsignedBigInteger('invoice_journal_id');$t->unsignedBigInteger('credit_note_id');$t->uuid('operation_uuid');$t->uuid('request_uuid');$t->char('request_revision',64);$t->char('credit_revision',64);$t->string('state');$t->unsignedBigInteger('credit_journal_id')->nullable();$t->json('payload');});
+  if(!$schema->hasColumn('journal_entries','source'))$schema->table('journal_entries',fn($t)=>$t->string('source')->nullable());
+  $this->initializeSalesFixture(true);$data=$this->data();$data['source_status']='posted';$data['posted_invoice_journal_id']=70;
+  DB::connection('tenant')->table('journal_entries')->insert(['id'=>70,'organization_id'=>14,'source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted']);$this->authority($data);
+  $actor=new User;$actor->id=323;Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);$r=app(FulfillmentRequestService::class)->upsert($data,323);app(FulfillmentRequestService::class)->approve(FulfillmentRequest::sole(),$this->warehouse->id);
+  $order=SalesOrder::sole();app(SalesOrderService::class)->reserve($order);
+  DB::connection('tenant')->table('credit_notes')->insert(['id'=>90,'organization_id'=>14,'invoice_id'=>800]);
+  $command=['source_invoice_id'=>800,'request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'credit_note_id'=>90,'operation_uuid'=>(string)Str::uuid(),'credit_revision'=>str_repeat('c',64),'purpose'=>'prepare','lines'=>[['source_invoice_line_id'=>'801','credit_note_line_id'=>91,'unfulfilled_quantity'=>'1']]];
+  DB::connection('tenant')->table('finance_sales_credit_demands')->insert(['organization_id'=>14,'invoice_id'=>800,'invoice_journal_id'=>70,'credit_note_id'=>90,'operation_uuid'=>$command['operation_uuid'],'request_uuid'=>$command['request_uuid'],'request_revision'=>$command['source_revision'],'credit_revision'=>$command['credit_revision'],'state'=>'preparing','payload'=>json_encode(['lines'=>$command['lines']])]);return$command;
+ }
+ private function proof(array$c,array$extra=[]):void {$response=['command'=>'reduce-demand','purpose'=>$c['purpose'],'request_uuid'=>$c['request_uuid'],'request_revision'=>$c['source_revision'],'operation_uuid'=>$c['operation_uuid'],'credit_note_id'=>90,'credit_revision'=>$c['credit_revision'],'invoice_journal_id'=>70,'lines'=>$c['lines']]+$extra;$this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->andReturn($response);}
+ public function test_prepared_credit_fences_dispatch_and_exact_posted_credit_commits_once_without_physical_movement():void {
+  $c=$this->setupDemand();$this->proof($c);$service=app(CreditDemandService::class);$before=StockLedger::count();$prepared=$service->dispatch($c,323);$this->assertSame('prepared',$prepared['state']);$this->assertSame($prepared,$service->dispatch($c,323));
+  try{app(FulfillmentRequestService::class)->guardOrderDemand(SalesOrder::sole()->id);$this->fail('Prepared credit allowed dispatch');}catch(HttpException$e){$this->assertSame(409,$e->getStatusCode());}
+  DB::connection('tenant')->table('journal_entries')->insert(['id'=>80,'organization_id'=>14,'source'=>'NOTE','source_type'=>'App\\Models\\CreditNote','source_id'=>90,'status'=>'posted']);DB::connection('tenant')->table('finance_sales_credit_demands')->update(['state'=>'commit_pending','credit_journal_id'=>80]);
+  $c['purpose']='commit';$c['hold_fingerprint']=$prepared['hold_fingerprint'];$this->proof($c,['credit_journal_id'=>80,'hold_fingerprint'=>$prepared['hold_fingerprint']]);$committed=$service->dispatch($c,323);$this->assertSame('committed',$committed['state']);$this->assertSame($committed,$service->dispatch($c,323));$this->assertSame('1.0000',FulfillmentRequest::sole()->lines->sole()->cancelled_qty);$this->assertSame('4.0000',FulfillmentRequest::sole()->lines->sole()->requested_qty);$this->assertSame('3.0000',(string)Reservation::where('status','active')->sum('qty'));$this->assertSame($before,StockLedger::count());$this->assertSame(1,FulfillmentDemandCommand::count());
+ }
+ public function test_abandoned_no_journal_credit_releases_only_the_hold_and_cannot_later_commit():void {
+  $c=$this->setupDemand();$this->proof($c);$service=app(CreditDemandService::class);$prepared=$service->dispatch($c,323);DB::connection('tenant')->table('finance_sales_credit_demands')->update(['state'=>'abandoned']);$c['purpose']='abandon';$c['hold_fingerprint']=$prepared['hold_fingerprint'];$this->proof($c,['hold_fingerprint'=>$prepared['hold_fingerprint']]);$this->assertSame('abandoned',$service->dispatch($c,323)['state']);$this->assertSame('0.0000',FulfillmentRequest::sole()->lines->sole()->cancelled_qty);$this->assertSame('4.0000',(string)Reservation::where('status','active')->sum('qty'));
+  $c['purpose']='commit';$this->proof($c,['hold_fingerprint'=>$prepared['hold_fingerprint']]);try{$service->dispatch($c,323);$this->fail('Abandoned credit committed');}catch(HttpException$e){$this->assertSame(409,$e->getStatusCode());}
+ }
+}

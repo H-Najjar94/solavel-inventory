@@ -23,6 +23,7 @@ class SalesOrderLine extends Model
         'picked_qty' => 'decimal:4',
         'packed_qty' => 'decimal:4',
         'shipped_qty' => 'decimal:4',
+        'cancelled_qty' => 'decimal:4',
         'unit_price' => 'decimal:4',
         'discount_rate' => 'decimal:4',
         'discount_amount' => 'decimal:2',

@@ -83,6 +83,7 @@ class StockReservationService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $serialId, $sourceType, $sourceId, $expiresAt, $priority) {
+            if ($sourceType === 'sales_order') app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand($sourceId);
             $serial = SerialNumber::query()->where('organization_id', $orgId)->lockForUpdate()->find($serialId);
             if (! $serial || (int) $serial->item_id !== $itemId || (int) $serial->warehouse_id !== $warehouseId) {
                 throw new RuntimeException(__('inventory.stock.serial_unavailable'));
@@ -259,6 +260,7 @@ class StockReservationService
         $this->expireOverdue(null, null, $itemId, $warehouseId);
 
         return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $warehouseId, $qty, $sourceType, $sourceId, $binId, $lotId, $expiresAt, $priority, $partial, $serialId) {
+            if ($sourceType === 'sales_order') app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand($sourceId);
             $balance = $this->lockBalance($orgId, $itemId, $warehouseId, $binId, $lotId);
 
             // Idempotent active reservation per source+coordinate.
@@ -324,6 +326,7 @@ class StockReservationService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($orgId, $sourceType, $sourceId, $reservationId) {
+            if ($sourceType === 'sales_order') app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand($sourceId);
             $query = Reservation::query()->where('organization_id', $orgId)
                 ->where('source_type', $sourceType)->where('source_id', $sourceId)
                 ->where('status', 'active')
@@ -417,6 +420,61 @@ class StockReservationService
                 }
             }
             $this->syncSourceProjection('sales_order', (int) $shipment->sales_order_id);
+            return $count;
+        });
+    }
+
+    /** Release only aggregate surplus after an independently committed credit demand reduction. */
+    public function releaseExcessForSalesOrder(SalesOrder $order): int
+    {
+        return $this->transitionExcessForSalesOrder($order, [], true);
+    }
+
+    public function validateExcessReleaseForSalesOrder(SalesOrder $order, array $baseReductions): int
+    {
+        return $this->transitionExcessForSalesOrder($order, $baseReductions, false);
+    }
+
+    private function transitionExcessForSalesOrder(SalesOrder $order, array $baseReductions, bool $apply): int
+    {
+        $orgId = $this->context->idOrFail();
+        return DB::connection($this->conn())->transaction(function () use ($order, $orgId, $baseReductions, $apply) {
+            $order = SalesOrder::query()->where('organization_id', $orgId)->whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $lines = $order->lines()->orderBy('id')->lockForUpdate()->get();
+            $remaining = [];
+            foreach ($lines as $line) {
+                $key = (int) $line->item_id;
+                $qty = Decimal::sub(Decimal::sub((string) $line->ordered_qty, (string) $line->shipped_qty), Decimal::add((string) ($line->cancelled_qty ?? '0'), (string) ($baseReductions[$line->id] ?? '0')));
+                if (Decimal::lt($qty, '0')) throw new RuntimeException('Credited demand exceeds the original order quantity.');
+                $remaining[$key] = Decimal::add($remaining[$key] ?? '0', $qty);
+            }
+            Item::query()->where('organization_id', $orgId)->whereIn('id', array_keys($remaining))->orderBy('id')->lockForUpdate()->get();
+            $reservations = Reservation::query()->where('organization_id', $orgId)->where('source_type', 'sales_order')->where('source_id', $order->id)->where('status', 'active')->orderBy('item_id')->orderBy('id')->lockForUpdate()->get();
+            $count = 0;
+            foreach ($reservations->groupBy('item_id') as $itemId => $held) {
+                $total = $held->reduce(fn ($sum, $r) => Decimal::add($sum, (string) $r->qty), '0');
+                $excess = Decimal::sub($total, $remaining[$itemId] ?? '0');
+                foreach ($held->reverse() as $reservation) {
+                    if (!Decimal::gt($excess, '0')) break;
+                    if ((int) $reservation->warehouse_id !== (int) $order->warehouse_id) throw new RuntimeException('Review reservations assigned to another warehouse before crediting demand.');
+                    $released = Decimal::lt($excess, (string) $reservation->qty) ? $excess : (string) $reservation->qty;
+                    if ($reservation->serial_id) {
+                        $serial = SerialNumber::query()->where('organization_id', $orgId)->where('item_id', $itemId)->where('warehouse_id', $order->warehouse_id)->whereKey($reservation->serial_id)->lockForUpdate()->first();
+                        if (!$serial || Decimal::cmp($released, '1') !== 0 || Decimal::cmp((string) $reservation->qty, '1') !== 0) throw new RuntimeException('Serialized reservations require an exact whole-unit demand reduction.');
+                    }
+                    $balances = StockBalance::query()->where('organization_id', $orgId)->where('item_id', $itemId)->where('warehouse_id', $reservation->warehouse_id)
+                        ->when($reservation->bin_id, fn($q)=>$q->where('bin_id',$reservation->bin_id), fn($q)=>$q->whereNull('bin_id'))
+                        ->when($reservation->lot_id, fn($q)=>$q->where('lot_id',$reservation->lot_id), fn($q)=>$q->whereNull('lot_id'))->orderBy('id')->lockForUpdate()->get();
+                    if ($balances->count() !== 1 || $balances->first()->variant_id) throw new RuntimeException('Review variant-specific reservations before crediting demand.');
+                    $balance = $balances->first();
+                    if (Decimal::lt((string) $balance->reserved_qty, $released)) throw new RuntimeException('Reservation balance must be reviewed before crediting demand.');
+                    if ($apply) { $balance->reserved_qty = Decimal::qty(Decimal::sub((string) $balance->reserved_qty, $released)); $balance->save();
+                    $reservation->qty = Decimal::qty(Decimal::sub((string) $reservation->qty, $released));
+                    if (!Decimal::gt((string) $reservation->qty, '0')) { $reservation->status = 'released'; $reservation->released_at = now(); }
+                    $reservation->save(); } $excess = Decimal::sub($excess, $released); $count++;
+                }
+            }
+            if ($apply) $this->syncSourceProjection('sales_order', (int) $order->id);
             return $count;
         });
     }

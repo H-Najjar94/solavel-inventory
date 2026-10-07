@@ -106,7 +106,7 @@ final class FinanceDispatchService
             $source = $r->lines->first(fn ($l)=>(int) $l->id === (int) $line['request_line_id'] && (string) $l->source_line_id === (string) $line['source_invoice_line_id']);
             if (!$source || (int) $source->entered_unit_id !== (int) $line['unit_id'] || isset($used[$source->id])) $this->invalid("lines.$i.request_line_id");
             $used[$source->id]=true;
-            if (Decimal::gt((string) $line['quantity'], Decimal::sub($source->requested_qty,$source->fulfilled_qty))) throw ValidationException::withMessages(["lines.$i.quantity"=>__('inventory.sales_handoff.exceeds_remaining')]);
+            if (Decimal::gt((string) $line['quantity'], Decimal::sub(Decimal::sub($source->requested_qty,$source->fulfilled_qty),(string)($source->cancelled_qty??'0')))) throw ValidationException::withMessages(["lines.$i.quantity"=>__('inventory.sales_handoff.exceeds_remaining')]);
             $item=Item::query()->where('is_active',true)->findOrFail($source->item_id);
             $nativeSource=SalesOrderLine::query()->where('sales_order_id',$r->sales_order_id)->whereKey($source->sales_order_line_id)->firstOrFail();
             $factor=(string) ($nativeSource->unit_conversion_factor ?: '1');

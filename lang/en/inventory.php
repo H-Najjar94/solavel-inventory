@@ -2,6 +2,7 @@
 
 return [
     'sales_handoff' => [
+        'credit_demand_pending' => 'A credit is updating undelivered demand. Retry dispatch after the credit finishes, or ask the accountant to resume it.',
         'tracking_required' => 'Choose the required lot, serial number, or variant for this product before dispatching.',
         'order_not_dispatchable' => 'Confirm the sales order before dispatching its remaining quantities.',
         'source_line_invalid' => 'A shipment line does not belong to this sales order and product. Reopen the shipment from its sales order.',

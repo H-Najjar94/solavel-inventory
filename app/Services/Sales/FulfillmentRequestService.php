@@ -75,7 +75,16 @@ final class FulfillmentRequestService
   $this->lockFinanceCommand($mapping,$known->source_payload,'upsert');
   $request=FulfillmentRequest::query()->whereKey($known->id)->lockForUpdate()->firstOrFail();
   abort_unless($request->source_revision===$known->source_revision,409,__('inventory.purchasing.source_changed'));
+  if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->where('state','prepared')->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
   return$request;
+ }
+ public function guardOrderDemand(int $orderId):void {
+  if(!$orderId)return;
+  $known=FulfillmentRequest::query()->where('sales_order_id',$orderId)->first();if(!$known)return;
+  $mapping=\App\Models\Tenant\IntegrationOrganizationMapping::query()->where('solastock_organization_id',$known->organization_id)->where('mapping_uuid',$known->organization_mapping_uuid)->firstOrFail();
+  DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$known->source_invoice_id)->lockForUpdate()->firstOrFail();
+  $request=FulfillmentRequest::query()->whereKey($known->id)->lockForUpdate()->firstOrFail();
+  if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->where('state','prepared')->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
  }
  public function validateShipment(Shipment $shipment):void {
   $request=$this->lockShipmentSource($shipment);if(!$request)return;
@@ -83,7 +92,7 @@ final class FulfillmentRequestService
  }
  public function status(FulfillmentRequest $request):array {
   $request->loadMissing('lines');$shipments=$request->sales_order_id?Shipment::query()->where('sales_order_id',$request->sales_order_id)->where('status','posted')->whereNull('reversal_sales_return_id')->get(['id','shipment_number','ship_date']):collect();
-  return['id'=>$request->id,'request_uuid'=>$request->request_uuid,'number'=>'FR-'.$request->id,'source_invoice_id'=>$request->source_invoice_id,'source_invoice_number'=>$request->source_invoice_number,'source_revision'=>$request->source_revision,'status'=>$request->status,'warehouse_id'=>$request->warehouse_id,'sales_order_id'=>$request->sales_order_id,'approved_at'=>$request->approved_at?->toIso8601String(),'approved_revision'=>$request->approved_revision,'fulfilled_quantity'=>$request->lines->reduce(fn($sum,$line)=>Decimal::add($sum,(string)$line->fulfilled_qty),'0.0000'),'shipment_ids'=>$shipments->pluck('id')->all(),'lines'=>$request->lines->map(fn($l)=>['id'=>$l->id,'source_line_id'=>$l->source_line_id,'item_id'=>$l->item_id,'item_name'=>Item::query()->find($l->item_id)?->name,'entered_unit_id'=>$l->entered_unit_id,'remaining_qty'=>Decimal::sub((string)$l->requested_qty,(string)$l->fulfilled_qty),'requested_quantity'=>(string)$l->requested_qty,'fulfilled_quantity'=>(string)$l->fulfilled_qty,'requested_qty'=>(string)$l->requested_qty,'fulfilled_qty'=>(string)$l->fulfilled_qty])->all(),'shipments'=>$shipments->toArray()];
+  return['id'=>$request->id,'request_uuid'=>$request->request_uuid,'number'=>'FR-'.$request->id,'source_invoice_id'=>$request->source_invoice_id,'source_invoice_number'=>$request->source_invoice_number,'source_revision'=>$request->source_revision,'status'=>$request->status,'warehouse_id'=>$request->warehouse_id,'sales_order_id'=>$request->sales_order_id,'approved_at'=>$request->approved_at?->toIso8601String(),'approved_revision'=>$request->approved_revision,'fulfilled_quantity'=>$request->lines->reduce(fn($sum,$line)=>Decimal::add($sum,(string)$line->fulfilled_qty),'0.0000'),'shipment_ids'=>$shipments->pluck('id')->all(),'lines'=>$request->lines->map(fn($l)=>['id'=>$l->id,'source_line_id'=>$l->source_line_id,'item_id'=>$l->item_id,'item_name'=>Item::query()->find($l->item_id)?->name,'entered_unit_id'=>$l->entered_unit_id,'remaining_qty'=>Decimal::sub(Decimal::sub((string)$l->requested_qty,(string)$l->fulfilled_qty),(string)($l->cancelled_qty??'0')),'requested_quantity'=>(string)$l->requested_qty,'fulfilled_quantity'=>(string)$l->fulfilled_qty,'cancelled_quantity'=>(string)($l->cancelled_qty??'0.0000'),'requested_qty'=>(string)$l->requested_qty,'fulfilled_qty'=>(string)$l->fulfilled_qty])->all(),'shipments'=>$shipments->toArray()];
  }
  public function approve(FulfillmentRequest $request,int $warehouse):array {
   abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can(request()->user(),'inventory.manage_sales_orders'),403);
@@ -91,7 +100,7 @@ final class FulfillmentRequestService
   return DB::connection('tenant')->transaction(function()use($request,$warehouse){$this->lockFinanceCommand(app(ReceivingRequestService::class)->mapping(),$request->source_payload,'upsert');$r=FulfillmentRequest::query()->with('lines')->whereKey($request->id)->lockForUpdate()->firstOrFail();abort_unless($r->status==='pending',409);
    if($r->sales_order_id)return$this->status($r);
    $native=app(SalesOrderService::class);$order=$native->createDraft(['warehouse_id'=>$warehouse,'customer_id'=>$r->customer_id,'source_app'=>'solabooks','source_document_id'=>(string)$r->source_invoice_id,'source_document_number'=>$r->source_invoice_number,'order_date'=>$r->invoice_date?->format('Y-m-d'),'requested_ship_date'=>$r->requested_ship_date?->format('Y-m-d'),'currency_code'=>$r->currency_code],$r->lines->map(fn($l)=>['item_id'=>$l->item_id,'entered_unit_id'=>$l->entered_unit_id,'ordered_qty'=>$l->requested_qty,'unit_price'=>$l->unit_price,'discount_rate'=>$l->discount_rate,'tax_rate'=>'0'])->all());
-   $order=$native->confirm($order);foreach($r->lines as$i=>$line)$line->update(['sales_order_line_id'=>$order->lines[$i]->id]);
+   $order=$native->confirm($order);foreach($r->lines as$i=>$line){$source=$order->lines[$i];if(Decimal::gt((string)($line->cancelled_qty??'0'),'0'))$source->update(['cancelled_qty'=>Decimal::qty(Decimal::mul((string)$line->cancelled_qty,(string)($source->unit_conversion_factor?:'1')))]);$line->update(['sales_order_line_id'=>$source->id]);}
    $r->update(['sales_order_id'=>$order->id,'warehouse_id'=>$warehouse,'approved_at'=>now(),'approved_by'=>auth()->id(),'approved_revision'=>$r->source_revision]);return$this->changed($r->fresh('lines'));
   },3);
  }
@@ -133,6 +142,7 @@ final class FulfillmentRequestService
    }
    abort_unless(($data['expected_revision']??$data['source_revision'])===$r->source_revision,409);
    if($r->status==='cancelled')return $this->status($r);
+   if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))abort_if(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$r->organization_id)->where('fulfillment_request_id',$r->id)->where('state','prepared')->exists(),409,__('inventory.sales_handoff.credit_demand_pending'));
    if($r->sales_order_id){$order=SalesOrder::query()->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail();if($order->status!=='shipped'&&$order->status!=='cancelled')app(SalesOrderService::class)->cancel($order);}
    $r->update(['status'=>'cancelled']);return $this->changed($r);
   },3);
@@ -140,6 +150,6 @@ final class FulfillmentRequestService
  public function posted(Shipment $shipment):void {
   if(!$shipment->sales_order_id)return;$r=FulfillmentRequest::query()->where('sales_order_id',$shipment->sales_order_id)->lockForUpdate()->first();if(!$r)return;
   $r->loadMissing('lines');foreach($r->lines as$l){$source=\App\Models\Tenant\SalesOrderLine::query()->whereKey($l->sales_order_line_id)->firstOrFail();$factor=(string)($source->unit_conversion_factor?:'1');$l->update(['fulfilled_qty'=>Decimal::qty(Decimal::div((string)$source->shipped_qty,$factor))]);}
-  $r->status=$r->lines()->get()->every(fn($l)=>Decimal::gte((string)$l->fulfilled_qty,(string)$l->requested_qty))?'complete':'partial';$r->save();$this->changed($r);
+  $r->status=$r->lines()->get()->every(fn($l)=>Decimal::gte(Decimal::add((string)$l->fulfilled_qty,(string)($l->cancelled_qty??'0')),(string)$l->requested_qty))?'complete':'partial';$r->save();$this->changed($r);
  }
 }

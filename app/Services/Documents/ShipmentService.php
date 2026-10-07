@@ -285,7 +285,7 @@ class ShipmentService
         }
         foreach ($quantities as $id => $quantity) {
             $source = $sources->get($id);
-            if (Decimal::gt($quantity, Decimal::sub((string) $source->ordered_qty, (string) $source->shipped_qty))) {
+            if (Decimal::gt($quantity, Decimal::sub(Decimal::sub((string) $source->ordered_qty, (string) $source->shipped_qty), (string) ($source->cancelled_qty ?? '0')))) {
                 throw new RuntimeException(__('inventory.sales_handoff.exceeds_remaining'));
             }
         }

@@ -263,7 +263,7 @@ class SolaBooksOutboxDeliveryService
     /** Signed, invoice-specific Finance authority; never grants a Stock application permission. */
     public function authorizeSales(int $actorId, int $invoiceId, string $permission, array $reviewFacts = []): array
     {
-        abort_unless($actorId > 0 && $invoiceId > 0 && in_array($permission, ['view', 'edit_draft', 'post', 'unpost', 'void'], true), 403);
+        abort_unless($actorId > 0 && $invoiceId > 0 && in_array($permission, ['view', 'edit_draft', 'post', 'unpost', 'void', 'credit_notes.post'], true), 403);
         $mapping = app(ReceivingRequestService::class)->mapping();
         $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
         $key = 'sales:authorize:'.Str::uuid();
@@ -276,7 +276,7 @@ class SolaBooksOutboxDeliveryService
                 'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid],
             'actor_id' => $actorId, 'source_invoice_id' => $invoiceId, 'permission' => $permission,
         ];
-        $payload += array_intersect_key($reviewFacts, array_flip(['party_command', 'party_customer_id', 'request_uuid', 'source_revision', 'expected_revision', 'command', 'closing_invoice_journal_id']));
+        $payload += array_intersect_key($reviewFacts, array_flip(['party_command', 'party_customer_id', 'request_uuid', 'source_revision', 'expected_revision', 'command', 'closing_invoice_journal_id', 'purpose', 'credit_note_id', 'operation_uuid', 'credit_revision', 'hold_fingerprint']));
         $body = SolaStockJournalContract::canonicalJson($payload);
         $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/sales/authorize', $this->journalEndpoint());
         if (! $endpoint || $endpoint === $this->journalEndpoint()) {

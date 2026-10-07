@@ -110,6 +110,7 @@ class SalesOrderService
     public function reserve(SalesOrder $so, array $options = []): SalesOrder
     {
         return DB::connection($this->conn())->transaction(function () use ($so, $options) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->with('lines.item')->findOrFail($so->id);
             if (! in_array($so->status, ['confirmed', 'partially_reserved', 'reserved'], true)) {
                 throw new RuntimeException("Sales order must be confirmed before reserving (status '{$so->status}').");
