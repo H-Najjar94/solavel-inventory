@@ -39,7 +39,10 @@ final class SupplierReturnController extends ApiController
     $factor=(string)$line->unit_conversion_factor;abort_unless(is_numeric($factor)&&bccomp($factor,'0',8)>0,422);
     $lines[]=['goods_receipt_line_id'=>$line->id,'source_stock_ledger_id'=>$entry->id,'item_id'=>$line->item_id,'item_name'=>$line->item?->name,'item_sku'=>$line->item?->sku,
      'warehouse_id'=>$warehouse,'entered_unit_id'=>$line->entered_unit_id,'unit_label'=>DB::connection('tenant')->table('units')->where('organization_id',$goods_receipt->organization_id)->where('id',$line->entered_unit_id)->value('code'),
-     'remaining_entered_quantity'=>bcdiv($remaining,$factor,8),'base_quantity'=>$remaining,'lot_id'=>$entry->lot_id,'serial_id'=>$entry->serial_id,'bin_id'=>$entry->bin_id,'variant_id'=>$entry->variant_id];
+     'remaining_entered_quantity'=>bcdiv($remaining,$factor,8),'base_quantity'=>$remaining,'lot_id'=>$entry->lot_id,'serial_id'=>$entry->serial_id,'bin_id'=>$entry->bin_id,'variant_id'=>$entry->variant_id,
+     'lot_label'=>$entry->lot_id?DB::connection('tenant')->table('lots')->where('organization_id',$goods_receipt->organization_id)->where('id',$entry->lot_id)->value('lot_code'):null,
+     'serial_label'=>$entry->serial_id?DB::connection('tenant')->table('serial_numbers')->where('organization_id',$goods_receipt->organization_id)->where('id',$entry->serial_id)->value('serial'):null,
+     'bin_label'=>$entry->bin_id?DB::connection('tenant')->table('warehouse_bins')->where('organization_id',$goods_receipt->organization_id)->where('id',$entry->bin_id)->value('code'):null];
    }
   }
   return $this->success(['receipt_id'=>$goods_receipt->id,'receipt_number'=>$goods_receipt->grn_number,'warehouse_id'=>$goods_receipt->warehouse_id,'lines'=>$lines,
