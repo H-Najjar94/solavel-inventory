@@ -168,7 +168,7 @@ final class WorkflowDocumentMappingService
     {
         [$parentType, $parentId] = match ($type) {
             'goods_receipt' => ['purchase_order', $document->purchase_order_id ?? null],
-            'supplier_return' => ['goods_receipt', $document->source_id ?? null],
+            'supplier_return' => ['goods_receipt', $document->goods_receipt_id ?? $document->source_id ?? null],
             'reservation', 'pick_list', 'pack', 'shipment' => ['sales_order', $document->sales_order_id ?? null],
             'sales_return' => ['shipment', $document->shipment_id ?? $document->source_reversal_shipment_id ?? null],
             default => [null, null],
