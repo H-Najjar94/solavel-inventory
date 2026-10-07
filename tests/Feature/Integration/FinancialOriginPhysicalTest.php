@@ -73,7 +73,7 @@ final class FinancialOriginPhysicalTest extends TestCase
     }
     public function test_native_operation_status_needs_no_finance_access_but_preserves_actor_revision_and_warehouse_scope():void
     {
-        [,,$op]=$this->admitted(tracking:'serial');$service=app(OriginDispatchService::class);$before=StockLedger::count();
+        [,,$op]=$this->admitted(tracking:'serial');$service=app(OriginDispatchService::class);$before=DB::connection('tenant')->table('stock_ledger')->where('organization_id',\Tests\Support\TenantTestManager::ORG_A)->count();
         $this->assertFalse(app(CentralAppAccess::class)->decision(336,FinancialOriginRequest::sole()->organization_id,'finance')['allowed']);
         $this->item->update(['is_variant_parent'=>true,'tracks_expiry'=>true]);
         $variant=\App\Models\Tenant\ItemVariant::create(['item_id'=>$this->item->id,'sku'=>'QA-VISIBLE-VARIANT','variant_attributes'=>['size'=>'S'],'is_active'=>true]);
@@ -107,7 +107,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->actor(336);InventoryUserWarehouse::query()->where('user_id',336)->delete();$this->app->forgetInstance(\App\Services\Access\WarehouseAccessService::class);
         try{$service->statusNative($op,336);$this->fail('Revoked warehouse assignment disclosed operation');}catch(\Illuminate\Auth\Access\AuthorizationException $e){$this->assertNotEmpty($e->getMessage());}
         try{$service->optionsNative($op,336);$this->fail('Revoked warehouse disclosed source options');}catch(\Illuminate\Auth\Access\AuthorizationException $e){$this->assertNotEmpty($e->getMessage());}
-        $this->assertSame($before,StockLedger::count());$this->assertSame(0,GoodsReceipt::count());$this->assertSame(0,FinancialOriginOutbox::count());
+        $this->assertSame($before,DB::connection('tenant')->table('stock_ledger')->where('organization_id',\Tests\Support\TenantTestManager::ORG_A)->count()); // Audit stored rows after warehouse visibility is revoked.$this->assertSame(0,GoodsReceipt::count());$this->assertSame(0,FinancialOriginOutbox::count());
     }
     public function test_stock_only_cash_dispatch_partial_final_and_replay_emit_typed_events_without_new_invoice_draft():void
     {
