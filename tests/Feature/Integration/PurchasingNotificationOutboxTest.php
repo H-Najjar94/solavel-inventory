@@ -34,4 +34,11 @@ final class PurchasingNotificationOutboxTest extends TestCase {
   [, $rr]=$this->fixture();$rr->update(['approved_at'=>now(),'approved_revision'=>$rr->source_revision]);$method=new \ReflectionMethod(\App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class,'approved');$controller=app(\App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class);$this->assertTrue($method->invoke($controller,$rr->fresh()));$this->queue($rr);$rr->update(['source_revision'=>str_repeat('b',64)]);$this->assertFalse($method->invoke($controller,$rr->fresh()));$this->queue($rr);$this->assertSame(2,DB::connection('tenant')->table('purchasing_notification_outbox')->count());
  }
 
+ public function test_revoked_current_receiving_authority_never_fetches_stored_alert_bodies():void {
+  $this->fixture();$user=new \App\Models\User;$user->id=1007;$request=\Illuminate\Http\Request::create('/inventory/api/v1/purchasing/notifications');$request->setUserResolver(fn()=>$user);
+  // Explicit remote/canonical permission seam: current authority revoked.
+  $this->mock(\App\Services\Access\InventoryPermissionService::class,fn($mock)=>$mock->shouldReceive('can')->with($user,'inventory.receive_goods')->once()->andReturn(false));Http::fake();
+  try {app(\App\Http\Controllers\Api\V1\PurchasingNotificationController::class)->index($request,app(OrganizationContext::class));$this->fail('Revoked receiving permission accepted');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}Http::assertNothingSent();
+ }
+
 }
