@@ -40,6 +40,14 @@ final class FinancialOriginHoldMigrationTest extends TestCase
         $this->assertSame(27,(int)$legacy->source_bill_id);$this->assertNull($legacy->source_document_type);
         $this->assertNull($origin->source_bill_id);$this->assertSame('expense',$origin->source_document_type);
         $this->assertSame(837,(int)$origin->source_document_id);$this->assertSame(901,(int)$origin->source_journal_id);
+        foreach (['source_document_type'=>'sales_receipt','source_document_id'=>838,'source_journal_id'=>902] as $field=>$value) {
+            try {$origin->fresh()->update([$field=>$value]);$this->fail('Immutable typed source identity changed');}
+            catch (ValidationException $e) {$this->assertArrayHasKey('settlement_uuid',$e->errors());}
+        }
+        try {$legacy->fresh()->update(['source_bill_id'=>28]);$this->fail('Legacy source identity changed');}
+        catch (ValidationException $e) {$this->assertArrayHasKey('settlement_uuid',$e->errors());}
+        try {$origin->fresh()->update(['organization_id'=>999]);$this->fail('Typed source crossed organization');}
+        catch (ValidationException $e) {$this->assertArrayHasKey('settlement_uuid',$e->errors());}
         (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->down();
         $this->assertSame('expense',$origin->fresh()->source_document_type);$this->assertSame($before,StockLedger::count());
     }
