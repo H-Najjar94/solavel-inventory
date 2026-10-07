@@ -315,6 +315,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::post('/supplier-returns/{supplier_return}/post', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'post'])->middleware('perm:inventory.manage_purchase_returns')->name('api.v1.supplier-returns.post');
     Route::post('/supplier-returns/{supplier_return}/reverse', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'reverse'])->middleware('perm:inventory.manage_purchase_returns')->name('api.v1.supplier-returns.reverse');
 
+    Route::get('/supplier-return-requests', [\App\Http\Controllers\Api\V1\SupplierReturnRequestController::class, 'index'])->middleware('perm:inventory.view_stock')->name('api.v1.supplier-return-requests.index');
+    Route::post('/supplier-return-requests/{uuid}/post', [\App\Http\Controllers\Api\V1\SupplierReturnRequestController::class, 'post'])->whereUuid('uuid')->middleware('perm:inventory.manage_purchase_returns')->name('api.v1.supplier-return-requests.post');
     Route::get('/purchasing/requests', [ReceivingRequestController::class, 'index'])->middleware('perm:inventory.receive_goods')->name('api.v1.receiving-requests.index');
     Route::post('/purchasing/requests/{receiving_request}/approve', [ReceivingRequestController::class, 'approve'])->middleware('perm:inventory.approve_purchase_orders')->name('api.v1.receiving-requests.approve');
     Route::get('/purchasing/requests/{receiving_request}', [ReceivingRequestController::class, 'show'])->middleware('perm:inventory.receive_goods')->name('api.v1.receiving-requests.show');
