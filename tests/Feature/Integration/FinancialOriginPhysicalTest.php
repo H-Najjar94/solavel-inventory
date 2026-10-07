@@ -62,8 +62,11 @@ final class FinancialOriginPhysicalTest extends TestCase
         $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->meta=$meta;$setting->save();
         $result=$service->executeNative($context+['operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'physical_date'=>'2026-10-07','lines'=>[['request_line_id'=>$request['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]],336);
         $this->assertSame('partial',$result['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame(1,FinancialOriginOutbox::count());
+        // Render the native human GET outside the testing wrapper's transaction, as live HTTP does.
+        $db=DB::connection('tenant');while($db->transactionLevel()>0)$db->commit();
         $documents=app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents'];
         $this->assertSame(GoodsReceipt::sole()->grn_number,$documents[0]['number']);$this->assertSame('goods_receipt',$documents[0]['type']);
+        $this->assertSame([],DB::connection('tenant')->transaction(fn()=>app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents']));
         $this->actor(337);$this->assertSame([],app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents']);
     }
     public function test_native_operation_status_needs_no_finance_access_but_preserves_actor_revision_and_warehouse_scope():void
