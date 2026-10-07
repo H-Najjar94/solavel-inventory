@@ -17,8 +17,11 @@ final class PurchasingNotificationContextController
     {
         $data=$request->validate(['client_id'=>'required|integer|min:1','organization_id'=>'required|integer|min:1','request_id'=>'required|integer|min:1','nonce'=>'required|uuid']);
         $org=Organization::whereKey($data['organization_id'])->where('client_id',$data['client_id'])->where('is_active',true)->firstOrFail();
+        $hadTenantState=$request->attributes->has('tenant_state');$oldTenantState=$request->attributes->get('tenant_state');
         $oldConnection=config('database.connections.tenant');$oldDefault=config('database.default');$oldOrg=$context->has()?$context->id():null;
         try {
+            // Identity comes from the signed payload and the verified active Central organization.
+            $request->attributes->set('tenant_state',['client_id'=>(int)$org->client_id,'organization_id'=>(int)$org->id]);
             $tenants->switchToDatabase($tenants->resolveDatabaseName($data['client_id']));$context->set((int)$org->id);
             $mapping=IntegrationOrganizationMapping::query()->where('central_client_id',$data['client_id'])->where('central_organization_id',$org->id)->where('solastock_organization_id',$org->id)->where('tenant_database_identity',DB::connection('tenant')->getDatabaseName())->where('integration','solabooks')->where('status','verified')->where('activation_state','active')->firstOrFail();
             if (config('inventory_entitlements.feature_enforcement',false)) abort_unless(app(\App\Services\Entitlements\InventoryCommercialEntitlementService::class)->checkPermission('inventory.receive_goods')['allowed']??false,403);
@@ -41,6 +44,7 @@ final class PurchasingNotificationContextController
             $facts=['request_uuid'=>(string)$rr->request_uuid,'source_revision'=>(string)$rr->source_revision,'status'=>(string)$rr->status,'source_bill_id'=>(int)$rr->source_bill_id,'source_bill_number'=>(string)$rr->source_bill_number,'warehouse_id'=>$warehouse,'approved'=>$this->approved($rr),'warehouse_setup_required'=>!$activeWarehouseExists,'lines'=>$lines];
             return response()->json(['client_id'=>(int)$data['client_id'],'organization_id'=>(int)$org->id,'request_id'=>(int)$rr->id,'app_key'=>'inventory','facts'=>$facts,'fingerprint'=>hash('sha256',json_encode($facts,JSON_THROW_ON_ERROR)),'eligible_user_ids'=>$recipients])->header('Cache-Control','no-store');
         } finally {
+            if($hadTenantState)$request->attributes->set('tenant_state',$oldTenantState);else $request->attributes->remove('tenant_state');
             $context->forget();if($oldOrg!==null)$context->set((int)$oldOrg);DB::purge('tenant');config(['database.connections.tenant'=>$oldConnection,'database.default'=>$oldDefault]);
             app()->forgetInstance(InventoryPermissionService::class);
         }
