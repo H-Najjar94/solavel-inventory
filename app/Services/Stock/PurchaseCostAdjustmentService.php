@@ -153,7 +153,7 @@ final class PurchaseCostAdjustmentService
             $holdService->lockItems($components->pluck('item_id')->all());
             $allowedHold = request()->attributes->get('validated_settlement_hold');
             if ($authority) {
-                abort_unless(hash_equals((string) data_get($row->safe_metadata, 'landed_cost.operation_uuid'), $authority->operationUuid()) && $row->organization_id === $authority->organizationId(), 403);
+                abort_unless(hash_equals((string) data_get($row->safe_metadata, 'landed_cost.operation_uuid'), $authority->operationUuid()) && (int) $row->organization_id === $authority->organizationId(), 403);
                 abort_unless($reverse ? $authority->reversalJournalId() !== null : $authority->financeJournalId() !== null, 409);
             }
             foreach ($components as $component) {

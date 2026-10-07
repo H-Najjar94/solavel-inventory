@@ -114,7 +114,7 @@ final class PurchaseCostAdjustmentPlanner
         $residual = Decimal::round(Decimal::sub($exact, $posted, 8), $authority->moneyScale());
         $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.005'), 6);
         if (Decimal::gt(ltrim($residual, '-'), $bound, 6)) $this->fail('Cumulative valuation rounding exceeds its deterministic bound.');
-        return ['contract_version' => 'solastock-landed-cost.v1', 'organization_mapping_uuid' => $authority->mappingUuid(),
+        return ['contract_version' => 'solastock-landed-cost.v1', 'direction' => $authority->direction(), 'organization_mapping_uuid' => $authority->mappingUuid(),
             'destination_document_type' => 'landed_cost', 'destination_document_id' => $authority->landedCostId(),
             'destination_fingerprint' => $authority->fingerprint(), 'operation_uuid' => $authority->operationUuid(),
             'source_bill_id' => $authority->sourceBillId(), 'source_bill_journal_id' => $authority->billJournalId(),
