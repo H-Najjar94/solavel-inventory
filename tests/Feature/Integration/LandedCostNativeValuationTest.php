@@ -28,6 +28,8 @@ final class LandedCostNativeValuationTest extends TestCase
         $this->useTenantA();
         $schema = DB::connection('tenant')->getSchemaBuilder();
         if (!$schema->hasColumn('bills', 'journal_entry_id')) $schema->table('bills', fn (Blueprint $t) => $t->unsignedBigInteger('journal_entry_id')->nullable());
+        foreach (['source', 'source_key', 'source_type'] as $column) if (!$schema->hasColumn('journal_entries', $column)) $schema->table('journal_entries', fn (Blueprint $t) => $t->string($column)->nullable());
+        if (!$schema->hasColumn('journal_entries', 'source_id')) $schema->table('journal_entries', fn (Blueprint $t) => $t->unsignedBigInteger('source_id')->nullable());
         if (!$schema->hasColumn('journal_entries', 'reverses_entry_id')) $schema->table('journal_entries', fn (Blueprint $t) => $t->unsignedBigInteger('reverses_entry_id')->nullable());
         if (!$schema->hasTable('landed_costs')) $schema->create('landed_costs', function (Blueprint $t) {
             $t->id(); $t->unsignedBigInteger('org_id'); $t->unsignedBigInteger('bill_id'); $t->date('date');
@@ -92,13 +94,14 @@ final class LandedCostNativeValuationTest extends TestCase
                 'item_external_id' => 701, 'unit_external_id' => 702, 'quantity' => '10', 'base_quantity' => '10',
                 'base_unit_id' => $this->unit->id, 'unit_conversion_factor' => '1', 'delta_base' => '10']]];
         $db = DB::connection('tenant');
-        $db->table('bills')->insert(['id' => 800, 'organization_id' => 14, 'journal_entry_id' => 96]);
+        $db->table('suppliers')->insert(['id' => 704, 'organization_id' => 14, 'name' => 'Canonical landed supplier']);
+        $db->table('bills')->insert(['id' => 800, 'organization_id' => 14, 'supplier_id' => 704, 'status' => 'unpaid', 'journal_entry_id' => 96]);
         $db->table('landed_costs')->insert(['id' => 700, 'org_id' => 14, 'bill_id' => 800, 'date' => '2026-10-07', 'exchange_rate' => 1, 'total_additional_cost' => 10, 'status' => 'draft']);
         $db->table('landed_cost_lines')->insert(['id' => 1, 'landed_cost_id' => 700, 'expense_account_id' => 300, 'amount' => 10]);
         $db->table('landed_cost_allocations')->insert(['id' => 1, 'landed_cost_id' => 700, 'inventory_item_id' => 701, 'quantity' => 10, 'allocated_amount' => 10]);
         foreach ([95 => ['external-api:'.hash('sha256', $journal->idempotency_key), null, null], 96 => ['private-bill-800', 'App\\Models\\Bill', 800]] as $id => [$key, $type, $source])
             $db->table('journal_entries')->insert(['id' => $id, 'organization_id' => 14, 'number' => 'LANDED-'.$id, 'entry_date' => '2026-10-07',
-                'source_key' => $key, 'source_type' => $type, 'source_id' => $source, 'status' => 'posted', 'posted_at' => now()]);
+                'source' => $id === 96 ? 'AP' : 'STOCK-GRN', 'source_key' => $key, 'source_type' => $type, 'source_id' => $source, 'status' => 'posted', 'posted_at' => now()]);
         $db->table('finance_purchase_positions')->insert(['organization_id' => 14, 'organization_mapping_uuid' => $this->mapping->mapping_uuid,
             'position_uuid' => $position, 'bill_id' => 800, 'bill_journal_id' => 96, 'bill_line_id' => 801, 'state' => 'received',
             'snapshot' => json_encode(['item_external_id' => 701, 'unit_external_id' => 702])]);
