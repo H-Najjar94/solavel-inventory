@@ -26,8 +26,8 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->initializeOriginFixture(true,$tracking);
         if($type==='expense'){
             $supplier=Supplier::create(['code'=>'QA-TYPED-PHYSICAL','name'=>'QA typed physical supplier','is_active'=>true]);$this->master('supplier',$supplier->id,704);
-            $grniId=DB::connection('tenant')->table('accounts')->insertGetId(['organization_id'=>14,'code'=>'QA-TYPED-GRNI','name'=>'GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
-            $a=IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>$grniId,'status'=>'verified']);$this->master('account_role',$a->id,300);
+            DB::connection('tenant')->table('accounts')->insert(['id'=>300,'organization_id'=>14,'code'=>'300','name'=>'GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
+            $a=IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>300,'status'=>'verified']);$this->master('account_role',$a->id,300);
         }
         $data=$this->typed($type,$anonymous);$this->proof($data);$r=app(OriginRequestService::class)->upsert($data,323);
         $context=array_intersect_key($data,array_flip(['source_document_type','source_document_id','source_document_number','source_journal_id','request_uuid']))+['request_revision'=>$data['source_revision']];
@@ -65,8 +65,6 @@ final class FinancialOriginPhysicalTest extends TestCase
         [,,$op]=$this->admitted('expense');
         // A receipt requires its own reviewed native accounting workflow and real GRNI liability mapping.
         $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->meta=$meta;$setting->save();
-        $grniId=DB::connection('tenant')->table('accounts')->insertGetId(['organization_id'=>14,'code'=>'QA-TYPED-GRNI','name'=>'Private native GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
-        \App\Models\Tenant\IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>$grniId,'status'=>'verified']);
         $before=StockLedger::count();$service=app(OriginDispatchService::class);$partial=$service->executeNative($op,336);
         $this->assertSame($partial,$service->executeNative($op,336));$this->assertSame('partial',$partial['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame($before+1,StockLedger::count());
         $this->assertSame(0,\App\Models\Tenant\PurchasingDocumentOutbox::count());$event=FinancialOriginOutbox::sole()->payload;
