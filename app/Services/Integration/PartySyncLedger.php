@@ -48,12 +48,12 @@ final class PartySyncLedger {
     $archiveChanged=$db->table('integration_master_data_mappings')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where($sourceColumn,(string)$id)->where($archiveColumn,!$fields['active'])->count()===0;
     if($archiveChanged)$db->table('integration_master_data_mappings')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where($sourceColumn,(string)$id)->update([$archiveColumn=>!$fields['active'],'updated_at'=>now()]);
     if($archiveChanged || $overrides!==json_decode($opposite->field_overrides??'{}',true))
-     $db->table('integration_party_sync_states')->where('id',$opposite->id)->update(['field_overrides'=>json_encode($overrides),'status'=>'pending','next_attempt_at'=>null,'updated_at'=>now()]);
+     $db->table('integration_party_sync_states')->where('id',$opposite->id)->update(['field_overrides'=>json_encode($overrides),'state_version'=>$opposite->state_version+1,'status'=>'pending','next_attempt_at'=>null,'updated_at'=>now()]);
     return $opposite;
    }
    $db->table('integration_party_sync_states')->insertOrIgnore($identity+['organization_id'=>$mapping->finance_organization_id,'central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,'source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>1,'created_at'=>now(),'updated_at'=>now()]);
    $row=$db->table('integration_party_sync_states')->where($identity)->lockForUpdate()->first();
-   if($row->source_revision!==$hash)$db->table('integration_party_sync_states')->where('id',$row->id)->update(['source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>$row->state_version+1,'next_attempt_at'=>null,'last_error'=>null,'updated_at'=>now()]);
+   if($row->source_revision!==$hash)$db->table('integration_party_sync_states')->where('id',$row->id)->update(['source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>$row->state_version+1,'attempts'=>0,'next_attempt_at'=>null,'last_error'=>null,'updated_at'=>now()]);
    return $db->table('integration_party_sync_states')->where('id',$row->id)->first();
   });
  }
@@ -64,11 +64,15 @@ final class PartySyncLedger {
     ? DB::connection('tenant')->table('integration_connection_wizard_runs')->where('organization_mapping_uuid',$mapping->mapping_uuid)->whereNotNull('activated_at')->min('activated_at') : null;
    $activation=$activation??($mapping->verified_at??null);
    $sourceColumn=$app==='finance'?'solabooks_record_id':'solastock_record_id';
-   DB::connection('tenant')->table($table)->where('organization_id',$org)->where(function($query)use($mapping,$app,$type,$table,$sourceColumn,$activation){
+   $cursorKey='party-sync-cursor:'.hash('sha256',DB::connection('tenant')->getDatabaseName().'|'.$mapping->mapping_uuid.'|'.$app.'|'.$type);
+   $cursor=(int)\Illuminate\Support\Facades\Cache::store('file')->get($cursorKey,0);
+   $rows=DB::connection('tenant')->table($table)->where('organization_id',$org)->where($table.'.id','>',$cursor)->where(function($query)use($mapping,$app,$type,$table,$sourceColumn,$activation){
     if($activation)$query->where($table.'.created_at','>=',$activation);
     $query->orWhereExists(function($q)use($mapping,$type,$table,$sourceColumn){$q->selectRaw('1')->from('integration_master_data_mappings as pm')->where('pm.organization_mapping_uuid',$mapping->mapping_uuid)->where('pm.entity_type',$type)->where('pm.status','verified')->whereColumn('pm.'.$sourceColumn,$table.'.id');});
     $query->orWhereExists(function($q)use($mapping,$app,$type,$table){$q->selectRaw('1')->from('integration_party_sync_states as ps')->where('ps.organization_mapping_uuid',$mapping->mapping_uuid)->where('ps.entity_type',$type)->where('ps.source_app',$app)->whereColumn('ps.source_id',$table.'.id');});
-   })->orderBy('id')->chunkById(100,function($rows)use($mapping,$app,$type){foreach($rows as$row)$this->record($mapping,$app,$type,(int)$row->id);});
+   })->orderBy('id')->limit(100)->get();
+   foreach($rows as$row)$this->record($mapping,$app,$type,(int)$row->id);
+   \Illuminate\Support\Facades\Cache::store('file')->forever($cursorKey,$rows->count()===100?(int)$rows->last()->id:0);
   }
  }
 }

@@ -88,4 +88,22 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame(0,DB::connection('tenant')->table('purchasing_receiving_cancellations')->count());
  }
 
+ public function test_repeated_connection_failure_becomes_explicit_intervention():void {
+  $this->source();$this->ensure();$db=DB::connection('tenant');
+  $db->table('integration_party_sync_states')->update(['status'=>'pending','attempts'=>39,'next_attempt_at'=>null]);
+  $db->table('integration_settings')->update(['mode'=>'paused']);
+  app(ContinuousPartySync::class)->process($this->mapping,1);
+  $state=$db->table('integration_party_sync_states')->sole();
+  $this->assertSame('intervention',$state->status);$this->assertSame('party_retry_exhausted',$state->last_error);$this->assertSame(40,(int)$state->attempts);
+  $this->assertSame(0,app(ContinuousPartySync::class)->process($this->mapping,1));
+ }
+
+ public function test_import_reconciliation_is_bounded_and_advances_durable_cursor():void {
+  for($id=901;$id<=1001;$id++)$this->source($id,'Imported '.$id);
+  $ledger=app(PartySyncLedger::class);$ledger->reconcile($this->mapping);
+  $this->assertSame(100,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+  $ledger->reconcile($this->mapping);
+  $this->assertSame(101,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+ }
+
 }
