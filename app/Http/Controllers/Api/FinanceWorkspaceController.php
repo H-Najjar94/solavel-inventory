@@ -107,6 +107,34 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            // Financial demand creation is a closed Finance capability. Physical
+            // dispatch separately requires current Stock access and native permissions.
+            if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status',
+                'sales.fulfillment.options','sales.fulfillment.approve','sales.fulfillment.prepare',
+                'sales.fulfillment.execute','sales.fulfillment.status','sales.fulfillment.abandon'], true)) {
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(Schema::connection('tenant')->hasTable('sales_fulfillment_requests'), 409, 'workspace_schema_not_ready');
+                $data = (array) ($input['data'] ?? []);
+                validator($data, ['source_invoice_id'=>'required|integer|min:1','request_uuid'=>'required|uuid'])->validate();
+                if (str_starts_with($input['action'], 'sales.request.')) {
+                    $service=app(\App\Services\Sales\FulfillmentRequestService::class);
+                    $result=match ($input['action']) {
+                        'sales.request.upsert'=>$service->upsert($data,(int)$actor->id),
+                        'sales.request.cancel'=>$service->cancel($data,(int)$actor->id),
+                        'sales.request.status'=>$service->sourceStatus($data,(int)$actor->id),
+                    };
+                } else {
+                    validator($data,['invoice_revision'=>'required|string|size:64'])->validate();
+                    $action=substr($input['action'],strlen('sales.fulfillment.'));
+                    if (in_array($action,['prepare','execute','status','abandon'],true)) {
+                        validator($data,['operation_uuid'=>'required|uuid'])->validate();
+                    }
+                    if ($action==='approve') validator($data,['warehouse_id'=>'required|integer|min:1'])->validate();
+                    $result=app(\App\Services\Sales\FinanceDispatchService::class)->{$action}($data);
+                }
+                return response()->json(['success'=>true,'data'=>$result]);
+            }
             if (str_starts_with($input['action'], 'purchasing.request.') || str_starts_with($input['action'], 'purchasing.bill.') || str_starts_with($input['action'], 'purchasing.receiving.')) {
                 $billId = (int) data_get($input, 'data.source_bill_id');
                 abort_unless($billId > 0, 422);
