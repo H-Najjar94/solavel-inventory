@@ -45,7 +45,9 @@ class InventoryReversalService
 
     public function reverseGoodsReceipt(GoodsReceipt $receipt, string $reason): InventoryReversal
     {
-        return DB::connection($this->connection())->transaction(function () use ($receipt, $reason) {
+        $originContext = app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->beforeReverse($receipt);
+        return DB::connection($this->connection())->transaction(function () use ($receipt, $reason, $originContext) {
+            $originContext?->lockAndValidate();
             $receipt = GoodsReceipt::query()->with('lines')->lockForUpdate()->findOrFail($receipt->id);
             if ($receipt->reversal_id) {
                 return InventoryReversal::query()->findOrFail($receipt->reversal_id);
@@ -81,8 +83,10 @@ class InventoryReversalService
             $receipt->markSystemTransition()->save();
 
             $this->recordEvent($reversal, 'grn.reversed');
-            app(ReceivingRequestService::class)->posted($receipt, true);
-            app(ReceiptHandoffService::class)->record($receipt, true);
+            if (!app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->reversed($receipt, $reversal)) {
+                app(ReceivingRequestService::class)->posted($receipt, true);
+                app(ReceiptHandoffService::class)->record($receipt, true);
+            }
 
             return $reversal->fresh();
         });
