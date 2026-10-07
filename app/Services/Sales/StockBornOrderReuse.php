@@ -11,7 +11,7 @@ final class StockBornOrderReuse
 {
     public function lockedOrder(FulfillmentRequest $request,int $warehouse):SalesOrder
     {
-        abort_unless(DB::connection('tenant')->transactionLevel()>0,409);
+        abort_unless(DB::connection('tenant')->transactionLevel()>0 && $request->source_status==='posted' && (int)$request->posted_invoice_journal_id>0,409);
         $origin=(array)data_get($request->source_payload,'origin_order',[]);
         abort_unless((int)($origin['sales_order_id']??0)>0 && (int)($origin['warehouse_id']??0)===$warehouse,409);
         $refs=(array)($origin['source_shipment_refs']??[]);abort_unless($refs!==[],409);

@@ -23,7 +23,10 @@ final class StockBornOrderReuseTest extends TestCase {
   $shipments=app(ShipmentService::class);$source=$order->lines->first();
   $shipment=$shipments->post($shipments->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07'],[['sales_order_line_id'=>$source->id,'item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'4']]));
   $event=SalesDocumentOutbox::query()->where('payload->shipment->id',$shipment->id)->where('event_type','sales.shipment.confirmed')->sole();
-  $data=$this->data();$data['lines'][0]['quantity']='6';$data['lines'][0]['original_sales_order_line_id']=$source->id;
+  $data=$this->data();$data['source_status']='posted';$data['posted_invoice_journal_id']=95;
+  // Native Finance source/AR metadata is the declared projection seam, not a Finance posting claim.
+  DB::connection('tenant')->table('journal_entries')->insert(['id'=>95,'organization_id'=>14,'source_type'=>\App\Models\Invoice::class,'source_id'=>800,'status'=>'posted']);
+  $data['lines'][0]['quantity']='6';$data['lines'][0]['original_sales_order_line_id']=$source->id;
   $data['origin_order']=['sales_order_id'=>$order->id,'warehouse_id'=>$this->warehouse->id,'source_shipment_refs'=>[['mapping_uuid'=>$event->payload['shipment']['mapping_uuid'],'id'=>$shipment->id,'event_uuid'=>$event->event_uuid,'payload_hash'=>$event->payload_hash]]];
   $this->authority($data);$summary=app(FulfillmentRequestService::class)->upsert($data,323);
   return [$order,$data,FulfillmentRequest::findOrFail($summary['id']),$shipment];
