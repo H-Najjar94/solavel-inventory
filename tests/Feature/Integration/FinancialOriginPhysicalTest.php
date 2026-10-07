@@ -69,6 +69,10 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame($partial,$service->executeNative($op,336));$this->assertSame('partial',$partial['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame($before+1,StockLedger::count());
         $this->assertSame(0,\App\Models\Tenant\PurchasingDocumentOutbox::count());$event=FinancialOriginOutbox::sole()->payload;
         $this->assertSame('expense',$event['source_document_type']);$this->assertSame('financial-origin.receipt.confirmed',$event['event_type']);$this->assertSame('7.00000000',$event['physical']['lines'][0]['unit_cost']);
+        $native=StockLedger::query()->where('source_type',GoodsReceipt::class)->where('source_id',GoodsReceipt::sole()->id)->sole();
+        $this->assertSame($native->id,$event['physical']['lines'][0]['stock_ledger_id']);
+        $this->assertSame((string)$native->total_cost,$event['physical']['lines'][0]['stock_value_base']);
+        $this->assertSame(\App\Services\Stock\Support\Decimal::MONEY_SCALE,$event['physical']['lines'][0]['stock_money_scale']);
         $this->assertSame('22.0000',StockBalance::sole()->on_hand_qty);
     }
     public function test_finance_only_or_unassigned_actor_cannot_move_typed_stock_and_prepared_correction_requires_abandon_ack():void
@@ -144,6 +148,9 @@ final class FinancialOriginPhysicalTest extends TestCase
         $event=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.reversed')->sole()->payload;
         $this->assertSame(850,$event['source_document_id']);$this->assertSame(95,$event['source_journal_id']);$this->assertSame($inverse->id,$event['reversal']['id']);
         $this->assertNotEmpty($event['original_payload_hash']);$this->assertNotEmpty($event['reversal']['journal_key']);
+        $original=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.confirmed')->sole()->payload;
+        $this->assertSame($original['physical']['lines'][0]['stock_ledger_id'],$event['physical']['lines'][0]['stock_ledger_id']);
+        $this->assertSame($original['physical']['lines'][0]['stock_value_base'],$event['physical']['lines'][0]['stock_value_base']);
     }
 
     public function test_typed_expense_inverse_rejects_uncertain_cost_ack_and_foreign_audit_without_movement():void

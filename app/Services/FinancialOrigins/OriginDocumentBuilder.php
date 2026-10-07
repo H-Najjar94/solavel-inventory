@@ -66,12 +66,20 @@ final class OriginDocumentBuilder
             abort_unless($actual && $source && (int)$source->source_document_line_id===(int)$link['source_document_line_id'],409);
             $factor=(string)$actual->unit_conversion_factor;abort_unless(Decimal::gt($factor,'0'),409);
             $base=(string)($shipment?$actual->quantity:$actual->accepted_qty);
+            $nativeValueFields=[];
+            if(!$shipment){
+                $ledger=\App\Models\Tenant\StockLedger::query()->where('organization_id',$request->organization_id)
+                    ->where('source_type',GoodsReceipt::class)->where('source_id',$document->id)->where('source_line_id',$actual->id)->where('direction','in')->sole();
+                abort_unless(Decimal::cmp((string)$ledger->quantity,$base)===0 && (int)$ledger->item_id===(int)$actual->item_id
+                    && (int)$ledger->warehouse_id===(int)$document->warehouse_id,409);
+                $nativeValueFields=['stock_ledger_id'=>(int)$ledger->id,'stock_value_base'=>(string)$ledger->total_cost,'stock_money_scale'=>Decimal::MONEY_SCALE];
+            }
             $sourceLine=collect($request->source_payload['lines'])->firstWhere('source_document_line_id',(int)$source->source_document_line_id);abort_unless($sourceLine,409);
             $lines[]=['physical_line_id'=>$actual->id,'source_document_line_id'=>(int)$source->source_document_line_id,
                 'item_external_id'=>(int)$sourceLine['item_external_id'],'unit_external_id'=>(int)$sourceLine['unit_external_id'],
                 'quantity'=>Decimal::qty(Decimal::div($base,$factor)),'base_quantity'=>$base,'unit_conversion_factor'=>$factor,
                 'base_unit_id'=>$actual->base_unit_id,'unit_conversion_hash'=>$actual->unit_conversion_hash,
-                'unit_price'=>$sourceLine['unit_price'],'unit_cost'=>$shipment?null:Decimal::mul((string)$actual->unit_cost,$factor,8),'stock_item_id'=>$actual->item_id,'stock_unit_id'=>$actual->entered_unit_id];
+                'unit_price'=>$sourceLine['unit_price'],'unit_cost'=>$shipment?null:Decimal::mul((string)$actual->unit_cost,$factor,8),'stock_item_id'=>$actual->item_id,'stock_unit_id'=>$actual->entered_unit_id]+$nativeValueFields;
         }
         abort_unless(count($lines)===$native->count(),409);
         $uuid=(string)Str::uuid();$setting=IntegrationSetting::query()->where('organization_id',$request->organization_id)->where('integration','solabooks')->firstOrFail();
