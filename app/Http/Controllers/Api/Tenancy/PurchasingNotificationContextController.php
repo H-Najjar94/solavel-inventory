@@ -30,7 +30,7 @@ final class PurchasingNotificationContextController
                 $decision=app(CentralAppAccess::class)->decision((int)$user->id,(int)$org->id,'inventory');
                 if (!($decision['allowed']??false) || !app(InventoryPermissionService::class)->can($user,'inventory.receive_goods')) continue;
                 $approver=app(InventoryPermissionService::class)->can($user,'inventory.approve_purchase_orders') || app(InventoryPermissionService::class)->can($user,'inventory.manage_adjustments');
-                if (($warehouse===0 || !$rr->approved_at) && !$approver) continue;
+                if (($warehouse===0 || !$this->approved($rr)) && !$approver) continue;
                 $allowed=app(WarehouseAccessService::class)->allowedIds((int)$user->id);
                 if ($warehouse>0 && $allowed!==null && !in_array($warehouse,$allowed,true)) continue;
                 if ($warehouse===0 && !$approver) continue;
@@ -38,11 +38,12 @@ final class PurchasingNotificationContextController
                 $recipients[]=(int)$user->id;
             }
             $lines=$rr->lines->map(fn($line)=>['id'=>(int)$line->id,'requested'=>(string)$line->requested_qty,'received'=>(string)$line->received_qty])->sortBy('id')->values()->all();
-            $facts=['request_uuid'=>(string)$rr->request_uuid,'source_revision'=>(string)$rr->source_revision,'status'=>(string)$rr->status,'source_bill_id'=>(int)$rr->source_bill_id,'source_bill_number'=>(string)$rr->source_bill_number,'warehouse_id'=>$warehouse,'approved'=>(bool)$rr->approved_at,'warehouse_setup_required'=>!$activeWarehouseExists,'lines'=>$lines];
+            $facts=['request_uuid'=>(string)$rr->request_uuid,'source_revision'=>(string)$rr->source_revision,'status'=>(string)$rr->status,'source_bill_id'=>(int)$rr->source_bill_id,'source_bill_number'=>(string)$rr->source_bill_number,'warehouse_id'=>$warehouse,'approved'=>$this->approved($rr),'warehouse_setup_required'=>!$activeWarehouseExists,'lines'=>$lines];
             return response()->json(['client_id'=>(int)$data['client_id'],'organization_id'=>(int)$org->id,'request_id'=>(int)$rr->id,'app_key'=>'inventory','facts'=>$facts,'fingerprint'=>hash('sha256',json_encode($facts,JSON_THROW_ON_ERROR)),'eligible_user_ids'=>$recipients])->header('Cache-Control','no-store');
         } finally {
             $context->forget();if($oldOrg!==null)$context->set((int)$oldOrg);DB::purge('tenant');config(['database.connections.tenant'=>$oldConnection,'database.default'=>$oldDefault]);
             app()->forgetInstance(InventoryPermissionService::class);
         }
     }
+    private function approved(\App\Models\Tenant\ReceivingRequest $request):bool {return (bool)$request->approved_at && hash_equals((string)$request->source_revision,(string)$request->approved_revision);}
 }
