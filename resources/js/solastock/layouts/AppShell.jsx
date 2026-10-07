@@ -245,7 +245,7 @@ export default function AppShell() {
                         <OrgSwitcher tenant={tenant} />
                     </div>
                     <div className="topbar-right">
-                        <PurchasingNotificationBell organizationId={tenant.organization_id} />
+                        {meta.permissions?.includes('inventory.receive_goods') && <PurchasingNotificationBell organizationId={tenant.organization_id} />}
                         {tenant.loading ? (
                             <span className="badge badge--muted">{t('shell.loading')}</span>
                         ) : !tenant.isLive && (<>
