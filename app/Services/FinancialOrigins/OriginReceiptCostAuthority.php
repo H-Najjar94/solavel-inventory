@@ -12,7 +12,7 @@ use Ramsey\Uuid\Uuid;
 /** Construction is restricted to independently verified, locked Expense/receipt facts. */
 final readonly class OriginReceiptCostAuthority
 {
-    private function __construct(private array $snapshot, private array $proof, private array $allocations, private int $org, private string $mapping, private string $operation, private int $expense, private int $sourceJournal, private ?array $quote, private ?array $forwardQuote) {}
+    private function __construct(private array $snapshot, private array $proof, private array $allocations, private int $org, private string $mapping, private string $operation, private int $expense, private int $sourceJournal, private ?array $quote, private ?array $forwardQuote, private ?OriginReceiptReverseGeneration $reverseGeneration = null) {}
 
     public static function fromLockedNativeProvenance(array $identity, array $proof, IntegrationOrganizationMapping $mapping, string $action, int $actor): self
     {
@@ -92,11 +92,14 @@ final readonly class OriginReceiptCostAuthority
         abort_unless(isset($price['booked_fx_difference_base']) && Decimal::cmp(Decimal::sub((string) $match->booked_base, $expectedAtReceipt, 8), (string) $price['booked_fx_difference_base'], $scale) === 0, 409);
         $plan = json_decode($match->value_plan ?? 'null', true, 512, JSON_THROW_ON_ERROR);
         abort_unless(($plan === null && ($proof['value_plan_hash'] ?? null) === null) || ($plan !== null && hash_equals(SolaStockJournalContract::payloadHash($plan), (string) ($proof['value_plan_hash'] ?? ''))), 409);
-        $quote = $direction === 'reverse' ? ($plan['reverse_plan'] ?? null) : $plan;
+        $generation = $direction === 'reverse' && ($match->reversal_generation ?? null) !== null
+            ? OriginReceiptReverseGeneration::lock($db, $match, $request, $identity, $proof, $action) : null;
+        $quote = $direction === 'reverse' ? ($generation ? $generation->quote() : ($plan['reverse_plan'] ?? null)) : $plan;
+        if ($generation) $match = $generation->lifecycleMatch($match);
         if ($quote) abort_unless(hash_equals((string) $quote['plan_fingerprint'], (string) ($proof['plan_fingerprint'] ?? '')), 409);
         // Inverse and release require audited directional intents, independently checked below.
         self::assertFinancialLifecycle($db, $mapping, $expense, $sourceJE, $request, $match, $action, $direction, $actor, $proof, $quote);
-        return new self($snapshot, $proof, [[ 'receipt_id' => (int) $grn->id, 'receipt_line_id' => (int) $line->id, 'request_line_id' => (int) $link['request_line_id'], 'position_uuid' => $position->position_uuid, 'quantity_base' => $baseQty, 'price_delta_base' => (string) $price['price_delta_base'], 'item_id' => (int) $line->item_id, 'warehouse_id' => (int) $grn->warehouse_id ]], $org, $mapping->mapping_uuid, $match->operation_uuid, (int) $expense->id, (int) $request->source_journal_id, $quote, $plan);
+        return new self($snapshot, $proof, [[ 'receipt_id' => (int) $grn->id, 'receipt_line_id' => (int) $line->id, 'request_line_id' => (int) $link['request_line_id'], 'position_uuid' => $position->position_uuid, 'quantity_base' => $baseQty, 'price_delta_base' => (string) $price['price_delta_base'], 'item_id' => (int) $line->item_id, 'warehouse_id' => (int) $grn->warehouse_id ]], $org, $mapping->mapping_uuid, $match->operation_uuid, (int) $expense->id, (int) $request->source_journal_id, $quote, $plan, $generation);
     }
 
     private static function assertFinancialLifecycle($db, $mapping, $expense, $sourceJE, $request, $match, string $action, string $direction, int $actor, array $proof, ?array $quote): void
@@ -160,5 +163,7 @@ final readonly class OriginReceiptCostAuthority
     public function planFingerprint(): ?string { return $this->proof['plan_fingerprint'] ?? null; }
     public function storedQuote(): ?array { return $this->quote; }
     public function forwardQuote(): ?array { return $this->forwardQuote; }
-    public function holdUuid(int $item, int $warehouse, string $direction = 'apply'): string { return Uuid::uuid5(Uuid::NAMESPACE_URL, 'financial-origin|'.$this->mapping.'|'.$this->operation.'|'.$item.'|'.$warehouse.'|'.$direction)->toString(); }
+    public function reversalGeneration(): int { return $this->reverseGeneration?->number() ?? 0; }
+    public function reversalOperationUuid(): ?string { return $this->reverseGeneration?->operationUuid(); }
+    public function holdUuid(int $item, int $warehouse, string $direction = 'apply'): string { return Uuid::uuid5(Uuid::NAMESPACE_URL, 'financial-origin|'.$this->mapping.'|'.($direction === 'reverse' && $this->reverseGeneration ? $this->reverseGeneration->operationUuid() : $this->operation).'|'.$item.'|'.$warehouse.'|'.$direction)->toString(); }
 }

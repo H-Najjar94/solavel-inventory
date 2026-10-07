@@ -707,8 +707,11 @@ class SolaBooksOutboxDeliveryService
             'request_uuid' => 'required|uuid', 'operation_uuid' => 'required|uuid', 'position_uuid' => 'required|uuid',
             'source_revision' => 'required|string|size:64', 'direction' => 'required|in:forward,reverse',
             'plan_fingerprint' => 'sometimes|string|size:64',
+            'reversal_generation' => 'sometimes|integer|min:1', 'reversal_operation_uuid' => 'sometimes|uuid',
         ])->validate();
         abort_unless($operation !== 'reverse' || ($facts['direction'] === 'reverse' && $actor > 0), 403);
+        abort_unless(!isset($facts['reversal_generation']) || ($facts['direction'] === 'reverse' && isset($facts['reversal_operation_uuid'])), 403);
+        abort_unless(!isset($facts['reversal_operation_uuid']) || isset($facts['reversal_generation']), 403);
         $mapping = app(ReceivingRequestService::class)->mapping();
         $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
         $key = 'financial-origin:settlement-authorize:'.Str::uuid();
@@ -735,6 +738,7 @@ class SolaBooksOutboxDeliveryService
             && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id
             && ($data['organization_mapping_uuid'] ?? null) === $mapping->mapping_uuid, 403);
         foreach (['source_document_id', 'source_journal_id', 'request_uuid', 'operation_uuid', 'position_uuid', 'source_revision'] as $field) abort_unless((string) ($data[$field] ?? '') === (string) $facts[$field], 403);
+        if (isset($facts['reversal_generation'])) abort_unless(($data['reversal_generation'] ?? null) === (int) $facts['reversal_generation'] && ($data['reversal_operation_uuid'] ?? null) === $facts['reversal_operation_uuid'], 403);
         return $data;
     }
 

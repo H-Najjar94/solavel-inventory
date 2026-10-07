@@ -32,6 +32,7 @@ final class HeldOriginReceiptCostService
             'request_uuid' => 'required|uuid', 'source_revision' => 'required|string|size:64',
             'source_document_id' => 'required|integer|min:1', 'source_journal_id' => 'required|integer|min:1',
             'direction' => 'sometimes|in:forward,reverse', 'plan_fingerprint' => 'sometimes|string|size:64',
+            'reversal_generation' => 'sometimes|integer|min:1', 'reversal_operation_uuid' => 'sometimes|uuid',
         ])->validate();
         $facts['direction'] ??= $operation === 'reverse' ? 'reverse' : 'forward';
         abort_unless($operation !== 'reverse' || $facts['direction'] === 'reverse', 403);
@@ -71,16 +72,15 @@ final class HeldOriginReceiptCostService
                     // Native Finance inverse undoes its original classification; changed provenance needs review.
                     abort_unless($original && $this->components($original['native_plan']['components']) === $this->components($plan['components']), 409, __('receiving.valuation_changed'));
                 }
-                $fingerprint = SolaStockJournalContract::payloadHash(['authority' => $authority->fingerprint(), 'purpose' => $purpose, 'plan_revision' => 1, 'native_plan' => $plan]);
+                $fingerprint = $this->quoteFingerprint($authority, $purpose, $plan);
                 $quote = ['operation_uuid' => $authority->operationUuid(), 'plan_revision' => 1, 'plan_fingerprint' => $fingerprint,
                     'direction' => $authority->direction(), 'total_delta_base' => $plan['allocated_base_difference'],
                     'components' => $plan['components'], 'native_plan' => $plan];
+                if ($authority->reversalGeneration() > 0) $quote += ['reversal_generation' => $authority->reversalGeneration(), 'reversal_operation_uuid' => $authority->reversalOperationUuid()];
             }
             abort_unless($row && is_array($quote), 409, __('receiving.valuation_pending'));
             $fingerprint = $quote['plan_fingerprint'];
-            abort_unless(is_array($quote['native_plan'] ?? null) && hash_equals((string) $fingerprint, SolaStockJournalContract::payloadHash([
-                'authority' => $authority->fingerprint(), 'purpose' => $purpose, 'plan_revision' => 1, 'native_plan' => $quote['native_plan'],
-            ])), 409);
+            abort_unless(is_array($quote['native_plan'] ?? null) && hash_equals((string) $fingerprint, $this->quoteFingerprint($authority, $purpose, $quote['native_plan'])), 409);
             abort_unless(($quote['native_plan']['direction'] ?? null) === $authority->direction()
                 && ($quote['native_plan']['destination_fingerprint'] ?? null) === $authority->fingerprint()
                 && ($quote['native_plan']['operation_uuid'] ?? null) === $authority->operationUuid(), 409);
@@ -121,6 +121,13 @@ final class HeldOriginReceiptCostService
             }
             return $quote + ['state' => $operation === 'release' ? 'abandoned' : $result['state'], 'adjustment_uuid' => $result['adjustment_uuid']];
         }, 5);
+    }
+
+    private function quoteFingerprint(OriginReceiptCostAuthority $authority, string $purpose, array $plan): string
+    {
+        $identity = ['authority' => $authority->fingerprint(), 'purpose' => $purpose, 'plan_revision' => 1, 'native_plan' => $plan];
+        if ($authority->reversalGeneration() > 0) $identity += ['reversal_generation' => $authority->reversalGeneration(), 'reversal_operation_uuid' => $authority->reversalOperationUuid()];
+        return SolaStockJournalContract::payloadHash($identity);
     }
 
     private function components(array $components): array
