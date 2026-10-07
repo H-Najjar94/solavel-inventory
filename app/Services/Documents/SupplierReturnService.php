@@ -124,7 +124,7 @@ final class SupplierReturnService
                 $line->update(['actual_return_cost_base' => $cost, 'unit_cost' => Decimal::div($cost, (string) $line->quantity)]);
             }
             $return->status = 'posted'; $return->posted_at = now(); $return->posted_by = auth()->id(); $return->markSystemTransition()->save();
-            if ($connected) $this->outbox->record('supplier_return.posted', $return, 'SupplierReturn', $return->return_number, $return->return_date->format('Y-m-d'));
+            if ($connected) $this->outbox->record('supplier_return.posted', $return, 'supplier_return', $return->return_number, $return->return_date->format('Y-m-d'));
             return $return->fresh('lines');
         });
     }
