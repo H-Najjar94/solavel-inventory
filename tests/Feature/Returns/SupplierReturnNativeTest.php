@@ -90,6 +90,16 @@ final class SupplierReturnNativeTest extends TestCase
         $this->assertSame('posted',$source->fresh()->status);
     }
 
+    public function test_missing_original_conversion_rejects_draft_without_invented_unit_or_stock_effects(): void
+    {
+        $source=$this->receipt();
+        \Illuminate\Support\Facades\DB::connection('tenant')->table('goods_receipt_lines')->where('id',$source->lines->sole()->id)->update(['unit_conversion_factor'=>'0']);
+        $source->load('lines');$before=StockLedger::count();$documents=SupplierReturn::count();
+        try{$this->draft($source,'1');$this->fail('Missing historical conversion was invented.');}
+        catch(ValidationException $error){$this->assertArrayHasKey('lines',$error->errors());}
+        $this->assertSame($before,StockLedger::count());$this->assertSame($documents,SupplierReturn::count());
+    }
+
     public function test_cross_tenant_receipt_cannot_create_a_supplier_return(): void
     {
         $source = $this->receipt(); $this->useTenantB();
