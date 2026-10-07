@@ -166,4 +166,43 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
     }
 
+    /** Real native GRN/holds; Finance192 generation and financial rows are an explicit persisted projection seam. */
+    public function test_new_reverse_generation_requires_acknowledged_native_predecessor_and_rejects_stale_or_unknown_release():void
+    {
+        [$id] = $this->fixture(); $db = DB::connection('tenant');
+        (require base_path('tests/Support/FinancialOriginReverseGenerationSchema.php'))->up();
+        $request = $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->first();
+        $match = $db->table('finance_document_matches')->where('operation_uuid',$id['operation_uuid'])->first();
+        $match->journal_entry_id = 97; $match->reversal_generation = 2;
+        $original = (string) Str::uuid(); $current = (string) Str::uuid(); $releaseUuid = (string) Str::uuid();
+        $fp = str_repeat('c',64);
+        $quote = ['operation_uuid'=>$match->operation_uuid,'plan_fingerprint'=>$fp,'reversal_generation'=>1,'reversal_operation_uuid'=>$original,'native_plan'=>['components'=>[]]];
+        $ack = ['state'=>'abandoned','operation_uuid'=>$match->operation_uuid,'reversal_generation'=>1,'reversal_operation_uuid'=>$original,'plan_fingerprint'=>$fp];
+        $release = ['purpose'=>'abandon_match','direction'=>'reverse','release_operation_uuid'=>$releaseUuid,'reverse_hold_fingerprint'=>$fp,'quote'=>$quote+['abandoned'=>true],'acknowledgement'=>$ack];
+        $base = ['organization_id'=>$match->organization_id,'operation_uuid'=>$match->operation_uuid,'request_uuid'=>$request->request_uuid,'source_revision'=>$request->source_revision,'source_journal_id'=>$request->source_journal_id,'original_match_journal_id'=>97,'actor_id'=>4,'central_actor_id'=>323,'closure_permission'=>'unpost','snapshot'=>'{}'];
+        $db->table('finance_document_reverse_generations')->insert($base+['generation'=>1,'reversal_operation_uuid'=>$original,'state'=>'released','reverse_quote'=>json_encode($quote),'plan_fingerprint'=>$fp,'release_operation_uuid'=>$releaseUuid,'release_snapshot'=>json_encode($release),'released_at'=>now()]);
+        $snapshot = ['phase'=>'match_inverse_before_expense_unpost','original_source_journal_id'=>(int)$request->source_journal_id,'original_match_journal_id'=>97,'request_uuid'=>$request->request_uuid,'source_revision'=>$request->source_revision,'reverse_actor_id'=>4,'reverse_central_actor_id'=>323,'closure_permission'=>'unpost','cancel_request_uuid'=>$request->request_uuid,'cancel_source_revision'=>$request->source_revision,'cancel_expected_revision'=>null,'cancel_state'=>'cancelled','cancel_command'=>'cancel','reversal_generation'=>2,'reversal_operation_uuid'=>$current];
+        $db->table('finance_document_reverse_generations')->insert(array_replace($base,['generation'=>2,'reversal_operation_uuid'=>$current,'state'=>'prepared','snapshot'=>json_encode($snapshot)]));
+        $proof = ['reversal_generation'=>2,'reversal_operation_uuid'=>$current,'reverse_generation_state'=>'prepared','reverse_generation_snapshot'=>$snapshot,'reverse_snapshot_hash'=>SolaStockJournalContract::payloadHash($snapshot),'reverse_quote_hash'=>null];
+        $identity = ['reversal_generation'=>2,'reversal_operation_uuid'=>$current];
+        $generation = \App\Services\FinancialOrigins\OriginReceiptReverseGeneration::lock($db,$match,$request,$identity,$proof,'prepare');
+        $grn = GoodsReceipt::sole(); $line = $grn->lines()->sole();
+        $holdUuid = \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL,'financial-origin|'.$this->mapping->mapping_uuid.'|'.$original.'|'.$line->item_id.'|'.$grn->warehouse_id.'|reverse')->toString();
+        $hold = \App\Models\Tenant\PurchaseValuationHold::create(['organization_id'=>$grn->organization_id,'settlement_uuid'=>$holdUuid,'purpose'=>'origin_reverse','plan_revision'=>1,'item_id'=>$line->item_id,'warehouse_id'=>$grn->warehouse_id,'receipt_id'=>$grn->id,'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,'plan_fingerprint'=>$fp,'state'=>'released']);
+        $assert = fn()=>$generation->assertPredecessorsReleased($db,$match,$request,(int)$grn->organization_id,$this->mapping->mapping_uuid,(int)$line->item_id,(int)$grn->warehouse_id,(int)$grn->id);
+        $assert(); $this->assertSame(2,$generation->number()); $this->assertSame($current,$generation->operationUuid());
+        $quantity = StockLedger::sum('quantity'); $ledgerCount = StockLedger::count(); $holdCount = $db->table('purchase_valuation_holds')->count();
+        foreach (['active_hold','unknown_ack','prior_inverse','stale_generation'] as $failure) {
+            if ($failure==='active_hold') $hold->update(['state'=>'active']);
+            if ($failure==='unknown_ack') { $bad=$release;unset($bad['acknowledgement']);$db->table('finance_document_reverse_generations')->where('generation',1)->update(['release_snapshot'=>json_encode($bad)]); }
+            if ($failure==='prior_inverse') $db->table('finance_document_reverse_generations')->where('generation',1)->update(['inverse_journal_id'=>98]);
+            try { if ($failure==='stale_generation') \App\Services\FinancialOrigins\OriginReceiptReverseGeneration::lock($db,$match,$request,['reversal_generation'=>1,'reversal_operation_uuid'=>$original],$proof,'prepare'); else $assert(); $this->fail('Unsafe generation admitted: '.$failure); }
+            catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { $this->assertSame(409,$e->getStatusCode()); }
+            $hold->update(['state'=>'released']);$db->table('finance_document_reverse_generations')->where('generation',1)->update(['release_snapshot'=>json_encode($release),'inverse_journal_id'=>null]);
+        }
+        $assert();$this->assertSame($holdCount,$db->table('purchase_valuation_holds')->count());
+        $this->assertSame($ledgerCount,StockLedger::count());$this->assertSame($quantity,StockLedger::sum('quantity'));
+        $this->assertSame($quote,json_decode($db->table('finance_document_reverse_generations')->where('generation',1)->value('reverse_quote'),true));
+    }
+
 }
