@@ -45,7 +45,8 @@ final class SupplierReturnService
                 if (! $physical) throw ValidationException::withMessages(['lines' => 'Choose the received batch or serial number for this return.']);
                 $warehouse = (int) ($source->warehouse_id ?: $receipt->warehouse_id);
                 $this->warehouses->assertAllowed($warehouse);
-                $factor = (string) ($source->unit_conversion_factor ?: '1');
+                $factor = (string) $source->unit_conversion_factor;
+                if (! is_numeric($factor) || ! Decimal::gt($factor, '0')) throw ValidationException::withMessages(['lines' => 'The original receipt conversion requires review before returning these goods.']);
                 $quantity = Decimal::qty(Decimal::mul((string) $input['entered_qty'], $factor));
                 if (! Decimal::gt($quantity, '0') || Decimal::gt($quantity, (string) $source->accepted_qty) || Decimal::gt($quantity, (string) $physical->quantity)) {
                     throw ValidationException::withMessages(['lines' => 'Return quantities cannot exceed the accepted receipt quantities.']);
