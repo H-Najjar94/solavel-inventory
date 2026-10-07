@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Validator;
 /** Two-phase demand metadata only: financial credit belongs to Finance, shipment remains native Stock. */
 final class CreditDemandService {
  public function dispatch(array $data,int $actor):array {
+  if(in_array($data['purpose']??null,['reverse_prepare','reverse_commit','reverse_abandon','reverse_status'],true))return app(CreditDemandReversalService::class)->dispatch($data,$actor);
   Validator::make($data,['source_invoice_id'=>'required|integer|min:1','request_uuid'=>'required|uuid','source_revision'=>'required|string|size:64','credit_note_id'=>'required|integer|min:1','operation_uuid'=>'required|uuid','credit_revision'=>'required|string|size:64','purpose'=>'required|in:prepare,commit,abandon,status','lines'=>'required|array','lines.*.source_invoice_line_id'=>'required','lines.*.credit_note_line_id'=>'required|integer|min:1','lines.*.unfulfilled_quantity'=>'required|numeric|min:0'])->validate();
   $review=array_intersect_key($data,array_flip(['request_uuid','source_revision','credit_note_id','operation_uuid','credit_revision','purpose','hold_fingerprint']));$review['command']='reduce-demand';
   $proof=app(SolaBooksOutboxDeliveryService::class)->authorizeSales($actor,(int)$data['source_invoice_id'],'credit_notes.post',$review);

@@ -6,5 +6,5 @@ final class FulfillmentDemandCommand extends Model {
  use BelongsToOrganization;
  protected $table='sales_fulfillment_demand_commands';
  protected $guarded=['id'];
- protected $casts=['payload'=>'array'];
+ protected $casts=['payload'=>'array','reversal_snapshot'=>'array'];
 }

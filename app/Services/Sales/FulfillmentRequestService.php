@@ -75,7 +75,7 @@ final class FulfillmentRequestService
   $this->lockFinanceCommand($mapping,$known->source_payload,'upsert');
   $request=FulfillmentRequest::query()->whereKey($known->id)->lockForUpdate()->firstOrFail();
   abort_unless($request->source_revision===$known->source_revision,409,__('inventory.purchasing.source_changed'));
-  if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->where('state','prepared')->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
+  if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->whereIn('state',['prepared','reverse_prepared'])->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
   return$request;
  }
  public function guardOrderDemand(int $orderId):void {
@@ -84,7 +84,7 @@ final class FulfillmentRequestService
   $mapping=\App\Models\Tenant\IntegrationOrganizationMapping::query()->where('solastock_organization_id',$known->organization_id)->where('mapping_uuid',$known->organization_mapping_uuid)->firstOrFail();
   DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$known->source_invoice_id)->lockForUpdate()->firstOrFail();
   $request=FulfillmentRequest::query()->whereKey($known->id)->lockForUpdate()->firstOrFail();
-  if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->where('state','prepared')->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
+  if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->whereIn('state',['prepared','reverse_prepared'])->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
  }
  public function validateShipment(Shipment $shipment):void {
   $request=$this->lockShipmentSource($shipment);if(!$request)return;
@@ -142,7 +142,7 @@ final class FulfillmentRequestService
    }
    abort_unless(($data['expected_revision']??$data['source_revision'])===$r->source_revision,409);
    if($r->status==='cancelled')return $this->status($r);
-   if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))abort_if(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$r->organization_id)->where('fulfillment_request_id',$r->id)->where('state','prepared')->exists(),409,__('inventory.sales_handoff.credit_demand_pending'));
+   if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))abort_if(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$r->organization_id)->where('fulfillment_request_id',$r->id)->whereIn('state',['prepared','reverse_prepared'])->exists(),409,__('inventory.sales_handoff.credit_demand_pending'));
    if($r->sales_order_id){$order=SalesOrder::query()->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail();if($order->status!=='shipped'&&$order->status!=='cancelled')app(SalesOrderService::class)->cancel($order);}
    $r->update(['status'=>'cancelled']);return $this->changed($r);
   },3);
