@@ -2,6 +2,7 @@
 
 return [
     'sales_handoff' => [
+        'credit_quantity_precision' => 'The credited quantity cannot be represented in the Stock product unit. Review the credit quantity and unit with the accountant before posting.',
         'credit_demand_pending' => 'A credit is updating undelivered demand. Retry dispatch after the credit finishes, or ask the accountant to resume it.',
         'tracking_required' => 'Choose the required lot, serial number, or variant for this product before dispatching.',
         'order_not_dispatchable' => 'Confirm the sales order before dispatching its remaining quantities.',
