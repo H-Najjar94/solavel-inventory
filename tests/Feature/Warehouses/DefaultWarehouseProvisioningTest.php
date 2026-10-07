@@ -92,6 +92,13 @@ final class DefaultWarehouseProvisioningTest extends TestCase
         // Canonical app admission is the remote boundary; native resource rows/scopes are real.
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->with(943, $org, 'inventory')->andReturn(['allowed' => true, 'owner' => false, 'roles' => []]);
         $this->assertNull($service->authorizedId());
+        $request = \Illuminate\Http\Request::create('/api/v1/meta');
+        $request->setUserResolver(fn () => Auth::user());
+        $meta = app(\App\Http\Controllers\Api\V1\MetaController::class)
+            ->index($request, app(\App\Services\Access\InventoryPermissionService::class))->getData(true)['data'];
+        $this->assertNull($meta['default_warehouse_id']);
+        $this->assertNull($meta['settings']['default_warehouse_id']);
+        $this->assertSame($id, (int) InventorySetting::first()->default_warehouse_id);
         InventoryUserWarehouse::create(['user_id' => 943, 'warehouse_id' => $id, 'assigned_by' => 943]);
         $this->assertSame($id, $service->authorizedId());
         Warehouse::findOrFail($id)->update(['is_active' => false]);

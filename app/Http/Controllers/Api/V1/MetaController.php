@@ -26,15 +26,19 @@ class MetaController extends ApiController
         $connection = IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
         $currency = (array) data_get($connection?->meta, 'finance_currency_contract', []);
 
+        $default = app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId();
+        $settings = InventorySetting::query()->first();
+        $settings?->setAttribute('default_warehouse_id', $default);
+
         return $this->success([
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
             'organization_id' => $organizationId,
-            'default_warehouse_id' => app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId(),
+            'default_warehouse_id' => $default,
             'permissions' => $permissions->permissionsFor($request->user()),
             'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],
             'can_schedule_reports' => app(WarehouseAccessService::class)->allowedIds() === null && $permissions->can($request->user(), 'inventory.export_reports'),
             'tenant_mode' => $request->attributes->get('tenant_mode', 'live'), // live|demo
-            'settings' => InventorySetting::query()->first(),
+            'settings' => $settings,
             'document_currency' => [
                 'base' => $currency['base_currency_code'] ?? null,
                 'enabled' => array_values(array_filter((array) ($currency['enabled_currency_codes'] ?? []), fn ($code) => is_string($code) && preg_match('/^[A-Z]{3}$/D', $code))),
