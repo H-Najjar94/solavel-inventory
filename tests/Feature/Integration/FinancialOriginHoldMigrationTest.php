@@ -47,7 +47,7 @@ final class FinancialOriginHoldMigrationTest extends TestCase
         try {$legacy->fresh()->update(['source_bill_id'=>28]);$this->fail('Legacy source identity changed');}
         catch (ValidationException $e) {$this->assertArrayHasKey('settlement_uuid',$e->errors());}
         try {$origin->fresh()->update(['organization_id'=>999]);$this->fail('Typed source crossed organization');}
-        catch (ValidationException $e) {$this->assertArrayHasKey('settlement_uuid',$e->errors());}
+        catch (\RuntimeException $e) {$this->assertStringContainsString('organization_id is immutable',$e->getMessage());}
         (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->down();
         $this->assertSame('expense',$origin->fresh()->source_document_type);$this->assertSame($before,StockLedger::count());
     }
