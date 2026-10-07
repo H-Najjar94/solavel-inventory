@@ -61,6 +61,7 @@ final class LandedCostNativeValuationTest extends TestCase
         $this->initializeSalesFixture();
         $this->warehouse = F::warehouse();
         $supplier = Supplier::create(['code' => 'LANDED-QA', 'name' => 'Landed supplier', 'is_active' => true]);
+        $this->master('supplier', $supplier->id, 704);
         \App\Models\Tenant\IntegrationSetting::create(['integration' => 'solabooks', 'mode' => 'active', 'solabooks_organization_id' => 14,
             'meta' => ['client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'signing_key_id' => 'private-test',
                 'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD'], 'money_scale' => 2,
