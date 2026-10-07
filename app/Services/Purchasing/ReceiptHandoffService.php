@@ -78,7 +78,7 @@ final class ReceiptHandoffService
                 $missing[] = 'unit_mapping:'.$l->id;
             }
             $f = (string) ($l->unit_conversion_factor ?: '1');
-            $lines[] = ['source_line_id' => (string) $l->id, 'source_bill_line_id' => $request?->lines()->whereKey($l->receiving_request_line_id)->value('source_line_id'), 'item_id' => $l->item_id, 'item_name' => Item::query()->find($l->item_id)?->name, 'item_sku' => Item::query()->find($l->item_id)?->sku, 'unit_id' => $l->entered_unit_id, 'unit_label' => Unit::query()->find($l->entered_unit_id)?->code, 'item_external_id' => $item, 'unit_external_id' => $unit, 'quantity' => Decimal::qty(Decimal::div((string) $l->accepted_qty, $f)), 'unit_cost' => Decimal::cost(Decimal::mul((string) $l->unit_cost, $f))];
+            $lines[] = ['source_line_id' => (string) $l->id, 'source_bill_line_id' => $request?->lines()->whereKey($l->receiving_request_line_id)->value('source_line_id'), 'item_id' => $l->item_id, 'item_name' => Item::query()->find($l->item_id)?->name, 'item_sku' => Item::query()->find($l->item_id)?->sku, 'unit_id' => $l->entered_unit_id, 'unit_label' => Unit::query()->find($l->entered_unit_id)?->code, 'item_external_id' => $item, 'unit_external_id' => $unit, 'quantity' => Decimal::qty(Decimal::div((string) $l->accepted_qty, $f)), 'unit_cost' => Decimal::cost(Decimal::mul((string) $l->unit_cost, $f)), 'base_quantity' => (string) $l->accepted_qty, 'base_unit_id' => $l->base_unit_id, 'unit_conversion_factor' => $l->unit_conversion_factor === null ? null : (string) $l->unit_conversion_factor, 'unit_conversion_hash' => $l->unit_conversion_hash];
         }
         $currency = (array) data_get($journal->payload, 'currency', []);
         $uuid = (string) Str::uuid();
