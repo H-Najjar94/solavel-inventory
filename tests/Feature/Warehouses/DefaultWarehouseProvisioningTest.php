@@ -26,12 +26,6 @@ final class DefaultWarehouseProvisioningTest extends TestCase
         $this->useTenantA();
     }
 
-    protected function tearDown(): void
-    {
-        $this->rollbackTenantAware();
-        parent::tearDown();
-    }
-
     public function test_empty_organization_initializes_once_without_stock_or_assignments(): void
     {
         $org = app(OrganizationContext::class)->idOrFail();
