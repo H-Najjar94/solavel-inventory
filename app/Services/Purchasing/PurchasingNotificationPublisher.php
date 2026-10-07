@@ -12,7 +12,7 @@ final class PurchasingNotificationPublisher
     public function changed(ReceivingRequest $request): void
     {
         $org=(int)$request->organization_id;$id=(int)$request->id;
-        DB::connection('tenant')->afterCommit(fn()=> $this->queue($org,$id));
+        DB::connection('tenant')->afterCommit(function()use($org,$id){try{$this->queue($org,$id);}catch(\Throwable){\Illuminate\Support\Facades\Log::warning('purchasing.notification.enqueue_failed',['organization_id'=>$org,'request_id'=>$id]);}});
     }
 
     private function queue(int $org,int $id): void {
@@ -30,6 +30,13 @@ final class PurchasingNotificationPublisher
         if (!Schema::connection('tenant')->hasTable('purchasing_notification_outbox')) return 0;
         $mapping=IntegrationOrganizationMapping::query()->where('solastock_organization_id',$org)->where('central_organization_id',$org)->where('tenant_database_identity',DB::connection('tenant')->getDatabaseName())->where('integration','solabooks')->where('status','verified')->where('activation_state','active')->first();if(!$mapping)return 0;
         $secret=(string)config('solavel_sync.secret');$base=rtrim((string)config('sso.central_app_url'),'/');if($secret===''||$base==='')return 0;
+        // Bounded rotating projection recovers a committed request whose after-commit
+        // queue insert failed. Persistent native requests remain the source of truth.
+        $cursorKey='purchasing-notification-recovery:'.DB::connection('tenant')->getDatabaseName().':'.$org;
+        $cache=\Illuminate\Support\Facades\Cache::store('file');$cursor=(int)$cache->get($cursorKey,0);
+        $requests=ReceivingRequest::query()->where('organization_id',$org)->where('id','>',$cursor)->orderBy('id')->limit(20)->get();
+        foreach($requests as$request)$this->queue($org,(int)$request->id);
+        $cache->put($cursorKey,$requests->count()<20?0:(int)$requests->last()->id,86400);
         $count=0;$deadline=microtime(true)+15;
         for($i=0;$i<min(2,max(1,$limit));$i++) {
             if(microtime(true)>=$deadline)break;
