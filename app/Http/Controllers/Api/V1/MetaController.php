@@ -42,6 +42,8 @@ class MetaController extends ApiController
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
             'organization_id' => $organizationId,
             'supplier_return_requests_available' => $returnRequests,
+            'financial_origin_requests_available' => $schema->hasTable('stock_financial_origin_requests')
+                && class_exists(\App\Services\FinancialOrigins\OriginDispatchService::class),
             'default_warehouse_id' => $default,
             'permissions' => $permissions->permissionsFor($request->user()),
             'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],
