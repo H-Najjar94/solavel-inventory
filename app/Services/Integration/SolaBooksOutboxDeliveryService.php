@@ -263,7 +263,7 @@ class SolaBooksOutboxDeliveryService
     /** Signed, invoice-specific Finance authority; never grants a Stock application permission. */
     public function authorizeSales(int $actorId, int $invoiceId, string $permission, array $reviewFacts = []): array
     {
-        abort_unless($actorId > 0 && $invoiceId > 0 && in_array($permission, ['view', 'edit_draft', 'post', 'unpost', 'void'], true), 403);
+        abort_unless($actorId > 0 && $invoiceId > 0 && in_array($permission, ['view', 'edit_draft', 'post', 'unpost', 'void', 'credit_notes.post', 'credit_notes.void'], true), 403);
         $mapping = app(ReceivingRequestService::class)->mapping();
         $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
         $key = 'sales:authorize:'.Str::uuid();
@@ -276,7 +276,7 @@ class SolaBooksOutboxDeliveryService
                 'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid],
             'actor_id' => $actorId, 'source_invoice_id' => $invoiceId, 'permission' => $permission,
         ];
-        $payload += array_intersect_key($reviewFacts, array_flip(['party_command', 'party_customer_id', 'request_uuid', 'source_revision', 'expected_revision', 'command', 'closing_invoice_journal_id']));
+        $payload += array_intersect_key($reviewFacts, array_flip(['party_command', 'party_customer_id', 'request_uuid', 'source_revision', 'expected_revision', 'command', 'closing_invoice_journal_id', 'purpose', 'credit_note_id', 'operation_uuid', 'credit_revision', 'hold_fingerprint', 'reversal_operation_uuid', 'closure_permission', 'original_credit_journal_id']));
         $body = SolaStockJournalContract::canonicalJson($payload);
         $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/sales/authorize', $this->journalEndpoint());
         if (! $endpoint || $endpoint === $this->journalEndpoint()) {
@@ -288,6 +288,41 @@ class SolaBooksOutboxDeliveryService
         $data = (array) $response->json('data');
         abort_unless(($data['allowed'] ?? false) === true && (int) ($data['actor_id'] ?? 0) === $actorId
             && (int) ($data['source_invoice_id'] ?? 0) === $invoiceId && ($data['permission'] ?? null) === $permission
+            && (int) ($data['finance_organization_id'] ?? 0) === (int) $mapping->finance_organization_id
+            && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id
+            && ($data['organization_mapping_uuid'] ?? null) === $mapping->mapping_uuid, 403);
+
+        return $data;
+    }
+
+    public function authorizeOrigin(int $actorId, \App\Services\FinancialOrigins\FinancialOrigin $origin, string $permission, array $reviewFacts = []): array
+    {
+        abort_unless($actorId > 0 && $origin->documentId > 0 && in_array($permission, ['view', 'post', 'unpost', 'void'], true), 403);
+        $mapping = app(ReceivingRequestService::class)->mapping();
+        $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
+        $sales = $origin->domain() === 'sales';
+        $key = 'origin:authorize:'.Str::uuid();
+        $payload = [
+            'source_app' => 'solastock', 'schema_version' => 'financial-origin.v1', 'contract_version' => SolaStockJournalContract::VERSION,
+            'event_type' => $sales ? 'sales.origin.authorize' : 'purchasing.origin.authorize', 'event_uuid' => (string) Str::uuid(), 'external_source_key' => $key,
+            'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id,
+            'identity' => ['central_client_id' => $mapping->central_client_id, 'central_organization_id' => $mapping->central_organization_id,
+                'inventory_organization_id' => $mapping->solastock_organization_id, 'finance_organization_id' => $mapping->finance_organization_id,
+                'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid],
+            'actor_id' => $actorId, 'source_document_type' => $origin->type, 'source_document_id' => $origin->documentId, 'source_journal_id' => $origin->journalId, 'permission' => $permission,
+        ];
+        $payload += array_intersect_key($reviewFacts, array_flip(['request_uuid', 'source_revision', 'expected_revision', 'command', 'operation_uuid', 'purpose', 'closure_permission', 'closing_source_journal_id']));
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', $sales ? '/sales/origins/authorize' : '/purchasing/origins/authorize', $this->journalEndpoint());
+        if (! $endpoint || $endpoint === $this->journalEndpoint()) {
+            throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        }
+        $event = new IntegrationOutboxEvent(['organization_id' => $mapping->solastock_organization_id, 'idempotency_key' => $key, 'event_uuid' => $payload['event_uuid']]);
+        $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
+        abort_unless($response->successful(), in_array($response->status(), [403, 404], true) ? 403 : 503, __('inventory.purchasing.authority_unavailable'));
+        $data = (array) $response->json('data');
+        abort_unless(($data['allowed'] ?? false) === true && (int) ($data['actor_id'] ?? 0) === $actorId
+            && ($data['source_document_type'] ?? null) === $origin->type && (int) ($data['source_document_id'] ?? 0) === $origin->documentId && (int) ($data['source_journal_id'] ?? 0) === $origin->journalId && ($data['permission'] ?? null) === $permission
             && (int) ($data['finance_organization_id'] ?? 0) === (int) $mapping->finance_organization_id
             && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id
             && ($data['organization_mapping_uuid'] ?? null) === $mapping->mapping_uuid, 403);
@@ -319,33 +354,6 @@ class SolaBooksOutboxDeliveryService
             && (int) ($data['central_organization_id'] ?? 0) === (int) $mapping->central_organization_id
             && ($data['organization_mapping_uuid'] ?? null) === $mapping->mapping_uuid, 403);
 
-        return $data;
-    }
-
-    /** Signed read-only consumer admission; registry or commercial entitlement alone is insufficient. */
-    public function supplierReturnCapability(): array
-    {
-        $mapping=app(ReceivingRequestService::class)->mapping();
-        $this->safety->assertDeliveryEnabledFor((int)$mapping->solastock_organization_id);
-        $setting=IntegrationSetting::query()->where('organization_id',$this->context->idOrFail())->where('integration','solabooks')->firstOrFail();
-        $key='purchasing:return-capability:'.Str::uuid();
-        $payload=['source_app'=>'solastock','schema_version'=>'purchasing.v1','contract_version'=>SolaStockJournalContract::VERSION,
-            'event_type'=>'purchasing.return.capability','event_uuid'=>(string)Str::uuid(),'external_source_key'=>$key,
-            'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
-            'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,
-                'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
-                'integration_mapping_id'=>$mapping->id,'signing_key_id'=>(string)data_get($setting->meta,'signing_key_id'),'organization_mapping_uuid'=>$mapping->mapping_uuid]];
-        $body=SolaStockJournalContract::canonicalJson($payload);
-        $endpoint=preg_replace('~/journal-entries(?:\\?.*)?$~','/purchasing/returns/capability',$this->journalEndpoint());
-        abort_unless($endpoint && $endpoint!==$this->journalEndpoint(),409,__('inventory.purchasing.connection_review_required'));
-        $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
-        $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
-        abort_unless($response->successful(),$response->status()===403?403:503,__('inventory.purchasing.authority_unavailable'));
-        $data=(array)$response->json('data');
-        abort_unless(($data['contract']??null)==='purchasing.return.v1'
-            && (int)($data['finance_organization_id']??0)===(int)$mapping->finance_organization_id
-            && (int)($data['central_organization_id']??0)===(int)$mapping->central_organization_id
-            && ($data['organization_mapping_uuid']??null)===$mapping->mapping_uuid,403);
         return $data;
     }
 
@@ -403,6 +411,44 @@ class SolaBooksOutboxDeliveryService
         $response = $this->signedClient($event, $payload, $body, $endpoint)->withBody($body, 'application/json')->post($endpoint);
 
         return ['successful' => $response->successful(), 'status' => $response->status(), 'data' => (array) ($response->json('data') ?? [])];
+    }
+
+    /** Supplier-return intent authority forwards identity only; canonical economics are independently fetched. */
+    public function authorizeSupplierReturnRequest(array $data, string $operation, int $capturedCentralActor): array
+    {
+        abort_unless($capturedCentralActor > 0 && in_array($operation, ['options', 'create', 'status', 'post'], true), 403);
+        $mapping = app(ReceivingRequestService::class)->mapping();
+        $setting = IntegrationSetting::query()->where('organization_id', $this->context->idOrFail())->where('integration', 'solabooks')->firstOrFail();
+        $key = 'purchasing:return-request-authorize:'.Str::uuid();
+        $facts = (array) ($data['canonical_payload'] ?? $data);
+        $payload = ['source_app'=>'solastock', 'schema_version'=>'purchasing.return_request.v1', 'contract_version'=>SolaStockJournalContract::VERSION,
+            'event_type'=>'purchasing.return_request.authorize', 'event_uuid'=>(string) Str::uuid(), 'external_source_key'=>$key,
+            'inventory_organization_id'=>$mapping->solastock_organization_id, 'finance_organization_id'=>$mapping->finance_organization_id,
+            'identity'=>['central_client_id'=>$mapping->central_client_id, 'central_organization_id'=>$mapping->central_organization_id,
+                'inventory_organization_id'=>$mapping->solastock_organization_id, 'finance_organization_id'=>$mapping->finance_organization_id,
+                'integration_mapping_id'=>$mapping->id, 'signing_key_id'=>(string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid'=>$mapping->mapping_uuid],
+            'actor_id'=>$capturedCentralActor, 'operation'=>$operation];
+        if ($operation === 'options') {
+            abort_unless((int) ($facts['source_bill_id'] ?? 0)>0 && (int) ($facts['finance_receipt_id'] ?? 0)>0,422);
+            $payload += ['source_bill_id'=>(int) $facts['source_bill_id'], 'finance_receipt_id'=>(int) $facts['finance_receipt_id']];
+        } else {
+            $uuid = $data['operation_uuid'] ?? $facts['operation_uuid'] ?? null;
+            \Illuminate\Support\Facades\Validator::make(['operation_uuid'=>$uuid], ['operation_uuid'=>'required|uuid'])->validate();
+            $payload['operation_uuid']=$uuid;
+        }
+        $body = SolaStockJournalContract::canonicalJson($payload);
+        $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/return-requests/authorize', $this->journalEndpoint());
+        if (!$endpoint || $endpoint === $this->journalEndpoint()) throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
+        $event = new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
+        $response = $this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
+        abort_unless($response->successful(), in_array($response->status(),[403,404],true)?403:503, __('inventory.purchasing.authority_unavailable'));
+        $proof = (array) $response->json('data');
+        abort_unless(($proof['allowed']??false)===true && ($proof['contract']??null)==='purchasing.return_request.v1' && ($proof['operation']??null)===$operation
+            && (int) ($proof['actor_id']??0)===$capturedCentralActor && (int) ($proof['finance_organization_id']??0)===(int) $mapping->finance_organization_id
+            && (int) ($proof['central_organization_id']??0)===(int) $mapping->central_organization_id
+            && data_get($proof,'canonical_payload.organization_mapping_uuid')===$mapping->mapping_uuid,403);
+        if ($operation !== 'options') abort_unless(($proof['operation_uuid']??null)===$payload['operation_uuid'] && ($proof['organization_mapping_uuid']??null)===$mapping->mapping_uuid,403);
+        return $proof;
     }
 
     public function rotateSigningKey(): IntegrationSetting

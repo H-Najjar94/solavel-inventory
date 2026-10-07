@@ -242,6 +242,16 @@ CREATE TABLE IF NOT EXISTS suppliers (
   created_at TIMESTAMP NULL,
   updated_at TIMESTAMP NULL
 );
+ALTER TABLE bills ADD COLUMN deleted_at TIMESTAMP NULL;
+ALTER TABLE journal_entries ADD COLUMN source VARCHAR(40) NULL, ADD COLUMN source_type VARCHAR(191) NULL, ADD COLUMN source_id BIGINT UNSIGNED NULL, ADD COLUMN source_key VARCHAR(191) NULL;
+CREATE TABLE finance_supplier_return_requests (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, organization_id BIGINT UNSIGNED NOT NULL, organization_mapping_uuid CHAR(36) NOT NULL, operation_uuid CHAR(36) NOT NULL,
+ bill_id BIGINT UNSIGNED NOT NULL, bill_journal_id BIGINT UNSIGNED NOT NULL, finance_receipt_id BIGINT UNSIGNED NOT NULL, stock_receipt_id BIGINT UNSIGNED NOT NULL, receipt_mapping_uuid CHAR(36) NOT NULL,
+ actor_id BIGINT UNSIGNED NOT NULL, physical_actor_id BIGINT UNSIGNED NULL, stock_request_id BIGINT UNSIGNED NULL, stock_return_id BIGINT UNSIGNED NULL,
+ state VARCHAR(32) NOT NULL DEFAULT 'pending_delivery', payload_hash CHAR(64) NOT NULL, payload LONGTEXT NOT NULL, response LONGTEXT NULL,
+ attempts INT UNSIGNED NOT NULL DEFAULT 0, last_error VARCHAR(96) NULL, next_attempt_at TIMESTAMP NULL, lease_uuid CHAR(36) NULL, lease_expires_at TIMESTAMP NULL, created_at TIMESTAMP NULL, updated_at TIMESTAMP NULL,
+ UNIQUE KEY finance_supplier_return_request_identity (organization_id,operation_uuid), KEY finance_supplier_return_request_recovery (organization_id,state,next_attempt_at), KEY finance_supplier_return_request_bill (organization_mapping_uuid,bill_id)
+);
 SQL
 done
 

@@ -24,6 +24,7 @@ final class FinanceDocumentLifecycleAuthority
     public const ACTIONS = [
         'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',
         'purchasing.request.upsert', 'purchasing.request.status', 'purchasing.request.cancel',
+        'sales.request.upsert', 'sales.request.status', 'sales.request.cancel', 'sales.request.reduce-demand',
         'finance-allocations.review-status',
         'finance-allocations.commit',
         'finance-allocations.release',
@@ -40,6 +41,18 @@ final class FinanceDocumentLifecycleAuthority
      * saga itself only accepts reviewed category/unit mappings and native item rules, and
      * opens no browsing, editing, stock or warehouse operation.
      */
+    /** Value-only operations backed by an exact posted native LandedCost proof. */
+    public const LANDED_COST_ACTIONS = [
+        'purchasing.landed_cost.prepare', 'purchasing.landed_cost.apply',
+        'purchasing.landed_cost.reverse', 'purchasing.landed_cost.status',
+        'purchasing.landed_cost.release',
+    ];
+
+    /** Nonphysical return intent only; physical posting still requires Stock access. */
+    public const RETURN_REQUEST_ACTIONS = [
+        'purchasing.return_request.options', 'purchasing.return_request.create', 'purchasing.return_request.status',
+    ];
+
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
@@ -58,7 +71,7 @@ final class FinanceDocumentLifecycleAuthority
 
     public static function scopeFor(string $action): ?string
     {
-        return in_array($action, self::ACTIONS, true) ? self::SCOPE
+        return (in_array($action, self::ACTIONS, true) || in_array($action, self::LANDED_COST_ACTIONS, true) || in_array($action, self::RETURN_REQUEST_ACTIONS, true)) ? self::SCOPE
             : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 
