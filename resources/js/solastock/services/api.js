@@ -4,6 +4,12 @@ import { text as feedbackText } from '../../shared/feedback/messages';
 
 const BASE = `${window.SOLASTOCK_BASE_PATH ?? '/inventory'}/api/v1`;
 const uncertain = new Set();
+const originTypes = new Map();
+function rememberOrigins(result) {
+    const rows=Array.isArray(result?.data)?result.data:[result?.data?.request];
+    for(const row of rows)if(row?.request_uuid&&['expense','sales_receipt'].includes(row.source_document_type))originTypes.set(`${organizationScope}:${row.request_uuid}`,row.source_document_type);
+    return result;
+}
 let organizationScope = "unresolved";
 function bodyFingerprint(body) {
     const raw = body instanceof FormData ? JSON.stringify([...body.entries()].map(([key,value])=>[key,value instanceof File?[value.name,value.size,value.type,value.lastModified]:value])) : String(body || "");
@@ -19,7 +25,7 @@ function transport(url, options) {
     const execute = async () => {
         const unknown = (metadata = {}) => {
             uncertain.add(key);
-            void feedback.failure(undefined, true, statusRoute(url,window.SOLASTOCK_BASE_PATH??'/inventory'));
+            void feedback.failure(undefined, true, statusRoute(url,window.SOLASTOCK_BASE_PATH??'/inventory',originTypes.get(`${organizationScope}:${new URL(url).pathname.split('/financial-origin-requests/')[1]?.split('/')[0]}`)));
             return Object.assign(new Error(feedbackText('unknown')), {...metadata, feedbackHandled:true, outcomeUnknown:true});
         };
         if (mutation && uncertain.has(key)) throw unknown();
@@ -66,8 +72,8 @@ function requestForm(path,formData) {
 }
 
 export const api = {
-    financialOriginRequests: (side, state='active', page=1) => request('/financial-origin-requests', {params:{side,state,page}}),
-    financialOriginOptions: (uuid) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/options`),
+    financialOriginRequests: (side, state='active', page=1, request_uuid=null) => request('/financial-origin-requests', {params:{side,state,page,request_uuid}}).then(rememberOrigins),
+    financialOriginOptions: (uuid) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/options`).then(rememberOrigins),
     approveFinancialOrigin: (uuid, body) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/approve`, {method:'POST',body}),
     prepareFinancialOrigin: (uuid, body) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/prepare`, {method:'POST',body}),
     executeFinancialOrigin: (uuid, body) => request(`/financial-origin-requests/${encodeURIComponent(uuid)}/execute`, {method:'POST',body}),

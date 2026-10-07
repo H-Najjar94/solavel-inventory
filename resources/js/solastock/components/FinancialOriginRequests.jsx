@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Link} from 'react-router-dom';
+import {Link,useSearchParams} from 'react-router-dom';
 import {api} from '../services/api';
 import {useApiQuery} from '../hooks/useApiQuery';
 import {useMeta} from '../stores/meta';
@@ -10,9 +10,11 @@ import {LotCapture,LotSelector,SerialNumberListInput,SerialSelector} from './tra
 /** Native typed sources have their own persisted identities and operation UUIDs. */
 export function FinancialOriginRequests({side,state='active'}) {
  const meta=useMeta(),tenant=useTenant(),{locale}=useI18n(),ar=locale==='ar';
+ const [params]=useSearchParams(),rawOrigin=params.get('origin'),origin=/^[0-9a-f-]{36}$/i.test(rawOrigin??'')?rawOrigin:null;
  const [page,setPage]=useState(1),[selected,setSelected]=useState(null);
  useEffect(()=>{setPage(1);setSelected(null);},[state,tenant.organization_id]);
- const query=useApiQuery(['financial-origins',tenant.organization_id,side,state,page],()=>api.financialOriginRequests(side,state,page),{enabled:meta.financial_origin_requests_available===true,select:r=>r});
+ const query=useApiQuery(['financial-origins',tenant.organization_id,side,state,page,origin],()=>api.financialOriginRequests(side,state,page,origin),{enabled:meta.financial_origin_requests_available===true,select:r=>r});
+ useEffect(()=>{if(origin){const row=query.data?.data?.find(r=>r.request_uuid===origin);if(row)setSelected(row);}},[origin,query.data]);
  if(!meta.financial_origin_requests_available)return null;
  if(query.isError)return <div className="banner banner--warn" role="alert">{ar?'تعذر تحميل الطلبات المرتبطة.':'Linked requests could not be loaded.'} <button className="btn" onClick={()=>query.refetch()}>{ar?'إعادة المحاولة':'Retry'}</button></div>;
  const rows=query.data?.data??[],pagination=query.data?.pagination;
