@@ -45,7 +45,7 @@ final class CreditDemandService {
    }
    abort_unless($c,404);abort_unless(($proof['hold_fingerprint']??null)===$c->hold_fingerprint&&($data['hold_fingerprint']??null)===$c->hold_fingerprint,403);
    if($data['purpose']==='abandon'){
-    abort_unless($c->state!=='committed'&&$intent->state==='abandoned'&&!$intent->credit_journal_id,409);$c->update(['state'=>'abandoned']);return$this->result($c,$r,$scope);
+    abort_unless($c->state!=='committed'&&in_array($intent->state,['abandon_pending','abandoned'],true)&&!$intent->credit_journal_id,409);$c->update(['state'=>'abandoned']);return$this->result($c,$r,$scope);
    }
    if($c->state==='committed')return$this->result($c,$r,$scope);abort_unless($c->state==='prepared'&&in_array($intent->state,['commit_pending','committed'],true),409);
    $creditJournal=$db->table('journal_entries')->where('organization_id',$mapping->finance_organization_id)->where('id',$intent->credit_journal_id)->where('source','NOTE')->where('source_type','App\\Models\\CreditNote')->where('source_id',$credit->id)->lockForUpdate()->first();abort_unless($creditJournal&&$creditJournal->status==='posted'&&empty($creditJournal->voided_at)&&empty($creditJournal->deleted_at)&&(int)$creditJournal->id===(int)($proof['credit_journal_id']??0),409);
