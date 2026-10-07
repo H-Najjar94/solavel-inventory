@@ -19,8 +19,9 @@ final class SalesNotificationPublisher
 
             if (!Schema::connection('tenant')->hasTable('sales_notification_outbox')) return;
             $rr=FulfillmentRequest::query()->where('organization_id',$org)->with('lines')->find($id);if(!$rr)return;
-            $lines=$rr->lines->map(fn($line)=>[(int)$line->id,(string)$line->requested_qty,(string)$line->fulfilled_qty])->sortBy(0)->values()->all();
-            $fingerprint=hash('sha256',json_encode([$rr->request_uuid,$rr->source_revision,$rr->status,$rr->warehouse_id,((bool)$rr->approved_at && hash_equals((string)$rr->source_revision,(string)$rr->approved_revision)),$lines],JSON_THROW_ON_ERROR));
+            $lines=$rr->lines->map(fn($line)=>[(int)$line->id,(string)$line->requested_qty,(string)$line->fulfilled_qty,(string)($line->cancelled_qty??'0')])->sortBy(0)->values()->all();
+            $activeWarehouseExists=DB::connection('tenant')->table('warehouses')->where('organization_id',$org)->where('is_active',true)->exists();
+            $fingerprint=hash('sha256',json_encode([$activeWarehouseExists,$rr->request_uuid,$rr->source_revision,$rr->status,$rr->warehouse_id,((bool)$rr->approved_at && hash_equals((string)$rr->source_revision,(string)$rr->approved_revision)),$lines],JSON_THROW_ON_ERROR));
             DB::connection('tenant')->table('sales_notification_outbox')->insertOrIgnore(['organization_id'=>$org,'request_id'=>$id,'transition_fingerprint'=>$fingerprint,'state'=>'pending','attempts'=>0,'created_at'=>now(),'updated_at'=>now()]);
     }
 
