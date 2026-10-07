@@ -49,6 +49,7 @@ import PackDetailPage from '../pages/PackDetailPage.jsx';
 import ShipmentsPage from '../pages/ShipmentsPage.jsx';
 import ShipmentDetailPage from '../pages/ShipmentDetailPage.jsx';
 import SupplierReturnsPage from '../pages/SupplierReturnsPage.jsx';
+import SupplierReturnRequestsPage from '../pages/SupplierReturnRequestsPage.jsx';
 import SalesReturnsPage from '../pages/SalesReturnsPage.jsx';
 import SalesReturnFormPage from '../pages/SalesReturnFormPage.jsx';
 import SalesReturnDetailPage from '../pages/SalesReturnDetailPage.jsx';
@@ -138,6 +139,7 @@ export const router = createBrowserRouter(
                 { path: 'purchase-orders/new', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
                 { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
                 { path: 'purchase-orders/:id/edit', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
+                { path: 'supplier-return-requests', element: protectedElement(<SupplierReturnRequestsPage />, 'inventory.view_stock') },
                 { path: 'supplier-returns', element: protectedElement(<SupplierReturnsPage />, 'inventory.view_stock') },
                 { path: 'receiving-requests', element: protectedElement(<ReceivingRequestsPage />, 'inventory.receive_goods') },
                 { path: 'goods-receipts/from-request/:requestId', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.receive_goods') },

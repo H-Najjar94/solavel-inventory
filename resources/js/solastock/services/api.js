@@ -66,6 +66,8 @@ function requestForm(path,formData) {
 }
 
 export const api = {
+    supplierReturnRequests: () => request('/supplier-return-requests'),
+    postSupplierReturnRequest: (uuid,body) => request(`/supplier-return-requests/${encodeURIComponent(uuid)}/post`,{method:'POST',body}),
     approveReceivingRequest: (id,body) => request(`/purchasing/requests/${id}/approve`,{method:'POST',body}),
     supplierReturns: (params) => request('/supplier-returns', { params }),
     supplierReturn: (id) => request(`/supplier-returns/${id}`),
