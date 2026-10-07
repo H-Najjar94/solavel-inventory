@@ -1,2 +1,2 @@
 <?php
-return ['credit_before_return'=>'Ask the accountant to reverse the linked customer credit before reversing this physical return. Payments and refunds are separate actions.', 'refresh_source'=>'The linked financial document changed. Refresh and review it before reversing this return.'];
+return ['supplier_credit_before_return'=>'Ask the accountant to void the linked supplier credit before reversing this physical return. Applied credits and posted refunds must be resolved separately.', 'credit_before_return'=>'Ask the accountant to reverse the linked customer credit before reversing this physical return. Payments and refunds are separate actions.', 'refresh_source'=>'The linked financial document changed. Refresh and review it before reversing this return.'];
