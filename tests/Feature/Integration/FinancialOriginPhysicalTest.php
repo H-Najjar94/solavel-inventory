@@ -90,7 +90,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $reserve=app(\App\Services\Stock\StockReservationService::class);$order=\App\Models\Tenant\SalesOrder::findOrFail(FinancialOriginRequest::sole()->sales_order_id);
         $reserve->reserveSerial($this->item->id,$this->warehouse->id,$serial->id,'sales_order',$order->id);
         $foreign=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->skip(2)->firstOrFail();
-        $otherOrder=app(\App\Services\Documents\SalesOrderService::class)->createDraft(['warehouse_id'=>$this->warehouse->id,'customer_id'=>$order->customer_id,'order_date'=>'2026-10-07','currency_code'=>'JOD'],[['item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'ordered_qty'=>'1','unit_price'=>'7']]);
+        $otherOrder=app(\App\Services\Documents\SalesOrderService::class)->createDraft(['warehouse_id'=>$this->warehouse->id,'customer_id'=>$order->customer_id,'order_date'=>'2026-10-07','currency_code'=>'JOD'],[['item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'ordered_qty'=>'1','unit_price'=>'7','variant_id'=>$variant->id]]);
         $reserve->reserveSerial($this->item->id,$this->warehouse->id,$foreign->id,'sales_order',$otherOrder->id);
         $options=$service->optionsNative($op,336);$this->assertCount(1,$options['operations']);$this->assertSame($op,$options['operations'][0]['payload']);
         $this->assertSame([$variant->id],array_column($options['lines'][0]['variant_choices'],'id'));
