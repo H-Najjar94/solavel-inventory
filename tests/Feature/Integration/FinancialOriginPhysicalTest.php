@@ -87,11 +87,9 @@ final class FinancialOriginPhysicalTest extends TestCase
     /** Explicit Finance closure projection seam; Stock GRN, inverse ledger and immutable events are native. */
     private function reversedExpenseFixture():GoodsReceipt
     {
-        [,,$op]=$this->admitted('expense');
-        $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;
-        $meta['transport_enabled_workflows']=array_merge($meta['transport_enabled_workflows'],['grn.posted','grn.reversed']);$setting->meta=$meta;$setting->save();
-        app(OriginDispatchService::class)->executeNative($op,336);$this->actor(323,true);
-        $db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
+        $this->useTenantA();$db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
+        if(!$schema->hasTable('expenses'))$schema->create('expenses',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('customer_id')->nullable();$t->unsignedBigInteger('vendor_id')->nullable();});
+        if(!$schema->hasTable('finance_document_requests'))$schema->create('finance_document_requests',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->string('side');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->char('source_revision',64);$t->string('command');$t->json('payload');});
         $add=function($table,$name,$callback)use($schema){if(!$schema->hasColumn($table,$name))$schema->table($table,fn($t)=>$callback($t,$name));};
         $add('expenses','status',fn($t,$n)=>$t->string($n)->nullable());
         $add('finance_document_requests','state',fn($t,$n)=>$t->string($n)->nullable());
@@ -102,6 +100,11 @@ final class FinancialOriginPhysicalTest extends TestCase
         if(!$schema->hasTable('action_logs'))$schema->create('action_logs',function($t){$t->id();$t->string('controller');$t->string('method');$t->unsignedBigInteger('user_id');$t->json('data');});
         if(!$schema->hasTable('finance_document_positions'))$schema->create('finance_document_positions',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('position_uuid');$t->string('side');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->unsignedBigInteger('source_document_line_id');});
         if(!$schema->hasTable('finance_document_matches'))$schema->create('finance_document_matches',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('operation_uuid');$t->uuid('position_uuid');$t->uuid('reversal_operation_uuid');$t->unsignedBigInteger('source_document_line_id');$t->unsignedBigInteger('journal_entry_id');$t->unsignedBigInteger('reversal_journal_id');$t->string('state');$t->string('reverse_state');$t->string('closure_state');$t->json('closure_snapshot');});
+        $this->tenantTestManager->cleanup();
+        [,,$op]=$this->admitted('expense');
+        $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;
+        $meta['transport_enabled_workflows']=array_merge($meta['transport_enabled_workflows'],['grn.posted','grn.reversed']);$setting->meta=$meta;$setting->save();
+        app(OriginDispatchService::class)->executeNative($op,336);$this->actor(323,true);
         $r=FinancialOriginRequest::sole();$r->update(['status'=>'cancelled']);
         $db->table('finance_document_requests')->where('request_uuid',$r->request_uuid)->update(['command'=>'cancel','state'=>'cancelled']);
         $db->table('expenses')->where('id',850)->update(['status'=>'draft']);
@@ -118,7 +121,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $db->table('finance_document_matches')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'operation_uuid'=>$match,'position_uuid'=>$position,
             'reversal_operation_uuid'=>$reverse,'source_document_line_id'=>851,'journal_entry_id'=>96,'reversal_journal_id'=>97,'state'=>'reversed','reverse_state'=>'committed','closure_state'=>'completed','closure_snapshot'=>json_encode($snapshot)]);
         $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOriginPhysicalReversal')->andReturnUsing(fn($facts)=>$facts+[
-            'allowed'=>true,'actor_id'=>0,'authority_kind'=>'posted_financial_origin_physical_reversal','finance_organization_id'=>14,'central_organization_id'=>1,
+            'allowed'=>true,'actor_id'=>0,'authority_kind'=>'posted_financial_origin_physical_reversal','finance_organization_id'=>14,'central_organization_id'=>$this->mapping->central_organization_id,
             'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'matches'=>[['operation_uuid'=>$match,'position_uuid'=>$position,'closure_state'=>'completed',
                 'closure_snapshot_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($snapshot)]]]);
         return GoodsReceipt::sole();
