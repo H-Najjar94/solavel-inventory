@@ -160,6 +160,7 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame('customer',IntegrationMasterDataMapping::query()->sole()->entity_type);
  }
  public function test_customer_review_excludes_supplier_candidates_and_preserves_exact_customer_link():void {
+  config(['finance_workspace.secret'=>str_repeat('k',48)]);
   DB::connection('tenant')->table('customers')->insert(['id'=>992,'organization_id'=>14,'name'=>'Reviewed customer','is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);
   Supplier::create(['code'=>'SUPPLIER-ONLY','name'=>'Reviewed customer','is_active'=>true]);
   $target=\App\Models\Tenant\Customer::create(['code'=>'CUSTOMER-ONLY','name'=>'Reviewed customer','is_active'=>true]);
