@@ -44,6 +44,20 @@ final class FinanceWorkspaceController
         abort_unless($org && $central->table('clients')->where('id', $input['client_id'])
             ->where('is_active', true)->whereNull('deleted_at')->exists(), 403, 'workspace_organization_unavailable');
         if ((int) $input['actor_id'] === 0) {
+            if (in_array($input['action'], FinanceDocumentLifecycleAuthority::FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS, true)) {
+                abort_unless(($input['authority_kind'] ?? null) === 'posted_financial_origin_settlement'
+                    && $input['action'] !== 'financial-origin.settlement.reverse', 403);
+                abort_unless(class_exists(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class), 409, 'workspace_schema_not_ready');
+                $hadState = $request->attributes->has('tenant_state');
+                $oldState = $request->attributes->get('tenant_state');
+                $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id]);
+                try {
+                    return response()->json(['success' => true, 'data' => app(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class)->dispatch($input, $org)]);
+                } finally {
+                    if ($hadState) $request->attributes->set('tenant_state', $oldState);
+                    else $request->attributes->remove('tenant_state');
+                }
+            }
             if (in_array($input['action'], ['purchasing.party.ensure', 'purchasing.party.status', 'purchasing.party.choices', 'purchasing.party.resolve', 'sales.party.ensure', 'sales.party.status', 'sales.party.choices', 'sales.party.resolve'], true)) {
                 return response()->json(['success'=>true,'data'=>app(\App\Services\Integration\ContinuousPartySync::class)->dispatch($input,$org)]);
             }
@@ -107,6 +121,14 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if (in_array($input['action'], FinanceDocumentLifecycleAuthority::FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS, true)) {
+                abort_unless(($input['authority_kind'] ?? null) === 'posted_financial_origin_settlement', 403);
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(class_exists(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class), 409, 'workspace_schema_not_ready');
+                $result = app(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class)->dispatch($input, $org);
+                return response()->json(['success' => true, 'data' => $result]);
+            }
             // Financial demand creation is a closed Finance capability. Physical
             // dispatch separately requires current Stock access and native permissions.
             if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand',
