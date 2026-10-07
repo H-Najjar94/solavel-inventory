@@ -146,6 +146,7 @@ final class SupplierReturnService
             if($return->reversal_id)return InventoryReversal::query()->where('organization_id',$org)->whereKey($return->reversal_id)->firstOrFail();
             abort_unless($return->status==='posted',409);
             foreach($return->lines as$line)$this->warehouses->assertAllowed((int)$line->warehouse_id);
+            if($connected)app(\App\Services\Returns\SupplierReturnFinancialReversalGuard::class)->assertMappingCurrent($connected,$return);
             $original=IntegrationOutboxEvent::query()->where('organization_id',$org)->where('event_type','supplier_return.posted')->where('aggregate_id',$return->id)->first();
             $reversal=InventoryReversal::create(['organization_id'=>$org,'reversal_number'=>DocumentNumber::next('REV-SPR',InventoryReversal::class,'reversal_number',$org,'tenant'),
                 'source_type'=>'supplier_return','source_id'=>$return->id,'source_number'=>$return->return_number,'reversal_date'=>now()->toDateString(),
@@ -155,7 +156,7 @@ final class SupplierReturnService
             $return->status='reversed';$return->reversal_id=$reversal->id;$return->reversed_at=now();$return->reversed_by=auth()->id();$return->markSystemTransition()->save();
             if($connected){
                 $this->outbox->record('supplier_return.reversed',$reversal,'inventory_reversal',$reversal->reversal_number,$reversal->reversal_date->format('Y-m-d'));
-                app(\App\Services\Sales\SupplierReturnDocumentBuilder::class)->record($return,true);
+                app(\App\Services\Sales\SupplierReturnDocumentBuilder::class)->record($return,true,$connected->mapping_uuid);
             }
             return $reversal;
         });
