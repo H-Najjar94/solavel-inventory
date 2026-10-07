@@ -45,7 +45,7 @@ final class LandedCostNativeValuationTest extends TestCase
         });
         if (!$schema->hasTable('finance_landed_cost_operations')) $schema->create('finance_landed_cost_operations', function (Blueprint $t) {
             $t->id(); $t->unsignedBigInteger('organization_id'); $t->uuid('organization_mapping_uuid'); $t->unsignedBigInteger('landed_cost_id');
-            $t->uuid('operation_uuid'); $t->unsignedBigInteger('actor_id'); $t->unsignedBigInteger('bill_id'); $t->unsignedBigInteger('bill_journal_id');
+            $t->uuid('operation_uuid'); $t->unsignedBigInteger('actor_id'); $t->unsignedBigInteger('reversal_actor_id')->nullable(); $t->unsignedBigInteger('release_actor_id')->nullable(); $t->unsignedBigInteger('bill_id'); $t->unsignedBigInteger('bill_journal_id');
             $t->string('state'); $t->char('payload_hash', 64); $t->json('payload'); $t->json('cost_plan')->nullable();
             $t->char('plan_fingerprint', 64)->nullable(); $t->unsignedBigInteger('journal_entry_id')->nullable(); $t->unsignedBigInteger('reversal_journal_id')->nullable();
         });
@@ -119,6 +119,16 @@ final class LandedCostNativeValuationTest extends TestCase
 
     public function test_native_landed_quote_tracks_remaining_and_consumed_cost_without_invoice_price_reinterpretation(): void
     {
+        $this->exerciseNativeLanded(323);
+    }
+
+    public function test_different_finance_void_actor_uses_exact_persisted_directional_authority(): void
+    {
+        $this->exerciseNativeLanded(335);
+    }
+
+    private function exerciseNativeLanded(int $reverseActor): void
+    {
         $authority = LandedCostAllocationAuthority::fromLockedNativeProvenance($this->landedIdentity, $this->landedProof, $this->mapping, 'prepare', 323);
         $plan = app(PurchaseCostAdjustmentPlanner::class)->planLandedCost($authority);
         $parts = collect($plan['components'])->keyBy('destination_role');
@@ -162,13 +172,13 @@ final class LandedCostNativeValuationTest extends TestCase
             'source' => 'AP-LANDED-COST', 'source_type' => 'App\\Models\\LandedCost', 'source_id' => 700, 'reverses_entry_id' => 97,
             'source_key' => 'landed-cost-reversal:'.$authority->operationUuid(), 'status' => 'posted', 'posted_at' => now()]);
         $db->table('finance_landed_cost_operations')->where('operation_uuid', $authority->operationUuid())->update([
-            'state' => 'valuation_reverse_pending', 'reversal_journal_id' => 98,
+            'state' => 'valuation_reverse_pending', 'reversal_journal_id' => 98, 'reversal_actor_id' => $reverseActor,
             'cost_plan' => json_encode(['plan_fingerprint' => $fingerprint, 'native_plan' => $plan,
                 'reverse_plan' => ['plan_fingerprint' => $reverseFingerprint]])]);
         $reverseProof = array_replace($applyProof, ['operation' => 'reverse', 'direction' => 'reverse',
-            'state' => 'valuation_reverse_pending', 'plan_fingerprint' => $reverseFingerprint, 'reversal_journal_id' => 98]);
+            'state' => 'valuation_reverse_pending', 'plan_fingerprint' => $reverseFingerprint, 'reversal_journal_id' => 98, 'actor_id' => $reverseActor]);
         $reverse = LandedCostAllocationAuthority::fromLockedNativeProvenance(array_replace($this->landedIdentity, ['direction' => 'reverse']),
-            $reverseProof, $this->mapping, 'reverse', 323);
+            $reverseProof, $this->mapping, 'reverse', $reverseActor);
         $inverseHold = $holds->acquire(['settlement_uuid' => $reverse->holdUuid($this->item->id, $this->warehouse->id, 'reverse'),
             'purpose' => 'landed_reverse', 'plan_revision' => 1, 'item_id' => $this->item->id, 'warehouse_id' => $this->warehouse->id,
             'receipt_id' => $this->landedPayload['sources'][0]['receipt_id'], 'source_bill_id' => 800], $reverseFingerprint);
@@ -178,6 +188,17 @@ final class LandedCostNativeValuationTest extends TestCase
         $this->assertSame('30.00', StockBalance::sole()->total_value);
         $this->assertSame('6.0000', StockBalance::sole()->on_hand_qty);
         $this->assertSame(2, StockLedger::count());
+        if ($reverseActor !== 323) {
+            try {
+                LandedCostAllocationAuthority::fromLockedNativeProvenance(array_replace($this->landedIdentity, ['direction' => 'reverse']),
+                    array_replace($reverseProof, ['actor_id' => 323]), $this->mapping, 'reverse', 323);
+                $this->fail('Original posting actor borrowed the independently persisted void authority.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                $this->assertSame(409, $exception->getStatusCode());
+            }
+            $this->assertSame('30.00', StockBalance::sole()->total_value);
+            $this->assertSame(2, StockLedger::count());
+        }
     }
 
     public function test_locked_landed_factory_rejects_a_paused_mapping_without_valuation_or_physical_changes(): void
