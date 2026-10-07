@@ -37,6 +37,8 @@ final class OriginDocumentBuilder
             abort_unless($returns->count()===count(data_get($original->payload,'physical.lines',[])),409);
         }
         $payload=$original->payload;$uuid=(string)Str::uuid();$event=$shipment?'financial-origin.shipment.reversed':'financial-origin.receipt.reversed';
+        abort_unless(!isset($payload['operation_uuid']) || $payload['operation_uuid']===$command->operation_uuid,409);
+        $payload['operation_uuid']=$command->operation_uuid;
         $payload['event_type']=$event;$payload['event_uuid']=$uuid;$payload['external_source_key']=$key;
         $payload['original_event_uuid']=$original->event_uuid;$payload['original_payload_hash']=$original->payload_hash;
         $payload['reversal']=['type'=>$shipment?'sales_return':'inventory_reversal','id'=>(int)$inverse->id,
@@ -91,7 +93,7 @@ final class OriginDocumentBuilder
                 'organization_mapping_uuid'=>$mapping->mapping_uuid,'integration_mapping_id'=>$mapping->id,'signing_key_id'=>(string)data_get($setting->meta,'signing_key_id')],
             'source_document_type'=>$request->source_document_type,'source_document_id'=>(int)$request->source_document_id,
             'source_document_number'=>$request->source_document_number,'source_journal_id'=>(int)$request->source_journal_id,
-            'request_uuid'=>$request->request_uuid,'request_revision'=>$request->source_revision,
+            'request_uuid'=>$request->request_uuid,'request_revision'=>$request->source_revision,'operation_uuid'=>$command->operation_uuid,
             'physical'=>['type'=>$type,'id'=>$document->id,'mapping_uuid'=>$life->mapping_uuid,
                 'number'=>$shipment?$document->shipment_number:$document->grn_number,'date'=>($shipment?$document->ship_date:$document->receipt_date)?->format('Y-m-d'),
                 'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,'journal_payload_hash'=>SolaStockJournalContract::payloadHash($journal->payload),
