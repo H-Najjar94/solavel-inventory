@@ -125,13 +125,14 @@ class SalesOrderService
                 ['reserved_qty', 'asc'],
                 ['id', 'asc'],
             ]) as $line) {
-                if (! Decimal::gt((string) $line->ordered_qty, (string) $line->reserved_qty)) {
+                $reservable = Decimal::gt((string) ($line->cancelled_qty ?? '0'), '0') ? Decimal::sub(Decimal::sub((string) $line->ordered_qty, (string) $line->shipped_qty), (string) $line->cancelled_qty) : (string) $line->ordered_qty;
+                if (! Decimal::gt($reservable, (string) $line->reserved_qty)) {
                     $anyReserved = true;
 
                     continue;
                 }
 
-                $needed = Decimal::sub((string) $line->ordered_qty, (string) $line->reserved_qty);
+                $needed = Decimal::sub($reservable, (string) $line->reserved_qty);
                 $warehouseId = (int) ($line->warehouse_id ?? $so->warehouse_id);
                 $selectedSerials = array_values(array_unique(array_map('intval', $options['serial_ids'][$line->id] ?? [])));
                 if ($line->item?->tracksSerials()) {
@@ -165,7 +166,7 @@ class SalesOrderService
                 );
                 $line->reserved_qty = Decimal::qty(Decimal::add((string) $line->reserved_qty, $allocated));
                 $line->save();
-                if (Decimal::lt((string) $line->reserved_qty, (string) $line->ordered_qty)) {
+                if (Decimal::lt((string) $line->reserved_qty, $reservable)) {
                     $allReserved = false;
                 }
                 if (Decimal::gt((string) $line->reserved_qty, '0')) {
