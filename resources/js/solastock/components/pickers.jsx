@@ -1,4 +1,6 @@
-import React from 'react';
+import React, {useEffect, useRef} from 'react';
+import {useTenant} from '../stores/tenant.jsx';
+import {defaultWarehouseDecision} from './warehouseDefaultSelection.mjs';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { t } from '../i18n/index.js';
@@ -35,10 +37,23 @@ export function ItemPicker({ value, onChange, disabled, stockOnly = false }) {
         placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
 }
 
-export function WarehousePicker({ value, onChange, disabled, placeholder }) {
-    const { data } = useApiQuery(['warehouses-picker'], () => api.warehouses({ per_page: 200 }), { fallback: [] });
+export function WarehousePicker({ value, onChange, disabled, placeholder, autoSelectDefault = false, defaultContext = 'new' }) {
+    const tenant = useTenant();
+    const organizationId = tenant.organization_id ?? 'no-organization';
+    const query = useApiQuery(['warehouses-picker', organizationId], () => api.warehouses({ per_page: 200 }), { fallback: [], enabled: tenant.resolved });
+    const data = query.data;
     const list = Array.isArray(data) ? data : (data?.data ?? []);
-    return <Select value={value} onChange={onChange} options={list} disabled={disabled}
+    const context = String(organizationId) + ':' + defaultContext;
+    const selection = useRef({context, attempted:false});
+    if (selection.current.context !== context) selection.current = {context, attempted:false};
+    useEffect(() => {
+        const decision = defaultWarehouseDecision({enabled:autoSelectDefault, disabled, loaded:query.isSuccess && !query.isPlaceholderData,
+            value, attempted:selection.current.attempted, list, defaultId:data?.default_warehouse_id});
+        selection.current.attempted = decision.attempted;
+        if (decision.selected !== null) onChange(decision.selected);
+    }, [context, autoSelectDefault, disabled, query.isSuccess, query.isPlaceholderData, data, value, onChange]);
+    const change = next => {selection.current.attempted = true; onChange(next);};
+    return <Select value={value} onChange={change} options={list} disabled={disabled}
         placeholder={placeholder ?? t('picker.warehouse')} getLabel={(w) => `${w.code} · ${w.name}`} />;
 }
 
