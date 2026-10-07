@@ -62,7 +62,12 @@ final class FinancialOriginPhysicalTest extends TestCase
     }
     public function test_stock_only_expense_receipt_uses_native_grn_once_and_never_creates_a_bill_draft():void
     {
-        [,,$op]=$this->admitted('expense');$before=StockLedger::count();$service=app(OriginDispatchService::class);$partial=$service->executeNative($op,336);
+        [,,$op]=$this->admitted('expense');
+        // A receipt requires its own reviewed native accounting workflow and real GRNI liability mapping.
+        $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->meta=$meta;$setting->save();
+        DB::connection('tenant')->table('accounts')->insert(['id'=>300,'organization_id'=>14,'code'=>'300','name'=>'Private native GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
+        \App\Models\Tenant\IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>300,'status'=>'verified']);
+        $before=StockLedger::count();$service=app(OriginDispatchService::class);$partial=$service->executeNative($op,336);
         $this->assertSame($partial,$service->executeNative($op,336));$this->assertSame('partial',$partial['status']);$this->assertSame(1,GoodsReceipt::count());$this->assertSame($before+1,StockLedger::count());
         $this->assertSame(0,\App\Models\Tenant\PurchasingDocumentOutbox::count());$event=FinancialOriginOutbox::sole()->payload;
         $this->assertSame('expense',$event['source_document_type']);$this->assertSame('financial-origin.receipt.confirmed',$event['event_type']);$this->assertSame('7.00000000',$event['physical']['lines'][0]['unit_cost']);
