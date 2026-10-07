@@ -6,7 +6,8 @@ use App\Models\Tenant\{ReceivingRequest, Supplier};
 use App\Services\Access\{InventoryPermissionService, WarehouseAccessService};
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{DB, Http};
+use Illuminate\Support\Facades\{DB, Http, Schema};
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Str;
 use Tests\Support\StockTestFactory as F;
 use Tests\TestCase;
@@ -18,7 +19,21 @@ final class WarehouseNotificationVisibilityTest extends TestCase
     use TenantAware;
     private function fixture(): array
     {
-        $this->useTenantA(); $org = app(OrganizationContext::class)->idOrFail(); $warehouse = F::warehouse();
+        $this->useTenantA();
+        // Private controller fixture only; no producer service or production migration is simulated.
+        if (! Schema::connection('tenant')->hasTable('sales_fulfillment_requests')) {
+            Schema::connection('tenant')->create('sales_fulfillment_requests', function (Blueprint $table) {
+                $table->id(); $table->unsignedBigInteger('organization_id');
+                $table->uuid('organization_mapping_uuid'); $table->uuid('request_uuid');
+                $table->unsignedBigInteger('source_invoice_id'); $table->string('source_revision', 64);
+                $table->string('source_status'); $table->unsignedBigInteger('customer_id');
+                $table->date('invoice_date'); $table->string('currency_code', 3); $table->string('base_currency_code', 3);
+                $table->text('source_payload'); $table->unsignedBigInteger('warehouse_id')->nullable();
+                $table->timestamp('approved_at')->nullable(); $table->string('approved_revision', 64)->nullable();
+                $table->timestamps();
+            });
+        }
+        $org = app(OrganizationContext::class)->idOrFail(); $warehouse = F::warehouse();
         $supplier = Supplier::create(['code' => 'VIS-'.Str::random(5), 'name' => 'Synthetic supplier', 'is_active' => true]);
         $revision = str_repeat('a', 64);
         $purchase = ReceivingRequest::create(['organization_mapping_uuid' => (string) Str::uuid(), 'finance_organization_id' => 14,
