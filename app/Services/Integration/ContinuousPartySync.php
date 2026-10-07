@@ -19,7 +19,7 @@ final class ContinuousPartySync {
   $facts=validator((array)($input['data']??[]),['entity_type'=>'required|in:supplier','source_app'=>'required|in:finance','source_id'=>'required|integer|min:1','source_bill_id'=>'required|integer|min:1','native_actor_id'=>'required|integer|min:1','source_revision'=>'required|string|size:64'])->validate();
   $bill=DB::connection('tenant')->table('bills')->where('organization_id',$mapping->finance_organization_id)->where('id',$facts['source_bill_id'])->first();
   abort_unless($bill && (int)$bill->supplier_id===(int)$facts['source_id'],403);
-  app(SolaBooksOutboxDeliveryService::class)->authorizePurchasing((int)$facts['native_actor_id'],(int)$bill->id,$bill->status==='posted'?'post':'edit_draft');
+  app(SolaBooksOutboxDeliveryService::class)->authorizePurchasing((int)$facts['native_actor_id'],(int)$bill->id,(int)($bill->journal_entry_id??0)>0?'post':'edit_draft');
   $ledger=app(PartySyncLedger::class);$fields=$ledger->fields($mapping,'finance','supplier',(int)$facts['source_id']);
   abort_unless($fields && hash_equals($ledger->revision($fields),$facts['source_revision']),409);
   if($input['action']==='purchasing.party.status'){
@@ -37,9 +37,9 @@ final class ContinuousPartySync {
     if($row->source_app==='finance')$result=$this->materialize($mapping,'finance',$row->entity_type,(int)$row->source_id,$row->source_revision);
     else $result=app(SolaBooksOutboxDeliveryService::class)->sendPartyChange($mapping,$row);
     if(in_array($result['status']??null,['synced','held','pending','intervention'],true))
-     DB::connection('tenant')->table('integration_party_sync_states')->where('id',$row->id)->where('source_revision',$row->source_revision)->where('attempts',$row->attempts)->update(['status'=>$result['status'],'last_error'=>$result['reason']??null,'attempts'=>$row->attempts+1,'next_attempt_at'=>in_array($result['status'],['held','pending'],true)?now()->addMinute():null,'updated_at'=>now()]);
+     DB::connection('tenant')->table('integration_party_sync_states')->where('id',$row->id)->where('source_revision',$row->source_revision)->where('state_version',$row->state_version)->where('attempts',$row->attempts)->update(['status'=>$row->attempts+1>=40 && in_array($result['status'],['held','pending'],true)?'intervention':$result['status'],'last_error'=>$row->attempts+1>=40 && in_array($result['status'],['held','pending'],true)?'party_retry_exhausted':($result['reason']??null),'attempts'=>$row->attempts+1,'next_attempt_at'=>in_array($result['status'],['held','pending'],true)?now()->addMinute():null,'updated_at'=>now()]);
    }catch(\Throwable $e){
-    DB::connection('tenant')->table('integration_party_sync_states')->where('id',$row->id)->where('source_revision',$row->source_revision)->update(['attempts'=>$row->attempts+1,'last_error'=>'party_connection_pending','next_attempt_at'=>now()->addSeconds(min(3600,30*(2**min(7,$row->attempts)))),'updated_at'=>now()]);
+    DB::connection('tenant')->table('integration_party_sync_states')->where('id',$row->id)->where('source_revision',$row->source_revision)->where('state_version',$row->state_version)->where('attempts',$row->attempts)->update(['status'=>$row->attempts+1>=40?'intervention':'pending','attempts'=>$row->attempts+1,'last_error'=>$row->attempts+1>=40?'party_retry_exhausted':'party_connection_pending','next_attempt_at'=>now()->addSeconds(min(3600,30*(2**min(7,$row->attempts)))),'updated_at'=>now()]);
     report($e);
    }
    $count++;

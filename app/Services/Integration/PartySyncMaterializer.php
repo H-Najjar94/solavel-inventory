@@ -94,6 +94,9 @@ final class PartySyncMaterializer {
   return ['status'=>$status,'source_id'=>$sourceId,'target_id'=>$targetId,'mapping_uuid'=>$mapping,'reason'=>$reason,'retryable'=>in_array($status,['pending','held'],true),'field_overrides'=>$overrides];
  }
  private function finish(object $state,array $result,array $extra=[]):array {
+  if($state->attempts+1>=40 && in_array($result['status'],['held','pending'],true)){
+   $result['status']='intervention';$result['retryable']=false;$result['reason']='party_retry_exhausted';
+  }
   $values=['status'=>$result['status'],'target_id'=>$result['target_id'],'mapping_uuid'=>$result['mapping_uuid'],'last_error'=>$result['reason'],'attempts'=>$state->attempts+1,'next_attempt_at'=>$result['retryable']?now()->addMinute():null,'updated_at'=>now()];
   foreach($extra as$key=>$value)$values[$key]=json_encode($value);
   DB::connection('tenant')->table('integration_party_sync_states')->where('id',$state->id)->update($values);return$result;
