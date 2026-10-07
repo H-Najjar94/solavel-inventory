@@ -20,6 +20,7 @@ function groupNav(items) {
 }
 
 const NAV_LABELS = {
+    'supplier-return-requests': 'supplierReturnRequests', 'supplier-returns': 'supplierReturns',
     dashboard: 'dashboard', items: 'items', warehouses: 'warehouses', balances: 'currentStock',
     ledger: 'stockLedger', opening: 'openingStock', adjustments: 'adjustments', transfers: 'transfers',
     counts: 'counts', scanner: 'scanner', suppliers: 'suppliers', 'purchase-orders': 'purchaseOrders',

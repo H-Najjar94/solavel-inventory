@@ -1,4 +1,5 @@
 export const en = {
+  supplierReturnRequests: 'Supplier return requests', supplierReturns: 'Supplier Returns',
   dashboard: 'Dashboard', loading: 'Loading…', collapse: 'Collapse', account: 'Account',
   english: 'English', arabic: 'العربية', language: 'Language',
   light: 'Light', dark: 'Dark', organization: 'Organization', organizations: 'Your organizations',
@@ -47,6 +48,7 @@ export const en = {
 };
 
 export const ar = {
+  supplierReturnRequests: 'طلبات إرجاع المورد', supplierReturns: 'مرتجعات الموردين',
   dashboard: 'لوحة التحكم', loading: 'جارٍ التحميل…', collapse: 'طيّ القائمة', account: 'الحساب',
   english: 'English', arabic: 'العربية', language: 'اللغة',
   light: 'فاتح', dark: 'داكن', organization: 'المؤسسة', organizations: 'مؤسساتك',
