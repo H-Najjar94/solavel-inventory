@@ -30,6 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
             require __DIR__.'/../routes/finance_workspace.php';
             Route::post('/api/tenancy/member-management', \App\Http\Controllers\Api\Tenancy\MemberManagementController::class)
                 ->middleware(VerifySolavelSyncSignature::class)->name('api.tenancy.member-management');
+            // Signed server-to-server context must not inherit browser session CSRF.
+            Route::post('/api/tenancy/purchasing-notification-context', \App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class)
+                ->middleware(VerifySolavelSyncSignature::class)->name('api.tenancy.purchasing-notification-context');
 
             // Web routes (session-stateful).
             Route::middleware('web')

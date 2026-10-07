@@ -71,7 +71,6 @@ Route::prefix('v1/tenant')->group(function () {
 });
 
 Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
-    Route::post('purchasing-notification-context', \App\Http\Controllers\Api\Tenancy\PurchasingNotificationContextController::class)->name('api.tenancy.purchasing-notification-context');
     Route::post('sync/events', SyncEventsController::class)
         ->name('api.tenancy.sync.events');
 });
