@@ -1,7 +1,7 @@
 <?php
 namespace App\Services\Documents;
 
-use App\Models\Tenant\{GoodsReceipt, IntegrationOrganizationMapping, StockBalance, StockLedger, SupplierReturn};
+use App\Models\Tenant\{GoodsReceipt, InventoryReversal, IntegrationOutboxEvent, IntegrationOrganizationMapping, StockBalance, StockLedger, SupplierReturn};
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\{IntegrationEvents, IntegrationOutboxService, WorkflowValidationService};
@@ -129,6 +129,31 @@ final class SupplierReturnService
             $return->status = 'posted'; $return->posted_at = now(); $return->posted_by = auth()->id(); $return->markSystemTransition()->save();
             if ($connected) $this->outbox->record('supplier_return.posted', $return, 'supplier_return', $return->return_number, $return->return_date->format('Y-m-d'));
             return $return->fresh('lines');
+        });
+    }
+
+    /** Native inverse of this return OUT, never a reversal of the original purchase receipt. */
+    public function reverse(SupplierReturn $return, string $reason): InventoryReversal
+    {
+        validator(['reason'=>$reason],['reason'=>'required|string|min:3|max:2000'])->validate();
+        $org=$this->context->idOrFail();
+        return DB::connection('tenant')->transaction(function()use($return,$reason,$org){
+            GoodsReceipt::query()->where('organization_id',$org)->whereKey($return->goods_receipt_id)->lockForUpdate()->firstOrFail();
+            $return=SupplierReturn::query()->where('organization_id',$org)->whereKey($return->id)->with('lines')->lockForUpdate()->firstOrFail();
+            if($return->reversal_id)return InventoryReversal::query()->where('organization_id',$org)->whereKey($return->reversal_id)->firstOrFail();
+            abort_unless($return->status==='posted',409);
+            // Consumer financial allocation and source-reversal authority must be installed before connected reversal.
+            if(IntegrationOrganizationMapping::query()->where('solastock_organization_id',$org)->where('tenant_database_identity',DB::connection('tenant')->getDatabaseName())->exists())
+                throw ValidationException::withMessages(['integration'=>'Review the linked Finance return before reversing received goods.']);
+            foreach($return->lines as$line)$this->warehouses->assertAllowed((int)$line->warehouse_id);
+            $original=IntegrationOutboxEvent::query()->where('organization_id',$org)->where('event_type','supplier_return.posted')->where('aggregate_id',$return->id)->first();
+            $reversal=InventoryReversal::create(['organization_id'=>$org,'reversal_number'=>DocumentNumber::next('REV-SPR',InventoryReversal::class,'reversal_number',$org,'tenant'),
+                'source_type'=>'supplier_return','source_id'=>$return->id,'source_number'=>$return->return_number,'reversal_date'=>now()->toDateString(),
+                'status'=>'posted','reason'=>trim($reason),'posted_by'=>auth()->id(),'posted_at'=>now(),'posted_guard_key'=>'supplier_return:'.$return->id.':reversal','original_event_uuid'=>$original?->event_uuid]);
+            $this->ledger->reverse('supplier_return:'.$return->id.':post','inventory_reversal:'.$reversal->id.':post',
+                ['action'=>'supplier_return.reverse','entity_type'=>'inventory_reversal','entity_id'=>$reversal->id,'document_ref'=>$reversal->reversal_number],InventoryReversal::class,$reversal->id);
+            $return->status='reversed';$return->reversal_id=$reversal->id;$return->reversed_at=now();$return->reversed_by=auth()->id();$return->markSystemTransition()->save();
+            return $reversal;
         });
     }
 

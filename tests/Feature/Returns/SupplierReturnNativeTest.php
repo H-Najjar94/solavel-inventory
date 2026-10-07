@@ -77,6 +77,19 @@ final class SupplierReturnNativeTest extends TestCase
         $this->assertSame(4.0, (float) StockBalance::query()->where('item_id', $this->item->id)->sole()->on_hand_qty);
     }
 
+    public function test_supplier_return_native_reversal_restores_only_its_out_quantity_and_value_once(): void
+    {
+        $source=$this->receipt();$service=app(SupplierReturnService::class);
+        $before=StockBalance::query()->where('item_id',$this->item->id)->sole();$value=(float)$before->total_value;
+        $posted=$service->post($this->draft($source,'2'));
+        $reversal=$service->reverse($posted,'Synthetic mistaken return');$count=StockLedger::count();
+        $this->assertSame('reversed',$posted->fresh()->status);$this->assertSame('supplier_return',$reversal->source_type);
+        $this->assertSame(10.0,(float)$before->fresh()->on_hand_qty);$this->assertEqualsWithDelta($value,(float)$before->fresh()->total_value,0.000001);
+        $again=$service->reverse($posted->fresh(),'Repeated same native reversal');
+        $this->assertSame($reversal->id,$again->id);$this->assertSame($count,StockLedger::count());
+        $this->assertSame('posted',$source->fresh()->status);
+    }
+
     public function test_cross_tenant_receipt_cannot_create_a_supplier_return(): void
     {
         $source = $this->receipt(); $this->useTenantB();

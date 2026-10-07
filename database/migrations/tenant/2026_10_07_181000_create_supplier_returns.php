@@ -10,7 +10,7 @@ return new class extends Migration {
             $t->unsignedBigInteger('goods_receipt_id'); $t->unsignedBigInteger('supplier_id'); $t->unsignedBigInteger('warehouse_id');
             $t->date('return_date'); $t->text('reason'); $t->text('notes')->nullable(); $t->string('status', 32)->default('draft');
             $t->unsignedBigInteger('created_by')->nullable(); $t->unsignedBigInteger('posted_by')->nullable(); $t->timestamp('posted_at')->nullable();
-            $t->unsignedBigInteger('reversed_by')->nullable(); $t->timestamp('reversed_at')->nullable(); $t->timestamps();
+            $t->unsignedBigInteger('reversal_id')->nullable();$t->unsignedBigInteger('reversed_by')->nullable(); $t->timestamp('reversed_at')->nullable(); $t->timestamps();
             $t->unique(['organization_id','return_uuid'], 'supplier_return_uuid_unique');
             $t->unique(['organization_id','return_number'], 'supplier_return_number_unique');
             $t->index(['organization_id','goods_receipt_id','status'], 'supplier_return_source_index');
