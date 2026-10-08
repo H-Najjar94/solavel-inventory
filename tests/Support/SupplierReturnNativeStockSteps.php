@@ -23,6 +23,7 @@ final class SupplierReturnNativeStockSteps
   if($step==='reverse-return'){$return=SupplierReturn::query()->where('organization_id',$org)->whereKey((int)$args['stock_return_id'])->firstOrFail();$inverse=$native->reverse($return,'Private verified supplier return inverse');return ['stock_return_id'=>$return->id,'stock_reversal_id'=>$inverse->id,'status'=>$return->fresh()->status];}
   $receipt=GoodsReceipt::query()->where('organization_id',$org)->whereKey((int)$args['receipt_id'])->where('status','posted')->firstOrFail();$line=$receipt->lines()->whereKey((int)$args['receipt_line_id'])->firstOrFail();
   $return=$native->createDraft(['goods_receipt_id'=>$receipt->id,'return_date'=>(string)$args['date'],'reason'=>'Private actual supplier return'],[['goods_receipt_line_id'=>$line->id,'entered_qty'=>(string)$args['quantity']]+(isset($args['source_stock_ledger_id'])?['source_stock_ledger_id'=>(int)$args['source_stock_ledger_id']]:[])]);$return=$native->post($return);
-  return ['stock_return_id'=>$return->id,'return_mapping_uuid'=>$return->return_uuid,'return_number'=>$return->return_number,'status'=>$return->status];
+  $life=\App\Models\Tenant\IntegrationDocumentLifecycleMapping::query()->where('organization_mapping_uuid',$ids['organization_mapping_uuid'])->where('source_document_type','supplier_return')->where('source_document_id',(string)$return->id)->sole();
+  return ['stock_return_id'=>$return->id,'return_mapping_uuid'=>$life->mapping_uuid,'return_number'=>$return->return_number,'status'=>$return->status];
  }
 }
