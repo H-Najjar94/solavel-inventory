@@ -66,7 +66,9 @@ final class SupplierReturnService
     public function post(SupplierReturn $return): SupplierReturn
     {
         $org = $this->context->idOrFail();
-        return DB::connection('tenant')->transaction(function () use ($return, $org) {
+        abort_unless((int)$return->organization_id===(int)$org,404);
+        $capability=app(\App\Services\Returns\SupplierReturnReadiness::class)->prepare($return);
+        return DB::connection('tenant')->transaction(function () use ($return, $org, $capability) {
             $receipt = GoodsReceipt::query()->where('organization_id', $org)->whereKey($return->goods_receipt_id)->lockForUpdate()->with('lines')->firstOrFail();
             $return = SupplierReturn::query()->where('organization_id', $org)->whereKey($return->id)->lockForUpdate()->with('lines')->firstOrFail();
             if ($return->status === 'posted' && ! $return->reversed_at) return $return;
@@ -74,12 +76,7 @@ final class SupplierReturnService
             $this->assertReceipt($receipt);
             $connected = IntegrationOrganizationMapping::query()->where('solastock_organization_id', $org)
                 ->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())->exists();
-            // Connected activation remains disabled until canonical reviewed_supplier_returns_v1
-            // capability and the actual Finance allocation consumer are independently qualified.
-            // Registering an event type alone never authorizes this accounting workflow.
-            if ($connected) {
-                throw ValidationException::withMessages(['integration' => 'Supplier-return accounting must be configured before goods can be returned.']);
-            }
+            app(\App\Services\Returns\SupplierReturnReadiness::class)->assertLocked($return,$capability);
             $movements = []; $currentByReceiptLine = [];
             foreach ($return->lines as $line) {
                 $this->warehouses->assertAllowed((int) $line->warehouse_id);

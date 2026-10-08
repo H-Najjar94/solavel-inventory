@@ -28,8 +28,8 @@ final class SupplierReturnContractParityTest extends TestCase
     public function test_connected_activation_stays_closed_before_native_qualification(): void
     {
         $source = file_get_contents(dirname(__DIR__, 3).'/app/Services/Documents/SupplierReturnService.php');
-        self::assertStringContainsString('reviewed_supplier_returns_v1', $source);
-        self::assertStringContainsString('Supplier-return accounting must be configured before goods can be returned.', $source);
+        self::assertStringContainsString('SupplierReturnReadiness::class)->prepare($return)', $source);
+        self::assertStringContainsString('SupplierReturnReadiness::class)->assertLocked($return,$capability)', $source);
         self::assertStringContainsString('SupplierReturnDocumentBuilder::class)->record($return)', $source);
     }
 }
