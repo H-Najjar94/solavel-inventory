@@ -85,6 +85,7 @@ final class OriginPhysicalService
             }
             return $r; // Native caller's posted-document idempotent return; no fulfilment/outbox writes.
         }
+        // The exact durable command was already accepted. Gate changes cannot strand its native confirmation.
         abort_unless($command->status==='pending' && in_array($r->status,['pending','partial'],true) && $r->approved_at
             && $r->approved_revision===$r->source_revision && (int)$r->warehouse_id===(int)$document->warehouse_id,409);
         if($document instanceof Shipment)abort_unless($r->side==='sales' && $r->source_document_type==='sales_receipt' && (int)$r->sales_order_id===(int)$document->sales_order_id,409);
