@@ -121,6 +121,18 @@ final class PurchaseCostAdjustmentPlanner
             if(Decimal::cmp($allocated,$difference,8)!==0)$this->fail('Restored receipt cost allocation rounding requires review.');
             return $parts;
         }
+        $eligible=request()->attributes->get('verified_unbilled_return_cost_cohort');
+        if(is_array($eligible)&&($eligible['settlement_uuid']??null)===$allocation->allocation_uuid){
+            abort_unless((int)$eligible['organization_id']===(int)$allocation->solastock_organization_id,403);
+            $receipt=$this->ledgerQuery($allocation)->where('organization_id',$allocation->solastock_organization_id)->whereKey($eligible['receipt_ledger_id'])->firstOrFail();
+            $provenance=['unbilled_return_snapshot_hash'=>$eligible['snapshot_hash']];
+            if($receipt->costing_method==='fifo'){
+                $layer=CostLayer::query()->where('organization_id',$receipt->organization_id)->where('source_ledger_id',$receipt->id)->lockForUpdate()->firstOrFail();
+                abort_unless(Decimal::cmp((string)$layer->remaining_qty,$eligible['eligible_quantity'],8)===0,409);
+                $provenance['cost_layer_id']=$layer->id;
+            }
+            return collect([$this->component($allocation,$receipt,'inventory_asset',(string)$allocation->base_quantity,$difference,$provenance)]);
+        }
         $receipt = $this->ledgerQuery($allocation)->where('organization_id', $allocation->solastock_organization_id)
             ->where('source_type', GoodsReceipt::class)->where('source_id', $allocation->source_document_id)
             ->where('source_line_id', $allocation->source_line_id)->orderBy('id')->first();

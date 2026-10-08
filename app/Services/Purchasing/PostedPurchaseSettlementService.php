@@ -57,7 +57,7 @@ final class PostedPurchaseSettlementService
             'receipt_journal_key' => 'required|string|max:191', 'quantity' => 'required|numeric|gt:0',
             'invoice_net_unit_cost' => 'required|numeric|min:0', 'nonrecoverable_tax_unit_cost' => 'required|numeric|min:0',
             'finance_journal_id' => 'sometimes|integer|min:1', 'finance_journal_key' => 'sometimes|string|max:191',
-            'return_inverse_origin' => 'sometimes|array', 'settlement_date'=>'sometimes|date_format:Y-m-d',
+            'unbilled_return_exclusions'=>'sometimes|array', 'return_inverse_origin' => 'sometimes|array', 'settlement_date'=>'sometimes|date_format:Y-m-d',
             'finance_reversal_journal_id' => 'sometimes|integer|min:1', 'finance_reversal_journal_key' => 'sometimes|string|max:191',
         ])->validate();
         // Independent remote read happens before taking any Stock locks.
@@ -166,6 +166,7 @@ final class PostedPurchaseSettlementService
                 $receiptCost=Decimal::div(Decimal::mul($restoredOrigin['base_cost'],$rate,12),(string)$facts['quantity'],8);
                 request()->attributes->set('verified_return_inverse_cost_origin',$restoredOrigin);
             }
+            if(isset($facts['unbilled_return_exclusions'])){abort_unless($restoredOrigin===null,403);$cohort=app(\App\Services\Returns\UnbilledReturnCostCohortProof::class)->verify($facts['unbilled_return_exclusions'],$authority,$mapping,$receipt,$line);request()->attributes->set('verified_unbilled_return_cost_cohort',$cohort);}
             $allocation = new IntegrationFinancialLineAllocation([
                 'allocation_uuid' => $facts['settlement_uuid'], 'organization_mapping_uuid' => $mapping->mapping_uuid,
                 'solastock_organization_id' => $organization->id, 'source_document_type' => 'goods_receipt',
