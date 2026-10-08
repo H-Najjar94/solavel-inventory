@@ -23,5 +23,10 @@ return [
             'SOLASTOCK_TRANSPORT_HEARTBEAT_PATH',
             '/var/lib/solavel/solastock-finance-v2/heartbeat.json'
         ),
+        // Durable per-organization failure diagnostics (ids, stage, error code; no secrets).
+        'diagnostics_path' => env(
+            'SOLASTOCK_TRANSPORT_DIAGNOSTICS_PATH',
+            '/var/lib/solavel/solastock-finance-v2/target-diagnostics.json'
+        ),
     ],
 ];

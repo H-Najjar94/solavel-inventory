@@ -6,6 +6,7 @@ use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Services\Integration\ApprovedTransportTargetRegistry;
 use App\Services\Integration\DurableOutboxTransportService;
 use App\Services\Integration\SolaStockJournalContract;
+use App\Services\Integration\TransportTargetIsolation;
 use App\Services\Integration\TransportWorkerHeartbeat;
 use App\Services\Purchasing\ReceiptHandoffService;
 use App\Services\Tenancy\TenantManager;
@@ -30,6 +31,7 @@ final class SuperviseSolaBooksTransport extends Command
         OrganizationContext $organizations,
         DurableOutboxTransportService $transport,
         TransportWorkerHeartbeat $heartbeat,
+        TransportTargetIsolation $isolation,
     ): int {
         if (! config('integration_transport.worker_enabled', false)) {
             throw new RuntimeException('Dedicated transport worker is disabled.');
@@ -43,39 +45,57 @@ final class SuperviseSolaBooksTransport extends Command
                 if ($this->stop) {
                     break;
                 }
-                $tenants->switchToDatabase($target['database']);
-                $mapping = IntegrationOrganizationMapping::query()
-                    ->where('central_client_id', $target['client_id'])
-                    ->where('central_organization_id', $target['organization_id'])
-                    ->where('tenant_database_identity', $target['database'])
-                    ->where('contract_version', SolaStockJournalContract::VERSION)
-                    ->where('status', 'verified')
-                    ->where('activation_state', 'active')
-                    ->first();
+                // One organization's failure must never stop delivery for the others:
+                // each stage is isolated, diagnosed durably and backed off on its own.
+                $mapping = $isolation->attempt($target, 'connection', function () use ($tenants, $target) {
+                    $tenants->switchToDatabase($target['database']);
+
+                    return IntegrationOrganizationMapping::query()
+                        ->where('central_client_id', $target['client_id'])
+                        ->where('central_organization_id', $target['organization_id'])
+                        ->where('tenant_database_identity', $target['database'])
+                        ->where('contract_version', SolaStockJournalContract::VERSION)
+                        ->where('status', 'verified')
+                        ->where('activation_state', 'active')
+                        ->first();
+                }, null);
                 if (! $mapping) {
                     continue;
                 }
                 $organizations->set((int) $mapping->solastock_organization_id);
-                $processed += app(\App\Services\Integration\ContinuousPartySync::class)->process($mapping, 2);
-                $processed += app(\App\Services\Catalog\DurableCatalogSync::class)->process($mapping, 2);
-                for ($i = 0, $limit = min(250, max(1, (int) $this->option('limit'))); $i < $limit; $i++) {
-                    $event = $transport->claim((int) $mapping->solastock_organization_id, gethostname().':'.getmypid());
-                    if (! $event) {
-                        break;
-                    }
-                    $transport->processClaim($event);
-                    $processed++;
+                try {
+                    $limit = min(250, max(1, (int) $this->option('limit')));
+                    $processed += (int) $isolation->attempt($target, 'party_sync', fn () => app(\App\Services\Integration\ContinuousPartySync::class)->process($mapping, 2));
+                    $processed += (int) $isolation->attempt($target, 'catalog_sync', fn () => app(\App\Services\Catalog\DurableCatalogSync::class)->process($mapping, 2));
+                    $processed += (int) $isolation->attempt($target, 'journal_outbox', function () use ($transport, $mapping, $limit): int {
+                        $count = 0;
+                        for ($i = 0; $i < $limit; $i++) {
+                            $event = $transport->claim((int) $mapping->solastock_organization_id, gethostname().':'.getmypid());
+                            if (! $event) {
+                                break;
+                            }
+                            $transport->processClaim($event);
+                            $count++;
+                        }
+
+                        return $count;
+                    });
+                    $processed += (int) $isolation->attempt($target, 'receipt_handoff', fn () => app(ReceiptHandoffService::class)->deliverDue(min(25, $limit)));
+                    // Mixed-version tenants may not yet have the additive sales outbox.
+                    $processed += (int) $isolation->attempt($target, 'sales_handoff', function (): int {
+                        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('sales_document_outbox')) {
+                            return 0;
+                        }
+
+                        return app(\App\Services\Sales\ShipmentHandoffService::class)->deliverDue(1)
+                            + app(\App\Services\Sales\SalesNotificationPublisher::class)->process(1)
+                            + app(\App\Services\FinancialOrigins\CashNotificationPublisher::class)->process(1);
+                    });
+                    $processed += (int) $isolation->attempt($target, 'purchasing_notifications', fn () => app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1));
+                    $processed += (int) $isolation->attempt($target, 'document_incidents', fn () => app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->process(1));
+                } finally {
+                    $organizations->forget();
                 }
-                $processed += app(ReceiptHandoffService::class)->deliverDue(min(25, max(1, (int) $this->option('limit'))));
-                // Mixed-version tenants may not yet have the additive sales outbox.
-                if (\Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('sales_document_outbox')) {
-                    $processed += app(\App\Services\Sales\ShipmentHandoffService::class)->deliverDue(1);
-                    $processed += app(\App\Services\Sales\SalesNotificationPublisher::class)->process(1);
-                    $processed += app(\App\Services\FinancialOrigins\CashNotificationPublisher::class)->process(1);
-                }
-                $processed += app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1);
-                $processed += app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->process(1);
-                $organizations->forget();
             }
             $heartbeat->write($targets === [] ? 'idle' : 'running', count($targets), $processed);
             if ($this->option('once') || $this->stop) {
