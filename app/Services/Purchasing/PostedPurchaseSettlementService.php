@@ -50,7 +50,7 @@ final class PostedPurchaseSettlementService
         app(FinanceOnboardingReadiness::class)->assertComplete((int) $organization->id);
         app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
         $facts = validator((array) ($input['data'] ?? []), [
-            'plan_revision' => 'sometimes|integer|min:1', 'plan_fingerprint' => 'sometimes|string|size:64', 'hold_purpose' => 'sometimes|in:apply,reverse', 'direction' => 'sometimes|in:forward,reverse', 'settlement_uuid' => 'required|uuid', 'position_uuid' => 'required|uuid',
+            'adjusted_acquisition' => 'sometimes|array', 'plan_revision' => 'sometimes|integer|min:1', 'plan_fingerprint' => 'sometimes|string|size:64', 'hold_purpose' => 'sometimes|in:apply,reverse', 'direction' => 'sometimes|in:forward,reverse', 'settlement_uuid' => 'required|uuid', 'position_uuid' => 'required|uuid',
             'source_bill_id' => 'required|integer|min:1', 'bill_journal_id' => 'required|integer|min:1',
             'bill_revision' => 'required|string|size:64', 'receipt_id' => 'required|integer|min:1',
             'receipt_line_id' => 'required|integer|min:1', 'receipt_mapping_uuid' => 'required|uuid',
@@ -87,6 +87,8 @@ final class PostedPurchaseSettlementService
             $bill = DB::connection('tenant')->table('bills')->where('organization_id', $mapping->finance_organization_id)
                 ->where('id', $facts['source_bill_id'])->lockForUpdate()->first();
             abort_unless($bill && (int) $bill->journal_entry_id === (int) $facts['bill_journal_id'], 409, __('receiving.valuation_changed'));
+            $adjustedAcquisition = app(\App\Services\PurchasingCredits\SupplierCreditReceiptAcquisitionProof::class)
+                ->verify($facts, $authority, (int) $mapping->finance_organization_id, $mapping->mapping_uuid, $bill);
             $position = DB::connection('tenant')->table('finance_purchase_positions')
                 ->where('organization_id', $mapping->finance_organization_id)->where('organization_mapping_uuid', $mapping->mapping_uuid)
                 ->where('position_uuid', $facts['position_uuid'])->where('bill_id', $facts['source_bill_id'])
@@ -151,6 +153,7 @@ final class PostedPurchaseSettlementService
                 (int) $line->id, $factor, $facts['settlement_uuid']);
             abort_unless(Decimal::cmp(Decimal::add(Decimal::add($legacyUsed, $otherNewUsed, 8), $settledBaseQty, 8), (string) $line->accepted_qty, 8) <= 0, 409, __('receiving.receipt_already_billed'));
             $fingerprint = hash('sha256', 'posted-purchase-settlement-v1|'.$facts['settlement_uuid'].'|'.$facts['position_uuid'].'|'.$facts['bill_revision'].'|'.$lifecycle->mapping_uuid.'|'.$line->id.'|plan:'.(int) ($facts['plan_revision'] ?? 1));
+            if ($adjustedAcquisition) $fingerprint = hash('sha256', $fingerprint.'|credit-receipt:'.$adjustedAcquisition['revision_hash']);
             $receiptCost = Decimal::mul((string) $line->unit_cost, $factor, 8);
             $invoiceCost = Decimal::add($facts['invoice_net_unit_cost'], $facts['nonrecoverable_tax_unit_cost'], 8);
             $allocation = new IntegrationFinancialLineAllocation([
