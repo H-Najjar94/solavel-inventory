@@ -87,7 +87,7 @@ final readonly class SupplierCreditCostAuthority
                 && ($saved['position_uuid']??null)===$row->position_uuid && $settlement->organization_mapping_uuid===$mapping->mapping_uuid,409);
             self::activeJournal($db->table('journal_entries')->where('organization_id',$finance)->where('id',$settlement->journal_entry_id)
                 ->where('source_key','purchase-settlement:'.$settlement->settlement_uuid)->lockForUpdate()->first());
-            $sources[]=self::receipt($source,$position,$mapping,$org,$scale,(int)$bill->supplier_id);
+            $sources[]=self::receipt($source,$position,$mapping,$org,$scale,(int)$bill->supplier_id,(string)$originalSource['invoice_exchange_rate']);
             $net=Decimal::add($net,(string)$source['receipt_net_credit_amount'],8);$tax=Decimal::add($tax,(string)$source['receipt_nonrecoverable_tax_credit_amount'],8);
         }
         abort_unless(Decimal::cmp($net,(string)$row->matched_net_amount,8)===0 && Decimal::cmp($tax,(string)$row->matched_nonrecoverable_tax,8)===0
@@ -130,7 +130,7 @@ final readonly class SupplierCreditCostAuthority
         return new self($proof,$row,$sources,$org,$mapping->mapping_uuid);
     }
 
-    private static function receipt(array $source,object $position,IntegrationOrganizationMapping $map,int $org,int $scale,int $supplier):array
+    private static function receipt(array $source,object $position,IntegrationOrganizationMapping $map,int $org,int $scale,int $supplier,string $invoiceRate):array
     {
         $db=DB::connection('tenant');
         IntegrationDocumentLifecycleMapping::query()->where('organization_mapping_uuid',$map->mapping_uuid)->where('mapping_uuid',$source['receipt_mapping_uuid'])
@@ -162,7 +162,8 @@ final readonly class SupplierCreditCostAuthority
             && Decimal::cmp($base,(string)$line->accepted_qty,8)===0 && Decimal::cmp($base,(string)$ledger->quantity,8)===0
             && (int)$ledger->item_id===(int)$line->item_id && (int)$ledger->warehouse_id===(int)$grn->warehouse_id,409);
         foreach(['receipt_net_credit_amount','receipt_nonrecoverable_tax_credit_amount']as$key)abort_unless(preg_match('/^\d+(?:\.\d{1,12})?$/D',(string)$source[$key])===1,409);
-        $delta=Decimal::sub('0',Decimal::round(Decimal::div(Decimal::add((string)$source['receipt_net_credit_amount'],(string)$source['receipt_nonrecoverable_tax_credit_amount'],12),(string)$source['receipt_exchange_rate'],12),$scale),8);
+        // Credit scope amounts are stored Bill-currency amounts; dated receipt FX authenticates the receipt, not the invoice carrying value.
+        $delta=Decimal::sub('0',Decimal::round(Decimal::div(Decimal::add((string)$source['receipt_net_credit_amount'],(string)$source['receipt_nonrecoverable_tax_credit_amount'],12),$invoiceRate,12),$scale),8);
         return ['receipt_id'=>(int)$grn->id,'receipt_line_id'=>(int)$line->id,'stock_ledger_id'=>(int)$ledger->id,'position_uuid'=>$position->position_uuid,
             'quantity_base'=>$base,'price_delta_base'=>$delta,'item_id'=>(int)$ledger->item_id,'warehouse_id'=>(int)$ledger->warehouse_id,'variant_id'=>$ledger->variant_id?(int)$ledger->variant_id:null,
             'lot_id'=>$ledger->lot_id?(int)$ledger->lot_id:null,'bin_id'=>$ledger->bin_id?(int)$ledger->bin_id:null];
