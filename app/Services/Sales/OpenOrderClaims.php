@@ -33,6 +33,9 @@ final class OpenOrderClaims
         $result=[];
         foreach($orders as $order){
             if($this->hasPostedShipments($order))continue;
+            // Already bound by an approved claim (or any non-cancelled request) of another invoice.
+            if($this->boundRequests($order)->where('source_invoice_id','<>',$sourceInvoiceId)->exists())continue;
+            // Claimed and awaiting approval by another invoice.
             $holder=$this->holder($order);
             if($holder&&(int)$holder->source_invoice_id!==$sourceInvoiceId)continue;
             $result[]=$this->present($mapping,$order);
@@ -79,6 +82,31 @@ final class OpenOrderClaims
         return $order;
     }
 
+    /**
+     * Read-only re-check of a claimed request that is still awaiting approval: the reason
+     * approval would refuse it now (claimed order cancelled, shipped, changed or taken),
+     * or null while the claim is still usable. Reported to Finance through the request
+     * status so the invoice shows "claim refused - choose again" instead of waiting forever.
+     */
+    public function refusal(FulfillmentRequest $request):?array
+    {
+        $origin=(array)data_get($request->source_payload,'origin_order',[]);
+        if(($origin['source_order_claim']??false)!==true||$request->sales_order_id!==null||$request->status!=='pending')return null;
+        try{
+            $order=$this->orders()->where('organization_id',$request->organization_id)->whereKey((int)($origin['sales_order_id']??0))->first();
+            if(!$order)$this->refuse('order_claim_unavailable');
+            $this->assertClaimable($order,(int)$request->customer_id,(int)($origin['warehouse_id']??0),(int)$request->id,false);
+            $request->loadMissing('lines');
+            $sourceLines=collect((array)data_get($request->source_payload,'lines',[]))->keyBy(fn($l)=>(string)$l['source_line_id']);
+            $this->assertCoverage($order,$request->lines->map(fn($l)=>['source_line_id'=>(string)$l->source_line_id,'item_id'=>(int)$l->item_id,'entered_unit_id'=>(int)$l->entered_unit_id,'requested_qty'=>(string)$l->requested_qty])->all(),
+                $sourceLines->map(fn($l)=>(int)($l['original_sales_order_line_id']??0))->all(),false);
+        }catch(ValidationException $refused){
+            $body=$refused->response?json_decode((string)$refused->response->getContent(),true):[];
+            return['state'=>'refused','reason'=>(string)data_get($body,'claim.reason','order_claim_unavailable'),'message'=>(string)data_get($body,'message','')];
+        }
+        return null;
+    }
+
     /** A claimed order waits for the warehouse approval of its Finance request before shipping. */
     public function pendingClaim(int $orderId):?FulfillmentRequest
     {
@@ -110,20 +138,25 @@ final class OpenOrderClaims
             'order_revision'=>$this->revision($order),'mapped'=>$mapped,'lines'=>$lines];
     }
 
-    private function assertClaimable(SalesOrder $order,int $customerId,int $warehouse,?int $requestId):void
+    /**
+     * Called with the order row already locked. The holder checks are locking reads: under
+     * REPEATABLE READ a plain read would use the transaction's earlier snapshot and miss a
+     * claim another invoice committed while this one waited for the order lock.
+     */
+    private function assertClaimable(SalesOrder $order,int $customerId,int $warehouse,?int $requestId,bool $lock=true):void
     {
         if((int)$order->customer_id!==$customerId||$order->source_app==='solabooks')$this->refuse('order_claim_unavailable');
         if((int)$order->warehouse_id!==$warehouse)$this->refuse('order_claim_changed');
-        if(!in_array($order->status,self::CLAIMABLE_STATUSES,true)||$this->hasPostedShipments($order))$this->refuse('order_claim_unavailable');
-        if(FulfillmentRequest::query()->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->when($requestId,fn($q)=>$q->whereKeyNot($requestId))->exists())$this->refuse('order_claim_taken');
-        $holder=$this->holder($order,$requestId);
+        if(!in_array($order->status,self::CLAIMABLE_STATUSES,true)||$this->hasPostedShipments($order,$lock))$this->refuse('order_claim_unavailable');
+        if(FulfillmentRequest::query()->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->when($requestId,fn($q)=>$q->whereKeyNot($requestId))->when($lock,fn($q)=>$q->lockForUpdate())->exists())$this->refuse('order_claim_taken');
+        $holder=$this->holder($order,$requestId,$lock);
         if($holder)$this->refuse('order_claim_taken',['invoice'=>$holder->source_invoice_number?:('#'.$holder->source_invoice_id)]);
     }
 
     /** @param array<string,int> $requested source_line_id => original_sales_order_line_id */
-    private function assertCoverage(SalesOrder $order,array $lines,array $requested):void
+    private function assertCoverage(SalesOrder $order,array $lines,array $requested,bool $lock=true):void
     {
-        $native=SalesOrderLine::query()->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+        $native=SalesOrderLine::query()->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->orderBy('id')->when($lock,fn($q)=>$q->lockForUpdate())->get()->keyBy('id');
         $used=[];
         foreach($lines as$line){
             $id=(int)($requested[(string)$line['source_line_id']]??0);$source=$native->get($id);
@@ -135,16 +168,22 @@ final class OpenOrderClaims
         foreach($native as$id=>$source)if(!isset($used[$id])&&Decimal::gt($this->remaining($source),'0'))$this->refuse('order_claim_partial');
     }
 
-    private function holder(SalesOrder $order,?int $except=null):?FulfillmentRequest
+    private function holder(SalesOrder $order,?int $except=null,bool $lock=false):?FulfillmentRequest
     {
         return FulfillmentRequest::query()->where('organization_id',$order->organization_id)->where('customer_id',$order->customer_id)
-            ->whereNull('sales_order_id')->whereNotIn('status',['cancelled'])->when($except,fn($q)=>$q->whereKeyNot($except))->orderBy('id')->get()
+            ->whereNull('sales_order_id')->whereNotIn('status',['cancelled'])->when($except,fn($q)=>$q->whereKeyNot($except))->orderBy('id')->when($lock,fn($q)=>$q->lockForUpdate())->get()
             ->first(fn($r)=>data_get($r->source_payload,'origin_order.source_order_claim')===true&&(int)data_get($r->source_payload,'origin_order.sales_order_id')===(int)$order->id);
     }
 
-    private function hasPostedShipments(SalesOrder $order):bool
+    private function hasPostedShipments(SalesOrder $order,bool $lock=false):bool
     {
-        return Shipment::withoutGlobalScope('warehouse_access')->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->where('status','posted')->exists();
+        return Shipment::withoutGlobalScope('warehouse_access')->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->where('status','posted')->when($lock,fn($q)=>$q->lockForUpdate())->exists();
+    }
+
+    /** Non-cancelled Finance requests bound to this order (approved claims or Finance-born demand). */
+    private function boundRequests(SalesOrder $order)
+    {
+        return FulfillmentRequest::query()->where('organization_id',$order->organization_id)->where('sales_order_id',$order->id)->whereNotIn('status',['cancelled']);
     }
 
     private function remaining(SalesOrderLine $line):string

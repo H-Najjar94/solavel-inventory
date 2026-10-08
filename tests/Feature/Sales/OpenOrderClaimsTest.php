@@ -98,4 +98,37 @@ final class OpenOrderClaimsTest extends TestCase
   $this->assertSame('confirmed',$order->fresh()->status);$this->assertSame(1,SalesOrder::count());
   $read=$this->data();$read['source_invoice_id']=901;$this->intent($read);$this->assertCount(1,$service->openOrders($read,323)['orders']);
  }
+ public function test_already_claimed_checks_are_locking_reads_taken_after_the_order_lock():void {
+  // Under REPEATABLE READ a plain read uses the transaction's earlier snapshot and can miss a claim
+  // committed by another invoice while this upsert waited for the order lock: both checks must lock.
+  $order=$this->fixture();$service=app(FulfillmentRequestService::class);$service->upsert($this->claim($order),323);
+  $second=$this->claim($order,900);$db=DB::connection('tenant');$db->flushQueryLog();$db->enableQueryLog();
+  $this->refused(fn()=>$service->upsert($second,323),'order_claim_taken');
+  $log=array_map(fn($q)=>strtolower($q['query']),$db->getQueryLog());$db->disableQueryLog();
+  $orderLock=collect($log)->search(fn($q)=>str_contains($q,'from `inventory_sales_orders`')&&str_contains($q,'for update'));
+  $bound=collect($log)->search(fn($q)=>str_contains($q,'from `sales_fulfillment_requests`')&&str_contains($q,'`sales_order_id` = ?')&&str_contains($q,'for update'));
+  $holder=collect($log)->search(fn($q)=>str_contains($q,'from `sales_fulfillment_requests`')&&str_contains($q,'`sales_order_id` is null')&&str_contains($q,'for update'));
+  $this->assertIsInt($orderLock);$this->assertIsInt($bound);$this->assertIsInt($holder);
+  $this->assertGreaterThan($orderLock,$bound);$this->assertGreaterThan($orderLock,$holder);
+  $this->assertSame(1,FulfillmentRequest::count());
+ }
+ public function test_an_order_bound_by_an_approved_claim_is_not_offered_to_another_invoice():void {
+  $order=$this->fixture();$service=app(FulfillmentRequestService::class);$service->upsert($this->claim($order),323);
+  $service->approve(FulfillmentRequest::sole(),$this->warehouse->id);$this->assertSame($order->id,FulfillmentRequest::sole()->sales_order_id);
+  $read=$this->data();$read['source_invoice_id']=901;$this->intent($read);
+  $this->assertSame([],$service->openOrders($read,323)['orders']);
+  // An unrelated open order of the same customer is still offered.
+  $free=$this->order($this->customer->id,'2');
+  $this->assertSame([$free->id],array_column($service->openOrders($read,323)['orders'],'sales_order_id'));
+ }
+ public function test_a_claimed_order_cancelled_in_stock_is_reported_as_a_refused_claim_and_approval_refuses_it():void {
+  $order=$this->fixture();$d=$this->claim($order);$service=app(FulfillmentRequestService::class);$service->upsert($d,323);
+  $this->assertArrayNotHasKey('claim',$service->sourceStatus($d,323));
+  app(SalesOrderService::class)->cancel($order);
+  $status=$service->sourceStatus($d,323);
+  $this->assertSame('pending',$status['status']);$this->assertNull($status['sales_order_id']);
+  $this->assertSame(['state'=>'refused','reason'=>'order_claim_unavailable','message'=>__('inventory.sales_handoff.order_claim_unavailable')],$status['claim']);
+  $this->refused(fn()=>$service->approve(FulfillmentRequest::sole(),$this->warehouse->id),'order_claim_unavailable');
+  $this->assertSame('pending',FulfillmentRequest::sole()->status);$this->assertSame(1,SalesOrder::count());
+ }
 }
