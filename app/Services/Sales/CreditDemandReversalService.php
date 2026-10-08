@@ -30,6 +30,9 @@ final class CreditDemandReversalService {
    $scope=CreditDemandScope::fromLockedIntent($r,$intent,$proof);$order=$r->sales_order_id?SalesOrder::withoutGlobalScope('warehouse_access')->where('organization_id',$org)->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail():null;
    $c=FulfillmentDemandCommand::query()->where('organization_id',$org)->where('fulfillment_request_id',$r->id)->where('operation_uuid',$data['operation_uuid'])->where('credit_note_id',$credit->id)->lockForUpdate()->firstOrFail();
    abort_unless($c->credit_revision===$data['credit_revision']&&(int)$c->credit_journal_id===(int)$original->id&&SolaStockJournalContract::payloadHash($c->payload['lines']??[])===SolaStockJournalContract::payloadHash($data['lines']),409);
+   // An acknowledge_cancelled credit never touched physical demand, so its void only gives back the cancelled-quantity
+   // acknowledgement; the request stays cancelled and nothing is re-reserved or re-opened.
+   abort_unless(CreditDemandService::commandMode($c)!==CreditDemandService::ACKNOWLEDGE||$r->status==='cancelled',409);
    if($data['purpose']==='reverse_prepare'){
     abort_unless(in_array($intent->reversal_state??null,['reverse_preparing','reverse_prepared'],true)&&$original->status==='posted'&&empty($original->voided_at)&&empty($original->deleted_at)&&$credit->status!=='void',409);
     if($c->state==='reverse_prepared'){abort_unless($c->reversal_operation_uuid===$data['reversal_operation_uuid']&&(int)$c->reverse_actor_id===$actor,409);return$this->result($c,$r,$scope);}
@@ -65,5 +68,5 @@ final class CreditDemandReversalService {
   $rows=$db->table('tax_lines')->where('org_id',$org)->where('taxable_type','App\\Models\\CreditNote')->where('taxable_id',$credit)->orderBy('id')->lockForUpdate()->get();$ids=$rows->pluck('id')->map(fn($id)=>(int)$id)->all();$expected=array_merge($original,$offset);sort($expected);abort_unless($ids===$expected,409);
   $a=[];$b=[];foreach($rows as$row){$scope=[$row->tax_id,$row->tax_account_id,$row->tax_date];if(in_array((int)$row->id,$original,true)){$a[]=json_encode(array_merge($scope,[Decimal::add('0',(string)$row->base_amount),Decimal::add('0',(string)$row->tax_amount)]));}else{$b[]=json_encode(array_merge($scope,[Decimal::sub('0',(string)$row->base_amount),Decimal::sub('0',(string)$row->tax_amount)]));}}sort($a);sort($b);abort_unless($a===$b,409);
  }
- private function result(FulfillmentDemandCommand$c,FulfillmentRequest$r,CreditDemandScope$scope):array{return['operation_uuid'=>$c->operation_uuid,'reversal_operation_uuid'=>$c->reversal_operation_uuid,'credit_note_id'=>$c->credit_note_id,'state'=>$c->state,'hold_fingerprint'=>$c->reverse_hold_fingerprint,'fulfillment_request'=>app(FulfillmentRequestService::class)->status($r,$scope)];}
+ private function result(FulfillmentDemandCommand$c,FulfillmentRequest$r,CreditDemandScope$scope):array{return['operation_uuid'=>$c->operation_uuid,'reversal_operation_uuid'=>$c->reversal_operation_uuid,'credit_note_id'=>$c->credit_note_id,'state'=>$c->state,'mode'=>CreditDemandService::commandMode($c),'hold_fingerprint'=>$c->reverse_hold_fingerprint,'fulfillment_request'=>app(FulfillmentRequestService::class)->status($r,$scope)];}
 }

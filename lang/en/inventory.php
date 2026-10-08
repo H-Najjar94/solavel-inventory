@@ -42,6 +42,7 @@ return [
         'order_claim_warehouse' => 'Approve this request for the warehouse of the sales order it fulfils.',
         'credit_quantity_precision' => 'The credited quantity cannot be represented in the Stock product unit. Review the credit quantity and unit with the accountant before posting.',
         'credit_demand_pending' => 'A credit is updating undelivered demand. Retry dispatch after the credit finishes, or ask the accountant to resume it.',
+        'credit_cancelled_order_live' => 'This fulfillment request was cancelled but its sales order is still open or shipped. Review the order in SolaStock before crediting the remainder.',
         'tracking_required' => 'Choose the required lot, serial number, or variant for this product before dispatching.',
         'order_not_dispatchable' => 'Confirm the sales order before dispatching its remaining quantities.',
         'source_line_invalid' => 'A shipment line does not belong to this sales order and product. Reopen the shipment from its sales order.',
