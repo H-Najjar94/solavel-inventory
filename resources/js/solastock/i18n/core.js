@@ -1,4 +1,5 @@
 export const en = {
+  cashFulfillment: 'Cash sale dispatch',
   dashboard: 'Dashboard', loading: 'Loading…', collapse: 'Collapse', account: 'Account',
   english: 'English', arabic: 'العربية', language: 'Language',
   light: 'Light', dark: 'Dark', organization: 'Organization', organizations: 'Your organizations',
@@ -47,6 +48,7 @@ export const en = {
 };
 
 export const ar = {
+  cashFulfillment: 'تسليم المبيعات النقدية',
   dashboard: 'لوحة التحكم', loading: 'جارٍ التحميل…', collapse: 'طيّ القائمة', account: 'الحساب',
   english: 'English', arabic: 'العربية', language: 'اللغة',
   light: 'فاتح', dark: 'داكن', organization: 'المؤسسة', organizations: 'مؤسساتك',

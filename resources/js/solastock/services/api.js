@@ -206,6 +206,15 @@ export const api = {
     postCount: (id) => request(`/counts/${id}/post`, { method: 'POST' }),
     countPrefill: (warehouseId, binId) => request('/counts-prefill', { params: { warehouse_id: warehouseId, bin_id: binId } }),
 
+    cashFulfillmentRequests: (status='active') => request('/cash-sales/requests',{params:{status}}),
+    cashFulfillmentOptions: id => request(`/cash-sales/requests/${id}`),
+    approveCashFulfillment: (id,body) => request(`/cash-sales/requests/${id}/approve`,{method:'POST',body}),
+    dispatchCashFulfillment: (id,body) => request(`/cash-sales/requests/${id}/dispatch`,{method:'POST',body}),
+    cashFulfillmentStatus: async (id,uuid) => {
+        const result=await request(`/cash-sales/requests/${id}/operations/${uuid}`);
+        if(['prepared','completed'].includes(result?.data?.status))uncertain.delete(`${organizationScope}:POST:${new URL(BASE+`/cash-sales/requests/${id}/dispatch`,window.location.origin)}`);
+        return result;
+    },
     // ── Sales Fulfillment ──
     fulfillmentRequests: (status='active') => request('/sales/requests', {params:{status}}),
     fulfillmentRequest: (id) => request(`/sales/requests/${id}`),
