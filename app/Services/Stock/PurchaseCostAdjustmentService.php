@@ -116,6 +116,19 @@ final class PurchaseCostAdjustmentService
                 $balance->total_value = Decimal::money(Decimal::add((string) $balance->total_value, $amount));
                 $balance->average_cost = Decimal::isZero((string) $balance->on_hand_qty) ? '0' : Decimal::cost(Decimal::div((string) $balance->total_value, (string) $balance->on_hand_qty));
                 $balance->save();
+                $slices=data_get($component->provenance,'restored_fifo_layer_slices');
+                if(is_array($slices)){
+                    $sum='0';$seen=[];
+                    foreach($slices as$slice){
+                        $id=(int)($slice['cost_layer_id']??0);if($id<1||isset($seen[$id]))$this->fail('Distinct restored FIFO layer proof required.');$seen[$id]=true;
+                        $sliceAmount=Decimal::money(Decimal::mul((string)$slice['posted_base_amount'],$sign));$sum=Decimal::add($sum,$sliceAmount,8);
+                        $layer=CostLayer::query()->where('organization_id',$row->organization_id)->where('item_id',$component->item_id)->where('warehouse_id',$component->warehouse_id)->lockForUpdate()->findOrFail($id);
+                        if(Decimal::isZero((string)$layer->remaining_qty)||Decimal::cmp((string)$layer->remaining_qty,(string)$slice['remaining_quantity'],8)!==0)$this->fail('A restored FIFO layer changed after cost review.');
+                        $layer->unit_cost=Decimal::cost(Decimal::add((string)$layer->unit_cost,Decimal::div($sliceAmount,(string)$layer->remaining_qty)));$layer->save();
+                    }
+                    if(!$slices||Decimal::cmp($sum,$amount,8)!==0)$this->fail('Restored FIFO layer amounts do not reconcile.');
+                    continue;
+                }
                 $layerId = data_get($component->provenance, 'cost_layer_id');
                 if ($layerId) {
                     $layer = CostLayer::query()->where('organization_id', $row->organization_id)->lockForUpdate()->findOrFail($layerId);

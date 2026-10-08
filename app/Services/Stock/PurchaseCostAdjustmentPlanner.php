@@ -72,6 +72,7 @@ final class PurchaseCostAdjustmentPlanner
         $serialized = $components->map(function (array $component) use (&$posted, $scale): array {
             $componentScale = $component['destination_role'] === 'inventory_asset' ? 2 : $scale;
             $component['posted_base_amount'] = Decimal::round($component['exact_base_amount'], $componentScale);
+            if(isset($component['provenance']['restored_fifo_layer_slices'])){$component['provenance']['restored_fifo_layer_slices']=RestoredFifoLayerSlices::rounded($component['provenance']['restored_fifo_layer_slices'],$component['posted_base_amount']);}
             $posted = Decimal::add($posted, $component['posted_base_amount'], 8);
 
             return $component;
@@ -210,10 +211,11 @@ final class PurchaseCostAdjustmentPlanner
         // Native component uniqueness is allocation + ledger + role, even when one OUT consumed several layers.
         $cohort=[];foreach($parts as$part){
             $key=$part['stock_ledger_id'].'|'.$part['destination_role'];
+            if($part['destination_role']==='inventory_asset'){$layerId=(int)$part['provenance']['cost_layer_id'];$layer=CostLayer::query()->where('organization_id',$inverse->organization_id)->whereKey($layerId)->firstOrFail();$part['provenance']['restored_fifo_layer_slices']=[['cost_layer_id'=>$layerId,'remaining_quantity'=>(string)$layer->remaining_qty,'exact_base_amount'=>$part['exact_base_amount']]];}
             if(!isset($cohort[$key])){$cohort[$key]=$part;continue;}
             $cohort[$key]['base_quantity']=Decimal::add($cohort[$key]['base_quantity'],$part['base_quantity'],8);
             $cohort[$key]['exact_base_amount']=Decimal::add($cohort[$key]['exact_base_amount'],$part['exact_base_amount'],8);
-            $cohort[$key]['provenance']['restored_layer_components'][]=$part['provenance'];
+            $cohort[$key]['provenance']['restored_layer_components'][]=$part['provenance'];if($part['destination_role']==='inventory_asset')$cohort[$key]['provenance']['restored_fifo_layer_slices']=array_merge($cohort[$key]['provenance']['restored_fifo_layer_slices'],$part['provenance']['restored_fifo_layer_slices']);
         }
         return collect(array_values($cohort));
     }
