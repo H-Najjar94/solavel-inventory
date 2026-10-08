@@ -36,6 +36,7 @@
             try { localStorage.setItem("solastock_theme", t); } catch (_) {}
             document.documentElement.setAttribute("data-theme", t);
             window.SOLASTOCK_LOCALE = @json(['locale' => $locale, 'dir' => $dir]);
+            window.SOLASTOCK_FEATURES = @json(['cashHandoff' => (bool) config('integration_safety.financial_origin_cash_handoff_enabled', false)]);
             window.SOLASTOCK_BASE_PATH = @json(app()->environment('staging') ? '' : '/inventory');
         })();
     </script>
