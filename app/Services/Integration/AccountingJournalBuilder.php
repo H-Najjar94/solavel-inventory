@@ -23,7 +23,7 @@ class AccountingJournalBuilder
         return match ($event->event_type) {
             'stock.historical_fifo_cost_corrected.v1' => $this->historicalFifo($event, $orgId),
             'grn.posted' => $this->goodsReceipt($event, $orgId),
-            'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),
+            'grn.reversed', 'adjustment.reversed', 'supplier_return.reversed' => $this->inventoryReversal($event, $orgId),
             'shipment.posted' => $this->shipment($event, $orgId),
             'sales_return.posted' => $this->salesReturn($event, $orgId),
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
@@ -49,12 +49,15 @@ class AccountingJournalBuilder
         $originalType = match ($reversal->source_type) {
             'goods_receipt' => 'grn.posted',
             'stock_adjustment' => 'adjustment.posted',
+            'supplier_return' => 'supplier_return.posted',
             default => throw new RuntimeException("Unsupported reversal source '{$reversal->source_type}'."),
         };
         $original = $this->originalEvent($originalType, (int) $reversal->source_id);
-        $lines = $originalType === 'grn.posted'
-            ? $this->goodsReceipt($original, $orgId)
-            : $this->adjustment($original, $orgId);
+        $lines = match ($originalType) {
+            'grn.posted' => $this->goodsReceipt($original, $orgId),
+            'supplier_return.posted' => $this->twoLine($original, $orgId),
+            default => $this->adjustment($original, $orgId),
+        };
 
         return $this->invert($lines, $event);
     }
