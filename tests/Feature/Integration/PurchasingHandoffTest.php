@@ -558,6 +558,22 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame(1, StockLedger::count());
         $this->assertSame(1, PurchasingDocumentOutbox::count());
         $this->assertSame(1, IntegrationOutboxEvent::count());
+        // Reconnect keeps the reviewed contract and dated rate; resume this
+        // exact draft, rather than resetting ownership or creating another GRN.
+        $contract = IntegrationSetting::sole()->meta['finance_currency_contract'];
+        IntegrationSetting::sole()->update(['mode' => 'active']);
+        app(GoodsReceiptService::class)->post($receipt);
+        $this->assertSame($contract, IntegrationSetting::sole()->meta['finance_currency_contract']);
+        $this->assertSame('posted', $receipt->fresh()->status);
+        $this->assertSame(2, StockLedger::count());
+        $this->assertSame(['2.0000', '2.0000'], StockLedger::orderBy('id')->pluck('unit_cost')->all());
+        $this->assertSame('2.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame(2, PurchasingDocumentOutbox::count());
+        $this->assertSame(2, IntegrationOutboxEvent::count());
+        app(GoodsReceiptService::class)->post($receipt->fresh());
+        $this->assertSame(2, StockLedger::count());
+        $this->assertSame(2, PurchasingDocumentOutbox::count());
+        $this->assertSame(2, IntegrationOutboxEvent::count());
     }
 
     public function test_missing_foreign_dated_fx_blocks_receipt_without_stock_or_document_handoff(): void
