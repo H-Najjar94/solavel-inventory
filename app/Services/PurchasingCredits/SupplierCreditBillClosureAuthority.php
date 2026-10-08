@@ -74,12 +74,16 @@ final readonly class SupplierCreditBillClosureAuthority
   abort_unless(hash_equals($closure['claim_cohort_hash'],hash('sha256',json_encode($cohort,JSON_THROW_ON_ERROR))),409);
   abort_unless(!$quotes||count($quotes)===$rows->count(),409);
   if($quotes){foreach($quotes as$q)abort_unless($q===$quotes[0],409);$proof['closure_quote']=$quotes[0];}
-  if($action==='reverse'){
-   $je=$db->table('journal_entries')->where('organization_id',$fin)->where('id',$proof['finance_reversal_journal_id']??0)->lockForUpdate()->first();
+  $closureJEIds=$rows->pluck('bill_closure_journal_id')->filter()->unique()->values();
+  abort_unless($closureJEIds->count()<=1,409);
+  if($closureJEIds->count()){
+   $je=$db->table('journal_entries')->where('organization_id',$fin)->where('id',$closureJEIds[0])->lockForUpdate()->first();
    abort_unless($je&&$je->status==='posted'&&!empty($je->posted_at)&&empty($je->voided_at)&&empty($je->deleted_at)
-    &&$je->source_key===($proof['finance_reversal_journal_key']??null),409);
+    &&$je->source_key==='purchase-settlement-reversal:'.$facts['settlement_uuid'],409);
    foreach($rows as$row)abort_unless((int)$row->bill_closure_journal_id===(int)$je->id,409);
-  }
+   if($action==='reverse')abort_unless((int)($proof['finance_reversal_journal_id']??0)===(int)$je->id,409);
+   $proof['finance_reversal_journal_id']=(int)$je->id;
+  }else abort_unless($action!=='reverse',409);
   $proof['_closure_action']=$action==='reverse'?'apply':$action;
   $sources=[];$ids=[];
   foreach($adjustments as$adjustment){
@@ -159,7 +163,7 @@ final readonly class SupplierCreditBillClosureAuthority
  public function moneyScale():int{return (int)$this->position['money_scale'];} public function currencyCode():string{return $this->position['currency_code'];}
  public function baseCurrencyCode():string{return $this->position['base_currency_code'];} public function exchangeRate():string{return (string)$this->position['invoice_exchange_rate'];}
  public function financialReverseProven():bool{return $this->action()==='apply'&&!empty($this->proof['finance_reversal_journal_id']);}
- public function financeJournalId():?int{return $this->financialReverseProven()?(int)$this->proof['finance_reversal_journal_id']:null;}
+ public function financeJournalId():?int{return !empty($this->proof['finance_reversal_journal_id'])?(int)$this->proof['finance_reversal_journal_id']:null;}
  public function identity():array{return ['organization_mapping_uuid'=>$this->map,'operation_uuid'=>$this->operationUuid(),'allocation_uuid'=>$this->allocationUuid(),'settlement_uuid'=>$this->settlementUuid(),'source_bill_id'=>$this->billId(),'bill_journal_id'=>$this->billJournalId(),'claim_cohort_hash'=>$this->proof['restoration_closure']['claim_cohort_hash'],'plan_revision'=>$this->planRevision()];}
  public function holdUuid(int $item,int $warehouse,string $direction='apply'):string{return Uuid::uuid5(Uuid::NAMESPACE_URL,'credit-bill-closure-hold|'.$this->operationUuid().'|'.$item.'|'.$warehouse)->toString();}
 }
