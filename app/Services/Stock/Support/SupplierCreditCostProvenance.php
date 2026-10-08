@@ -2,6 +2,7 @@
 namespace App\Services\Stock\Support;
 
 use App\Services\PurchasingCredits\SupplierCreditCostAuthority;
+use App\Services\PurchasingCredits\SupplierCreditReceiptRestoreAuthority;
 use Ramsey\Uuid\Uuid;
 
 /** Private credit allocation identity. Neither a supplier Bill nor an Expense settlement. */
@@ -20,7 +21,7 @@ final readonly class SupplierCreditCostProvenance
         public ?int $bin_id,
     ) {}
 
-    public static function fromAuthority(SupplierCreditCostAuthority $authority, array $source): self
+    public static function fromAuthority(SupplierCreditCostAuthority|SupplierCreditReceiptRestoreAuthority $authority, array $source): self
     {
         abort_unless(in_array($source, $authority->sourceAllocations(), true), 403);
         return new self(

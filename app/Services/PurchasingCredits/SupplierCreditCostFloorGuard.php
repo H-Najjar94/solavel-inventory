@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 /** Check the native aggregate value floor while all affected item pools are locked. */
 final class SupplierCreditCostFloorGuard
 {
-    public function assertPlan(SupplierCreditCostAuthority $authority,array $plan,bool $inverse=false):void
+    public function assertPlan(SupplierCreditCostAuthority|SupplierCreditReceiptRestoreAuthority $authority,array $plan,bool $inverse=false):void
     {
         $org=$authority->organizationId();
         abort_unless(DB::connection('tenant')->transactionLevel()>0 && $org===app(OrganizationContext::class)->idOrFail()

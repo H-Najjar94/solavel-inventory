@@ -9,7 +9,7 @@ use App\Models\Tenant\IntegrationPurchaseCostAdjustmentComponent;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
 use App\Services\FinancialOrigins\OriginReceiptCostAuthority;
-use App\Services\PurchasingCredits\{SupplierCreditCostAuthority,SupplierCreditCostFloorGuard};
+use App\Services\PurchasingCredits\{SupplierCreditCostAuthority,SupplierCreditReceiptRestoreAuthority,SupplierCreditCostFloorGuard};
 use App\Services\Purchasing\PurchaseValuationHoldService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -106,6 +106,44 @@ final class PurchaseCostAdjustmentService
         return $this->serialize($row);
     }
 
+    /** Positive current-disposition restoration; no fictional original native adjustment. */
+    public function prepareSupplierCreditReceiptRestore(SupplierCreditReceiptRestoreAuthority $authority,array $plan):array
+    {
+        abort_unless(DB::connection('tenant')->transactionLevel()>0 && $authority->action()==='prepare'
+            && ($plan['direction']??null)==='receipt_restore',403);
+        app(SupplierCreditCostFloorGuard::class)->assertPlan($authority,$plan);
+        $key=hash('sha256','supplier_credit_receipt_restore|'.$authority->mappingUuid().'|'.$authority->operationUuid().'|'.$authority->settlementUuid().'|'.$authority->planRevision());
+        $row=IntegrationPurchaseCostAdjustment::query()->where('organization_id',$authority->organizationId())
+            ->where('organization_mapping_uuid',$authority->mappingUuid())->where('idempotency_key',$key)->lockForUpdate()->first();
+        if(!$row){
+            $row=IntegrationPurchaseCostAdjustment::create(['adjustment_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$authority->mappingUuid(),
+                'organization_id'=>$authority->organizationId(),'destination_document_type'=>'supplier_credit_receipt_restore','destination_document_id'=>$authority->noteId(),
+                'destination_fingerprint'=>$authority->fingerprint(),'currency_code'=>$authority->currencyCode(),'base_currency_code'=>$authority->baseCurrencyCode(),
+                'exchange_rate'=>$authority->exchangeRate(),'finance_money_scale'=>$authority->moneyScale(),'stock_money_scale'=>2,
+                'exact_base_difference'=>$plan['exact_base_difference'],'allocated_base_difference'=>$plan['allocated_base_difference'],
+                'rounding_residual'=>$plan['rounding_residual'],'rounding_bound'=>$plan['rounding_bound'],'state'=>'prepared','idempotency_key'=>$key,
+                'safe_metadata'=>['contract_version'=>'purchase-credit-receipt-restore.v1','supplier_credit'=>['operation_uuid'=>$authority->operationUuid(),
+                    'allocation_uuid'=>$authority->allocationUuid(),'settlement_uuid'=>$authority->settlementUuid(),'debit_note_id'=>$authority->noteId(),
+                    'source_bill_id'=>$authority->billId(),'bill_journal_id'=>$authority->billJournalId(),'plan_revision'=>$authority->planRevision()]]]);
+            foreach($plan['components']as$component){unset($component['receipt_line_id']);IntegrationPurchaseCostAdjustmentComponent::create($component+
+                ['adjustment_uuid'=>$row->adjustment_uuid,'organization_id'=>$authority->organizationId()]);}
+        }
+        abort_unless($row->destination_document_type==='supplier_credit_receipt_restore'&&$row->destination_fingerprint===$authority->fingerprint(),409);
+        return $this->serialize($row);
+    }
+    public function applySupplierCreditReceiptRestore(SupplierCreditReceiptRestoreAuthority $authority):array
+    {
+        abort_unless($authority->action()==='apply'&&$authority->financialReverseProven(),403);
+        return $this->transition($this->creditInput($authority),false,$authority);
+    }
+    public function statusSupplierCreditReceiptRestore(SupplierCreditReceiptRestoreAuthority $authority):array
+    {
+        $row=IntegrationPurchaseCostAdjustment::query()->where('organization_id',$authority->organizationId())->where('organization_mapping_uuid',$authority->mappingUuid())
+            ->where('destination_document_type','supplier_credit_receipt_restore')->where('destination_document_id',$authority->noteId())
+            ->where('destination_fingerprint',$authority->fingerprint())->where('safe_metadata->supplier_credit->plan_revision',$authority->planRevision())->lockForUpdate()->firstOrFail();
+        return $this->serialize($row);
+    }
+
     public function applySupplierCredit(SupplierCreditCostAuthority $authority):array
     {
         abort_unless($authority->action()==='apply' && !$authority->reverse(),403);
@@ -129,7 +167,7 @@ final class PurchaseCostAdjustmentService
         abort_unless(data_get($row->safe_metadata,'supplier_credit.operation_uuid')===$authority->operationUuid() && data_get($row->safe_metadata,'supplier_credit.allocation_uuid')===$authority->allocationUuid(),403);
         return $this->serialize($row);
     }
-    private function creditInput(SupplierCreditCostAuthority $authority):array
+    private function creditInput(SupplierCreditCostAuthority|SupplierCreditReceiptRestoreAuthority $authority):array
     {
         return ['organization_mapping_uuid'=>$authority->mappingUuid(),'destination_document_id'=>$authority->noteId(),'destination_fingerprint'=>$authority->fingerprint()];
     }
@@ -206,7 +244,7 @@ final class PurchaseCostAdjustmentService
         return $this->transition($input, true);
     }
 
-    private function transition(array $input, bool $reverse, OriginReceiptCostAuthority|SupplierCreditCostAuthority|null $authority = null): array
+    private function transition(array $input, bool $reverse, OriginReceiptCostAuthority|SupplierCreditCostAuthority|SupplierCreditReceiptRestoreAuthority|null $authority = null): array
     {
         return DB::connection('tenant')->transaction(function () use ($input, $reverse, $authority): array {
             $organizationId = app(OrganizationContext::class)->idOrFail();
@@ -217,10 +255,10 @@ final class PurchaseCostAdjustmentService
                 $this->fail('The connection is not active for this organization.');
             }
             $row = IntegrationPurchaseCostAdjustment::query()->where('organization_id', $organizationId)->where('organization_mapping_uuid', $input['organization_mapping_uuid'])
-                ->where('destination_document_type', $authority instanceof SupplierCreditCostAuthority ? ($authority->reverse()?'supplier_credit_inverse':'supplier_credit') : ($authority ? 'expense' : 'supplier_bill'))->where('destination_document_id', $input['destination_document_id'])->where('destination_fingerprint', $input['destination_fingerprint'])
-                ->when($authority instanceof SupplierCreditCostAuthority,fn($query)=>$query->where('safe_metadata->supplier_credit->plan_revision',$authority->planRevision()))
+                ->where('destination_document_type', $authority instanceof SupplierCreditReceiptRestoreAuthority ? 'supplier_credit_receipt_restore' : (($authority instanceof SupplierCreditCostAuthority) ? ($authority->reverse()?'supplier_credit_inverse':'supplier_credit') : ($authority ? 'expense' : 'supplier_bill')))->where('destination_document_id', $input['destination_document_id'])->where('destination_fingerprint', $input['destination_fingerprint'])
+                ->when(($authority instanceof SupplierCreditCostAuthority || $authority instanceof SupplierCreditReceiptRestoreAuthority),fn($query)=>$query->where('safe_metadata->supplier_credit->plan_revision',$authority->planRevision()))
                 ->lockForUpdate()->firstOrFail();
-            if($authority instanceof SupplierCreditCostAuthority)abort_unless((int)data_get($row->safe_metadata,'supplier_credit.plan_revision')===$authority->planRevision(),409);
+            if(($authority instanceof SupplierCreditCostAuthority || $authority instanceof SupplierCreditReceiptRestoreAuthority))abort_unless((int)data_get($row->safe_metadata,'supplier_credit.plan_revision')===$authority->planRevision(),409);
             if (data_get($row->safe_metadata, 'purchase_settlement.settlement_uuid')
                 && ! str_starts_with((string) request()->attributes->get('verified_workspace_action'), 'purchasing.settlement.')) {
                 $this->fail(__('receiving.valuation_pending'));
@@ -237,7 +275,7 @@ final class PurchaseCostAdjustmentService
             $holdService->lockItems($components->pluck('item_id')->all());
             $allowedHold = request()->attributes->get('validated_settlement_hold');
             if ($authority) {
-                $credit=$authority instanceof SupplierCreditCostAuthority;
+                $credit=($authority instanceof SupplierCreditCostAuthority || $authority instanceof SupplierCreditReceiptRestoreAuthority);
                 abort_unless(hash_equals((string)data_get($row->safe_metadata,($credit?'supplier_credit':'financial_origin').'.operation_uuid'),$authority->operationUuid()) && (int)$row->organization_id===$authority->organizationId(),403);
                 if($credit){
                     abort_unless(data_get($row->safe_metadata,'supplier_credit.allocation_uuid')===$authority->allocationUuid(),403);
@@ -248,8 +286,8 @@ final class PurchaseCostAdjustmentService
             foreach ($components as $component) {
                 if ($authority) {
                     $allowedHold = ['settlement_uuid' => $authority->holdUuid((int) $component->item_id, (int) $component->warehouse_id, ($reverse || $authority->reverse()) ? 'reverse' : 'apply'),
-                        'purpose' => $authority instanceof SupplierCreditCostAuthority ? ($authority->reverse() ? 'credit_reverse' : 'credit_apply') : ($reverse ? 'origin_reverse' : 'origin_apply'), 'plan_revision' => $authority->planRevision(), 'plan_fingerprint' => $authority->planFingerprint()];
-                    if ($authority instanceof SupplierCreditCostAuthority && $authority->reverse()) {
+                        'purpose' => ($authority instanceof SupplierCreditCostAuthority || $authority instanceof SupplierCreditReceiptRestoreAuthority) ? ($authority->reverse() ? 'credit_reverse' : 'credit_apply') : ($reverse ? 'origin_reverse' : 'origin_apply'), 'plan_revision' => $authority->planRevision(), 'plan_fingerprint' => $authority->planFingerprint()];
+                    if (($authority instanceof SupplierCreditCostAuthority || $authority instanceof SupplierCreditReceiptRestoreAuthority) && $authority->reverse()) {
                         $allowedHold += ['group_credit_note_id'=>$authority->noteId(), 'group_bill_id'=>$authority->billId(),
                             'group_bill_journal_id'=>$authority->billJournalId()];
                     }

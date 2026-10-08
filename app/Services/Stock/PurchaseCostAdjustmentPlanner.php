@@ -16,6 +16,7 @@ use App\Services\FinancialOrigins\OriginReceiptCostAuthority;
 use App\Services\Stock\Support\OriginReceiptCostProvenance;
 use App\Services\Stock\Support\SupplierCreditCostProvenance;
 use App\Services\PurchasingCredits\SupplierCreditCostAuthority;
+use App\Services\PurchasingCredits\SupplierCreditReceiptRestoreAuthority;
 use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -131,7 +132,7 @@ final class PurchaseCostAdjustmentPlanner
     }
 
     /** A supplier credit changes value through actual native FIFO/AVG provenance, never quantity. */
-    public function planSupplierCredit(SupplierCreditCostAuthority $authority): array
+    public function planSupplierCredit(SupplierCreditCostAuthority|SupplierCreditReceiptRestoreAuthority $authority): array
     {
         abort_unless(\DB::connection('tenant')->transactionLevel()>0 && $authority->organizationId()===app(OrganizationContext::class)->idOrFail(),403);
         $components=collect();$exact='0';
