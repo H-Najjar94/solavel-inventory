@@ -44,6 +44,15 @@ final readonly class SupplierCreditBillClosureAuthority
    abort_unless($user&&(int)$intent['central_actor_id']>0&&$db->table('organization_user')->where('organization_id',$fin)->where('user_id',$user->id)->where('status','active')->exists(),403);
    abort_unless((int)$source['claim_id']===(int)$row->id&&$source['claim_snapshot']===$row->snapshot&&$source['claim_snapshot_hash']===$row->snapshot_hash
     &&hash_equals($row->snapshot_hash,hash('sha256',$row->snapshot))&&$source['claim_revision_hash']===$row->revision_hash,409);
+   abort_unless(hash_equals($settlement->payload_hash,hash('sha256',$settlement->payload)),409);
+   $payload=json_decode($settlement->payload,true,512,JSON_THROW_ON_ERROR);$savedClaim=json_decode($row->snapshot,true,512,JSON_THROW_ON_ERROR);
+   abort_unless(in_array($savedClaim,(array)data_get($payload,'adjusted_acquisition.allocation_claims'),true)
+    &&data_get($payload,'adjusted_acquisition.revision_hash')===$row->revision_hash
+    &&$row->position_uuid===$position->position_uuid&&Decimal::cmp((string)$row->quantity,(string)$payload['quantity'],8)===0,409);
+   foreach(['net_amount','nonrecoverable_tax_amount','acquisition_base','quantity_basis']as$field)
+    abort_unless(Decimal::cmp((string)$row->$field,(string)($savedClaim[$field]??''),8)===0,409);
+   abort_unless(($savedClaim['allocation_uuid']??null)===$row->allocation_uuid&&(int)($savedClaim['note_id']??0)===(int)$row->debit_note_id
+    &&(int)($savedClaim['note_journal_id']??0)===(int)$row->note_journal_id&&($savedClaim['source_hash']??null)===$row->source_hash,409);
    $note=$db->table('debit_notes')->where('organization_id',$fin)->where('id',$row->debit_note_id)->lockForUpdate()->first();
    $noteJE=$db->table('journal_entries')->where('organization_id',$fin)->where('id',$row->note_journal_id)->lockForUpdate()->first();
    abort_unless($note&&$note->status==='void'&&$noteJE&&$noteJE->source==='NOTE'&&$noteJE->source_type==='App\\Models\\DebitNote'&&!empty($noteJE->voided_at)&&(int)$noteJE->source_id===(int)$note->id,409);
