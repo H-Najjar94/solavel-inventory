@@ -32,8 +32,8 @@ final readonly class SupplierCreditReceiptRestoreAuthority
    &&(int)$allocation->journal_entry_id===(int)$identity['original_journal_id']&&(int)$claim->note_journal_id===(int)$identity['original_journal_id']
    &&hash_equals($allocation->source_hash,$identity['source_hash'])&&hash_equals($claim->revision_hash,$identity['claim_revision_hash'])
    &&(int)$claim->restore_plan_revision===(int)$identity['plan_revision'],409);
-  abort_unless(in_array($claim->state,['matched','restore_quote_pending','restore_quoted','restore_pending','restored'],true),409);
-  if(in_array($claim->state,['restore_quote_pending','restore_quoted'],true))abort_unless(in_array($action,['prepare','status','release'],true)&&empty($claim->restore_journal_id),409);
+  abort_unless(in_array($claim->state,['matched','restore_quote_pending','restore_quoted','restore_release_pending','restore_pending','restored'],true),409);
+  if(in_array($claim->state,['restore_quote_pending','restore_quoted','restore_release_pending'],true))abort_unless(in_array($action,['prepare','status','release'],true)&&empty($claim->restore_journal_id),409);
   if($action==='apply')abort_unless(in_array($claim->state,['restore_pending','restored'],true),409);
   $intent=json_decode($claim->restore_intent??'null',true,512,JSON_THROW_ON_ERROR);
   abort_unless(is_array($intent)&&$intent===($proof['restore_intent']??null)
@@ -42,6 +42,8 @@ final readonly class SupplierCreditReceiptRestoreAuthority
   abort_unless((int)($intent['original_journal_id']??0)===(int)$identity['original_journal_id'],403);
   $nativeLine=$db->table('debit_note_lines')->where('organization_id',$finance)->where('debit_note_id',$note->id)->where('id',$allocation->debit_note_line_id)->lockForUpdate()->first();
   abort_unless($nativeLine&&hash_equals($allocation->note_revision,SupplierCreditCommercialRevision::forRows($note,$nativeLine)),409);
+  if($action==='release')abort_unless($claim->state==='restore_release_pending'&&($intent['release_requested']??false)===true,403);
+  if($action==='apply')abort_unless(($intent['release_requested']??false)!==true,403);
   $user=$db->table('users')->where('id',$intent['actor_id']??0)->where('central_user_id',$actor)->first();
   abort_unless($user&&$db->table('organization_user')->where('organization_id',$finance)->where('user_id',$user->id)->where('status','active')->exists(),403);
   $locked=IntegrationOrganizationMapping::query()->whereKey($map->id)->lockForUpdate()->firstOrFail();
@@ -61,7 +63,7 @@ final readonly class SupplierCreditReceiptRestoreAuthority
   $voided=!empty($journal->voided_at)&&$note->status==='void';
   if($action==='apply')abort_unless($voided&&(int)($proof['native_voided_journal_id']??0)===(int)$journal->id&&($proof['finance_reversal_journal_id']??null)===null,409);
   elseif($action==='release')abort_unless(!$voided&&empty($claim->restore_journal_id),409);
-  elseif(in_array($claim->state,['restore_quote_pending','restore_quoted'],true))abort_unless(!$voided&&$journal->status==='posted'&&$note->posting_status==='posted',409);
+  elseif(in_array($claim->state,['restore_quote_pending','restore_quoted','restore_release_pending'],true))abort_unless(!$voided&&$journal->status==='posted'&&$note->posting_status==='posted',409);
   else abort_unless($voided||($journal->status==='posted'&&empty($journal->voided_at)&&$note->posting_status==='posted'),409);
   $settlement=$db->table('finance_purchase_settlements')->where('organization_id',$finance)->where('position_uuid',$position->position_uuid)
    ->where('settlement_uuid',$claim->settlement_uuid)->lockForUpdate()->sole();
