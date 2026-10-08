@@ -22,7 +22,7 @@ final readonly class SupplierCreditBillClosureAuthority
   $billJE=$db->table('journal_entries')->where('organization_id',$fin)->where('id',$facts['bill_journal_id'])->lockForUpdate()->first();
   abort_unless($billJE&&$billJE->status==='posted'&&!empty($billJE->posted_at)&&empty($billJE->voided_at)&&empty($billJE->deleted_at),409);
   $snapshot=json_decode($position->snapshot,true,512,JSON_THROW_ON_ERROR);
-  $financeOrg=$db->table('organizations')->where('id',$fin)->first();abort_unless($financeOrg,409);$snapshot['money_scale']=(int)$financeOrg->money_scale;
+  $financeOrg=$db->table('organizations')->where('id',$fin)->first();abort_unless($financeOrg&&$financeOrg->money_scale!==null&&(int)$financeOrg->money_scale>=0&&(int)$financeOrg->money_scale<=8,409);$snapshot['money_scale']=(int)$financeOrg->money_scale;
   $rows=$db->table('finance_purchase_credit_receipt_claims')->where('organization_id',$fin)->where('settlement_uuid',$facts['settlement_uuid'])->whereNotNull('restore_journal_id')->orderBy('id')->lockForUpdate()->get();
   abort_unless($rows->count()>0&&$rows->count()===count($closure['claims']??[]),409);
   $financial=[];$originalParts=[];
