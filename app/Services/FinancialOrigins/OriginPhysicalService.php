@@ -57,6 +57,34 @@ final class OriginPhysicalService
         LockedOriginProof::lockAccepted($r,(int)(request()->user()?->getAuthIdentifier()??0));
         $r=$r->newQuery()->whereKey($r->id)->lockForUpdate()->firstOrFail();
         $command=$known->newQuery()->whereKey($known->id)->lockForUpdate()->firstOrFail();
+        if($command->status==='completed') {
+            OriginSourceAdmission::stock($r,(int)(request()->user()?->getAuthIdentifier()??0),
+                $document instanceof Shipment?'inventory.manage_shipments':'inventory.receive_goods');
+            app(\App\Services\Access\WarehouseAccessService::class)->assertAllowed((int)$document->warehouse_id);
+            $posted=$document->newQuery()->where('organization_id',$r->organization_id)->whereKey($document->id)->lockForUpdate()->firstOrFail();
+            abort_unless($posted->status==='posted' && (int)$posted->warehouse_id===(int)$r->warehouse_id
+                && $r->approved_at && $r->approved_revision===$r->source_revision && data_get($command->payload,'request_revision')===$r->source_revision,409);
+            if($document instanceof Shipment)abort_unless($r->side==='sales' && $r->source_document_type==='sales_receipt'
+                && (int)$posted->sales_order_id===(int)$r->sales_order_id,409);
+            else abort_unless($r->side==='purchase' && $r->source_document_type==='expense' && !$posted->purchase_order_id && !$posted->receiving_request_id,409);
+            $event=\App\Models\Tenant\FinancialOriginOutbox::query()->where('organization_id',$r->organization_id)
+                ->where('operation_uuid',$command->operation_uuid)->where('physical_document_id',$posted->id)
+                ->where('event_type',$posted instanceof Shipment?'financial-origin.shipment.confirmed':'financial-origin.receipt.confirmed')->firstOrFail();
+            abort_unless($event->payload_hash===\App\Services\Integration\SolaStockJournalContract::payloadHash($event->payload)
+                && data_get($event->payload,'request_uuid')===$r->request_uuid
+                && data_get($event->payload,'request_revision')===$r->source_revision
+                && (int)data_get($event->payload,'physical.id')===(int)$posted->id
+                && (int)data_get($event->payload,'source_document_id')===(int)$r->source_document_id,409);
+            $native=$posted->lines()->get()->keyBy('id');$facts=data_get($event->payload,'physical.lines',[]);
+            abort_unless(count($facts)===$native->count(),409);
+            foreach($facts as $fact){
+                $line=$native->get((int)$fact['physical_line_id']);
+                abort_unless($line && (int)$line->item_id===(int)$fact['stock_item_id'] && (int)$line->entered_unit_id===(int)$fact['stock_unit_id']
+                    && Decimal::cmp((string)($posted instanceof Shipment?$line->quantity:$line->accepted_qty),(string)$fact['base_quantity'])===0
+                    && (string)$line->unit_conversion_hash===(string)$fact['unit_conversion_hash'],409);
+            }
+            return $r; // Native caller's posted-document idempotent return; no fulfilment/outbox writes.
+        }
         abort_unless($command->status==='pending' && in_array($r->status,['pending','partial'],true) && $r->approved_at
             && $r->approved_revision===$r->source_revision && (int)$r->warehouse_id===(int)$document->warehouse_id,409);
         if($document instanceof Shipment)abort_unless($r->side==='sales' && $r->source_document_type==='sales_receipt' && (int)$r->sales_order_id===(int)$document->sales_order_id,409);
