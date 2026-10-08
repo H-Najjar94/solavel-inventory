@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 /** An additional receipt match is admitted only for an actual credited return's native physical inverse. */
 final class SupplierReturnInverseOriginProof
 {
-    public function assertLocked(array $origin,array $facts,object $mapping): void
+    public function assertLocked(array $origin,array $facts,object $mapping): array
     {
         $db=DB::connection('tenant');$org=(int)$mapping->finance_organization_id;$stock=(int)$mapping->solastock_organization_id;
         abort_unless(($origin['version']??null)==='purchase-return-inverse.v1',403);
@@ -42,7 +42,7 @@ final class SupplierReturnInverseOriginProof
         abort_unless($nativeLine&&Decimal::cmp((string)$nativeLine->entered_qty,(string)$facts['quantity'],8)===0,403);
         $physical=$db->table((new \App\Models\Tenant\StockLedger)->getTable())->where('organization_id',$stock)->where('source_type','App\\Models\\Tenant\\InventoryReversal')
             ->where('source_id',$inverse->id)->where('source_line_id',$nativeLine->id)->where('direction','in')->where('item_id',$nativeLine->item_id)->where('warehouse_id',$nativeLine->warehouse_id)->get();
-        $restored='0';foreach($physical as$row)$restored=Decimal::add($restored,(string)$row->quantity,8);
+        $restored='0';$cost='0';foreach($physical as$row){$restored=Decimal::add($restored,(string)$row->quantity,8);$cost=Decimal::add($cost,(string)$row->total_cost,8);}
         abort_unless(Decimal::cmp($restored,(string)$nativeLine->quantity,8)===0,403);
         $void=$db->table('journal_entries')->where('organization_id',$org)->where('id',$proof->voided_note_journal_id)
             ->where('source','NOTE')->where('source_type','App\\Models\\DebitNote')->where('source_id',$proof->debit_note_id)
@@ -55,6 +55,8 @@ final class SupplierReturnInverseOriginProof
         abort_unless($bridge&&$mirror&&$mirror->source==='AP'&&$mirror->source_type==='App\\Services\\Integration\\FinanceSupplierReturnReceiver'
             &&(int)$mirror->source_id===(int)$source->id&&$mirror->source_key==='supplier-return-unbilled-reversal:'.$source->return_mapping_uuid,403);
         abort_unless($this->vectors($bridge->id,true)===$this->vectors($mirror->id,false),403);
+        abort_unless(isset($facts['settlement_date'])&&substr((string)$inverse->reversal_date,0,10)===$facts['settlement_date'],403);
+        return ['settlement_uuid'=>$facts['settlement_uuid'],'organization_id'=>$stock,'item_id'=>(int)$nativeLine->item_id,'warehouse_id'=>(int)$nativeLine->warehouse_id,'inverse_id'=>(int)$inverse->id,'return_id'=>(int)$return->id,'return_line_id'=>(int)$nativeLine->id,'ledger_ids'=>$physical->pluck('id')->map(fn($id)=>(int)$id)->all(),'quantity'=>$restored,'base_cost'=>$cost];
     }
     private function journal(int $org,int $id):?object
     {return DB::connection('tenant')->table('journal_entries')->where('organization_id',$org)->where('id',$id)->where('status','posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->first();}
