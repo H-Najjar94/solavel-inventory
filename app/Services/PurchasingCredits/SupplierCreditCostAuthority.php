@@ -188,7 +188,7 @@ final readonly class SupplierCreditCostAuthority
             $value=$index===$last?$deltaLeft:Decimal::mul($delta,Decimal::div((string)$movement->quantity,$cohort,12),8);
             $quantityLeft=Decimal::sub($quantityLeft,$quantity,8);$deltaLeft=Decimal::sub($deltaLeft,$value,8);
             abort_unless(Decimal::gt($quantity,'0') && Decimal::cmp($quantity,(string)$movement->quantity,8)<=0,409);
-            $result[]=['receipt_id'=>(int)$grn->id,'receipt_line_id'=>(int)$line->id,'stock_ledger_id'=>(int)$movement->id,'position_uuid'=>$position->position_uuid,
+            $result[]=['settlement_uuid'=>$source['settlement_uuid'],'receipt_id'=>(int)$grn->id,'receipt_line_id'=>(int)$line->id,'stock_ledger_id'=>(int)$movement->id,'position_uuid'=>$position->position_uuid,
                 'quantity_base'=>$quantity,'price_delta_base'=>$value,'item_id'=>(int)$movement->item_id,'warehouse_id'=>(int)$movement->warehouse_id,
                 'variant_id'=>$movement->variant_id?(int)$movement->variant_id:null,'lot_id'=>$movement->lot_id?(int)$movement->lot_id:null,
                 'bin_id'=>$movement->bin_id?(int)$movement->bin_id:null];

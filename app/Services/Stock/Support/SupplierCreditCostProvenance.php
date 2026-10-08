@@ -24,7 +24,7 @@ final readonly class SupplierCreditCostProvenance
     {
         abort_unless(in_array($source, $authority->sourceAllocations(), true), 403);
         return new self(
-            Uuid::uuid5(Uuid::NAMESPACE_URL, 'supplier-credit-value|'.$authority->mappingUuid().'|'.$authority->operationUuid().'|'.$authority->allocationUuid().'|'.$source['receipt_line_id'].'|'.$source['stock_ledger_id'])->toString(),
+            Uuid::uuid5(Uuid::NAMESPACE_URL, 'supplier-credit-value|'.$authority->mappingUuid().'|'.$authority->operationUuid().'|'.$authority->allocationUuid().'|'.$source['settlement_uuid'].'|'.$source['receipt_line_id'].'|'.$source['stock_ledger_id'])->toString(),
             $authority->organizationId(), 'goods_receipt', (int) $source['receipt_id'],
             (int) $source['receipt_line_id'], (int)$source['stock_ledger_id'], (string) $source['quantity_base'],
             $source['variant_id'], $source['lot_id'], $source['bin_id'],
