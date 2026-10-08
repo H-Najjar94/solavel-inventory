@@ -11,7 +11,7 @@ final class SupplierReturnNativeStockSteps
   if(PHP_SAPI!=='cli'||!app()->environment('testing')||!str_starts_with(base_path(),'/qualification/stock')||$org<1||$db->getDatabaseName()!=='tenant_000100'||$db->transactionLevel()!==0||$db->selectOne('SELECT CURRENT_USER() AS u')->u!=='t_000100@localhost')throw new \LogicException('Private native Stock pair only.');
   app(\App\Tenancy\OrganizationContext::class)->set($org);
   if(in_array($step,['seed','receive','journal','documents'],true)){
-   $result=CustomerCreditNativeStockSteps::run($step,$ids,$stock,$args);
+   $result=$step==='seed'?SupplierCreditNativeStockFixture::seed($ids,(string)($args['costing_method']??'average')):CustomerCreditNativeStockSteps::run($step,$ids,$stock,$args);
    if($step==='seed'){$setting=\App\Models\Tenant\IntegrationSetting::where('organization_id',$org)->where('integration','solabooks')->sole();$meta=(array)$setting->meta;$meta['transport_enabled_workflows']=array_values(array_unique(array_merge($meta['transport_enabled_workflows']??[],['supplier_return.posted','supplier_return.reversed'])));$setting->meta=$meta;$setting->save();}
    return$result;
   }
