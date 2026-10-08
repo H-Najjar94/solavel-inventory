@@ -9,6 +9,17 @@ use Illuminate\Support\Str;
 /** Commercial return handoff uses the frozen original shipment identity, never a guessed invoice. */
 final class ReturnHandoffService
 {
+    public static function ordinaryShipmentSource(array $payload, int $organizationId, int $shipmentId): bool
+    {
+        return ($payload['source_app'] ?? null) === 'solastock'
+            && ($payload['schema_version'] ?? null) === 'sales.v1'
+            && ($payload['event_type'] ?? null) === 'sales.shipment.confirmed'
+            && (int) ($payload['identity']['inventory_organization_id'] ?? 0) === $organizationId
+            && $shipmentId > 0 && (int) ($payload['shipment']['id'] ?? 0) === $shipmentId
+            && \Illuminate\Support\Str::isUuid($payload['shipment']['mapping_uuid'] ?? '')
+            && \Illuminate\Support\Str::isUuid($payload['identity']['organization_mapping_uuid'] ?? '');
+    }
+
     public function record(SalesReturn $return, bool $reverse = false): ?SalesDocumentOutbox
     {
         // Typed origins (including cash) have their own financial closure. Only
@@ -16,7 +27,7 @@ final class ReturnHandoffService
         $original = SalesDocumentOutbox::query()->where('organization_id', $return->organization_id)
             ->where('event_type', 'sales.shipment.confirmed')
             ->where('payload->shipment->id', $return->shipment_id)->lockForUpdate()->first();
-        if (! $original) return null;
+        if (! $original || ! self::ordinaryShipmentSource((array) $original->payload, (int) $return->organization_id, (int) $return->shipment_id)) return null;
         $shipment = (array) data_get($original->payload, 'shipment', []);
         $life = IntegrationDocumentLifecycleMapping::query()
             ->where('organization_mapping_uuid', $original->organization_mapping_uuid)
