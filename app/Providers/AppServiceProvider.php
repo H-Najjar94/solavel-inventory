@@ -27,5 +27,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Item::observe(ItemCatalogObserver::class);
+        foreach([\App\Models\Tenant\Unit::class,\App\Models\Tenant\ItemCategory::class,\App\Models\Tenant\UnitConversion::class] as $reference)
+            $reference::observe(\App\Observers\CatalogReferenceObserver::class);
     }
 }

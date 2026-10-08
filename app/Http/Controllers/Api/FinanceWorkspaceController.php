@@ -66,11 +66,12 @@ final class FinanceWorkspaceController
         // member always needs SolaCount; SolaStock assignment is waived only for the
         // closed follow-through scope of an already reviewed financial document.
         $lifecycle = FinanceDocumentLifecycleAuthority::covers($input['action']);
+        $catalogSource = $input['action'] === 'catalog.source-authorize' && ($input['authority_kind'] ?? null) === 'stock_catalog_source';
         foreach (['finance', 'inventory'] as $slug) {
             $project = $central->table('projects')->where('slug', $slug)->where('is_active', true)->value('id');
             abort_unless($project && $central->table('organization_projects')->where('organization_id', $org->id)
                 ->where('project_id', $project)->where('is_active', true)->exists(), 403, 'workspace_application_assignment_required');
-            if ($lifecycle && $slug === 'inventory') {
+            if (($lifecycle && $slug === 'inventory') || ($catalogSource && $slug === 'finance')) {
                 continue;
             }
             // Central owns assignment, owner access and explicit revocations. A
@@ -107,6 +108,12 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if ($catalogSource) {
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(Schema::connection('tenant')->hasTable(\App\Services\Catalog\DurableCatalogSync::TABLE), 409, 'workspace_schema_not_ready');
+                return response()->json(['success' => true, 'data' => app(\App\Services\Catalog\CatalogSourceAuthority::class)->authorize((array) ($input['data'] ?? []), $mapping, $actor)]);
+            }
             if ($input['action'] === 'sales.fulfillment.capabilities') {
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
                     && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
