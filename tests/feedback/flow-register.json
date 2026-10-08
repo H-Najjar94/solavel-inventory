@@ -1,0 +1,1375 @@
+{
+  "scope": "Finite Stock route and reusable boundary inventory; route-specific verification is separate from inherited provider/API coverage. Source matches are not flow completion.",
+  "routes": [
+    {
+      "route": "/inventory/dashboard",
+      "component": "resources/js/solastock/pages/DashboardPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/items",
+      "component": "resources/js/solastock/pages/ItemsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/items/new",
+      "component": "resources/js/solastock/pages/ItemFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/items/:id",
+      "component": "resources/js/solastock/pages/ItemDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Actual synthetic item3 media validation EN/ARdesktop/mobile; long filenames wrap, zero uploads.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/items/:id/edit",
+      "component": "resources/js/solastock/pages/ItemFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/warehouses",
+      "component": "resources/js/solastock/pages/WarehousesPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/warehouses/new",
+      "component": "resources/js/solastock/pages/WarehouseFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/warehouses/:id",
+      "component": "resources/js/solastock/pages/WarehouseDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/warehouses/:id/edit",
+      "component": "resources/js/solastock/pages/WarehouseFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/suppliers",
+      "component": "resources/js/solastock/pages/SuppliersPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/suppliers/new",
+      "component": "resources/js/solastock/pages/SupplierFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/suppliers/:id",
+      "component": "resources/js/solastock/pages/SupplierDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/suppliers/:id/edit",
+      "component": "resources/js/solastock/pages/SupplierFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/balances",
+      "component": "resources/js/solastock/pages/BalancesPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/opening-stock",
+      "component": "resources/js/solastock/pages/OpeningStockPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/opening-stock/new",
+      "component": "resources/js/solastock/pages/OpeningStockFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/opening-stock/:id",
+      "component": "resources/js/solastock/pages/OpeningStockDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/opening-stock/:id/edit",
+      "component": "resources/js/solastock/pages/OpeningStockFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/adjustments",
+      "component": "resources/js/solastock/pages/AdjustmentsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/adjustments/new",
+      "component": "resources/js/solastock/pages/AdjustmentFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/adjustments/:id",
+      "component": "resources/js/solastock/pages/AdjustmentDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/adjustments/:id/edit",
+      "component": "resources/js/solastock/pages/AdjustmentFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/transfers",
+      "component": "resources/js/solastock/pages/TransfersPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/transfers/new",
+      "component": "resources/js/solastock/pages/TransferFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/transfers/:id",
+      "component": "resources/js/solastock/pages/TransferDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/transfers/:id/edit",
+      "component": "resources/js/solastock/pages/TransferFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/counts",
+      "component": "resources/js/solastock/pages/CountsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/counts/new",
+      "component": "resources/js/solastock/pages/CountFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/counts/:id",
+      "component": "resources/js/solastock/pages/CountDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "production synthetic count1 EN/AR desktop/mobile pending/error: pending-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/counts/:id/edit",
+      "component": "resources/js/solastock/pages/CountFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "production EN/AR desktop/mobile Cancel0, intercepted one update/post, disabled repeat after failure: save-post-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/scanner",
+      "component": "resources/js/solastock/pages/ScannerPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Actual production EN/ARdesktop/mobile no-match: one intercepted GET, preserved input, no mutations.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/purchase-orders",
+      "component": "resources/js/solastock/pages/PurchaseOrdersPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/purchase-orders/new",
+      "component": "resources/js/solastock/pages/PurchaseOrderFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/purchase-orders/:id",
+      "component": "resources/js/solastock/pages/PurchaseOrderDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/purchase-orders/:id/edit",
+      "component": "resources/js/solastock/pages/PurchaseOrderFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/goods-receipts",
+      "component": "resources/js/solastock/pages/GoodsReceiptsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/goods-receipts/new",
+      "component": "resources/js/solastock/pages/GoodsReceiptFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Actual production EN/AR desktop/mobile Cancel0 and empty-form Confirm0 with inline validation; form-confirmations-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/goods-receipts/from-po/:poId",
+      "component": "resources/js/solastock/pages/GoodsReceiptFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/goods-receipts/:id",
+      "component": "resources/js/solastock/pages/GoodsReceiptDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/goods-receipts/:id/edit",
+      "component": "resources/js/solastock/pages/GoodsReceiptFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-orders",
+      "component": "resources/js/solastock/pages/SalesOrdersPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-orders/new",
+      "component": "resources/js/solastock/pages/SalesOrderFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-orders/:id",
+      "component": "resources/js/solastock/pages/SalesOrderDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-orders/:id/edit",
+      "component": "resources/js/solastock/pages/SalesOrderFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/customers",
+      "component": "resources/js/solastock/pages/CustomersPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/customers/new",
+      "component": "resources/js/solastock/pages/CustomerFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "production EN/AR desktop/mobile 422 and unknown outcome: customer-outcomes-results.json",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/customers/:id",
+      "component": "resources/js/solastock/pages/CustomerDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/customers/:id/edit",
+      "component": "resources/js/solastock/pages/CustomerFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/pick-lists",
+      "component": "resources/js/solastock/pages/PickListsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/pick-lists/:id",
+      "component": "resources/js/solastock/pages/PickListDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/packs",
+      "component": "resources/js/solastock/pages/PacksPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/packs/:id",
+      "component": "resources/js/solastock/pages/PackDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/shipments",
+      "component": "resources/js/solastock/pages/ShipmentsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/shipments/:id",
+      "component": "resources/js/solastock/pages/ShipmentDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-returns",
+      "component": "resources/js/solastock/pages/SalesReturnsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-returns/new",
+      "component": "resources/js/solastock/pages/SalesReturnFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-returns/:id",
+      "component": "resources/js/solastock/pages/SalesReturnDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/sales-returns/:id/edit",
+      "component": "resources/js/solastock/pages/SalesReturnFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/traceability",
+      "component": "resources/js/solastock/pages/TraceabilityPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/traceability/lots",
+      "component": "resources/js/solastock/pages/LotsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/traceability/lots/:id",
+      "component": "resources/js/solastock/pages/LotDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/traceability/serials",
+      "component": "resources/js/solastock/pages/SerialsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/traceability/serials/:id",
+      "component": "resources/js/solastock/pages/SerialDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/recalls",
+      "component": "resources/js/solastock/pages/RecallsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/recalls/new",
+      "component": "resources/js/solastock/pages/RecallFormPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/recalls/:id",
+      "component": "resources/js/solastock/pages/RecallDetailPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/reports",
+      "component": "resources/js/solastock/pages/ReportsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/settings",
+      "component": "resources/js/solastock/pages/SettingsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/team-access",
+      "component": "resources/js/solastock/pages/TeamAccessPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/integrations/solacount",
+      "component": "resources/js/solastock/pages/IntegrationSettingsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": true,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/integrations/solacount/events",
+      "component": "resources/js/solastock/pages/IntegrationEventsPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/integrations/solabooks",
+      "component": "Navigate",
+      "shared_request_feedback": false,
+      "implementation": "retained-navigation",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Redirect alias or route shell; no mutation feedback."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/settings/solabooks",
+      "component": "Navigate",
+      "shared_request_feedback": false,
+      "implementation": "retained-navigation",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Redirect alias or route shell; no mutation feedback."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/integrations/solabooks/events",
+      "component": "Navigate",
+      "shared_request_feedback": false,
+      "implementation": "retained-navigation",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Redirect alias or route shell; no mutation feedback."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/ledger",
+      "component": "resources/js/solastock/pages/LedgerPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    },
+    {
+      "route": "/inventory/*",
+      "component": "resources/js/solastock/pages/NotFoundPage.jsx",
+      "shared_request_feedback": true,
+      "implementation": "reviewed-shared-adapter",
+      "new_confirmations_ready": false,
+      "route_specific_browser": "Shared API/provider/confirmation contract verified; this route-specific lifecycle state was not separately exercised in production.",
+      "integrated_request_adapter": "192a788",
+      "deployed_request_adapter": "20261002T185836Z-192a788b",
+      "retained": [
+        "Inline field validation preserves input; persistent permission/setup/read-only and empty/loading states remain contextual."
+      ],
+      "integrated_action_batch": "0f8a176",
+      "deployed_action_batch": "20261002T190227Z-0f8a176f",
+      "integrated_final_runtime": "b744c418",
+      "deployed_final_runtime": "20261002T192314Z-b744c418"
+    }
+  ],
+  "reusable_boundaries": [
+    {
+      "component": "resources/js/solastock/components/ItemImages.jsx",
+      "status": "shared adapter and confirmation migration ready; representative attachment browser tested"
+    },
+    {
+      "component": "resources/js/solastock/components/WarehouseImages.jsx",
+      "status": "shared adapter and confirmation migration ready; representative attachment browser tested"
+    },
+    {
+      "component": "resources/js/solastock/components/ItemAttachments.jsx",
+      "status": "shared adapter and confirmation migration ready; representative attachment browser tested"
+    },
+    {
+      "component": "resources/js/solastock/components/GuidedConnectionAssistant.jsx",
+      "status": "shared adapter and confirmation migration ready; representative attachment browser tested"
+    }
+  ],
+  "intentional_exceptions": [
+    {
+      "component": "resources/views/errors/app-access.blade.php",
+      "reason": "Server authorization failure deliberately renders a persistent localized access page with portal/switch-organization next action. No modal needed on failed page entry."
+    },
+    {
+      "component": "resources/views/solastock-app.blade.php",
+      "reason": "React mount and selected-locale bootstrap; feedback is owned by the React provider."
+    },
+    {
+      "component": "resources/views/solastock.blade.php",
+      "reason": "Legacy informational shell, no alert/confirmation/flash/validation surface."
+    },
+    {
+      "component": "resources/views/welcome.blade.php",
+      "reason": "Framework welcome surface, no application mutation feedback."
+    },
+    {
+      "component": "resources/views/phase6a-staging-login.blade.php",
+      "reason": "Explicit staging-only approved auth fixture; not a customer production flow; preserve auth boundary."
+    },
+    {
+      "component": "resources/js/solastock/utils/reportPageView.js",
+      "reason": "Best-effort page-view telemetry failure remains silent; must not interrupt accounting/inventory work."
+    },
+    {
+      "component": "resources/js/solastock/pages/ScannerPage.jsx",
+      "reason": "No-match and read-only lookup failure remain contextual results, not blocking modals. Enter preserves scan value; one in-flight request enforced; read-only retry is safe."
+    },
+    {
+      "component": "resources/js/solastock/components/AccountingMappingTable.jsx",
+      "reason": "AccountPicker is a selection workflow, not a feedback confirmation. Existing picker kept; failed-save text now asks status review rather than blind retry."
+    },
+    {
+      "component": "Stock document forms and item rows",
+      "reason": "Removing an unsaved draft line or changing reversible draft mapping inputs is local editing; no destructive confirmation needed. Existing server validation remains authoritative."
+    }
+  ],
+  "remaining_actual_migration": [],
+  "counts": {
+    "routes": 76,
+    "reusable_boundaries": 4,
+    "explicit_exceptions": 9
+  },
+  "unverified_acceptance": [
+    "Individual document lifecycle states without synthetic records were reviewed and share tested confirmation/API adapters, but were not each mutated in production. Production mutations are deliberately intercepted; customer documents are never modified for QA."
+  ],
+  "latest_verified_release": "20261002T193034Z-caa63900",
+  "production_evidence": {
+    "customer_validation_unknown": "20261002T185836Z-192a788b/customer-outcomes-results.json",
+    "count_pending": "20261002T185836Z-192a788b/pending-results.json",
+    "save_post_sequence": "20261002T190227Z-0f8a176f/save-post-results.json",
+    "inline_media_scanner": "20261002T190615Z-61b2c80f/inline-results.json",
+    "form_confirmations": "20261002T191805Z-a04fd3aa/form-confirmations-results.json",
+    "safe_status": "20261002T191805Z-a04fd3aa/status-path-results.json",
+    "navigation": "20261002T192314Z-b744c418/navigation-results.json (EN desktop reused explicitly from a04; other3 confirmed b744 assets)",
+    "long_media_validation": "20261002T192314Z-b744c418/inline-results.json",
+    "gallery_hint_locale": "20261002T193034Z-caa63900/gallery-copy-results.json (actual item3 EN/AR1440/390 read-only, zero mutation requests, exact assets captured)"
+  },
+  "runtime_main_commit": "caa63900"
+}

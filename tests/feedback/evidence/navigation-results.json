@@ -1,0 +1,42 @@
+[
+  {
+    "lang": "en",
+    "width": 1440,
+    "status": "passed",
+    "saveToastRetained": true,
+    "linkAndBackClear": true,
+    "obsoleteDialogCleared": true,
+    "reducedMotion": true,
+    "liveDisabledGuard": true
+  },
+  {
+    "lang": "en",
+    "width": 390,
+    "status": "passed",
+    "saveToastRetained": true,
+    "linkAndBackClear": true,
+    "obsoleteDialogCleared": true,
+    "reducedMotion": true,
+    "liveDisabledGuard": true
+  },
+  {
+    "lang": "ar",
+    "width": 1440,
+    "status": "passed",
+    "saveToastRetained": true,
+    "linkAndBackClear": true,
+    "obsoleteDialogCleared": true,
+    "reducedMotion": true,
+    "liveDisabledGuard": true
+  },
+  {
+    "lang": "ar",
+    "width": 390,
+    "status": "passed",
+    "saveToastRetained": true,
+    "linkAndBackClear": true,
+    "obsoleteDialogCleared": true,
+    "reducedMotion": true,
+    "liveDisabledGuard": true
+  }
+]

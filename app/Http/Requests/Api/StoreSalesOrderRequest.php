@@ -1,0 +1,53 @@
+<?php
+namespace App\Http\Requests\Api;
+use Illuminate\Foundation\Http\FormRequest;
+class StoreSalesOrderRequest extends FormRequest
+{
+    public function authorize(): bool { return true; }
+
+    protected function prepareForValidation(): void
+    {
+        // order_number is SERVER-GENERATED when blank (users don't invent it).
+        // Blank dates → null so 'nullable|date' passes and order_date can default.
+        $patch = [];
+        if (in_array($this->input('order_number'), ['', null], true)) {
+            $patch['order_number'] = null;
+        }
+        foreach (['order_date', 'requested_ship_date', 'currency_code'] as $f) {
+            if ($this->input($f) === '') {
+                $patch[$f] = null;
+            }
+        }
+        if ($patch !== []) {
+            $this->merge($patch);
+        }
+    }
+
+    public function rules(): array
+    {
+        return [
+            // Optional: generated server-side if not supplied.
+            'order_number' => ['nullable','string','max:50'],
+            'customer_id' => ['nullable','integer'],
+            'customer_name' => ['nullable','string','max:255'],
+            'customer_external_id' => ['nullable','string','max:100'],
+            'order_date' => ['nullable','date'],
+            'requested_ship_date' => ['nullable','date'],
+            'currency_code' => ['nullable','string','size:3','regex:/^[A-Z]{3}$/'],
+            'warehouse_id' => ['required','integer'],
+            'notes' => ['nullable','string'],
+            'lines' => ['required','array','min:1'],
+            'lines.*.item_id' => ['required','integer'],
+            'lines.*.variant_id' => ['nullable','integer'],
+            'lines.*.warehouse_id' => ['nullable','integer'],
+            'lines.*.bin_id' => ['nullable','integer'],
+            'lines.*.ordered_qty' => ['required','numeric','gt:0'],
+            'lines.*.entered_qty' => ['nullable','numeric','gt:0'],
+            'lines.*.entered_unit_id' => ['nullable','integer'],
+            'lines.*.unit_price' => ['nullable','numeric','min:0'],
+            'lines.*.discount_rate' => ['nullable','numeric','min:0','max:100'],
+            'lines.*.tax_code' => ['nullable','string','max:50'],
+            'lines.*.tax_rate' => ['nullable','numeric','min:0','max:100'],
+        ];
+    }
+}

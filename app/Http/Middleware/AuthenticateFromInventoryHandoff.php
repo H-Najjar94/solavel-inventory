@@ -1,0 +1,159 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Services\Tenancy\TenantManager;
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Authenticate a SolaStock request from a secure handoff token minted by the
+ * central Solavel app — the SAME token format Finance/Projects/HR consume.
+ *
+ * Token = base64url( iv[16] . hmac[32] . ciphertext ), AES-256-CBC,
+ *   key  = sha256(workspace_handoff_secret),
+ *   hmac = HMAC-SHA256(iv . ciphertext, key).
+ * Payload = { user_id, client_id, organization_id, context, exp, nonce }.
+ *
+ * On a valid token this seeds the session exactly like the other apps
+ * (client_id / selected_central_org_id / principal), switches the SHARED tenant
+ * DB (tenant_{clientId}) — without ever touching Finance's tables — and logs the
+ * local user in. Must run BEFORE the `auth` middleware.
+ */
+class AuthenticateFromInventoryHandoff
+{
+    public function __construct(private TenantManager $tenants) {}
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        $token = trim((string) $request->query('handoff', ''));
+        if ($token === '') {
+            return $next($request);
+        }
+
+        $payload = $this->decrypt($token);
+        if (! $payload) {
+            Log::warning('[InventoryHandoff] Invalid handoff token');
+
+            return $next($request);
+        }
+        if (($exp = (int) ($payload['exp'] ?? 0)) <= now()->timestamp) {
+            Log::warning('[InventoryHandoff] Handoff token expired');
+
+            return $next($request);
+        }
+
+        $clientId = (int) ($payload['client_id'] ?? 0);
+        $userId = (int) ($payload['user_id'] ?? 0);
+        $orgId = (int) ($payload['organization_id'] ?? 0);
+        if ($clientId <= 0 || $userId <= 0 || $orgId <= 0 || ($payload['context'] ?? null) !== 'inventory') {
+            return $next($request);
+        }
+
+        $authority = app(\App\Services\Access\CentralAppAccess::class);
+        $decision = $authority->decision($userId, $orgId, 'inventory');
+        if (! ($decision['allowed'] ?? false)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return $authority->deny($request, $decision, 'inventory');
+        }
+        $mappedClient = (int) \Illuminate\Support\Facades\DB::connection(config('tenancy.central_connection', 'mysql'))
+            ->table('organizations')->where('id', $orgId)->value('client_id');
+        if ($mappedClient !== $clientId) return $authority->deny($request, ['reason' => 'membership_inactive'], 'inventory');
+        $nonce = (string) ($payload['nonce'] ?? '');
+        if ($nonce === '' || ! \Illuminate\Support\Facades\Cache::add('inventory.handoff.'.hash('sha256', $nonce), true, max(1, $exp - now()->timestamp))) {
+            return $authority->deny($request, ['reason' => 'membership_inactive'], 'inventory');
+        }
+
+        // Switch to the shared per-client tenant DB (SolaStock owns its own tables there).
+        try {
+$this->tenants->useTenant($orgId, $this->tenants->resolveDatabaseName($clientId));
+        } catch (\Throwable $e) {
+            Log::error('[InventoryHandoff] Could not switch tenant connection', ['client_id' => $clientId, 'error' => $e->getMessage()]);
+
+            return $next($request); // fall through → setup/sample state, never a 500
+        }
+
+        // Seed the session the same way the other Solavel apps do.
+        if ($request->hasSession()) {
+            $request->session()->put('client_id', $clientId);
+            \App\Support\DisplayPreferences::hydrate($request, $payload['display_preferences'] ?? [], $userId, 'solastock_locale');
+            // Persist the SELECTED org from the handoff payload only. Never store
+            // the clientId as the org id (different id space → wrong-org bug). If
+            // the payload carried no org, LiveTenantResolver resolves the user's
+            // own org under this client instead.
+            if ($orgId > 0) {
+                $request->session()->put('selected_central_org_id', $orgId);
+            } else {
+                $request->session()->forget('selected_central_org_id');
+            }
+            $request->session()->put('auth_context', (string) ($payload['context'] ?? 'inventory'));
+        }
+
+        // Log the central user in if a local mirror row exists; otherwise the
+        // session org context is still set so the live state resolves.
+        try {
+            $userModel = config('auth.providers.users.model');
+            if (class_exists($userModel)) {
+                // The user registry lives on the central connection (see
+                // User::getConnectionName) and the handoff's user_id IS the
+                // central user's id, so resolve + log in directly. The previous
+                // lookup queried a `central_user_id` column on the tenant
+                // connection — neither the column nor a tenant users mirror
+                // exists, so it always threw and no user was ever logged in
+                // (leaving can_provision/permissions unresolved).
+                $local = $userModel::find($userId);
+                if ($local) {
+                    Auth::login($local, remember: false);
+                    if ($request->hasSession()) {
+                        $request->session()->put('principal', ['id' => $local->id, 'name' => $local->name ?? null, 'email' => $local->email ?? null]);
+                        $request->session()->regenerate();
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::info('[InventoryHandoff] No local user mirror; continuing with org context only', ['error' => $e->getMessage()]);
+        }
+
+        return redirect($this->cleanUrl($request));
+    }
+
+    private function decrypt(string $token): ?array
+    {
+        $secret = (string) config('tenancy.workspace_handoff_secret', config('app.key'));
+        if ($secret === '') {
+            return null;
+        }
+        $raw = base64_decode(strtr($token, '-_', '+/'), true);
+        if ($raw === false || strlen($raw) < 48) {
+            return null;
+        }
+        $iv = substr($raw, 0, 16);
+        $hmac = substr($raw, 16, 32);
+        $ciphertext = substr($raw, 48);
+        $key = hash('sha256', $secret, true);
+        $expected = hash_hmac('sha256', $iv.$ciphertext, $key, true);
+        if (! hash_equals($expected, $hmac)) {
+            return null;
+        }
+        $json = openssl_decrypt($ciphertext, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+        if ($json === false) {
+            return null;
+        }
+        $payload = json_decode($json, true);
+
+        return is_array($payload) ? $payload : null;
+    }
+
+    private function cleanUrl(Request $request): string
+    {
+        $url = $request->url();
+        $query = $request->except(['handoff', '_sso_tried']);
+
+        return $query ? $url.'?'.http_build_query($query) : $url;
+    }
+}

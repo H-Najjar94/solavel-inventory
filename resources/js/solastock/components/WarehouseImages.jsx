@@ -1,0 +1,110 @@
+import {ConfirmedActionButton} from './ConfirmedActionButton';
+import {text as feedbackText} from '../../shared/feedback/messages';
+import React, { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../services/api.js';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useToast } from '../stores/toast.jsx';
+import { Skeleton, EmptyState } from './ui.jsx';
+import { t } from '../i18n/index.js';
+
+const ACCEPT = 'image/jpeg,image/png,image/webp';
+const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Warehouse image gallery — BANNER-style (wide primary). Served from a private,
+ * authenticated API route (never a public URL). Viewers see the gallery; managers
+ * (canManage) upload multiple, set primary, and delete.
+ */
+export default function WarehouseImages({ warehouseId, canManage }) {
+    const qc = useQueryClient();
+    const toast = useToast();
+    const fileRef = useRef(null);
+    const [busy, setBusy] = useState(false);
+    const [validation,setValidation]=useState('');
+    const [progress, setProgress] = useState(null);
+
+    const { data, isLoading, refetch } = useApiQuery(['warehouse-images', String(warehouseId)],
+        () => api.warehouseImages(warehouseId), { fallback: [] });
+    const images = Array.isArray(data) ? data : (data?.data ?? []);
+    const primary = images.find((i) => i.is_primary) ?? images[0];
+
+    function invalidate() {
+        refetch();
+        qc.invalidateQueries({ queryKey: ['warehouse', String(warehouseId)] });
+        qc.invalidateQueries({ queryKey: ['warehouses'] });
+    }
+
+    async function onPick(e) {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        const valid = [],rejected=[];
+        for (const f of files) {
+            if (!ALLOWED.includes(f.type)) { rejected.push(t('warehouseDetail.media.invalidType', undefined, { file: f.name })); continue; }
+            if (f.size > MAX_BYTES) { rejected.push(t('warehouseDetail.media.tooLarge', undefined, { file: f.name })); continue; }
+            valid.push(f);
+        }
+        setValidation(rejected.join(' '));
+        if (!valid.length) return;
+        setBusy(true); setProgress({ done: 0, total: valid.length });
+        let ok = 0;
+        for (let i = 0; i < valid.length; i++) {
+            try { await api.uploadWarehouseImage(warehouseId, valid[i]); ok++; }
+            catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.media.uploadFailed', undefined, { file: valid[i].name })); }
+            setProgress({ done: i + 1, total: valid.length });
+        }
+        setBusy(false); setProgress(null);
+        if (ok) { toast.push(ok === 1 ? t('warehouseDetail.media.uploadedOne') : t('warehouseDetail.media.uploadedMany', undefined, { count: ok }), 'success'); invalidate(); }
+    }
+
+    async function makePrimary(id) { setBusy(true); try { await api.setWarehouseImagePrimary(id); invalidate(); } catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.media.primaryFailed')); } finally { setBusy(false); } }
+    async function remove(id) { setBusy(true); try { await api.deleteWarehouseImage(id); toast.push(t('media.imageRemoved'), 'success'); invalidate(); } catch (feedbackError) { toast.failure(feedbackError, t('warehouseDetail.media.removeFailed')); } finally { setBusy(false); } }
+
+    if (isLoading) return <Skeleton rows={2} />;
+
+    const uploadBtn = canManage && (
+        <>
+            {validation&&<p className="field-error" role="alert">{validation}</p>}
+            <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
+            <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
+                {busy && progress ? t('media.uploading', undefined, progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadBanner'))}
+            </button>
+        </>
+    );
+
+    if (!images.length) {
+        return <div className="wh-gallery-empty"><EmptyState title={t('media.noWarehouseImage')}
+            hint={canManage ? t('warehouseDetail.media.emptyManageHint') : t('warehouseDetail.media.emptyViewHint')}
+            action={uploadBtn} /></div>;
+    }
+
+    return (
+        <div className="wh-gallery">
+            {primary && <div className="wh-banner"><img src={primary.url} alt={t('warehouseDetail.media.imageAlt')} /></div>}
+            {images.length > 1 && (
+                <div className="wh-thumb-row">
+                    {images.map((img) => (
+                        <figure key={img.id} className={`wh-thumb ${img.is_primary ? 'wh-thumb--primary' : ''}`}>
+                            <img src={img.url} alt="" loading="lazy" />
+                            {img.is_primary && <span className="gallery-primary-badge">{t('media.primary')}</span>}
+                            {canManage && (
+                                <div className="gallery-actions">
+                                    {!img.is_primary && <button className="gallery-act" title={t('media.setPrimary')} disabled={busy} onClick={() => makePrimary(img.id)}>★</button>}
+                                    <ConfirmedActionButton className="gallery-act gallery-act--danger" disabled={busy}  title={feedbackText("deleteImage")} message={feedbackText("deleteImageBody")} action={feedbackText("deleteImage")} onConfirm={()=>remove(img.id)}> 🗑</ConfirmedActionButton>
+                                </div>
+                            )}
+                        </figure>
+                    ))}
+                </div>
+            )}
+            {canManage && (
+                <div className="item-images-actions">
+                    {uploadBtn}
+                    {images.length === 1 && <ConfirmedActionButton className="btn btn--sm btn--danger" disabled={busy}  title={feedbackText("deleteImage")} message={feedbackText("deleteImageBody")} action={feedbackText("deleteImage")} onConfirm={()=>remove(primary.id)}> {t('media.removeImage')}</ConfirmedActionButton>}
+                    <div className="item-images-hint">{t('warehouseDetail.media.privateHint')}</div>
+                </div>
+            )}
+        </div>
+    );
+}

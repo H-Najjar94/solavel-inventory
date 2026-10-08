@@ -1,0 +1,13 @@
+[Unit]
+Description=SolaStock read-only integration reconciliation (installed disabled)
+ConditionPathExists=/etc/solavel/enable-solastock-integration-reconciliation
+
+[Service]
+Type=oneshot
+User=www-data
+Group=sharedgroup
+WorkingDirectory=/var/www/html/solavel-inventory
+Environment=SOLASTOCK_RECONCILIATION_SCHEDULE_ENABLED=false
+ExecStart=/usr/bin/php artisan integration:reconcile --database=${TENANT_DATABASE} --organization=${ORGANIZATION_ID}
+NoNewPrivileges=true
+PrivateTmp=true

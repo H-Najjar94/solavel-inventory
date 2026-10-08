@@ -1,0 +1,4 @@
+<?php
+require($argv[1]??throw new RuntimeException('Native vendor required')).'/autoload.php';
+$app=new Illuminate\Foundation\Application(dirname(__DIR__,2));$app->instance('env','testing');$app->instance('config',new Illuminate\Config\Repository());$app->instance('events',new Illuminate\Events\Dispatcher($app));(new Illuminate\Routing\RoutingServiceProvider($app))->register();Illuminate\Support\Facades\Facade::setFacadeApplication($app);
+require dirname(__DIR__,2).'/routes/web.php';$router=$app['router'];foreach(['/fulfillment-requests','/fulfillment-requests/1']as$path){$route=$router->getRoutes()->match(Illuminate\Http\Request::create($path,'GET'));if(!in_array('inv.access',$route->middleware(),true))throw new RuntimeException('Canonical access middleware absent');if($route->defaults['view']!=='solastock-app')throw new RuntimeException('Native SPA view mismatch');echo 'PASS native deep link '.$path.' uses authorized Stock SPA'.PHP_EOL;}

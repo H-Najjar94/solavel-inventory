@@ -1,0 +1,29 @@
+<?php
+
+namespace App\Models\Tenant;
+
+use App\Tenancy\Concerns\BelongsToOrganization;
+use Illuminate\Database\Eloquent\Model;
+
+class IntegrationOutboxEvent extends Model
+{
+    use BelongsToOrganization;
+
+    protected $table = 'integration_outbox_events';
+
+    protected $guarded = ['id'];
+
+    protected $casts = [
+        'payload' => 'array',
+        'external_response' => 'array',
+        'occurred_at' => 'datetime',
+        'next_attempt_at' => 'datetime',
+        'sent_at' => 'datetime',
+        'dead_lettered_at' => 'datetime',
+        'claimed_at' => 'datetime',
+        'lease_expires_at' => 'datetime',
+        'first_failed_at' => 'datetime',
+        'last_failed_at' => 'datetime',
+        'transport_eligible_at' => 'datetime',
+    ];
+}

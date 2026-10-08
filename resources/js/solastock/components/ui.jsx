@@ -1,0 +1,162 @@
+import {WorkflowConfirmation} from '../../shared/feedback/WorkflowConfirmation';
+import React, { useState, useId, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { t } from '../i18n/index.js';
+
+// ── Breadcrumbs ──
+export function Breadcrumbs({ items }) {
+    return (
+        <nav className="breadcrumbs">
+            {items.map((it, i) => (
+                <span key={i}>
+                    {it.to ? <Link to={it.to}>{it.label}</Link> : <span className="breadcrumbs-current">{it.label}</span>}
+                    {i < items.length - 1 && <span className="breadcrumbs-sep">/</span>}
+                </span>
+            ))}
+        </nav>
+    );
+}
+
+// ── Loading skeleton ──
+export function Skeleton({ rows = 5 }) {
+    return (
+        <div className="skeleton">
+            {Array.from({ length: rows }).map((_, i) => <div key={i} className="skeleton-row" />)}
+        </div>
+    );
+}
+
+// ── Empty state ──
+export function EmptyState({ title = t('common.empty'), hint, action }) {
+    return (
+        <div className="empty-state">
+            <div className="empty-state-title">{title}</div>
+            {hint && <div className="empty-state-hint">{hint}</div>}
+            {action}
+        </div>
+    );
+}
+
+// ── Tabs ──
+export function Tabs({ tabs, active, onChange }) {
+    return (
+        <div className="tabs">
+            {tabs.map((t) => (
+                <button key={t.key} className={`tab ${active === t.key ? 'tab--active' : ''}`} onClick={() => onChange(t.key)}>
+                    {t.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+// ── Status badge ──
+export function StatusBadge({ active, labels = [t('active'), t('inactive', 'Inactive')] }) {
+    return <span className={`badge ${active ? 'badge--live' : 'badge--muted'}`}>{active ? labels[0] : labels[1]}</span>;
+}
+
+// ── Field wrapper with error ──
+export function Field({ label, error, children, required }) {
+    const root=useRef(null),id=useId();
+    useEffect(()=>{
+        const field=root.current?.querySelector('input,select,textarea');
+        if(!field||!error)return;
+        const invalid=field.getAttribute('aria-invalid'),described=field.getAttribute('aria-describedby');
+        field.setAttribute('aria-invalid','true');field.setAttribute('aria-describedby',[described,id].filter(Boolean).join(' '));
+        const frame=document.querySelector('.field[data-feedback-invalid]')===root.current?requestAnimationFrame(()=>field.focus()):null;
+        return()=>{if(frame!==null)cancelAnimationFrame(frame);if(invalid===null)field.removeAttribute('aria-invalid');else field.setAttribute('aria-invalid',invalid);if(described===null)field.removeAttribute('aria-describedby');else field.setAttribute('aria-describedby',described);};
+    },[error,id]);
+    return (
+        <label ref={root} className="field" data-feedback-invalid={error ? '' : undefined}>
+            <span className="field-label">{label}{required && <span className="field-req"> *</span>}</span>
+            {children}
+            {error && <span id={id} className="field-error" role="alert">{error}</span>}
+        </label>
+    );
+}
+
+// ── Confirm modal ──
+export function ConfirmModal({ open, title, message, confirmLabel = t('confirm'), onConfirm, onCancel, danger }) {
+    const [pending,setPending]=useState(false);
+    if (!open) return null;
+    return <WorkflowConfirmation title={title} action={confirmLabel} busy={pending} onClose={onCancel} onConfirm={async()=>{setPending(true);try{await onConfirm();}finally{setPending(false);}}}><p>{message}</p></WorkflowConfirmation>;
+}
+
+// ── Quick-create select: a dropdown with an inline "+ create" option ──
+export function QuickCreateSelect({ label, value, onChange, options, onCreate, placeholder = t('none'), createLabel = t('create'), error, required = false }) {
+    const [creating, setCreating] = useState(false);
+    const [text, setText] = useState('');
+
+    async function submit() {
+        const name = text.trim();
+        if (!name) return;
+        const created = await onCreate(name);
+        if (created?.id) onChange(created.id);
+        setText(''); setCreating(false);
+    }
+
+    return (
+        <Field label={label} error={error} required={required}>
+            {creating ? (
+                <div className="quick-create">
+                    <input className="input" autoFocus value={text} placeholder={t('common.newValue', 'New :label…', { label })}
+                        onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
+                    <button type="button" className="btn btn--sm btn--primary" onClick={submit}>{t('add')}</button>
+                    <button type="button" className="btn btn--sm" onClick={() => setCreating(false)}>{t('cancel')}</button>
+                </div>
+            ) : (
+                <div className="quick-create">
+                    <select className="input" value={value ?? ''} required={required} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+                        <option value="">{placeholder}</option>
+                        {(options ?? []).map((o) => <option key={o.id} value={o.id}>{o.name ?? o.code}</option>)}
+                    </select>
+                    {onCreate && <button type="button" className="btn btn--sm" onClick={() => setCreating(true)}>+ {createLabel}</button>}
+                </div>
+            )}
+        </Field>
+    );
+}
+
+// ── Drawer: right-side slide-over for read-only detail (valuation, movement) ──
+export function Drawer({ open, title, subtitle, onClose, children, width = 460 }) {
+    if (!open) return null;
+    return (
+        <div className="drawer-overlay" onClick={onClose}>
+            <aside className="drawer" style={{ width }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+                <header className="drawer-head">
+                    <div>
+                        <h3>{title}</h3>
+                        {subtitle && <div className="drawer-sub">{subtitle}</div>}
+                    </div>
+                    <button className="drawer-close" onClick={onClose} aria-label={t('common.close')}>×</button>
+                </header>
+                <div className="drawer-body">{children}</div>
+            </aside>
+        </div>
+    );
+}
+
+// ── Metric card: a labelled value with optional sublabel/tone. Reuses .card ──
+export function MetricCard({ label, value, sub, tone }) {
+    return (
+        <div className={`card metric-card ${tone ? `metric-card--${tone}` : ''}`}>
+            <div className="metric-card-label">{label}</div>
+            <div className="metric-card-val">{value}</div>
+            {sub && <div className="metric-card-sub">{sub}</div>}
+        </div>
+    );
+}
+
+// ── Generic tone badge (ok / warn / danger / info / muted) ──
+export function Badge({ tone = 'muted', children }) {
+    const cls = { ok: 'badge--live', warn: 'badge--warn', danger: 'badge--danger', info: 'badge--info', muted: 'badge--muted' }[tone] ?? 'badge--muted';
+    return <span className={`badge ${cls}`}>{children}</span>;
+}
+
+// Parse a Laravel 422 error payload into { field: message }.
+export function fieldErrors(err) {
+    const out = {};
+    const errs = err?.payload?.errors;
+    if (errs) Object.entries(errs).forEach(([k, v]) => { out[k] = Array.isArray(v) ? v[0] : v; });
+    return out;
+}

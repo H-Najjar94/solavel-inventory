@@ -1,0 +1,34 @@
+[
+  {
+    "locale": "en",
+    "width": 1440,
+    "status": "passed",
+    "posts": 1,
+    "cancelPosts": 0,
+    "scope": "Actual CountDetailPage and API client with intercepted synthetic tenant/meta/count responses. Pending stays open, Escape blocked, Confirm sends once, success closes and notifies."
+  },
+  {
+    "locale": "en",
+    "width": 390,
+    "status": "passed",
+    "posts": 1,
+    "cancelPosts": 0,
+    "scope": "Actual CountDetailPage and API client with intercepted synthetic tenant/meta/count responses. Pending stays open, Escape blocked, Confirm sends once, success closes and notifies."
+  },
+  {
+    "locale": "ar",
+    "width": 1440,
+    "status": "passed",
+    "posts": 1,
+    "cancelPosts": 0,
+    "scope": "Actual CountDetailPage and API client with intercepted synthetic tenant/meta/count responses. Pending stays open, Escape blocked, Confirm sends once, success closes and notifies."
+  },
+  {
+    "locale": "ar",
+    "width": 390,
+    "status": "passed",
+    "posts": 1,
+    "cancelPosts": 0,
+    "scope": "Actual CountDetailPage and API client with intercepted synthetic tenant/meta/count responses. Pending stays open, Escape blocked, Confirm sends once, success closes and notifies."
+  }
+]

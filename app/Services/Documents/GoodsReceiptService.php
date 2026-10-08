@@ -1,0 +1,391 @@
+<?php
+
+namespace App\Services\Documents;
+
+use App\Models\Tenant\GoodsReceipt;
+use App\Models\Tenant\Lot;
+use App\Models\Tenant\PurchaseOrder;
+use App\Models\Tenant\PurchaseOrderLine;
+use App\Models\Tenant\SerialNumber;
+use App\Services\Catalog\UnitConversionResolver;
+use App\Services\Documents\Concerns\CapturesTraceability;
+use App\Services\Documents\Support\DocumentNumber;
+use App\Services\Integration\FinanceBaseValuation;
+use App\Services\Integration\IntegrationOutboxService;
+use App\Services\Integration\WorkflowValidationService;
+use App\Services\Purchasing\PurchaseOrderBackorderService;
+use App\Services\Purchasing\ReceiptHandoffService;
+use App\Services\Purchasing\ReceivingRequestService;
+use App\Services\Stock\StockLedgerService;
+use App\Services\Stock\StockMovement;
+use App\Services\Stock\Support\Decimal;
+use App\Services\Traceability\LotService;
+use App\Services\Traceability\SerialService;
+use App\Tenancy\OrganizationContext;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
+
+/**
+ * Goods Receipt (GRN). Posting a GRN is the inbound (IN) stock event for
+ * purchases — delegated entirely to StockLedgerService. Updates PO received_qty
+ * and PO status. NEVER writes stock tables directly.
+ */
+class GoodsReceiptService
+{
+    use CapturesTraceability;
+
+    public function __construct(
+        private OrganizationContext $context,
+        private StockLedgerService $ledger,
+        private IntegrationOutboxService $outbox,
+        private LotService $lots,
+        private SerialService $serials,
+        private UnitConversionResolver $conversions,
+        private PurchaseOrderBackorderService $backorders,
+        private WorkflowValidationService $workflowValidation,
+    ) {}
+
+    protected function lotService(): LotService
+    {
+        return $this->lots;
+    }
+
+    protected function serialService(): SerialService
+    {
+        return $this->serials;
+    }
+
+    private function connection(): string
+    {
+        return config('tenancy.tenant_connection', 'tenant');
+    }
+
+    private function postNamespace(GoodsReceipt $grn): string
+    {
+        return 'goods_receipt:'.$grn->id.':post';
+    }
+
+    public function createDraft(array $attributes, array $lines): GoodsReceipt
+    {
+        $orgId = $this->context->idOrFail();
+
+        return DB::connection($this->connection())->transaction(function () use ($attributes, $lines, $orgId) {
+            $this->assertSource($attributes['purchase_order_id'] ?? null, $lines);
+            app(ReceivingRequestService::class)->validateReceipt($attributes['receiving_request_id'] ?? null, $attributes, $lines);
+
+            // Server-issued GRN number when none was supplied (users don't type it).
+            $attributes['grn_number'] = ! empty($attributes['grn_number'])
+                ? $attributes['grn_number']
+                : DocumentNumber::next('GRN', GoodsReceipt::class, 'grn_number', $orgId, $this->connection());
+
+            // Default a missing/blank date (receipt_date is a NOT NULL column). Done
+            // here rather than only in array_merge so a null in $attributes can't win.
+            $attributes['receipt_date'] = $attributes['receipt_date'] ?? now()->toDateString();
+
+            $grn = new GoodsReceipt(array_merge([
+                'status' => 'draft',
+            ], $attributes));
+            $grn->organization_id = $orgId;
+            $grn->save();
+
+            foreach ($this->expandAndCaptureLines($lines, (int) $grn->id, $orgId) as $line) {
+                $grn->lines()->create($line);
+            }
+
+            return $grn->fresh('lines');
+        });
+    }
+
+    /** Update a DRAFT GRN: replace header + lines. */
+    public function updateDraft(GoodsReceipt $grn, array $attributes, array $lines): GoodsReceipt
+    {
+        $orgId = $this->context->idOrFail();
+
+        return DB::connection($this->connection())->transaction(function () use ($grn, $attributes, $lines, $orgId) {
+            $grn = GoodsReceipt::query()->lockForUpdate()->findOrFail($grn->id);
+            if ($grn->status !== 'draft') {
+                throw new RuntimeException("Only a draft GRN can be edited (status '{$grn->status}').");
+            }
+
+            $this->assertSource(array_key_exists('purchase_order_id', $attributes) ? $attributes['purchase_order_id'] : $grn->purchase_order_id, $lines);
+
+            app(ReceivingRequestService::class)->validateReceipt($grn->receiving_request_id, $attributes, $lines);
+            $grn->fill(collect($attributes)->only(['grn_number', 'purchase_order_id', 'supplier_id', 'warehouse_id', 'receipt_date', 'blind_receiving', 'notes'])->toArray());
+            $grn->lines()->delete();
+
+            foreach ($this->expandAndCaptureLines($lines, (int) $grn->id, $orgId) as $line) {
+                $grn->lines()->create($line);
+            }
+            $grn->save();
+
+            return $grn->fresh('lines');
+        });
+    }
+
+    private function assertSource(?int $purchaseOrderId, array $lines): void
+    {
+        $po = $purchaseOrderId ? PurchaseOrder::query()->find($purchaseOrderId) : null;
+        if ($purchaseOrderId && ! $po) {
+            throw ValidationException::withMessages(['purchase_order_id' => __('inventory.workflow_currency.workflow_source_invalid')]);
+        }
+        foreach ($lines as $index => $line) {
+            if (empty($line['purchase_order_line_id'])) {
+                continue;
+            }
+            $valid = $po && $po->lines()->where('id', $line['purchase_order_line_id'])
+                ->where('item_id', $line['item_id'])->exists();
+            if (! $valid) {
+                throw ValidationException::withMessages(["lines.$index.purchase_order_line_id" => __('inventory.workflow_currency.workflow_source_line_invalid')]);
+            }
+        }
+    }
+
+    /**
+     * Resolve traceability capture for each line into concrete lot_id/serial_id
+     * and expand serial captures into one qty-1 line per serial. Lines that
+     * already carry lot_id/serial_id pass through unchanged. Lot/serial rows are
+     * minted via the approved traceability services (no stock writes here).
+     *
+     * Capture inputs (optional, per line): lot_code, expiry_date, serials[].
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function expandAndCaptureLines(array $lines, int $grnId, int $orgId): array
+    {
+        $out = [];
+        foreach ($lines as $line) {
+            $cap = $this->resolveCapture($line, $orgId, GoodsReceipt::class, $grnId);
+            if ($cap['serial_ids'] === []) {
+                $originalAccepted = $line['accepted_qty'] ?? null;
+                $originalQuarantine = $line['quarantine_qty'] ?? null;
+                $sourceLine = ! empty($line['purchase_order_line_id'])
+                    ? PurchaseOrderLine::query()->where('organization_id', $orgId)->find((int) $line['purchase_order_line_id'])
+                    : null;
+                if (! empty($line['purchase_order_line_id']) && ! $sourceLine) {
+                    throw new RuntimeException('The purchase-order source line is unavailable in this organization.');
+                }
+                $line = $sourceLine && $sourceLine->unit_conversion_version
+                    ? $this->conversions->normalizeLineFromSnapshot($line, 'received_qty', $sourceLine)
+                    : $this->conversions->normalizeLine($line, 'received_qty');
+                if ($originalAccepted !== null && ! empty($line['entered_unit_id'])) {
+                    $line['accepted_qty'] = Decimal::qty(Decimal::mul((string) $originalAccepted, (string) $line['unit_conversion_factor']));
+                }
+                if ($originalQuarantine !== null && ! empty($line['entered_unit_id'])) {
+                    $line['quarantine_qty'] = Decimal::qty(Decimal::mul((string) $originalQuarantine, (string) $line['unit_conversion_factor']));
+                }
+            } else {
+                if (! empty($line['entered_unit_id'])) {
+                    throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+                }
+                $line = $this->conversions->normalizeLine(array_merge($line, [
+                    'received_qty' => '1', 'accepted_qty' => '1', 'entered_qty' => '1',
+                ]), 'received_qty');
+            }
+
+            $base = [
+                'organization_id' => $orgId,
+                'purchase_order_line_id' => $line['purchase_order_line_id'] ?? null,
+                'receiving_request_line_id' => $line['receiving_request_line_id'] ?? null,
+                'item_id' => $line['item_id'],
+                'variant_id' => $line['variant_id'] ?? null,
+                'rejected_qty' => Decimal::qty((string) ($line['rejected_qty'] ?? '0')),
+                'inspection_status' => $line['inspection_status'] ?? (($line['disposition'] ?? null) === 'quarantine' ? 'quarantine' : 'accepted'),
+                'disposition' => $line['disposition'] ?? 'restock',
+                'quarantine_qty' => Decimal::qty((string) ($line['quarantine_qty'] ?? (($line['disposition'] ?? null) === 'quarantine' ? ($line['accepted_qty'] ?? $line['received_qty']) : '0'))),
+                'unit_cost' => $this->baseUnitCost((string) ($line['unit_cost'] ?? '0'), $line['unit_conversion_factor'] ?? null),
+                'entered_qty' => $line['entered_qty'] ?? null,
+                'entered_unit_id' => $line['entered_unit_id'] ?? null,
+                'base_unit_id' => $line['base_unit_id'] ?? null,
+                'unit_conversion_id' => $line['unit_conversion_id'] ?? null,
+                'unit_conversion_factor' => $line['unit_conversion_factor'] ?? null,
+                'unit_conversion_version' => $line['unit_conversion_version'] ?? null,
+                'unit_conversion_hash' => $line['unit_conversion_hash'] ?? null,
+                'unit_conversion_precision' => $line['unit_conversion_precision'] ?? null,
+                'unit_conversion_rounding_mode' => $line['unit_conversion_rounding_mode'] ?? null,
+                'lot_id' => $cap['lot_id'],
+                'bin_id' => $line['bin_id'] ?? null,
+                'expiry_date' => $cap['expiry_date'],
+                'notes' => $line['notes'] ?? null,
+            ];
+
+            // Serial capture: one qty-1 line per serial.
+            if ($cap['serial_ids'] !== []) {
+                foreach ($cap['serial_ids'] as $sid) {
+                    $serialBase = $base;
+                    if (($serialBase['disposition'] ?? null) === 'quarantine') {
+                        $serialBase['quarantine_qty'] = '1.0000';
+                    }
+                    $out[] = $serialBase + ['received_qty' => '1.0000', 'accepted_qty' => '1.0000', 'serial_id' => $sid];
+                }
+
+                continue;
+            }
+
+            $accepted = Decimal::qty((string) ($line['accepted_qty'] ?? $line['received_qty']));
+            if (Decimal::gt((string) $base['quarantine_qty'], $accepted)) {
+                throw new RuntimeException(__('inventory.stock.quarantine_exceeds_accepted'));
+            }
+
+            $out[] = $base + [
+                'received_qty' => Decimal::qty((string) $line['received_qty']),
+                'accepted_qty' => $accepted,
+                'serial_id' => $line['serial_id'] ?? null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Post a GRN → inbound ledger movements for accepted qty; update PO. */
+    public function post(GoodsReceipt $grn): GoodsReceipt
+    {
+        return DB::connection($this->connection())->transaction(function () use ($grn) {
+            app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->lockAndValidateDocument($grn);
+            $grn = GoodsReceipt::query()->lockForUpdate()->findOrFail($grn->id);
+            if ($grn->isPosted()) {
+                return $grn; // idempotent
+            }
+            if ($grn->status !== 'draft') {
+                throw new RuntimeException("GRN {$grn->id} cannot be posted from status '{$grn->status}'.");
+            }
+
+            $grn->loadMissing('lines');
+            $this->assertSource($grn->purchase_order_id, $grn->lines->toArray());
+            $this->workflowValidation->assertOperationalDocumentReady($grn, 'grn.posted');
+            app(ReceivingRequestService::class)->validateReceipt($grn->receiving_request_id, $grn->toArray(), $grn->lines->toArray());
+            app(ReceivingRequestService::class)->posted($grn);
+
+            // Over-receipt guard: a line tied to a PO line cannot accept more than
+            // the PO line's remaining (ordered − already received). No tolerance
+            // setting yet, so over-receipt is blocked.
+            $poTotals=[];
+            foreach($grn->lines as $line){if($line->purchase_order_line_id)$poTotals[(int)$line->purchase_order_line_id]=Decimal::add($poTotals[(int)$line->purchase_order_line_id]??'0',(string)$line->accepted_qty);}
+            ksort($poTotals);
+            foreach($poTotals as$lineId=>$accepted){
+                $poLine=PurchaseOrderLine::query()->whereKey($lineId)->lockForUpdate()->firstOrFail();
+                $remaining=Decimal::sub((string)$poLine->ordered_qty,(string)$poLine->received_qty);
+                if(Decimal::gt($accepted,$remaining))throw new RuntimeException(__('inventory.purchasing.over_receipt'));
+            }
+
+            $movements = [];
+            foreach ($grn->lines as $line) {
+                if (! Decimal::gt((string) $line->accepted_qty, '0')) {
+                    continue; // nothing accepted on this line
+                }
+                $movements[] = new StockMovement(
+                    direction: 'in',
+                    itemId: (int) $line->item_id,
+                    warehouseId: (int) $grn->warehouse_id,
+                    quantity: (string) $line->accepted_qty,
+                    sourceType: GoodsReceipt::class,
+                    sourceId: (int) $grn->id,
+                    sourceLineId: (int) $line->id,
+                    variantId: $line->variant_id ? (int) $line->variant_id : null,
+                    binId: $line->bin_id ? (int) $line->bin_id : null,
+                    lotId: $line->lot_id ? (int) $line->lot_id : null,
+                    serialId: $line->serial_id ? (int) $line->serial_id : null,
+                    unitCost: app(FinanceBaseValuation::class)->receiptUnitCost($grn, (string) $line->unit_cost),
+                    movedAt: $grn->receipt_date?->toDateTimeString() ?? now()->toDateTimeString(),
+                    expiryDate: $line->expiry_date ? (string) $line->expiry_date : null,
+                );
+            }
+
+            if ($movements === []) {
+                throw new RuntimeException(__('inventory.stock.receipt_no_quantity'));
+            }
+
+            $this->ledger->post($movements, $this->postNamespace($grn), [
+                'action' => 'goods_receipt.post',
+                'entity_type' => 'goods_receipt',
+                'entity_id' => $grn->id,
+                'document_ref' => $grn->grn_number,
+            ]);
+
+            $this->applyInspectionDisposition($grn);
+
+            $this->applyToPurchaseOrder($grn);
+
+            $grn->status = 'posted';
+            $grn->inspection_status = $this->receiptInspectionStatus($grn);
+            $grn->posted_at = now();
+            $grn->posted_by = auth()->id();
+            $grn->inspected_at = now();
+            $grn->inspected_by = auth()->id();
+            $grn->posted_guard_key = $this->postNamespace($grn);
+            $grn->markSystemTransition()->save();
+
+            $this->outbox->record('grn.posted', $grn, 'goods_receipt', $grn->grn_number, (string) $grn->receipt_date);
+            app(ReceiptHandoffService::class)->record($grn);
+
+            return $grn;
+        });
+    }
+
+    /** Roll PO line received_qty forward and recompute PO status. */
+    private function applyToPurchaseOrder(GoodsReceipt $grn): void
+    {
+        if (! $grn->purchase_order_id) {
+            return;
+        }
+        $po = PurchaseOrder::query()->with('lines')->find($grn->purchase_order_id);
+        if (! $po) {
+            return;
+        }
+
+        foreach ($grn->lines as $line) {
+            if (! $line->purchase_order_line_id) {
+                continue;
+            }
+            $poLine = $po->lines->firstWhere('id', $line->purchase_order_line_id);
+            if ($poLine) {
+                $poLine->received_qty = Decimal::qty(Decimal::add((string) $poLine->received_qty, (string) $line->accepted_qty));
+                $poLine->save();
+            }
+        }
+
+        $allReceived = $po->lines->every(fn ($l) => Decimal::gte((string) $l->received_qty, (string) $l->ordered_qty));
+        $anyReceived = $po->lines->contains(fn ($l) => Decimal::gt((string) $l->received_qty, '0'));
+        $po->status = $allReceived ? 'received' : ($anyReceived ? 'partially_received' : $po->status);
+        $po->save();
+        $this->backorders->refresh($po->fresh('lines'));
+    }
+
+    private function baseUnitCost(string $enteredUnitCost, ?string $factor): string
+    {
+        if ($factor && Decimal::gt($factor, '0')) {
+            return Decimal::cost(Decimal::div($enteredUnitCost, $factor));
+        }
+
+        return Decimal::cost($enteredUnitCost);
+    }
+
+    private function applyInspectionDisposition(GoodsReceipt $grn): void
+    {
+        foreach ($grn->lines as $line) {
+            if ($line->disposition !== 'quarantine' && $line->inspection_status !== 'quarantine') {
+                continue;
+            }
+
+            if ($line->lot_id) {
+                $this->lots->setStatus(Lot::query()->findOrFail($line->lot_id), 'quarantined');
+            }
+            if ($line->serial_id) {
+                $this->serials->setStatus(SerialNumber::query()->findOrFail($line->serial_id), 'quarantined');
+            }
+        }
+    }
+
+    private function receiptInspectionStatus(GoodsReceipt $grn): string
+    {
+        $statuses = $grn->lines->pluck('inspection_status')->filter()->unique()->values();
+        if ($statuses->contains('quarantine')) {
+            return 'quarantine';
+        }
+        if ($statuses->contains('rejected')) {
+            return 'rejected';
+        }
+
+        return 'accepted';
+    }
+}

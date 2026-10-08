@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+status=0
+
+echo "SolaStock user-facing English scan"
+echo "Root: $root"
+
+# JSX text nodes and common prop literals. This is intentionally conservative:
+# it reports candidates for review; it never treats customer data or technical
+# identifiers as translatable source text.
+# Narrow reviewed allowlist:
+# - OnboardingPage.jsx `migrated_at_inv`: an immutable tenant migration marker
+#   shown to administrators; translating it would make the server command wrong.
+# - ItemsPage.jsx `<th>SKU</th>`: internationally recognized inventory
+#   abbreviation; the underlying identifier and its heading remain exact.
+# - AppShell.jsx `SolaStock`: registered product brand in the sidebar.
+if rg -n --glob '*.jsx' --glob '*.js' \
+  '<[^>]+>[[:space:]]*[A-Za-z][A-Za-z ,./&+#?()’'"'"'_-]{2,}[[:space:]]*<' \
+  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components" \
+  "$root/resources/js/solastock/layouts" "$root/resources/js/solastock/router" "$root/resources/js/solastock/stores" \
+  | rg -v 'OnboardingPage\.jsx:.*<code>migrated_at_inv</code>' \
+  | rg -v 'ItemsPage\.jsx:.*<th>SKU</th>' \
+  | rg -v 'AppShell\.jsx:.*<span className="side-name">SolaStock</span>'; then
+  status=1
+fi
+
+# Literal accessibility labels, tooltips and placeholders can render outside
+# ordinary text nodes (including portals and native controls).
+if rg -n --glob '*.jsx' --glob '*.js' \
+  '(placeholder|title|aria-label)=["'"'"'][A-Za-z][^"'"'"']{2,}["'"'"']' \
+  "$root/resources/js/solastock/pages" "$root/resources/js/solastock/components" \
+  "$root/resources/js/solastock/layouts" "$root/resources/js/solastock/router" "$root/resources/js/solastock/stores"; then
+  status=1
+fi
+
+if rg -n --glob '*.php' "['\"][A-Z][A-Za-z ,.'\"-]{8,}[.!?]['\"]" \
+  "$root/app/Http" "$root/app/Services" "$root/app/Http/Requests"; then
+  status=1
+fi
+
+if [[ "$status" -ne 0 ]]; then
+  echo
+  echo "Unreviewed system-owned English candidates found. Do not deploy as complete."
+else
+  echo "No candidates found. Verify the technical allowlist and run route tests."
+fi
+exit "$status"

@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Providers;
+
+use App\Models\Tenant\Item;
+use App\Observers\ItemCatalogObserver;
+use App\Services\Tenancy\TenantManager;
+use App\Tenancy\OrganizationContext;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        // Active-tenant context is request/job scoped state → singleton.
+        $this->app->singleton(OrganizationContext::class);
+        $this->app->singleton(TenantManager::class);
+        $this->app->singleton(\App\Services\InventoryWorkspace\MigrationCatalogScope::class);
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        Item::observe(ItemCatalogObserver::class);
+    }
+}

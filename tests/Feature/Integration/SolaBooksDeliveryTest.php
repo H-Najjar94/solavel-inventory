@@ -1,0 +1,732 @@
+<?php
+
+namespace Tests\Feature\Integration;
+
+use App\Models\Landlord\Organization;
+use App\Models\Tenant\IntegrationAccountMapping;
+use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
+use App\Models\Tenant\IntegrationMasterDataMapping;
+use App\Models\Tenant\IntegrationOrganizationMapping;
+use App\Models\Tenant\IntegrationOutboxEvent;
+use App\Models\Tenant\IntegrationSetting;
+use App\Services\Integration\DeadLetterReviewService;
+use App\Services\Integration\DurableOutboxTransportService;
+use App\Services\Integration\ExternalRequestSignature;
+use App\Services\Integration\IntegrationReconciliationService;
+use App\Services\Integration\SolaBooksOutboxDeliveryService;
+use App\Services\Integration\SolaStockJournalContract;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\TenantTestManager;
+use Tests\TestCase;
+use Tests\Traits\TenantAware;
+
+class SolaBooksDeliveryTest extends TestCase
+{
+    use TenantAware;
+
+    private array $quantityMappings = [];
+
+    private function bootActiveIntegration(): void
+    {
+        $this->useTenantA();
+        DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
+            ['client_id' => 7, 'project_slug' => 'inventory'],
+            [
+                'payload' => json_encode([
+                    'accessible' => true,
+                    'commercially_entitled' => true,
+                    'entitlement_source' => 'advanced_bundle',
+                ], JSON_THROW_ON_ERROR),
+                'version' => 'test-advanced-worker-v1',
+                'synced_at' => now('UTC'),
+                'evaluated_at' => now('UTC'),
+                'pushed_at' => now('UTC'),
+                'state_hash' => hash('sha256', 'test-advanced-worker-v1'),
+            ]
+        );
+        // Transport eligibility is Central's exact organization capability, not bundle provenance.
+        DB::connection('mysql')->table('entitlement_state_snapshots')->updateOrInsert(
+            ['organization_id' => TenantTestManager::ORG_A],
+            ['underlying_subscription_state' => 'paid_active', 'effective_access_state' => 'paid_active',
+                'state_hash' => hash('sha256', 'delivery-capability-fixture'),
+                'state_payload' => json_encode(['client_id' => 7, 'organization_id' => TenantTestManager::ORG_A,
+                    'integration_capabilities' => ['connection_activation_delivery_entitled' => true],
+                    'applications' => ['finance' => ['accessible' => true, 'commercially_entitled' => true],
+                        'inventory' => ['accessible' => true, 'commercially_entitled' => true]]])]
+        );
+        DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
+            ['client_id' => 7, 'project_slug' => 'finance'],
+            ['payload' => json_encode(['accessible' => true, 'commercially_entitled' => true]),
+                'version' => 'delivery-fixture', 'synced_at' => now('UTC')]
+        );
+        DB::connection('tenant')->table('organizations')->updateOrInsert(
+            ['id' => 14],
+            ['central_org_id' => TenantTestManager::ORG_A]
+        );
+        Organization::query()->updateOrCreate(
+            ['central_organization_id' => TenantTestManager::ORG_A],
+            ['name' => 'Contract Test Org', 'database_name' => 'solastock_test_a', 'base_currency' => 'JOD', 'is_active' => true]
+        );
+
+        IntegrationSetting::query()->updateOrCreate(
+            ['organization_id' => TenantTestManager::ORG_A, 'integration' => 'solabooks'],
+            [
+                'mode' => 'active',
+                'solabooks_organization_id' => 14,
+                'meta' => [
+                    'client_id' => 7,
+                    'central_organization_id' => TenantTestManager::ORG_A,
+                    'signing_key_id' => 'test-signing-key',
+                    'signing_secret_encrypted' => Crypt::encryptString('test-signing-secret'),
+                    'signing_protocol_version' => ExternalRequestSignature::VERSION,
+                    'contract_version' => SolaStockJournalContract::VERSION,
+                    'finance_currency_contract' => [
+                        'base_currency_code' => 'JOD',
+                        'enabled_currency_codes' => ['JOD', 'USD', 'EUR', 'GBP', 'AED', 'SAR'],
+                        'currency_precisions' => ['JOD' => 2, 'USD' => 2, 'EUR' => 2, 'GBP' => 2, 'AED' => 2, 'SAR' => 2],
+                        'money_scale' => 2,
+                        'rate_scale' => 8,
+                    ],
+                ],
+            ]
+        );
+        $organizationMapping = IntegrationOrganizationMapping::query()->firstOrCreate(
+            [
+                'tenant_database_identity' => (string) DB::connection('tenant')->getDatabaseName(),
+                'solastock_organization_id' => TenantTestManager::ORG_A,
+            ],
+            [
+                'mapping_uuid' => (string) Str::uuid(),
+                'central_client_id' => 7,
+                'central_organization_id' => TenantTestManager::ORG_A,
+                'finance_organization_id' => 14,
+                'contract_version' => SolaStockJournalContract::VERSION,
+                'status' => 'verified',
+                'activation_state' => 'active',
+                'base_currency_code' => 'JOD',
+                'currency_verified_at' => now(),
+                'verified_at' => now(),
+            ]
+        );
+        foreach (['item' => ['item', '501', '501'], 'source' => ['unit', '8', '801'], 'base' => ['unit', '7', '701']] as $role => [$type, $stock, $books]) {
+            $this->quantityMappings[$role] = (string) Str::uuid();
+            IntegrationMasterDataMapping::query()->create([
+                'mapping_uuid' => $this->quantityMappings[$role],
+                'organization_mapping_uuid' => $organizationMapping->mapping_uuid,
+                'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A,
+                'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A,
+                'entity_type' => $type, 'solastock_record_id' => $stock, 'solabooks_record_id' => $books,
+                'status' => 'verified', 'contract_source_version' => 'phase2.v1',
+            ]);
+        }
+
+        foreach ([
+            'inventory_asset' => 101,
+            'grni' => 202,
+            'cogs' => 303,
+            'adjustment_gain' => 404,
+            'adjustment_loss' => 405,
+            'opening_offset' => 505,
+            'accounts_receivable' => 606,
+            'sales_revenue' => 707,
+        ] as $type => $accountId) {
+            IntegrationAccountMapping::query()->updateOrCreate(
+                [
+                    'organization_id' => TenantTestManager::ORG_A,
+                    'integration' => 'solabooks',
+                    'mapping_type' => $type,
+                ],
+                ['solabooks_account_id' => (string) $accountId, 'status' => 'mapped']
+            );
+        }
+    }
+
+    private function event(array $overrides = []): IntegrationOutboxEvent
+    {
+        $aggregateId = $overrides['aggregate_id'] ?? random_int(100000, 999999);
+        $aggregateNumber = $overrides['aggregate_number'] ?? 'ADJ-'.$aggregateId;
+
+        $defaultPayload = [
+            'document_date' => now()->toDateString(),
+            'document_number' => $aggregateNumber,
+            'currency' => ['code' => 'JOD'],
+            'total_inventory_value_change' => '25.00',
+            'suggested_debit_account_mapping' => 'inventory_asset',
+            'suggested_credit_account_mapping' => 'grni',
+            'lines' => [],
+        ];
+        $payload = $overrides['payload'] ?? $defaultPayload;
+        if (empty($payload['lines'])) {
+            $hashInput = [
+                'organization_id' => TenantTestManager::ORG_A, 'item_id' => 501,
+                'source_unit_id' => 8, 'base_unit_id' => 7, 'conversion_id' => 3,
+                'factor' => '10.00000000', 'version' => 'solastock-unit-conversion.v1',
+                'precision' => 4, 'rounding_mode' => 'HALF_UP',
+            ];
+            $payload['lines'] = [[
+                'ledger_entry_ids' => [1],
+                'unit_conversion' => [
+                    'item_id' => 501, 'source_quantity' => '1.0000', 'source_unit_id' => 8,
+                    'base_quantity' => '10.0000', 'base_unit_id' => 7, 'conversion_id' => 3,
+                    'factor' => '10.00000000', 'version' => 'solastock-unit-conversion.v1',
+                    'hash' => hash('sha256', json_encode($hashInput, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION)),
+                    'precision' => 4, 'rounding_mode' => 'HALF_UP',
+                ],
+            ]];
+        }
+        $overrides['payload'] = $payload;
+        $event = IntegrationOutboxEvent::query()->create(array_merge([
+            'organization_id' => TenantTestManager::ORG_A,
+            'event_uuid' => 'evt-'.uniqid(),
+            'integration' => 'solabooks',
+            'event_type' => 'adjustment.posted',
+            'aggregate_type' => 'StockAdjustment',
+            'aggregate_id' => $aggregateId,
+            'aggregate_number' => $aggregateNumber,
+            'occurred_at' => now(),
+            'payload' => $defaultPayload,
+            'status' => 'pending',
+            'mapping_status' => 'complete',
+            'attempts' => 0,
+            'idempotency_key' => 'solabooks:adjustment.posted:StockAdjustment:'.$aggregateId,
+        ], $overrides));
+        $organization = IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', TenantTestManager::ORG_A)->firstOrFail();
+        IntegrationDocumentLifecycleMapping::query()->firstOrCreate([
+            'organization_mapping_uuid' => $organization->mapping_uuid,
+            'source_application' => 'solastock',
+            'source_document_type' => 'stock_adjustment',
+            'source_document_id' => (string) $event->aggregate_id,
+        ], [
+            'mapping_uuid' => (string) Str::uuid(),
+            'central_client_id' => $organization->central_client_id,
+            'central_organization_id' => $organization->central_organization_id,
+            'tenant_database_identity' => $organization->tenant_database_identity,
+            'finance_organization_id' => $organization->finance_organization_id,
+            'solastock_organization_id' => $organization->solastock_organization_id,
+            'document_version' => 'phase3.v1',
+            'lifecycle_status' => 'posted',
+            'base_currency_code' => $organization->base_currency_code,
+            'transaction_currency_code' => 'JOD',
+            'exchange_rate' => 1,
+            'exchange_rate_date' => now()->toDateString(),
+            'accounting_source_key' => $event->idempotency_key,
+        ]);
+
+        return $event;
+    }
+
+    private function configureHttp(): void
+    {
+        Config::set('services.solabooks.journal_entries_url', 'https://books.test/api/v1/journal-entries');
+        Config::set('services.solabooks.api_key', 'key');
+        Config::set('services.solabooks.client_id', '7');
+        Config::set('services.solabooks.organization_id', '14');
+        Config::set('services.solabooks.api_base_url', 'https://books.test/api/v1');
+    }
+
+    #[Test]
+    public function it_posts_a_balanced_idempotent_journal_to_solabooks_and_reconciles_the_response(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 987, 'reference' => 'ok']], 201),
+        ]);
+
+        $input = $this->event();
+        $event = app(SolaBooksOutboxDeliveryService::class)->deliver($input);
+
+        $this->assertSame('sent', $event->status);
+        $this->assertSame('987', $event->external_document_id);
+        $this->assertNotNull($event->sent_at);
+
+        Http::assertSent(function ($request) use ($input) {
+            $body = $request->data();
+            $raw = $request->body();
+            $canonical = ExternalRequestSignature::canonicalString(
+                'POST',
+                '/api/v1/journal-entries',
+                '',
+                'application/json',
+                $request->header('X-Solavel-Timestamp')[0],
+                $request->header('X-Solavel-Nonce')[0],
+                $request->header('X-Solavel-Content-SHA256')[0],
+                (string) TenantTestManager::ORG_A,
+                '14',
+                $input->idempotency_key,
+                'adjustment.posted',
+                ExternalRequestSignature::VERSION,
+                SolaStockJournalContract::VERSION,
+                '7',
+                (string) TenantTestManager::ORG_A,
+                (string) IntegrationOrganizationMapping::query()
+                    ->where('solastock_organization_id', TenantTestManager::ORG_A)
+                    ->value('id'),
+            );
+
+            return $request->hasHeader('X-API-Key', 'key')
+                && $request->hasHeader('X-Client-Id', '7')
+                && $request->hasHeader('X-Organization-Id', '14')
+                && $request->hasHeader('Idempotency-Key', $input->idempotency_key)
+                && hash('sha256', $raw) === $request->header('X-Solavel-Content-SHA256')[0]
+                && ExternalRequestSignature::sign($canonical, 'test-signing-secret') === $request->header('X-Solavel-Signature')[0]
+                && $body['lines'][0]['account_id'] === 101
+                && $body['lines'][0]['debit'] === '25.00'
+                && $body['lines'][1]['account_id'] === 404
+                && $body['lines'][1]['credit'] === '25.00';
+        });
+    }
+
+    #[Test]
+    public function preview_builds_foreign_currency_base_amounts_without_mutating_the_event(): void
+    {
+        $this->bootActiveIntegration();
+        $event = $this->event(['payload' => [
+            'document_date' => '2026-07-29',
+            'document_number' => 'ADJ-FX-1',
+            'currency' => ['code' => 'USD', 'exchange_rate' => '1.41', 'rate_date' => '2026-07-29', 'rate_source' => 'manual'],
+            'total_inventory_value_change' => '141.00',
+            'suggested_debit_account_mapping' => 'inventory_asset',
+            'suggested_credit_account_mapping' => 'grni',
+            'lines' => [],
+        ]]);
+        $before = $event->only(['status', 'attempts', 'next_attempt_at']);
+        $before['updated_at'] = $event->updated_at?->toISOString();
+        $payload = app(SolaBooksOutboxDeliveryService::class)->preview($event);
+        $fresh = $event->fresh();
+        $after = $fresh->only(['status', 'attempts', 'next_attempt_at']);
+        $after['updated_at'] = $fresh->updated_at?->toISOString();
+
+        $this->assertSame('solastock-journal.v2', $payload['contract_version']);
+        $this->assertSame('JOD', $payload['currency']['base_code']);
+        $this->assertSame('USD', $payload['currency']['transaction_code']);
+        $this->assertSame('100.00', $payload['lines'][0]['base_debit']);
+        $this->assertSame('100.00', $payload['lines'][1]['base_credit']);
+        $this->assertSame($before, $after);
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function preview_rejects_missing_and_stale_currency_without_consuming_delivery_state(): void
+    {
+        $this->bootActiveIntegration();
+        foreach ([
+            ['document_date' => '2026-07-29', 'total_inventory_value_change' => '10.00', 'suggested_debit_account_mapping' => 'inventory_asset', 'suggested_credit_account_mapping' => 'grni'],
+            ['document_date' => '2026-07-29', 'currency' => ['code' => 'USD', 'exchange_rate' => '1.41', 'rate_date' => '2026-07-28', 'rate_source' => 'manual'], 'total_inventory_value_change' => '10.00', 'suggested_debit_account_mapping' => 'inventory_asset', 'suggested_credit_account_mapping' => 'grni'],
+        ] as $index => $eventPayload) {
+            $event = $this->event(['payload' => $eventPayload]);
+            try {
+                app(SolaBooksOutboxDeliveryService::class)->preview($event);
+                $this->fail("currency case {$index} must fail");
+            } catch (\RuntimeException) {
+                $this->assertSame('pending', $event->fresh()->status);
+                $this->assertSame(0, $event->fresh()->attempts);
+            }
+        }
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function it_does_not_deliver_an_already_sent_event_again(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake();
+
+        $event = $this->event(['status' => 'sent', 'sent_at' => now(), 'external_document_id' => '987']);
+        $result = app(SolaBooksOutboxDeliveryService::class)->deliver($event);
+
+        $this->assertSame('sent', $result->status);
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function it_refreshes_a_historical_incomplete_mapping_snapshot_before_delivery(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 988]], 201),
+        ]);
+
+        $event = $this->event(['mapping_status' => 'incomplete']);
+        $result = app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
+
+        $this->assertSame('complete', $result->mapping_status);
+        $this->assertSame('sent', $result->status);
+    }
+
+    #[Test]
+    public function it_marks_failure_with_bounded_backoff_when_credentials_are_missing(): void
+    {
+        $this->bootActiveIntegration();
+        Config::set('services.solabooks.api_key', null);
+        Config::set('services.solabooks.client_id', null);
+        Config::set('services.solabooks.organization_id', null);
+        IntegrationSetting::query()->where('integration', 'solabooks')->update(['solabooks_organization_id' => null, 'meta' => null]);
+
+        $event = $this->event();
+
+        try {
+            app(SolaBooksOutboxDeliveryService::class)->deliver($event);
+            $this->fail('delivery should fail without credentials');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('identity', strtolower($e->getMessage()));
+        }
+
+        $event = $event->fresh();
+        $this->assertSame('failed', $event->status);
+        $this->assertSame(1, $event->attempts);
+        $this->assertNotNull($event->next_attempt_at);
+        $this->assertStringContainsString('identity', strtolower($event->last_error));
+    }
+
+    #[Test]
+    public function signing_key_rotation_stores_the_one_time_secret_encrypted_and_revocation_clears_local_use(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            '*/external-signing-keys/rotate' => Http::response([
+                'data' => ['key_id' => 'rotated-key', 'secret' => 'one-time-remote-secret', 'protocol_version' => 'v1', 'contract_version' => 'solastock-journal.v2'],
+            ], 201),
+            '*/external-signing-keys/rotated-key/revoke' => Http::response([
+                'data' => ['key_id' => 'rotated-key', 'status' => 'revoked'],
+            ]),
+        ]);
+
+        $service = app(SolaBooksOutboxDeliveryService::class);
+        $setting = $service->rotateSigningKey();
+        $this->assertSame('rotated-key', $setting->meta['signing_key_id']);
+        $this->assertSame('one-time-remote-secret', $setting->signingSecret());
+        $this->assertNotSame('one-time-remote-secret', $setting->meta['signing_secret_encrypted']);
+
+        $service->revokeSigningKey('rotated-key');
+        $setting = $setting->fresh();
+        $this->assertNull($setting->signingSecret());
+        $this->assertArrayNotHasKey('signing_key_id', $setting->meta);
+    }
+
+    #[Test]
+    public function recoverable_finance_failures_retry_once_without_duplicate_inventory_delivery_state(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Http::fake([
+            'books.test/*' => Http::sequence()
+                ->push(['message' => 'finance unavailable'], 503)
+                ->push(['success' => true, 'data' => ['id' => 1200]], 200)
+                ->push(['message' => 'invalid signature'], 401)
+                ->push(['success' => true, 'data' => ['id' => 1201]], 200)
+                ->push(['message' => 'locked accounting period'], 422)
+                ->push(['success' => true, 'data' => ['id' => 1202]], 200),
+        ]);
+
+        foreach (['finance unavailable', 'invalid signature', 'locked accounting period'] as $index => $message) {
+            $event = $this->event();
+
+            try {
+                app(SolaBooksOutboxDeliveryService::class)->deliver($event);
+                $this->fail($message.' must leave a recoverable failed event');
+            } catch (\RuntimeException) {
+                // Expected remote rejection/outage.
+            }
+
+            $this->assertSame('failed', $event->fresh()->status);
+            $this->assertSame(1, $event->fresh()->attempts);
+            $recovered = app(SolaBooksOutboxDeliveryService::class)->deliver($event->fresh(), true);
+            $this->assertSame('sent', $recovered->status);
+            $this->assertSame((string) (1200 + $index), $recovered->external_document_id);
+            $this->assertSame(
+                $recovered->external_document_id,
+                app(SolaBooksOutboxDeliveryService::class)->deliver($recovered->fresh(), true)->external_document_id,
+            );
+        }
+        Http::assertSentCount(6);
+    }
+
+    #[Test]
+    public function missing_account_mapping_blocks_delivery_without_http_and_recovers_after_restoration(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $mapping = IntegrationAccountMapping::query()->where('mapping_type', 'inventory_asset')->firstOrFail();
+        $mapping->update(['solabooks_account_id' => null, 'status' => 'unmapped']);
+        Http::fake([
+            'books.test/*' => Http::response(['success' => true, 'data' => ['id' => 1300]], 200),
+        ]);
+        $event = $this->event(['mapping_status' => 'incomplete']);
+
+        try {
+            app(SolaBooksOutboxDeliveryService::class)->deliver($event, true);
+            $this->fail('Incomplete account mappings must block delivery.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('mapping', strtolower($e->getMessage()));
+        }
+        Http::assertNothingSent();
+        $this->assertSame('failed', $event->fresh()->status);
+
+        $mapping->update(['solabooks_account_id' => '101', 'status' => 'mapped']);
+        $recovered = app(SolaBooksOutboxDeliveryService::class)->deliver($event->fresh(), true);
+        $this->assertSame('sent', $recovered->status);
+        $this->assertSame('1300', $recovered->external_document_id);
+        Http::assertSentCount(1);
+    }
+
+    private function enableDurableTransport(IntegrationOutboxEvent $event): IntegrationOutboxEvent
+    {
+        Config::set('integration_safety.solabooks_delivery_enabled', true);
+        Config::set('integration_transport.worker_enabled', true);
+        Config::set('integration_transport.jitter_percent', 0);
+        $setting = IntegrationSetting::query()->where('integration', 'solabooks')->firstOrFail();
+        $meta = $setting->meta;
+        $meta['transport_enabled'] = true;
+        $meta['transport_enabled_workflows'] = ['adjustment.posted'];
+        $setting->update(['meta' => $meta]);
+        $event->update([
+            'status' => 'ready',
+            'contract_version' => SolaStockJournalContract::VERSION,
+            'payload_hash' => hash(
+                'sha256',
+                SolaStockJournalContract::canonicalJson((array) $event->payload)
+            ),
+            'workflow_key' => 'adjustment.posted',
+            'ordering_key' => 'StockAdjustment:'.$event->aggregate_id,
+            'transport_eligible_at' => now(),
+        ]);
+
+        return $event->fresh();
+    }
+
+    #[Test]
+    public function durable_transport_claims_commits_then_performs_http_and_acknowledges_by_lease(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $event = $this->enableDurableTransport($this->event());
+        Http::fake(['books.test/*' => Http::response(['data' => ['id' => 5001]], 201)]);
+        $transport = app(DurableOutboxTransportService::class);
+
+        $claimed = $transport->claim(TenantTestManager::ORG_A, 'worker-a');
+        $this->assertSame($event->id, $claimed->id);
+        $this->assertSame('processing', $claimed->status);
+        $this->assertNotNull($claimed->lease_token);
+        $this->assertDatabaseHas('integration_outbox_transition_audits', [
+            'event_id' => $event->id, 'from_status' => 'ready', 'to_status' => 'processing',
+        ]);
+        $audit = DB::connection('tenant')->table('integration_outbox_transition_audits')
+            ->where('event_id', $event->id)->first();
+        $this->assertSame(hash('sha256', (string) $claimed->lease_token), $audit->lease_token_hash);
+        $this->assertNotSame((string) $claimed->lease_token, $audit->lease_token_hash);
+
+        $result = $transport->processClaim($claimed);
+        $this->assertSame('sent', $result['status']);
+        $this->assertSame('5001', $event->fresh()->external_document_id);
+        $this->assertNull($event->fresh()->lease_token);
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function concurrent_claim_and_stale_acknowledgement_fail_closed(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $event = $this->enableDurableTransport($this->event());
+        Http::fake();
+        $transport = app(DurableOutboxTransportService::class);
+        $first = $transport->claim(TenantTestManager::ORG_A, 'worker-a');
+        $this->assertNull($transport->claim(TenantTestManager::ORG_A, 'worker-b'));
+
+        $event->fresh()->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $this->assertSame(1, $transport->recoverExpiredLeases(TenantTestManager::ORG_A));
+        $this->expectException(\RuntimeException::class);
+        $transport->processClaim($first);
+    }
+
+    #[Test]
+    public function retryable_and_permanent_failures_follow_distinct_states_and_backoff(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $transport = app(DurableOutboxTransportService::class);
+
+        $retryable = $this->enableDurableTransport($this->event());
+        Http::fake(['books.test/*' => Http::sequence()
+            ->push(['error' => ['code' => 'rate_limited', 'message' => 'try later']], 429, ['Retry-After' => '120'])
+            ->push(['error' => ['code' => 'currency_invalid', 'message' => 'invalid currency']], 422)]);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-rate')
+        );
+        $this->assertSame('retry_scheduled', $result['status']);
+        $this->assertSame('rate_limit', $retryable->fresh()->failure_category);
+        $this->assertTrue($retryable->fresh()->next_attempt_at->gte(now()->addSeconds(115)));
+
+        $retryable->fresh()->update(['status' => 'superseded']);
+        $permanent = $this->enableDurableTransport($this->event());
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-business')
+        );
+        $this->assertSame('failed', $result['status']);
+        $this->assertSame('business_permanent', $permanent->fresh()->failure_category);
+        $this->assertNull($permanent->fresh()->next_attempt_at);
+    }
+
+    #[Test]
+    public function reviewed_retry_allows_the_shared_unit_receiver_fix_but_not_other_permanent_failures(): void
+    {
+        $this->bootActiveIntegration();
+        $transport = app(DurableOutboxTransportService::class);
+        $event = $this->enableDurableTransport($this->event());
+        $event->update([
+            'status' => 'failed',
+            'mapping_status' => 'complete',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'unit_conversion_finance_scope_invalid',
+        ]);
+
+        $retried = $transport->queueReviewedRetry($event->fresh(), 42);
+        $this->assertSame('ready', $retried->status);
+        $this->assertSame('unit_conversion_finance_scope_invalid', $retried->failure_code);
+
+        $blocked = $this->enableDurableTransport($this->event());
+        $blocked->update([
+            'status' => 'failed',
+            'mapping_status' => 'complete',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'currency_invalid',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        $transport->queueReviewedRetry($blocked->fresh(), 42);
+    }
+
+    #[Test]
+    public function maximum_attempts_dead_letter_and_remote_commit_ack_crash_are_recoverable(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        Config::set('integration_transport.max_attempts', 1);
+        $event = $this->enableDurableTransport($this->event());
+        Http::fake(['books.test/*' => Http::sequence()
+            ->push(['message' => 'unavailable'], 503)
+            ->push(['data' => ['id' => 6001]], 201)
+            ->push(['data' => ['id' => 6001]], 200)]);
+        $transport = app(DurableOutboxTransportService::class);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-dead')
+        );
+        $this->assertSame('dead_letter', $result['status']);
+        $this->assertNotNull($event->fresh()->dead_lettered_at);
+
+        Config::set('integration_transport.max_attempts', 8);
+        $committed = $this->enableDurableTransport($this->event());
+        $claim = $transport->claim(TenantTestManager::ORG_A, 'worker-crash');
+        $remote = app(SolaBooksOutboxDeliveryService::class)->sendClaimed($claim);
+        $this->assertTrue($remote['successful']); // Simulated crash before local ack.
+        $committed->fresh()->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $transport->recoverExpiredLeases(TenantTestManager::ORG_A);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'worker-recovery')
+        );
+        $this->assertSame('sent', $result['status']);
+        $this->assertSame('6001', $committed->fresh()->external_document_id);
+    }
+
+    #[Test]
+    public function durable_transport_uses_real_http_and_recovers_remote_commit(): void
+    {
+        $url = getenv('PHASE4_REAL_HTTP_URL');
+        if (! $url) {
+            $this->markTestSkipped('Run scripts/run-phase4-paired-http.sh for the real HTTP transport proof.');
+        }
+        $this->bootActiveIntegration();
+        Config::set('services.solabooks.journal_entries_url', $url);
+        Config::set('services.solabooks.api_key', 'key');
+        Config::set('services.solabooks.client_id', '7');
+        Config::set('services.solabooks.organization_id', '14');
+        $event = $this->enableDurableTransport($this->event());
+        $transport = app(DurableOutboxTransportService::class);
+        $claim = $transport->claim(TenantTestManager::ORG_A, 'real-http-crash');
+
+        // The first actual HTTP request commits remotely; simulate a process
+        // death by deliberately omitting the local acknowledgement.
+        $remote = app(SolaBooksOutboxDeliveryService::class)->sendClaimed($claim);
+        $this->assertTrue($remote['successful']);
+        $event->fresh()->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $transport->recoverExpiredLeases(TenantTestManager::ORG_A);
+        $result = $transport->processClaim(
+            $transport->claim(TenantTestManager::ORG_A, 'real-http-recovery')
+        );
+
+        $this->assertSame('sent', $result['status']);
+        $this->assertSame('91001', $event->fresh()->external_document_id);
+        $this->assertSame(2, $event->fresh()->attempts);
+    }
+
+    #[Test]
+    public function reconciliation_classifies_without_repairing_any_state(): void
+    {
+        $this->bootActiveIntegration();
+        $pending = $this->event(['status' => 'pending']);
+        $ignored = $this->event(['status' => 'ignored']);
+        $before = IntegrationOutboxEvent::query()->orderBy('id')->get()
+            ->map(fn ($event) => [
+                ...$event->only(['id', 'status', 'attempts']),
+                'updated_at' => $event->updated_at?->toISOString(),
+            ])->all();
+
+        $report = app(IntegrationReconciliationService::class)
+            ->report(TenantTestManager::ORG_A);
+
+        $this->assertTrue($report['read_only']);
+        $this->assertSame(0, $report['mutation']['events']);
+        $this->assertSame(1, $report['events']['counts']['pending']);
+        $this->assertSame(1, $report['events']['counts']['ignored_historical']);
+        $this->assertSame(
+            $before,
+            IntegrationOutboxEvent::query()->orderBy('id')->get()
+                ->map(fn ($event) => [
+                    ...$event->only(['id', 'status', 'attempts']),
+                    'updated_at' => $event->updated_at?->toISOString(),
+                ])->all()
+        );
+        $this->assertSame('pending', $pending->fresh()->status);
+        $this->assertSame('ignored', $ignored->fresh()->status);
+    }
+
+    #[Test]
+    public function dead_letter_recovery_is_reviewed_audited_and_rejects_permanent_blockers(): void
+    {
+        $this->bootActiveIntegration();
+        $event = $this->enableDurableTransport($this->event());
+        $event->update([
+            'status' => 'dead_letter',
+            'failure_category' => 'transport',
+            'failure_code' => 'http_503',
+            'dead_lettered_at' => now(),
+        ]);
+        $reviewed = app(DeadLetterReviewService::class)
+            ->review($event->fresh(), 42, 'Remote service restored.', true);
+        $this->assertSame('ready', $reviewed->status);
+        $this->assertDatabaseHas('integration_dead_letter_reviews', [
+            'event_id' => $event->id,
+            'action' => 'review_and_retry',
+            'reviewer_user_id' => 42,
+        ], 'tenant');
+
+        $permanent = $this->enableDurableTransport($this->event());
+        $permanent->update([
+            'status' => 'dead_letter',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'currency_invalid',
+        ]);
+        $this->expectException(\RuntimeException::class);
+        app(DeadLetterReviewService::class)
+            ->review($permanent->fresh(), 42, 'Not corrected.', true);
+    }
+}

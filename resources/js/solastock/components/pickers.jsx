@@ -1,0 +1,100 @@
+import React, {useEffect, useRef} from 'react';
+import {useTenant} from '../stores/tenant.jsx';
+import {defaultWarehouseDecision} from './warehouseDefaultSelection.mjs';
+import { useApiQuery } from '../hooks/useApiQuery.js';
+import { api } from '../services/api.js';
+import { t } from '../i18n/index.js';
+
+// Lightweight API-backed select pickers used across document line editors.
+// Each falls back to an empty list (no tenant) and is plain <select> for now.
+
+function Select({ value, onChange, options, placeholder, getLabel, disabled }) {
+    return (
+        <select className="input" value={value ?? ''} disabled={disabled}
+            onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">{placeholder}</option>
+            {options.map((o) => <option key={o.id} value={o.id}>{getLabel(o)}</option>)}
+        </select>
+    );
+}
+
+// stockOnly: documents that move stock offer inventory items only; service and
+// non-inventory items cannot hold stock (the ledger rejects them on posting).
+export function ItemPicker({ value, onChange, disabled, stockOnly = false }) {
+    const params = stockOnly ? { per_page: 200, is_active: true, item_type: 'inventory' } : { per_page: 200, is_active: true };
+    const { data } = useApiQuery(stockOnly ? ['items-picker', 'inventory'] : ['items-picker'], () => api.items(params), { fallback: [] });
+    const items = Array.isArray(data) ? data : (data?.data ?? []);
+    // An existing line may hold an item the stockOnly list excludes (e.g. a
+    // service line saved before filtering): show that item as a read-only label.
+    const listLoaded = Array.isArray(data) ? data.length > 0 : Boolean(data?.data);
+    const outsideList = stockOnly && value && listLoaded && !items.some((i) => String(i.id) === String(value));
+    const existing = useApiQuery(['item', value], () => api.item(value), { fallback: null, enabled: Boolean(outsideList) });
+    if (outsideList) {
+        const item = existing.data?.item;
+        return <span className="input is-disabled" aria-readonly="true">{item ? <bdi>{`${item.sku} · ${item.name}`}</bdi> : <bdi>#{value}</bdi>}</span>;
+    }
+    return <Select value={value} onChange={onChange} options={items} disabled={disabled}
+        placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
+}
+
+export function WarehousePicker({ value, onChange, disabled, placeholder, autoSelectDefault = false, defaultContext = 'new' }) {
+    const tenant = useTenant();
+    const organizationId = tenant.organization_id ?? 'no-organization';
+    const query = useApiQuery(['warehouses-picker', organizationId], () => api.warehouses({ per_page: 200 }), { fallback: [], enabled: tenant.resolved });
+    const data = query.data;
+    const list = Array.isArray(data) ? data : (data?.data ?? []);
+    const context = String(organizationId) + ':' + defaultContext;
+    const selection = useRef({context, attempted:false});
+    if (selection.current.context !== context) selection.current = {context, attempted:false};
+    useEffect(() => {
+        const decision = defaultWarehouseDecision({enabled:autoSelectDefault, disabled, loaded:query.isSuccess && !query.isPlaceholderData,
+            value, attempted:selection.current.attempted, list, defaultId:data?.default_warehouse_id});
+        selection.current.attempted = decision.attempted;
+        if (decision.selected !== null) onChange(decision.selected);
+    }, [context, autoSelectDefault, disabled, query.isSuccess, query.isPlaceholderData, data, value, onChange]);
+    const change = next => {selection.current.attempted = true; onChange(next);};
+    return <Select value={value} onChange={change} options={list} disabled={disabled}
+        placeholder={placeholder ?? t('picker.warehouse')} getLabel={(w) => `${w.code} · ${w.name}`} />;
+}
+
+export function BinPicker({ warehouseId, value, onChange, disabled, placeholder }) {
+    const { data } = useApiQuery(['warehouse', warehouseId], () => api.warehouse(warehouseId),
+        { fallback: null, enabled: !!warehouseId });
+    const bins = data?.bins ?? [];
+    return <Select value={value} onChange={onChange} options={bins} disabled={disabled || !warehouseId}
+        placeholder={placeholder ?? t('picker.binOptional')} getLabel={(b) => b.code} />;
+}
+
+// activeOnly: new choices exclude inactive suppliers, but the currently
+// selected supplier stays listed so an existing document still shows it.
+export function SupplierPicker({ value, onChange, disabled, activeOnly = false }) {
+    const { data } = useApiQuery(['suppliers-picker'], () => api.suppliers({ per_page: 200 }), { fallback: [] });
+    const all = Array.isArray(data) ? data : (data?.data ?? []);
+    const list = activeOnly ? all.filter((s) => s.is_active !== false && s.is_active !== 0 || String(s.id) === String(value)) : all;
+    return <Select value={value} onChange={onChange} options={list} disabled={disabled}
+        placeholder={t('picker.supplier')} getLabel={(s) => `${s.code} · ${s.name}`} />;
+}
+
+export function CustomerPicker({ value, onChange, disabled }) {
+    const { data } = useApiQuery(['customers-picker'], () => api.customers({ per_page: 200, is_active: true }), { fallback: [] });
+    const list = Array.isArray(data) ? data : (data?.data ?? []);
+    return <Select value={value} onChange={onChange} options={list} disabled={disabled}
+        placeholder={t('picker.customer')} getLabel={(c) => `${c.code} · ${c.name}`} />;
+}
+
+export function UnitPicker({ value, onChange, disabled, placeholder }) {
+    const { data } = useApiQuery(['meta'], api.meta, { fallback: { lookups: { units: [] } } });
+    const units = data?.lookups?.units ?? [];
+    return <Select value={value} onChange={onChange} options={units} disabled={disabled}
+        placeholder={placeholder ?? t('picker.baseUnit')} getLabel={(u) => `${u.code} · ${u.name}`} />;
+}
+
+export function QuantityInput({ value, onChange, disabled }) {
+    return <input className="input input--num" type="number" step="0.0001" min="0" disabled={disabled}
+        value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
+}
+
+export function MoneyInput({ value, onChange, disabled }) {
+    return <input className="input input--num" type="number" step="0.0001" min="0" disabled={disabled}
+        value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
+}
