@@ -60,7 +60,7 @@ final class DurableCatalogSync {
     $changes=['state'=>'delivered','target_id'=>(int)$reply['target_id'],'delivery_ack'=>json_encode($reply,JSON_THROW_ON_ERROR),'last_error'=>null,'next_attempt_at'=>null];
    }catch(\Throwable $e){
     $code=(string)$e->getMessage();$safe=in_array($code,['catalog_source_actor_required','catalog_dependency_pending','catalog_projection_ack_invalid','catalog_source_changed','catalog_field_conflict','catalog_shared_reference_change','catalog_identity_conflict','catalog_source_not_authorized','finance_connection_transport_unknown_retry_same_key'],true)?$code:'catalog_projection_delivery_failed';
-    $terminal=in_array($safe,['catalog_source_actor_required','catalog_field_conflict','catalog_shared_reference_change','catalog_identity_conflict','catalog_source_not_authorized'],true)||$row->attempts>=11;
+    $terminal=in_array($safe,['catalog_source_actor_required','catalog_source_changed','catalog_field_conflict','catalog_shared_reference_change','catalog_identity_conflict','catalog_source_not_authorized'],true)||$row->attempts>=11;
     $changes=['state'=>$terminal?'intervention_required':($safe==='finance_connection_transport_unknown_retry_same_key'?'unknown_outcome':'retrying'),'last_error'=>$safe,'next_attempt_at'=>$terminal?null:now()->addSeconds(min(900,5*(2**min(8,$row->attempts))))];
     Log::warning('catalog_sync_delivery_pending',['organization_id'=>$map->solastock_organization_id,'mapping_uuid'=>$map->mapping_uuid,'source_uuid'=>$row->source_uuid,'entity_type'=>$row->entity_type,'source_id'=>$row->source_id,'state_version'=>$row->state_version,'attempt'=>$row->attempts+1,'reason'=>$safe]);
    }
