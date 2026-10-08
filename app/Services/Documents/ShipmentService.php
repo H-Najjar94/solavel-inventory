@@ -162,6 +162,7 @@ class ShipmentService
         $allowQuarantined = (bool) ($overrides['allow_quarantined_lot'] ?? false);
 
         return DB::connection($this->conn())->transaction(function () use ($s, $allowExpired, $allowQuarantined) {
+            app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->lockAndValidateDocument($s);
             $s = Shipment::query()->lockForUpdate()->with('lines')->findOrFail($s->id);
             if ($s->status === 'posted') {
                 return $s; // idempotent

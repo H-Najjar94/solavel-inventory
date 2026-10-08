@@ -25,6 +25,7 @@ final class FinanceDocumentLifecycleAuthority
         'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',
         'purchasing.request.upsert', 'purchasing.request.status', 'purchasing.request.cancel',
         'sales.request.upsert', 'sales.request.status', 'sales.request.cancel', 'sales.request.reduce-demand',
+        'financial-origin.cash-refund-demand',
         'finance-allocations.review-status',
         'finance-allocations.commit',
         'finance-allocations.release',
@@ -41,6 +42,21 @@ final class FinanceDocumentLifecycleAuthority
      * saga itself only accepts reviewed category/unit mappings and native item rules, and
      * opens no browsing, editing, stock or warehouse operation.
      */
+    /** Value-only matching of a genuine posted inventory Expense, never physical access. */
+    public const FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS = [
+        'financial-origin.settlement.prepare', 'financial-origin.settlement.apply',
+        'financial-origin.settlement.reverse', 'financial-origin.settlement.status',
+        'financial-origin.settlement.release',
+    ];
+
+    /** Genuine native cash sales and inventory expenses: financial demand only. */
+    public const FINANCIAL_ORIGIN_REQUEST_ACTIONS = [
+        'financial-origin.request.upsert', 'financial-origin.request.cancel', 'financial-origin.request.status',
+    ];
+
+    /** Metadata only; does not confer warehouse access or permit actor zero. */
+    public const FINANCIAL_ORIGIN_CAPABILITY_ACTIONS = ['financial-origin.capabilities'];
+
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
@@ -59,7 +75,7 @@ final class FinanceDocumentLifecycleAuthority
 
     public static function scopeFor(string $action): ?string
     {
-        return in_array($action, self::ACTIONS, true) ? self::SCOPE
+        return (in_array($action, self::ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_REQUEST_ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_CAPABILITY_ACTIONS, true)) ? self::SCOPE
             : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 

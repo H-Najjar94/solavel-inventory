@@ -14,6 +14,7 @@ class StoreSalesReturnRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'operation_uuid' => ['nullable','uuid'],
             'return_number' => ['required', 'string', 'max:50'],
             'shipment_id' => ['nullable', 'integer'],
             'customer_id' => ['nullable', 'integer'],

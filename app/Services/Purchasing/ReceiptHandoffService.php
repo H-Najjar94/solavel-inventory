@@ -42,6 +42,9 @@ final class ReceiptHandoffService
 
     public function record(GoodsReceipt $g, bool $reverse = false): ?PurchasingDocumentOutbox
     {
+        if (! $reverse && app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->posted($g) !== null) {
+            return null;
+        }
         $m = IntegrationOrganizationMapping::query()->where('solastock_organization_id', $g->organization_id)->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())->whereIn('status', ['verified', 'verified_hold'])->whereIn('activation_state', ['active', 'maintenance_hold'])->first();
         $setting = IntegrationSetting::query()->where('organization_id', $g->organization_id)->where('integration', 'solabooks')->first();
         if (! $m || ! in_array($setting?->mode, ['active', 'paused', 'connected_readonly', 'connected_pending_mapping'], true)) {
