@@ -65,6 +65,7 @@ import SettingsPage from '../pages/SettingsPage.jsx';
 import TeamAccessPage from '../pages/TeamAccessPage.jsx';
 import IntegrationSettingsPage from '../pages/IntegrationSettingsPage.jsx';
 import IntegrationEventsPage from '../pages/IntegrationEventsPage.jsx';
+import CatalogSyncPage from '../pages/CatalogSyncPage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
 import { t } from '../i18n/index.js';
 // Onboarding/activation lives entirely in the CENTRAL app
@@ -176,6 +177,7 @@ export const router = createBrowserRouter(
                 { path: 'settings', element: protectedElement(<SettingsPage />, 'inventory.manage_settings') },
                 { path: 'team-access', element: protectedElement(<TeamAccessPage />, 'inventory.manage_settings') },
                 { path: 'integrations/solacount', element: protectedElement(<IntegrationSettingsPage />, 'inventory.integration.view') },
+                { path: 'integrations/solacount/catalog', element: protectedElement(<CatalogSyncPage />, 'inventory.integration.manage') },
                 { path: 'integrations/solacount/events', element: protectedElement(<IntegrationEventsPage />, 'inventory.integration.view') },
                 // Old SolaBooks-era addresses keep working for bookmarks and emails.
                 { path: 'integrations/solabooks', element: <Navigate to="/integrations/solacount" replace /> },

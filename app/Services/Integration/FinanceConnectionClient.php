@@ -12,6 +12,12 @@ final class FinanceConnectionClient
     private const PATH = '/api/internal/stock-connection';
 
     public function command(array $payload): array
+    {return $this->send($payload,self::PATH);}
+
+    public function projectCatalog(array $payload):array
+    {return $this->send($payload,'/api/internal/stock-catalog-projection');}
+
+    private function send(array $payload,string $path):array
     {
         $base = preg_replace('#/api/v1/?$#', '', rtrim((string) config('services.solabooks.api_base_url'), '/'));
         $secret = (string) config('finance_workspace.secret', '');
@@ -25,8 +31,8 @@ final class FinanceConnectionClient
         try {
             $response = Http::acceptJson()->connectTimeout(3)->timeout(20)->withoutRedirecting()->withHeaders([
                 'X-Workspace-Timestamp' => $timestamp, 'X-Workspace-Nonce' => $nonce,
-                'X-Workspace-Signature' => WorkspaceSignature::signForPath(self::PATH, $body, $timestamp, $nonce, $secret),
-            ])->withBody($body, 'application/json')->post($base.self::PATH);
+                'X-Workspace-Signature' => WorkspaceSignature::signForPath($path, $body, $timestamp, $nonce, $secret),
+            ])->withBody($body, 'application/json')->post($base.$path);
         } catch (ConnectionException $exception) {
             throw new RuntimeException('finance_connection_transport_unknown_retry_same_key', 503, $exception);
         }

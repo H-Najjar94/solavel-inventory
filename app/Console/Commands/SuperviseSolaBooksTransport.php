@@ -57,6 +57,7 @@ final class SuperviseSolaBooksTransport extends Command
                 }
                 $organizations->set((int) $mapping->solastock_organization_id);
                 $processed += app(\App\Services\Integration\ContinuousPartySync::class)->process($mapping, 2);
+                $processed += app(\App\Services\Catalog\DurableCatalogSync::class)->process($mapping, 2);
                 for ($i = 0, $limit = min(250, max(1, (int) $this->option('limit'))); $i < $limit; $i++) {
                     $event = $transport->claim((int) $mapping->solastock_organization_id, gethostname().':'.getmypid());
                     if (! $event) {
