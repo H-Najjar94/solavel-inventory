@@ -54,6 +54,8 @@ final class PurchasingHandoffTest extends TestCase
 {
     use TenantAware;
 
+    private ?\Tests\Support\CommittedTenantFixture $committedFixture = null;
+
     private IntegrationOrganizationMapping $mapping;
 
     private $warehouse;
@@ -68,6 +70,9 @@ final class PurchasingHandoffTest extends TestCase
     {
         parent::setUp();
         $this->useTenantA();
+        if ($this->name() === 'test_signed_document_delivery_uses_separate_endpoint_and_exact_immutable_payload') {
+            $this->committedFixture = new \Tests\Support\CommittedTenantFixture($this->tenantTestManager);
+        }
         DB::connection('tenant')->table('organizations')->insert(['id' => 14, 'central_org_id' => TenantTestManager::ORG_A, 'setup_status' => 'complete', 'finance_setup_completed_at' => now()]);
         $this->mapping = IntegrationOrganizationMapping::create(['mapping_uuid' => (string) Str::uuid(), 'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'tenant_database_identity' => DB::connection('tenant')->getDatabaseName(), 'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A, 'contract_version' => 'solastock-journal.v2', 'status' => 'verified', 'activation_state' => 'active', 'base_currency_code' => 'JOD', 'verified_at' => now()]);
         IntegrationSetting::create(['integration' => 'solabooks', 'mode' => 'active', 'solabooks_organization_id' => 14, 'meta' => ['client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'signing_key_id' => 'test-key', 'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD', 'USD'], 'currency_precisions' => ['JOD' => 2, 'USD' => 2], 'money_scale' => 2, 'rate_scale' => 8, 'inventory_valuation_basis' => FinanceBaseValuation::BASIS]]]);
@@ -82,6 +87,19 @@ final class PurchasingHandoffTest extends TestCase
             DB::connection('tenant')->table('accounts')->insert(['id' => $id, 'organization_id' => 14, 'code' => (string) $id, 'name' => $role, 'type' => $role === 'grni' ? 'liability' : 'asset', 'is_active' => true, 'is_postable' => true]);
             $a = IntegrationAccountMapping::create(['integration' => 'solabooks', 'mapping_type' => $role, 'solabooks_account_id' => $id, 'status' => 'verified']);
             $this->master('account_role', $a->id, $id);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        try {
+            $this->committedFixture?->restore();
+        } finally {
+            if ($this->committedFixture !== null) {
+                $central = DB::connection((string) config('tenancy.central_connection', 'mysql'));
+                while ($central->transactionLevel() > 0) { $central->rollBack(); }
+            }
+            parent::tearDown();
         }
     }
 
@@ -608,6 +626,29 @@ final class PurchasingHandoffTest extends TestCase
         $event = PurchasingDocumentOutbox::sole();
         $event->update(['status' => 'processing', 'lease_token' => (string) Str::uuid(), 'lease_expires_at' => now()->addMinute()]);
         Http::fake(['https://finance.example.invalid/api/v1/purchasing/receipts' => Http::response(['success' => true, 'data' => ['bill_id' => 999, 'status' => 'draft']], 200)]);
+        $central = DB::connection((string) config('tenancy.central_connection', 'mysql'));
+        \App\Tenancy\TenancySafetyGuard::assertSafeTestDatabase($central->getDatabaseName());
+        $central->beginTransaction();
+        $central->table('entitlement_state_snapshots')->updateOrInsert(
+            ['organization_id' => TenantTestManager::ORG_A],
+            ['underlying_subscription_state' => 'paid_active', 'effective_access_state' => 'paid_active',
+                'state_hash' => hash('sha256', 'committed-purchasing-test'),
+                'state_payload' => json_encode(['client_id' => 7, 'organization_id' => TenantTestManager::ORG_A,
+                    'integration_capabilities' => ['connection_activation_delivery_entitled' => true],
+                    'applications' => ['finance' => ['accessible' => true, 'commercially_entitled' => true],
+                        'inventory' => ['accessible' => true, 'commercially_entitled' => true]]], JSON_THROW_ON_ERROR)]
+        );
+        foreach (['finance', 'inventory'] as $slug) {
+            DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
+                ['client_id' => 7, 'project_slug' => $slug],
+                ['payload' => json_encode(['accessible' => true, 'commercially_entitled' => true], JSON_THROW_ON_ERROR),
+                    'version' => 'committed-purchasing-test', 'synced_at' => now('UTC')]
+            );
+        }
+        app(\App\Services\Integration\ApprovedFinanceIntegrationEntitlement::class)->assertApproved($this->mapping);
+        $this->assertSame(1, IntegrationMasterDataMapping::query()->where('entity_type', 'supplier')->count());
+        $this->committedFixture->commit();
+        $this->assertSame(0, DB::connection('tenant')->transactionLevel());
         $result = app(SolaBooksOutboxDeliveryService::class)->sendPurchasingDocument($event);
         $this->assertTrue($result['successful']);
         $this->assertSame(999, $result['data']['bill_id']);
