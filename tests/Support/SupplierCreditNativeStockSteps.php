@@ -30,6 +30,7 @@ final class SupplierCreditNativeStockSteps
    return SupplierCreditNativeStockFixture::receive($org,(int)$metadata['finance_bill_id'],(int)$stock['warehouse_id'],
     $quantity,$date,isset($arguments['unit_cost'])?(string)$arguments['unit_cost']:null);
   }
+  if($step==='receipt-documents')return ['delivered_count'=>app(\App\Services\Purchasing\ReceiptHandoffService::class)->deliverDue(1)];
   if($step==='journal'){
    $transport=app(\App\Services\Integration\DurableOutboxTransportService::class);
    $claim=$transport->claim($org,'private-supplier-credit-native-pair');
