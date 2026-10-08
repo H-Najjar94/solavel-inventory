@@ -50,6 +50,15 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $this->mock(\App\Services\Tenancy\TenantManager::class)->shouldReceive('resolveDatabaseName')->with(7)->andReturn($database)->getMock()->shouldReceive('useTenant')->with($org,$database)->andReturn($database);
         $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class)->shouldReceive('assertComplete')->andReturnNull();
         $this->mock(\App\Services\Integration\FinanceInventoryCapability::class)->shouldReceive('allows')->with(7,$org)->andReturnTrue();
+        // Explicit private Central commercial projection; the native subscription decision stays real.
+        $commercial = ['accessible'=>true, 'commercially_entitled'=>true, 'subscription_status'=>'active',
+            'access_until'=>now()->addMonth()->toIso8601String()];
+        $this->mock(\App\Services\Entitlements\EntitlementsCache::class)
+            ->shouldReceive('getProjectSnapshot')->with(7, 'finance')->andReturn($commercial)
+            ->getMock()->shouldReceive('getProjectSnapshot')->with(7, 'inventory')->andReturn($commercial);
+        $decision = app(\App\Services\Entitlements\EntitlementAccessDecision::class);
+        $this->assertSame(\App\Services\Entitlements\EntitlementAccessDecision::DENY_NOT_IN_PLAN, $decision->decide($commercial, '')['reason']);
+        $this->assertSame(\App\Services\Entitlements\EntitlementAccessDecision::DENY_NO_ENTITLEMENT, $decision->decide(null, '')['reason']);
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturnUsing(fn($actor,$organization,$slug)=>['allowed'=>$slug==='finance','owner'=>false,'roles'=>[]]);
         return ['client_id'=>7,'organization_id'=>$org,'finance_organization_id'=>14,'actor_id'=>335,'action'=>'financial-origin.capabilities','data'=>['source_document_type'=>'expense']];
     }
