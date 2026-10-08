@@ -1,16 +1,16 @@
 import React, {useState} from 'react';
-import {Link} from 'react-router-dom';
+import {Link,useSearchParams} from 'react-router-dom';
 import {api} from '../services/api';
 import {useApiQuery} from '../hooks/useApiQuery';
 import {useTenant} from '../stores/tenant';
 import {useI18n} from '../i18n/context';
 
 export default function CashFulfillmentRequestsPage() {
- const tenant=useTenant();const {locale}=useI18n();const ar=locale==='ar';const [filter,setFilter]=useState('active');const [selected,setSelected]=useState(null);
- const query=useApiQuery(['cash-fulfillment',tenant.organization_id,filter],()=>api.cashFulfillmentRequests(filter),{fallback:[]});
+ const tenant=useTenant();const {locale}=useI18n();const ar=locale==='ar';const [params,setParams]=useSearchParams();const deepId=/^\d+$/.test(params.get('request')||'')?Number(params.get('request')):null;const [filter,setFilter]=useState('active');const [selected,setSelected]=useState(null);
+ const query=useApiQuery(['cash-fulfillment',tenant.organization_id,filter,deepId],()=>api.cashFulfillmentRequests(filter,deepId),{fallback:[]});
  const states={pending:ar?'بانتظار التسليم':'Awaiting dispatch',partial:ar?'تسليم جزئي':'Partially dispatched',complete:ar?'مكتمل':'Completed',cancelled:ar?'ملغى':'Cancelled'};
  return <section className="page"><header className="page-head"><h1>{ar?'تسليم المبيعات النقدية':'Cash sale dispatch'}</h1></header><p>{ar?'تم تسجيل البيع والدفع في SolaCount. أكّد التسليم الفعلي هنا فقط عند خروج البضاعة.':'The sale and payment are recorded in SolaCount. Confirm actual dispatch only when the goods leave the warehouse.'}</p>
- <nav aria-label={ar?'حالة التسليم':'Dispatch status'} style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{['active','history','cancelled'].map(v=><button className={filter===v?'btn btn--primary':'btn'} key={v} aria-pressed={filter===v} onClick={()=>{setFilter(v);setSelected(null);}}>{({active:ar?'النشطة':'Active',history:ar?'السجل':'History',cancelled:ar?'الملغاة':'Cancelled'})[v]}</button>)}</nav>
+ <nav aria-label={ar?'حالة التسليم':'Dispatch status'} style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{['active','history','cancelled'].map(v=><button className={filter===v?'btn btn--primary':'btn'} key={v} aria-pressed={filter===v} onClick={()=>{setFilter(v);setSelected(null);setParams({status:v});}}>{({active:ar?'النشطة':'Active',history:ar?'السجل':'History',cancelled:ar?'الملغاة':'Cancelled'})[v]}</button>)}</nav>
  {query.isError?<div role="alert" className="banner banner--warn">{ar?'تعذر تحميل الطلبات.':'Requests could not be loaded.'}<button className="btn" onClick={()=>query.refetch()}>{ar?'إعادة المحاولة':'Retry'}</button></div>:query.isLoading?<p>{ar?'جار التحميل…':'Loading…'}</p>:!query.data?.length?<div className="empty-state">{ar?'لا توجد طلبات بيع نقدي في هذه القائمة.':'No cash sale requests in this list.'}</div>:query.data.map(r=><article className="panel" key={r.request_uuid} style={{marginBottom:16,overflowWrap:'anywhere'}}><h2>{r.source_document_number}</h2><p>{states[r.status]??(ar?'قيد المراجعة':'Needs review')}</p><div style={{overflowX:'auto'}}><table className="data-table"><thead><tr><th>{ar?'الصنف':'Item'}</th><th>{ar?'المطلوب':'Expected'}</th><th>{ar?'تم تسليمه':'Dispatched'}</th><th>{ar?'الملغى':'Cancelled'}</th></tr></thead><tbody>{r.lines.map(l=><tr key={l.id}><td>{l.item_name??l.item_id}</td><td>{l.requested_quantity}</td><td>{l.fulfilled_quantity}</td><td>{l.cancelled_quantity??'0.0000'}</td></tr>)}</tbody></table></div>{r.physical_documents?.map(d=><p key={d.id}><Link to={`/shipments/${d.id}`}>{d.number}</Link></p>)}{['pending','partial'].includes(r.status)&&<button className="btn btn--primary" onClick={()=>setSelected(selected===r.id?null:r.id)}>{ar?'مراجعة التسليم':'Review dispatch'}</button>}{selected===r.id&&<CashDispatchForm key={`${tenant.organization_id}:${r.id}`} id={r.id} org={tenant.organization_id} ar={ar} onDone={()=>query.refetch()}/>}</article>)}
  </section>;
 }

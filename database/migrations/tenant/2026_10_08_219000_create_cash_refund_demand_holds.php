@@ -16,7 +16,10 @@ return new class extends Migration {
    $t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('operation_uuid');$t->unsignedBigInteger('actor_id');$t->unsignedBigInteger('request_id');$t->unsignedBigInteger('shipment_id');$t->unsignedBigInteger('sales_return_id');$t->char('payload_hash',64);$t->json('payload');$t->string('state',32);$t->timestamps();
    $t->unique(['organization_id','operation_uuid'],'scpr_operation_unique');$t->unique(['organization_id','sales_return_id'],'scpr_return_unique');
   });
-
+  if(!$s->hasTable('cash_notification_outbox'))$s->create('cash_notification_outbox',function(Blueprint $t){
+   $t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('request_id');$t->char('transition_fingerprint',64);$t->string('state',20);$t->unsignedInteger('attempts')->default(0);$t->timestamp('retry_at')->nullable();$t->uuid('lease_token')->nullable();$t->timestamp('lease_until')->nullable();$t->uuid('notification_thread_id')->nullable();$t->string('last_error',80)->nullable();$t->timestamp('delivered_at')->nullable();$t->timestamps();
+   $t->unique(['organization_id','request_id','transition_fingerprint'],'cash_notification_transition_unique');$t->index(['organization_id','state','retry_at'],'cash_notification_due');
+  });
  }
  public function down():void { /* Preserve native hold and refund audit on rollback. */ }
 };

@@ -20,7 +20,7 @@ final class PurchasingNotificationController
         $salesApprover=$dispatch&&$permissions->can($user,'inventory.manage_sales_orders');
         $warehouses=app(\App\Services\Access\WarehouseAccessService::class)->allowedIds((int)$user->id);
         $data=$this->call($request,$context,'GET','/api/app-notifications');
-        $items=(array)($data['data']??[]);$references=[];$purchaseIds=[];$salesIds=[];
+        $items=(array)($data['data']??[]);$references=[];$purchaseIds=[];$salesIds=[];$cashIds=[];
         foreach($items as$item){
             $url=parse_url((string)($item['action_url']??''));
             $path=(string)($url['path']??'');parse_str($url['query']??'',$query);
@@ -28,6 +28,8 @@ final class PurchasingNotificationController
             if($id<=0)continue;
             if($receive&&str_ends_with($path,'/receiving-requests')){
                 $references[(string)($item['id']??'')]=['purchase',$id];$purchaseIds[]=$id;
+            }elseif($dispatch&&str_ends_with($path,'/cash-fulfillment-requests')){
+                $references[(string)($item['id']??'')]=['cash',$id];$cashIds[]=$id;
             }elseif($dispatch&&str_ends_with($path,'/fulfillment-requests')){
                 $references[(string)($item['id']??'')]=['sales',$id];$salesIds[]=$id;
             }
@@ -38,10 +40,11 @@ final class PurchasingNotificationController
         if($salesIds&&$db->getSchemaBuilder()->hasTable('sales_fulfillment_requests')){
             $sales=$db->table('sales_fulfillment_requests')->where('organization_id',$org)->whereIn('id',$salesIds)->get()->keyBy('id');
         }
+        $cash=collect();if($cashIds&&$db->getSchemaBuilder()->hasTable('stock_financial_origin_requests'))$cash=$db->table('stock_financial_origin_requests')->where('organization_id',$org)->where('source_document_type','sales_receipt')->whereIn('id',$cashIds)->get()->keyBy('id');
         $active=$db->table('warehouses')->where('organization_id',$org)->where('is_active',true)->pluck('id')->map(fn($id)=>(int)$id)->all();
-        return array_values(array_filter($items,function($item)use($references,$purchases,$sales,$purchaseApprover,$salesApprover,$warehouses,$active){
+        return array_values(array_filter($items,function($item)use($references,$purchases,$sales,$cash,$purchaseApprover,$salesApprover,$warehouses,$active){
             $reference=$references[(string)($item['id']??'')]??null;if(!$reference)return false;
-            [$kind,$id]=$reference;$document=($kind==='purchase'?$purchases:$sales)->get($id);if(!$document)return false;
+            [$kind,$id]=$reference;$document=($kind==='purchase'?$purchases:($kind==='cash'?$cash:$sales))->get($id);if(!$document)return false;
             $approver=$kind==='purchase'?$purchaseApprover:$salesApprover;
             $warehouse=(int)$document->warehouse_id;
             $approved=(bool)$document->approved_at&&hash_equals((string)$document->source_revision,(string)$document->approved_revision);

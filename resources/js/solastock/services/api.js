@@ -206,7 +206,7 @@ export const api = {
     postCount: (id) => request(`/counts/${id}/post`, { method: 'POST' }),
     countPrefill: (warehouseId, binId) => request('/counts-prefill', { params: { warehouse_id: warehouseId, bin_id: binId } }),
 
-    cashFulfillmentRequests: (status='active') => request('/cash-sales/requests',{params:{status}}),
+    cashFulfillmentRequests: (status='active',id=null) => request('/cash-sales/requests',{params:{status,request:id}}),
     cashFulfillmentOptions: id => request(`/cash-sales/requests/${id}`),
     approveCashFulfillment: (id,body) => request(`/cash-sales/requests/${id}/approve`,{method:'POST',body}),
     dispatchCashFulfillment: (id,body) => request(`/cash-sales/requests/${id}/dispatch`,{method:'POST',body}),

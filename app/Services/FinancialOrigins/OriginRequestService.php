@@ -43,6 +43,7 @@ final class OriginRequestService
                 'source_document_number'=>$dto->origin->number,'source_journal_id'=>$dto->origin->journalId,'source_revision'=>$p['source_revision'],
                 'side'=>$dto->origin->domain()==='sales'?'sales':'purchase','status'=>'pending','party_id'=>$partyId,'source_payload'=>$p]);
             foreach($lines as $line)$r->lines()->create($line+['organization_id'=>$r->organization_id]);
+            if($r->source_document_type==='sales_receipt')app(CashNotificationPublisher::class)->changed($r);
             return $this->summary($r);
         },3);
     }
@@ -94,6 +95,7 @@ final class OriginRequestService
                 $r->sales_order_id=$order->id;
             }
             $r->fill(['warehouse_id'=>$warehouse,'approved_at'=>now(),'approved_by'=>$actor,'approved_revision'=>$r->source_revision])->save();
+            if($r->source_document_type==='sales_receipt')app(CashNotificationPublisher::class)->changed($r);
             return $this->summary($r);
         },3);
     }
@@ -129,6 +131,7 @@ final class OriginRequestService
                     if(!in_array($so->status,['shipped','cancelled'],true))app(SalesOrderService::class)->cancel($so);}
                 $r->update(['status'=>'cancelled']);
             }
+            if($r->source_document_type==='sales_receipt')app(CashNotificationPublisher::class)->changed($r);
             return $this->summary($r);
         },3);
     }

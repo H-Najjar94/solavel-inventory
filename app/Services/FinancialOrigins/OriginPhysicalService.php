@@ -154,6 +154,7 @@ final class OriginPhysicalService
         $response=app(OriginRequestService::class)->summary($r->fresh('lines'));
         $command->update(['status'=>'completed','response'=>$response]);
         app(OriginDocumentBuilder::class)->record($r,$command,$document);
+        if($r->source_document_type==='sales_receipt')app(CashNotificationPublisher::class)->changed($r);
         return $response;
     }
 }

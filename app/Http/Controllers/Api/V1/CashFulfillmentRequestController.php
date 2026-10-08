@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Schema;
 final class CashFulfillmentRequestController extends ApiController {
  public function index(Request $http){
   if(!Schema::connection('tenant')->hasTable('stock_financial_origin_requests'))return$this->success([]);
-  $status=$http->validate(['status'=>'sometimes|in:active,history,cancelled'])['status']??'active';
+  $input=$http->validate(['status'=>'sometimes|in:active,history,cancelled','request'=>'sometimes|integer|min:1']);$status=$input['status']??'active';
   $query=FinancialOriginRequest::query()->where('organization_id',app(\App\Tenancy\OrganizationContext::class)->idOrFail())->where('source_document_type','sales_receipt');
-  $query->whereIn('status',match($status){'history'=>['complete','cancelled'],'cancelled'=>['cancelled'],default=>['pending','partial']});
+  if(isset($input['request']))$query->whereKey((int)$input['request']);else $query->whereIn('status',match($status){'history'=>['complete','cancelled'],'cancelled'=>['cancelled'],default=>['pending','partial']});
   if(($allowed=app(WarehouseAccessService::class)->allowedIds())!==null){$approve=app(InventoryPermissionService::class)->can($http->user(),'inventory.manage_sales_orders');$query->where(function($q)use($allowed,$approve){$q->whereIn('warehouse_id',$allowed);if($approve)$q->orWhereNull('warehouse_id');});}
   return$this->success($query->with('lines')->orderByDesc('id')->limit(100)->get()->map(fn($r)=>$this->display($r))->values());
  }
