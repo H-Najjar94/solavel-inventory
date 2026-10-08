@@ -142,7 +142,7 @@ final class PurchaseCostAdjustmentPlanner
             if(Decimal::isZero($difference,8))continue;
             $components=$components->concat($this->allocationComponents(SupplierCreditCostProvenance::fromAuthority($authority,$source),$difference)->map(function(array $component)use($authority,$source):array{
                 $component['receipt_line_id']=(int)$source['receipt_line_id'];
-                $component['provenance']['supplier_credit_source']=['receipt_id'=>(int)$source['receipt_id'],'receipt_line_id'=>(int)$source['receipt_line_id'],'source_stock_ledger_id'=>(int)$source['stock_ledger_id'],'position_uuid'=>$source['position_uuid'],'operation_uuid'=>$authority->operationUuid(),'allocation_uuid'=>$authority->allocationUuid()];
+                $component['provenance']['supplier_credit_source']=['settlement_uuid'=>$source['settlement_uuid'],'receipt_id'=>(int)$source['receipt_id'],'receipt_line_id'=>(int)$source['receipt_line_id'],'source_stock_ledger_id'=>(int)$source['stock_ledger_id'],'position_uuid'=>$source['position_uuid'],'operation_uuid'=>$authority->operationUuid(),'allocation_uuid'=>$authority->allocationUuid()];
                 return $component;
             }));
         }
