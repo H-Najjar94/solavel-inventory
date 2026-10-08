@@ -18,20 +18,25 @@ final class HeldSupplierCreditValueService
         $holds=app(PurchaseValuationHoldService::class);$holds->lockItems(array_column($authority->sourceAllocations(),'item_id'));
         $service=app(PurchaseCostAdjustmentService::class);
         $row=IntegrationPurchaseCostAdjustment::query()->where('organization_id',$authority->organizationId())
-            ->where('organization_mapping_uuid',$authority->mappingUuid())->where('destination_document_type','supplier_credit')
-            ->where('destination_document_id',$authority->noteId())->where('destination_fingerprint',$authority->fingerprint())->lockForUpdate()->first();
+            ->where('organization_mapping_uuid',$authority->mappingUuid())->where('destination_document_type',$reverse?'supplier_credit_inverse':'supplier_credit')
+            ->where('destination_document_id',$authority->noteId())->where('destination_fingerprint',$authority->fingerprint())->where('safe_metadata->supplier_credit->plan_revision',$authority->planRevision())->lockForUpdate()->first();
         $quote=$authority->storedQuote();
         if($action==='prepare' && !$quote){
             $plan=app(PurchaseCostAdjustmentPlanner::class)->planSupplierCredit($authority);
             if($reverse){
-                abort_unless($row && $row->state==='applied',409);
                 $original=$authority->forwardQuote();
-                // Later consumption changes expense/inventory classification: require review rather than changing the original credit's posting.
-                abort_unless(is_array($original) && $this->economicComponents($plan['components'])===$this->economicComponents($original['native_plan']['components']),409);
+                abort_unless(is_array($original),409);
+                $forwardRow=IntegrationPurchaseCostAdjustment::query()->where('organization_id',$authority->organizationId())
+                    ->where('organization_mapping_uuid',$authority->mappingUuid())->where('adjustment_uuid',$original['adjustment_uuid'])
+                    ->where('destination_document_type','supplier_credit')->where('state','applied')->lockForUpdate()->firstOrFail();
                 foreach(['exact_base_difference','allocated_base_difference','rounding_residual']as$key)$plan[$key]=Decimal::sub('0',$plan[$key],8);
                 foreach($plan['components']as&$component)foreach(['exact_base_amount','posted_base_amount']as$key)$component[$key]=Decimal::sub('0',$component[$key],8);
                 unset($component);
-                app(SupplierCreditCostFloorGuard::class)->assertPlan($authority,$original['native_plan'],true);
+                $plan['original_adjustment_uuid']=$forwardRow->adjustment_uuid;
+                $plan['original_plan_fingerprint']=$original['plan_fingerprint'];
+                $plan['classification_difference']=$this->classificationDifference($original['native_plan']['components'],$plan['components']);
+                $prepared=$service->prepareSupplierCreditInverse($authority,$plan);
+                $row=IntegrationPurchaseCostAdjustment::query()->where('adjustment_uuid',$prepared['adjustment_uuid'])->lockForUpdate()->firstOrFail();
             }else{
                 $prepared=$service->prepareSupplierCredit($authority,$plan);
                 $row=IntegrationPurchaseCostAdjustment::query()->where('adjustment_uuid',$prepared['adjustment_uuid'])->lockForUpdate()->firstOrFail();
@@ -66,7 +71,7 @@ final class HeldSupplierCreditValueService
         }
         if(in_array($action,['apply','reverse','release'],true))abort_unless(hash_equals((string)$authority->planFingerprint(),$quote['plan_fingerprint']),403);
         // A release may abandon a prepared step, never undo a successfully applied financial/value operation.
-        if($action==='release')abort_unless(!$complete && ($reverse?$row->state==='applied':$row->state==='prepared'),409);
+        if($action==='release')abort_unless(!$complete && $row->state==='prepared',409);
         $before=$this->valuationSnapshot($authority,$quote['native_plan']);
         $native=match($action){'apply'=>$service->applySupplierCredit($authority),'reverse'=>$service->reverseSupplierCredit($authority),default=>$service->statusSupplierCredit($authority)};
         if(in_array($action,['apply','reverse','release'],true))foreach($owned as$hold)if($hold->state==='active')$hold->update(['state'=>'released']);
@@ -87,7 +92,7 @@ final class HeldSupplierCreditValueService
         $components=IntegrationPurchaseCostAdjustmentComponent::query()->where('organization_id',$authority->organizationId())
             ->where('adjustment_uuid',$row->adjustment_uuid)->orderBy('id')->get()->map(fn($part)=>['component_id'=>(int)$part->id,
                 'stock_ledger_id'=>(int)$part->stock_ledger_id,'destination_role'=>$part->destination_role,'destination_source_type'=>$part->destination_source_type,
-                'destination_source_id'=>(int)$part->destination_source_id,'posted_base_amount'=>Decimal::mul((string)$part->posted_base_amount,$reverse?'-1':'1',8)])->all();
+                'destination_source_id'=>(int)$part->destination_source_id,'posted_base_amount'=>Decimal::mul((string)$part->posted_base_amount,'1',8)])->all();
         return array_replace($quote,['state'=>$state,'holds'=>array_map(fn($hold)=>['hold_id'=>(int)$hold->id,'settlement_uuid'=>$hold->settlement_uuid,
             'purpose'=>$hold->purpose,'plan_revision'=>(int)$hold->plan_revision,'plan_fingerprint'=>$hold->plan_fingerprint,
             'state'=>$hold->state,'updated_at'=>$hold->getRawOriginal('updated_at')],$owned),
@@ -101,10 +106,22 @@ final class HeldSupplierCreditValueService
     {
         return SolaStockJournalContract::payloadHash(['identity'=>$authority->identity(),'purpose'=>$purpose,'native_plan'=>$plan,'valuation_revision'=>$revision]);
     }
-    private function economicComponents(array $parts):array
+    /** Zero-sum native destination difference; Finance posts this separately from the original NOTE void. */
+    private function classificationDifference(array $forward,array $inverse):array
     {
-        $parts=array_map(fn($part)=>[$part['stock_ledger_id'],$part['destination_role'],$part['destination_source_type'],$part['destination_source_id'],
-            $part['base_quantity'],$part['posted_base_amount']],$parts);sort($parts);return $parts;
+        $rows=[];
+        foreach([[$forward,'1'],[$inverse,'1']]as[$parts,$sign])foreach($parts as$part){
+            // Forward credit components are negative; current inverse components positive.
+            $key=$part['destination_role'].'|'.$part['destination_source_type'].'|'.$part['destination_source_id'];
+            $rows[$key]??=['destination_role'=>$part['destination_role'],'destination_source_type'=>$part['destination_source_type'],
+                'destination_source_id'=>(int)$part['destination_source_id'],'base_amount'=>'0'];
+            $rows[$key]['base_amount']=Decimal::add($rows[$key]['base_amount'],Decimal::mul($part['posted_base_amount'],$sign,8),8);
+        }
+
+        $sum='0';foreach($rows as$row)$sum=Decimal::add($sum,$row['base_amount'],8);
+        if(!Decimal::isZero($sum,8))$rows['rounding|native|0']=['destination_role'=>'rounding','destination_source_type'=>'native_rounding',
+            'destination_source_id'=>0,'base_amount'=>Decimal::sub('0',$sum,8)];
+        ksort($rows);return array_values(array_filter($rows,fn($row)=>!Decimal::isZero($row['base_amount'],8)));
     }
     private function valuationSnapshot(SupplierCreditCostAuthority $authority,array $plan):array
     {

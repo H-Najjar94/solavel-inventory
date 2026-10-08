@@ -166,7 +166,7 @@ final readonly class SupplierCreditCostAuthority
         // the shared native ledger explains the whole cohort. Reject cumulative claims beyond the physical cohort.
         $claims=$db->table('finance_purchase_settlements')->where('organization_id',$map->finance_organization_id)
             ->where('organization_mapping_uuid',$map->mapping_uuid)->where('receipt_mapping_uuid',$source['receipt_mapping_uuid'])
-            ->where('receipt_id',$grn->id)->where('receipt_line_id',$line->id)->where('state','settled')->lockForUpdate()->get();
+            ->where('receipt_id',$grn->id)->where('receipt_line_id',$line->id)->where('state','settled')->orderBy('id')->lockForUpdate()->get();
         $claimed='0';foreach($claims as$claim){
             abort_unless(Decimal::gt((string)$claim->quantity,'0'),409);
             $claimed=Decimal::add($claimed,Decimal::mul((string)$claim->quantity,$factor,8),8);
@@ -208,6 +208,23 @@ final readonly class SupplierCreditCostAuthority
             && (int)($proof['native_voided_journal_id']??0)===(int)$journal->id
             && empty($proof['finance_reversal_journal_id']) && empty($row->reversal_journal_id),409);
         else abort_unless($voided || ($journal->status==='posted' && empty($journal->voided_at)),409);
+        if($action==='reverse'){
+            $quote=json_decode($row->reverse_quote??'null',true,512,JSON_THROW_ON_ERROR);
+            $difference=$quote['native_plan']['classification_difference']??null;
+            abort_unless(is_array($difference),409);
+            if($difference){
+                $classification=$db->table('journal_entries')->where('organization_id',$finance)
+                    ->where('id',(int)($proof['inverse_classification_journal_id']??0))->where('source_type','App\\Models\\DebitNote')
+                    ->where('source_id',$note->id)->where('source_key','credit-inverse-classification:'.$row->allocation_uuid.':'.$row->reverse_plan_revision)
+                    ->lockForUpdate()->first();self::activeJournal($classification);
+                $lines=$db->table('journal_entry_lines')->where('organization_id',$finance)->where('journal_entry_id',$classification->id)
+                    ->orderBy('line_no')->lockForUpdate()->get()->map(fn($line)=>(array)$line)->all();
+                abort_unless($lines===($proof['inverse_classification_journal_lines']??null)
+                    && ($proof['inverse_classification_plan_fingerprint']??null)===$row->reverse_plan_fingerprint
+                    && hash_equals(hash('sha256',json_encode([(array)$classification,$lines],JSON_THROW_ON_ERROR)),
+                        (string)($proof['inverse_classification_journal_fingerprint']??'')),409);
+            }else abort_unless(empty($proof['inverse_classification_journal_id']),409);
+        }
     }
 
     private static function activeJournal(?object $row):void {abort_unless($row && $row->status==='posted' && !empty($row->posted_at) && empty($row->voided_at) && empty($row->deleted_at),409);}
