@@ -11,10 +11,16 @@ if [[ "${1:-}" != --private-lifecycle ]]; then
       echo 'REFUSING: lifecycle group selection belongs to the contained launcher.' >&2; exit 2;
     }
   done
+  set +e
   bash "$0" --private-lifecycle rollback "$@" --exclude-group committed-native-transport
+  TASK_ROLLBACK_STATUS=$?
   bash "$0" --private-lifecycle committed "$@" --group committed-native-transport
-  echo STOCK_PRIVATE_COHORTS=PASS
-  exit 0
+  TASK_COMMITTED_STATUS=$?
+  set -e
+  printf 'STOCK_PRIVATE_COHORT_EXITS rollback=%s committed=%s\n' "$TASK_ROLLBACK_STATUS" "$TASK_COMMITTED_STATUS"
+  TASK_STATUS=$TASK_ROLLBACK_STATUS
+  if (( TASK_COMMITTED_STATUS > TASK_STATUS )); then TASK_STATUS=$TASK_COMMITTED_STATUS; fi
+  exit "$TASK_STATUS"
 fi
 shift
 TASK_COHORT=${1:?private lifecycle cohort required}; shift
@@ -66,11 +72,25 @@ PRIVATE_MANIFEST
 fi
 COHORT_JUNIT="/evidence/cohort-$TASK_COHORT.xml"
 [[ ! -e "$COHORT_JUNIT" ]] || { echo 'REFUSING: existing cohort evidence would be overwritten.' >&2; exit 2; }
+set +e
 bash scripts/run-tests.sh "$@" --log-junit "$COHORT_JUNIT"
-python3 - "$COHORT_JUNIT" "$TASK_COHORT" <<'COHORT_COUNTS'
-import json,sys,xml.etree.ElementTree as ET
+TASK_TEST_STATUS=$?
+set -e
+if [[ ! -f "$COHORT_JUNIT" ]]; then
+  printf 'STOCK_PRIVATE_COHORT=%s LAUNCHER_FAILURE missing_junit test_exit=%s\n' "$TASK_COHORT" "$TASK_TEST_STATUS" >&2
+  exit 2
+fi
+python3 - "$COHORT_JUNIT" "$TASK_COHORT" "$RUN/executed-cases" <<'COHORT_COUNTS'
+import json,sys,pathlib,xml.etree.ElementTree as ET
 root=ET.parse(sys.argv[1]).getroot(); cases=root.findall('.//testcase')
+pathlib.Path(sys.argv[3]).write_text(str(len(cases)))
 print(json.dumps({'cohort':sys.argv[2],'executed_cases':len(cases),'failures':len(root.findall('.//failure')),'errors':len(root.findall('.//error')),'skipped':len(root.findall('.//skipped')),'junit_evidence':sys.argv[1],'empty_selection_is_not_product_pass':True}))
 COHORT_COUNTS
-printf 'STOCK_PRIVATE_COHORT=%s PASS\n' "$TASK_COHORT"
-echo STOCK_PRIVATE_TESTS=PASS
+if (( TASK_TEST_STATUS != 0 )); then
+  printf 'STOCK_PRIVATE_COHORT=%s FAILED exit=%s\n' "$TASK_COHORT" "$TASK_TEST_STATUS"
+elif [[ $(cat "$RUN/executed-cases") == 0 ]]; then
+  printf 'STOCK_PRIVATE_COHORT=%s NOT_SELECTED\n' "$TASK_COHORT"
+else
+  printf 'STOCK_PRIVATE_COHORT=%s PASS\n' "$TASK_COHORT"
+fi
+exit "$TASK_TEST_STATUS"
