@@ -24,7 +24,8 @@ class AccountingJournalBuilder
             'stock.historical_fifo_cost_corrected.v1' => $this->historicalFifo($event, $orgId),
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'supplier_return.posted' => $this->supplierReturn($event, $orgId),
-            'grn.reversed', 'adjustment.reversed', 'supplier_return.reversed', 'opening_stock.reversed' => $this->inventoryReversal($event, $orgId),
+            'grn.reversed', 'adjustment.reversed', 'supplier_return.reversed', 'opening_stock.reversed', 'landed_cost.reversed' => $this->inventoryReversal($event, $orgId),
+            'landed_cost.posted' => $this->landedCost($event, $orgId),
             'shipment.posted' => $this->shipment($event, $orgId),
             'sales_return.posted' => $this->salesReturn($event, $orgId),
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
@@ -57,6 +58,7 @@ class AccountingJournalBuilder
             'stock_adjustment' => 'adjustment.posted',
             'supplier_return' => 'supplier_return.posted',
             'opening_stock' => 'opening_stock.posted',
+            'landed_cost' => 'landed_cost.posted',
             default => throw new RuntimeException("Unsupported reversal source '{$reversal->source_type}'."),
         };
         $original = $this->originalEvent($originalType, (int) $reversal->source_id);
@@ -66,10 +68,47 @@ class AccountingJournalBuilder
             // The original opening journal is Dr inventory / Cr opening offset;
             // inverting it once below gives the exact reversal.
             'opening_stock.posted' => $this->twoLine($original, $orgId),
+            'landed_cost.posted' => $this->landedCost($original, $orgId),
             default => $this->adjustment($original, $orgId),
         };
 
         return $this->invert($lines, $event);
+    }
+
+    /**
+     * Dr inventory_asset (on-hand share) + Dr cogs / adjustment_loss (consumed
+     * share) / Cr landed_cost_clearing (whole landed cost). Amounts are the
+     * immutable per-role totals frozen in the event payload when it was posted.
+     */
+    private function landedCost(IntegrationOutboxEvent $event, int $orgId): array
+    {
+        $journal = (array) data_get($event->payload, 'landed_cost.journal', []);
+        $lines = [];
+        $total = '0';
+        foreach (['inventory_asset', 'cogs', 'adjustment_loss'] as $role) {
+            $amount = Decimal::money((string) ($journal[$role] ?? '0'));
+            if (Decimal::lt($amount, '0')) {
+                throw new RuntimeException(__('inventory.integration.event_no_value'));
+            }
+            if (Decimal::gt($amount, '0')) {
+                $lines[] = $this->roleLine($this->account($orgId, $role), $role, $amount, '0', $event);
+                $total = Decimal::add($total, $amount, 2);
+            }
+        }
+        $clearing = Decimal::money((string) ($journal['landed_cost_clearing'] ?? '0'));
+        if (! Decimal::gt($total, '0') || Decimal::cmp($total, $clearing, 2) !== 0) {
+            throw new RuntimeException(__('inventory.integration.event_no_value'));
+        }
+        $lines[] = $this->roleLine($this->account($orgId, 'landed_cost_clearing'), 'landed_cost_clearing', '0', $clearing, $event);
+
+        return $lines;
+    }
+
+    /** A line whose accounting role is the one it was planned for, not inferred from the account. */
+    private function roleLine(int $accountId, string $role, string $debit, string $credit, IntegrationOutboxEvent $event): array
+    {
+        return ['account_id' => $accountId, 'account_role' => $role, 'debit' => Decimal::money($debit), 'credit' => Decimal::money($credit),
+            'description' => $event->aggregate_number, 'tax_rate_id' => null, 'tax_rate_code' => null, 'is_tax_line' => false, 'taxable_base_amount' => null];
     }
 
     private function salesReturn(IntegrationOutboxEvent $event, int $orgId): array

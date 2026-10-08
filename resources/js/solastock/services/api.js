@@ -198,6 +198,17 @@ export const api = {
     receiveTransfer: (id) => request(`/transfers/${id}/receive`, { method: 'POST' }),
     transferAvailable: (itemId, warehouseId) => request('/transfers-available', { params: { item_id: itemId, warehouse_id: warehouseId } }),
 
+    // Landed costs
+    landedCosts: (params) => request('/landed-costs', { params }),
+    landedCost: (id) => request(`/landed-costs/${id}`),
+    landedCostReceiptLines: (params) => request('/landed-costs/receipt-lines', { params }),
+    landedCostConnection: () => request('/landed-costs/connection'),
+    enableLandedCostConnection: (financeAccountId) => request('/landed-costs/connection/enable', { method: 'POST', body: { finance_account_id: financeAccountId } }),
+    createLandedCost: (body) => request('/landed-costs', { method: 'POST', body }),
+    updateLandedCost: (id, body) => request(`/landed-costs/${id}`, { method: 'PUT', body }),
+    postLandedCost: (id) => request(`/landed-costs/${id}/post`, { method: 'POST' }),
+    reverseLandedCost: (id, reason) => request(`/landed-costs/${id}/reverse`, { method: 'POST', body: { reason } }),
+
     // Counts
     counts: (params) => request('/counts', { params }),
     count: (id) => request(`/counts/${id}`),

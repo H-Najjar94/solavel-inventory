@@ -17,6 +17,7 @@ export const NAV = [
     { key: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: 'fa-solid fa-file-invoice', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'receiving-requests', label: 'Receiving Requests', path: '/receiving-requests', icon: 'fa-solid fa-dolly', perm: 'inventory.receive_goods', group: 'Purchasing' },
     { key: 'goods-receipts', label: 'Goods Receipts', path: '/goods-receipts', icon: 'fa-solid fa-dolly', perm: 'inventory.view_stock', group: 'Purchasing' },
+    { key: 'landed-costs', label: 'Landed Costs', path: '/landed-costs', icon: 'fa-solid fa-ship', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'customers', label: 'Customers', path: '/customers', icon: 'fa-solid fa-address-book', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'cash-fulfillment-requests', label: 'Cash sale dispatch', path: '/cash-fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment', feature: 'cashHandoff' },
     { key: 'fulfillment-requests', label: 'Fulfillment Requests', path: '/fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },

@@ -164,47 +164,60 @@ final class PurchaseCostAdjustmentService
                 $holdService->assertMovable((int) $component->item_id, (int) $component->warehouse_id,
                     is_array($allowedHold) ? $allowedHold : null);
             }
-            foreach ($components->where('destination_role', 'inventory_asset') as $component) {
-                $amount = Decimal::money(Decimal::mul((string) $component->posted_base_amount, $sign));
-                // The reviewed plan fixes these rows; applying it is not a warehouse selection by the actor,
-                // who may be a SolaCount-only member completing the bill. Organization scope still binds them.
-                $ledger = StockLedger::query()->withoutGlobalScope('warehouse_access')->where('organization_id', $row->organization_id)->findOrFail($component->stock_ledger_id);
-                $balance = StockBalance::query()->withoutGlobalScope('warehouse_access')->where('organization_id', $row->organization_id)->where('item_id', $component->item_id)
-                    ->where('warehouse_id', $component->warehouse_id)->whereRaw('COALESCE(variant_id,0)=?', [(int) ($ledger->variant_id ?? 0)])
-                    ->whereRaw('COALESCE(lot_id,0)=?', [(int) ($ledger->lot_id ?? 0)])->whereRaw('COALESCE(bin_id,0)=?', [(int) ($ledger->bin_id ?? 0)])
-                    ->lockForUpdate()->firstOrFail();
-                $balance->total_value = Decimal::money(Decimal::add((string) $balance->total_value, $amount));
-                $balance->average_cost = Decimal::isZero((string) $balance->on_hand_qty) ? '0' : Decimal::cost(Decimal::div((string) $balance->total_value, (string) $balance->on_hand_qty));
-                $balance->save();
-                $slices=data_get($component->provenance,'restored_fifo_layer_slices');
-                if(is_array($slices)){
-                    $sum='0';$seen=[];
-                    foreach($slices as$slice){
-                        $id=(int)($slice['cost_layer_id']??0);if($id<1||isset($seen[$id]))$this->fail('Distinct restored FIFO layer proof required.');$seen[$id]=true;
-                        $sliceAmount=Decimal::money(Decimal::mul((string)$slice['posted_base_amount'],$sign));$sum=Decimal::add($sum,$sliceAmount,8);
-                        $layer=CostLayer::query()->where('organization_id',$row->organization_id)->where('item_id',$component->item_id)->where('warehouse_id',$component->warehouse_id)->lockForUpdate()->findOrFail($id);
-                        if(Decimal::isZero((string)$layer->remaining_qty)||Decimal::cmp((string)$layer->remaining_qty,(string)$slice['remaining_quantity'],8)!==0)$this->fail('A restored FIFO layer changed after cost review.');
-                        $layer->unit_cost=Decimal::cost(Decimal::add((string)$layer->unit_cost,Decimal::div($sliceAmount,(string)$layer->remaining_qty)));$layer->save();
-                    }
-                    if(!$slices||Decimal::cmp($sum,$amount,8)!==0)$this->fail('Restored FIFO layer amounts do not reconcile.');
-                    continue;
-                }
-                $layerId = data_get($component->provenance, 'cost_layer_id');
-                if ($layerId) {
-                    $layer = CostLayer::query()->where('organization_id', $row->organization_id)->lockForUpdate()->findOrFail($layerId);
-                    if (Decimal::isZero((string) $layer->remaining_qty)) {
-                        $this->fail('A FIFO layer changed after cost review.');
-                    }
-                    $layer->unit_cost = Decimal::cost(Decimal::add((string) $layer->unit_cost, Decimal::div($amount, (string) $layer->remaining_qty)));
-                    $layer->save();
-                }
-            }
+            $this->revalueInventoryComponents((int) $row->organization_id, $components, $reverse);
             $row->state = $reverse ? 'reversed' : 'applied';
             $row->{$reverse ? 'reversed_at' : 'applied_at'} = now();
             $row->save();
 
             return $this->serialize($row);
         }, 5);
+    }
+
+    /**
+     * Apply (or exactly undo) the inventory_asset share of a reviewed valuation
+     * plan: the stock balance value and, for FIFO, the open receipt layer's unit
+     * cost. Consumed shares (cogs / adjustment_loss) never touch stock rows; they
+     * are journal-only. Shared by supplier price deltas and landed costs.
+     */
+    public function revalueInventoryComponents(int $organizationId, iterable $components, bool $reverse): void
+    {
+        $sign = $reverse ? '-1' : '1';
+        $components = collect($components);
+        foreach ($components->where('destination_role', 'inventory_asset') as $component) {
+            $amount = Decimal::money(Decimal::mul((string) $component->posted_base_amount, $sign));
+            // The reviewed plan fixes these rows; applying it is not a warehouse selection by the actor,
+            // who may be a SolaCount-only member completing the bill. Organization scope still binds them.
+            $ledger = StockLedger::query()->withoutGlobalScope('warehouse_access')->where('organization_id', $organizationId)->findOrFail($component->stock_ledger_id);
+            $balance = StockBalance::query()->withoutGlobalScope('warehouse_access')->where('organization_id', $organizationId)->where('item_id', $component->item_id)
+                ->where('warehouse_id', $component->warehouse_id)->whereRaw('COALESCE(variant_id,0)=?', [(int) ($ledger->variant_id ?? 0)])
+                ->whereRaw('COALESCE(lot_id,0)=?', [(int) ($ledger->lot_id ?? 0)])->whereRaw('COALESCE(bin_id,0)=?', [(int) ($ledger->bin_id ?? 0)])
+                ->lockForUpdate()->firstOrFail();
+            $balance->total_value = Decimal::money(Decimal::add((string) $balance->total_value, $amount));
+            $balance->average_cost = Decimal::isZero((string) $balance->on_hand_qty) ? '0' : Decimal::cost(Decimal::div((string) $balance->total_value, (string) $balance->on_hand_qty));
+            $balance->save();
+            $slices=data_get($component->provenance,'restored_fifo_layer_slices');
+            if(is_array($slices)){
+                $sum='0';$seen=[];
+                foreach($slices as$slice){
+                    $id=(int)($slice['cost_layer_id']??0);if($id<1||isset($seen[$id]))$this->fail('Distinct restored FIFO layer proof required.');$seen[$id]=true;
+                    $sliceAmount=Decimal::money(Decimal::mul((string)$slice['posted_base_amount'],$sign));$sum=Decimal::add($sum,$sliceAmount,8);
+                    $layer=CostLayer::query()->where('organization_id',$organizationId)->where('item_id',$component->item_id)->where('warehouse_id',$component->warehouse_id)->lockForUpdate()->findOrFail($id);
+                    if(Decimal::isZero((string)$layer->remaining_qty)||Decimal::cmp((string)$layer->remaining_qty,(string)$slice['remaining_quantity'],8)!==0)$this->fail('A restored FIFO layer changed after cost review.');
+                    $layer->unit_cost=Decimal::cost(Decimal::add((string)$layer->unit_cost,Decimal::div($sliceAmount,(string)$layer->remaining_qty)));$layer->save();
+                }
+                if(!$slices||Decimal::cmp($sum,$amount,8)!==0)$this->fail('Restored FIFO layer amounts do not reconcile.');
+                continue;
+            }
+            $layerId = data_get($component->provenance, 'cost_layer_id');
+            if ($layerId) {
+                $layer = CostLayer::query()->where('organization_id', $organizationId)->lockForUpdate()->findOrFail($layerId);
+                if (Decimal::isZero((string) $layer->remaining_qty)) {
+                    $this->fail('A FIFO layer changed after cost review.');
+                }
+                $layer->unit_cost = Decimal::cost(Decimal::add((string) $layer->unit_cost, Decimal::div($amount, (string) $layer->remaining_qty)));
+                $layer->save();
+            }
+        }
     }
 
     private function serialize($row): array

@@ -27,6 +27,11 @@ final class IntegrationEvents
         'supplier_return.reversed' => ['InventoryReversal', 'inventory_asset', 'supplier_return_clearing'],
         'transfer.posted' => ['StockTransfer', 'inventory_asset', 'transfer_clearing'],
         'stock_count.posted' => ['StockCount', 'inventory_asset', 'adjustment_gain'],
+        // Landed cost: Dr inventory (on-hand share) + Dr cogs/adjustment_loss
+        // (consumed share) / Cr landed_cost_clearing. The reversal is its own
+        // InventoryReversal aggregate and the exact inverse of the posted journal.
+        'landed_cost.posted' => ['LandedCost', 'inventory_asset', 'landed_cost_clearing'],
+        'landed_cost.reversed' => ['InventoryReversal', 'landed_cost_clearing', 'inventory_asset'],
 
         // ── Sales fulfillment ──
         // Only shipment.posted / sales_return.posted move stock + carry COGS hints.
@@ -53,6 +58,7 @@ final class IntegrationEvents
             'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed',
             'supplier_return.posted', 'supplier_return.reversed',
             'stock.historical_fifo_cost_corrected.v1', 'stock_count.posted', 'shipment.posted', 'sales_return.posted', 'sales_return.reversed',
+            'landed_cost.posted', 'landed_cost.reversed',
         ], true);
     }
 
@@ -61,6 +67,11 @@ final class IntegrationEvents
     {
         if (! self::postsJournal($type)) {
             return false;
+        }
+        if (in_array($type, ['landed_cost.posted', 'landed_cost.reversed'], true)) {
+            // The inventory change can be 0 when every unit was already sold;
+            // the journal value is the whole landed cost.
+            return abs((float) data_get($payload, 'landed_cost.total_base_amount', 0)) > 0.00001;
         }
         if (in_array($type, ['stock.historical_fifo_cost_corrected.v1', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
             return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;

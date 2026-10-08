@@ -6,7 +6,7 @@ namespace App\Services\Integration;
 final class AccountRolePolicy
 {
     public const VERSION = 'inventory-account-roles.v1';
-    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'supplier_return_clearing' => ['asset'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability']];
+    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'supplier_return_clearing' => ['asset'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability'], 'landed_cost_clearing' => ['asset', 'liability']];
     public const OPERATIONS = [
         'opening_stock.posted' => ['inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['inventory_asset', 'opening_offset'],
@@ -23,6 +23,8 @@ final class AccountRolePolicy
         'sales_return.reversed' => ['inventory_asset', 'cogs'],
         'purchase_cost_adjustment.posted' => ['inventory_asset','cogs','adjustment_loss','purchase_price_variance'],
         'purchase_cost_adjustment.reversed' => ['inventory_asset','cogs','adjustment_loss','purchase_price_variance'],
+        'landed_cost.posted' => ['inventory_asset', 'cogs', 'adjustment_loss', 'landed_cost_clearing'],
+        'landed_cost.reversed' => ['inventory_asset', 'cogs', 'adjustment_loss', 'landed_cost_clearing'],
         'transfer.posted' => [], // Same organization: quantity movement, no journal.
         'purchase_order.approved' => [],
         'sales_order.confirmed' => [],

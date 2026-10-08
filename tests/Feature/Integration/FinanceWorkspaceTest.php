@@ -906,4 +906,134 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame($before,StockLedger::count());
         if(Schema::connection('tenant')->hasTable('stock_cash_refund_demands'))$this->assertSame(0,DB::connection('tenant')->table('stock_cash_refund_demands')->count());
     }
+
+
+    /**
+     * Connected landed cost: refused until an owner enables the workflow with a
+     * reviewed clearing account; then Dr inventory (on hand) + Dr COGS (sold) /
+     * Cr landed cost clearing, and an exact linked inverse on reversal.
+     */
+    public function test_connected_landed_cost_needs_the_enabled_clearing_workflow_then_journals_and_reverses_exactly(): void
+    {
+        $org = TenantTestManager::ORG_A;
+        $mapping = IntegrationOrganizationMapping::query()->firstOrFail();
+        $warehouse = StockTestFactory::warehouse();
+        $unit = Unit::create(['code' => 'LC-EACH', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = StockTestFactory::averageItem(['base_unit_id' => $unit->id]);
+        $supplier = Supplier::create(['code' => 'LC-SUP', 'name' => 'Freight supplier', 'is_active' => true]);
+        foreach ([801 => ['1301', 'asset'], 802 => ['2150', 'liability'], 803 => ['5001', 'expense'], 804 => ['6804', 'expense'],
+            806 => ['1580', 'asset'], 807 => ['1590', 'asset']] as $id => [$code, $type]) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $id, 'organization_id' => 14, 'code' => $code, 'name' => 'Account '.$code,
+                'type' => $type, 'is_active' => true, 'is_postable' => true]);
+        }
+        $pairs = ['item' => [[$item->id, 901]], 'unit' => [[$unit->id, 902]], 'supplier' => [[$supplier->id, 903]]];
+        foreach (['inventory_asset' => 801, 'grni' => 802, 'cogs' => 803, 'adjustment_loss' => 804] as $role => $id) {
+            $account = IntegrationAccountMapping::create(['integration' => 'solabooks', 'mapping_type' => $role, 'solabooks_account_id' => $id, 'status' => 'verified']);
+            $pairs['account_role'][] = [$account->id, $id];
+        }
+        foreach ($pairs as $type => $entries) {
+            foreach ($entries as [$native, $external]) {
+                IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $mapping->mapping_uuid,
+                    'central_client_id' => self::CLIENT, 'central_organization_id' => $org, 'finance_organization_id' => 14,
+                    'solastock_organization_id' => $org, 'entity_type' => $type, 'solastock_record_id' => (string) $native,
+                    'solabooks_record_id' => (string) $external, 'status' => 'verified']);
+            }
+        }
+        IntegrationSetting::sole()->update(['meta' => ['client_id' => self::CLIENT, 'central_organization_id' => $org,
+            'signing_key_id' => 'fixture', 'transport_enabled_workflows' => ['grn.posted', 'shipment.posted'],
+            'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD', 'USD'],
+                'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8, 'inventory_valuation_basis' => FinanceBaseValuation::BASIS]]]);
+        $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $warehouse->id, 'supplier_id' => $supplier->id, 'receipt_date' => '2026-10-06'],
+            [['item_id' => $item->id, 'entered_unit_id' => $unit->id, 'received_qty' => '10', 'accepted_qty' => '10', 'unit_cost' => '5']]);
+        app(GoodsReceiptService::class)->post($receipt);
+        app(StockLedgerService::class)->post([new StockMovement('out', $item->id, $warehouse->id, '4', \App\Models\Tenant\Shipment::class, 92001)], 'landed-cost-connected-sale');
+        $service = app(\App\Services\Documents\LandedCostService::class);
+        $doc = $service->createDraft(['allocation_method' => 'quantity', 'landed_cost_date' => '2026-10-07', 'supplier_reference' => 'FWD-77'],
+            [['charge_type' => 'freight', 'amount' => '20']], [$receipt->lines()->sole()->id]);
+        $this->assertSame('JOD', $doc->currency_code);
+        $this->assertSame('JOD', $doc->base_currency_code);
+
+        // Not in the reviewed workflow scope yet: refused, nothing revalued.
+        try {
+            $service->post($doc);
+            $this->fail('An existing connection must enable landed costs first.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertSame(__('inventory.landed_cost.connection_not_enabled'), collect($e->errors())->flatten()->first());
+        }
+        $this->assertSame('draft', $doc->fresh()->status);
+        $this->assertSame('30.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+
+        $workflow = app(\App\Services\Integration\LandedCostWorkflow::class);
+        $status = $workflow->status($org);
+        $this->assertSame('connected', $status['mode']);
+        $this->assertFalse($status['enabled']);
+        $this->assertSame(['landed_cost_clearing'], $status['missing_roles']);
+        $this->assertSame(806, $status['candidates'][0]['id']);
+        $this->assertTrue($status['candidates'][0]['recommended']);
+        foreach ([801 => 'clearing_same_as_inventory', 803 => 'clearing_account_invalid'] as $account => $code) {
+            try {
+                $workflow->enable($org, $account, self::ACTOR);
+                $this->fail('Invalid clearing account '.$account);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $this->assertSame(__('inventory.landed_cost.'.$code), collect($e->errors())->flatten()->first());
+            }
+        }
+        $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['enabled']);
+        $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['enabled']);
+        try {
+            $workflow->enable($org, 807, self::ACTOR);
+            $this->fail('A reviewed clearing binding is immutable.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertSame(__('inventory.landed_cost.clearing_immutable'), collect($e->errors())->flatten()->first());
+        }
+        $meta = IntegrationSetting::sole()->meta;
+        $this->assertSame(['grn.posted', 'shipment.posted', 'landed_cost.posted', 'landed_cost.reversed'], $meta['transport_enabled_workflows']);
+        $this->assertSame(['grn.posted', 'landed_cost.posted', 'landed_cost.reversed'], \App\Services\Integration\LandedCostWorkflow::preserve($meta, ['grn.posted']));
+        $clearing = IntegrationAccountMapping::query()->where('mapping_type', 'landed_cost_clearing')->sole();
+        $this->assertSame(['806', 'verified'], [(string) $clearing->solabooks_account_id, $clearing->status]);
+        $this->assertSame(1, IntegrationMasterDataMapping::query()->where('entity_type', 'account_role')
+            ->where('solastock_record_id', (string) $clearing->id)->where('solabooks_record_id', '806')->where('status', 'verified')->count());
+
+        $service->post($doc->fresh());
+        $service->post($doc->fresh());
+        $balance = StockBalance::query()->where('item_id', $item->id)->sole();
+        $this->assertSame('42.00', (string) $balance->total_value);
+        $this->assertSame('7.0000', (string) $balance->average_cost);
+        $posted = IntegrationOutboxEvent::query()->where('event_type', 'landed_cost.posted')->sole();
+        $this->assertSame('LandedCost', $posted->aggregate_type);
+        $this->assertSame('solabooks:landed_cost.posted:LandedCost:'.$doc->id, $posted->idempotency_key);
+        $this->assertSame('12.00', $posted->payload['total_inventory_value_change']);
+        $this->assertSame(['inventory_asset' => '12.00', 'cogs' => '8.00', 'adjustment_loss' => '0.00', 'landed_cost_clearing' => '20.00'], $posted->payload['landed_cost']['journal']);
+        $this->assertSame($posted->event_uuid, $doc->fresh()->event_uuid);
+        $this->assertSame(1, IntegrationDocumentLifecycleMapping::query()->where('source_document_type', 'landed_cost')
+            ->where('source_document_id', (string) $doc->id)->where('accounting_source_key', $posted->idempotency_key)->count());
+
+        $original = app(SolaStockJournalContractBuilder::class)->build($posted);
+        $this->assertSame('landed_cost.posted', $original['event_type']);
+        $this->assertSame([801, 803, 806], array_column($original['lines'], 'account_id'));
+        $this->assertSame(['inventory_asset', 'cogs', 'landed_cost_clearing'], array_column($original['lines'], 'account_role'));
+        $this->assertSame(['12.00', '8.00', '0.00'], array_column($original['lines'], 'base_debit'));
+        $this->assertSame(['0.00', '0.00', '20.00'], array_column($original['lines'], 'base_credit'));
+        $this->assertSame(['JOD', '1', 'identity'], [$original['currency']['transaction_code'], $original['currency']['exchange_rate'], $original['currency']['rate_source']]);
+        $this->assertSame('10.0000', $original['inventory_quantities'][0]['base_quantity']);
+        $this->assertNull($original['source']['reversal']);
+
+        $reversal = $service->reverse($doc->fresh(), 'Freight belonged to another shipment');
+        $service->reverse($doc->fresh(), 'Duplicate');
+        $this->assertSame('30.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+        $this->assertSame('5.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('average_cost'));
+        $reversed = IntegrationOutboxEvent::query()->where('event_type', 'landed_cost.reversed')->sole();
+        $this->assertSame(['InventoryReversal', $reversal->id], [$reversed->aggregate_type, (int) $reversed->aggregate_id]);
+        $this->assertSame($posted->event_uuid, $reversed->payload['original_source']['event_uuid']);
+        $this->assertSame($posted->event_uuid, $reversed->depends_on_event_uuid);
+        $this->assertSame('-12.00', $reversed->payload['total_inventory_value_change']);
+        $contract = app(SolaStockJournalContractBuilder::class)->build($reversed);
+        $this->assertSame($posted->idempotency_key, $contract['source']['reversal']['original_source_key']);
+        $this->assertSame([801, 803, 806], array_column($contract['lines'], 'account_id'));
+        $this->assertSame(array_column($original['lines'], 'base_debit'), array_column($contract['lines'], 'base_credit'));
+        $this->assertSame(array_column($original['lines'], 'base_credit'), array_column($contract['lines'], 'base_debit'));
+        $this->assertSame($original['currency'], $contract['currency']);
+        $strip = fn (array $q) => array_map(function ($s) { unset($s['ledger_entry_ids']); return $s; }, $q);
+        $this->assertSame($strip($original['inventory_quantities']), $strip($contract['inventory_quantities']));
+    }
 }

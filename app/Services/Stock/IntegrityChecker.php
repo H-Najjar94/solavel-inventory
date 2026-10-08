@@ -96,6 +96,17 @@ class IntegrityChecker
                     ->selectRaw("SUM(CASE WHEN a.state='applied' THEN c.posted_base_amount WHEN a.state='reversed' THEN 0 ELSE 0 END) total")
                     ->value('total');
             }
+            if (DB::connection($connection)->getSchemaBuilder()->hasTable('stock_landed_cost_components')) {
+                // Posted landed costs revalue receipts without ledger rows; reversed ones net to zero.
+                $landed=(string)DB::connection($connection)->table('stock_landed_cost_components as c')
+                    ->join('stock_landed_costs as d','d.id','=','c.landed_cost_id')
+                    ->join('stock_ledger as l','l.id','=','c.stock_ledger_id')
+                    ->where('c.organization_id',$organizationId)->where('c.destination_role','inventory_asset')->where('d.status','posted')
+                    ->where('l.item_id',$row->item_id)->whereRaw('COALESCE(l.variant_id,0)=?',[$row->vkey])
+                    ->where('l.warehouse_id',$row->warehouse_id)->whereRaw('COALESCE(l.lot_id,0)=?',[$row->lkey])
+                    ->whereRaw('COALESCE(l.bin_id,0)=?',[$row->bkey])->sum('c.posted_base_amount');
+                $valuationAdjustment=Decimal::add($valuationAdjustment ?: '0',$landed ?: '0');
+            }
             $expectedValue=Decimal::add((string)$row->net_val,$valuationAdjustment ?: '0');
             $valDiff = Decimal::sub($expectedValue, (string) $bal->total_value);
             if (Decimal::gt(ltrim($valDiff, '-'), $tolerance)) {
