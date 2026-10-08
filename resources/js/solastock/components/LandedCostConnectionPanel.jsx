@@ -13,9 +13,9 @@ function accountLabel(account) {
     return [account.code, name].filter(Boolean).join(' · ');
 }
 
-// Connected organizations only: shows whether landed costs journal to SolaCount
-// and lets a connection manager who may review accounting roles choose the
-// reviewed clearing account once.
+// Connected organizations only. Landed costs are available by plan (drafts work);
+// this panel is the posting-readiness step: "Set up landed costs: choose the
+// clearing account", for a connection manager who may review accounting roles.
 export default function LandedCostConnectionPanel({ status }) {
     const manager = useCanCreate('inventory.integration.connection_manage');
     // Binding the clearing account is an accountant decision (same gate as the wizard).
@@ -26,7 +26,7 @@ export default function LandedCostConnectionPanel({ status }) {
     const [busy, setBusy] = useState(false);
     if (!status || status.mode !== 'connected') return null;
 
-    if (status.enabled) {
+    if (status.posting_ready ?? status.enabled) {
         return <div className="panel" role="status">
             {t('landedCosts.connection.enabled')} {t('landedCosts.connection.clearing', undefined, { account: accountLabel(status.clearing_account) })}
         </div>;
@@ -46,8 +46,9 @@ export default function LandedCostConnectionPanel({ status }) {
 
     return (
         <div className="panel">
-            <h2>{t('landedCosts.connection.title')}</h2>
+            <h2 id="landed-cost-setup">{t('landedCosts.connection.title')}</h2>
             <p className="muted">{t('landedCosts.connection.hint')}</p>
+            {status.setup_action === 'review_connection_mappings' && <p className="banner banner--warn">{t('landedCosts.connection.reviewMappings')}</p>}
             {(status.missing_roles ?? []).filter((r) => r !== 'landed_cost_clearing').length > 0 &&
                 <p className="banner banner--warn">{t('landedCosts.connection.missing', undefined, { roles: status.missing_roles.filter((r) => r !== 'landed_cost_clearing').join(', ') })}</p>}
             {owner.allowed ? (

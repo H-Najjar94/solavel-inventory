@@ -188,6 +188,24 @@ return [
         // Bulk import / export.
         'api.v1.opening.import' => 'stock.import_export',
         'api.v1.items.bulk-update' => 'stock.import_export',
+
+        // Landed costs (freight, duty, insurance on posted receipts). Reads ride
+        // view_stock and writes manage_adjustments (both core), so the plan gate is
+        // per route. Central publishes stock.landed_costs from
+        // config/release_feature_eligibility.php (Professional, Premium, Enterprise).
+        // Availability is automatic where the plan includes it; an organization's
+        // explicit opt-out and the clearing-account setup are separate checks in
+        // LandedCostAvailability / LandedCostWorkflow.
+        'api.v1.landed-costs.index' => 'stock.landed_costs',
+        'api.v1.landed-costs.show' => 'stock.landed_costs',
+        'api.v1.landed-costs.receipt-lines' => 'stock.landed_costs',
+        'api.v1.landed-costs.connection' => 'stock.landed_costs',
+        'api.v1.landed-costs.connection.enable' => 'stock.landed_costs',
+        'api.v1.landed-costs.preference' => 'stock.landed_costs',
+        'api.v1.landed-costs.store' => 'stock.landed_costs',
+        'api.v1.landed-costs.update' => 'stock.landed_costs',
+        'api.v1.landed-costs.post' => 'stock.landed_costs',
+        'api.v1.landed-costs.reverse' => 'stock.landed_costs',
     ],
 
     /*

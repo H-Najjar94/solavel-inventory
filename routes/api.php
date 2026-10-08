@@ -389,10 +389,13 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::get('/landed-costs/connection', [LandedCostController::class, 'connection'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.connection');
     Route::post('/landed-costs/connection/enable', [LandedCostController::class, 'enableConnection'])
-        // Binding the clearing account is an accounting-role decision: it also needs the
+        // "Set up landed costs: choose the clearing account". Binding the clearing account is an accounting-role decision: it also needs the
         // accountant gate (can_review_accounting), so segregation of duties holds.
         ->middleware(['perm:inventory.integration.connection_manage', 'perm:inventory.integration.accounting_review'])
         ->name('api.v1.landed-costs.connection.enable');
+    // An organization's explicit opt-out is a settings decision (availability itself follows the plan).
+    Route::put('/landed-costs/preference', [LandedCostController::class, 'preference'])
+        ->middleware('perm:inventory.manage_settings')->name('api.v1.landed-costs.preference');
     Route::get('/landed-costs/{landed_cost}', [LandedCostController::class, 'show'])->whereNumber('landed_cost')
         ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.show');
     Route::post('/landed-costs', [LandedCostController::class, 'store'])

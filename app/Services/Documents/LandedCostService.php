@@ -585,12 +585,14 @@ class LandedCostService
             app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $operation);
         } catch (ValidationException $e) {
             $errors = $e->errors();
+            // Posting readiness, not availability: drafts stay possible, and the
+            // refusal names the one setup action (choose the clearing account).
             if (isset($errors['workflow'])) {
-                $this->fail('connection_not_enabled');
+                throw LandedCostSetupRequired::withMessages(['landed_cost' => __('inventory.landed_cost.connection_not_enabled')]);
             }
             if (isset($errors['account_mappings'])) {
                 $missing = trim((string) str_replace('required_account_mappings_missing:', '', (string) collect($errors['account_mappings'])->first()));
-                $this->fail('mapping_missing', ['roles' => $missing]);
+                throw LandedCostSetupRequired::withMessages(['landed_cost' => __('inventory.landed_cost.mapping_missing', ['roles' => $missing])]);
             }
             throw $e;
         }
