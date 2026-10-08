@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useI18n } from '../i18n/context.jsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
@@ -21,6 +23,8 @@ const STATUSES = [
 
 export default function IntegrationEventsPage() {
     const tr = useSettingsTranslation();
+    const { locale } = useI18n();
+    const catalogGate = useCanCreate('inventory.integration.manage');
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.integration.retry');
     const [filters, setFilters] = useState({ status: '', event_type: '', search: '', from: '', to: '' });
@@ -42,7 +46,7 @@ export default function IntegrationEventsPage() {
     return (
         <section className="page">
             <Breadcrumbs items={[{ label: tr('integration.title'), to: '/integrations/solacount' }, { label: tr('integration.events.breadcrumb') }]} />
-            <header className="page-head"><h1>{tr('integration.events.title')}</h1>{isMock && <span className="badge badge--warn">{tr('integration.events.sampleData')}</span>}</header>
+            <header className="page-head"><h1>{tr('integration.events.title')}</h1>{catalogGate.allowed && <Link className="btn" to="/integrations/solacount/catalog">{locale === 'ar' ? 'مزامنة الأصناف' : 'Catalog synchronization'}</Link>}{isMock && <span className="badge badge--warn">{tr('integration.events.sampleData')}</span>}</header>
             {status.isError && <div className="panel" role="alert"><strong>{tr('integration.loadFailed')}</strong><p>{status.error?.message || tr('settings.common.errorFallback')}</p></div>}
             {!deliveryEnabled && <div className="panel" role="status"><strong>{tr('integration.safetyHold.title')}</strong><p>{status.data?.delivery_disabled_message || tr('integration.safetyHold.message')}</p></div>}
 

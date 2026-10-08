@@ -16,7 +16,7 @@ final class CatalogSourceAuthority {
   }
   $query=DB::connection('tenant')->table(DurableCatalogSync::TABLE)->where('organization_id',$mapping->solastock_organization_id)->where('organization_mapping_uuid',$mapping->mapping_uuid);
   if(isset($data['entity_type'],$data['source_id']))$query->where('entity_type',$data['entity_type'])->where('source_id',(int)$data['source_id']);
-  return ['organization_mapping_uuid'=>$mapping->mapping_uuid,'rows'=>$query->orderByDesc('updated_at')->limit(100)->get(['source_uuid','entity_type','source_id','target_id','state','attempts','last_error','next_attempt_at','updated_at'])->map(fn($row)=>(array)$row)->all()];
+  return ['organization_mapping_uuid'=>$mapping->mapping_uuid,'rows'=>$query->orderByDesc('updated_at')->limit(100)->get(['source_uuid','entity_type','source_id','target_id','state','attempts','last_error','next_attempt_at','updated_at','source_snapshot'])->map(function($row){$safe=(array)$row;$snapshot=json_decode($row->source_snapshot,true);unset($safe['source_snapshot']);$safe['name']=(string)($snapshot['name']??'');return$safe;})->all()];
  }
  public function authorize(array $data,object $mapping,object $actor):array {
   $data=validator($data,['source_uuid'=>'required|uuid','entity_type'=>'required|in:item,unit,category','source_id'=>'required|integer|min:1','source_revision'=>'required|string|size:64','state_version'=>'required|integer|min:1'])->validate();

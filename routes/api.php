@@ -629,6 +629,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         Route::put('/mappings/items/{item}', [IntegrationController::class, 'updateItemMapping'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.items.update');
 
+        Route::get('/catalog-sync', [\App\Http\Controllers\Api\V1\CatalogSyncController::class, 'index'])->middleware('perm:inventory.integration.manage')->name('api.v1.catalog-sync.index');
+        Route::post('/catalog-sync/{source}/retry', [\App\Http\Controllers\Api\V1\CatalogSyncController::class, 'retry'])->whereUuid('source')->middleware('perm:inventory.integration.manage')->name('api.v1.catalog-sync.retry');
         Route::get('/events', [IntegrationController::class, 'events'])
             ->middleware('perm:inventory.integration.view')->name('api.v1.integration.events.index');
         Route::get('/events/{event}', [IntegrationController::class, 'event'])
