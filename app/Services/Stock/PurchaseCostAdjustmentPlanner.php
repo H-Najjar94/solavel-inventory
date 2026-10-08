@@ -182,7 +182,9 @@ final class PurchaseCostAdjustmentPlanner
     {
         $receipt = $this->ledgerQuery($allocation)->where('organization_id', $allocation->solastock_organization_id)
             ->where('source_type', GoodsReceipt::class)->where('source_id', $allocation->source_document_id)
-            ->where('source_line_id', $allocation->source_line_id)->orderBy('id')->first();
+            ->where('source_line_id', $allocation->source_line_id)
+            ->when($allocation instanceof SupplierCreditCostProvenance,fn($query)=>$query->whereKey($allocation->stock_ledger_id))
+            ->orderBy('id')->first();
         if (! $receipt) {
             $this->fail('The receipt valuation ledger provenance is missing.');
         }

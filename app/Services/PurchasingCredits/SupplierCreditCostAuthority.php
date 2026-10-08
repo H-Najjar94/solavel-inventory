@@ -87,7 +87,7 @@ final readonly class SupplierCreditCostAuthority
                 && ($saved['position_uuid']??null)===$row->position_uuid && $settlement->organization_mapping_uuid===$mapping->mapping_uuid,409);
             self::activeJournal($db->table('journal_entries')->where('organization_id',$finance)->where('id',$settlement->journal_entry_id)
                 ->where('source_key','purchase-settlement:'.$settlement->settlement_uuid)->lockForUpdate()->first());
-            $sources[]=self::receipt($source,$position,$mapping,$org,$scale,(int)$bill->supplier_id,(string)$originalSource['invoice_exchange_rate']);
+            $sources=array_merge($sources,self::receipt($source,$position,$mapping,$org,$scale,(int)$bill->supplier_id,(string)$originalSource['invoice_exchange_rate']));
             $net=Decimal::add($net,(string)$source['receipt_net_credit_amount'],8);$tax=Decimal::add($tax,(string)$source['receipt_nonrecoverable_tax_credit_amount'],8);
         }
         abort_unless(Decimal::cmp($net,(string)$row->matched_net_amount,8)===0 && Decimal::cmp($tax,(string)$row->matched_nonrecoverable_tax,8)===0
@@ -157,13 +157,17 @@ final readonly class SupplierCreditCostAuthority
         self::activeJournal($db->table('journal_entries')->where('organization_id',$map->finance_organization_id)
             ->where('source_key','external-api:'.hash('sha256',$source['receipt_journal_key']))->lockForUpdate()->first());
         $ledger=$db->table('stock_ledger')->where('organization_id',$org)->where('source_type',GoodsReceipt::class)->where('source_id',$grn->id)
-            ->where('source_line_id',$line->id)->where('direction','in')->lockForUpdate()->get();
-        abort_unless($ledger->count()===1,409);$ledger=$ledger->first();
+            ->where('source_line_id',$line->id)->where('direction','in')->orderBy('id')->lockForUpdate()->get();
+        abort_unless($ledger->isNotEmpty(),409);$cohort='0';
+        foreach($ledger as$movement){
+            abort_unless(Decimal::gt((string)$movement->quantity,'0') && (int)$movement->item_id===(int)$line->item_id
+                && (int)$movement->warehouse_id===(int)$grn->warehouse_id,409);
+            $cohort=Decimal::add($cohort,(string)$movement->quantity,8);
+        }
         $factor=(string)$line->unit_conversion_factor;$base=Decimal::mul((string)$source['quantity'],$factor,8);
         abort_unless(Decimal::gt($factor,'0') && !empty($line->unit_conversion_hash) && Decimal::gt($base,'0')
-            && Decimal::cmp((string)$line->accepted_qty,(string)$ledger->quantity,8)===0
-            && Decimal::cmp($base,(string)$ledger->quantity,8)<=0
-            && (int)$ledger->item_id===(int)$line->item_id && (int)$ledger->warehouse_id===(int)$grn->warehouse_id,409);
+            && Decimal::cmp((string)$line->accepted_qty,$cohort,8)===0
+            && Decimal::cmp($base,$cohort,8)<=0,409);
         // A bill may settle a subset of one receipt line. The durable settlement scope supplies that subset;
         // the shared native ledger explains the whole cohort. Reject cumulative claims beyond the physical cohort.
         $claims=$db->table('finance_purchase_settlements')->where('organization_id',$map->finance_organization_id)
@@ -173,13 +177,24 @@ final readonly class SupplierCreditCostAuthority
             abort_unless(Decimal::gt((string)$claim->quantity,'0'),409);
             $claimed=Decimal::add($claimed,Decimal::mul((string)$claim->quantity,$factor,8),8);
         }
-        abort_unless(Decimal::cmp($claimed,(string)$ledger->quantity,8)<=0,409);
+        abort_unless(Decimal::cmp($claimed,$cohort,8)<=0,409);
         foreach(['receipt_net_credit_amount','receipt_nonrecoverable_tax_credit_amount']as$key)abort_unless(preg_match('/^\d+(?:\.\d{1,12})?$/D',(string)$source[$key])===1,409);
         // Credit scope amounts are stored Bill-currency amounts; dated receipt FX authenticates the receipt, not the invoice carrying value.
         $delta=Decimal::sub('0',Decimal::round(Decimal::div(Decimal::add((string)$source['receipt_net_credit_amount'],(string)$source['receipt_nonrecoverable_tax_credit_amount'],12),$invoiceRate,12),$scale),8);
-        return ['receipt_id'=>(int)$grn->id,'receipt_line_id'=>(int)$line->id,'stock_ledger_id'=>(int)$ledger->id,'position_uuid'=>$position->position_uuid,
-            'quantity_base'=>$base,'price_delta_base'=>$delta,'item_id'=>(int)$ledger->item_id,'warehouse_id'=>(int)$ledger->warehouse_id,'variant_id'=>$ledger->variant_id?(int)$ledger->variant_id:null,
-            'lot_id'=>$ledger->lot_id?(int)$ledger->lot_id:null,'bin_id'=>$ledger->bin_id?(int)$ledger->bin_id:null];
+        $result=[];$quantityLeft=$base;$deltaLeft=$delta;$last=$ledger->count()-1;
+        foreach($ledger as$index=>$movement){
+            // Durable native line cohort is distributed by actual ledger quantity; the final member absorbs only arithmetic residuals.
+            $quantity=$index===$last?$quantityLeft:Decimal::mul($base,Decimal::div((string)$movement->quantity,$cohort,12),8);
+            $value=$index===$last?$deltaLeft:Decimal::mul($delta,Decimal::div((string)$movement->quantity,$cohort,12),8);
+            $quantityLeft=Decimal::sub($quantityLeft,$quantity,8);$deltaLeft=Decimal::sub($deltaLeft,$value,8);
+            abort_unless(Decimal::gt($quantity,'0') && Decimal::cmp($quantity,(string)$movement->quantity,8)<=0,409);
+            $result[]=['receipt_id'=>(int)$grn->id,'receipt_line_id'=>(int)$line->id,'stock_ledger_id'=>(int)$movement->id,'position_uuid'=>$position->position_uuid,
+                'quantity_base'=>$quantity,'price_delta_base'=>$value,'item_id'=>(int)$movement->item_id,'warehouse_id'=>(int)$movement->warehouse_id,
+                'variant_id'=>$movement->variant_id?(int)$movement->variant_id:null,'lot_id'=>$movement->lot_id?(int)$movement->lot_id:null,
+                'bin_id'=>$movement->bin_id?(int)$movement->bin_id:null];
+        }
+        abort_unless(Decimal::isZero($quantityLeft,8) && Decimal::isZero($deltaLeft,8),409);
+        return $result;
     }
 
     /** A native void invalidates the original NOTE journal; it never invents a reversing twin. */
