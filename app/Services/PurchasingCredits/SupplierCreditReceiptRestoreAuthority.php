@@ -11,7 +11,8 @@ final readonly class SupplierCreditReceiptRestoreAuthority
  public static function fromLocked(array $identity,array $proof,IntegrationOrganizationMapping $map,string $action,int $actor):self
  {
   $db=DB::connection('tenant');$org=(int)$map->solastock_organization_id;$finance=(int)$map->finance_organization_id;
-  abort_unless($db->transactionLevel()>0&&$actor>0&&in_array($action,['prepare','apply','status','release'],true)
+  abort_unless(app(\App\Tenancy\OrganizationContext::class)->idOrFail()===$org&&$map->tenant_database_identity===$db->getDatabaseName()
+   &&$db->transactionLevel()>0&&$actor>0&&in_array($action,['prepare','apply','status','release'],true)
    &&($proof['allowed']??false)===true&&($proof['contract_version']??null)==='purchase-credit-receipt-restore.v1'
    &&($proof['authority_kind']??null)==='posted_supplier_credit_receipt_restore'&&($proof['operation']??null)===$action
    &&(int)($proof['actor_id']??0)===$actor&&(int)($proof['finance_organization_id']??0)===$finance

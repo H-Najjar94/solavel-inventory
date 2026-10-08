@@ -53,11 +53,11 @@ final class HeldSupplierCreditReceiptRestoreService
   $before=$this->valuation($authority,$quote['native_plan']);
   $native=$action==='apply'?$service->applySupplierCreditReceiptRestore($authority):$service->statusSupplierCreditReceiptRestore($authority);
   if(in_array($action,['apply','release'],true))foreach($owned as$hold)if($hold->state==='active')$hold->update(['state'=>'released']);
-  $effect=SupplierCreditValueEffect::query()->where('organization_id',$authority->organizationId())->where('adjustment_uuid',$row->adjustment_uuid)->where('direction','receipt_restore')->lockForUpdate()->first();
+  $effect=SupplierCreditValueEffect::query()->where('organization_id',$authority->organizationId())->where('adjustment_uuid',$row->adjustment_uuid)->where('direction','restore')->lockForUpdate()->first();
   if($action==='apply'&&!$effect){
    abort_unless(!$complete,409);$snapshot=json_encode(['before'=>$before,'after'=>$this->valuation($authority,$quote['native_plan'])],JSON_THROW_ON_ERROR);
    $effect=SupplierCreditValueEffect::create(['organization_id'=>$authority->organizationId(),'organization_mapping_uuid'=>$authority->mappingUuid(),
-    'allocation_uuid'=>$authority->allocationUuid(),'operation_uuid'=>$authority->operationUuid(),'direction'=>'receipt_restore','plan_revision'=>$authority->planRevision(),
+    'allocation_uuid'=>$authority->allocationUuid(),'operation_uuid'=>$authority->operationUuid(),'direction'=>'restore','plan_fingerprint'=>$quote['plan_fingerprint'],
     'adjustment_uuid'=>$row->adjustment_uuid,'snapshot'=>$snapshot,'snapshot_hash'=>hash('sha256',$snapshot)]);
   }
   $components=IntegrationPurchaseCostAdjustmentComponent::query()->where('adjustment_uuid',$row->adjustment_uuid)->orderBy('id')->get()->map(fn($part)=>[
