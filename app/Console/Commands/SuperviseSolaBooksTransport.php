@@ -96,6 +96,8 @@ final class SuperviseSolaBooksTransport extends Command
                             + app(\App\Services\FinancialOrigins\CashNotificationPublisher::class)->process(1);
                     });
                     $processed += (int) $isolation->attempt($target, 'purchasing_notifications', fn () => app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1));
+                    // Queue-only reconciliation of party/catalog sync incidents; delivered below.
+                    $isolation->attempt($target, 'sync_incidents', fn () => app(\App\Services\Integration\SyncIncidentNotificationPublisher::class)->sweep($mapping));
                     $processed += (int) $isolation->attempt($target, 'document_incidents', fn () => app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->process(1));
                 } finally {
                     $organizations->forget();

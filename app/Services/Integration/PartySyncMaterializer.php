@@ -99,7 +99,10 @@ final class PartySyncMaterializer {
   }
   $values=['status'=>$result['status'],'target_id'=>$result['target_id'],'mapping_uuid'=>$result['mapping_uuid'],'last_error'=>$result['reason'],'attempts'=>$state->attempts+1,'next_attempt_at'=>$result['retryable']?now()->addMinute():null,'updated_at'=>now()];
   foreach($extra as$key=>$value)$values[$key]=json_encode($value);
-  DB::connection('tenant')->table('integration_party_sync_states')->where('id',$state->id)->update($values);return$result;
+  DB::connection('tenant')->table('integration_party_sync_states')->where('id',$state->id)->update($values);
+  // After commit and deduplicated; never fails or changes the sync itself.
+  app(SyncIncidentNotificationPublisher::class)->changed('party',(int)$state->id,(string)$state->organization_mapping_uuid);
+  return$result;
  }
 }
 
