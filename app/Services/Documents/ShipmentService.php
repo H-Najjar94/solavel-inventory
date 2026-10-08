@@ -156,6 +156,8 @@ class ShipmentService
      */
     public function post(Shipment $s, array $overrides = []): Shipment
     {
+        app(\App\Services\Integration\OperationalPartyReadiness::class)->ensure($s);
+
         $allowExpired = (bool) ($overrides['allow_expired_lot'] ?? false);
         $allowQuarantined = (bool) ($overrides['allow_quarantined_lot'] ?? false);
 

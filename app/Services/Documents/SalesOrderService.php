@@ -91,6 +91,8 @@ class SalesOrderService
 
     public function confirm(SalesOrder $so): SalesOrder
     {
+        app(\App\Services\Integration\OperationalPartyReadiness::class)->ensure($so);
+
         return DB::connection($this->conn())->transaction(function () use ($so) {
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if ($so->status !== 'draft') {

@@ -240,6 +240,8 @@ class GoodsReceiptService
     /** Post a GRN → inbound ledger movements for accepted qty; update PO. */
     public function post(GoodsReceipt $grn): GoodsReceipt
     {
+        app(\App\Services\Integration\OperationalPartyReadiness::class)->ensure($grn);
+
         return DB::connection($this->connection())->transaction(function () use ($grn) {
             $grn = GoodsReceipt::query()->lockForUpdate()->findOrFail($grn->id);
             if ($grn->isPosted()) {
