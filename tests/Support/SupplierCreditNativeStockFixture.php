@@ -68,4 +68,25 @@ final class SupplierCreditNativeStockFixture
   return ['receiving_request_id'=>$request->id,'request_uuid'=>$request->request_uuid,'goods_receipt_id'=>$receipt->id,
    'goods_receipt_number'=>$receipt->grn_number,'lines'=>$receipt->lines()->get()->map(fn($line)=>['id'=>$line->id,'accepted_base_qty'=>$line->accepted_qty])->all()];
  }
+ /** Genuine linked native sales order/reservation/shipment: no direct consumption/ledger writes. */
+ public static function consume(int $org,array $stock,string $quantity,string $date):array {
+  self::isolated($org);
+  $permission=app(\App\Services\Access\InventoryPermissionService::class);
+  foreach(['inventory.manage_sales_orders','inventory.manage_reservations','inventory.manage_shipments'] as $ability)
+   if(!$permission->can(request()->user(),$ability))throw new \LogicException('Actual native dispatch permissions required');
+  if(!preg_match('/^[0-9]+(?:\.[0-9]+)?$/D',$quantity)||bccomp($quantity,'0',4)<=0)
+   throw new \LogicException('Positive explicit native dispatch quantity required');
+  $orders=app(\App\Services\Documents\SalesOrderService::class);
+  $order=$orders->createDraft(['warehouse_id'=>$stock['warehouse_id'],'order_date'=>$date,'currency_code'=>'JOD'],
+   [['item_id'=>$stock['item_id'],'entered_unit_id'=>$stock['unit_id'],'ordered_qty'=>$quantity,'unit_price'=>'7']]);
+  $order=$orders->confirm($order);$order=$orders->reserve($order);
+  $source=$order->lines()->sole();
+  $shipments=app(\App\Services\Documents\ShipmentService::class);
+  $shipment=$shipments->createDraft(['sales_order_id'=>$order->id,'warehouse_id'=>$stock['warehouse_id'],'ship_date'=>$date],
+   [['sales_order_line_id'=>$source->id,'item_id'=>$stock['item_id'],'entered_unit_id'=>$stock['unit_id'],'quantity'=>$quantity]]);
+  $shipment=$shipments->post($shipment);
+  return ['sales_order_id'=>$order->id,'sales_order_line_id'=>$source->id,'shipment_id'=>$shipment->id,
+   'shipment_number'=>$shipment->shipment_number,'shipment_status'=>$shipment->status];
+ }
+
 }

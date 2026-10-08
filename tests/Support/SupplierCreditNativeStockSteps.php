@@ -16,7 +16,7 @@ final class SupplierCreditNativeStockSteps
   if($step==='seed')return SupplierCreditNativeStockFixture::seed($metadata,$arguments['costing_method']??'average');
   if((int)($stock['organization_id']??0)!==$org)throw new \LogicException('Native Stock identity mismatch');
   if($step==='snapshot')return SupplierCreditNativeStockEvidence::snapshot($org);
-  if($step==='receive'){
+  if(in_array($step,['receive','consume'],true)){
    $actorId=(int)($metadata['warehouse_actor_id']??0);
    $actor=\App\Models\User::findOrFail($actorId);
    Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);
@@ -27,6 +27,7 @@ final class SupplierCreditNativeStockSteps
    $quantity=(string)($arguments['quantity']??'');$date=(string)($arguments['date']??'');
    if(!preg_match('/^[0-9]+(?:\.[0-9]+)?$/D',$quantity)||bccomp($quantity,'0',4)<=0
     ||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date))throw new \LogicException('Explicit native quantity/date required');
+   if($step==='consume')return SupplierCreditNativeStockFixture::consume($org,$stock,$quantity,$date);
    return SupplierCreditNativeStockFixture::receive($org,(int)$metadata['finance_bill_id'],(int)$stock['warehouse_id'],
     $quantity,$date,isset($arguments['unit_cost'])?(string)$arguments['unit_cost']:null);
   }
