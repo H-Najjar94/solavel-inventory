@@ -131,6 +131,15 @@ final class FinanceWorkspaceController
                 abort_unless(Schema::connection('tenant')->hasTable(\App\Services\Catalog\DurableCatalogSync::TABLE), 409, 'workspace_schema_not_ready');
                 return response()->json(['success' => true, 'data' => app(\App\Services\Catalog\CatalogSourceAuthority::class)->dispatch($input['action'], (array) ($input['data'] ?? []), $mapping, $actor)]);
             }
+            if ($input['action'] === 'financial-origin.capabilities') {
+                abort_unless((int) $input['actor_id'] > 0, 403);
+                $probe = (array) ($input['data'] ?? []);
+                abort_unless(array_diff(array_keys($probe), ['source_document_type']) === [], 422);
+                validator($probe, ['source_document_type' => 'required|in:expense,sales_receipt'])->validate();
+                // Canonical Finance membership/app authority is checked above. No Stock assignment or physical permission is granted.
+                return response()->json(['success' => true, 'data' => app(\App\Services\FinancialOrigins\FinancialOriginCapabilities::class)
+                    ->inspect((int) $input['finance_organization_id'])]);
+            }
             if ($input['action'] === 'sales.fulfillment.capabilities') {
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
                     && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');

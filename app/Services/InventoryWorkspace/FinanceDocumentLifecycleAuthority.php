@@ -54,6 +54,9 @@ final class FinanceDocumentLifecycleAuthority
         'financial-origin.request.upsert', 'financial-origin.request.cancel', 'financial-origin.request.status',
     ];
 
+    /** Metadata only; does not confer warehouse access or permit actor zero. */
+    public const FINANCIAL_ORIGIN_CAPABILITY_ACTIONS = ['financial-origin.capabilities'];
+
     public const CATALOG_SCOPE = 'finance_catalog_item_creation';
 
     public const CATALOG_ACTIONS = [
@@ -72,7 +75,7 @@ final class FinanceDocumentLifecycleAuthority
 
     public static function scopeFor(string $action): ?string
     {
-        return (in_array($action, self::ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_REQUEST_ACTIONS, true)) ? self::SCOPE
+        return (in_array($action, self::ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_SETTLEMENT_ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_REQUEST_ACTIONS, true) || in_array($action, self::FINANCIAL_ORIGIN_CAPABILITY_ACTIONS, true)) ? self::SCOPE
             : (in_array($action, self::CATALOG_ACTIONS, true) ? self::CATALOG_SCOPE : null);
     }
 
