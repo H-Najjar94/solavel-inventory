@@ -14,9 +14,13 @@ function accountLabel(account) {
 }
 
 // Connected organizations only: shows whether landed costs journal to SolaCount
-// and lets an owner choose the reviewed clearing account once.
+// and lets a connection manager who may review accounting roles choose the
+// reviewed clearing account once.
 export default function LandedCostConnectionPanel({ status }) {
-    const owner = useCanCreate('inventory.integration.connection_manage');
+    const manager = useCanCreate('inventory.integration.connection_manage');
+    // Binding the clearing account is an accountant decision (same gate as the wizard).
+    const reviewer = useCanCreate('inventory.integration.accounting_review');
+    const owner = { allowed: manager.allowed && reviewer.allowed };
     const toast = useToast(); const qc = useQueryClient();
     const [accountId, setAccountId] = useState('');
     const [busy, setBusy] = useState(false);

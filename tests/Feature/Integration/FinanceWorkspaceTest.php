@@ -970,7 +970,13 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(['landed_cost_clearing'], $status['missing_roles']);
         $this->assertSame(806, $status['candidates'][0]['id']);
         $this->assertTrue($status['candidates'][0]['recommended']);
-        foreach ([801 => 'clearing_same_as_inventory', 803 => 'clearing_account_invalid'] as $account => $code) {
+        // Accounts already bound to another role (inventory 801, GRNI 802) are not offered.
+        $this->assertNotContains(801, array_column($status['candidates'], 'id'));
+        $this->assertNotContains(802, array_column($status['candidates'], 'id'));
+        $this->assertContains(807, array_column($status['candidates'], 'id'));
+        // 802 (GRNI) is a valid liability account but already bound to the grni role: a
+        // localized refusal, not a 500 from imdm_org_type_books_uniq.
+        foreach ([801 => 'clearing_same_as_inventory', 803 => 'clearing_account_invalid', 802 => 'clearing_account_bound'] as $account => $code) {
             try {
                 $workflow->enable($org, $account, self::ACTOR);
                 $this->fail('Invalid clearing account '.$account);

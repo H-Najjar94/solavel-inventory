@@ -19,6 +19,7 @@ use App\Services\Documents\LandedCostService;
 use App\Services\Stock\IntegrityChecker;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
@@ -55,6 +56,45 @@ class LandedCostTest extends TestCase
     {
         return app(LandedCostService::class)->createDraft($attributes + ['allocation_method' => $method, 'currency_code' => 'JOD', 'exchange_rate' => '1'],
             $charges, $lineIds);
+    }
+
+    /**
+     * Runs $call with the tenant query log on and returns the indexes of the
+     * item, balance and layer locks and of the first non-locking data read.
+     *
+     * @return array{items:int|false,balances:int|false,layers:int|false,first_plain:int|false}
+     */
+    private function lockOrder(\Closure $call): array
+    {
+        $db = DB::connection('tenant');
+        $db->flushQueryLog();
+        $db->enableQueryLog();
+        try {
+            $call();
+        } finally {
+            $log = array_map(fn ($q) => strtolower($q['query']), $db->getQueryLog());
+            $db->disableQueryLog();
+        }
+        $find = fn (string $table) => collect($log)->search(fn ($q) => str_contains($q, 'from `'.$table.'`') && str_contains($q, 'for update'));
+
+        return [
+            'items' => $find('items'),
+            'balances' => $find('stock_balances'),
+            'layers' => $find('cost_layers'),
+            // A plain SELECT fixes the REPEATABLE READ view; schema probes do not read rows.
+            'first_plain' => collect($log)->search(fn ($q) => str_starts_with(ltrim($q), 'select')
+                && ! str_contains($q, 'for update') && ! str_contains($q, 'information_schema')),
+        ];
+    }
+
+    private function assertLocksPrecedeFirstPlainRead(array $order): void
+    {
+        foreach (['items', 'balances', 'layers', 'first_plain'] as $key) {
+            $this->assertIsInt($order[$key], $key);
+        }
+        $this->assertLessThan($order['first_plain'], $order['items']);
+        $this->assertLessThan($order['first_plain'], $order['balances']);
+        $this->assertLessThan($order['first_plain'], $order['layers']);
     }
 
     private function message(\Closure $call): string
@@ -228,6 +268,70 @@ class LandedCostTest extends TestCase
     }
 
     #[Test]
+    public function posting_locks_the_stock_before_any_plain_read_so_the_plan_sees_a_shipment_committed_just_before(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'LC-LOCK-WH']);
+        $item = F::fifoItem(['sku' => 'LC-LOCK']);
+        $receipt = $this->receive($warehouse, $item, '10', '4', 'LC-LOCK-GRN');
+        $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'freight', 'amount' => '20']]);
+        $this->assertSame(['inventory_asset' => '20.00', 'cogs' => '0.00', 'adjustment_loss' => '0.00'],
+            app(LandedCostService::class)->preview($doc)['totals']);
+
+        // Sequenced stand-in for the race: this shipment commits after the draft
+        // was saved and immediately before the post asks for the item lock.
+        $this->out($warehouse, $item, '4', Shipment::class, 91011);
+        $order = $this->lockOrder(fn () => app(LandedCostService::class)->post($doc));
+
+        // Every stock lock precedes the first non-locking read, so the read view
+        // the planner uses is taken after any committed movement of these items.
+        $this->assertLocksPrecedeFirstPlainRead($order);
+        $components = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->get()->keyBy('destination_role');
+        $this->assertSame('12.00', (string) $components['inventory_asset']->posted_base_amount);
+        $this->assertSame('8.00', (string) $components['cogs']->posted_base_amount);
+        $this->assertSame('6.0000', (string) data_get($components['inventory_asset']->provenance, 'layer_remaining_at_post'));
+        $layer = CostLayer::query()->where('item_id', $item->id)->sole();
+        $this->assertSame('6.0000', (string) $layer->unit_cost);
+        $this->assertSame('6.0000', (string) $layer->remaining_qty);
+        $this->assertSame('36.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+        $this->assertTrue(app(IntegrityChecker::class)->check('tenant', TenantTestManager::ORG_A)['ok']);
+
+        // Still exactly reversible: nothing moved after the post.
+        app(LandedCostService::class)->reverse($doc->fresh(), 'Wrong receipt');
+        $this->assertSame('4.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+        $this->assertSame('24.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+    }
+
+    #[Test]
+    public function a_reversal_after_the_revalued_stock_moved_is_refused_after_taking_the_stock_locks_and_changes_nothing(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'LC-MOVED-WH']);
+        $item = F::fifoItem(['sku' => 'LC-MOVED']);
+        $receipt = $this->receive($warehouse, $item, '10', '4', 'LC-MOVED-GRN');
+        $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'duty', 'amount' => '10']]);
+        app(LandedCostService::class)->post($doc);
+        $this->assertSame('5.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+
+        // A write-off committed after the post (and just before the reversal's lock).
+        $this->out($warehouse, $item, '1', StockAdjustment::class, 91012);
+        $message = null;
+        $order = $this->lockOrder(function () use ($doc, &$message) {
+            $message = $this->message(fn () => app(LandedCostService::class)->reverse($doc->fresh(), 'Too late'));
+        });
+
+        $this->assertSame(__('inventory.landed_cost.reverse_moved'), $message);
+        $this->assertLocksPrecedeFirstPlainRead($order);
+        $this->assertSame('posted', $doc->fresh()->status);
+        $this->assertNull($doc->fresh()->reversal_id);
+        $this->assertSame(0, InventoryReversal::query()->where('source_type', 'landed_cost')->where('source_id', $doc->id)->count());
+        $layer = CostLayer::query()->where('item_id', $item->id)->sole();
+        $this->assertSame('5.0000', (string) $layer->unit_cost);
+        $this->assertSame('9.0000', (string) $layer->remaining_qty);
+        $this->assertSame('45.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+    }
+
+    #[Test]
     public function routes_require_the_inventory_valuation_permission_and_the_owner_connection_permission(): void
     {
         foreach (['store', 'update', 'post', 'reverse', 'receipt-lines'] as $name) {
@@ -236,8 +340,10 @@ class LandedCostTest extends TestCase
         foreach (['index', 'show', 'connection'] as $name) {
             $this->assertContains('perm:inventory.view_stock', Route::getRoutes()->getByName('api.v1.landed-costs.'.$name)->gatherMiddleware());
         }
-        $this->assertContains('perm:inventory.integration.connection_manage',
-            Route::getRoutes()->getByName('api.v1.landed-costs.connection.enable')->gatherMiddleware());
+        $enable = Route::getRoutes()->getByName('api.v1.landed-costs.connection.enable')->gatherMiddleware();
+        $this->assertContains('perm:inventory.integration.connection_manage', $enable);
+        // The clearing binding is an accountant decision (segregation of duties).
+        $this->assertContains('perm:inventory.integration.accounting_review', $enable);
     }
 
     #[Test]

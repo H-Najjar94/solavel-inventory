@@ -190,13 +190,27 @@ class LandedCostService
                 $this->fail('not_draft');
             }
             $orgId = (int) $doc->organization_id;
+            // Every stock lock is taken BEFORE the first non-locking read of this
+            // transaction. Under REPEATABLE READ the read view is fixed by the first
+            // plain SELECT; taken earlier, it would hide a shipment that committed
+            // while this post waited for the item lock, and the plan would treat sold
+            // stock as on hand. The lines are read with a locking read for the same
+            // reason, and the lock order (items, then balances and layers) is the one
+            // StockLedgerService uses, so there is no deadlock inversion.
+            $locked = LandedCostLine::query()->where('landed_cost_id', $doc->id)->orderBy('id')->lockForUpdate()->get(['id', 'item_id', 'warehouse_id']);
+            $pairs = $locked->map(fn ($l) => [(int) $l->item_id, (int) $l->warehouse_id])->all();
+            $this->lockStock($locked->pluck('item_id')->all(), $pairs);
             $this->assertConnectedReady($orgId, 'landed_cost.posted');
             // The connection may have changed since the draft was saved.
             $this->currencyContract($doc->currency_code, (string) $doc->exchange_rate, $doc->base_currency_code, true);
             $doc->load('lines');
-            $this->lockStock($doc->lines->pluck('item_id')->all(), $doc->lines->map(fn ($l) => [(int) $l->item_id, (int) $l->warehouse_id])->all());
+            $lockedPairs = array_flip(array_map(fn (array $p) => $p[0].':'.$p[1], $pairs));
             foreach ($doc->lines as $line) {
-                $line->fill($this->receiptLineSnapshot((int) $line->goods_receipt_line_id))->save();
+                $snapshot = $this->receiptLineSnapshot((int) $line->goods_receipt_line_id);
+                if (! isset($lockedPairs[$snapshot['item_id'].':'.$snapshot['warehouse_id']])) {
+                    $this->fail('receipt_line_unavailable', ['line' => (int) $line->goods_receipt_line_id]);
+                }
+                $line->fill($snapshot)->save();
             }
             $plan = $this->plan($doc->fresh('lines'));
 
@@ -254,10 +268,16 @@ class LandedCostService
                 $this->fail('not_posted');
             }
             $orgId = (int) $doc->organization_id;
+            // Lock first (see post()): a plain read before the stock locks would
+            // fix a read view that hides a movement committed while this reversal
+            // waited, so the "has the stock moved" refusal would pass wrongly.
+            $locked = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->orderBy('id')->lockForUpdate()
+                ->get(['id', 'item_id', 'warehouse_id', 'destination_role']);
+            $this->lockStock($locked->pluck('item_id')->all(), $locked->where('destination_role', 'inventory_asset')
+                ->map(fn ($c) => [(int) $c->item_id, (int) $c->warehouse_id])->all());
             $this->assertConnectedReady($orgId, 'landed_cost.reversed');
             $components = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->orderBy('id')->get();
             $inventory = $components->where('destination_role', 'inventory_asset');
-            $this->lockStock($components->pluck('item_id')->all(), $inventory->map(fn ($c) => [(int) $c->item_id, (int) $c->warehouse_id])->all());
             $this->assertExactlyReversible($doc, $inventory);
 
             $reversal = $this->reversals->reverseLandedCost($doc, trim($reason) !== '' ? $reason : __('inventory.landed_cost.default_reason'),
@@ -498,22 +518,28 @@ class LandedCostService
         return array_values(array_filter($components, fn (array $c) => ! Decimal::isZero($c['posted_base_amount'], 2)));
     }
 
-    /** Lock items, then every balance (and FIFO layer) of the touched item/warehouse pairs. */
+    /**
+     * Lock items (sorted, as StockLedgerService does), then every balance and
+     * FIFO layer of the touched item/warehouse pairs. Only locking reads happen
+     * here; the valuation-hold check (a plain read) runs after every lock is held.
+     */
     private function lockStock(array $itemIds, array $pairs): void
     {
         $holds = app(PurchaseValuationHoldService::class);
         $holds->lockItems($itemIds);
-        $seen = [];
+        $unique = [];
         foreach ($pairs as [$itemId, $warehouseId]) {
-            if (isset($seen[$itemId.':'.$warehouseId])) {
-                continue;
-            }
-            $seen[$itemId.':'.$warehouseId] = true;
-            $holds->assertMovable($itemId, $warehouseId);
+            $unique[$itemId.':'.$warehouseId] = [(int) $itemId, (int) $warehouseId];
+        }
+        ksort($unique, SORT_NATURAL);
+        foreach ($unique as [$itemId, $warehouseId]) {
             StockBalance::query()->withoutGlobalScope('warehouse_access')->where('item_id', $itemId)
                 ->where('warehouse_id', $warehouseId)->orderBy('id')->lockForUpdate()->get(['id']);
             CostLayer::query()->where('item_id', $itemId)->where('warehouse_id', $warehouseId)
                 ->orderBy('id')->lockForUpdate()->get(['id']);
+        }
+        foreach ($unique as [$itemId, $warehouseId]) {
+            $holds->assertMovable($itemId, $warehouseId);
         }
     }
 

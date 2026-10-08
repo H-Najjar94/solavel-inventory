@@ -5,6 +5,7 @@ namespace Tests\Feature\Access;
 use App\Services\Integration\ConnectionManagementPolicy;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -105,6 +106,25 @@ class ConnectionManagementPolicyTest extends TestCase
         $this->grant(self::MEMBER, ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION);
         $reviewer = app(ConnectionManagementPolicy::class)->status(self::ORGANIZATION, $this->user(self::MEMBER));
         $this->assertTrue($reviewer['can_review_accounting']);
+    }
+
+    #[Test]
+    public function enabling_landed_costs_needs_the_accounting_reviewer_so_a_segregated_owner_cannot_bind_the_clearing_account_alone(): void
+    {
+        // Same gate as the wizard's accountant decisions: connection management AND accounting review.
+        $middleware = Route::getRoutes()->getByName('api.v1.landed-costs.connection.enable')->gatherMiddleware();
+        $this->assertContains('perm:'.ConnectionManagementPolicy::MANAGEMENT_PERMISSION, $middleware);
+        $this->assertContains('perm:'.ConnectionManagementPolicy::ACCOUNTING_REVIEW_PERMISSION, $middleware);
+
+        // Without segregation an eligible owner holds both, so nothing changes for ordinary owners.
+        $plain = app(ConnectionManagementPolicy::class)->status(self::ORGANIZATION, $this->user(self::OWNER));
+        $this->assertTrue($plain['can_manage_connection'] && $plain['can_review_accounting']);
+
+        // With segregation the owner still manages the connection but is refused the enable route.
+        $this->grant(null, ConnectionManagementPolicy::SEGREGATION_POLICY);
+        $owner = app(ConnectionManagementPolicy::class)->status(self::ORGANIZATION, $this->user(self::OWNER));
+        $this->assertTrue($owner['can_manage_connection']);
+        $this->assertFalse($owner['can_review_accounting']);
     }
 
     #[Test]

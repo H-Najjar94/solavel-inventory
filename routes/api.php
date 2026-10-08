@@ -389,7 +389,10 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::get('/landed-costs/connection', [LandedCostController::class, 'connection'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.connection');
     Route::post('/landed-costs/connection/enable', [LandedCostController::class, 'enableConnection'])
-        ->middleware('perm:inventory.integration.connection_manage')->name('api.v1.landed-costs.connection.enable');
+        // Binding the clearing account is an accounting-role decision: it also needs the
+        // accountant gate (can_review_accounting), so segregation of duties holds.
+        ->middleware(['perm:inventory.integration.connection_manage', 'perm:inventory.integration.accounting_review'])
+        ->name('api.v1.landed-costs.connection.enable');
     Route::get('/landed-costs/{landed_cost}', [LandedCostController::class, 'show'])->whereNumber('landed_cost')
         ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.show');
     Route::post('/landed-costs', [LandedCostController::class, 'store'])

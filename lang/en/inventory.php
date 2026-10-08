@@ -28,6 +28,7 @@ return [
         'clearing_account_invalid' => 'Choose an active, postable SolaCount asset or liability account for landed cost clearing.',
         'clearing_same_as_inventory' => 'The landed cost clearing account must be different from the inventory account.',
         'clearing_immutable' => 'A different landed cost clearing account is already reviewed for this connection. Changing it needs a connection review.',
+        'clearing_account_bound' => 'This account is already bound to another SolaCount account role. Choose a dedicated landed cost clearing account.',
         'default_reason' => 'Landed cost reversed',
     ],
     'warehouse_setup' => ['default_name' => 'Main Warehouse', 'initialization_failed' => 'Warehouse setup could not be completed. Check the organization’s Stock activation and try again.'],

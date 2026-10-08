@@ -59,18 +59,25 @@ export default function LandedCostFormPage() {
     async function save(post = false) {
         if (pending.current || !gate.allowed) return;
         pending.current = true; setSaving(true); setErrors({});
+        let createdId = null;
         try {
             const payload = { ...header, currency_code: header.currency_code || null,
                 charges: charges.filter((c) => Number(c.amount) > 0),
                 receipt_line_ids: [...selected] };
             const res = isEdit ? await api.updateLandedCost(id, payload) : await api.createLandedCost(payload);
             const docId = res?.data?.id ?? id;
+            if (!isEdit) createdId = docId;
             if (post) { await api.postLandedCost(docId); toast.push(t('landedCosts.posted'), 'success'); }
             else toast.push(t('landedCosts.draftSaved'), 'success');
             qc.invalidateQueries({ queryKey: ['landed-costs'] });
             qc.invalidateQueries({ queryKey: ['landed-cost'] });
             nav(`/landed-costs/${docId}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('landedCosts.saveFailed')); }
+        } catch (err) {
+            setErrors(fieldErrors(err)); toast.failure(err, err.message || t('landedCosts.saveFailed'));
+            // The draft was created but posting was refused: continue on that draft, so
+            // the next click updates it instead of creating a second one.
+            if (createdId) { qc.invalidateQueries({ queryKey: ['landed-costs'] }); nav(`/landed-costs/${createdId}/edit`, { replace: true }); }
+        }
         finally { pending.current = false; setSaving(false); }
     }
 

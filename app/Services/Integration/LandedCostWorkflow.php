@@ -39,6 +39,7 @@ final class LandedCostWorkflow
         $requirements = app(OrganizationAccountRequirements::class);
         $valid = $requirements->validMappedRoles($organizationId);
         $missing = array_values(array_diff(AccountRolePolicy::forOperations(self::OPERATIONS), $valid));
+        $bound = $this->boundToOtherRoles($organizationId, $mapping);
         $clearingId = (int) DB::connection('tenant')->table('integration_account_mappings')->where('organization_id', $organizationId)
             ->where('integration', IntegrationEvents::INTEGRATION)->where('mapping_type', 'landed_cost_clearing')
             ->whereIn('status', ['mapped', 'verified'])->value('solabooks_account_id');
@@ -52,6 +53,7 @@ final class LandedCostWorkflow
             'missing_roles' => $missing,
             'clearing_account' => $clearingId ? $this->present($this->accounts((int) $mapping->finance_organization_id)->firstWhere('id', $clearingId)) : null,
             'candidates' => $this->accounts((int) $mapping->finance_organization_id)
+                ->reject(fn ($a) => in_array((string) $a->id, $bound, true))
                 ->sortBy(fn ($a) => [$this->rank($a), (string) $a->code])->values()->map(fn ($a) => $this->present($a))->all(),
         ];
     }
@@ -81,6 +83,11 @@ final class LandedCostWorkflow
             if ($stable && (string) $stable->solabooks_record_id !== (string) $financeAccountId) {
                 // A reviewed binding is immutable; changing it needs the connection review.
                 $this->fail('clearing_immutable');
+            }
+            // An account already bound to another role (GRNI, AP, input VAT, ...) is the wrong
+            // account for clearing, and its account_role binding would violate imdm_org_type_books_uniq.
+            if (! $stable && in_array((string) $financeAccountId, $this->boundToOtherRoles($organizationId, $mapping), true)) {
+                $this->fail('clearing_account_bound');
             }
             $name = json_decode((string) $account->name, true);
             $values = ['solabooks_account_id' => (string) $financeAccountId, 'account_code' => $account->code,
@@ -129,6 +136,27 @@ final class LandedCostWorkflow
     private static function withWorkflow(array $workflows): array
     {
         return array_values(array_unique(array_merge(array_values($workflows), self::OPERATIONS)));
+    }
+
+    /**
+     * Finance account ids already used by another account role of this connection:
+     * reviewed account_role bindings and active role mappings, except the
+     * landed_cost_clearing mapping itself.
+     *
+     * @return list<string>
+     */
+    private function boundToOtherRoles(int $organizationId, IntegrationOrganizationMapping $mapping): array
+    {
+        $roles = DB::connection('tenant')->table('integration_account_mappings')->where('organization_id', $organizationId)
+            ->where('integration', IntegrationEvents::INTEGRATION);
+        $clearingRowIds = (clone $roles)->where('mapping_type', 'landed_cost_clearing')->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $mapped = (clone $roles)->where('mapping_type', '!=', 'landed_cost_clearing')->whereIn('status', ['mapped', 'verified'])
+            ->whereNotNull('solabooks_account_id')->pluck('solabooks_account_id')->map(fn ($id) => (string) $id)->all();
+        $bound = IntegrationMasterDataMapping::query()->where('organization_mapping_uuid', $mapping->mapping_uuid)
+            ->where('entity_type', 'account_role')->whereNotIn('solastock_record_id', $clearingRowIds ?: ['0'])
+            ->pluck('solabooks_record_id')->map(fn ($id) => (string) $id)->all();
+
+        return array_values(array_unique(array_merge($mapped, $bound)));
     }
 
     private function mapping(int $organizationId): ?IntegrationOrganizationMapping

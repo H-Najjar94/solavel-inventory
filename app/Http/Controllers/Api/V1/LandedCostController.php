@@ -7,6 +7,7 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\LandedCost;
 use App\Models\Tenant\LandedCostLine;
+use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\LandedCostService;
 use App\Services\Integration\LandedCostWorkflow;
@@ -51,7 +52,7 @@ class LandedCostController extends ApiController
             'landed_cost' => $landedCost,
             'preview' => $landedCost->status === 'draft' ? $this->service->preview($landedCost) : null,
             'accounting_events' => $events,
-            'connection' => app(LandedCostWorkflow::class)->status($this->context->idOrFail()),
+            'connection' => $this->connectionStatus(),
         ]);
     }
 
@@ -119,7 +120,18 @@ class LandedCostController extends ApiController
 
     public function connection(): JsonResponse
     {
-        return $this->success(app(LandedCostWorkflow::class)->status($this->context->idOrFail()));
+        return $this->success($this->connectionStatus());
+    }
+
+    /** The Finance chart candidates are shown only to users who may enable the workflow. */
+    private function connectionStatus(): array
+    {
+        $status = app(LandedCostWorkflow::class)->status($this->context->idOrFail());
+        if (($status['candidates'] ?? []) !== [] && ! app(InventoryPermissionService::class)->can(auth()->user(), 'inventory.integration.connection_manage')) {
+            $status['candidates'] = [];
+        }
+
+        return $status;
     }
 
     public function enableConnection(Request $request): JsonResponse
