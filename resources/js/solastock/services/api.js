@@ -236,7 +236,7 @@ export const api = {
     shipmentDraftFromSo: (soId) => request(`/sales-orders/${soId}/shipment-draft`),
     createShipment: (body) => request('/shipments', { method: 'POST', body }),
     updateShipment: (id, body) => request(`/shipments/${id}`, { method: 'PUT', body }),
-    postShipment: (id) => request(`/shipments/${id}/post`, { method: 'POST' }),
+    postShipment: (id, body = {}) => request(`/shipments/${id}/post`, { method: 'POST', body }),
     shipmentRates: (id) => request(`/shipments/${id}/rates`),
     shipmentLabel: (id, body = {}) => request(`/shipments/${id}/label`, { method: 'POST', body }),
     shipmentTracking: (id) => request(`/shipments/${id}/tracking`),
