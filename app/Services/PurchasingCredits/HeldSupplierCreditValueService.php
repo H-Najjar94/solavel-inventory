@@ -100,7 +100,7 @@ final class HeldSupplierCreditValueService
                 'allocated_base_difference'=>$quote['native_plan']['allocated_base_difference']],
             'physical_movement_ids'=>[],'physical_quantity_delta'=>'0.00000000','financial_journal_ids'=>[],
             'valuation_effect'=>$effect?json_decode($effect->snapshot,true,512,JSON_THROW_ON_ERROR):null,
-            'native_voided_journal_id'=>$authority->financialReverseProven()?$authority->financeJournalId():null,'finance_reversal_journal_id'=>null]);
+            'native_voided_journal_id'=>$authority->financialReverseProven()?$authority->financeJournalId():null,'finance_reversal_journal_id'=>null,'inverse_classification_journal_id'=>$authority->inverseClassificationJournalId()]);
     }
     private function fingerprint(SupplierCreditCostAuthority $authority,string $purpose,array $plan,array $revision):string
     {

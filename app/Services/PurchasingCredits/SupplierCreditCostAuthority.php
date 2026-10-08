@@ -250,6 +250,7 @@ final readonly class SupplierCreditCostAuthority
     public function action():string{return $this->proof['operation'];}
     public function reverse():bool{return $this->direction()==='reverse';}
     public function financialReverseProven():bool{return $this->reverse() && $this->action()==='reverse' && ($this->proof['native_inverse_mode']??null)==='native_void_no_twin' && (int)($this->proof['native_voided_journal_id']??0)===(int)$this->row->journal_entry_id;}
+    public function inverseClassificationJournalId():?int{return !empty($this->proof['inverse_classification_journal_id'])?(int)$this->proof['inverse_classification_journal_id']:null;}
     public function financeJournalId():?int{return $this->row->journal_entry_id?(int)$this->row->journal_entry_id:null;}
     public function forwardQuote():?array{return json_decode($this->row->stock_value_quote??'null',true,512,JSON_THROW_ON_ERROR);}
     public function planRevision():int{return (int)($this->reverse()?$this->row->reverse_plan_revision:$this->row->plan_revision);}
