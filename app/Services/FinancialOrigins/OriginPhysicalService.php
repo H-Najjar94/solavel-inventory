@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 /** Native posting hooks use exact durable command links, never source-name or number heuristics. */
 final class OriginPhysicalService
 {
-    public function beforeReverse(GoodsReceipt|Shipment $document):?OriginPhysicalReversalContext
+    public function beforeReverse(GoodsReceipt|Shipment $document):OriginPhysicalReversalContext|OriginCashPhysicalReversalContext|null
     {
         $db=DB::connection('tenant');abort_unless($db->transactionLevel()===0,409);
         if(!$db->getSchemaBuilder()->hasTable('stock_financial_origin_commands'))return null;
@@ -17,7 +17,7 @@ final class OriginPhysicalService
         abort_unless($command->status==='completed',409);
         $request=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)->where('request_uuid',$command->request_uuid)->firstOrFail();
         OriginSourceAdmission::stock($request,(int)(request()->user()?->getAuthIdentifier()??0),
-            $document instanceof Shipment?'inventory.manage_shipments':'inventory.manage_adjustments');
+            $document instanceof Shipment?'inventory.manage_returns':'inventory.manage_adjustments');
         $event=\App\Models\Tenant\FinancialOriginOutbox::query()->where('organization_id',$document->organization_id)
             ->where('operation_uuid',$command->operation_uuid)->where('physical_document_id',$document->id)
             ->where('event_type',$document instanceof Shipment?'financial-origin.shipment.confirmed':'financial-origin.receipt.confirmed')->firstOrFail();
@@ -29,7 +29,9 @@ final class OriginPhysicalService
             'physical_journal_event_uuid'=>data_get($event->payload,'physical.journal_event_uuid'),
             'physical_journal_payload_hash'=>data_get($event->payload,'physical.journal_payload_hash')];
         $proof=app(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->authorizeOriginPhysicalReversal($facts);
-        return OriginPhysicalReversalContext::fromProof($facts,$proof,(int)$document->organization_id,(int)$command->id);
+        return $request->source_document_type==='sales_receipt'
+            ? OriginCashPhysicalReversalContext::fromProof($facts,$proof,(int)$document->organization_id,(int)$command->id)
+            : OriginPhysicalReversalContext::fromProof($facts,$proof,(int)$document->organization_id,(int)$command->id);
     }
 
     public function reversed(GoodsReceipt|Shipment $document,\App\Models\Tenant\InventoryReversal|\App\Models\Tenant\SalesReturn $inverse):?array

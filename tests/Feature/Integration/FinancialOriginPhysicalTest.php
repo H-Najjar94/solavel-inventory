@@ -293,4 +293,49 @@ final class FinancialOriginPhysicalTest extends TestCase
         try{app(\App\Services\Documents\InventoryReversalService::class)->reverseGoodsReceipt($grn,'QA foreign audit');$this->fail('Foreign audit allowed reversal');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}
         $this->assertSame($before,StockLedger::count());$this->assertNull($grn->fresh()->reversal_id);$this->assertSame(1,FinancialOriginOutbox::count());
     }
+
+    /** Native Shipment/SalesReturn/ledger; persisted Finance match and remote proof are explicit projections. */
+    public function test_cash_origin_source_return_preserves_gross_demand_and_native_replay():void
+    {
+        [,,$op]=$this->admitted('sales_receipt', 'none', true);
+        app(OriginDispatchService::class)->executeNative($op,336);$this->actor(323,true);
+        $db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
+        $add=function($table,$name,$callback)use($schema){if(!$schema->hasColumn($table,$name))$schema->table($table,fn($t)=>$callback($t,$name));};
+        $add('sales_receipts','status',fn($t,$n)=>$t->string($n)->nullable());
+        foreach(['source_key'] as $name)$add('journal_entries',$name,fn($t,$n)=>$t->string($n)->nullable());
+        foreach(['posted_at','voided_at','deleted_at'] as $name)$add('journal_entries',$name,fn($t,$n)=>$t->timestamp($n)->nullable());
+        $add('journal_entries','reverses_entry_id',fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
+        if(!$schema->hasTable('finance_document_positions'))$schema->create('finance_document_positions',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('position_uuid');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->unsignedBigInteger('source_document_line_id');});
+        if(!$schema->hasTable('finance_document_matches'))$schema->create('finance_document_matches',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->uuid('operation_uuid');$t->uuid('position_uuid');$t->uuid('physical_mapping_uuid');$t->unsignedBigInteger('physical_document_id');$t->unsignedBigInteger('physical_line_id');$t->unsignedBigInteger('source_document_line_id');$t->unsignedBigInteger('physical_journal_id');$t->unsignedBigInteger('journal_entry_id')->nullable();$t->unsignedBigInteger('reversal_journal_id')->nullable();$t->string('state');$t->string('reverse_state')->nullable();$t->decimal('quantity',24,8);$t->decimal('booked_base',24,6);$t->json('snapshot');});
+        if(!$schema->hasTable('finance_document_physical_events'))$schema->create('finance_document_physical_events',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('request_uuid');$t->string('event_type');$t->uuid('physical_mapping_uuid');$t->unsignedBigInteger('physical_document_id');$t->string('state');$t->char('source_hash',64);$t->json('payload');});
+        $shipment=Shipment::sole();$r=FinancialOriginRequest::sole();$event=FinancialOriginOutbox::sole();$physical=$event->payload['physical'];
+        $position=(string)Str::uuid();$match=(string)Str::uuid();$snapshot=['physical'=>$physical];$at='2026-10-07 12:00:00';
+        $db->table('sales_receipts')->where('id',850)->update(['status'=>'posted']);$db->table('journal_entries')->where('id',95)->update(['posted_at'=>$at]);
+        $db->table('finance_document_positions')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'position_uuid'=>$position,'source_document_type'=>'sales_receipt','source_document_id'=>850,'source_journal_id'=>95,'source_document_line_id'=>851]);
+        $db->table('journal_entries')->insert(['id'=>96,'organization_id'=>14,'source'=>'SOLASTOCK','source_type'=>'shipment','source_id'=>$shipment->id,'source_key'=>'external-api:'.hash('sha256',$physical['journal_key']),'status'=>'posted','posted_at'=>$at]);
+        $db->table('journal_entries')->insert(['id'=>97,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>'App\\Models\\SalesReceipt','source_id'=>850,'source_key'=>'financial-origin-match:'.$match,'status'=>'posted','posted_at'=>$at]);
+        $db->table('finance_document_matches')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'operation_uuid'=>$match,'position_uuid'=>$position,'physical_mapping_uuid'=>$physical['mapping_uuid'],'physical_document_id'=>$shipment->id,'physical_line_id'=>$physical['lines'][0]['physical_line_id'],'source_document_line_id'=>851,'physical_journal_id'=>96,'journal_entry_id'=>97,'state'=>'settled','quantity'=>'2','booked_base'=>'14','snapshot'=>json_encode($snapshot)]);
+        $db->table('finance_document_physical_events')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'event_type'=>'financial-origin.shipment.confirmed','physical_mapping_uuid'=>$physical['mapping_uuid'],'physical_document_id'=>$shipment->id,'state'=>'reviewed','source_hash'=>$event->payload_hash,'payload'=>json_encode($event->payload)]);
+        $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOriginPhysicalReversal')->andReturnUsing(fn($facts)=>$facts+[
+            'allowed'=>true,'actor_id'=>0,'authority_kind'=>'posted_financial_origin_physical_reversal','physical_policy'=>'cash_receipt_active_source_only','cash_refund_authorized'=>false,'source_closure_authorized'=>false,
+            'finance_organization_id'=>14,'central_organization_id'=>$this->mapping->central_organization_id,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,
+            'matches'=>[['operation_uuid'=>$match,'position_uuid'=>$position,'physical_line_id'=>$physical['lines'][0]['physical_line_id'],'match_state'=>$db->table('finance_document_matches')->where('operation_uuid',$match)->value('state'),'recognition_reversal_journal_id'=>($id=$db->table('finance_document_matches')->where('operation_uuid',$match)->value('reversal_journal_id'))?(int)$id:null,'recognition_journal_id'=>97,'quantity'=>'2.00000000','booked_base'=>'14.000000','match_snapshot_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($snapshot)]]]);
+        $service=app(\App\Services\Documents\SalesReturnService::class);$return=$service->createDraft(['shipment_id'=>$shipment->id,'reason'=>'Exact cash source inverse','return_date'=>'2026-10-07'],[]);
+        while($db->transactionLevel()>0)$db->commit();$before=StockLedger::count();
+        // A remote allowed response cannot replace the exact active native recognition fact.
+        $db->table('journal_entries')->where('id',97)->update(['status'=>'voided','voided_at'=>$at]);
+        try {$service->post($return);$this->fail('Voided native recognition was accepted');}
+        catch(HttpException $error){$this->assertSame(409,$error->getStatusCode());}
+        $this->assertSame($before,StockLedger::count());$this->assertSame(1,FinancialOriginOutbox::count());
+        $db->table('journal_entries')->where('id',97)->update(['status'=>'posted','voided_at'=>null]);
+        $result=$service->post($return);
+        // Explicit Finance inverse projection: native Stock replay must still succeed after accounting reconciliation.
+        $db->table('journal_entries')->insert(['id'=>98,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>'App\\Models\\SalesReceipt','source_id'=>850,'source_key'=>'financial-origin-match-reversal:'.$match,'status'=>'posted','posted_at'=>$at,'reverses_entry_id'=>97]);
+        $db->table('finance_document_matches')->where('operation_uuid',$match)->update(['state'=>'reversed','reverse_state'=>'committed','reversal_journal_id'=>98]);
+        $this->assertSame($result->id,$service->post($result->fresh())->id);
+        $this->assertSame($before+1,StockLedger::count());$this->assertSame('20.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame('2.0000',FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity);
+        $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(0,SalesDocumentOutbox::count());
+        $this->assertSame(850,FinancialOriginOutbox::where('event_type','financial-origin.shipment.reversed')->sole()->payload['source_document_id']);
+    }
 }

@@ -137,7 +137,14 @@ class SalesReturnService
 
     public function post(SalesReturn $r): SalesReturn
     {
-        return DB::connection($this->conn())->transaction(function () use ($r) {
+        // Canonical factual proof is fetched outside the native transaction; Stock permissions remain independent.
+        $originShipment = $r->source_reversal_shipment_id ?: $r->shipment_id;
+        $originSource = $originShipment ? Shipment::query()->where('organization_id',$r->organization_id)->findOrFail($originShipment) : null;
+        $originContext = $originSource ? app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->beforeReverse($originSource) : null;
+        abort_unless(!$originContext || $r->is_source_reversal,409,'cash_origin_partial_return_policy_unavailable');
+        return DB::connection($this->conn())->transaction(function () use ($r,$originSource,$originContext) {
+            $originContext?->lockAndValidate();
+            if($originContext)Shipment::query()->where('organization_id',$r->organization_id)->whereKey($originSource->id)->lockForUpdate()->firstOrFail();
             $r = SalesReturn::query()->lockForUpdate()->with('lines')->findOrFail($r->id);
             if ($r->status === 'posted') {
                 return $r; // idempotent
@@ -226,6 +233,7 @@ class SalesReturnService
                 $r->markSystemTransition()->save();
             }
 
+            if($originContext)app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->reversed($originSource->fresh(),$r);
             return $r->fresh('lines');
         });
     }

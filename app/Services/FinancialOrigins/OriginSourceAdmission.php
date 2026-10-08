@@ -17,7 +17,7 @@ final readonly class OriginSourceAdmission
     }
     public static function stock(FinancialOriginRequest $request,int $actor,string $permission):self
     {
-        abort_unless(in_array($permission,['inventory.view_sales','inventory.view_stock','inventory.manage_sales_orders','inventory.manage_adjustments','inventory.manage_shipments','inventory.receive_goods'],true),403);
+        abort_unless(in_array($permission,['inventory.view_sales','inventory.view_stock','inventory.manage_sales_orders','inventory.manage_adjustments','inventory.manage_shipments','inventory.manage_returns','inventory.receive_goods'],true),403);
         $user=request()->user();abort_unless($user && (int)$user->getAuthIdentifier()===$actor && $actor>0
             && (app(CentralAppAccess::class)->decision($actor,(int)$request->organization_id,'inventory')['allowed']??false)
             && app(InventoryPermissionService::class)->can($user,$permission),403);
