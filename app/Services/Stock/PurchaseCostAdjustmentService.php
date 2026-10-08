@@ -249,6 +249,10 @@ final class PurchaseCostAdjustmentService
                 if ($authority) {
                     $allowedHold = ['settlement_uuid' => $authority->holdUuid((int) $component->item_id, (int) $component->warehouse_id, ($reverse || $authority->reverse()) ? 'reverse' : 'apply'),
                         'purpose' => $authority instanceof SupplierCreditCostAuthority ? ($authority->reverse() ? 'credit_reverse' : 'credit_apply') : ($reverse ? 'origin_reverse' : 'origin_apply'), 'plan_revision' => $authority->planRevision(), 'plan_fingerprint' => $authority->planFingerprint()];
+                    if ($authority instanceof SupplierCreditCostAuthority && $authority->reverse()) {
+                        $allowedHold += ['group_credit_note_id'=>$authority->noteId(), 'group_bill_id'=>$authority->billId(),
+                            'group_bill_journal_id'=>$authority->billJournalId()];
+                    }
                 }
                 $holdService->assertMovable((int) $component->item_id, (int) $component->warehouse_id,
                     is_array($allowedHold) ? $allowedHold : null);
