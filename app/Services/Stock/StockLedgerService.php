@@ -737,6 +737,10 @@ class StockLedgerService
             foreach ($consumptions as $c) {
                 $layer = CostLayer::query()->lockForUpdate()->find($c->cost_layer_id);
                 if ($layer) {
+                    // A financial cost adjustment may have changed the remaining layer since this OUT.
+                    // Restore its captured historical carrying without repricing the units still on hand.
+                    $layer->unit_cost = RestoredFifoCarrying::unitCost((string) $layer->remaining_qty,
+                        (string) $layer->unit_cost, (string) $c->qty, (string) $c->unit_cost);
                     $layer->remaining_qty = Decimal::qty(Decimal::add((string) $layer->remaining_qty, (string) $c->qty));
                     $layer->save();
                 }

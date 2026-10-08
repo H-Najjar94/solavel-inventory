@@ -226,6 +226,8 @@ class SalesReturnService
                 $r->markSystemTransition()->save();
             }
 
+            app(\App\Services\Sales\ReturnHandoffService::class)->record($r);
+
             return $r->fresh('lines');
         });
     }

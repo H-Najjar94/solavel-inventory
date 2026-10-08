@@ -72,6 +72,7 @@ final class PurchaseCostAdjustmentPlanner
         $serialized = $components->map(function (array $component) use (&$posted, $scale): array {
             $componentScale = $component['destination_role'] === 'inventory_asset' ? 2 : $scale;
             $component['posted_base_amount'] = Decimal::round($component['exact_base_amount'], $componentScale);
+            if(isset($component['provenance']['restored_fifo_layer_slices'])){$component['provenance']['restored_fifo_layer_slices']=RestoredFifoLayerSlices::rounded($component['provenance']['restored_fifo_layer_slices'],$component['posted_base_amount']);}
             $posted = Decimal::add($posted, $component['posted_base_amount'], 8);
 
             return $component;
@@ -102,6 +103,36 @@ final class PurchaseCostAdjustmentPlanner
 
     private function allocationComponents(IntegrationFinancialLineAllocation $allocation, string $difference): Collection
     {
+        $origin=request()->attributes->get('verified_return_inverse_cost_origin');
+        if(is_array($origin)&&($origin['settlement_uuid']??null)===$allocation->allocation_uuid){
+            abort_unless((int)$origin['organization_id']===(int)$allocation->solastock_organization_id,403);
+            $rows=$this->ledgerQuery($allocation)->where('organization_id',$allocation->solastock_organization_id)
+                ->whereIn('id',$origin['ledger_ids'])->where('source_type','App\\Models\\Tenant\\InventoryReversal')
+                ->where('source_id',$origin['inverse_id'])->where('direction','in')->orderBy('id')->get();
+            abort_unless($rows->count()===count($origin['ledger_ids'])&&!$rows->isEmpty(),403);
+            $parts=collect();$allocated='0';
+            foreach($rows as$row){
+                $share=Decimal::mul($difference,Decimal::div((string)$row->quantity,(string)$origin['quantity'],12),8);
+                $allocated=Decimal::add($allocated,$share,8);
+                $parts=$parts->concat($row->costing_method==='fifo'
+                    ?$this->restoredFifoComponents($allocation,$row,$share)
+                    :$this->averageComponents($allocation,$row,$share));
+            }
+            if(Decimal::cmp($allocated,$difference,8)!==0)$this->fail('Restored receipt cost allocation rounding requires review.');
+            return $parts;
+        }
+        $eligible=request()->attributes->get('verified_unbilled_return_cost_cohort');
+        if(is_array($eligible)&&($eligible['settlement_uuid']??null)===$allocation->allocation_uuid){
+            abort_unless((int)$eligible['organization_id']===(int)$allocation->solastock_organization_id,403);
+            $receipt=$this->ledgerQuery($allocation)->where('organization_id',$allocation->solastock_organization_id)->whereKey($eligible['receipt_ledger_id'])->firstOrFail();
+            $provenance=['unbilled_return_snapshot_hash'=>$eligible['snapshot_hash']];
+            if($receipt->costing_method==='fifo'){
+                $layer=CostLayer::query()->where('organization_id',$receipt->organization_id)->where('source_ledger_id',$receipt->id)->lockForUpdate()->firstOrFail();
+                abort_unless(Decimal::cmp((string)$layer->remaining_qty,$eligible['eligible_quantity'],8)===0,409);
+                $provenance['cost_layer_id']=$layer->id;
+            }
+            return collect([$this->component($allocation,$receipt,'inventory_asset',(string)$allocation->base_quantity,$difference,$provenance)]);
+        }
         $receipt = $this->ledgerQuery($allocation)->where('organization_id', $allocation->solastock_organization_id)
             ->where('source_type', GoodsReceipt::class)->where('source_id', $allocation->source_document_id)
             ->where('source_line_id', $allocation->source_line_id)->orderBy('id')->first();
@@ -153,6 +184,52 @@ final class PurchaseCostAdjustmentPlanner
         }
 
         return $parts;
+    }
+
+    /** Restored FIFO quantities reuse original layers; they are not new receipt layers. */
+    private function restoredFifoComponents($allocation,StockLedger $inverse,string $difference): Collection
+    {
+        $out=StockLedger::query()->withoutGlobalScope('warehouse_access')->where('organization_id',$inverse->organization_id)
+            ->where('source_type','App\\Models\\Tenant\\SupplierReturn')
+            ->where('source_id',request()->attributes->get('verified_return_inverse_cost_origin')['return_id'])
+            ->where('source_line_id',$inverse->source_line_id)->where('direction','out')->firstOrFail();
+        $consumptions=CostLayerConsumption::query()->where('organization_id',$inverse->organization_id)->where('ledger_id',$out->id)->orderBy('id')->get();
+        $parts=collect();$restored='0';
+        foreach($consumptions as$source){
+            $restored=Decimal::add($restored,(string)$source->qty,8);
+            $layer=CostLayer::query()->where('organization_id',$inverse->organization_id)->whereKey($source->cost_layer_id)->lockForUpdate()->firstOrFail();
+            if(StockLedger::query()->withoutGlobalScope('warehouse_access')->where('organization_id',$inverse->organization_id)
+                ->where('cost_layer_id',$layer->id)->where('id','>',$inverse->id)->where('direction','in')->exists()){
+                $this->fail('A later physical layer restoration requires its own reviewed cost cohort.');
+            }
+            $later=CostLayerConsumption::query()->where('organization_id',$inverse->organization_id)->where('cost_layer_id',$layer->id)
+                ->where('ledger_id','>',$inverse->id)->orderBy('id')->get();
+            $atRestore=(string)$layer->remaining_qty;foreach($later as$c)$atRestore=Decimal::add($atRestore,(string)$c->qty,8);
+            if(!Decimal::gt($atRestore,'0',8)||Decimal::gt((string)$source->qty,$atRestore,8))$this->fail('Restored FIFO layer provenance requires review.');
+            $layerDifference=Decimal::mul($difference,Decimal::div((string)$source->qty,(string)$inverse->quantity,12),8);
+            $remainingShare=Decimal::div((string)$layer->remaining_qty,$atRestore,12);
+            $remaining=Decimal::mul((string)$source->qty,$remainingShare,8);
+            $layerLedger=$this->ledgerQuery($allocation)->where('organization_id',$inverse->organization_id)->whereKey($layer->source_ledger_id)->firstOrFail();
+            if(Decimal::gt($remaining,'0',8))$parts->push($this->component($allocation,$layerLedger,'inventory_asset',$remaining,
+                Decimal::mul($layerDifference,$remainingShare,8),['cost_layer_id'=>$layer->id,'restored_from_ledger_id'=>$out->id,'inverse_ledger_id'=>$inverse->id]));
+            foreach($later as$c){
+                $ledger=$this->ledgerQuery($allocation)->where('organization_id',$inverse->organization_id)->whereKey($c->ledger_id)->firstOrFail();
+                $share=Decimal::div((string)$c->qty,$atRestore,12);
+                $parts->push($this->component($allocation,$ledger,$this->role($ledger),Decimal::mul((string)$source->qty,$share,8),
+                    Decimal::mul($layerDifference,$share,8),['cost_layer_id'=>$layer->id,'consumption_id'=>$c->id,'restored_from_ledger_id'=>$out->id,'inverse_ledger_id'=>$inverse->id]));
+            }
+        }
+        if(Decimal::cmp($restored,(string)$inverse->quantity,8)!==0)$this->fail('Restored FIFO source quantities do not reconcile.');
+        // Native component uniqueness is allocation + ledger + role, even when one OUT consumed several layers.
+        $cohort=[];foreach($parts as$part){
+            $key=$part['stock_ledger_id'].'|'.$part['destination_role'];
+            if($part['destination_role']==='inventory_asset'){$layerId=(int)$part['provenance']['cost_layer_id'];$layer=CostLayer::query()->where('organization_id',$inverse->organization_id)->whereKey($layerId)->firstOrFail();$part['provenance']['restored_fifo_layer_slices']=[['cost_layer_id'=>$layerId,'remaining_quantity'=>(string)$layer->remaining_qty,'exact_base_amount'=>$part['exact_base_amount']]];}
+            if(!isset($cohort[$key])){$cohort[$key]=$part;continue;}
+            $cohort[$key]['base_quantity']=Decimal::add($cohort[$key]['base_quantity'],$part['base_quantity'],8);
+            $cohort[$key]['exact_base_amount']=Decimal::add($cohort[$key]['exact_base_amount'],$part['exact_base_amount'],8);
+            $cohort[$key]['provenance']['restored_layer_components'][]=$part['provenance'];if($part['destination_role']==='inventory_asset')$cohort[$key]['provenance']['restored_fifo_layer_slices']=array_merge($cohort[$key]['provenance']['restored_fifo_layer_slices'],$part['provenance']['restored_fifo_layer_slices']);
+        }
+        return collect(array_values($cohort));
     }
 
     private function averageComponents($allocation, StockLedger $receipt, string $difference): Collection

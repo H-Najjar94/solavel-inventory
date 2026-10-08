@@ -19,11 +19,12 @@ final class DocumentHandoffOutcome
         $data=(array)($response['data']??[]);
         $linked=match($event) {
             'purchasing.receipt.confirmed'=>(int)($data['bill_id']??0)>0,
+            'sales.return.confirmed'=>(int)($data['credit_note_id']??0)>0,
             'sales.shipment.confirmed'=>(int)($data['invoice_id']??0)>0,
             default=>true,
         };
         $accepted=($response['successful']??false)===true;
-        $intervention=$accepted && !$linked && in_array($data['state']??null,['intervention','needs_information'],true);
+        $intervention=$accepted && !$linked && in_array($data['state']??null,['intervention','needs_information','source_review'],true);
         return ['successful'=>$accepted && $linked,'intervention'=>$intervention,
             'data'=>$data,'reason'=>$intervention?'commercial_mapping_required':(!$accepted?'delivery_pending':(!$linked?'destination_document_missing':null))];
     }
