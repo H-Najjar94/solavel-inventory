@@ -5,6 +5,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
+import { localDocumentDate } from '../services/documentDate.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
@@ -27,7 +28,7 @@ export default function GoodsReceiptFormPage() {
     const gate = useCanCreate('inventory.receive_goods');
     const valuationGate = useCanCreate('inventory.manage_adjustments');
 
-    const [header, setHeader] = useState({ grn_number: '', purchase_order_id: poId ? Number(poId) : null, supplier_id: null, warehouse_id: null, receipt_date: new Date().toISOString().slice(0, 10), notes: '' });
+    const [header, setHeader] = useState({ grn_number: '', purchase_order_id: poId ? Number(poId) : null, supplier_id: null, warehouse_id: null, receipt_date: localDocumentDate(), notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
     const [blindReceiving, setBlindReceiving] = useState(false);
     const [errors, setErrors] = useState({});

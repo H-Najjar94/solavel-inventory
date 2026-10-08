@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
+import { localDocumentDate } from '../services/documentDate.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
@@ -21,7 +22,7 @@ export default function SalesOrderFormPage() {
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.manage_sales_orders');
 
-    const [header, setHeader] = useState({ order_number: '', customer_id: null, customer_name: '', warehouse_id: null, order_date: new Date().toISOString().slice(0, 10), requested_ship_date: '', notes: '' });
+    const [header, setHeader] = useState({ order_number: '', customer_id: null, customer_name: '', warehouse_id: null, order_date: localDocumentDate(), requested_ship_date: '', notes: '' });
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
