@@ -76,7 +76,9 @@ class EventPayloadBuilder
         // payload instead of a model-cast midnight timestamp.
         $transactionDate = substr((string) ($date ?? ''), 0, 10);
         $original = $this->originalSource($document);
-        $originalPayload = $original ? (array) IntegrationOutboxEvent::query()->where('organization_id', $orgId)
+        // A reversal of a document posted while standalone has no original event
+        // (IntegrationEvents::reversesDocumentUnknownToFinance): nothing to inherit.
+        $originalPayload = $original && $original['event_uuid'] ? (array) IntegrationOutboxEvent::query()->where('organization_id', $orgId)
             ->where('event_uuid', $original['event_uuid'])->firstOrFail()->payload : null;
         $valuation = $ledger->isNotEmpty() ? app(FinanceBaseValuation::class)->contract((int) $orgId) : null;
 

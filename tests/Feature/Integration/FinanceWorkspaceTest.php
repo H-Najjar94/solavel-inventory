@@ -547,6 +547,65 @@ final class FinanceWorkspaceTest extends TestCase
             ->assertJsonPath('data.accounting_events.1.event_uuid', $reversed->event_uuid);
     }
 
+    /**
+     * Batch 10 (landed-cost review N3, all reversal types): a document posted while the
+     * organization was standalone recorded no outbox event, so Finance never booked it.
+     * Reversing it after connecting must stay local: no journal-bearing event that could
+     * never link to an original (it used to dead-letter / fail building the payload).
+     */
+    public function test_reversal_of_a_document_posted_while_standalone_emits_no_finance_journal(): void
+    {
+        [$warehouse, $item] = $this->connectedOpeningFixture('REV-SA');
+        $service = app(\App\Services\Documents\OpeningStockService::class);
+        $entry = $service->createDraft(['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01'],
+            [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]);
+        $service->post($entry);
+        // Standalone-born: IntegrationOutboxService::record() returns null without a connection
+        // identity, so the original has no event at all.
+        IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->delete();
+
+        $service->reverse($entry->fresh(), 'Opening entered twice');
+
+        $this->assertSame('reversed', $entry->fresh()->status);
+        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $reversal = \App\Models\Tenant\InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
+        $this->assertNull($reversal->original_event_uuid);
+        $reversed = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.reversed')->sole();
+        $this->assertSame('ignored', $reversed->status);
+        $this->assertSame('original_posted_standalone_no_journal', $reversed->payload['accounting_policy']);
+        $this->assertNull($reversed->payload['original_source']['event_uuid']);
+        $this->assertNull($reversed->depends_on_event_uuid);
+        $this->assertNull($reversed->contract_version);
+        $this->assertNull($reversed->payload_hash);
+        $this->assertNull($reversed->transport_eligible_at);
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::postsJournalForPayload('opening_stock.reversed', (array) $reversed->payload));
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::isAccountingEventForReconciliation('opening_stock.reversed', (array) $reversed->payload));
+        // Never promoted later either.
+        app(\App\Services\Integration\IntegrationOutboxService::class)->promoteEligiblePending(TenantTestManager::ORG_A, 25);
+        $this->assertSame('ignored', $reversed->fresh()->status);
+    }
+
+    public function test_every_reversal_type_without_an_original_event_is_excluded_from_journals(): void
+    {
+        $reversalTypes = array_values(array_filter(array_keys(\App\Services\Integration\IntegrationEvents::TYPES),
+            fn (string $type) => \App\Services\Integration\IntegrationEvents::aggregateType($type) === 'InventoryReversal'));
+        $this->assertContains('landed_cost.reversed', $reversalTypes);
+        $this->assertContains('grn.reversed', $reversalTypes);
+        foreach ($reversalTypes as $type) {
+            $payload = ['total_inventory_value_change' => '-40.00', 'landed_cost' => ['total_base_amount' => '40.00'],
+                'original_source' => ['type' => 'x', 'id' => 1, 'number' => 'X-1', 'event_uuid' => null, 'reason' => 'r']];
+            $this->assertTrue(\App\Services\Integration\IntegrationEvents::reversesDocumentUnknownToFinance($type, $payload), $type);
+            $this->assertFalse(\App\Services\Integration\IntegrationEvents::postsJournalForPayload($type, $payload), $type);
+            $this->assertFalse(\App\Services\Integration\IntegrationEvents::isAccountingEventForReconciliation($type, $payload), $type);
+            $payload['original_source']['event_uuid'] = (string) Str::uuid();
+            $this->assertFalse(\App\Services\Integration\IntegrationEvents::reversesDocumentUnknownToFinance($type, $payload), $type);
+            $this->assertSame(\App\Services\Integration\IntegrationEvents::postsJournal($type),
+                \App\Services\Integration\IntegrationEvents::postsJournalForPayload($type, $payload), $type);
+        }
+        // Posted (non-reversal) events are never affected.
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::reversesDocumentUnknownToFinance('opening_stock.posted', ['original_source' => null]));
+    }
+
     public function test_journals_recorded_while_paused_are_promoted_once_after_resume_but_historical_pending_is_untouched(): void
     {
         $org = TenantTestManager::ORG_A;
