@@ -2,7 +2,7 @@
 namespace Tests\Unit;
 
 use App\Models\Tenant\{GoodsReceipt, Shipment, PurchasingDocumentOutbox, SalesDocumentOutbox};
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 /** Model serialization only: no database, posting or customer history changes. */
 final class NativeDocumentCalendarSerializationTest extends TestCase
