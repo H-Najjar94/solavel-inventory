@@ -186,6 +186,11 @@ final class PostedPurchaseSettlementService
             $adjustment = IntegrationPurchaseCostAdjustment::query()
                 ->where('adjustment_uuid', $previous['adjustment_uuid'])->lockForUpdate()->firstOrFail();
             abort_unless(data_get($adjustment->safe_metadata, 'purchase_settlement.settlement_uuid') === $facts['settlement_uuid'], 409);
+            if(isset($authority['restoration_closure'])) {
+                abort_unless(($facts['direction']??'forward')==='reverse'||in_array($operation,['reverse','status','release'],true),403);
+                $closure=\App\Services\PurchasingCredits\SupplierCreditBillClosureAuthority::fromLocked($facts,$authority,$mapping,$operation,$adjustment);
+                return app(\App\Services\PurchasingCredits\HeldSupplierCreditBillClosureService::class)->executeLocked($closure);
+            }
             $reversePreview = $operation === 'prepare' && ($facts['direction'] ?? null) === 'reverse';
             if ($reversePreview) {
                 abort_unless(in_array($previous['state'], ['applied', 'reversed'], true), 409, __('receiving.valuation_pending'));
