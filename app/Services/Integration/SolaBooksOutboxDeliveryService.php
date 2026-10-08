@@ -232,7 +232,9 @@ class SolaBooksOutboxDeliveryService
         if(!$endpoint||$endpoint===$this->journalEndpoint())throw new RuntimeException('party_connection_pending');
         $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
         $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
-        if(!$response->successful())throw new RuntimeException('party_connection_pending');
+        if(!$response->successful())throw new PartyDeliveryFailure($response->status(),
+            PartyDeliveryFailure::code($response->json('error.code') ?? $response->json('code')),
+            (string)$state->entity_type,(int)$state->source_id);
         $result=(array)$response->json('data');
         if (($result['status']??null)==='synced' && (int)($result['source_id']??0)===(int)$state->source_id)
             app(PartyDocumentDependency::class)->resumePending($mapping,$state->entity_type,(int)$state->source_id);

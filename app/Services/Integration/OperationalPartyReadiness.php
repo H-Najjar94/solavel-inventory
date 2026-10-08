@@ -61,7 +61,9 @@ final class OperationalPartyReadiness
                     'central_organization_id'=>(int)$mapping->central_organization_id,
                     'source_revision'=>$state->source_revision,
                     'source_key'=>'party:'.hash('sha256',$mapping->mapping_uuid.'|'.$type.'|stock|'.$partyId.'|'.$state->source_revision),
-                    'exception_class'=>$failure::class]);
+                    'exception_class'=>$failure::class,
+                    'http_status'=>$failure instanceof PartyDeliveryFailure ? $failure->httpStatus : null,
+                    'error_code'=>$failure instanceof PartyDeliveryFailure ? $failure->errorCode : 'party_connection_pending']);
                 $this->pending($type,(string)$fields['name']);
             }
         }
