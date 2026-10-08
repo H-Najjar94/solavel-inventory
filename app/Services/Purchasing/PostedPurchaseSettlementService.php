@@ -192,7 +192,8 @@ final class PostedPurchaseSettlementService
                 'bill_revision' => $facts['bill_revision'],
             ]);
             $service = app(PurchaseCostAdjustmentService::class);
-            $previous = in_array($operation, ['status', 'release'], true) ? $service->status($native) : $service->prepare($native);
+            $readExisting=in_array($operation,['status','release'],true)||($restoredOrigin!==null&&($operation==='reverse'||($operation==='prepare'&&($facts['direction']??null)==='reverse')));
+            $previous=$readExisting?$service->status($native):$service->prepare($native);
             $adjustment = IntegrationPurchaseCostAdjustment::query()
                 ->where('adjustment_uuid', $previous['adjustment_uuid'])->lockForUpdate()->firstOrFail();
             abort_unless(data_get($adjustment->safe_metadata, 'purchase_settlement.settlement_uuid') === $facts['settlement_uuid'], 409);
