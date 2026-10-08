@@ -35,6 +35,7 @@ for extension in mysqlnd pdo phar bcmath ctype curl dom fileinfo gd iconv intl m
   printf 'extension=%s.so\n' "$extension" >> "$RUN/php/php.ini"
 done
 readlink /proc/self/ns/net > "$RUN/host-net-namespace"
+set +e
 bwrap --unshare-all --die-with-parent --new-session --cap-drop ALL \
   --ro-bind /usr/bin /usr/bin --ro-bind /usr/sbin /usr/sbin \
   --ro-bind /usr/lib /usr/lib --ro-bind /usr/lib64 /usr/lib64 --ro-bind /usr/share /usr/share \
@@ -47,5 +48,9 @@ bwrap --unshare-all --die-with-parent --new-session --cap-drop ALL \
   --clearenv --setenv PATH /qualification/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   --setenv HOME /tmp --setenv PHPRC /qualification/php/php.ini --setenv PHP_INI_SCAN_DIR /qualification/php/empty \
   --chdir /qualification/source /bin/bash scripts/run-private-tests.sh "$@"
+TASK_TEST_STATUS=$?
+set -e
+# Source integrity is mandatory even when product/baseline assertions fail.
 (cd "$RUN/source" && sha256sum --check --quiet "$EVIDENCE/source.sha256")
 echo STOCK_CONTAINMENT=PASS
+exit "$TASK_TEST_STATUS"
