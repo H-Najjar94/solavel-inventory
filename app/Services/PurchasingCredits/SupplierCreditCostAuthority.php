@@ -115,7 +115,9 @@ final readonly class SupplierCreditCostAuthority
             if($reverse){
                 $original=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$row->journal_entry_id)->lockForUpdate()->first();
                 self::activeJournal($original);
-                abort_unless($note->status==='posted' && (int)$note->journal_entry_id===(int)$original->id,409);
+                abort_unless($note->posting_status==='posted' && $note->status==='unapplied'
+                    && !$db->table('debit_allocations')->where('debit_note_id',$note->id)->lockForUpdate()->exists()
+                    && (int)$note->journal_entry_id===(int)$original->id,409);
             }else abort_unless($note->status==='draft',409);
         }elseif($reverse){
             self::nativeInverse($proof,$row,$note,$db,$finance,$action);
@@ -207,7 +209,8 @@ final readonly class SupplierCreditCostAuthority
             && ($proof['native_inverse_mode']??null)==='native_void_no_twin'
             && (int)($proof['native_voided_journal_id']??0)===(int)$journal->id
             && empty($proof['finance_reversal_journal_id']) && empty($row->reversal_journal_id),409);
-        else abort_unless($voided || ($journal->status==='posted' && empty($journal->voided_at)),409);
+        else abort_unless($voided || ($journal->status==='posted' && empty($journal->voided_at)
+            && $note->posting_status==='posted' && $note->status==='unapplied'),409);
         if($action==='reverse'){
             $quote=json_decode($row->reverse_quote??'null',true,512,JSON_THROW_ON_ERROR);
             $difference=$quote['native_plan']['classification_difference']??null;
