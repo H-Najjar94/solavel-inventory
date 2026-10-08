@@ -105,12 +105,12 @@ final readonly class SupplierCreditReceiptRestoreAuthority
   foreach($quote['native_plan']['components']as$part){
    $role=$part['destination_role'];
    if(!isset($bindings[$role])){
-    $reference=$db->table('integration_master_data_mappings')->where('organization_mapping_uuid',$map->mapping_uuid)->where('finance_organization_id',$finance)
-     ->where('solastock_organization_id',$map->solastock_organization_id)->where('integration_master_data_mappings.entity_type','account_role')->whereIn('integration_master_data_mappings.status',['mapped','verified'])
+    $reference=$db->table('integration_master_data_mappings')->where('integration_master_data_mappings.organization_mapping_uuid',$map->mapping_uuid)->where('integration_master_data_mappings.finance_organization_id',$finance)
+     ->where('integration_master_data_mappings.solastock_organization_id',$map->solastock_organization_id)->where('integration_master_data_mappings.entity_type','account_role')->whereIn('integration_master_data_mappings.status',['mapped','verified'])
      ->join('integration_account_mappings as canonical_account','canonical_account.id','=','integration_master_data_mappings.solastock_record_id')
      ->where('canonical_account.organization_id',$map->solastock_organization_id)->where('canonical_account.integration','solabooks')
-     ->where('canonical_account.mapping_type',$role)->whereIn('canonical_account.status',['mapped','verified'])->select('canonical_account.solabooks_account_id')->sole();
-    $bindings[$role]=(int)$reference->solabooks_account_id;
+     ->where('canonical_account.mapping_type',$role)->whereIn('canonical_account.status',['mapped','verified'])->select('integration_master_data_mappings.solabooks_record_id')->sole();
+    $bindings[$role]=(int)$reference->solabooks_record_id;
    }
    $amount=Decimal::round((string)$part['posted_base_amount'],$scale);$sum=Decimal::add($sum,$amount,8);
    $account=$bindings[$role];$expected[$account]=Decimal::add($expected[$account]??'0',$amount,8);
@@ -128,7 +128,8 @@ final readonly class SupplierCreditReceiptRestoreAuthority
   $expected[$bui]=Decimal::sub($expected[$bui]??'0',$carry,8);
   foreach($bindings as$role=>$account)abort_unless((int)($proof['restore_account_bindings'][$role]??0)===$account
    &&$db->table('accounts')->where('organization_id',$finance)->where('id',$account)->where('is_active',true)->where('is_postable',true)->exists(),409);
-  $actual=[];foreach($lines as$line){$account=(int)$line['account_id'];abort_unless(array_key_exists($account,$expected),409);
+  $base=json_decode($position->snapshot,true,512,JSON_THROW_ON_ERROR)['base_currency_code'];
+  $actual=[];foreach($lines as$line){abort_unless($line['currency_code']===$base&&Decimal::cmp((string)$line['exchange_rate'],'1',12)===0,409);$account=(int)$line['account_id'];abort_unless(array_key_exists($account,$expected),409);
    $actual[$account]=Decimal::add($actual[$account]??'0',Decimal::sub((string)$line['base_debit'],(string)$line['base_credit'],8),8);}
   foreach($expected as$account=>$amount)abort_unless(Decimal::cmp($actual[$account]??'0',$amount,8)===0,409);
  }
