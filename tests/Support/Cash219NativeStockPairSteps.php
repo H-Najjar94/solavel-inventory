@@ -10,7 +10,18 @@ final class Cash219NativeStockPairSteps
 {
  public static function run(string $step,array $state):array {
   if(!app()->environment('testing')||DB::connection('tenant')->getDatabaseName()!=='tenant_000100'||DB::connection('tenant')->transactionLevel()!==0)throw new \LogicException('Sealed native pair only.');
-  $org=(int)$state['organization_id'];$actor=(int)$state['warehouse_actor_id'];
+  $org=(int)$state['organization_id'];$actor=$step==='opening'?17003:(int)$state['warehouse_actor_id'];
+  $user=\App\Models\User::findOrFail($actor);\Illuminate\Support\Facades\Auth::setUser($user);request()->setUserResolver(fn()=>$user);
+  $access=app(\App\Services\Access\CentralAppAccess::class);
+  if(($access->decision($actor,$org,'inventory')['allowed']??false)!==true||($access->decision($actor,$org,'finance')['allowed']??false)===true)throw new \LogicException('Actual Stock-only native actor required.');
+  if($step==='opening'){
+   app(\App\Services\Access\WarehouseAccessService::class)->assertAllowed((int)$state['warehouse_id']);
+   if(!app(\App\Services\Access\InventoryPermissionService::class)->can($user,'inventory.manage_opening_stock'))throw new \LogicException('Native opening-stock authority required.');
+   $service=app(\App\Services\Documents\OpeningStockService::class);
+   $entry=$service->createDraft(['warehouse_id'=>$state['warehouse_id'],'opening_date'=>'2024-06-13','notes'=>'Private Cash219 initial stock'],
+    [['item_id'=>$state['item_id'],'entered_unit_id'=>$state['unit_id'],'quantity'=>'10','unit_cost'=>'2']]);
+   $entry=$service->post($entry);return['opening_stock_id'=>$entry->id,'status'=>$entry->status];
+  }
   $r=FinancialOriginRequest::query()->where('organization_id',$org)->where('request_uuid',$state['request_uuid'])->where('source_document_type','sales_receipt')->sole();
   $context=['request_uuid'=>$r->request_uuid,'source_document_type'=>'sales_receipt','source_document_id'=>$r->source_document_id,'source_journal_id'=>$r->source_journal_id,'request_revision'=>$r->source_revision];
   if($step==='approve')return app(OriginRequestService::class)->approveNative($context+['warehouse_id'=>$state['warehouse_id']],$actor);
