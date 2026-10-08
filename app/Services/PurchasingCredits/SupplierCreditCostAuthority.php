@@ -16,12 +16,14 @@ final readonly class SupplierCreditCostAuthority
     public static function fromLockedNativeProvenance(array $identity,array $proof,IntegrationOrganizationMapping $mapping,string $action,int $actor):self
     {
         $db=DB::connection('tenant');$org=app(OrganizationContext::class)->idOrFail();
-        // Native void/release lifecycle proof remains unsupported until its audit and durable ACK contract is qualified.
-        abort_unless($db->transactionLevel()>0 && $actor>0 && in_array($action,['prepare','apply','status'],true)
-            && ($identity['direction']??null)==='forward',403);
+        // Release stays closed until the durable release ACK lifecycle is independently implemented.
+        $reverse=($identity['direction']??null)==='reverse';
+        abort_unless($db->transactionLevel()>0 && $actor>0 && in_array($action,['prepare','apply','status','reverse'],true)
+            && in_array($identity['direction']??null,['forward','reverse'],true)
+            && ($reverse ? $action!=='apply' : $action!=='reverse'),403);
         abort_unless(($proof['allowed']??false)===true && ($proof['contract_version']??null)==='purchase-credit-value.v1'
             && ($proof['authority_kind']??null)==='posted_supplier_credit_value' && ($proof['operation']??null)===$action
-            && ($proof['direction']??null)==='forward' && (int)($proof['actor_id']??0)===$actor,403);
+            && ($proof['direction']??null)===$identity['direction'] && (int)($proof['actor_id']??0)===$actor,403);
         abort_unless((int)($proof['finance_organization_id']??0)===(int)$mapping->finance_organization_id
             && (int)($proof['central_organization_id']??0)===$org && (int)$mapping->solastock_organization_id===$org
             && (int)$mapping->central_organization_id===$org,403);
@@ -35,14 +37,14 @@ final readonly class SupplierCreditCostAuthority
         $position=$db->table('finance_purchase_positions')->where('organization_id',$finance)->where('position_uuid',$identity['position_uuid'])->lockForUpdate()->first();
         $row=$db->table('finance_purchase_credit_allocations')->where('organization_id',$finance)->where('allocation_uuid',$identity['allocation_uuid'])->lockForUpdate()->first();
         abort_unless($bill && $note && $position && $row && (int)$note->bill_id===(int)$bill->id && (int)$note->supplier_id===(int)$bill->supplier_id,409);
-        foreach($fields as$key){$column=$key==='source_bill_id'?'bill_id':$key;abort_unless((string)$row->$column===(string)$identity[$key],409);}
+        foreach($fields as$key){$column=$key==='source_bill_id'?'bill_id':($key==='plan_revision'&&$reverse?'reverse_plan_revision':$key);abort_unless((string)$row->$column===(string)$identity[$key],409);}
         abort_unless($row->credit_kind==='price_only' && Decimal::isZero((string)$row->quantity,8)
             && (int)$row->bill_journal_id===(int)$bill->journal_entry_id && (int)$position->bill_journal_id===(int)$bill->journal_entry_id
             && $position->bill_revision===$row->bill_revision && (int)$position->bill_line_id===(int)$row->bill_line_id
             && $position->organization_mapping_uuid===$mapping->mapping_uuid && !in_array($position->state,['reversed','reversal_pending'],true),409);
-        abort_unless($action==='status' || in_array($row->state,$action==='prepare'?['draft_reserved','quote_pending','quoted']:['quoted','valuation_pending','posted'],true),409);
-        $user=$db->table('users')->where('id',$row->actor_id)->where('central_user_id',$actor)->first();
-        abort_unless($user && (int)$row->central_actor_id===$actor && $db->table('organization_user')->where('organization_id',$finance)
+        abort_unless($action==='status' || in_array($row->state,$reverse?['posted','reverse_quote_pending','reverse_pending','reversed']:($action==='prepare'?['draft_reserved','quote_pending','quoted']:['quoted','valuation_pending','posted']),true),409);
+        $user=$db->table('users')->where('id',$reverse?$row->reverse_actor_id:$row->actor_id)->where('central_user_id',$actor)->first();
+        abort_unless($user && (int)($reverse?$row->reverse_central_actor_id:$row->central_actor_id)===$actor && $db->table('organization_user')->where('organization_id',$finance)
             ->where('user_id',$user->id)->where('status','active')->exists(),403);
         $locked=IntegrationOrganizationMapping::query()->whereKey($mapping->id)->lockForUpdate()->firstOrFail();
         abort_unless($locked->mapping_uuid===$mapping->mapping_uuid && $locked->status==='verified' && $locked->activation_state==='active'
@@ -90,15 +92,18 @@ final readonly class SupplierCreditCostAuthority
         }
         abort_unless(Decimal::cmp($net,(string)$row->matched_net_amount,8)===0 && Decimal::cmp($tax,(string)$row->matched_nonrecoverable_tax,8)===0
             && Decimal::gt(Decimal::add($net,$tax,8),'0'),409);
-        $quote=json_decode($row->stock_value_quote??'null',true,512,JSON_THROW_ON_ERROR);
-        abort_unless($quote===($proof['forward_quote']??null) && $quote===($proof['quote']??null) && $row->state===($proof['state']??null),409);
+        $forward=json_decode($row->stock_value_quote??'null',true,512,JSON_THROW_ON_ERROR);
+        $quote=json_decode(($reverse?$row->reverse_quote:$row->stock_value_quote)??'null',true,512,JSON_THROW_ON_ERROR);
+        abort_unless($forward===($proof['forward_quote']??null) && $quote===($proof['quote']??null) && $row->state===($proof['state']??null),409);
         if(is_array($quote)){
-            abort_unless(($quote['direction']??null)==='forward' && ($quote['allocation_uuid']??null)===$row->allocation_uuid
-                && ($quote['operation_uuid']??null)===$row->operation_uuid && (int)($quote['plan_revision']??0)===(int)$row->plan_revision
-                && ($quote['plan_fingerprint']??null)===$row->plan_fingerprint && is_array($quote['native_plan']??null),409);
-            abort_unless(($proof['plan_fingerprint']??null)===$row->plan_fingerprint,409);
+            abort_unless(($quote['direction']??null)===$identity['direction'] && ($quote['allocation_uuid']??null)===$row->allocation_uuid
+                && ($quote['operation_uuid']??null)===$row->operation_uuid && (int)($quote['plan_revision']??0)===(int)($reverse?$row->reverse_plan_revision:$row->plan_revision)
+                && ($quote['plan_fingerprint']??null)===($proof['plan_fingerprint']??null) && is_array($quote['native_plan']??null),409);
+            if(!$reverse)abort_unless(($proof['plan_fingerprint']??null)===$row->plan_fingerprint,409);
         }
-        if($action==='apply'||($action==='status'&&$row->journal_entry_id)){
+        if($reverse){
+            self::nativeInverse($proof,$row,$note,$db,$finance,$action);
+        }elseif($action==='apply'||($action==='status'&&$row->journal_entry_id)){
             $journal=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$row->journal_entry_id)
                 ->where('source','NOTE')->where('source_type','App\\Models\\DebitNote')->where('source_id',$note->id)
                 ->where('source_key','purchase-credit-position:'.$row->operation_uuid)->lockForUpdate()->first();self::activeJournal($journal);
@@ -146,6 +151,37 @@ final readonly class SupplierCreditCostAuthority
             'quantity_base'=>$base,'price_delta_base'=>$delta,'variant_id'=>$ledger->variant_id?(int)$ledger->variant_id:null,
             'lot_id'=>$ledger->lot_id?(int)$ledger->lot_id:null,'bin_id'=>$ledger->bin_id?(int)$ledger->bin_id:null];
     }
+
+    /** A native void invalidates the original NOTE journal; it never invents a reversing twin. */
+    private static function nativeInverse(array $proof,object $row,object $note,object $db,int $finance,string $action):void
+    {
+        $intent=json_decode($row->reverse_snapshot??'null',true,512,JSON_THROW_ON_ERROR);
+        abort_unless(is_array($intent) && $intent===($proof['reverse_intent']??null)
+            && ($intent['allocation_uuid']??null)===$row->allocation_uuid
+            && (int)($intent['original_journal_id']??0)===(int)$row->journal_entry_id
+            && ($intent['closure_permission']??null)==='void'
+            && hash_equals(hash('sha256',json_encode($intent,JSON_THROW_ON_ERROR)),(string)($proof['inverse_intent_hash']??''))
+            && (int)($proof['reverse_actor_id']??0)===(int)$row->reverse_actor_id
+            && (int)($proof['reverse_central_actor_id']??0)===(int)$row->reverse_central_actor_id
+            && !$db->table('debit_allocations')->where('debit_note_id',$note->id)->lockForUpdate()->exists(),409);
+        $forward=json_decode($row->stock_value_quote??'null',true,512,JSON_THROW_ON_ERROR);
+        abort_unless(is_array($forward) && ($forward['direction']??null)==='forward'
+            && ($forward['operation_uuid']??null)===$row->operation_uuid && ($forward['allocation_uuid']??null)===$row->allocation_uuid
+            && (int)($forward['plan_revision']??0)===(int)$row->plan_revision
+            && ($forward['plan_fingerprint']??null)===$row->plan_fingerprint && is_array($forward['native_plan']??null),409);
+        $journal=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$row->journal_entry_id)
+            ->where('source','NOTE')->where('source_type','App\\Models\\DebitNote')->where('source_id',$note->id)
+            ->where('source_key','purchase-credit-position:'.$row->operation_uuid)->lockForUpdate()->first();
+        abort_unless($journal && !empty($journal->posted_at) && empty($journal->deleted_at)
+            && (int)$note->journal_entry_id===(int)$journal->id,409);
+        $voided=!empty($journal->voided_at) && $note->status==='void';
+        if($action==='reverse')abort_unless($voided && ($intent['native_inverse_mode']??null)==='native_void_no_twin'
+            && ($proof['native_inverse_mode']??null)==='native_void_no_twin'
+            && (int)($proof['native_voided_journal_id']??0)===(int)$journal->id
+            && empty($proof['finance_reversal_journal_id']) && empty($row->reversal_journal_id),409);
+        else abort_unless($voided || ($journal->status==='posted' && empty($journal->voided_at)),409);
+    }
+
     private static function activeJournal(?object $row):void {abort_unless($row && $row->status==='posted' && !empty($row->posted_at) && empty($row->voided_at) && empty($row->deleted_at),409);}
     public function organizationId():int{return $this->org;}
     public function mappingUuid():string{return $this->map;}
@@ -160,13 +196,13 @@ final readonly class SupplierCreditCostAuthority
     public function baseCurrencyCode():string{return $this->proof['base_currency_code'];}
     public function exchangeRate():string{return (string)$this->proof['exchange_rate'];}
     public function sourceAllocations():array{return $this->sources;}
-    public function direction():string{return 'forward';}
+    public function direction():string{return $this->proof['direction'];}
     public function action():string{return $this->proof['operation'];}
-    public function reverse():bool{return false;}
-    public function financialReverseProven():bool{return false;}
+    public function reverse():bool{return $this->direction()==='reverse';}
+    public function financialReverseProven():bool{return $this->reverse() && $this->action()==='reverse' && ($this->proof['native_inverse_mode']??null)==='native_void_no_twin' && (int)($this->proof['native_voided_journal_id']??0)===(int)$this->row->journal_entry_id;}
     public function financeJournalId():?int{return $this->row->journal_entry_id?(int)$this->row->journal_entry_id:null;}
     public function forwardQuote():?array{return json_decode($this->row->stock_value_quote??'null',true,512,JSON_THROW_ON_ERROR);}
-    public function planRevision():int{return (int)$this->row->plan_revision;}
-    public function planFingerprint():?string{return $this->row->plan_fingerprint;}
-    public function holdUuid(int $item,int $warehouse,string $direction='apply'):string {abort_unless($direction==='apply',403);return Uuid::uuid5(Uuid::NAMESPACE_URL,'supplier-credit|'.$this->allocationUuid().'|forward|'.$item.'|'.$warehouse.'|'.$this->planRevision())->toString();}
+    public function planRevision():int{return (int)($this->reverse()?$this->row->reverse_plan_revision:$this->row->plan_revision);}
+    public function planFingerprint():?string{return $this->proof['plan_fingerprint']??null;}
+    public function holdUuid(int $item,int $warehouse,string $direction='apply'):string {abort_unless($direction===($this->reverse()?'reverse':'apply'),403);return Uuid::uuid5(Uuid::NAMESPACE_URL,'supplier-credit|'.$this->allocationUuid().'|'.$this->direction().'|'.$item.'|'.$warehouse.'|'.$this->planRevision())->toString();}
 }
