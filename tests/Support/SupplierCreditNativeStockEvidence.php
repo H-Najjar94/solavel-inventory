@@ -37,4 +37,28 @@ final class SupplierCreditNativeStockEvidence
   if(!$components)throw new \RuntimeException('Native effect has no persisted components');
   return ['effect'=>$effect,'adjustment'=>$adjustments[0],'components'=>$components,'valuation'=>json_decode($effect['snapshot'],true,512,JSON_THROW_ON_ERROR)];
  }
+ /** Inspect actual overlapping native hold rows; this never inserts or updates a hold. */
+ public static function assertCooperativeHolds(array $snapshot,int $noteId,bool $terminal):array
+ {
+  $holds=array_values(array_filter($snapshot['rows']['purchase_valuation_holds'],fn($r)=>
+   $r['purpose']==='credit_reverse'&&(int)$r['source_document_id']===$noteId));
+  if(count($holds)<2)throw new \RuntimeException('Cooperative native case requires multiple actual holds');
+  $pools=[];
+  foreach($holds as $row){
+   if(!in_array($row['source_document_type'],['supplier_credit','supplier_credit_receipt_restore'],true)
+    ||(int)$row['source_bill_id']<1||(int)$row['source_journal_id']<1)
+    throw new \RuntimeException('Unbound cooperative native hold');
+   $key=$row['item_id'].':'.$row['warehouse_id'];$pools[$key][]=$row;
+   if($row['state']!==($terminal?'released':'active'))throw new \RuntimeException('Native cooperative lifecycle differs');
+  }
+  $overlap=array_values(array_filter($pools,fn($r)=>count($r)>1));
+  if(!$overlap)throw new \RuntimeException('No actual overlapping native pool proved');
+  foreach($overlap as $rows){
+   if(count(array_unique(array_column($rows,'source_bill_id')))!==1
+    ||count(array_unique(array_column($rows,'source_journal_id')))!==1)
+    throw new \RuntimeException('Cooperative sources differ');
+  }
+  return ['hold_ids'=>array_column($holds,'id'),'overlapping_pools'=>array_keys(array_filter($pools,fn($r)=>count($r)>1)),'terminal'=>$terminal];
+ }
+
 }
