@@ -6,7 +6,9 @@ final class SupplierCreditNativeStockEvidence
 {
  public static function snapshot(int $organizationId):array
  {
-  if(!app()->environment('testing')||$organizationId<1)throw new \RuntimeException('Exact isolated native test organization required');
+  if(PHP_SAPI!=='cli'||!str_starts_with(base_path(),'/qualification/stock')||!app()->environment('testing')
+   ||$organizationId<1||DB::connection('tenant')->getDatabaseName()!=='tenant_000100'
+   ||DB::connection('tenant')->selectOne('SELECT CURRENT_USER() AS actual_user')->actual_user!=='t_000100@localhost')throw new \RuntimeException('Exact isolated native test organization required');
   $db=DB::connection('tenant');$rows=[];
   foreach(['goods_receipts','goods_receipt_lines','stock_ledger','stock_balances','cost_layers','cost_layer_consumptions',
    'integration_purchase_cost_adjustments','integration_purchase_cost_adjustment_components','purchase_valuation_holds',

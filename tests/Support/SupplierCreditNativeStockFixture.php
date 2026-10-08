@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\{DB,Crypt};
 final class SupplierCreditNativeStockFixture
 {
  private static function isolated(int $org):void {
-  if(!app()->environment('testing') || $org<1 || DB::connection('tenant')->getDatabaseName()!=='tenant_000100')
+  if(PHP_SAPI!=='cli' || !str_starts_with(base_path(),'/qualification/stock') || !app()->environment('testing')
+   || $org<1 || DB::connection('tenant')->getDatabaseName()!=='tenant_000100'
+   || DB::connection('tenant')->selectOne('SELECT CURRENT_USER() AS actual_user')->actual_user!=='t_000100@localhost')
    throw new \LogicException('Private native Stock pair only');
   app(\App\Tenancy\OrganizationContext::class)->set($org);
  }
