@@ -125,9 +125,14 @@ final class HeldSupplierCreditValueService
     }
     private function valuationSnapshot(SupplierCreditCostAuthority $authority,array $plan):array
     {
-        $items=array_values(array_unique(array_column($plan['components'],'item_id')));sort($items,SORT_NUMERIC);
+        $pools=[];foreach($plan['components']as$part)$pools[$part['item_id'].'|'.$part['warehouse_id']]=[(int)$part['item_id'],(int)$part['warehouse_id']];
+        ksort($pools,SORT_NATURAL);
+        // Cost evidence is confined to the native source plan's pools; Finance authority never opens other warehouses.
         $rows=[];foreach(['stock_balances','cost_layers']as$table)$rows[$table]=DB::connection('tenant')->table($table)
-            ->where('organization_id',$authority->organizationId())->whereIn('item_id',$items)->orderBy('id')->lockForUpdate()->get()->map(fn($row)=>(array)$row)->all();
+            ->where('organization_id',$authority->organizationId())->where(function($query)use($pools){
+                if(!$pools)$query->whereRaw('1=0');
+                foreach($pools as[$item,$warehouse])$query->orWhere(fn($pool)=>$pool->where('item_id',$item)->where('warehouse_id',$warehouse));
+            })->orderBy('id')->lockForUpdate()->get()->map(fn($row)=>(array)$row)->all();
         return $rows;
     }
 }
