@@ -1,7 +1,0 @@
-# Account display defaults
-
-Central stores nullable preferred_locale (English/Arabic) and preferred_theme (light/dark) on the canonical user. The authenticated, active-user profile endpoint validates and saves only that user's two display fields. Existing profile, password, privacy, organization and application access remain independent. Defaults are applied after login and conveyed as optional display_preferences through the established Central SSO payload or Stock handoff. Consumers hydrate only allowlisted display values after authorization succeeds; roles, permissions, tenant and organization are untouched. Older payloads and users without preferences retain their previous behavior.
-
-The pre-paint script seeds each application's established theme storage key once per account and preferred value. A changed account default or a new browser adopts it; later device theme toggles survive reloads. Language choices made explicitly inside an app remain temporary session choices. Launching that app again through Central SSO reapplies the saved account language. Already-open app sessions receive changed defaults on their next Central handoff.
-
-Deploy the additive Central users migration before exposing the preference setting. No tenant database migration is required. Application rollback can retain the nullable columns and optional SSO fields. Preserve current and rollback releases; retain no more than three complete releases per app.
