@@ -949,6 +949,8 @@ final class ConnectionWizardService
                 'organization_id' => $organizationId, 'approval_payload_hash' => $approvalHash,
             ], $actorUserId);
         });
+        // Local only; anything older than this activation stays historical.
+        app(IntegrationOutboxService::class)->promoteEligiblePending($organizationId);
 
         return $this->show($organizationId, $runUuid);
     }
@@ -1411,6 +1413,57 @@ final class ConnectionWizardService
             ]);
             $this->audit($runUuid, null, 'organization_connection_paused', null, ['organization_id' => $organizationId], $actorUserId);
         });
+
+        return $this->show($organizationId, $runUuid);
+    }
+
+    /**
+     * Inverse of pause(): only a run that was activated (dual-approved) and then
+     * paused can resume, under the same activation gate, Finance onboarding,
+     * commercial entitlement and v2 signing-scope checks as activation, by a
+     * user with the activation permission and the activation confirmation
+     * phrase. It restores the run's approved workflow scope; it never widens it.
+     * Journals recorded while paused are then promoted for delivery.
+     */
+    public function resume(int $organizationId, string $runUuid, string $confirmation, int $actorUserId): array
+    {
+        app(FinanceOnboardingReadiness::class)->assertComplete($organizationId);
+        if (! $this->activationGateReady($organizationId)
+            || ! hash_equals((string) config('integration_connection_wizard.confirmation_phrase'), $confirmation)) {
+            $this->fail('organization_scoped_activation_gate_closed');
+        }
+        $mapping = $this->mapping($organizationId);
+        try {
+            app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+        } catch (\RuntimeException) {
+            $this->fail('integration_plan_required');
+        }
+        DB::connection('tenant')->transaction(function () use ($mapping, $organizationId, $runUuid, $actorUserId): void {
+            $run = $this->run($mapping, $runUuid, true);
+            if ($run->state === 'connected') {
+                return;
+            }
+            if ($run->state !== 'paused' || $run->activated_at === null || empty($run->approval_payload_hash)) {
+                $this->fail('paused_activated_run_required');
+            }
+            if ($mapping->status !== 'verified'
+                || ! in_array($mapping->v2_key_scope_status, ['provisioned_held', 'active'], true)
+                || ! $mapping->current_v2_signing_key_id) {
+                $this->fail('v2_signing_scope_not_ready');
+            }
+            $setting = IntegrationSetting::query()->where('organization_id', $organizationId)
+                ->where('integration', 'solabooks')->lockForUpdate()->firstOrFail();
+            $meta = (array) $setting->meta;
+            $meta['transport_enabled'] = true;
+            $meta['transport_enabled_workflows'] = array_values(json_decode($run->workflow_allowlist ?: '[]', true));
+            $setting->update(['mode' => 'active', 'meta' => $meta, 'updated_at' => now()]);
+            $mapping->update(['activation_state' => 'active']);
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->update([
+                'state' => 'connected', 'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'organization_connection_resumed', null, ['organization_id' => $organizationId], $actorUserId);
+        });
+        app(IntegrationOutboxService::class)->promoteEligiblePending($organizationId);
 
         return $this->show($organizationId, $runUuid);
     }

@@ -195,4 +195,65 @@ class AccountingJournalBuilderTest extends TestCase
         $this->assertSame(['32.50', '0.00'], array_column($lines, 'credit'));
         $this->assertSame(['REV-ADJ-98701', 'REV-ADJ-98701'], array_column($lines, 'description'));
     }
+
+    #[Test]
+    public function opening_stock_reversal_inverts_the_original_opening_journal_exactly_once(): void
+    {
+        $this->useTenantA();
+        $this->mappings();
+        IntegrationAccountMapping::query()->create([
+            'mapping_type' => 'opening_offset', 'integration' => 'solabooks',
+            'solabooks_account_id' => '700', 'status' => 'mapped',
+        ]);
+        $original = $this->event('opening_stock.posted', 'OpeningStockEntry', 98801, 'OS-SOURCE');
+        $original->payload = [
+            'document_date' => now()->toDateString(),
+            'total_inventory_value_change' => '40.00',
+            'suggested_debit_account_mapping' => 'inventory_asset',
+            'suggested_credit_account_mapping' => 'opening_offset',
+        ];
+        $original->save();
+        $reversal = InventoryReversal::query()->create([
+            'reversal_number' => 'REV-OS-98801',
+            'source_type' => 'opening_stock',
+            'source_id' => 98801,
+            'source_number' => 'OS-SOURCE',
+            'reversal_date' => now(),
+            'status' => 'posted',
+            'reason' => 'Opening entered twice',
+            'posted_at' => now(),
+            'posted_guard_key' => 'test-opening-reversal:98801',
+            'original_event_uuid' => $original->event_uuid,
+        ]);
+        $reversalEvent = $this->event('opening_stock.reversed', 'InventoryReversal', $reversal->id, $reversal->reversal_number);
+        // The reversal's own value is negative; it must not flip the sides a second time.
+        $reversalEvent->payload = ['document_date' => now()->toDateString(), 'total_inventory_value_change' => '-40.00',
+            'suggested_debit_account_mapping' => 'opening_offset', 'suggested_credit_account_mapping' => 'inventory_asset'];
+        $reversalEvent->save();
+
+        $originalLines = app(AccountingJournalBuilder::class)->build($original, TenantTestManager::ORG_A);
+        $lines = app(AccountingJournalBuilder::class)->build($reversalEvent, TenantTestManager::ORG_A);
+
+        $this->assertSame([100, 700], array_column($originalLines, 'account_id'));
+        $this->assertSame(['40.00', '0.00'], array_column($originalLines, 'debit'));
+        $this->assertSame(['0.00', '40.00'], array_column($originalLines, 'credit'));
+        // Exact inverse: Dr opening offset / Cr inventory, never Dr inventory again.
+        $this->assertSame([100, 700], array_column($lines, 'account_id'));
+        $this->assertSame(['inventory_asset', 'opening_offset'], array_column($lines, 'account_role'));
+        $this->assertSame(['0.00', '40.00'], array_column($lines, 'debit'));
+        $this->assertSame(['40.00', '0.00'], array_column($lines, 'credit'));
+        $this->assertSame(['REV-OS-98801', 'REV-OS-98801'], array_column($lines, 'description'));
+    }
+
+    #[Test]
+    public function a_pre_fix_opening_reversal_recorded_on_the_entry_is_refused_for_review(): void
+    {
+        $this->useTenantA();
+        $this->mappings();
+        $legacy = $this->event('opening_stock.reversed', 'OpeningStockEntry', 98802, 'OS-LEGACY');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage(__('inventory.integration.reversal_aggregate_unsupported'));
+        app(AccountingJournalBuilder::class)->build($legacy, TenantTestManager::ORG_A);
+    }
 }

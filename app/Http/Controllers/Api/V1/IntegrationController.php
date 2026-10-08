@@ -255,6 +255,18 @@ class IntegrationController extends ApiController
         ));
     }
 
+    /** Inverse of pause; activation permission + confirmation phrase, as activate. */
+    public function resumeWizard(Request $request, string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        $data = $request->validate(['confirmation' => ['required', 'string', 'max:100']]);
+
+        abort_unless($this->permissions->can(auth()->user(), 'inventory.integration.connection_manage'), 403);
+
+        return $this->success($wizard->resume(
+            $this->context->idOrFail(), $run, $data['confirmation'], (int) auth()->id()
+        ));
+    }
+
     public function configure(Request $request): JsonResponse
     {
         $orgId = $this->context->idOrFail();

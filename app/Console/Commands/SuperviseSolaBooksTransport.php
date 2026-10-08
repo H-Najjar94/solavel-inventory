@@ -71,6 +71,10 @@ final class SuperviseSolaBooksTransport extends Command
                     $limit = min(250, max(1, (int) $this->option('limit')));
                     $processed += (int) $isolation->attempt($target, 'party_sync', fn () => app(\App\Services\Integration\ContinuousPartySync::class)->process($mapping, 2));
                     $processed += (int) $isolation->attempt($target, 'catalog_sync', fn () => app(\App\Services\Catalog\DurableCatalogSync::class)->process($mapping, 2));
+                    // After party/catalog sync (dependencies) and before claiming: make
+                    // post-activation journals recorded while paused/unmapped claimable.
+                    $isolation->attempt($target, 'pending_promotion', fn () => app(\App\Services\Integration\IntegrationOutboxService::class)
+                        ->promoteEligiblePending((int) $mapping->solastock_organization_id, $limit));
                     $processed += (int) $isolation->attempt($target, 'journal_outbox', function () use ($transport, $mapping, $limit): int {
                         $count = 0;
                         for ($i = 0; $i < $limit; $i++) {

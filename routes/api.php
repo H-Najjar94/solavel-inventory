@@ -615,6 +615,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
             ->middleware('perm:inventory.integration.connection_manage')->name('api.v1.integration.wizard.activate');
         Route::post('/wizard/runs/{run}/pause', [IntegrationController::class, 'pauseWizard'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.wizard.pause');
+        Route::post('/wizard/runs/{run}/resume', [IntegrationController::class, 'resumeWizard'])
+            ->middleware('perm:inventory.integration.connection_manage')->name('api.v1.integration.wizard.resume');
         Route::put('/connection', [IntegrationController::class, 'configure'])
             ->middleware('perm:inventory.integration.manage')->name('api.v1.integration.connection.update');
         Route::post('/signing-keys/rotate', [IntegrationController::class, 'rotateSigningKey'])

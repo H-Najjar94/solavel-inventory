@@ -72,12 +72,20 @@ class OpeningStockController extends ApiController
         $entry->load(['lines.item:id,name,sku', 'lines.enteredUnit:id,code,name,symbol', 'warehouse:id,name,code']);
         $entry->setAttribute('warehouse_name', $entry->warehouse?->name);
         $this->attachLineTraceability($entry->lines);
+        // A reversal is its own InventoryReversal aggregate (ledger rows + event).
+        $reversalId = \App\Models\Tenant\InventoryReversal::query()
+            ->where('source_type', 'opening_stock')->where('source_id', $entry->id)->value('id');
         $ledger = StockLedger::query()
-            ->where('source_type', OpeningStockEntry::class)
-            ->where('source_id', $entry->id)->get();
+            ->where(fn ($q) => $q->where('source_type', OpeningStockEntry::class)->where('source_id', $entry->id))
+            ->when($reversalId, fn ($q) => $q->orWhere(fn ($q) => $q
+                ->where('source_type', \App\Models\Tenant\InventoryReversal::class)->where('source_id', $reversalId)))
+            ->orderBy('id')->get();
 
         $events = \App\Models\Tenant\IntegrationOutboxEvent::query()
-            ->where('aggregate_type', 'OpeningStockEntry')->where('aggregate_id', $entry->id)
+            ->where(fn ($scope) => $scope
+                ->where(fn ($q) => $q->where('aggregate_type', 'OpeningStockEntry')->where('aggregate_id', $entry->id))
+                ->when($reversalId, fn ($q) => $q->orWhere(fn ($q) => $q
+                    ->where('aggregate_type', 'InventoryReversal')->where('aggregate_id', $reversalId))))
             ->whereIn('event_type', ['opening_stock.posted', 'opening_stock.reversed'])
             ->orderBy('id')->get(['event_uuid', 'event_type', 'idempotency_key', 'status', 'mapping_status', 'sent_at']);
 

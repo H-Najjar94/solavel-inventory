@@ -24,7 +24,7 @@ class AccountingJournalBuilder
             'stock.historical_fifo_cost_corrected.v1' => $this->historicalFifo($event, $orgId),
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'supplier_return.posted' => $this->supplierReturn($event, $orgId),
-            'grn.reversed', 'adjustment.reversed', 'supplier_return.reversed' => $this->inventoryReversal($event, $orgId),
+            'grn.reversed', 'adjustment.reversed', 'supplier_return.reversed', 'opening_stock.reversed' => $this->inventoryReversal($event, $orgId),
             'shipment.posted' => $this->shipment($event, $orgId),
             'sales_return.posted' => $this->salesReturn($event, $orgId),
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
@@ -46,17 +46,26 @@ class AccountingJournalBuilder
 
     private function inventoryReversal(IntegrationOutboxEvent $event, int $orgId): array
     {
+        if (class_basename((string) $event->aggregate_type) !== 'InventoryReversal') {
+            // Pre-fix opening reversals were recorded on the entry itself with a
+            // zero (netted) value. They carry no linkage and need review.
+            throw new RuntimeException(__('inventory.integration.reversal_aggregate_unsupported'));
+        }
         $reversal = InventoryReversal::query()->findOrFail($event->aggregate_id);
         $originalType = match ($reversal->source_type) {
             'goods_receipt' => 'grn.posted',
             'stock_adjustment' => 'adjustment.posted',
             'supplier_return' => 'supplier_return.posted',
+            'opening_stock' => 'opening_stock.posted',
             default => throw new RuntimeException("Unsupported reversal source '{$reversal->source_type}'."),
         };
         $original = $this->originalEvent($originalType, (int) $reversal->source_id);
         $lines = match ($originalType) {
             'grn.posted' => $this->goodsReceipt($original, $orgId),
             'supplier_return.posted' => $this->supplierReturn($original, $orgId),
+            // The original opening journal is Dr inventory / Cr opening offset;
+            // inverting it once below gives the exact reversal.
+            'opening_stock.posted' => $this->twoLine($original, $orgId),
             default => $this->adjustment($original, $orgId),
         };
 
