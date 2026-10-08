@@ -40,8 +40,8 @@ final class PurchaseValuationHoldService
             // Only private supplier-credit authorities supply this exact native NOTE cohort.
             // All sibling quotes freeze physical disposition together; positive value-only
             // restorations remain additive while unrelated documents stay blocked.
-            if (($allowedHold['purpose'] ?? null) === 'credit_inverse'
-                && $hold->purpose === 'credit_inverse'
+            if (($allowedHold['purpose'] ?? null) === 'credit_reverse'
+                && $hold->purpose === 'credit_reverse'
                 && in_array($hold->source_document_type, ['supplier_credit', 'supplier_credit_receipt_restore'], true)
                 && isset($allowedHold['group_credit_note_id'], $allowedHold['group_bill_id'], $allowedHold['group_bill_journal_id'])
                 && (int) $allowedHold['group_credit_note_id'] > 0
@@ -66,9 +66,9 @@ final class PurchaseValuationHoldService
         }
         $cohort = $scope['purpose'] === 'reverse'
             ? ['purpose' => 'reverse', 'group_bill_id' => $scope['source_bill_id']] : null;
-        if ($scope['purpose'] === 'credit_inverse'
+        if ($scope['purpose'] === 'credit_reverse'
             && in_array($scope['source_document_type'] ?? null, ['supplier_credit', 'supplier_credit_receipt_restore'], true)) {
-            $cohort = ['purpose' => 'credit_inverse', 'group_credit_note_id' => $scope['source_document_id'],
+            $cohort = ['purpose' => 'credit_reverse', 'group_credit_note_id' => $scope['source_document_id'],
                 'group_bill_id' => $scope['source_bill_id'], 'group_bill_journal_id' => $scope['source_journal_id']];
         }
         $this->assertMovable($scope['item_id'], $scope['warehouse_id'], $cohort);
