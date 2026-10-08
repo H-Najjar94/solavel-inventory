@@ -197,4 +197,50 @@ final class TransportTargetIsolationTest extends TestCase
         $this->assertSame(['42:77:connection', '42:78:connection'], array_keys($diagnostics));
         $this->assertSame('stopped', json_decode((string) file_get_contents($this->directory.'/heartbeat.json'), true)['state'], 'The once-cycle completed instead of aborting on the first organization.');
     }
+
+    public function test_an_inactive_target_leaves_the_failing_set_but_a_failing_connection_does_not(): void
+    {
+        $isolation = new TransportTargetIsolation();
+        $isolation->attempt($this->target(77), 'party_sync', fn () => throw new RuntimeException('party down'));
+        $isolation->attempt($this->target(77), 'catalog_sync', fn () => throw new RuntimeException('catalog down'));
+        $isolation->attempt($this->target(78), 'connection', fn () => throw new RuntimeException('tenant down'));
+        $targets = [$this->target(77), $this->target(78)];
+        $this->assertSame(2, $isolation->failingTargets($targets));
+
+        Log::spy();
+        $isolation->retireInactive($this->target(77));
+
+        $fresh = new TransportTargetIsolation();
+        $this->assertSame(['42:78:connection'], array_keys($fresh->diagnostics()), 'Only the inactive target is dropped.');
+        $this->assertSame(1, $fresh->failingTargets($targets));
+        $this->assertSame('degraded', TransportWorkerHeartbeat::stateFor(2, $fresh->failingTargets($targets)));
+        Log::shouldHaveReceived('info')->with('integration.transport.target_inactive', Mockery::on(
+            fn (array $context): bool => $context['organization_id'] === 77 && $context['cleared_stages'] === ['party_sync', 'catalog_sync']))->once();
+        // Idempotent: nothing left to clear, nothing logged again.
+        $fresh->retireInactive($this->target(77));
+        Log::shouldHaveReceived('info')->with('integration.transport.target_inactive', Mockery::any())->once();
+    }
+
+    public function test_supervisor_clears_stale_stage_failures_of_a_target_whose_mapping_turned_inactive(): void
+    {
+        // Batch 6 review F2: a party_sync failure recorded while the mapping was active.
+        (new TransportTargetIsolation())->attempt($this->target(77), 'party_sync', fn () => throw new RuntimeException('party down'));
+        $this->assertSame(1, (new TransportTargetIsolation())->failingTargets([$this->target(77)]));
+
+        $registry = $this->createMock(ApprovedTransportTargetRegistry::class);
+        $registry->method('targets')->willReturn([$this->target(77)]);
+        // The connection stage reads the (reserved test) tenant: no active verified mapping for
+        // client 42 / organization 77 exists there, i.e. the mapping is paused/unverified.
+        $tenants = $this->createMock(TenantManager::class);
+        $tenants->method('switchToDatabase')->willReturnCallback(fn (string $database) => null);
+        $this->app->instance(ApprovedTransportTargetRegistry::class, $registry);
+        $this->app->instance(TenantManager::class, $tenants);
+        Log::spy();
+
+        $this->artisan('integration:transport-supervise', ['--once' => true])->assertExitCode(0);
+
+        $this->assertSame([], (new TransportTargetIsolation())->diagnostics());
+        Log::shouldHaveReceived('log')->with('info', 'integration.transport.supervisor_health',
+            Mockery::on(fn (array $context): bool => $context['state'] === 'running' && $context['failing_targets'] === 0))->once();
+    }
 }
