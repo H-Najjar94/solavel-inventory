@@ -159,8 +159,19 @@ final readonly class SupplierCreditCostAuthority
         abort_unless($ledger->count()===1,409);$ledger=$ledger->first();
         $factor=(string)$line->unit_conversion_factor;$base=Decimal::mul((string)$source['quantity'],$factor,8);
         abort_unless(Decimal::gt($factor,'0') && !empty($line->unit_conversion_hash) && Decimal::gt($base,'0')
-            && Decimal::cmp($base,(string)$line->accepted_qty,8)===0 && Decimal::cmp($base,(string)$ledger->quantity,8)===0
+            && Decimal::cmp((string)$line->accepted_qty,(string)$ledger->quantity,8)===0
+            && Decimal::cmp($base,(string)$ledger->quantity,8)<=0
             && (int)$ledger->item_id===(int)$line->item_id && (int)$ledger->warehouse_id===(int)$grn->warehouse_id,409);
+        // A bill may settle a subset of one receipt line. The durable settlement scope supplies that subset;
+        // the shared native ledger explains the whole cohort. Reject cumulative claims beyond the physical cohort.
+        $claims=$db->table('finance_purchase_settlements')->where('organization_id',$map->finance_organization_id)
+            ->where('organization_mapping_uuid',$map->mapping_uuid)->where('receipt_mapping_uuid',$source['receipt_mapping_uuid'])
+            ->where('receipt_id',$grn->id)->where('receipt_line_id',$line->id)->where('state','settled')->lockForUpdate()->get();
+        $claimed='0';foreach($claims as$claim){
+            abort_unless(Decimal::gt((string)$claim->quantity,'0'),409);
+            $claimed=Decimal::add($claimed,Decimal::mul((string)$claim->quantity,$factor,8),8);
+        }
+        abort_unless(Decimal::cmp($claimed,(string)$ledger->quantity,8)<=0,409);
         foreach(['receipt_net_credit_amount','receipt_nonrecoverable_tax_credit_amount']as$key)abort_unless(preg_match('/^\d+(?:\.\d{1,12})?$/D',(string)$source[$key])===1,409);
         // Credit scope amounts are stored Bill-currency amounts; dated receipt FX authenticates the receipt, not the invoice carrying value.
         $delta=Decimal::sub('0',Decimal::round(Decimal::div(Decimal::add((string)$source['receipt_net_credit_amount'],(string)$source['receipt_nonrecoverable_tax_credit_amount'],12),$invoiceRate,12),$scale),8);
