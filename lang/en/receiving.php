@@ -19,4 +19,5 @@ return [
     'quantity_remaining' => 'Enter a quantity greater than zero and no more than the remaining :quantity.',
     'fixed_cost' => 'This receipt uses the approved purchase cost. Only an authorized inventory valuation user may change it.',
     'receive_failed' => 'Receiving could not be completed. Review the warehouse, quantities and product tracking details, then retry the same operation.',
+    'valuation_connection_required' => 'Reconnect the existing Finance connection before posting stock. Its reviewed inventory valuation remains protected.',
 ];

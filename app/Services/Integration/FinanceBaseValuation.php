@@ -3,6 +3,7 @@
 namespace App\Services\Integration;
 
 use App\Models\Tenant\IntegrationSetting;
+use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Services\Stock\Support\Decimal;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +18,15 @@ final class FinanceBaseValuation
             ->where('organization_id', $organizationId)
             ->whereIn('mode', ['connected_readonly', 'connected_pending_mapping', 'active', 'paused'])->first();
         if (! $setting) {
+            // A retained connection identity is not a transfer back to native
+            // transaction-currency costing. Reconnection must establish the
+            // reviewed contract before another physical posting can proceed.
+            $owned = IntegrationOrganizationMapping::query()
+                ->where('solastock_organization_id', $organizationId)
+                ->where('tenant_database_identity', \DB::connection('tenant')->getDatabaseName())->exists();
+            if ($owned) {
+                throw ValidationException::withMessages(['valuation' => __('receiving.valuation_connection_required')]);
+            }
             return null;
         }
         $contract = (array) data_get($setting->meta, 'finance_currency_contract', []);
