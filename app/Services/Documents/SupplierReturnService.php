@@ -128,7 +128,12 @@ final class SupplierReturnService
                 $line->update(['actual_return_cost_base' => $cost, 'unit_cost' => Decimal::div($cost, (string) $line->quantity)]);
             }
             $return->status = 'posted'; $return->posted_at = now(); $return->posted_by = auth()->id(); $return->markSystemTransition()->save();
-            if ($connected) $this->outbox->record('supplier_return.posted', $return, 'supplier_return', $return->return_number, $return->return_date->format('Y-m-d'));
+            if ($connected) {
+                $this->outbox->record('supplier_return.posted', $return, 'supplier_return', $return->return_number, $return->return_date->format('Y-m-d'));
+                // Financial delivery and the commercial supplier-credit draft are distinct.
+                // Both durable events belong to the same native physical-return transaction.
+                app(\App\Services\Sales\SupplierReturnDocumentBuilder::class)->record($return);
+            }
             return $return->fresh('lines');
         });
     }
