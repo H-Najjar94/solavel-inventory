@@ -1,6 +1,8 @@
 <?php
 
 return [
+    // Qualified paired release must opt in explicitly; installation remains disabled.
+    'financial_origin_cash_handoff_enabled' => env('FINANCIAL_ORIGIN_CASH_HANDOFF_ENABLED', false),
     // Enable only after the exact typed Expense accounting pair is qualified.
     'financial_origin_expense_handoff_enabled' => env('FINANCIAL_ORIGIN_EXPENSE_HANDOFF_ENABLED', false),
     /*

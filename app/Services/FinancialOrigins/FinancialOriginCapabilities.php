@@ -61,9 +61,15 @@ final class FinancialOriginCapabilities
         ] as $name => $definition) {
             if (($indexes[$name] ?? null) !== $definition) $ready = false;
         }
+        $cashReady = app(\App\Services\Integration\Cash219SchemaReadiness::class)->ready();
+        $supported = [];
+        if ($ready && config('integration_safety.financial_origin_expense_handoff_enabled', false) === true) $supported[] = 'expense';
+        if ($ready && $cashReady && config('integration_safety.financial_origin_cash_handoff_enabled', false) === true) $supported[] = 'sales_receipt';
         return [
             'contract_version' => self::CONTRACT,
-            'supported_source_document_types' => $ready && config('integration_safety.financial_origin_expense_handoff_enabled', false) === true ? ['expense'] : [],
+            'supported_source_document_types' => $supported,
+            'cash_schema_ready' => $cashReady,
+            'cash_contract_version' => \App\Services\Integration\Cash219SchemaReadiness::VERSION,
             'schema_ready' => $ready,
             'finance_core_version' => self::CORE_VERSION, 'stock_core_version' => self::CORE_VERSION,
             'organization_mapping_uuid' => $mapping->mapping_uuid,
