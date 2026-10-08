@@ -20,6 +20,7 @@ final class CatalogSourceSnapshot {
  }
  public function capture(string $type,int $id,int $org):?array {
   $row=DB::connection('tenant')->table(self::TABLES[$type]??throw new \InvalidArgumentException('Unsupported source'))->where('organization_id',$org)->where('id',$id)->first();if(!$row)return null;
+  if($type==='item'&&empty($row->costing_method))$row->costing_method=DB::connection('tenant')->table('inventory_settings')->where('organization_id',$org)->value('default_costing_method')?:'average';
   $conversions=$type==='item'?DB::connection('tenant')->table('unit_conversions')->where('organization_id',$org)->where('item_id',$id)->orderBy('id')->get()->map(fn($r)=>(array)$r)->all():[];
   return self::fields($type,(array)$row,$conversions);
  }
