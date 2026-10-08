@@ -23,7 +23,7 @@ final class PartyDocumentDependency
             ->where('id',(int)($source['id']??0))->whereNull('deleted_at')->whereNull('reversed_at')->whereNotNull('posted_at')->first();
         abort_unless($native && empty($native->reversal_id),409);
         if ($sales) {
-            $order=$db->table('sales_orders')->where('organization_id',$stockOrganizationId)->where('id',$native->sales_order_id)->whereNull('deleted_at')->first();
+            $order=$db->table((new \App\Models\Tenant\SalesOrder())->getTable())->where('organization_id',$stockOrganizationId)->where('id',$native->sales_order_id)->whereNull('deleted_at')->first();
             abort_unless($order && (int)$order->id===(int)($source['sales_order_id']??0),409);
             $partyId=(int)$order->customer_id;
         } else $partyId=(int)$native->supplier_id;
@@ -64,7 +64,7 @@ final class PartyDocumentDependency
                 ->where('id',$source['id'])->whereNull('deleted_at')->whereNull('reversed_at')->whereNotNull('posted_at')->first();
             if (!$native || !empty($native->reversal_id)) continue;
             if ($sales) {
-                $owner=$db->table('sales_orders')->where('organization_id',$mapping->solastock_organization_id)->where('id',$native->sales_order_id)->whereNull('deleted_at')->first();
+                $owner=$db->table((new \App\Models\Tenant\SalesOrder())->getTable())->where('organization_id',$mapping->solastock_organization_id)->where('id',$native->sales_order_id)->whereNull('deleted_at')->first();
                 if (!$owner || (int)$owner->customer_id!==$partyId) continue;
             } elseif ((int)$native->supplier_id!==$partyId) continue;
             $db->table($table)->where('id',$row->id)->where('organization_id',$mapping->solastock_organization_id)
