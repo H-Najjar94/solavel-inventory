@@ -22,6 +22,8 @@ final class FinanceDocumentLifecycleAuthority
     public const SCOPE = 'finance_document_lifecycle';
 
     public const ACTIONS = [
+        'purchasing.credit-receipt-restore.prepare', 'purchasing.credit-receipt-restore.apply',
+        'purchasing.credit-receipt-restore.status', 'purchasing.credit-receipt-restore.release',
         'purchasing.credit-value.prepare', 'purchasing.credit-value.apply', 'purchasing.credit-value.status',
         'purchasing.credit-value.release', 'purchasing.credit-value.reverse',
         'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',

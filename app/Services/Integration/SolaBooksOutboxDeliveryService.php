@@ -772,4 +772,33 @@ class SolaBooksOutboxDeliveryService
         return $proof;
     }
 
+    /** Exact signed late receipt restoration; no physical operation authority. */
+    public function authorizeSupplierCreditReceiptRestore(array $facts,string $operation,int $actor):array
+    {
+        abort_unless(DB::connection('tenant')->transactionLevel()===0 && $actor>0 && in_array($operation,['prepare','apply','status','release'],true),403);
+        $mapping=app(ReceivingRequestService::class)->mapping();
+        $setting=IntegrationSetting::query()->where('organization_id',$this->context->idOrFail())->where('integration','solabooks')->firstOrFail();
+        $key='purchase-credit-receipt-restore:authorize:'.Str::uuid();
+        $payload=['source_app'=>'solastock','schema_version'=>'purchase-credit-receipt-restore.v1','contract_version'=>SolaStockJournalContract::VERSION,
+            'event_type'=>'purchase-credit-receipt-restore.authorize','event_uuid'=>(string)Str::uuid(),'external_source_key'=>$key,
+            'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
+            'identity'=>['central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,
+                'inventory_organization_id'=>$mapping->solastock_organization_id,'finance_organization_id'=>$mapping->finance_organization_id,
+                'integration_mapping_id'=>$mapping->id,'signing_key_id'=>(string)data_get($setting->meta,'signing_key_id'),'organization_mapping_uuid'=>$mapping->mapping_uuid],
+            'authority_kind'=>'posted_supplier_credit_receipt_restore','source_document_type'=>'debit_note','actor_id'=>$actor,'operation'=>$operation,'restore'=>$facts];
+        $body=SolaStockJournalContract::canonicalJson($payload);
+        $endpoint=preg_replace('~/journal-entries(?:\\?.*)?$~','/purchasing/credit-receipts/authorize',$this->journalEndpoint());
+        abort_unless($endpoint && $endpoint!==$this->journalEndpoint(),409);
+        $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
+        $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
+        abort_unless($response->successful(),in_array($response->status(),[403,404],true)?403:503,__('inventory.purchasing.authority_unavailable'));
+        $proof=(array)$response->json('data');
+        abort_unless(($proof['allowed']??false)===true && ($proof['contract_version']??null)==='purchase-credit-receipt-restore.v1'
+            && ($proof['authority_kind']??null)==='posted_supplier_credit_receipt_restore' && (int)($proof['actor_id']??0)===$actor
+            && ($proof['operation']??null)===$operation && (int)($proof['finance_organization_id']??0)===(int)$mapping->finance_organization_id
+            && (int)($proof['central_organization_id']??0)===(int)$mapping->central_organization_id,403);
+        foreach($facts as$key=>$value)abort_unless((string)($proof[$key]??'')===(string)$value,403);
+        return $proof;
+    }
+
 }

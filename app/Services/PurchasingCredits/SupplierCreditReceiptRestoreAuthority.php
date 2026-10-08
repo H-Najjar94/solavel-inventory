@@ -31,6 +31,7 @@ final readonly class SupplierCreditReceiptRestoreAuthority
    &&(int)$allocation->journal_entry_id===(int)$identity['original_journal_id']&&(int)$claim->note_journal_id===(int)$identity['original_journal_id']
    &&hash_equals($allocation->source_hash,$identity['source_hash'])&&hash_equals($claim->revision_hash,$identity['claim_revision_hash'])
    &&(int)$claim->restore_plan_revision===(int)$identity['plan_revision'],409);
+  abort_unless(in_array($claim->state,['matched','restore_pending','restored'],true),409);
   $intent=json_decode($claim->restore_intent??'null',true,512,JSON_THROW_ON_ERROR);
   abort_unless(is_array($intent)&&$intent===($proof['restore_intent']??null)
    &&(int)($intent['central_actor_id']??0)===$actor&&($intent['restore_operation_uuid']??null)===$identity['restore_operation_uuid'],403);
@@ -86,8 +87,38 @@ final readonly class SupplierCreditReceiptRestoreAuthority
     &&$je->source_type==='App\\Models\\DebitNote'&&(int)$je->source_id===(int)$note->id&&(int)($proof['restore_journal_id']??0)===(int)$je->id,409);
    $lines=$db->table('journal_entry_lines')->where('organization_id',$finance)->where('journal_entry_id',$je->id)->orderBy('line_no')->lockForUpdate()->get()->map(fn($r)=>(array)$r)->all();
    abort_unless($lines===($proof['restore_journal_lines']??null)&&hash_equals((string)($proof['restore_journal_fingerprint']??''),hash('sha256',json_encode([(array)$je,$lines],JSON_THROW_ON_ERROR))),409);
+   self::matchingJournal($lines,$quote,$claim,$position,$map,$finance,$proof);
   }
   return new self($proof,$claim,$allocation,$sources,$org,$map->mapping_uuid);
+ }
+ private static function matchingJournal(array $lines,array $quote,object $claim,object $position,IntegrationOrganizationMapping $map,int $finance,array $proof):void
+ {
+  $db=DB::connection('tenant');$expected=[];$bindings=[];
+  foreach($quote['native_plan']['components']as$part){
+   $role=$part['destination_role'];
+   if(!isset($bindings[$role])){
+    $reference=$db->table('integration_master_data_mappings')->where('organization_mapping_uuid',$map->mapping_uuid)->where('finance_organization_id',$finance)
+     ->where('solastock_organization_id',$map->solastock_organization_id)->where('integration_master_data_mappings.entity_type','account_role')->whereIn('integration_master_data_mappings.status',['mapped','verified'])
+     ->join('integration_account_mappings as canonical_account','canonical_account.id','=','integration_master_data_mappings.solastock_record_id')
+     ->where('canonical_account.organization_id',$map->solastock_organization_id)->where('canonical_account.integration','solabooks')
+     ->where('canonical_account.mapping_type',$role)->whereIn('canonical_account.status',['mapped','verified'])->select('canonical_account.solabooks_account_id')->sole();
+    $bindings[$role]=(int)$reference->solabooks_account_id;
+   }
+   $account=$bindings[$role];$expected[$account]=Decimal::add($expected[$account]??'0',(string)$part['posted_base_amount'],8);
+  }
+  $rounding=(string)$quote['native_plan']['rounding_residual'];
+  if(!Decimal::isZero($rounding,8)){
+   $default=$db->table('org_account_defaults')->where('organization_id',$finance)->lockForUpdate()->sole();
+   $account=(int)$default->rounding_account_id;abort_unless($account>0,409);$bindings['rounding']=$account;
+   $expected[$account]=Decimal::add($expected[$account]??'0',$rounding,8);
+  }
+  $bui=(int)$position->billed_unreceived_account_id;$bindings['billed_unreceived']=$bui;
+  $expected[$bui]=Decimal::sub($expected[$bui]??'0',(string)$claim->acquisition_base,8);
+  foreach($bindings as$role=>$account)abort_unless((int)($proof['restore_account_bindings'][$role]??0)===$account
+   &&$db->table('accounts')->where('organization_id',$finance)->where('id',$account)->where('is_active',true)->where('is_postable',true)->exists(),409);
+  $actual=[];foreach($lines as$line){$account=(int)$line['account_id'];abort_unless(array_key_exists($account,$expected),409);
+   $actual[$account]=Decimal::add($actual[$account]??'0',Decimal::sub((string)$line['base_debit'],(string)$line['base_credit'],8),8);}
+  foreach($expected as$account=>$amount)abort_unless(Decimal::cmp($actual[$account]??'0',$amount,8)===0,409);
  }
  private static function active(?object $row):void{abort_unless($row&&$row->status==='posted'&&!empty($row->posted_at)&&empty($row->voided_at)&&empty($row->deleted_at),409);}
  public function organizationId():int{return $this->org;}
