@@ -53,7 +53,7 @@ use Tests\Traits\TenantAware;
 final class PurchasingHandoffTest extends TestCase
 {
     use TenantAware {
-        tearDown as private tearDownTenantAware;
+        tearDown as private finishTenantTestLifecycle;
     }
 
     private ?\Tests\Support\CommittedTenantFixture $committedFixture = null;
@@ -106,7 +106,7 @@ final class PurchasingHandoffTest extends TestCase
             }
         } finally {
             DB::purge('committed_fixture_central');
-            $this->tearDownTenantAware();
+            $this->finishTenantTestLifecycle();
         }
     }
 
