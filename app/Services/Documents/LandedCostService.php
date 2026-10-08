@@ -271,13 +271,23 @@ class LandedCostService
             // Lock first (see post()): a plain read before the stock locks would
             // fix a read view that hides a movement committed while this reversal
             // waited, so the "has the stock moved" refusal would pass wrongly.
-            $locked = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->orderBy('id')->lockForUpdate()
-                ->get(['id', 'item_id', 'warehouse_id', 'destination_role']);
-            $this->lockStock($locked->pluck('item_id')->all(), $locked->where('destination_role', 'inventory_asset')
-                ->map(fn ($c) => [(int) $c->item_id, (int) $c->warehouse_id])->all());
+            // The pairs come from a locking read of the document LINES, not the
+            // components: a locking scan of the components index gap-locks the range
+            // a concurrent post() of a newer document inserts its components into
+            // while it already holds the item lock (reverse waits for the item, post
+            // waits for the gap: deadlock). Nothing inserts lines while holding item
+            // locks, and every component shares its line's item and receipt
+            // warehouse, so the line pairs cover every inventory_asset component.
+            $locked = LandedCostLine::query()->where('landed_cost_id', $doc->id)->orderBy('id')->lockForUpdate()
+                ->get(['id', 'item_id', 'warehouse_id']);
+            $this->lockStock($locked->pluck('item_id')->all(), $locked->map(fn ($l) => [(int) $l->item_id, (int) $l->warehouse_id])->all());
             $this->assertConnectedReady($orgId, 'landed_cost.reversed');
             $components = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->orderBy('id')->get();
             $inventory = $components->where('destination_role', 'inventory_asset');
+            $lockedPairs = $locked->mapWithKeys(fn ($l) => [$l->item_id.':'.$l->warehouse_id => true]);
+            if ($inventory->contains(fn ($c) => ! $lockedPairs->has($c->item_id.':'.$c->warehouse_id))) {
+                $this->fail('reverse_moved'); // fail closed: never revalue an unlocked pair
+            }
             $this->assertExactlyReversible($doc, $inventory);
 
             $reversal = $this->reversals->reverseLandedCost($doc, trim($reason) !== '' ? $reason : __('inventory.landed_cost.default_reason'),
