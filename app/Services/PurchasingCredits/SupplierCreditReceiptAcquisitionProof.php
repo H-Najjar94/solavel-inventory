@@ -53,6 +53,10 @@ final class SupplierCreditReceiptAcquisitionProof
     &&$journal->status==='posted'&&!empty($journal->posted_at)&&empty($journal->voided_at)&&empty($journal->deleted_at),409);
    $stored=$db->table('finance_purchase_credit_receipt_claims')->where('organization_id',$financeOrg)->where('allocation_uuid',$claim['allocation_uuid'])
     ->where('settlement_uuid',$facts['settlement_uuid'])->lockForUpdate()->sole();
+   abort_unless(in_array($stored->state,['reserved','matched'],true)&&(int)$stored->debit_note_id===(int)$claim['note_id']
+    &&(int)$stored->note_journal_id===(int)$claim['note_journal_id']&&hash_equals($stored->source_hash,$claim['source_hash'])
+    &&hash_equals($stored->snapshot_hash,hash('sha256',$stored->snapshot))
+    &&json_decode($stored->snapshot,true,512,JSON_THROW_ON_ERROR)===$claim,409);
    foreach(['net_amount','nonrecoverable_tax_amount','acquisition_base','quantity_basis']as$field)
     abort_unless(isset($claim[$field])&&Decimal::cmp((string)$claim[$field],(string)$stored->$field,8)===0,409);
    abort_unless(hash_equals((string)$stored->revision_hash,$hash)&&Decimal::gt((string)$stored->quantity_basis,'0'),409);
