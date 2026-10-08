@@ -17,6 +17,9 @@ final class TransportWorkerHeartbeatTest extends TestCase
             ['updated_at'=>'invalid'],['contract_version'=>'unknown']] as $change) {
             $this->assertFalse($service->isCurrent(array_replace($heartbeat,$change),'current-release'));
         }
+        // Degraded/failing health still proves a live supervisor process (additive v1 states).
+        $this->assertTrue($service->isCurrent(array_replace($heartbeat,['state'=>'degraded','failing_targets'=>1]),'current-release'));
+        $this->assertTrue($service->isCurrent(array_replace($heartbeat,['state'=>'failing','failing_targets'=>2]),'current-release'));
         $this->assertFalse($service->isCurrent($heartbeat,''));
         $this->assertFalse($service->isCurrent([],'current-release'));
     }
