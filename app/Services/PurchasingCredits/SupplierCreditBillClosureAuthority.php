@@ -64,7 +64,7 @@ final readonly class SupplierCreditBillClosureAuthority
     &&data_get($native->safe_metadata,'supplier_credit.allocation_uuid')===$row->allocation_uuid
     &&data_get($native->safe_metadata,'supplier_credit.settlement_uuid')===$row->settlement_uuid,409);
    $actualComponents=IntegrationPurchaseCostAdjustmentComponent::query()->where('organization_id',$org)->where('adjustment_uuid',$native->adjustment_uuid)->orderBy('id')->lockForUpdate()->get()->map(fn($c)=>[
-    'component_id'=>(int)$c->id,'component_uuid'=>$c->component_uuid,'allocation_uuid'=>$c->allocation_uuid,'stock_ledger_id'=>(int)$c->stock_ledger_id,
+    'component_id'=>(int)$c->id,'component_uuid'=>$c->getRawOriginal('component_uuid'),'allocation_uuid'=>$c->allocation_uuid,'stock_ledger_id'=>(int)$c->stock_ledger_id,
     'destination_role'=>$c->destination_role,'destination_source_type'=>$c->destination_source_type,'destination_source_id'=>(int)$c->destination_source_id,'posted_base_amount'=>(string)$c->posted_base_amount])->all();
    abort_unless($actualComponents===($ack['native_value_adjustment']['components']??null),409);
    $effect=$db->table('supplier_credit_value_effects')->where('organization_id',$org)->where('organization_mapping_uuid',$map->mapping_uuid)->where('adjustment_uuid',$native->adjustment_uuid)->where('direction','restore')->lockForUpdate()->sole();

@@ -61,7 +61,7 @@ final class HeldSupplierCreditBillClosureService
     'adjustment_uuid'=>$row->adjustment_uuid,'snapshot'=>$snapshot,'snapshot_hash'=>hash('sha256',$snapshot)]);
   }
   $components=IntegrationPurchaseCostAdjustmentComponent::query()->where('adjustment_uuid',$row->adjustment_uuid)->orderBy('id')->get()->map(fn($part)=>[
-   'component_id'=>(int)$part->id,'component_uuid'=>$part->component_uuid,'allocation_uuid'=>$part->allocation_uuid,'stock_ledger_id'=>(int)$part->stock_ledger_id,
+   'component_id'=>(int)$part->id,'component_uuid'=>$part->getRawOriginal('component_uuid'),'allocation_uuid'=>$part->allocation_uuid,'stock_ledger_id'=>(int)$part->stock_ledger_id,
    'destination_role'=>$part->destination_role,'destination_source_type'=>$part->destination_source_type,'destination_source_id'=>(int)$part->destination_source_id,
    'posted_base_amount'=>(string)$part->posted_base_amount])->all();
   return array_replace($quote,['state'=>$action==='release'?'released':($native['state']==='applied'?'reversed':$native['state']),
