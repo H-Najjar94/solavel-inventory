@@ -120,6 +120,7 @@ return [
         'warehouse_scope' => 'Every assigned warehouse must belong to the active organization.',
     ],
     'integration' => [
+        'party_posting_pending' => 'The connection for :party is not ready. Retry shortly. If it remains blocked, ask the organization integration manager to review its Finance link. The document remains a draft.',
         'mapping_choice_required' => 'Choose the specific record for this review item, then save it and review the connection again. No changes were applied.',
         'finance_setup_required' => 'Complete Finance setup before configuring or activating financial integration.',
         'wizard' => [
