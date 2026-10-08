@@ -56,7 +56,7 @@ final class DurableCatalogSync {
     $reply=app(FinanceConnectionClient::class)->projectCatalog(['client_id'=>(int)$map->central_client_id,'organization_id'=>(int)$map->central_organization_id,
      'finance_organization_id'=>(int)$map->finance_organization_id,'actor_id'=>(int)$row->actor_id,'organization_mapping_uuid'=>$map->mapping_uuid,'source_uuid'=>$row->source_uuid,
      'entity_type'=>$row->entity_type,'source_id'=>(int)$row->source_id,'source_revision'=>$row->source_revision,'state_version'=>(int)$row->state_version]);
-    if(($reply['source_uuid']??null)!==$row->source_uuid||($reply['source_revision']??null)!==$row->source_revision||(int)($reply['target_id']??0)<1)throw new \RuntimeException('catalog_projection_ack_invalid',409);
+    if(($reply['organization_mapping_uuid']??null)!==$map->mapping_uuid||(int)($reply['state_version']??0)!==(int)$row->state_version||($reply['source_uuid']??null)!==$row->source_uuid||($reply['source_revision']??null)!==$row->source_revision||(int)($reply['target_id']??0)<1)throw new \RuntimeException('catalog_projection_ack_invalid',409);
     $changes=['state'=>'delivered','target_id'=>(int)$reply['target_id'],'delivery_ack'=>json_encode($reply,JSON_THROW_ON_ERROR),'last_error'=>null,'next_attempt_at'=>null];
    }catch(\Throwable $e){
     $code=(string)$e->getMessage();$safe=in_array($code,['catalog_source_actor_required','catalog_dependency_pending','catalog_projection_ack_invalid','catalog_source_changed','catalog_field_conflict','catalog_shared_reference_change','catalog_identity_conflict','catalog_source_not_authorized','finance_connection_transport_unknown_retry_same_key'],true)?$code:'catalog_projection_delivery_failed';
