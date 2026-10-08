@@ -12,7 +12,7 @@ DEPENDENCIES="${STOCK_CONTAINED_VENDOR:?An explicit installed Stock vendor direc
 # Cohort selection is internal: every requested test is qualified in its native lifecycle.
 for task_arg in "$@"; do
   case "$task_arg" in
-    --private-lifecycle|--group|--group=*|--exclude-group|--exclude-group=*)
+    --private-lifecycle|--group|--group=*|--exclude-group|--exclude-group=*|--log-junit|--log-junit=*)
       echo 'REFUSING: private lifecycle groups are selected by the contained launcher.' >&2; exit 2 ;;
   esac
 done
