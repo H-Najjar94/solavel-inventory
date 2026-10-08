@@ -37,6 +37,44 @@ final class FinancialOriginPhysicalTest extends TestCase
             'lines'=>[['request_line_id'=>$r['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]];
         return [$data,$context,$op];
     }
+    private function historicallyAccepted(string $type='sales_receipt',string $tracking='none',bool $anonymous=false):array
+    {
+        $this->useTenantA();$previous=DB::getDefaultConnection();DB::setDefaultConnection('tenant');
+        try {
+            $finance=rtrim((string)env('FINANCIAL_ORIGIN_FINANCE_SOURCE','/qualification/finance'),'/');
+            foreach(['2026_10_07_187000_create_financial_origin_intents.php','2026_10_07_192000_create_financial_origin_reverse_generations.php','2026_10_08_194000_create_financial_origin_physical_operations.php']as$name)(require $finance.'/database/migrations/finance/'.$name)->up();
+            (require base_path('database/migrations/tenant/2026_10_07_081000_create_purchase_valuation_holds.php'))->up();
+            (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->up();
+        }finally{DB::setDefaultConnection($previous);}
+        $this->initializeOriginFixture(true,$tracking);
+        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false]);
+        if($type==='expense'){
+            $supplier=Supplier::create(['code'=>'QA-TYPED-PHYSICAL','name'=>'QA typed physical supplier','is_active'=>true]);$this->master('supplier',$supplier->id,704);
+            DB::connection('tenant')->table('accounts')->insert(['id'=>300,'organization_id'=>14,'code'=>'300','name'=>'GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
+            $a=IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>300,'status'=>'verified']);$this->master('account_role',$a->id,300);
+        }
+        $data=$this->typed($type,$anonymous);
+        DB::connection('tenant')->table('finance_document_requests')->insert(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'request_uuid'=>$data['request_uuid'],'side'=>$type==='expense'?'purchase':'sales','source_document_type'=>$type,'source_document_id'=>850,'source_journal_id'=>95,'source_revision'=>$data['source_revision'],'actor_id'=>323,'payload'=>json_encode($data)]);
+        $this->proof($data);
+        // Explicit historical accepted projection: no new upsert/approval and never enable cash.
+        $request=FinancialOriginRequest::create(['organization_id'=>$this->mapping->solastock_organization_id,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'request_uuid'=>$data['request_uuid'],'source_document_type'=>$type,'source_document_id'=>850,'source_document_number'=>$data['source_document_number'],'source_journal_id'=>95,'source_revision'=>$data['source_revision'],'side'=>$type==='expense'?'purchase':'sales','status'=>'pending','party_id'=>$type==='expense'?$supplier->id:($anonymous?null:$this->customer->id),'source_payload'=>$data,'warehouse_id'=>$this->warehouse->id,'approved_at'=>now(),'approved_by'=>323,'approved_revision'=>$data['source_revision']]);
+        $normalized=app(\App\Services\Catalog\UnitConversionResolver::class)->normalizeLine(['item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'4'],'quantity');
+        $line=$request->lines()->create(['organization_id'=>$request->organization_id,'source_document_line_id'=>851,'item_id'=>$this->item->id,'unit_id'=>$this->unit->id,'unit_conversion_factor'=>$normalized['unit_conversion_factor'],'requested_quantity'=>'4','unit_price'=>'7']);
+        $this->actor(323,true);
+        if($type==='sales_receipt'){
+            $orders=app(\App\Services\Documents\SalesOrderService::class);
+            $order=$orders->createDraft(['warehouse_id'=>$this->warehouse->id,'customer_id'=>$request->party_id,'source_app'=>'solabooks','source_document_id'=>'sales_receipt:850','source_document_number'=>$data['source_document_number'],'order_date'=>$data['document_date'],'currency_code'=>'JOD'],[['item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'ordered_qty'=>'4','unit_price'=>'7','discount_rate'=>'0','tax_rate'=>'0']]);
+            $orders->confirm($order);$line->update(['sales_order_line_id'=>$order->lines()->sole()->id]);$request->update(['sales_order_id'=>$order->id]);
+        }
+        $r=app(OriginRequestService::class)->summary($request->fresh('lines'));
+        $context=array_intersect_key($data,array_flip(['source_document_type','source_document_id','source_document_number','source_journal_id','request_uuid']))+['request_revision'=>$data['source_revision']];
+
+        InventoryUserWarehouse::create(['user_id'=>336,'warehouse_id'=>$this->warehouse->id,'assigned_by'=>323]);$this->actor(336);
+        $op=$context+['operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'physical_date'=>'2026-10-07',
+            'lines'=>[['request_line_id'=>$r['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'4','unit_id'=>$this->unit->id]]];
+        FinancialOriginCommand::create(['organization_id'=>$request->organization_id,'operation_uuid'=>$op['operation_uuid'],'request_uuid'=>$data['request_uuid'],'source_document_type'=>$type,'source_document_id'=>850,'source_journal_id'=>95,'actor_id'=>336,'payload_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($op),'payload'=>$op,'status'=>'pending']);
+        return [$data,$context,$op];
+    }
     public function test_expense_receiver_can_assign_and_receive_but_adjustment_authority_cannot_replace_receiving_permission():void
     {
         $this->initializeOriginFixture(true);
@@ -127,7 +165,7 @@ final class FinancialOriginPhysicalTest extends TestCase
     public function test_native_post_replay_of_completed_typed_receipt_and_shipment_preserves_all_durable_effects():void
     {
         $type='expense'; {
-            [,,$op]=$this->admitted($type);
+            [,,$op]=$this->historicallyAccepted($type);
             $op['lines'][0]['quantity']='4';
             if($type==='expense'){
                 $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->update(['meta'=>$meta]);
@@ -144,7 +182,7 @@ final class FinancialOriginPhysicalTest extends TestCase
     public function test_native_post_replay_of_completed_typed_shipment_preserves_all_durable_effects():void
     {
         $type='sales_receipt'; {
-            [,,$op]=$this->admitted($type);
+            [,,$op]=$this->historicallyAccepted($type);
             $op['lines'][0]['quantity']='4';
             if($type==='expense'){
                 $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->update(['meta'=>$meta]);
@@ -160,7 +198,7 @@ final class FinancialOriginPhysicalTest extends TestCase
     }
     public function test_native_completed_receipt_replay_rejects_forged_command_event_hash_and_foreign_event_without_effects():void
     {
-        [,,$op]=$this->admitted('expense');$op['lines'][0]['quantity']='4';
+        [,,$op]=$this->historicallyAccepted('expense');$op['lines'][0]['quantity']='4';
         $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->update(['meta'=>$meta]);
         app(OriginDispatchService::class)->executeNative($op,336);
         $document=GoodsReceipt::sole();$command=\App\Models\Tenant\FinancialOriginCommand::sole();$event=FinancialOriginOutbox::sole();

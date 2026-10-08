@@ -94,7 +94,8 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',false); // Same name, wrong uniqueness.
         Schema::connection('tenant')->table('finance_document_reverse_generations',fn($table)=>$table->dropIndex('fin_origin_reverse_uuid_unique'));
         $finance=rtrim((string)env('FINANCIAL_ORIGIN_FINANCE_SOURCE','/qualification/finance'),'/');
-        (require $finance.'/database/migrations/finance/2026_10_07_192000_create_financial_origin_reverse_generations.php')->up();
+        $previous=DB::getDefaultConnection();DB::setDefaultConnection('tenant');
+        try {(require $finance.'/database/migrations/finance/2026_10_07_192000_create_financial_origin_reverse_generations.php')->up();} finally {DB::setDefaultConnection($previous);}
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',['expense']);
     }
 
