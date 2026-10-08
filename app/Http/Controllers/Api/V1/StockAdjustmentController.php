@@ -82,10 +82,15 @@ class StockAdjustmentController extends ApiController
         $data = $request->validated();
         $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
         unset($data['adjustment_number']);
-        $adj = $this->service->createDraft(
-            collect($data)->except('lines')->toArray(),
-            $data['lines']
-        );
+        try {
+            $adj = $this->service->createDraft(
+                collect($data)->except('lines')->toArray(),
+                $data['lines']
+            );
+        } catch (RuntimeException $e) {
+            // e.g. an increase line with no cost and no cost history (SurplusCostResolver).
+            return $this->error('adjustment_create_failed', $e->getMessage(), 422);
+        }
 
         return $this->success($adj, 201);
     }
