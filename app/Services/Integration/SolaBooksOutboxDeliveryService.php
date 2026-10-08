@@ -233,7 +233,10 @@ class SolaBooksOutboxDeliveryService
         $event=new IntegrationOutboxEvent(['organization_id'=>$mapping->solastock_organization_id,'idempotency_key'=>$key,'event_uuid'=>$payload['event_uuid']]);
         $response=$this->signedClient($event,$payload,$body,$endpoint)->withBody($body,'application/json')->post($endpoint);
         if(!$response->successful())throw new RuntimeException('party_connection_pending');
-        return (array)$response->json('data');
+        $result=(array)$response->json('data');
+        if (($result['status']??null)==='synced' && (int)($result['source_id']??0)===(int)$state->source_id)
+            app(PartyDocumentDependency::class)->resumePending($mapping,$state->entity_type,(int)$state->source_id);
+        return $result;
     }
 
     public function authorizePurchasing(int $actorId, int $billId, string $permission, array $closureFacts = []): array
@@ -339,6 +342,7 @@ class SolaBooksOutboxDeliveryService
         if (! hash_equals((string) $document->payload_hash, hash('sha256', SolaStockJournalContract::canonicalJson($payload)))) {
             throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
         }
+        app(PartyDocumentDependency::class)->ensure($payload, (int) $document->organization_id, (string) ($payload['identity']['organization_mapping_uuid'] ?? ''));
         $body = SolaStockJournalContract::canonicalJson($payload);
         $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/purchasing/receipts', $this->journalEndpoint());
         if (! $endpoint || $endpoint === $this->journalEndpoint()) {
@@ -367,6 +371,7 @@ class SolaBooksOutboxDeliveryService
             || ! hash_equals((string) $document->payload_hash, hash('sha256', SolaStockJournalContract::canonicalJson($payload)))) {
             throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
         }
+        app(PartyDocumentDependency::class)->ensure($payload, (int) $document->organization_id, (string) ($payload['identity']['organization_mapping_uuid'] ?? ''));
         $body = SolaStockJournalContract::canonicalJson($payload);
         $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', '/sales/documents', $this->journalEndpoint());
         if (! $endpoint || $endpoint === $this->journalEndpoint()) {

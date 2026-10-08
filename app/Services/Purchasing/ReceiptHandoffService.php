@@ -130,23 +130,41 @@ final class ReceiptHandoffService
             $ok = false;
             $response = [];
             $error = null;
+            $intervention = false;
             try {
                 $this->enabled();
                 if (! hash_equals($event->payload_hash, hash('sha256', SolaStockJournalContract::canonicalJson($event->payload)))) {
                     throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
                 }$response = app(SolaBooksOutboxDeliveryService::class)->sendPurchasingDocument($event);
-                $ok = $response['successful'];
-                $error = $ok ? null : __('inventory.purchasing.delivery_pending');
+                $outcome = \App\Services\Integration\DocumentHandoffOutcome::classify($response,(string)$event->event_type);
+                $ok = $outcome['successful'];
+                $intervention = $outcome['intervention'];
+                $response['data']['delivery_reason']=$outcome['reason'];
+                $error = $outcome['reason'];
             } catch (Throwable $e) {
-                $error = __('inventory.purchasing.delivery_pending');
+                $error = 'delivery_pending';
+                if ($e instanceof \App\Services\Integration\PartyDependencyPending) {
+                    $response=['data'=>$e->details];
+                    $error=$e->details['reason'];
+                    $intervention=$e->details['state']==='intervention';
+                }
                 report($e);
             }
-            DB::connection('tenant')->transaction(function () use ($event, $ok, $response, $error) {
+            DB::connection('tenant')->transaction(function () use ($event, $ok, $response, $error, $intervention) {
                 $e = PurchasingDocumentOutbox::query()->whereKey($event->id)->lockForUpdate()->firstOrFail();
                 if ($e->status !== 'processing' || $e->lease_token !== $event->lease_token) {
                     return;
-                }$e->update(['status' => $ok ? 'sent' : 'retry', 'lease_token' => null, 'lease_expires_at' => null, 'next_attempt_at' => $ok ? null : now()->addSeconds(min(3600, 30 * (2 ** min(7, $e->attempts)))), 'last_error' => $error, 'receiver_response' => $ok ? $response['data'] : null]);
+                }$e->update(['status' => $ok ? 'sent' : ($intervention || $e->attempts>=40 ? 'intervention' : 'retry'), 'lease_token' => null, 'lease_expires_at' => null, 'next_attempt_at' => $ok ? null : now()->addSeconds(min(3600, 30 * (2 ** min(7, $e->attempts)))), 'last_error' => $ok ? null : \App\Services\Integration\DocumentHandoffOutcome::message($error), 'receiver_response' => $response['data'] ?? null]);
             });
+            if ($intervention || (!$ok && $event->attempts===1) || ($ok && $event->attempts>1)) {
+                \Illuminate\Support\Facades\Log::log($ok?'info':'warning','purchasing.document_handoff.'.($ok?'resolved':($intervention?'intervention':'retrying')),[
+                    'organization_id'=>(int)$event->organization_id,'document_outbox_id'=>(int)$event->id,
+                    'goods_receipt_id'=>(int)$event->goods_receipt_id,'source_key'=>$event->source_key,
+                    'correlation_id'=>$event->event_uuid,'attempt_count'=>(int)$event->attempts,
+                    'reason'=>$error,'destination_bill_id'=>$response['data']['bill_id']??null,
+                    'dependency'=>$response['data']['entity_type']??null,'dependency_source_id'=>$response['data']['source_id']??null]);
+            }
+            app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->changed('receipt',(int)$event->id,(int)$event->organization_id);
             $count++;
         }
 
