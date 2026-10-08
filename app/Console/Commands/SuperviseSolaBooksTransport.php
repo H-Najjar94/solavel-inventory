@@ -72,6 +72,7 @@ final class SuperviseSolaBooksTransport extends Command
                     $processed += app(\App\Services\Sales\SalesNotificationPublisher::class)->process(1);
                 }
                 $processed += app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1);
+                $processed += app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->process(1);
                 $organizations->forget();
             }
             $heartbeat->write($targets === [] ? 'idle' : 'running', count($targets), $processed);

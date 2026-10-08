@@ -164,6 +164,7 @@ final class ReceiptHandoffService
                     'reason'=>$error,'destination_bill_id'=>$response['data']['bill_id']??null,
                     'dependency'=>$response['data']['entity_type']??null,'dependency_source_id'=>$response['data']['source_id']??null]);
             }
+            app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->changed('receipt',(int)$event->id,(int)$event->organization_id);
             $count++;
         }
 

@@ -37,6 +37,9 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::post('/api/tenancy/sales-notification-context', \App\Http\Controllers\Api\Tenancy\SalesNotificationContextController::class)
                 ->middleware(VerifySolavelSyncSignature::class)->name('api.tenancy.sales-notification-context');
 
+            Route::post('/api/tenancy/document-incident-context', \App\Http\Controllers\Api\Tenancy\DocumentIncidentContextController::class)
+                ->middleware(VerifySolavelSyncSignature::class)->name('api.tenancy.document-incident-context');
+
             // Web routes (session-stateful).
             Route::middleware('web')
                 ->group(__DIR__.'/../routes/web.php');
