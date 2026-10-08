@@ -16,9 +16,9 @@ final readonly class SupplierCreditCostAuthority
     public static function fromLockedNativeProvenance(array $identity,array $proof,IntegrationOrganizationMapping $mapping,string $action,int $actor):self
     {
         $db=DB::connection('tenant');$org=app(OrganizationContext::class)->idOrFail();
-        // Release stays closed until the durable release ACK lifecycle is independently implemented.
+        // Every lifecycle action is bound to its independently persisted actor and immutable plan.
         $reverse=($identity['direction']??null)==='reverse';
-        abort_unless($db->transactionLevel()>0 && $actor>0 && in_array($action,['prepare','apply','status','reverse'],true)
+        abort_unless($db->transactionLevel()>0 && $actor>0 && in_array($action,['prepare','apply','status','reverse','release'],true)
             && in_array($identity['direction']??null,['forward','reverse'],true)
             && ($reverse ? $action!=='apply' : $action!=='reverse'),403);
         abort_unless(($proof['allowed']??false)===true && ($proof['contract_version']??null)==='purchase-credit-value.v1'
@@ -42,9 +42,9 @@ final readonly class SupplierCreditCostAuthority
             && (int)$row->bill_journal_id===(int)$bill->journal_entry_id && (int)$position->bill_journal_id===(int)$bill->journal_entry_id
             && $position->bill_revision===$row->bill_revision && (int)$position->bill_line_id===(int)$row->bill_line_id
             && $position->organization_mapping_uuid===$mapping->mapping_uuid && !in_array($position->state,['reversed','reversal_pending'],true),409);
-        abort_unless($action==='status' || in_array($row->state,$reverse?['posted','reverse_quote_pending','reverse_pending','reversed']:($action==='prepare'?['draft_reserved','quote_pending','quoted']:['quoted','valuation_pending','posted']),true),409);
-        $user=$db->table('users')->where('id',$reverse?$row->reverse_actor_id:$row->actor_id)->where('central_user_id',$actor)->first();
-        abort_unless($user && (int)($reverse?$row->reverse_central_actor_id:$row->central_actor_id)===$actor && $db->table('organization_user')->where('organization_id',$finance)
+        abort_unless(in_array($action,['status','release'],true) || in_array($row->state,$reverse?['posted','reverse_quote_pending','reverse_pending','reversed']:($action==='prepare'?['draft_reserved','quote_pending','quoted']:['quoted','valuation_pending','posted']),true),409);
+        $user=$db->table('users')->where('id',$action==='release'?$row->release_actor_id:($reverse?$row->reverse_actor_id:$row->actor_id))->where('central_user_id',$actor)->first();
+        abort_unless($user && (int)($action==='release'?$row->release_central_actor_id:($reverse?$row->reverse_central_actor_id:$row->central_actor_id))===$actor && $db->table('organization_user')->where('organization_id',$finance)
             ->where('user_id',$user->id)->where('status','active')->exists(),403);
         $locked=IntegrationOrganizationMapping::query()->whereKey($mapping->id)->lockForUpdate()->firstOrFail();
         abort_unless($locked->mapping_uuid===$mapping->mapping_uuid && $locked->status==='verified' && $locked->activation_state==='active'
@@ -101,7 +101,23 @@ final readonly class SupplierCreditCostAuthority
                 && ($quote['plan_fingerprint']??null)===($proof['plan_fingerprint']??null) && is_array($quote['native_plan']??null),409);
             if(!$reverse)abort_unless(($proof['plan_fingerprint']??null)===$row->plan_fingerprint,409);
         }
-        if($reverse){
+        if($action==='release'){
+            $release=json_decode($row->release_snapshot??'null',true,512,JSON_THROW_ON_ERROR);
+            abort_unless(is_array($quote) && is_array($release) && $release===($proof['release_snapshot']??null)
+                && ($release['direction']??null)===$identity['direction']
+                && ($release['allocation_uuid']??null)===$row->allocation_uuid && ($release['operation_uuid']??null)===$row->operation_uuid
+                && (int)($release['plan_revision']??0)===(int)$identity['plan_revision']
+                && ($release['plan_fingerprint']??null)===($quote['plan_fingerprint']??null)
+                && (int)($release['actor_id']??0)===(int)$row->release_actor_id
+                && (int)($release['central_actor_id']??0)===$actor
+                && in_array($release['reason']??null,['cancel','abandon'],true)
+                && ($reverse ? empty($row->reversed_at) : empty($row->journal_entry_id)),409);
+            if($reverse){
+                $original=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$row->journal_entry_id)->lockForUpdate()->first();
+                self::activeJournal($original);
+                abort_unless($note->status==='posted' && (int)$note->journal_entry_id===(int)$original->id,409);
+            }else abort_unless($note->status==='draft',409);
+        }elseif($reverse){
             self::nativeInverse($proof,$row,$note,$db,$finance,$action);
         }elseif($action==='apply'||($action==='status'&&$row->journal_entry_id)){
             $journal=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$row->journal_entry_id)
@@ -148,7 +164,7 @@ final readonly class SupplierCreditCostAuthority
         foreach(['receipt_net_credit_amount','receipt_nonrecoverable_tax_credit_amount']as$key)abort_unless(preg_match('/^\d+(?:\.\d{1,12})?$/D',(string)$source[$key])===1,409);
         $delta=Decimal::sub('0',Decimal::round(Decimal::div(Decimal::add((string)$source['receipt_net_credit_amount'],(string)$source['receipt_nonrecoverable_tax_credit_amount'],12),(string)$source['receipt_exchange_rate'],12),$scale),8);
         return ['receipt_id'=>(int)$grn->id,'receipt_line_id'=>(int)$line->id,'stock_ledger_id'=>(int)$ledger->id,'position_uuid'=>$position->position_uuid,
-            'quantity_base'=>$base,'price_delta_base'=>$delta,'variant_id'=>$ledger->variant_id?(int)$ledger->variant_id:null,
+            'quantity_base'=>$base,'price_delta_base'=>$delta,'item_id'=>(int)$ledger->item_id,'warehouse_id'=>(int)$ledger->warehouse_id,'variant_id'=>$ledger->variant_id?(int)$ledger->variant_id:null,
             'lot_id'=>$ledger->lot_id?(int)$ledger->lot_id:null,'bin_id'=>$ledger->bin_id?(int)$ledger->bin_id:null];
     }
 
@@ -184,6 +200,8 @@ final readonly class SupplierCreditCostAuthority
 
     private static function activeJournal(?object $row):void {abort_unless($row && $row->status==='posted' && !empty($row->posted_at) && empty($row->voided_at) && empty($row->deleted_at),409);}
     public function organizationId():int{return $this->org;}
+    public function identity():array {return array_intersect_key($this->proof,array_flip(['organization_mapping_uuid','operation_uuid','allocation_uuid','debit_note_id','debit_note_line_id','note_revision','source_bill_id','bill_line_id','bill_journal_id','bill_revision','position_uuid','source_hash','plan_revision','direction']));}
+    public function storedQuote():?array{return $this->proof['quote']??null;}
     public function mappingUuid():string{return $this->map;}
     public function operationUuid():string{return $this->row->operation_uuid;}
     public function allocationUuid():string{return $this->row->allocation_uuid;}
