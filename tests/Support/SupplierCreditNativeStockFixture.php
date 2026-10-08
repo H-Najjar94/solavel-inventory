@@ -52,7 +52,11 @@ final class SupplierCreditNativeStockFixture
   if(!app(\App\Services\Access\InventoryPermissionService::class)->can(request()->user(),'inventory.receive_goods'))
    throw new \LogicException('Actual warehouse receiving permission required');
   $request=ReceivingRequest::query()->where('organization_id',$org)->where('source_bill_id',$financeBillId)->where('status','!=','cancelled')->sole();
-  if(!$request->approved_at)app(ReceivingRequestService::class)->approve($request,$warehouseId);
+  if(!$request->approved_at){
+   if(!app(\App\Services\Access\InventoryPermissionService::class)->can(request()->user(),'inventory.approve_purchase_orders'))
+    throw new \LogicException('Actual native receiving approval permission required');
+   app(ReceivingRequestService::class)->approve($request,$warehouseId);
+  }
   $line=$request->lines()->sole();
   $attributes=['receiving_request_id'=>$request->id,'supplier_id'=>$request->supplier_id,'warehouse_id'=>$warehouseId,'receipt_date'=>$date];
   $prepared=app(OperationalReceiving::class)->prepare($attributes+['lines'=>[['receiving_request_line_id'=>$line->id,'item_id'=>$line->item_id,
