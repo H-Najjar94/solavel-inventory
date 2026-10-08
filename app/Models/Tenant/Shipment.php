@@ -18,7 +18,7 @@ class Shipment extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'ship_date' => 'date',
+        'ship_date' => 'date:Y-m-d',
         'posted_at' => 'datetime',
         'ship_to' => 'array',
         'package_weight' => 'decimal:4',
