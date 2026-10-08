@@ -183,7 +183,7 @@ final class PurchaseCostAdjustmentPlanner
             $posted=Decimal::add($posted,$component['posted_base_amount'],8);return $component;
         })->values()->all();
         $residual=Decimal::round(Decimal::sub($exact,$posted,8),$authority->moneyScale());
-        $bound=Decimal::round(Decimal::mul((string)max(1,count($serialized)),'0.005'),6);
+        $bound='0';foreach($serialized as$part)$bound=Decimal::add($bound,Decimal::div('0.5',(string)(10**($part['destination_role']==='inventory_asset'?Decimal::MONEY_SCALE:$authority->moneyScale())),12),8);
         if(Decimal::gt(ltrim($residual,'-'),$bound,6))$this->fail('Cumulative supplier-credit valuation rounding exceeds its native deterministic bound.');
         return ['contract_version'=>'purchase-credit-bill-closure.v1','direction'=>$authority->direction(),'organization_mapping_uuid'=>$authority->mappingUuid(),
             'operation_uuid'=>$authority->operationUuid(),'allocation_uuid'=>$authority->allocationUuid(),'destination_document_type'=>'supplier_credit_bill_closure','destination_document_id'=>$authority->noteId(),

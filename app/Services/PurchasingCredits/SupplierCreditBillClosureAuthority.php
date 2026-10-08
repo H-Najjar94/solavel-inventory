@@ -30,13 +30,16 @@ final readonly class SupplierCreditBillClosureAuthority
   abort_unless($matchJE&&$matchJE->source_key==='purchase-settlement:'.$facts['settlement_uuid']&&$matchJE->status==='posted'&&empty($matchJE->voided_at)&&empty($matchJE->deleted_at),409);
   foreach($db->table('journal_entry_lines')->where('organization_id',$fin)->where('journal_entry_id',$matchJE->id)->lockForUpdate()->get() as $line)
    $financial[(int)$line->account_id]=Decimal::add($financial[(int)$line->account_id]??'0',Decimal::sub((string)$line->base_credit,(string)$line->base_debit,8),8);
+  $receiptLine=$db->table('goods_receipt_lines')->where('organization_id',$org)->where('id',$facts['receipt_line_id'])->where('goods_receipt_id',$facts['receipt_id'])->lockForUpdate()->first();
+  abort_unless($receiptLine,409);$factor=(string)($receiptLine->unit_conversion_factor?:'1');
+  $quantities=[$original->adjustment_uuid=>Decimal::mul((string)$facts['quantity'],$factor,8)];
   $adjustments=[$original];$cohort=[];$quotes=[];
   foreach($rows as$i=>$row){
    $source=$closure['claims'][$i];$intent=json_decode($row->bill_closure_intent??'null',true,512,JSON_THROW_ON_ERROR);
    abort_unless(is_array($intent)&&$intent===($source['bill_closure_intent']??null)&&in_array($row->state,['bill_quote_pending','bill_quoted','bill_reverse_pending','bill_reversed'],true)
     &&(int)$intent['bill_id']===(int)$facts['source_bill_id']&&(int)$intent['bill_journal_id']===(int)$facts['bill_journal_id']
-    &&$intent['settlement_uuid']===$facts['settlement_uuid']&&in_array($intent['operation'],['unpost','void'],true),403);
-   if($action==='release')abort_unless(($intent['release_requested']??false)===true&&empty($row->bill_closure_journal_id),403);
+    &&$intent['settlement_uuid']===$facts['settlement_uuid']&&(int)$row->bill_closure_plan_revision===(int)($facts['plan_revision']??1)&&(int)$intent['plan_revision']===(int)$row->bill_closure_plan_revision&&in_array($intent['operation'],['unpost','void'],true),403);
+   if($action==='release')abort_unless((bool)($row->bill_closure_release_requested??false)===true&&(bool)($source['bill_closure_release_requested']??false)===true&&empty($row->bill_closure_journal_id),403);
    $user=$db->table('users')->where('id',$intent['actor_id'])->where('central_user_id',$intent['central_actor_id'])->first();
    abort_unless($user&&(int)$intent['central_actor_id']>0&&$db->table('organization_user')->where('organization_id',$fin)->where('user_id',$user->id)->where('status','active')->exists(),403);
    abort_unless((int)$source['claim_id']===(int)$row->id&&$source['claim_snapshot']===$row->snapshot&&$source['claim_snapshot_hash']===$row->snapshot_hash
@@ -64,11 +67,12 @@ final readonly class SupplierCreditBillClosureAuthority
     &&hash_equals($source['restore_journal_fingerprint'],hash('sha256',json_encode(['journal'=>(array)$je,'lines'=>$lines],JSON_THROW_ON_ERROR))),409);
    foreach($lines as$line)$financial[(int)$line['account_id']]=Decimal::add($financial[(int)$line['account_id']]??'0',Decimal::sub((string)$line['base_credit'],(string)$line['base_debit'],8),8);
    $cohort[]=[(int)$row->id,$row->snapshot_hash,$row->revision_hash,$native->adjustment_uuid,$quote['plan_fingerprint'],(int)$je->id,$intent];
-   $adjustments[]=$native;
+   $adjustments[]=$native;$quantities[$native->adjustment_uuid]=Decimal::mul((string)$row->quantity,$factor,8);
    $q=json_decode($row->bill_closure_quote??'null',true,512,JSON_THROW_ON_ERROR);if($q)$quotes[]=$q;
-   if($action==='reverse')abort_unless($row->state==='bill_reverse_pending'||$row->state==='bill_reversed',409);
+   if($action==='reverse')abort_unless(!(bool)($row->bill_closure_release_requested??false)&&($row->state==='bill_reverse_pending'||$row->state==='bill_reversed'),409);
   }
   abort_unless(hash_equals($closure['claim_cohort_hash'],hash('sha256',json_encode($cohort,JSON_THROW_ON_ERROR))),409);
+  abort_unless(!$quotes||count($quotes)===$rows->count(),409);
   if($quotes){foreach($quotes as$q)abort_unless($q===$quotes[0],409);$proof['closure_quote']=$quotes[0];}
   if($action==='reverse'){
    $je=$db->table('journal_entries')->where('organization_id',$fin)->where('id',$proof['finance_reversal_journal_id']??0)->lockForUpdate()->first();
@@ -84,17 +88,29 @@ final readonly class SupplierCreditBillClosureAuthority
    $group=[];
    $total='0';foreach($parts as$part){
     $originalParts[]=['destination_role'=>$part->destination_role,'posted_base_amount'=>(string)$part->posted_base_amount];$total=Decimal::add($total,(string)$part->posted_base_amount,8);
-    $ledger=StockLedger::withoutGlobalScope('warehouse_access')->where('organization_id',$org)->whereKey($part->stock_ledger_id)->lockForUpdate()->firstOrFail();
+    $sourceLedgerId=data_get($part->provenance,'supplier_credit_source.source_stock_ledger_id')
+     ??data_get($part->provenance,'average_replay_from_ledger_id');
+    if(!$sourceLedgerId&&data_get($part->provenance,'cost_layer_id')){
+     $layer=$db->table('cost_layers')->where('organization_id',$org)->where('id',data_get($part->provenance,'cost_layer_id'))->lockForUpdate()->first();
+     abort_unless($layer,409);$sourceLedgerId=$layer->source_ledger_id;
+    }
+    $destination=StockLedger::withoutGlobalScope('warehouse_access')->where('organization_id',$org)->whereKey($part->stock_ledger_id)->lockForUpdate()->firstOrFail();
+    if(!$sourceLedgerId&&$destination->direction==='in')$sourceLedgerId=$destination->id;
+    abort_unless($sourceLedgerId,409);
+    $ledger=StockLedger::withoutGlobalScope('warehouse_access')->where('organization_id',$org)->whereKey($sourceLedgerId)->lockForUpdate()->firstOrFail();
     abort_unless($ledger->direction==='in'&&$ledger->source_type==='App\\Models\\Tenant\\GoodsReceipt'&&(int)$ledger->source_id===(int)$facts['receipt_id']&&(int)$ledger->source_line_id===(int)$facts['receipt_line_id'],409);
-    abort_unless((int)$ledger->item_id===(int)$part->item_id&&(int)$ledger->warehouse_id===(int)$part->warehouse_id,409);
-    $key=(int)$ledger->id;if(!isset($group[$key]))$group[$key]=['amount'=>'0','ledger'=>$ledger,'quantity'=>'0'];
-    $group[$key]['quantity']=Decimal::add($group[$key]['quantity'],(string)$part->base_quantity,8);
+    abort_unless((int)$ledger->item_id===(int)$part->item_id&&(int)$ledger->warehouse_id===(int)$part->warehouse_id
+     &&(int)$destination->item_id===(int)$part->item_id&&(int)$destination->warehouse_id===(int)$part->warehouse_id,409);
+    $key=(int)$ledger->id;if(!isset($group[$key]))$group[$key]=['amount'=>'0','ledger'=>$ledger];
     $group[$key]['amount']=Decimal::sub($group[$key]['amount'],(string)$part->posted_base_amount,8);
    }
    abort_unless(Decimal::cmp($total,(string)$adjustment->allocated_base_difference,8)===0,409);
-   foreach($group as$g){$l=$g['ledger'];abort_unless(Decimal::gt($g['quantity'],'0')&&Decimal::cmp($g['quantity'],(string)$l->quantity,8)<=0,409);$sources[]=['settlement_uuid'=>$facts['settlement_uuid'],'position_uuid'=>$facts['position_uuid'],
+   $basis='0';foreach($group as$g)$basis=Decimal::add($basis,(string)$g['ledger']->quantity,8);
+   $remaining=$quantities[$adjustment->adjustment_uuid];$last=array_key_last($group);
+   foreach($group as$key=>$g){$l=$g['ledger'];$quantity=$key===$last?$remaining:Decimal::mul($quantities[$adjustment->adjustment_uuid],Decimal::div((string)$l->quantity,$basis,12),8);$remaining=Decimal::sub($remaining,$quantity,8);
+    abort_unless(Decimal::gt($quantity,'0')&&Decimal::cmp($quantity,(string)$l->quantity,8)<=0,409);$sources[]=['settlement_uuid'=>$facts['settlement_uuid'],'position_uuid'=>$facts['position_uuid'],
     'receipt_id'=>(int)$l->source_id,'receipt_line_id'=>(int)$l->source_line_id,'stock_ledger_id'=>(int)$l->id,'item_id'=>(int)$l->item_id,'warehouse_id'=>(int)$l->warehouse_id,
-    'variant_id'=>$l->variant_id,'lot_id'=>$l->lot_id,'bin_id'=>$l->bin_id,'quantity_base'=>$g['quantity'],'price_delta_base'=>$g['amount'],'source_adjustment_uuid'=>$adjustment->adjustment_uuid];}
+    'variant_id'=>$l->variant_id,'lot_id'=>$l->lot_id,'bin_id'=>$l->bin_id,'quantity_base'=>$quantity,'price_delta_base'=>$g['amount'],'source_adjustment_uuid'=>$adjustment->adjustment_uuid];}
   }
   return new self($facts,$proof,$sources,$ids,$org,$map->mapping_uuid,$snapshot,$financial,$originalParts,$fin);
  }
@@ -114,7 +130,7 @@ final readonly class SupplierCreditBillClosureAuthority
   foreach($plan['components']as$part){$id=$account($part['destination_role']);$expected[$id]=Decimal::add($expected[$id]??'0',Decimal::round($part['posted_base_amount'],$scale),8);}
   $sum='0';foreach($expected as$amount)$sum=Decimal::add($sum,$amount,8);
   if(!Decimal::isZero($sum,8)){
-   $bound=Decimal::mul((string)max(1,count($this->originalParts)+count($plan['components'])),'0.005',8);abort_unless(Decimal::cmp(ltrim($sum,'-'),$bound,8)<=0,409);
+   $bound=Decimal::mul((string)max(1,count($this->originalParts)+count($plan['components'])),Decimal::div('0.5',(string)(10**$scale),12),8);abort_unless(Decimal::cmp(ltrim($sum,'-'),$bound,8)<=0,409);
    $default=DB::connection('tenant')->table('org_account_defaults')->where('organization_id',$this->finance)->sole();$id=(int)$default->rounding_account_id;
    abort_unless(DB::connection('tenant')->table('accounts')->where('organization_id',$this->finance)->where('id',$id)->where('is_active',true)->where('is_postable',true)->exists(),409);
    $expected[$id]=Decimal::sub($expected[$id]??'0',$sum,8);
