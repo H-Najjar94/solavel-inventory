@@ -338,4 +338,28 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(0,SalesDocumentOutbox::count());
         $this->assertSame(850,FinancialOriginOutbox::where('event_type','financial-origin.shipment.reversed')->sole()->payload['source_document_id']);
     }
+    public function test_cash_partial_contract_rejects_uncommanded_shipment_without_creating_invoice_or_movement():void
+    {
+        [$data,$context,$op]=$this->admitted();
+        $request=FinancialOriginRequest::sole();
+        $shipment=new Shipment(['organization_id'=>$request->organization_id,'sales_order_id'=>$request->sales_order_id,'warehouse_id'=>$this->warehouse->id,'status'=>'draft']);
+        $before=StockLedger::count();
+        try {
+            DB::connection('tenant')->transaction(fn()=>app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->lockAndValidateDocument($shipment));
+            $this->fail('Cash source dispatched without its durable typed operation');
+        }catch(\Illuminate\Validation\ValidationException $error){$this->assertArrayHasKey('sales_order_id',$error->errors());}
+        $this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());$this->assertSame(0,FinancialOriginCommand::count());
+    }
+    public function test_cash_partial_contract_prepared_hold_fences_new_dispatch_until_released():void
+    {
+        [$data,$context,$op]=$this->admitted();
+        (require base_path('database/migrations/tenant/2026_10_08_219000_create_cash_refund_demand_holds.php'))->up();
+        $request=FinancialOriginRequest::sole();$db=DB::connection('tenant');
+        $db->table('stock_cash_refund_demands')->insert(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$request->organization_mapping_uuid,'request_id'=>$request->id,'request_uuid'=>$request->request_uuid,'source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,'source_revision'=>$request->source_revision,'refund_receipt_id'=>1991,'operation_uuid'=>(string)Str::uuid(),'actor_id'=>323,'payload_hash'=>str_repeat('b',64),'hold_fingerprint'=>str_repeat('c',64),'payload'=>'{}','state'=>'prepared']);
+        try{$db->transaction(fn()=>app(\App\Services\FinancialOrigins\CashRefundDemandService::class)->assertDispatchUnlocked($request));$this->fail('Prepared refund did not fence dispatch');}
+        catch(HttpException $error){$this->assertSame(409,$error->getStatusCode());}
+        $db->table('stock_cash_refund_demands')->update(['state'=>'abandoned']);
+        $db->transaction(fn()=>app(\App\Services\FinancialOrigins\CashRefundDemandService::class)->assertDispatchUnlocked($request));
+        $this->assertSame(0,StockLedger::count());$this->assertSame(0,Shipment::count());
+    }
 }
