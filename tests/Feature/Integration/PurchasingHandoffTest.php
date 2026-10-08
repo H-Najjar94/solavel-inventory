@@ -862,7 +862,7 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame(0, PurchasingDocumentOutbox::count());
     }
 
-    public function test_disconnected_existing_identity_retains_pending_finance_ownership(): void
+    public function test_disconnected_existing_identity_blocks_unreviewed_native_valuation(): void
     {
         IntegrationSetting::sole()->update(['mode' => 'disconnected']);
         $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06'],
