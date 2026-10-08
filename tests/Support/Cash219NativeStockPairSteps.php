@@ -10,7 +10,7 @@ final class Cash219NativeStockPairSteps
 {
  public static function run(string $step,array $state):array {
   if(!app()->environment('testing')||DB::connection('tenant')->getDatabaseName()!=='tenant_000100'||DB::connection('tenant')->transactionLevel()!==0)throw new \LogicException('Sealed native pair only.');
-  $org=(int)$state['organization_id'];$actor=$step==='opening'?17003:(int)$state['warehouse_actor_id'];
+  $org=(int)$state['organization_id'];$actor=in_array($step,['opening','approve'],true)?17003:(int)$state['warehouse_actor_id'];
   $user=\App\Models\User::findOrFail($actor);\Illuminate\Support\Facades\Auth::setUser($user);request()->setUserResolver(fn()=>$user);
   $access=app(\App\Services\Access\CentralAppAccess::class);
   if(($access->decision($actor,$org,'inventory')['allowed']??false)!==true||($access->decision($actor,$org,'finance')['allowed']??false)===true)throw new \LogicException('Actual Stock-only native actor required.');
