@@ -26,6 +26,7 @@ final class OriginRequestService
             $mapping=$proof->mapping; $p=$dto->payload;
             $r=FinancialOriginRequest::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_document_type',$dto->origin->type)->where('source_document_id',$dto->origin->documentId)->lockForUpdate()->first();
             if($r){abort_unless($r->status!=='cancelled',409);abort_unless($r->request_uuid===$p['request_uuid'] && $r->source_revision===$p['source_revision'] && (int)$r->source_journal_id===$dto->origin->journalId,409);return $this->summary($r);}
+            app(FinancialOriginCapabilities::class)->assertSourceSupported($dto->origin->type,(int)$mapping->finance_organization_id);
             $partyId=null;
             if($dto->origin->type==='expense')$partyId=$this->mapped($mapping,'supplier',(int)$p['supplier_external_id'],'supplier_external_id');
             elseif(($p['customer_external_id']??null)!==null)$partyId=$this->mapped($mapping,'customer',(int)$p['customer_external_id'],'customer_external_id');
@@ -83,6 +84,7 @@ final class OriginRequestService
             $r=FinancialOriginRequest::query()->whereKey($r->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($r->status,['pending','partial'],true),409);
             if($r->approved_at){abort_unless((int)$r->warehouse_id===$warehouse && $r->approved_revision===$r->source_revision,409);return $this->summary($r);}
+            app(FinancialOriginCapabilities::class)->assertSourceSupported($r->source_document_type,(int)app(ReceivingRequestService::class)->mapping()->finance_organization_id);
             if($r->side==='sales'){
                 $order=app(SalesOrderService::class)->createDraft(['warehouse_id'=>$warehouse,'customer_id'=>$r->party_id,'source_app'=>'solabooks',
                     'source_document_id'=>$r->source_document_type.':'.$r->source_document_id,'source_document_number'=>$r->source_document_number,

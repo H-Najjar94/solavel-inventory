@@ -34,12 +34,13 @@ final class OriginDispatchService
             ->where('source_document_type',$r->source_document_type)->where('source_document_id',$r->source_document_id)->where('source_journal_id',$r->source_journal_id)
             ->where('actor_id',$actor)->whereIn('status',['pending','completed'])->where('payload->request_revision',$r->source_revision)
             ->orderByDesc('id')->limit(25)->get()->map(fn($command)=>$this->commandSummary($command)+['payload'=>$command->payload])->all();
-        $canMove=app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_shipments':'inventory.receive_goods');
+        $supported=in_array($r->source_document_type,app(FinancialOriginCapabilities::class)->inspect((int)app(\App\Services\Purchasing\ReceivingRequestService::class)->mapping()->finance_organization_id)['supported_source_document_types'],true);
+        $canMove=$supported && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_shipments':'inventory.receive_goods');
         $ready=$canMove && $r->approved_at && $r->approved_revision===$r->source_revision && in_array($r->status,['pending','partial'],true) && in_array((int)$r->warehouse_id,$ids,true);
         $default=(int)(\App\Models\Tenant\InventorySetting::query()->first()?->default_warehouse_id??0);
         return ['request'=>app(OriginRequestService::class)->summary($r),'request_revision'=>$r->source_revision,'can_execute'=>(bool)$ready,
-            'can_approve'=>!$r->approved_at && $r->status==='pending' && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods'),
-            'can_reserve'=>$r->side==='sales' && app(InventoryPermissionService::class)->can($user,'inventory.manage_reservations'),
+            'can_approve'=>$supported && !$r->approved_at && $r->status==='pending' && app(InventoryPermissionService::class)->can($user,$r->side==='sales'?'inventory.manage_sales_orders':'inventory.receive_goods'),
+            'can_reserve'=>$supported && $r->side==='sales' && app(InventoryPermissionService::class)->can($user,'inventory.manage_reservations'),
             'default_warehouse_id'=>in_array($default,$ids,true)?$default:null,'operations'=>$operations,
             'warehouses'=>$warehouses->map(fn($w)=>['id'=>$w->id,'name'=>$w->name,'bins'=>\App\Models\Tenant\WarehouseBin::query()->where('warehouse_id',$w->id)->where('is_active',true)->get(['id','code','name'])->toArray()])->all(),
             'lines'=>$r->lines()->get()->map(function($l)use($r,$ids){$item=Item::query()->where('is_active',true)->findOrFail($l->item_id);return ['request_line_id'=>$l->id,'source_document_line_id'=>$l->source_document_line_id,
@@ -100,6 +101,7 @@ final class OriginDispatchService
             abort_unless($r->source_revision===$data['request_revision'] && $r->approved_at && $r->approved_revision===$r->source_revision && (int)$r->warehouse_id===(int)$data['warehouse_id'] && in_array($r->status,['pending','partial'],true),409);
             $c=FinancialOriginCommand::query()->where('operation_uuid',$data['operation_uuid'])->lockForUpdate()->first();
             if($c){abort_unless($c->request_uuid===$r->request_uuid && (int)$c->actor_id===$actor && $c->payload_hash===$hash && $c->status!=='abandoned',409);return $this->commandSummary($c);}
+            app(FinancialOriginCapabilities::class)->assertSourceSupported($r->source_document_type,(int)app(\App\Services\Purchasing\ReceivingRequestService::class)->mapping()->finance_organization_id);
             $seen=[];foreach($data['lines']as$line){
                 $l=$r->lines()->findOrFail($line['request_line_id']??0);abort_if(isset($seen[$l->id]),422);$seen[$l->id]=true;
                 abort_unless((int)$l->source_document_line_id===(int)($line['source_document_line_id']??0) && (int)$l->unit_id===(int)($line['unit_id']??0)
@@ -185,6 +187,8 @@ final class OriginDispatchService
                 if($command->status==='completed')return $command->response;abort_unless($command->status==='pending',409);
                 abort_if($command->shipment_id || $command->goods_receipt_id,409,'Reconcile the existing physical operation before retrying.');
             }
+            // A previously accepted immutable prepared command may finish; no fresh operation when disabled.
+            if(!$command)app(FinancialOriginCapabilities::class)->assertSourceSupported($r->source_document_type,(int)app(\App\Services\Purchasing\ReceivingRequestService::class)->mapping()->finance_organization_id);
             abort_unless($r->approved_at && $r->approved_revision===$r->source_revision && in_array($r->status,['pending','partial'],true) && (int)$r->warehouse_id===(int)$data['warehouse_id'],409);
             $nativeLines=[];$r->loadMissing('lines');
             foreach($data['lines']as$line){

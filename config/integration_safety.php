@@ -1,6 +1,8 @@
 <?php
 
 return [
+    // Enable only after the exact typed Expense accounting pair is qualified.
+    'financial_origin_expense_handoff_enabled' => env('FINANCIAL_ORIGIN_EXPENSE_HANDOFF_ENABLED', false),
     /*
     |--------------------------------------------------------------------------
     | SolaBooks delivery safety hold
