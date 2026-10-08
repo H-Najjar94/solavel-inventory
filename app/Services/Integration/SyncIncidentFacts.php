@@ -111,6 +111,21 @@ final class SyncIncidentFacts
         ];
     }
 
+    /**
+     * Sync-incident audience for one user (app access is checked separately). Administrators
+     * only: the document-incident manager rule (connection_manage + integration.view) or
+     * integration.manage + integration.view. Returns null (not a recipient), `events` or
+     * `catalog` (may also open the catalog sync page, which needs integration.manage).
+     */
+    public static function audience(string $kind, bool $view, bool $connectionManage, bool $manage): ?string
+    {
+        if (! $view || (! $connectionManage && ! $manage)) {
+            return null;
+        }
+
+        return $manage && $kind !== 'party' ? 'catalog' : 'events';
+    }
+
     public static function displayName(string $name): string
     {
         $clean = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/[\x00-\x1F\x7F]/u', ' ', strip_tags($name))));

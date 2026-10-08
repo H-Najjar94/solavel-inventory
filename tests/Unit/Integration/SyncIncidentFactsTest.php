@@ -37,4 +37,13 @@ final class SyncIncidentFactsTest extends TestCase {
  public function test_kind_must_match_the_state_row():void {
   $this->expectException(\InvalidArgumentException::class);SyncIncidentFacts::fromRow('unit',$this->catalog(),'m',1);
  }
+ public function test_audience_matches_document_incident_admins_or_integration_managers_and_never_operators():void {
+  foreach(['party','item','unit','category'] as $kind){
+   $this->assertSame('events',SyncIncidentFacts::audience($kind,true,true,false),'connection_manage + view, as document incidents, links to the events page.');
+   $this->assertSame($kind==='party'?'events':'catalog',SyncIncidentFacts::audience($kind,true,false,true));
+   $this->assertSame($kind==='party'?'events':'catalog',SyncIncidentFacts::audience($kind,true,true,true));
+   $this->assertNull(SyncIncidentFacts::audience($kind,false,true,true),'integration.view is always required.');
+   $this->assertNull(SyncIncidentFacts::audience($kind,true,false,false),'Viewers and operators are not administrators.');
+  }
+ }
 }

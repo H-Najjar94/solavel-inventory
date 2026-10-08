@@ -75,8 +75,10 @@ final class DocumentIncidentContextController
     }
     /**
      * Party/catalog sync incident (stock-sync-incident.v1). Audience is integration
-     * administrators only: inventory.integration.manage + inventory.integration.view with
-     * Central app access. There is never an operator audience for sync incidents.
+     * administrators only, never operators: the same rule document incidents use
+     * (connection_manage + integration.view) OR integration.manage + integration.view, each
+     * with Central app access. `catalog_manager_ids` is the subset that may open the catalog
+     * sync page (integration.manage); Central links everyone else to the events page.
      */
     private function syncContext(array $data,object $org,object $mapping)
     {
@@ -87,14 +89,17 @@ final class DocumentIncidentContextController
         abort_unless($facts,404);
         $members=DB::connection((string)config('tenancy.central_connection','mysql'))->table('user_organizations')
             ->where('organization_id',$org->id)->where(fn($q)=>$q->whereNull('status')->orWhere('status','active'))->pluck('user_id');
-        $managers=[];$permissions=app(InventoryPermissionService::class);
+        $managers=[];$catalogManagers=[];$permissions=app(InventoryPermissionService::class);
         foreach(User::query()->whereIn('id',$members)->get() as $user) {
-            if (!$permissions->can($user,'inventory.integration.manage') || !$permissions->can($user,'inventory.integration.view')) continue;
+            $audience=SyncIncidentFacts::audience($kind,$permissions->can($user,'inventory.integration.view'),
+                $permissions->can($user,ConnectionManagementPolicy::MANAGEMENT_PERMISSION),$permissions->can($user,'inventory.integration.manage'));
+            if ($audience===null) continue;
             if (!(app(CentralAppAccess::class)->decision((int)$user->id,(int)$org->id,'inventory')['allowed']??false)) continue;
             $managers[]=(int)$user->id;
+            if ($audience==='catalog') $catalogManagers[]=(int)$user->id;
         }
         return response()->json(['app_key'=>'inventory','client_id'=>(int)$org->client_id,'organization_id'=>(int)$org->id,
             'document_kind'=>$kind,'outbox_id'=>(int)$row->id,'facts'=>$facts,'fingerprint'=>SyncIncidentFacts::fingerprint($facts),
-            'eligible_manager_ids'=>$managers,'eligible_operator_ids'=>[]])->header('Cache-Control','no-store');
+            'eligible_manager_ids'=>$managers,'catalog_manager_ids'=>$catalogManagers,'eligible_operator_ids'=>[]])->header('Cache-Control','no-store');
     }
 }
