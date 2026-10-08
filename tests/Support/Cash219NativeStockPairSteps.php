@@ -25,11 +25,19 @@ final class Cash219NativeStockPairSteps
   $r=FinancialOriginRequest::query()->where('organization_id',$org)->where('request_uuid',$state['request_uuid'])->where('source_document_type','sales_receipt')->sole();
   $context=['request_uuid'=>$r->request_uuid,'source_document_type'=>'sales_receipt','source_document_id'=>$r->source_document_id,'source_journal_id'=>$r->source_journal_id,'request_revision'=>$r->source_revision];
   if($step==='approve')return app(OriginRequestService::class)->approveNative($context+['warehouse_id'=>$state['warehouse_id']],$actor);
-  if($step==='dispatch'||$step==='dispatch-replay'){
+  if(in_array($step,['dispatch','dispatch-replay','dispatch-held-denial'],true)){
    $line=$r->lines()->sole();
    $op=$context+['operation_uuid'=>$state['dispatch_uuid'],'warehouse_id'=>$state['warehouse_id'],'physical_date'=>'2024-06-14',
     'lines'=>[['request_line_id'=>$line->id,'source_document_line_id'=>$line->source_document_line_id,'quantity'=>'2','unit_id'=>$line->unit_id]]];
-   $service=app(OriginDispatchService::class);$service->prepareNative($op,$actor);return$service->executeNative($op,$actor);
+   $service=app(OriginDispatchService::class);
+   if($step==='dispatch-held-denial'){
+    $op['operation_uuid']=(string)Str::uuid();$before=DB::connection('tenant')->table('stock_financial_origin_commands')->where('organization_id',$org)->count();
+    try{$service->prepareNative($op,$actor);throw new \LogicException('Prepared Cash refund failed to fence new dispatch.');}
+    catch(\Illuminate\Validation\ValidationException $e){if(!isset($e->errors()['workflow']))throw$e;}
+    if($before!==DB::connection('tenant')->table('stock_financial_origin_commands')->where('organization_id',$org)->count())throw new \LogicException('Denied dispatch persisted a command.');
+    return['denied'=>true,'command_count_unchanged'=>true];
+   }
+   $service->prepareNative($op,$actor);return$service->executeNative($op,$actor);
   }
   if($step==='return'||$step==='return-replay'){
    $shipment=Shipment::query()->where('organization_id',$org)->findOrFail($state['shipment_id']);$line=$shipment->lines()->sole();
