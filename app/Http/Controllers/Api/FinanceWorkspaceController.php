@@ -140,6 +140,13 @@ final class FinanceWorkspaceController
                 $result = app(\App\Services\FinancialOrigins\HeldOriginReceiptCostService::class)->dispatch($input, $org);
                 return response()->json(['success' => true, 'data' => $result]);
             }
+            if ($input['action'] === 'financial-origin.cash-refund-demand') {
+                abort_unless((int)$actor->id > 0 && $mapping && $mapping->status === 'verified'
+                    && $mapping->activation_state === 'active' && $setting && $setting->mode === 'active',409,'workspace_connection_not_ready');
+                abort_unless(Schema::connection('tenant')->hasTable('stock_cash_refund_demands')
+                    && Schema::connection('tenant')->hasTable('finance_cash_refund_demands'),409,'workspace_schema_not_ready');
+                return response()->json(['success'=>true,'data'=>app(\App\Services\FinancialOrigins\CashRefundDemandService::class)->dispatch((array)($input['data']??[]),(int)$actor->id)]);
+            }
             // Typed native documents remain separate from Bill/Invoice identities.
             // Only financial demand waives Stock assignment; physical actions below do not.
             if (in_array($input['action'], FinanceDocumentLifecycleAuthority::FINANCIAL_ORIGIN_REQUEST_ACTIONS, true)

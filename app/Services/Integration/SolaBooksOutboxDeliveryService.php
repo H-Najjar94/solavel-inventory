@@ -352,7 +352,7 @@ class SolaBooksOutboxDeliveryService
                 'integration_mapping_id' => $mapping->id, 'signing_key_id' => (string) data_get($setting->meta, 'signing_key_id'), 'organization_mapping_uuid' => $mapping->mapping_uuid],
             'actor_id' => $actorId, 'source_document_type' => $origin->type, 'source_document_id' => $origin->documentId, 'source_journal_id' => $origin->journalId, 'permission' => $permission,
         ];
-        $payload += array_intersect_key($reviewFacts, array_flip(['request_uuid', 'source_revision', 'expected_revision', 'command', 'operation_uuid', 'purpose', 'closure_permission', 'closing_source_journal_id']));
+        $payload += array_intersect_key($reviewFacts, array_flip(['request_uuid', 'source_revision', 'expected_revision', 'command', 'operation_uuid', 'purpose', 'closure_permission', 'closing_source_journal_id', 'cash_demand']));
         $body = SolaStockJournalContract::canonicalJson($payload);
         $endpoint = preg_replace('~/journal-entries(?:\\?.*)?$~', $sales ? '/sales/origins/authorize' : '/purchasing/origins/authorize', $this->journalEndpoint());
         if (! $endpoint || $endpoint === $this->journalEndpoint()) {

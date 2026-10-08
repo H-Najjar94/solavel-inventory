@@ -425,17 +425,17 @@ class StockReservationService
     }
 
     /** Release only aggregate surplus after an independently committed credit demand reduction. */
-    public function releaseExcessForSalesOrder(SalesOrder $order, ?\App\Services\Sales\CreditDemandScope $scope = null): int
+    public function releaseExcessForSalesOrder(SalesOrder $order, \App\Services\Sales\CreditDemandScope|\App\Services\FinancialOrigins\CashDemandScope|null $scope = null): int
     {
         return $this->transitionExcessForSalesOrder($order, [], true, $scope);
     }
 
-    public function validateExcessReleaseForSalesOrder(SalesOrder $order, array $baseReductions, ?\App\Services\Sales\CreditDemandScope $scope = null): int
+    public function validateExcessReleaseForSalesOrder(SalesOrder $order, array $baseReductions, \App\Services\Sales\CreditDemandScope|\App\Services\FinancialOrigins\CashDemandScope|null $scope = null): int
     {
         return $this->transitionExcessForSalesOrder($order, $baseReductions, false, $scope);
     }
 
-    private function transitionExcessForSalesOrder(SalesOrder $order, array $baseReductions, bool $apply, ?\App\Services\Sales\CreditDemandScope $scope): int
+    private function transitionExcessForSalesOrder(SalesOrder $order, array $baseReductions, bool $apply, \App\Services\Sales\CreditDemandScope|\App\Services\FinancialOrigins\CashDemandScope|null $scope): int
     {
         $orgId = $this->context->idOrFail();
         return DB::connection($this->conn())->transaction(function () use ($order, $orgId, $baseReductions, $apply, $scope) {

@@ -100,6 +100,7 @@ final class OriginDispatchService
             abort_unless($r->source_revision===$data['request_revision'] && $r->approved_at && $r->approved_revision===$r->source_revision && (int)$r->warehouse_id===(int)$data['warehouse_id'] && in_array($r->status,['pending','partial'],true),409);
             $c=FinancialOriginCommand::query()->where('operation_uuid',$data['operation_uuid'])->lockForUpdate()->first();
             if($c){abort_unless($c->request_uuid===$r->request_uuid && (int)$c->actor_id===$actor && $c->payload_hash===$hash && $c->status!=='abandoned',409);return $this->commandSummary($c);}
+            app(CashRefundDemandService::class)->assertDispatchUnlocked($r);
             $seen=[];foreach($data['lines']as$line){
                 $l=$r->lines()->findOrFail($line['request_line_id']??0);abort_if(isset($seen[$l->id]),422);$seen[$l->id]=true;
                 abort_unless((int)$l->source_document_line_id===(int)($line['source_document_line_id']??0) && (int)$l->unit_id===(int)($line['unit_id']??0)
@@ -185,6 +186,7 @@ final class OriginDispatchService
                 if($command->status==='completed')return $command->response;abort_unless($command->status==='pending',409);
                 abort_if($command->shipment_id || $command->goods_receipt_id,409,'Reconcile the existing physical operation before retrying.');
             }
+            app(CashRefundDemandService::class)->assertDispatchUnlocked($r);
             abort_unless($r->approved_at && $r->approved_revision===$r->source_revision && in_array($r->status,['pending','partial'],true) && (int)$r->warehouse_id===(int)$data['warehouse_id'],409);
             $nativeLines=[];$r->loadMissing('lines');
             foreach($data['lines']as$line){

@@ -25,6 +25,7 @@ final class FinanceDocumentLifecycleAuthority
         'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',
         'purchasing.request.upsert', 'purchasing.request.status', 'purchasing.request.cancel',
         'sales.request.upsert', 'sales.request.status', 'sales.request.cancel', 'sales.request.reduce-demand',
+        'financial-origin.cash-refund-demand',
         'finance-allocations.review-status',
         'finance-allocations.commit',
         'finance-allocations.release',

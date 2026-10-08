@@ -53,7 +53,14 @@ final class OriginPhysicalService
         if(!DB::connection('tenant')->getSchemaBuilder()->hasTable('stock_financial_origin_commands'))return null;
         $field=$document instanceof Shipment?'shipment_id':'goods_receipt_id';
         $known=FinancialOriginCommand::query()->where('organization_id',$document->organization_id)->where($field,$document->id)->first();
-        if(!$known)return null;
+        if(!$known){
+            if($document instanceof Shipment && $document->sales_order_id && $document->status!=='posted'){
+                $cash=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)
+                    ->where('source_document_type','sales_receipt')->where('sales_order_id',$document->sales_order_id)->lockForUpdate()->first();
+                if($cash)app(CashRefundDemandService::class)->assertDispatchUnlocked($cash);
+            }
+            return null;
+        }
         $r=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)->where('request_uuid',$known->request_uuid)
             ->where('source_document_type',$known->source_document_type)->where('source_document_id',$known->source_document_id)->where('source_journal_id',$known->source_journal_id)->firstOrFail();
         LockedOriginProof::lockAccepted($r,(int)(request()->user()?->getAuthIdentifier()??0));
@@ -87,6 +94,7 @@ final class OriginPhysicalService
             }
             return $r; // Native caller's posted-document idempotent return; no fulfilment/outbox writes.
         }
+        app(CashRefundDemandService::class)->assertDispatchUnlocked($r);
         abort_unless($command->status==='pending' && in_array($r->status,['pending','partial'],true) && $r->approved_at
             && $r->approved_revision===$r->source_revision && (int)$r->warehouse_id===(int)$document->warehouse_id,409);
         if($document instanceof Shipment)abort_unless($r->side==='sales' && $r->source_document_type==='sales_receipt' && (int)$r->sales_order_id===(int)$document->sales_order_id,409);
