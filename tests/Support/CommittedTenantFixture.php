@@ -56,7 +56,7 @@ final class CommittedTenantFixture
             }
             $changed = [];
             foreach ($this->baseline as $table => $rows) {
-                if ($db->table($table)->get()->map(fn ($row) => (array) $row)->all() !== $rows) {
+                if ($this->canonicalRows($db->table($table)->get()->map(fn ($row) => (array) $row)->all()) !== $this->canonicalRows($rows)) {
                     $changed[$table] = $rows;
                 }
             }
@@ -67,9 +67,15 @@ final class CommittedTenantFixture
                     foreach ($changed as $table => $rows) {
                         $db->table($table)->delete();
                         // Generated values are restored by MySQL, not inserted explicitly.
-                        $generated = array_map(fn ($column) => $column->name, $db->select("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND EXTRA LIKE '%GENERATED%'", [$this->database, $table]));
+                        $generated = array_map(fn ($column) => $column->name, $db->select("SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND (EXTRA LIKE '%VIRTUAL GENERATED%' OR EXTRA LIKE '%STORED GENERATED%')", [$this->database, $table]));
                         foreach ($rows as $row) {
                             $db->table($table)->insert(array_diff_key($row, array_flip($generated)));
+                        }
+                    }
+                    foreach ($this->baseline as $table => $rows) {
+                        $restored = $db->table($table)->get()->map(fn ($row) => (array) $row)->all();
+                        if ($this->canonicalRows($restored) !== $this->canonicalRows($rows)) {
+                            throw new RuntimeException('Committed fixture baseline restoration failed for '.$table);
                         }
                     }
                 });
@@ -79,6 +85,17 @@ final class CommittedTenantFixture
         } finally {
             $db->selectOne('SELECT RELEASE_LOCK(?) AS released', [$this->lock]);
         }
+    }
+
+    /** Order-independent exact comparison, including binary and timestamp values. */
+    private function canonicalRows(array $rows): array
+    {
+        $canonical = array_map(function (array $row): string {
+            ksort($row, SORT_STRING);
+            return serialize($row);
+        }, $rows);
+        sort($canonical, SORT_STRING);
+        return $canonical;
     }
 
     private function assertSealedNamespace(): void
