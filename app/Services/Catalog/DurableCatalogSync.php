@@ -19,10 +19,21 @@ final class DurableCatalogSync {
    $uuid=Uuid::uuid5(Uuid::NAMESPACE_URL,'stock-catalog|'.$map->mapping_uuid.'|'.$type.'|'.$sourceId)->toString();
    $db->table(self::TABLE)->insertOrIgnore($identity+['organization_id'=>$org,'source_uuid'=>$uuid,'actor_id'=>$actor,'source_revision'=>$hash,'source_snapshot'=>$raw,'state'=>'pending','created_at'=>now(),'updated_at'=>now()]);
    $row=$db->table(self::TABLE)->where($identity)->lockForUpdate()->first();
-   if($row->source_revision!==$hash||($actor&&((int)$row->actor_id!==$actor)&&$row->state!=='delivered'))$db->table(self::TABLE)->where('id',$row->id)->update([
+   if($row->source_revision!==$hash||($actor&&((int)$row->actor_id!==$actor)&&$row->state!=='delivered'&&(!$row->lease_expires_at||!\Carbon\Carbon::parse($row->lease_expires_at)->isFuture())))$db->table(self::TABLE)->where('id',$row->id)->update([
     'actor_id'=>$actor?:$row->actor_id,'source_revision'=>$hash,'source_snapshot'=>$raw,'state_version'=>$row->state_version+1,'state'=>'pending','attempts'=>0,'last_error'=>null,'next_attempt_at'=>null,'lease_uuid'=>null,'lease_expires_at'=>null,'updated_at'=>now()]);
    foreach(CatalogSourceSnapshot::dependencies($fields)as[$dependency,$id])$this->record($dependency,$id,$org,$actor);
   });}finally{unset($this->recording[$key]);}
+ }
+ /** Explicit authorized recovery adopts the current actor, never guesses an owner. */
+ public function retry(string $type,int $id,int $org,int $actor):void {
+  $this->record($type,$id,$org,$actor);
+  $db=DB::connection('tenant');$db->transaction(function()use($db,$type,$id,$org,$actor){
+   $row=$db->table(self::TABLE)->where('organization_id',$org)->where('entity_type',$type)->where('source_id',$id)->lockForUpdate()->first();
+   if(!$row||$row->state==='delivered')return;
+   // Never race an unexpired accepted-or-in-flight delivery. Reconciliation retries its durable identity.
+   if($row->lease_expires_at&&\Carbon\Carbon::parse($row->lease_expires_at)->isFuture())return;
+   $db->table(self::TABLE)->where('id',$row->id)->update(['actor_id'=>$actor,'state'=>'pending','attempts'=>0,'last_error'=>null,'next_attempt_at'=>null,'lease_uuid'=>null,'lease_expires_at'=>null,'updated_at'=>now()]);
+  });
  }
  public function process(object $map,int $limit=2):int {
   if(!Schema::connection('tenant')->hasTable(self::TABLE)||$map->activation_state!=='active'||$map->status!=='verified')return 0;

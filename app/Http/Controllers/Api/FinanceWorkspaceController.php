@@ -66,7 +66,7 @@ final class FinanceWorkspaceController
         // member always needs SolaCount; SolaStock assignment is waived only for the
         // closed follow-through scope of an already reviewed financial document.
         $lifecycle = FinanceDocumentLifecycleAuthority::covers($input['action']);
-        $catalogSource = $input['action'] === 'catalog.source-authorize' && ($input['authority_kind'] ?? null) === 'stock_catalog_source';
+        $catalogSource = in_array($input['action'], ['catalog.source-authorize', 'catalog.reconcile', 'catalog.status'], true) && ($input['authority_kind'] ?? null) === 'stock_catalog_source';
         foreach (['finance', 'inventory'] as $slug) {
             $project = $central->table('projects')->where('slug', $slug)->where('is_active', true)->value('id');
             abort_unless($project && $central->table('organization_projects')->where('organization_id', $org->id)
@@ -112,7 +112,7 @@ final class FinanceWorkspaceController
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
                     && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
                 abort_unless(Schema::connection('tenant')->hasTable(\App\Services\Catalog\DurableCatalogSync::TABLE), 409, 'workspace_schema_not_ready');
-                return response()->json(['success' => true, 'data' => app(\App\Services\Catalog\CatalogSourceAuthority::class)->authorize((array) ($input['data'] ?? []), $mapping, $actor)]);
+                return response()->json(['success' => true, 'data' => app(\App\Services\Catalog\CatalogSourceAuthority::class)->dispatch($input['action'], (array) ($input['data'] ?? []), $mapping, $actor)]);
             }
             if ($input['action'] === 'sales.fulfillment.capabilities') {
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
