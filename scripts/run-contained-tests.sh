@@ -9,6 +9,13 @@ EVIDENCE="${STOCK_CONTAINED_EVIDENCE:?An existing /var/tmp evidence directory is
 DEPENDENCIES="${STOCK_CONTAINED_VENDOR:?An explicit installed Stock vendor directory is required}"
 [[ "$EVIDENCE" == /var/tmp/* && -d "$EVIDENCE" && "$(realpath "$EVIDENCE")" == "$EVIDENCE" ]] || exit 2
 [[ -f "$DEPENDENCIES/autoload.php" && "$(realpath "$DEPENDENCIES")" == "$DEPENDENCIES" ]] || exit 2
+# Cohort selection is internal: every requested test is qualified in its native lifecycle.
+for task_arg in "$@"; do
+  case "$task_arg" in
+    --private-lifecycle|--group|--group=*|--exclude-group|--exclude-group=*)
+      echo 'REFUSING: private lifecycle groups are selected by the contained launcher.' >&2; exit 2 ;;
+  esac
+done
 RUN="$(mktemp -d /var/tmp/stock-contained.XXXXXXXXXX)"
 mkdir "$RUN/source" "$RUN/etc" "$RUN/php"
 rsync -a --exclude='/.git' --exclude='/.env*' --exclude='/vendor' --exclude='/node_modules' \

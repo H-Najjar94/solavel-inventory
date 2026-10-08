@@ -96,7 +96,7 @@ final class PurchasingHandoffTest extends TestCase
     {
         try {
             if ($this->committedFixture !== null) {
-                // End every fixture-owned transaction before restoring committed rows.
+                // Close fixture transactions; the dedicated private SQL lifecycle owns cleanup.
                 foreach (DB::getConnections() as $connection) {
                     if (in_array($connection->getDatabaseName(), [$this->tenantTestManager->tenantADatabase(), $this->tenantTestManager->centralDatabase()], true)) {
                         while ($connection->transactionLevel() > 0) { $connection->rollBack(); }
@@ -617,6 +617,7 @@ final class PurchasingHandoffTest extends TestCase
         }
     }
 
+    #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_signed_document_delivery_uses_separate_endpoint_and_exact_immutable_payload(): void
     {
         config()->set('integration_safety.solabooks_delivery_enabled', true);
