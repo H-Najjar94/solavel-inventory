@@ -64,7 +64,8 @@ final class DurableCatalogSync {
     $changes=['state'=>$terminal?'intervention_required':($safe==='finance_connection_transport_unknown_retry_same_key'?'unknown_outcome':'retrying'),'last_error'=>$safe,'next_attempt_at'=>$terminal?null:now()->addSeconds(min(900,5*(2**min(8,$row->attempts))))];
     Log::warning('catalog_sync_delivery_pending',['organization_id'=>$map->solastock_organization_id,'mapping_uuid'=>$map->mapping_uuid,'source_uuid'=>$row->source_uuid,'entity_type'=>$row->entity_type,'source_id'=>$row->source_id,'state_version'=>$row->state_version,'attempt'=>$row->attempts+1,'reason'=>$safe]);
    }
-   $db->table(self::TABLE)->where('id',$row->id)->where('lease_uuid',$row->lease_uuid)->where('state_version',$row->state_version)->update($changes+['lease_uuid'=>null,'lease_expires_at'=>null,'updated_at'=>now()]);$count++;
+   $updated=$db->table(self::TABLE)->where('id',$row->id)->where('lease_uuid',$row->lease_uuid)->where('state_version',$row->state_version)->update($changes+['lease_uuid'=>null,'lease_expires_at'=>null,'updated_at'=>now()]);
+   if($updated===1&&$changes['state']==='delivered')app(\App\Services\Integration\CatalogDocumentResumption::class)->resume($map,$row->entity_type,(int)$row->source_id);$count++;
   }return $count;
  }
 }
