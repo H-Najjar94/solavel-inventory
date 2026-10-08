@@ -362,4 +362,30 @@ final class FinancialOriginPhysicalTest extends TestCase
         $db->transaction(fn()=>app(\App\Services\FinancialOrigins\CashRefundDemandService::class)->assertDispatchUnlocked($request));
         $this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());
     }
+    /** Native Stock demand operations; Finance authorization/payout facts are explicit remote projections, not financial posting proof. */
+    public function test_cash_partial_contract_prepare_commit_replay_and_void_restore_exact_demand():void
+    {
+        [$data,$context,$op]=$this->admitted();$db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
+        (require base_path('database/migrations/tenant/2026_10_08_219000_create_cash_refund_demand_holds.php'))->up();
+        if(!$schema->hasTable('finance_cash_refund_demands'))$schema->create('finance_cash_refund_demands',function(\Illuminate\Database\Schema\Blueprint $t){$t->id();foreach(['organization_id','actor_id','source_document_id','source_journal_id','refund_receipt_id']as$f)$t->unsignedBigInteger($f);$t->uuid('organization_mapping_uuid');$t->uuid('operation_uuid');$t->uuid('request_uuid');$t->char('source_revision',64);$t->char('payload_hash',64);$t->json('payload');$t->string('state');$t->unsignedBigInteger('refund_journal_id')->nullable();$t->unsignedBigInteger('reverse_actor_id')->nullable();});
+        $r=FinancialOriginRequest::sole();$uuid=(string)Str::uuid();$payload=['request_uuid'=>$r->request_uuid,'source_revision'=>$r->source_revision,'source_document_id'=>850,'source_journal_id'=>95,'refund_receipt_id'=>991,'operation_uuid'=>$uuid,'lines'=>[['source_document_line_id'=>851,'unfulfilled_quantity'=>'1']],'financial_plan_hash'=>str_repeat('d',64)];
+        $db->table('finance_cash_refund_demands')->insert(['organization_id'=>$this->mapping->finance_organization_id,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'operation_uuid'=>$uuid,'request_uuid'=>$r->request_uuid,'source_revision'=>$r->source_revision,'source_document_id'=>850,'source_journal_id'=>95,'refund_receipt_id'=>991,'actor_id'=>323,'payload_hash'=>\App\Services\Integration\SolaStockJournalContract::payloadHash($payload),'payload'=>json_encode($payload),'state'=>'preparing']);
+        $fingerprint=null;$phase='prepare';
+        $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOrigin')->andReturnUsing(function()use($data,$payload,&$phase,&$fingerprint){return['allowed'=>true,'actor_id'=>323,'source_document_type'=>'sales_receipt','source_document_id'=>850,'source_journal_id'=>95,'request_uuid'=>$data['request_uuid'],'request_revision'=>$data['source_revision'],'canonical_payload'=>$data,'command'=>'upsert','command_source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision'],'cash_demand'=>$payload+['purpose'=>$phase,'hold_fingerprint'=>$fingerprint]];});
+        $input=$context+['source_revision'=>$r->source_revision,'operation_uuid'=>$uuid,'refund_receipt_id'=>991,'purpose'=>'prepare'];unset($input['request_revision']);
+        $service=app(\App\Services\FinancialOrigins\CashRefundDemandService::class);$before=StockLedger::count();
+        $held=$service->dispatch($input,323);$again=$service->dispatch($input,323);$this->assertSame($held,$again);$fingerprint=$held['hold_fingerprint'];
+        $this->assertSame('0.0000',(string)$r->lines()->sole()->cancelled_quantity);$this->assertSame($before,StockLedger::count());
+        // A native Stock component may consume only a committed, source-bound remote Finance payout projection.
+        if(!$schema->hasTable('refund_receipts'))$schema->create('refund_receipts',function(\Illuminate\Database\Schema\Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->string('status');$t->unsignedBigInteger('journal_entry_id');});
+        $db->table('journal_entries')->insert(['id'=>96,'organization_id'=>$this->mapping->finance_organization_id,'source'=>'RF','source_type'=>'App\\Models\\RefundReceipt','source_id'=>991,'status'=>'posted']);
+        $projection=['id'=>991,'organization_id'=>$this->mapping->finance_organization_id,'status'=>'posted','journal_entry_id'=>96,'number'=>'QA-REMOTE-RF-991','date'=>'2026-10-07','amount'=>'7'];
+        $db->table('refund_receipts')->insert(array_filter($projection,fn($key)=>$schema->hasColumn('refund_receipts',$key),ARRAY_FILTER_USE_KEY));
+        if(!$schema->hasColumn('journal_entries','voided_at'))$schema->table('journal_entries',fn(\Illuminate\Database\Schema\Blueprint$t)=>$t->timestamp('voided_at')->nullable());
+        $db->table('finance_cash_refund_demands')->where('operation_uuid',$uuid)->update(['state'=>'commit_pending','refund_journal_id'=>96]);$phase='commit';$input['purpose']=$phase;$input['hold_fingerprint']=$fingerprint;
+        $committed=$service->dispatch($input,323);$this->assertSame('committed',$committed['state']);$this->assertSame($committed,$service->dispatch($input,323));$this->assertSame('1.0000',(string)$r->lines()->sole()->cancelled_quantity);$this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());
+        $db->table('refund_receipts')->where('id',991)->update(['status'=>'void']);$db->table('journal_entries')->where('id',96)->update(['status'=>'voided','voided_at'=>now()]);
+        $db->table('finance_cash_refund_demands')->where('operation_uuid',$uuid)->update(['state'=>'reverse_pending','reverse_actor_id'=>323]);$phase='reverse';$input['purpose']=$phase;
+        $reversed=$service->dispatch($input,323);$this->assertSame('reversed',$reversed['state']);$this->assertSame($reversed,$service->dispatch($input,323));$this->assertSame('0.0000',(string)$r->lines()->sole()->cancelled_quantity);$this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());
+    }
 }
