@@ -585,6 +585,19 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame('ignored', $reversed->fresh()->status);
     }
 
+    /** Review B1 (Batch 10): only inventory reversals may skip a missing original; a sales return still fails closed. */
+    public function test_only_inventory_reversals_may_lack_an_original_event(): void
+    {
+        $builder = \App\Services\Integration\EventPayloadBuilder::class;
+        $reversal = new \App\Models\Tenant\InventoryReversal;
+        $salesReturn = new \stdClass;
+        $this->assertFalse($builder::mustInheritOriginal(null, $salesReturn));
+        $this->assertFalse($builder::mustInheritOriginal(['event_uuid' => null], $reversal));
+        $this->assertTrue($builder::mustInheritOriginal(['event_uuid' => 'e-1'], $reversal));
+        $this->assertTrue($builder::mustInheritOriginal(['event_uuid' => null], $salesReturn), 'A sales return against a pre-connection shipment must fail closed');
+        $this->assertTrue($builder::mustInheritOriginal(['event_uuid' => 'e-2'], $salesReturn));
+    }
+
     public function test_every_reversal_type_without_an_original_event_is_excluded_from_journals(): void
     {
         $reversalTypes = array_values(array_filter(array_keys(\App\Services\Integration\IntegrationEvents::TYPES),

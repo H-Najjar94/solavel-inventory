@@ -76,9 +76,10 @@ class EventPayloadBuilder
         // payload instead of a model-cast midnight timestamp.
         $transactionDate = substr((string) ($date ?? ''), 0, 10);
         $original = $this->originalSource($document);
-        // A reversal of a document posted while standalone has no original event
-        // (IntegrationEvents::reversesDocumentUnknownToFinance): nothing to inherit.
-        $originalPayload = $original && $original['event_uuid'] ? (array) IntegrationOutboxEvent::query()->where('organization_id', $orgId)
+        // Only an inventory reversal of a document posted while standalone may have no original event
+        // (IntegrationEvents::reversesDocumentUnknownToFinance excludes it from Finance). Every other
+        // source, e.g. a sales return against a pre-connection shipment, still fails closed here.
+        $originalPayload = self::mustInheritOriginal($original, $document) ? (array) IntegrationOutboxEvent::query()->where('organization_id', $orgId)
             ->where('event_uuid', $original['event_uuid'])->firstOrFail()->payload : null;
         $valuation = $ledger->isNotEmpty() ? app(FinanceBaseValuation::class)->contract((int) $orgId) : null;
 
@@ -250,6 +251,16 @@ class EventPayloadBuilder
             'precision' => (int) $line->unit_conversion_precision,
             'rounding_mode' => (string) $line->unit_conversion_rounding_mode,
         ];
+    }
+
+    /**
+     * Whether the original event payload must be loaded (and must exist). Only an InventoryReversal of a
+     * document posted while standalone may lack an original event; anything else fails closed.
+     */
+    public static function mustInheritOriginal(?array $original, object $document): bool
+    {
+        if (! $original) return false;
+        return ! empty($original['event_uuid']) || ! $document instanceof InventoryReversal;
     }
 
     private function originalSource(object $document): ?array
