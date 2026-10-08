@@ -99,7 +99,7 @@ final readonly class SupplierCreditCostAuthority
             abort_unless(($quote['direction']??null)===$identity['direction'] && ($quote['allocation_uuid']??null)===$row->allocation_uuid
                 && ($quote['operation_uuid']??null)===$row->operation_uuid && (int)($quote['plan_revision']??0)===(int)($reverse?$row->reverse_plan_revision:$row->plan_revision)
                 && ($quote['plan_fingerprint']??null)===($proof['plan_fingerprint']??null) && is_array($quote['native_plan']??null),409);
-            if(!$reverse)abort_unless(($proof['plan_fingerprint']??null)===$row->plan_fingerprint,409);
+            abort_unless(($proof['plan_fingerprint']??null)===($reverse?$row->reverse_plan_fingerprint:$row->plan_fingerprint),409);
         }
         if($action==='release'){
             $release=json_decode($row->release_snapshot??'null',true,512,JSON_THROW_ON_ERROR);
