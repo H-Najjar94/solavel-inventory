@@ -73,15 +73,31 @@ final class FinancialOriginCapabilitiesTest extends TestCase
 
     public function test_signed_finance_only_probe_is_readonly_and_expense_requires_explicit_gate(): void
     {
-        $body=$this->fixture();$before=[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()];
+        $body=$this->fixture();
+        // Economic immutability must inspect actual tenant rows, independently of the caller's warehouse visibility.
+        $snapshot = function () use ($body): array {
+            $rows = [];
+            foreach ([FinancialOriginRequest::class, FinancialOriginCommand::class, FinancialOriginOutbox::class,
+                GoodsReceipt::class, Shipment::class, StockLedger::class, \App\Models\Tenant\StockBalance::class] as $model) {
+                $table = (new $model)->getTable();
+                $rows[$table] = DB::connection('tenant')->table($table)
+                    ->where('organization_id', $body['organization_id'])->orderBy('id')->get()
+                    ->map(fn ($row) => (array) $row)->all();
+            }
+            return $rows;
+        };
+        $before = $snapshot();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',[]);
         config(['integration_safety.financial_origin_expense_handoff_enabled'=>true]);
         $response=$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
         $this->assertSame(['contract_version','supported_source_document_types','schema_ready','finance_core_version','stock_core_version','organization_mapping_uuid','central_client_id','central_organization_id','finance_organization_id','solastock_organization_id'],array_keys($response->json('data')));
         $response->assertJsonPath('data.contract_version',FinancialOriginCapabilities::CONTRACT)->assertJsonPath('data.finance_core_version',FinancialOriginCapabilities::CORE_VERSION);
-        $this->assertSame($before,[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()]);
+        $this->assertSame($before, $snapshot());
+        $this->assertSame([], app(\App\Services\Access\WarehouseAccessService::class)->allowedIds(335),
+            'Finance metadata access must not grant warehouse visibility');
         $body['data']['source_document_type']='sales_receipt';$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
         config(['integration_safety.financial_origin_expense_handoff_enabled'=>false]);$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',[]);
+        $this->assertSame($before, $snapshot());
     }
 
     public function test_probe_rejects_actor_zero_foreign_identity_forged_signature_and_caller_economics(): void
