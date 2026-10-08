@@ -87,7 +87,10 @@ class SalesReturnController extends ApiController
         try {
             $data = $request->validated();
             $this->assertPayloadScope($data);
-            $return = $this->service->createDraft(collect($data)->except('lines')->toArray(), $data['lines']);
+            $cashSource = !empty($data['shipment_id']) && \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('stock_financial_origin_commands') && \App\Models\Tenant\FinancialOriginCommand::query()->where('shipment_id',$data['shipment_id'])->where('source_document_type','sales_receipt')->where('status','completed')->exists();
+            $return = $cashSource
+                ? app(\App\Services\FinancialOrigins\CashPartialReturnService::class)->createDraft($data,(int)$request->user()->getAuthIdentifier())
+                : $this->service->createDraft(collect($data)->except(['lines','operation_uuid'])->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('sales_return_create_failed', $e->getMessage(), 422);
         }
@@ -98,10 +101,11 @@ class SalesReturnController extends ApiController
     public function update(StoreSalesReturnRequest $request, SalesReturn $sales_return): JsonResponse
     {
         $this->assertReturnScope($sales_return);
+        abort_if($this->isTypedCashReturn($sales_return),422,'Cancel this saved Cash return draft and create a new operation to change its quantities.');
         try {
             $data = $request->validated();
             $this->assertPayloadScope($data);
-            $updated = $this->service->updateDraft($sales_return, collect($data)->except('lines')->toArray(), $data['lines']);
+            $updated = $this->service->updateDraft($sales_return, collect($data)->except(['lines','operation_uuid'])->toArray(), $data['lines']);
         } catch (RuntimeException $e) {
             return $this->error('sales_return_update_failed', $e->getMessage(), 422);
         }
@@ -113,7 +117,9 @@ class SalesReturnController extends ApiController
     {
         $this->assertReturnScope($sales_return);
         try {
-            $posted = $this->service->post($sales_return);
+            $posted = $this->isTypedCashReturn($sales_return)
+                ? app(\App\Services\FinancialOrigins\CashPartialReturnService::class)->post($sales_return,(int)request()->user()->getAuthIdentifier())
+                : $this->service->post($sales_return);
         } catch (RuntimeException $e) {
             return $this->error('sales_return_post_failed', $e->getMessage(), 422);
         }
@@ -148,7 +154,7 @@ class SalesReturnController extends ApiController
     public function cancel(SalesReturn $sales_return): JsonResponse
     {
         $this->assertReturnScope($sales_return);
-        return $this->success($this->service->cancel($sales_return));
+        return $this->success($this->isTypedCashReturn($sales_return) ? app(\App\Services\FinancialOrigins\CashPartialReturnService::class)->cancel($sales_return,(int)request()->user()->getAuthIdentifier()) : $this->service->cancel($sales_return));
     }
 
     public function reverse(Request $request, SalesReturn $sales_return): JsonResponse
@@ -157,4 +163,10 @@ class SalesReturnController extends ApiController
         $input = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         return $this->success($this->reversals->reverseSalesReturn($sales_return, $input['reason']));
     }
+    private function isTypedCashReturn(SalesReturn $return):bool
+    {
+        $db=\Illuminate\Support\Facades\DB::connection('tenant');
+        return $db->getSchemaBuilder()->hasTable('stock_cash_partial_returns') && $db->table('stock_cash_partial_returns')->where('organization_id',$return->organization_id)->where('sales_return_id',$return->id)->exists();
+    }
+
 }

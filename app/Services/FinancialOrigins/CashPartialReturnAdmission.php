@@ -5,6 +5,7 @@ use App\Models\Tenant\{SalesReturn,Shipment,FinancialOriginRequest};
 final readonly class CashPartialReturnAdmission {
  private function __construct(private OriginCashPhysicalReversalContext $context,private int $org,private int $shipmentId){}
  public static function fromNativeSource(Shipment $shipment,OriginCashPhysicalReversalContext $context):self {
+  $context->assertShipment($shipment);
   abort_unless($shipment->status==='posted'&&!$shipment->reversed_at,409);
   return new self($context,(int)$shipment->organization_id,(int)$shipment->id);
  }

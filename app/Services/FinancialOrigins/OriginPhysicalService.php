@@ -42,6 +42,7 @@ final class OriginPhysicalService
         $command=FinancialOriginCommand::query()->where('organization_id',$document->organization_id)->where($field,$document->id)->lockForUpdate()->first();
         if(!$command)return null;
         $request=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)->where('request_uuid',$command->request_uuid)->firstOrFail();
+        if($request->source_document_type==='sales_receipt')app(CashRefundDemandService::class)->assertFullPhysicalReversalUnlocked($request);
         $event=app(OriginDocumentBuilder::class)->recordReversed($request,$command,$document,$inverse);
         // Fulfilled is gross physical history: reversal never reopens demand or reserves stock.
         return ['event_uuid'=>$event->event_uuid,'event_type'=>$event->event_type,'request'=>app(OriginRequestService::class)->summary($request)];
@@ -57,7 +58,14 @@ final class OriginPhysicalService
             if($document instanceof Shipment && $document->sales_order_id && $document->status!=='posted'){
                 $cash=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)
                     ->where('source_document_type','sales_receipt')->where('sales_order_id',$document->sales_order_id)->lockForUpdate()->first();
-                if($cash)app(CashRefundDemandService::class)->assertDispatchUnlocked($cash);
+                if($cash){
+                    app(CashRefundDemandService::class)->assertDispatchUnlocked($cash);
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'sales_order_id'=>app()->getLocale()==='ar'
+                            ? 'هذا الطلب مرتبط ببيع نقدي. أكّد التسليم من طلب التنفيذ المرتبط حتى لا يتم إنشاء فاتورة أخرى.'
+                            : 'This order belongs to a cash sale. Confirm dispatch through its linked fulfillment request to avoid creating another invoice.',
+                    ]);
+                }
             }
             return null;
         }

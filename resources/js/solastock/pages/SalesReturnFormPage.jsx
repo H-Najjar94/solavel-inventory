@@ -25,6 +25,7 @@ export default function SalesReturnFormPage() {
     const [lines, setLines] = useState([emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const [operationUuid] = useState(() => crypto.randomUUID());
 
     // Prefill warehouse + lines from the source shipment.
     const ship = useApiQuery(['shipment-for-return', shipmentId], () => api.shipment(shipmentId), { fallback: null, enabled: !!shipmentId && !isEdit });
@@ -64,6 +65,7 @@ export default function SalesReturnFormPage() {
         setSaving(true); setErrors({});
         try {
             const payload = {
+                ...(!isEdit && header.shipment_id ? {operation_uuid: operationUuid} : {}),
                 ...header,
                 lines: lines.filter((l) => l.item_id && Number(l.returned_qty) > 0).map((l) => ({
                     source_line_id: l.source_line_id || undefined, source_stock_ledger_id: l.source_stock_ledger_id || undefined,

@@ -18,6 +18,10 @@ final readonly class OriginCashPhysicalReversalContext
   $actor=(int)(request()->user()?->getAuthIdentifier()??0);abort_unless($actor>0,403);
   return new self($facts,$proof,$org,$commandId,$actor);
  }
+ public function assertShipment(\App\Models\Tenant\Shipment $shipment):void
+ {
+  abort_unless((int)$shipment->organization_id===$this->org&&(int)$shipment->id===(int)$this->facts['physical_document_id']&&$this->facts['physical_document_type']==='shipment',403);
+ }
  public function lockAndValidate():FinancialOriginRequest
  {
   $db=DB::connection('tenant');$f=$this->facts;$p=$this->proof;$finance=(int)($p['finance_organization_id']??0);
