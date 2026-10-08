@@ -40,7 +40,7 @@ final class Cash219NativeStockPairSteps
    return['sales_return_id'=>$return->id,'status'=>$return->status];
   }
   if($step!=='evidence')throw new \InvalidArgumentException('Unknown native Cash pair step.');
-  $db=DB::connection('tenant');$result=['request'=>app(OriginRequestService::class)->summary($r)];
+  $db=DB::connection('tenant');$result=['request'=>app(OriginRequestService::class)->summary($r),'request_lines'=>$r->lines()->orderBy('id')->get()->toArray()];
   foreach(['stock_ledger','stock_cash_refund_demands','stock_cash_partial_returns','stock_financial_origin_commands','stock_financial_origin_outbox']as$table)
    $result[$table]=$db->table($table)->where('organization_id',$org)->orderBy('id')->get()->toArray();
   return$result;
