@@ -35,7 +35,7 @@ MYSQL=(mysql --defaults-extra-file="$MYSQL_CNF" --protocol=socket)
   exit 2
 }
 
-export APP_CONFIG_CACHE=/tmp/phase6a-stock-rebuild-config.php
+export APP_CONFIG_CACHE="${STOCK_PRIVATE_REBUILD_CONFIG_CACHE:-/tmp/phase6a-stock-rebuild-config.php}"
 export APP_ENV=testing APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 export TENANT_DERIVE_SECRET=phase6a-test-only-tenant-derivation-secret-000000000000000000000000
 export DB_HOST=localhost DB_PORT=0 DB_SOCKET="$TEST_SOCKET"

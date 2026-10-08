@@ -26,5 +26,5 @@ export SOLASTOCK_TEST_TENANT_B=solastock_test_b
 export SOLASTOCK_TEST_CENTRAL=solastock_test_central
 export INVENTORY_USE_DERIVED_TENANT_DB_USER=false
 
-export APP_CONFIG_CACHE=/tmp/phase6a-stock-phpunit-config.php
+export APP_CONFIG_CACHE="${STOCK_PRIVATE_CONFIG_CACHE:-/tmp/phase6a-stock-phpunit-config.php}"
 ./vendor/bin/phpunit "$@"
