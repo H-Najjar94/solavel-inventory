@@ -763,4 +763,13 @@ final class FinanceWorkspaceTest extends TestCase
         }
         $this->assertSame(0, GoodsReceipt::count());
     }
+    public function test_cash219_signed_wire_rejects_actor_zero_and_foreign_organization_without_effects():void
+    {
+        $before=StockLedger::count();
+        $payload=['action'=>'financial-origin.cash-refund-demand','data'=>['source_document_type'=>'sales_receipt','source_document_id'=>850,'source_journal_id'=>95,'request_uuid'=>(string)Str::uuid(),'source_revision'=>str_repeat('a',64),'operation_uuid'=>(string)Str::uuid(),'refund_receipt_id'=>991,'purpose'=>'prepare']];
+        $this->send($payload+['actor_id'=>0,'authority_kind'=>'posted_financial_origin_settlement'])->assertForbidden();
+        $this->send($payload+['organization_id'=>999000])->assertForbidden();
+        $this->assertSame($before,StockLedger::count());
+        if(Schema::connection('tenant')->hasTable('stock_cash_refund_demands'))$this->assertSame(0,DB::connection('tenant')->table('stock_cash_refund_demands')->count());
+    }
 }

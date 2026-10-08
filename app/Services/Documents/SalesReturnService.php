@@ -60,11 +60,11 @@ class SalesReturnService
         return 'sales_return:'.$r->id.':post';
     }
 
-    public function createDraft(array $attributes, array $lines): SalesReturn
+    public function createDraft(array $attributes, array $lines, ?\App\Services\FinancialOrigins\CashPartialReturnAdmission $cashAdmission = null): SalesReturn
     {
         $orgId = $this->context->idOrFail();
 
-        return DB::connection($this->conn())->transaction(function () use ($attributes, $lines, $orgId) {
+        return DB::connection($this->conn())->transaction(function () use ($attributes, $lines, $orgId, $cashAdmission) {
             $sourceShipment = ! empty($attributes['shipment_id'])
                 ? Shipment::query()->with('lines')->lockForUpdate()->findOrFail((int) $attributes['shipment_id'])
                 : null;
@@ -76,7 +76,8 @@ class SalesReturnService
                     throw new RuntimeException('A source reversal reason of at least 3 characters is required.');
                 }
                 $attributes['warehouse_id'] = $sourceShipment->warehouse_id;
-                $fullReversal = $this->isFullResellableSourceRequest($sourceShipment, $lines);
+                if ($cashAdmission) $cashAdmission->assertSource($sourceShipment);
+                $fullReversal = !$cashAdmission && $this->isFullResellableSourceRequest($sourceShipment, $lines);
                 if ($fullReversal) {
                     $existing = SalesReturn::query()->where('source_reversal_shipment_id', $sourceShipment->id)
                         ->lockForUpdate()->first();
@@ -101,7 +102,7 @@ class SalesReturnService
             $sourceShipment
                 ? ($r->is_source_reversal
                     ? $this->syncSourceLines($r, $sourceShipment, $orgId)
-                    : $this->syncAllocatedSourceLines($r, $sourceShipment, $lines, $orgId))
+                    : $this->syncAllocatedSourceLines($r, $sourceShipment, $lines, $orgId, $cashAdmission !== null))
                 : $this->syncLines($r, $lines, $orgId);
 
             return $r->fresh('lines');
@@ -135,9 +136,17 @@ class SalesReturnService
         });
     }
 
-    public function post(SalesReturn $r): SalesReturn
+    public function post(SalesReturn $r, ?\App\Services\FinancialOrigins\CashPartialReturnAdmission $cashAdmission = null): SalesReturn
     {
-        return DB::connection($this->conn())->transaction(function () use ($r) {
+        // Canonical factual proof is fetched outside the native transaction; Stock permissions remain independent.
+        $originShipment = $r->source_reversal_shipment_id ?: $r->shipment_id;
+        $originSource = $originShipment ? Shipment::query()->where('organization_id',$r->organization_id)->findOrFail($originShipment) : null;
+        $originContext = !$cashAdmission && $originSource ? app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->beforeReverse($originSource) : null;
+        abort_unless(!$originContext || $r->is_source_reversal,409,'cash_origin_partial_return_policy_unavailable');
+        return DB::connection($this->conn())->transaction(function () use ($r,$originSource,$originContext,$cashAdmission) {
+            $originContext?->lockAndValidate();
+            $cashAdmission?->lockAndValidate($r);
+            if($originContext)Shipment::query()->where('organization_id',$r->organization_id)->whereKey($originSource->id)->lockForUpdate()->firstOrFail();
             $r = SalesReturn::query()->lockForUpdate()->with('lines')->findOrFail($r->id);
             if ($r->status === 'posted') {
                 return $r; // idempotent
@@ -226,6 +235,7 @@ class SalesReturnService
                 $r->markSystemTransition()->save();
             }
 
+            if($originContext)app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->reversed($originSource->fresh(),$r);
             return $r->fresh('lines');
         });
     }
@@ -371,7 +381,7 @@ class SalesReturnService
      * lines reserve quantity; deleting/replacing a draft releases it. Posted lines
      * remain permanent and cumulative quantities are checked under shipment lock.
      */
-    private function syncAllocatedSourceLines(SalesReturn $return, Shipment $shipment, array $lines, int $orgId): void
+    private function syncAllocatedSourceLines(SalesReturn $return, Shipment $shipment, array $lines, int $orgId, bool $frozenSource = false): void
     {
         if ($lines === []) {
             throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Select at least one shipped line and return quantity.']);
@@ -387,7 +397,7 @@ class SalesReturnService
             if ((int) $sourceLine->item_id !== (int) $input['item_id']) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The returned item does not match its shipment line.']);
             }
-            $input = $this->conversions->normalizeLine($input, 'returned_qty');
+            $input = $frozenSource ? $this->conversions->normalizeLineFromSnapshot($input, 'returned_qty', $sourceLine) : $this->conversions->normalizeLine($input, 'returned_qty');
             $baseQty = Decimal::qty((string) $input['returned_qty']);
             $already = (string) DB::connection($this->conn())->table('sales_return_lines as lines')
                 ->join('sales_returns as returns', 'returns.id', '=', 'lines.sales_return_id')
