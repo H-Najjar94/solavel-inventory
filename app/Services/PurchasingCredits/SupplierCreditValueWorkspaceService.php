@@ -12,7 +12,7 @@ final class SupplierCreditValueWorkspaceService
   abort_unless($actor>0 && ($input['action']??null)==='purchasing.credit-value.'.$action
    && in_array($action,['prepare','apply','status','release','reverse'],true)
    && ($input['authority_kind']??null)==='posted_supplier_credit_value' && DB::connection('tenant')->transactionLevel()===0,403);
-  foreach(['finance_purchase_credit_allocations','purchase_valuation_holds','integration_purchase_cost_adjustments','integration_purchase_cost_adjustment_components']as$table)
+  foreach(['supplier_credit_value_effects','finance_purchase_credit_allocations','purchase_valuation_holds','integration_purchase_cost_adjustments','integration_purchase_cost_adjustment_components']as$table)
    abort_unless(Schema::connection('tenant')->hasTable($table),409,'workspace_schema_not_ready');
   $rules=['allocation_uuid'=>'required|uuid','operation_uuid'=>'required|uuid','organization_mapping_uuid'=>'required|uuid','position_uuid'=>'required|uuid',
    'direction'=>'required|in:forward,reverse','plan_revision'=>'required|integer|min:1','plan_fingerprint'=>'sometimes|string|size:64'];

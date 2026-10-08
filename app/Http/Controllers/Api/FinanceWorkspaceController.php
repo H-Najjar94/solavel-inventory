@@ -124,6 +124,13 @@ final class FinanceWorkspaceController
         $request->setUserResolver(fn () => $actor);
         $request->attributes->set('tenant_state', ['client_id' => (int) $org->client_id, 'organization_id' => (int) $org->id, 'database' => $database, 'state' => 'live_ready']);
         try {
+            if (in_array($input['action'], ['purchasing.credit-value.prepare','purchasing.credit-value.apply','purchasing.credit-value.status',
+                'purchasing.credit-value.release','purchasing.credit-value.reverse'],true)) {
+                abort_unless((int)$input['actor_id']>0 && ($input['authority_kind']??null)==='posted_supplier_credit_value',403);
+                abort_unless($mapping && $mapping->status==='verified' && $mapping->activation_state==='active'
+                    && $setting && $setting->mode==='active',409,'workspace_connection_not_ready');
+                return response()->json(['success'=>true,'data'=>app(\App\Services\PurchasingCredits\SupplierCreditValueWorkspaceService::class)->dispatch($input,$mapping)]);
+            }
             if ($input['action'] === 'financial-origin.capabilities') {
                 abort_unless((int) $input['actor_id'] > 0, 403);
                 $probe = (array) ($input['data'] ?? []);

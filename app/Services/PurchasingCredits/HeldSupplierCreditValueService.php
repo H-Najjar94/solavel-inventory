@@ -1,7 +1,7 @@
 <?php
 namespace App\Services\PurchasingCredits;
 
-use App\Models\Tenant\{IntegrationPurchaseCostAdjustment,IntegrationPurchaseCostAdjustmentComponent,PurchaseValuationHold};
+use App\Models\Tenant\{IntegrationPurchaseCostAdjustment,IntegrationPurchaseCostAdjustmentComponent,PurchaseValuationHold,SupplierCreditValueEffect};
 use App\Services\Integration\SolaStockJournalContract;
 use App\Services\Purchasing\PurchaseValuationHoldService;
 use App\Services\Stock\{PurchaseCostAdjustmentPlanner,PurchaseCostAdjustmentService};
@@ -71,11 +71,19 @@ final class HeldSupplierCreditValueService
         $native=match($action){'apply'=>$service->applySupplierCredit($authority),'reverse'=>$service->reverseSupplierCredit($authority),default=>$service->statusSupplierCredit($authority)};
         if(in_array($action,['apply','reverse','release'],true))foreach($owned as$hold)if($hold->state==='active')$hold->update(['state'=>'released']);
         $state=$action==='release'?'released':$native['state'];
-        $effectKey=$reverse?'reverse':'forward';$meta=$row->fresh()->safe_metadata;
-        if(in_array($action,['apply','reverse'],true) && !isset($meta['supplier_credit_effects'][$effectKey])){
-            $meta['supplier_credit_effects'][$effectKey]=['before'=>$before,'after'=>$this->valuationSnapshot($authority,$quote['native_plan'])];
-            $row->fresh()->update(['safe_metadata'=>$meta]);
+        $effect=SupplierCreditValueEffect::query()->where('organization_id',$authority->organizationId())->where('adjustment_uuid',$row->adjustment_uuid)
+            ->where('direction',$authority->direction())->lockForUpdate()->first();
+        if(in_array($action,['apply','reverse'],true) && !$effect){
+            // Never change immutable native adjustment metadata. Actual effects have their own append-only audit sidecar.
+            abort_unless(!$complete,409);
+            $snapshot=json_encode(['before'=>$before,'after'=>$this->valuationSnapshot($authority,$quote['native_plan'])],JSON_THROW_ON_ERROR);
+            $effect=SupplierCreditValueEffect::create(['organization_id'=>$authority->organizationId(),'organization_mapping_uuid'=>$authority->mappingUuid(),
+                'allocation_uuid'=>$authority->allocationUuid(),'operation_uuid'=>$authority->operationUuid(),'adjustment_uuid'=>$row->adjustment_uuid,
+                'direction'=>$authority->direction(),'plan_fingerprint'=>$quote['plan_fingerprint'],'snapshot'=>$snapshot,'snapshot_hash'=>hash('sha256',$snapshot)]);
         }
+        if($effect)abort_unless(hash_equals($effect->snapshot_hash,hash('sha256',$effect->snapshot))
+            && $effect->allocation_uuid===$authority->allocationUuid() && $effect->operation_uuid===$authority->operationUuid()
+            && $effect->plan_fingerprint===$quote['plan_fingerprint'],409);
         $components=IntegrationPurchaseCostAdjustmentComponent::query()->where('organization_id',$authority->organizationId())
             ->where('adjustment_uuid',$row->adjustment_uuid)->orderBy('id')->get()->map(fn($part)=>['component_id'=>(int)$part->id,
                 'stock_ledger_id'=>(int)$part->stock_ledger_id,'destination_role'=>$part->destination_role,'destination_source_type'=>$part->destination_source_type,
@@ -86,7 +94,7 @@ final class HeldSupplierCreditValueService
             'native_value_adjustment'=>['adjustment_uuid'=>$row->adjustment_uuid,'state'=>$native['state'],'components'=>$components,
                 'allocated_base_difference'=>$quote['native_plan']['allocated_base_difference']],
             'physical_movement_ids'=>[],'physical_quantity_delta'=>'0.00000000','financial_journal_ids'=>[],
-            'valuation_effect'=>$meta['supplier_credit_effects'][$effectKey]??null,
+            'valuation_effect'=>$effect?json_decode($effect->snapshot,true,512,JSON_THROW_ON_ERROR):null,
             'native_voided_journal_id'=>$authority->financialReverseProven()?$authority->financeJournalId():null,'finance_reversal_journal_id'=>null]);
     }
     private function fingerprint(SupplierCreditCostAuthority $authority,string $purpose,array $plan,array $revision):string
