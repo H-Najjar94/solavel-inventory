@@ -124,6 +124,40 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(2,Shipment::count());$this->assertSame('16.0000',StockBalance::sole()->on_hand_qty);
         $this->assertSame(0,SalesDocumentOutbox::count());
     }
+    public function test_native_post_replay_of_completed_typed_receipt_and_shipment_preserves_all_durable_effects():void
+    {
+        $type='expense'; {
+            [,,$op]=$this->admitted($type);
+            $op['lines'][0]['quantity']='4';
+            if($type==='expense'){
+                $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->update(['meta'=>$meta]);
+            }
+            app(OriginDispatchService::class)->executeNative($op,336);
+            $model=$type==='expense'?GoodsReceipt::class:Shipment::class;$document=$model::sole();
+            $service=$type==='expense'?\App\Services\Documents\GoodsReceiptService::class:\App\Services\Documents\ShipmentService::class;
+            $before=[StockLedger::count(),FinancialOriginOutbox::count(),FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity];
+            $this->assertSame($document->id,app($service)->post($document)->id);
+            $this->assertSame($before,[StockLedger::count(),FinancialOriginOutbox::count(),FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity]);
+
+        }
+    }
+    public function test_native_post_replay_of_completed_typed_shipment_preserves_all_durable_effects():void
+    {
+        $type='sales_receipt'; {
+            [,,$op]=$this->admitted($type);
+            $op['lines'][0]['quantity']='4';
+            if($type==='expense'){
+                $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;$meta['transport_enabled_workflows'][]='grn.posted';$setting->update(['meta'=>$meta]);
+            }
+            app(OriginDispatchService::class)->executeNative($op,336);
+            $model=$type==='expense'?GoodsReceipt::class:Shipment::class;$document=$model::sole();
+            $service=$type==='expense'?\App\Services\Documents\GoodsReceiptService::class:\App\Services\Documents\ShipmentService::class;
+            $before=[StockLedger::count(),FinancialOriginOutbox::count(),FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity];
+            $this->assertSame($document->id,app($service)->post($document)->id);
+            $this->assertSame($before,[StockLedger::count(),FinancialOriginOutbox::count(),FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity]);
+
+        }
+    }
     public function test_anonymous_cash_serial_dispatch_retains_null_customer_and_exact_serial_source_links():void
     {
         [,,$op]=$this->admitted(tracking:'serial',anonymous:true);$serials=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->limit(2)->pluck('id')->all();$op['lines'][0]['serial_ids']=$serials;$op['reserve_stock']=true;
