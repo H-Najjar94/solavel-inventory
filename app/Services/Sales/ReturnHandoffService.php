@@ -22,6 +22,8 @@ final class ReturnHandoffService
 
     public function record(SalesReturn $return, bool $reverse = false): ?SalesDocumentOutbox
     {
+        if (app(ReturnSourceOwnership::class)->cash($return)) return null;
+
         // Typed origins (including cash) have their own financial closure. Only
         // native invoice shipment handoffs establish this commercial ownership.
         $original = SalesDocumentOutbox::query()->where('organization_id', $return->organization_id)
