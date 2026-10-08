@@ -6,7 +6,7 @@ namespace App\Services\Integration;
 final class AccountRolePolicy
 {
     public const VERSION = 'inventory-account-roles.v1';
-    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability']];
+    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'supplier_return_clearing' => ['asset'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability']];
     public const OPERATIONS = [
         'opening_stock.posted' => ['inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['inventory_asset', 'opening_offset'],
@@ -15,6 +15,8 @@ final class AccountRolePolicy
         'stock_count.posted' => ['inventory_asset', 'adjustment_gain', 'adjustment_loss'],
         'grn.posted' => ['inventory_asset', 'grni'],
         'grn.reversed' => ['inventory_asset', 'grni'],
+        'supplier_return.posted' => ['inventory_asset', 'supplier_return_clearing'],
+        'supplier_return.reversed' => ['inventory_asset', 'supplier_return_clearing'],
         'shipment.posted' => ['cogs', 'inventory_asset'],
         'stock.historical_fifo_cost_corrected.v1' => ['cogs', 'inventory_asset'],
         'sales_return.posted' => ['inventory_asset', 'cogs'],
@@ -49,6 +51,8 @@ final class AccountRolePolicy
         return match ($eventType) {
             'grn.posted' => [['inventory_asset', 'debit'], ['grni', 'credit']],
             'grn.reversed' => [['grni', 'debit'], ['inventory_asset', 'credit']],
+            'supplier_return.posted' => [['supplier_return_clearing', 'debit'], ['inventory_asset', 'credit']],
+            'supplier_return.reversed' => [['inventory_asset', 'debit'], ['supplier_return_clearing', 'credit']],
             'shipment.posted' => [['cogs', 'debit'], ['inventory_asset', 'credit']],
             'stock.historical_fifo_cost_corrected.v1' => null,
             'sales_return.posted' => [['inventory_asset', 'debit'], ['cogs', 'credit']],

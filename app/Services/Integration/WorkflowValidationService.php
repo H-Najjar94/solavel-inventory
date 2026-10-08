@@ -62,6 +62,7 @@ final class WorkflowValidationService
             'pack.packed' => 'pack',
             'shipment.posted' => 'shipment',
             'sales_return.posted' => 'sales_return',
+            'supplier_return.posted' => 'supplier_return',
             'stock.historical_fifo_cost_corrected.v1' => 'historical_fifo_correction',
             default => class_basename($document),
         };
@@ -69,7 +70,7 @@ final class WorkflowValidationService
             'purchase_order', 'sales_order' => optional($document->order_date)->toDateString(),
             'goods_receipt' => optional($document->receipt_date)->toDateString(),
             'shipment' => optional($document->ship_date)->toDateString(),
-            'sales_return' => optional($document->return_date)->toDateString(),
+            'sales_return', 'supplier_return' => optional($document->return_date)->toDateString(),
             'inventory_reversal' => optional($document->reversal_date)->toDateString(),
             'historical_fifo_correction' => (string) $document->causal_payload['business_date'],
             default => optional($document->updated_at)->toDateString(),
@@ -186,7 +187,7 @@ final class WorkflowValidationService
                 ], JSON_UNESCAPED_SLASHES)],
             ]);
         }
-        if (in_array($eventType, ['grn.posted', 'shipment.posted', 'sales_return.posted', 'adjustment.posted', 'stock_count.posted', 'stock.historical_fifo_cost_corrected.v1'], true)) {
+        if (in_array($eventType, ['grn.posted', 'shipment.posted', 'sales_return.posted', 'supplier_return.posted', 'adjustment.posted', 'stock_count.posted', 'stock.historical_fifo_cost_corrected.v1'], true)) {
             app(FinanceBaseValuation::class)->contract($orgId);
         }
     }

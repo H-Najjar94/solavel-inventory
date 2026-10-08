@@ -30,6 +30,7 @@ class EventPayloadBuilder
         // Ledger rows for this document (the source of truth for movements).
         $sourceClass = 'App\\Models\\Tenant\\'.$aggregateType;
         $ledger = StockLedger::query()
+            ->where('organization_id', $orgId)
             ->where('source_type', $sourceClass)
             ->where('source_id', $document->id)
             ->get();
@@ -144,6 +145,7 @@ class EventPayloadBuilder
             'OpeningStockEntry' => 'opening_stock_entry_lines',
             'Shipment' => 'shipment_lines',
             'SalesReturn' => 'sales_return_lines',
+            'SupplierReturn' => 'supplier_return_lines',
             'StockAdjustment' => 'stock_adjustment_lines',
             'StockTransfer' => 'stock_transfer_lines',
             default => null,

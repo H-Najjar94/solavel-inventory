@@ -58,7 +58,7 @@ final class WorkflowCurrencyResolver
         // Inventory-only documents are explicitly valued in the reviewed Finance
         // base pool. They have no sales/purchase transaction currency to inherit.
         // Receipts resolve separately below; linked documents always retain their source currency.
-        $baseValued = in_array($documentType, ['historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock'], true);
+        $baseValued = in_array($documentType, ['historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock', 'supplier_return'], true);
         $code = $baseValued
             ? (string) (app(FinanceBaseValuation::class)->contract($orgId)['base_currency_code'] ?? '')
             : $this->documentCurrency($document, $documentType, true);
