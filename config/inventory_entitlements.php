@@ -236,6 +236,9 @@ return [
     |  at the catalog level until a suggested-PO endpoint exists, so it is not a
     |  catalog-only-but-sold key any more.)
     */
+    // Features that exist only when Central's snapshot names them explicitly (no paid-tier fallback).
+    'explicit_flag_features' => ['stock.landed_costs'],
+
     'catalog_only' => [
         'stock.items',
         'stock.movements',

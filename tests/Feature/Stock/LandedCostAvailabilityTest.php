@@ -91,6 +91,20 @@ class LandedCostAvailabilityTest extends TestCase
     }
 
     #[Test]
+    public function a_paid_snapshot_that_does_not_name_landed_costs_is_refused_until_central_publishes_the_flag(): void
+    {
+        $this->useTenantA();
+        $org = TenantTestManager::ORG_A;
+        foreach (['standard', 'professional'] as $tier) {
+            $snapshot = $this->tier($tier, true);
+            unset($snapshot['flags']['stock.landed_costs']);
+            $status = $this->plan($snapshot)->status($org);
+            $this->assertFalse($status['available'], $tier);
+            $this->assertSame('not_in_plan', $status['reason'], $tier);
+        }
+    }
+
+    #[Test]
     public function every_landed_cost_route_is_plan_gated_so_there_is_no_entitlement_bypass(): void
     {
         $map = config('inventory_entitlements.route_features');
