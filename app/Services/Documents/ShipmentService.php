@@ -71,7 +71,7 @@ class ShipmentService
         $so->loadMissing(['lines.item', 'reservations']);
 
         return $so->lines->flatMap(function ($l) use ($so) {
-            $remaining = Decimal::qty(Decimal::sub((string) $l->ordered_qty, (string) $l->shipped_qty));
+            $remaining = Decimal::qty(Decimal::sub(Decimal::sub((string) $l->ordered_qty, (string) $l->shipped_qty), (string) ($l->cancelled_qty ?? '0')));
             $factor = (string) ($l->unit_conversion_factor ?: '1');
             $enteredRemaining = Decimal::qty(Decimal::div($remaining, $factor));
             $base = [

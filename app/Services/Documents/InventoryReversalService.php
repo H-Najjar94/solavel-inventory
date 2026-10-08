@@ -164,6 +164,7 @@ class InventoryReversalService
             $return->reversed_by = auth()->id();
             $return->markSystemTransition()->save();
             $this->recordEvent($reversal, 'sales_return.reversed');
+            app(\App\Services\Sales\ReturnHandoffService::class)->record($return, true);
 
             return $reversal->fresh();
         });

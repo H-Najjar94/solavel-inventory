@@ -23,7 +23,8 @@ class AccountingJournalBuilder
         return match ($event->event_type) {
             'stock.historical_fifo_cost_corrected.v1' => $this->historicalFifo($event, $orgId),
             'grn.posted' => $this->goodsReceipt($event, $orgId),
-            'grn.reversed', 'adjustment.reversed' => $this->inventoryReversal($event, $orgId),
+            'supplier_return.posted' => $this->supplierReturn($event, $orgId),
+            'grn.reversed', 'adjustment.reversed', 'supplier_return.reversed' => $this->inventoryReversal($event, $orgId),
             'shipment.posted' => $this->shipment($event, $orgId),
             'sales_return.posted' => $this->salesReturn($event, $orgId),
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
@@ -49,12 +50,15 @@ class AccountingJournalBuilder
         $originalType = match ($reversal->source_type) {
             'goods_receipt' => 'grn.posted',
             'stock_adjustment' => 'adjustment.posted',
+            'supplier_return' => 'supplier_return.posted',
             default => throw new RuntimeException("Unsupported reversal source '{$reversal->source_type}'."),
         };
         $original = $this->originalEvent($originalType, (int) $reversal->source_id);
-        $lines = $originalType === 'grn.posted'
-            ? $this->goodsReceipt($original, $orgId)
-            : $this->adjustment($original, $orgId);
+        $lines = match ($originalType) {
+            'grn.posted' => $this->goodsReceipt($original, $orgId),
+            'supplier_return.posted' => $this->supplierReturn($original, $orgId),
+            default => $this->adjustment($original, $orgId),
+        };
 
         return $this->invert($lines, $event);
     }
@@ -132,6 +136,17 @@ class AccountingJournalBuilder
         return [
             $this->line($this->account($orgId, 'adjustment_loss'), $amount, '0', $event),
             $this->line($this->account($orgId, 'inventory_asset'), '0', $amount, $event),
+        ];
+    }
+
+    /** The native return OUT credits inventory even though its value change is negative. */
+    private function supplierReturn(IntegrationOutboxEvent $event, int $orgId): array
+    {
+        $value = Decimal::money($this->absolute((string) data_get($event->payload, 'total_inventory_value_change', '0')));
+        if (! Decimal::gt($value, '0')) return [];
+        return [
+            $this->line($this->account($orgId, 'supplier_return_clearing'), $value, '0', $event),
+            $this->line($this->account($orgId, 'inventory_asset'), '0', $value, $event),
         ];
     }
 

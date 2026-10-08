@@ -57,6 +57,7 @@ final class PostedPurchaseSettlementService
             'receipt_journal_key' => 'required|string|max:191', 'quantity' => 'required|numeric|gt:0',
             'invoice_net_unit_cost' => 'required|numeric|min:0', 'nonrecoverable_tax_unit_cost' => 'required|numeric|min:0',
             'finance_journal_id' => 'sometimes|integer|min:1', 'finance_journal_key' => 'sometimes|string|max:191',
+            'unbilled_return_exclusions'=>'sometimes|array', 'return_inverse_origin' => 'sometimes|array', 'settlement_date'=>'sometimes|date_format:Y-m-d',
             'finance_reversal_journal_id' => 'sometimes|integer|min:1', 'finance_reversal_journal_key' => 'sometimes|string|max:191',
         ])->validate();
         // Independent remote read happens before taking any Stock locks.
@@ -93,6 +94,13 @@ final class PostedPurchaseSettlementService
                 ->where('bill_journal_id', $facts['bill_journal_id'])->where('bill_line_id', $authority['bill_line_id'])
                 ->where('bill_revision', $facts['bill_revision'])->lockForUpdate()->first();
             abort_unless($position, 409, __('receiving.valuation_changed'));
+            $restoredOrigin=null;
+            if (isset($facts['return_inverse_origin'])) {
+                abort_unless(isset($authority['return_inverse_origin'])
+                    && SolaStockJournalContract::canonicalJson($facts['return_inverse_origin'])===SolaStockJournalContract::canonicalJson($authority['return_inverse_origin']),403);
+                $restoredOrigin=app(\App\Services\Returns\SupplierReturnInverseOriginProof::class)->assertLocked($facts['return_inverse_origin'],$facts,$mapping);
+                abort_unless(($authority['settlement_date']??null)===$facts['settlement_date'],403);
+            }
             $financialJournal = DB::connection('tenant')->table('journal_entries')
                 ->where('organization_id', $mapping->finance_organization_id)->where('id', $facts['bill_journal_id'])
                 ->where('status', 'posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->lockForUpdate()->first();
@@ -153,6 +161,12 @@ final class PostedPurchaseSettlementService
             $fingerprint = hash('sha256', 'posted-purchase-settlement-v1|'.$facts['settlement_uuid'].'|'.$facts['position_uuid'].'|'.$facts['bill_revision'].'|'.$lifecycle->mapping_uuid.'|'.$line->id.'|plan:'.(int) ($facts['plan_revision'] ?? 1));
             $receiptCost = Decimal::mul((string) $line->unit_cost, $factor, 8);
             $invoiceCost = Decimal::add($facts['invoice_net_unit_cost'], $facts['nonrecoverable_tax_unit_cost'], 8);
+            if($restoredOrigin!==null){
+                abort_unless(Decimal::cmp($restoredOrigin['quantity'],$settledBaseQty,8)===0,403);
+                $receiptCost=Decimal::div(Decimal::mul($restoredOrigin['base_cost'],$rate,12),(string)$facts['quantity'],8);
+                request()->attributes->set('verified_return_inverse_cost_origin',$restoredOrigin);
+            }
+            if(isset($facts['unbilled_return_exclusions'])){abort_unless($restoredOrigin===null,403);$cohort=app(\App\Services\Returns\UnbilledReturnCostCohortProof::class)->verify($facts['unbilled_return_exclusions'],$authority,$mapping,$receipt,$line);request()->attributes->set('verified_unbilled_return_cost_cohort',$cohort);}
             $allocation = new IntegrationFinancialLineAllocation([
                 'allocation_uuid' => $facts['settlement_uuid'], 'organization_mapping_uuid' => $mapping->mapping_uuid,
                 'solastock_organization_id' => $organization->id, 'source_document_type' => 'goods_receipt',
@@ -179,7 +193,8 @@ final class PostedPurchaseSettlementService
                 'bill_revision' => $facts['bill_revision'],
             ]);
             $service = app(PurchaseCostAdjustmentService::class);
-            $previous = in_array($operation, ['status', 'release'], true) ? $service->status($native) : $service->prepare($native);
+            $readExisting=in_array($operation,['status','release'],true)||($restoredOrigin!==null&&($operation==='reverse'||($operation==='prepare'&&($facts['direction']??null)==='reverse')));
+            $previous=$readExisting?$service->status($native):$service->prepare($native);
             $adjustment = IntegrationPurchaseCostAdjustment::query()
                 ->where('adjustment_uuid', $previous['adjustment_uuid'])->lockForUpdate()->firstOrFail();
             abort_unless(data_get($adjustment->safe_metadata, 'purchase_settlement.settlement_uuid') === $facts['settlement_uuid'], 409);
@@ -256,7 +271,8 @@ final class PostedPurchaseSettlementService
             return $result + ['settlement_uuid' => $facts['settlement_uuid'], 'adjustment_id' => $result['adjustment_uuid'],
                 'fingerprint' => $fingerprint, 'plan_fingerprint' => $hold?->plan_fingerprint ?? $quoteFingerprint,
                 'plan_revision' => (int) ($facts['plan_revision'] ?? 1), 'hold_state' => $hold?->state, 'status' => $result['state'], 'total_delta_base' => $result['allocated_base_difference'],
-                'receipt_base_amount' => $receiptBase, 'invoice_acquisition_at_receipt_base' => $invoiceAtReceiptBase];
+                'receipt_base_amount' => $receiptBase, 'invoice_acquisition_at_receipt_base' => $invoiceAtReceiptBase]
+                + ($restoredOrigin!==null?['restored_valuation_base_amount'=>Decimal::round($restoredOrigin['base_cost'],(int)$native['finance_money_scale'])]:[]);
         });
     }
 }
