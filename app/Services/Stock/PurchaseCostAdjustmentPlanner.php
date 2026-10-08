@@ -14,6 +14,8 @@ use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\StockTransfer;
 use App\Services\FinancialOrigins\OriginReceiptCostAuthority;
 use App\Services\Stock\Support\OriginReceiptCostProvenance;
+use App\Services\Stock\Support\SupplierCreditCostProvenance;
+use App\Services\PurchasingCredits\SupplierCreditCostAuthority;
 use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -128,18 +130,55 @@ final class PurchaseCostAdjustmentPlanner
             'rounding_bound' => $bound, 'components' => $serialized];
     }
 
+    /** A supplier credit changes value through actual native FIFO/AVG provenance, never quantity. */
+    public function planSupplierCredit(SupplierCreditCostAuthority $authority): array
+    {
+        abort_unless(\DB::connection('tenant')->transactionLevel()>0 && $authority->organizationId()===app(OrganizationContext::class)->idOrFail(),403);
+        $components=collect();$exact='0';
+        foreach($authority->sourceAllocations()as$source){
+            $difference=(string)$source['price_delta_base'];
+            abort_unless(Decimal::cmp($difference,'0',8)<=0 && Decimal::gt((string)$source['quantity_base'],'0'),409);
+            $exact=Decimal::add($exact,$difference,8);
+            if(Decimal::isZero($difference,8))continue;
+            $components=$components->concat($this->allocationComponents(SupplierCreditCostProvenance::fromAuthority($authority,$source),$difference)->map(function(array $component)use($authority,$source):array{
+                $component['receipt_line_id']=(int)$source['receipt_line_id'];
+                $component['provenance']['supplier_credit_source']=['receipt_id'=>(int)$source['receipt_id'],'receipt_line_id'=>(int)$source['receipt_line_id'],'source_stock_ledger_id'=>(int)$source['stock_ledger_id'],'position_uuid'=>$source['position_uuid'],'operation_uuid'=>$authority->operationUuid(),'allocation_uuid'=>$authority->allocationUuid()];
+                return $component;
+            }));
+        }
+        $posted='0';$serialized=$components->map(function(array $component)use(&$posted,$authority):array{
+            $scale=$component['destination_role']==='inventory_asset'?Decimal::MONEY_SCALE:$authority->moneyScale();
+            $component['posted_base_amount']=Decimal::round($component['exact_base_amount'],$scale);
+            $posted=Decimal::add($posted,$component['posted_base_amount'],8);return $component;
+        })->values()->all();
+        $residual=Decimal::round(Decimal::sub($exact,$posted,8),$authority->moneyScale());
+        $bound=Decimal::round(Decimal::mul((string)max(1,count($serialized)),'0.005'),6);
+        if(Decimal::gt(ltrim($residual,'-'),$bound,6))$this->fail('Cumulative supplier-credit valuation rounding exceeds its native deterministic bound.');
+        return ['contract_version'=>'purchase-credit-value.v1','direction'=>$authority->direction(),'organization_mapping_uuid'=>$authority->mappingUuid(),
+            'operation_uuid'=>$authority->operationUuid(),'allocation_uuid'=>$authority->allocationUuid(),'destination_document_type'=>'supplier_credit','destination_document_id'=>$authority->noteId(),
+            'destination_fingerprint'=>$authority->fingerprint(),'source_bill_id'=>$authority->billId(),'source_bill_journal_id'=>$authority->billJournalId(),
+            'currency_code'=>$authority->currencyCode(),'base_currency_code'=>$authority->baseCurrencyCode(),'exchange_rate'=>$authority->exchangeRate(),'finance_money_scale'=>$authority->moneyScale(),'stock_money_scale'=>Decimal::MONEY_SCALE,
+            'exact_base_difference'=>$exact,'allocated_base_difference'=>$posted,'rounding_residual'=>$residual,'rounding_bound'=>$bound,'components'=>$serialized];
+    }
+
     /** A scoped Finance purchase may inspect only its receipt's cost provenance. */
-    private function ledgerQuery(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance $allocation): Builder
+    private function ledgerQuery(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance|SupplierCreditCostProvenance $allocation): Builder
     {
         $query = StockLedger::query();
-        if ($allocation instanceof OriginReceiptCostProvenance || ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id))) {
+        if ($allocation instanceof OriginReceiptCostProvenance || $allocation instanceof SupplierCreditCostProvenance || ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id))) {
             $query->withoutGlobalScope('warehouse_access');
         }
 
+        if ($allocation instanceof SupplierCreditCostProvenance) {
+            foreach (['variant_id','lot_id','bin_id'] as $coordinate) {
+                $value=$allocation->$coordinate;
+                $value===null ? $query->whereNull($coordinate) : $query->where($coordinate,$value);
+            }
+        }
         return $query;
     }
 
-    private function allocationComponents(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance $allocation, string $difference): Collection
+    private function allocationComponents(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance|SupplierCreditCostProvenance $allocation, string $difference): Collection
     {
         $receipt = $this->ledgerQuery($allocation)->where('organization_id', $allocation->solastock_organization_id)
             ->where('source_type', GoodsReceipt::class)->where('source_id', $allocation->source_document_id)
