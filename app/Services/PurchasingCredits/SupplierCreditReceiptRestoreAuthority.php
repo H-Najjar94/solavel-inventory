@@ -32,7 +32,9 @@ final readonly class SupplierCreditReceiptRestoreAuthority
    &&(int)$allocation->journal_entry_id===(int)$identity['original_journal_id']&&(int)$claim->note_journal_id===(int)$identity['original_journal_id']
    &&hash_equals($allocation->source_hash,$identity['source_hash'])&&hash_equals($claim->revision_hash,$identity['claim_revision_hash'])
    &&(int)$claim->restore_plan_revision===(int)$identity['plan_revision'],409);
-  abort_unless(in_array($claim->state,['matched','restore_pending','restored'],true),409);
+  abort_unless(in_array($claim->state,['matched','restore_quote_pending','restore_quoted','restore_pending','restored'],true),409);
+  if(in_array($claim->state,['restore_quote_pending','restore_quoted'],true))abort_unless(in_array($action,['prepare','status','release'],true)&&empty($claim->restore_journal_id),409);
+  if($action==='apply')abort_unless(in_array($claim->state,['restore_pending','restored'],true),409);
   $intent=json_decode($claim->restore_intent??'null',true,512,JSON_THROW_ON_ERROR);
   abort_unless(is_array($intent)&&$intent===($proof['restore_intent']??null)
    &&(int)($intent['central_actor_id']??0)===$actor&&($intent['restore_operation_uuid']??null)===$identity['restore_operation_uuid'],403);
@@ -59,6 +61,7 @@ final readonly class SupplierCreditReceiptRestoreAuthority
   $voided=!empty($journal->voided_at)&&$note->status==='void';
   if($action==='apply')abort_unless($voided&&(int)($proof['native_voided_journal_id']??0)===(int)$journal->id&&($proof['finance_reversal_journal_id']??null)===null,409);
   elseif($action==='release')abort_unless(!$voided&&empty($claim->restore_journal_id),409);
+  elseif(in_array($claim->state,['restore_quote_pending','restore_quoted'],true))abort_unless(!$voided&&$journal->status==='posted'&&$note->posting_status==='posted',409);
   else abort_unless($voided||($journal->status==='posted'&&empty($journal->voided_at)&&$note->posting_status==='posted'),409);
   $settlement=$db->table('finance_purchase_settlements')->where('organization_id',$finance)->where('position_uuid',$position->position_uuid)
    ->where('settlement_uuid',$claim->settlement_uuid)->lockForUpdate()->sole();
@@ -94,7 +97,9 @@ final readonly class SupplierCreditReceiptRestoreAuthority
  }
  private static function matchingJournal(array $lines,array $quote,object $claim,object $position,IntegrationOrganizationMapping $map,int $finance,array $proof):void
  {
-  $db=DB::connection('tenant');$expected=[];$bindings=[];
+  $db=DB::connection('tenant');$expected=[];$bindings=[];$sum='0';
+  $organization=$db->table('organizations')->where('id',$finance)->first();abort_unless($organization,409);
+  $scale=(int)$organization->money_scale;abort_unless($scale>=0&&$scale<=6,409);
   foreach($quote['native_plan']['components']as$part){
    $role=$part['destination_role'];
    if(!isset($bindings[$role])){
@@ -105,16 +110,20 @@ final readonly class SupplierCreditReceiptRestoreAuthority
      ->where('canonical_account.mapping_type',$role)->whereIn('canonical_account.status',['mapped','verified'])->select('canonical_account.solabooks_account_id')->sole();
     $bindings[$role]=(int)$reference->solabooks_account_id;
    }
-   $account=$bindings[$role];$expected[$account]=Decimal::add($expected[$account]??'0',(string)$part['posted_base_amount'],8);
+   $amount=Decimal::round((string)$part['posted_base_amount'],$scale);$sum=Decimal::add($sum,$amount,8);
+   $account=$bindings[$role];$expected[$account]=Decimal::add($expected[$account]??'0',$amount,8);
   }
-  $rounding=(string)$quote['native_plan']['rounding_residual'];
+  $carry=Decimal::round((string)$claim->acquisition_base,$scale);$rounding=Decimal::sub($carry,$sum,8);
+  $quantum=$scale===0?'0.5':'0.'.str_repeat('0',$scale).'5';
+  $bound=Decimal::mul((string)(count($quote['native_plan']['components'])+1),$quantum,8);
+  abort_unless(Decimal::cmp(ltrim($rounding,'-'),$bound,8)<=0,409);
   if(!Decimal::isZero($rounding,8)){
    $default=$db->table('org_account_defaults')->where('organization_id',$finance)->lockForUpdate()->sole();
    $account=(int)$default->rounding_account_id;abort_unless($account>0,409);$bindings['rounding']=$account;
    $expected[$account]=Decimal::add($expected[$account]??'0',$rounding,8);
   }
   $bui=(int)$position->billed_unreceived_account_id;$bindings['billed_unreceived']=$bui;
-  $expected[$bui]=Decimal::sub($expected[$bui]??'0',(string)$claim->acquisition_base,8);
+  $expected[$bui]=Decimal::sub($expected[$bui]??'0',$carry,8);
   foreach($bindings as$role=>$account)abort_unless((int)($proof['restore_account_bindings'][$role]??0)===$account
    &&$db->table('accounts')->where('organization_id',$finance)->where('id',$account)->where('is_active',true)->where('is_postable',true)->exists(),409);
   $actual=[];foreach($lines as$line){$account=(int)$line['account_id'];abort_unless(array_key_exists($account,$expected),409);
