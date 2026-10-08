@@ -357,7 +357,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $request=FinancialOriginRequest::sole();$db=DB::connection('tenant');$before=StockLedger::count();
         $db->table('stock_cash_refund_demands')->insert(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$request->organization_mapping_uuid,'request_id'=>$request->id,'request_uuid'=>$request->request_uuid,'source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,'source_revision'=>$request->source_revision,'refund_receipt_id'=>1991,'operation_uuid'=>(string)Str::uuid(),'actor_id'=>323,'payload_hash'=>str_repeat('b',64),'hold_fingerprint'=>str_repeat('c',64),'payload'=>'{}','state'=>'prepared']);
         try{$db->transaction(fn()=>app(\App\Services\FinancialOrigins\CashRefundDemandService::class)->assertDispatchUnlocked($request));$this->fail('Prepared refund did not fence dispatch');}
-        catch(HttpException $error){$this->assertSame(409,$error->getStatusCode());}
+        catch(\Illuminate\Validation\ValidationException $error){$this->assertArrayHasKey('workflow',$error->errors());}
         $db->table('stock_cash_refund_demands')->update(['state'=>'abandoned']);
         $db->transaction(fn()=>app(\App\Services\FinancialOrigins\CashRefundDemandService::class)->assertDispatchUnlocked($request));
         $this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());

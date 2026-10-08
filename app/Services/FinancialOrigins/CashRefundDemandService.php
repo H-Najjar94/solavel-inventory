@@ -87,7 +87,7 @@ final class CashRefundDemandService {
  public function assertDispatchUnlocked(FinancialOriginRequest $r):void {
   $db=DB::connection('tenant');abort_unless($db->transactionLevel()>0,409);
   if($r->source_document_type!=='sales_receipt'||!$db->getSchemaBuilder()->hasTable('stock_cash_refund_demands'))return;
-  abort_if($db->table('stock_cash_refund_demands')->where('organization_id',$r->organization_id)->where('request_id',$r->id)->where('state','prepared')->lockForUpdate()->exists(),409,'Resolve the pending cash-sale refund before dispatching remaining goods.');
+  if($db->table('stock_cash_refund_demands')->where('organization_id',$r->organization_id)->where('request_id',$r->id)->where('state','prepared')->lockForUpdate()->exists())throw \Illuminate\Validation\ValidationException::withMessages(['workflow'=>app()->getLocale()==='ar'?'يوجد استرداد نقدي قيد المراجعة. أكمل مزامنة الاسترداد أو ألغِ مسودته في SolaCount قبل تسليم الكميات المتبقية.':'A cash refund is under review. Complete its synchronization or cancel its draft in SolaCount before dispatching the remaining goods.']);
  }
  private function result(object $hold,FinancialOriginRequest $r):array {return['operation_uuid'=>$hold->operation_uuid,'refund_receipt_id'=>(int)$hold->refund_receipt_id,'state'=>$hold->state,'hold_fingerprint'=>$hold->hold_fingerprint,'refund_journal_id'=>$hold->refund_journal_id,'request'=>app(OriginRequestService::class)->summary($r)];}
 }
