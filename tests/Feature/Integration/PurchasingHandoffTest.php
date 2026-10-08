@@ -533,6 +533,33 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame('2.0000', StockLedger::sole()->unit_cost);
     }
 
+    public function test_disconnected_foreign_receipt_preserves_existing_finance_base_cost_pool(): void
+    {
+        DB::connection('tenant')->table('exchange_rates')->insert(['organization_id' => 14, 'base_currency_code' => 'JOD', 'quote_currency_code' => 'USD', 'rate' => '1.25000000', 'rate_date' => '2026-10-06', 'source' => 'manual']);
+        $data = $this->data();
+        $data['currency_code'] = 'USD';
+        $data['exchange_rate'] = '1.25000000';
+        $data['exchange_rate_date'] = '2026-10-06';
+        app(ReceivingRequestService::class)->upsert($data);
+        $request = ReceivingRequest::sole();
+        app(GoodsReceiptService::class)->post($this->draft($request, '1'));
+        $before = StockBalance::sole()->getAttributes();
+        $this->assertSame('2.0000', StockLedger::sole()->unit_cost);
+        IntegrationSetting::sole()->update(['mode' => 'disconnected']);
+        $receipt = $this->draft($request->fresh(), '1');
+        try {
+            app(GoodsReceiptService::class)->post($receipt);
+            $this->fail('Disconnected ownership must not mix transaction costs into the existing base pool.');
+        } catch (ValidationException $failure) {
+            $this->assertArrayHasKey('valuation', $failure->errors());
+        }
+        $this->assertSame('draft', $receipt->fresh()->status);
+        $this->assertSame($before, StockBalance::sole()->getAttributes());
+        $this->assertSame(1, StockLedger::count());
+        $this->assertSame(1, PurchasingDocumentOutbox::count());
+        $this->assertSame(1, IntegrationOutboxEvent::count());
+    }
+
     public function test_missing_foreign_dated_fx_blocks_receipt_without_stock_or_document_handoff(): void
     {
         $d = $this->data();
@@ -824,8 +851,15 @@ final class PurchasingHandoffTest extends TestCase
         IntegrationSetting::sole()->update(['mode' => 'disconnected']);
         $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06'],
             [['item_id' => $this->item->id, 'received_qty' => '2', 'accepted_qty' => '2', 'unit_cost' => '5']]);
-        app(GoodsReceiptService::class)->post($receipt);
-        $this->assertSame('pending', IntegrationOutboxEvent::sole()->status);
-        $this->assertSame(1, StockLedger::count());
+        try {
+            app(GoodsReceiptService::class)->post($receipt);
+            $this->fail('A disconnected owned cost pool cannot switch to standalone valuation.');
+        } catch (ValidationException $failure) {
+            $this->assertArrayHasKey('valuation', $failure->errors());
+        }
+        $this->assertSame('draft', $receipt->fresh()->status);
+        $this->assertSame(0, StockLedger::count());
+        $this->assertSame(0, IntegrationOutboxEvent::count());
+        $this->assertSame(0, PurchasingDocumentOutbox::count());
     }
 }
