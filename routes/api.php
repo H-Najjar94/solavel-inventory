@@ -420,6 +420,13 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::post('/packs/{pack}/packed', [PackController::class, 'markPacked'])
         ->middleware('perm:inventory.manage_packing')->name('api.v1.packs.packed');
 
+    // Cash operations require native Stock authority, separate from financial posting.
+    Route::get('/cash-sales/requests', [\App\Http\Controllers\Api\V1\CashFulfillmentRequestController::class, 'index'])->middleware('perm:inventory.view_sales');
+    Route::get('/cash-sales/requests/{id}', [\App\Http\Controllers\Api\V1\CashFulfillmentRequestController::class, 'options'])->middleware('perm:inventory.view_sales');
+    Route::post('/cash-sales/requests/{id}/approve', [\App\Http\Controllers\Api\V1\CashFulfillmentRequestController::class, 'approve'])->middleware('perm:inventory.manage_sales_orders');
+    Route::post('/cash-sales/requests/{id}/dispatch', [\App\Http\Controllers\Api\V1\CashFulfillmentRequestController::class, 'dispatch'])->middleware('perm:inventory.manage_shipments');
+    Route::get('/cash-sales/requests/{id}/operations/{operation}', [\App\Http\Controllers\Api\V1\CashFulfillmentRequestController::class, 'status'])->middleware('perm:inventory.view_sales');
+
     // Durable Finance-origin requests; ordinary Stock permissions remain authoritative.
     Route::get('/sales/requests', [\App\Http\Controllers\Api\V1\FulfillmentRequestController::class, 'index'])->middleware('perm:inventory.view_sales')->name('api.v1.sales.requests.index');
     Route::get('/sales/requests/{fulfillment_request}', [\App\Http\Controllers\Api\V1\FulfillmentRequestController::class, 'show'])->middleware('perm:inventory.view_sales')->name('api.v1.sales.requests.show');
