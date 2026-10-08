@@ -15,7 +15,7 @@ final class SupplierCreditNativeStockSteps
   app(\App\Tenancy\OrganizationContext::class)->set($org);
   if($step==='seed')return SupplierCreditNativeStockFixture::seed($metadata,$arguments['costing_method']??'average');
   if((int)($stock['organization_id']??0)!==$org)throw new \LogicException('Native Stock identity mismatch');
-  if($step==='snapshot')return SupplierCreditNativeStockEvidence::snapshot($org);
+  if($step==='snapshot'){require_once __DIR__.'/SupplierCreditNativeStockEvidence.php';return SupplierCreditNativeStockEvidence::snapshot($org);}
   if(in_array($step,['receive','consume'],true)){
    $actorId=(int)($metadata['warehouse_actor_id']??0);
    $actor=\App\Models\User::findOrFail($actorId);
