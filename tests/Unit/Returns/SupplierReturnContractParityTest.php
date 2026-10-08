@@ -19,7 +19,7 @@ final class SupplierReturnContractParityTest extends TestCase
     public function test_inverse_requires_existing_190_and_193_native_financial_proof(): void
     {
         $source = file_get_contents(dirname(__DIR__, 3).'/app/Services/Returns/SupplierReturnFinancialReversalGuard.php');
-        foreach (['finance_supplier_return_credit_allocations', 'finance_supplier_return_reversals', "\$a->state!=='voided'", "\$a->branch!=='matched_physical'", 'actual_out_base', 'voidDebitNote', 'debit-note-void', 'debit_allocations', 'supplier_refunds'] as $proof) {
+        foreach (['finance_supplier_return_credit_allocations', 'finance_supplier_return_reversals', "\$a->state!=='voided'", 'bridged_unmatched', 'matched_physical', 'actual_out_base', 'voidDebitNote', 'debit-note-void', 'debit_allocations', 'supplier_refunds'] as $proof) {
             self::assertStringContainsString($proof, $source);
         }
         self::assertStringNotContainsString('203', $source);

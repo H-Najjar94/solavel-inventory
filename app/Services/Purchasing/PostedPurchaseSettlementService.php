@@ -57,6 +57,7 @@ final class PostedPurchaseSettlementService
             'receipt_journal_key' => 'required|string|max:191', 'quantity' => 'required|numeric|gt:0',
             'invoice_net_unit_cost' => 'required|numeric|min:0', 'nonrecoverable_tax_unit_cost' => 'required|numeric|min:0',
             'finance_journal_id' => 'sometimes|integer|min:1', 'finance_journal_key' => 'sometimes|string|max:191',
+            'return_inverse_origin' => 'sometimes|array',
             'finance_reversal_journal_id' => 'sometimes|integer|min:1', 'finance_reversal_journal_key' => 'sometimes|string|max:191',
         ])->validate();
         // Independent remote read happens before taking any Stock locks.
@@ -93,6 +94,11 @@ final class PostedPurchaseSettlementService
                 ->where('bill_journal_id', $facts['bill_journal_id'])->where('bill_line_id', $authority['bill_line_id'])
                 ->where('bill_revision', $facts['bill_revision'])->lockForUpdate()->first();
             abort_unless($position, 409, __('receiving.valuation_changed'));
+            if (isset($facts['return_inverse_origin'])) {
+                abort_unless(isset($authority['return_inverse_origin'])
+                    && SolaStockJournalContract::canonicalJson($facts['return_inverse_origin'])===SolaStockJournalContract::canonicalJson($authority['return_inverse_origin']),403);
+                app(\App\Services\Returns\SupplierReturnInverseOriginProof::class)->assertLocked($facts['return_inverse_origin'],$facts,$mapping);
+            }
             $financialJournal = DB::connection('tenant')->table('journal_entries')
                 ->where('organization_id', $mapping->finance_organization_id)->where('id', $facts['bill_journal_id'])
                 ->where('status', 'posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->lockForUpdate()->first();
