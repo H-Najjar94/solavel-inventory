@@ -27,6 +27,8 @@ export default function LandedCostDetailPage() {
     const previewByLine = Object.fromEntries((preview?.lines ?? []).map((l) => [l.landed_cost_line_id, l]));
     const events = data?.accounting_events ?? [];
     const draft = doc.status === 'draft';
+    // An explicit opt-out keeps the document readable but refuses changes.
+    const writable = gate.allowed && data?.availability?.available !== false;
 
     async function act(fn, label) {
         try { await fn(); toast.push(label, 'success'); qc.invalidateQueries({ queryKey: ['landed-cost'] }); qc.invalidateQueries({ queryKey: ['landed-costs'] }); return true; }
@@ -38,9 +40,11 @@ export default function LandedCostDetailPage() {
             <Breadcrumbs items={[{ label: t('landedCosts.title'), to: '/landed-costs' }, { label: doc.landed_cost_number }]} />
             <header className="page-head">
                 <h1>{doc.landed_cost_number}</h1><DocumentStatusBadge status={doc.status} />
-                {draft && <Link to={`/landed-costs/${id}/edit`} className="btn" style={{ marginInlineStart: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{t('landedCosts.edit')}</Link>}
+                {draft && <Link to={`/landed-costs/${id}/edit`} className="btn" style={{ marginInlineStart: 'auto', opacity: writable ? 1 : 0.5, pointerEvents: writable ? 'auto' : 'none' }}>{t('landedCosts.edit')}</Link>}
             </header>
-            <LandedCostConnectionPanel status={data?.connection} />
+            {data?.availability?.available === false
+                ? <p className="banner banner--warn" role="status">{t('landedCosts.availability.optedOut')}</p>
+                : <LandedCostConnectionPanel status={data?.connection} />}
 
             <div className="panel"><dl className="kv">
                 <dt>{t('landedCosts.date')}</dt><dd>{doc.landed_cost_date}</dd>
@@ -87,7 +91,7 @@ export default function LandedCostDetailPage() {
                 )}
             </div>
 
-            <DocumentActions status={doc.status} canManage={gate.allowed} onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} />
+            <DocumentActions status={doc.status} canManage={writable} onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} />
             <ConfirmPostModal open={confirmPost} name="landed cost"
                 onConfirm={async () => { if (await act(() => api.postLandedCost(id), t('landedCosts.posted'))) setConfirmPost(false); }} onCancel={() => setConfirmPost(false)} />
             <ConfirmReverseModal open={confirmReverse} name="landed cost"

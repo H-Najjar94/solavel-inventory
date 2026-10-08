@@ -1114,4 +1114,87 @@ final class FinanceWorkspaceTest extends TestCase
         $strip = fn (array $q) => array_map(function ($s) { unset($s['ledger_entry_ids']); return $s; }, $q);
         $this->assertSame($strip($original['inventory_quantities']), $strip($contract['inventory_quantities']));
     }
+
+    /**
+     * Batch 10 owner decision 2, connected organization: landed costs are available
+     * (a draft saves) but posting is blocked with the setup action until the
+     * clearing account is chosen; setting it up records no journal, allocation or
+     * stock change; an explicit opt-out survives the setup.
+     */
+    public function test_connected_landed_cost_drafts_by_plan_and_posting_waits_for_the_clearing_setup_which_journals_nothing(): void
+    {
+        $org = TenantTestManager::ORG_A;
+        $mapping = IntegrationOrganizationMapping::query()->firstOrFail();
+        $warehouse = StockTestFactory::warehouse();
+        $unit = Unit::create(['code' => 'LCA-EACH', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = StockTestFactory::averageItem(['base_unit_id' => $unit->id]);
+        $supplier = Supplier::create(['code' => 'LCA-SUP', 'name' => 'Freight supplier', 'is_active' => true]);
+        foreach ([801 => ['1301', 'asset'], 802 => ['2150', 'liability'], 803 => ['5001', 'expense'], 804 => ['6804', 'expense'], 806 => ['1580', 'asset']] as $id => [$code, $type]) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $id, 'organization_id' => 14, 'code' => $code, 'name' => 'Account '.$code,
+                'type' => $type, 'is_active' => true, 'is_postable' => true]);
+        }
+        $pairs = ['item' => [[$item->id, 911]], 'unit' => [[$unit->id, 912]], 'supplier' => [[$supplier->id, 913]]];
+        foreach (['inventory_asset' => 801, 'grni' => 802, 'cogs' => 803, 'adjustment_loss' => 804] as $role => $id) {
+            $account = IntegrationAccountMapping::create(['integration' => 'solabooks', 'mapping_type' => $role, 'solabooks_account_id' => $id, 'status' => 'verified']);
+            $pairs['account_role'][] = [$account->id, $id];
+        }
+        foreach ($pairs as $type => $entries) {
+            foreach ($entries as [$native, $external]) {
+                IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $mapping->mapping_uuid,
+                    'central_client_id' => self::CLIENT, 'central_organization_id' => $org, 'finance_organization_id' => 14,
+                    'solastock_organization_id' => $org, 'entity_type' => $type, 'solastock_record_id' => (string) $native,
+                    'solabooks_record_id' => (string) $external, 'status' => 'verified']);
+            }
+        }
+        IntegrationSetting::sole()->update(['meta' => ['client_id' => self::CLIENT, 'central_organization_id' => $org,
+            'signing_key_id' => 'fixture', 'transport_enabled_workflows' => ['grn.posted', 'shipment.posted'],
+            'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD'],
+                'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8, 'inventory_valuation_basis' => FinanceBaseValuation::BASIS]]]);
+        $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $warehouse->id, 'supplier_id' => $supplier->id, 'receipt_date' => '2026-10-06'],
+            [['item_id' => $item->id, 'entered_unit_id' => $unit->id, 'received_qty' => '10', 'accepted_qty' => '10', 'unit_cost' => '5']]);
+        app(GoodsReceiptService::class)->post($receipt);
+
+        // Available by plan: no switch-on step, and a draft saves.
+        $this->assertTrue(app(\App\Services\Documents\LandedCostAvailability::class)->status($org)['available']);
+        $service = app(\App\Services\Documents\LandedCostService::class);
+        $doc = $service->createDraft(['allocation_method' => 'quantity', 'landed_cost_date' => '2026-10-07'],
+            [['charge_type' => 'freight', 'amount' => '20']], [$receipt->lines()->sole()->id]);
+        $this->assertSame('draft', $doc->status);
+
+        // Posting readiness: blocked with the one setup action, and nothing moves.
+        $workflow = app(\App\Services\Integration\LandedCostWorkflow::class);
+        $status = $workflow->status($org);
+        $this->assertSame(['connected', false, true, 'choose_clearing_account'], [$status['mode'], $status['posting_ready'], $status['setup_required'], $status['setup_action']]);
+        try {
+            $service->post($doc);
+            $this->fail('Posting must wait for the clearing account setup.');
+        } catch (\App\Services\Documents\LandedCostSetupRequired $e) {
+            $this->assertSame(__('inventory.landed_cost.connection_not_enabled'), collect($e->errors())->flatten()->first());
+            $this->assertStringStartsWith('Set up landed costs: choose the clearing account', __('inventory.landed_cost.connection_not_enabled'));
+        }
+        $this->assertSame('draft', $doc->fresh()->status);
+
+        // An explicit opt-out recorded before the setup is preserved by it.
+        app(\App\Services\Documents\LandedCostAvailability::class)->setOptOut($org, true, self::ACTOR);
+
+        $before = ['events' => IntegrationOutboxEvent::query()->count(), 'ledger' => StockLedger::query()->count(),
+            'value' => (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'),
+            'components' => DB::connection('tenant')->table('stock_landed_cost_components')->count(),
+            'reversals' => DB::connection('tenant')->table('inventory_reversals')->count()];
+        $this->assertSame('50.00', $before['value']);
+        $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['posting_ready']);
+        $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['posting_ready']); // confirm again: idempotent
+
+        // Setting up journals nothing, allocates nothing and changes no stock or history.
+        $this->assertSame($before, ['events' => IntegrationOutboxEvent::query()->count(), 'ledger' => StockLedger::query()->count(),
+            'value' => (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'),
+            'components' => DB::connection('tenant')->table('stock_landed_cost_components')->count(),
+            'reversals' => DB::connection('tenant')->table('inventory_reversals')->count()]);
+        $this->assertSame(0, IntegrationOutboxEvent::query()->where('event_type', 'like', 'landed_cost.%')->count());
+        $this->assertSame('draft', $doc->fresh()->status);
+        $this->assertTrue(app(\App\Services\Documents\LandedCostAvailability::class)->status($org)['opted_out']);
+        // Each setup/confirm is audited; the clearing binding exists exactly once.
+        $this->assertSame(2, InventoryAuditLog::query()->where('action', 'inventory.solabooks_landed_cost_workflow.enabled')->count());
+        $this->assertSame(1, IntegrationAccountMapping::query()->where('mapping_type', 'landed_cost_clearing')->count());
+    }
 }

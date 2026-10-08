@@ -48,7 +48,18 @@ class MetaController extends ApiController
                 'brands' => ItemBrand::query()->where('is_active', true)->get(['id', 'name']),
                 'units' => Unit::query()->where('is_active', true)->get(['id', 'code', 'name', 'symbol']),
             ],
+            // Plan + opt-out availability for the Landed Costs menu and pages.
+            'landed_costs' => $this->landedCosts($organizationId),
             'primary_color' => '#e09921',
         ]);
+    }
+
+    private function landedCosts(int $organizationId): ?array
+    {
+        try {
+            return app(\App\Services\Documents\LandedCostAvailability::class)->status($organizationId);
+        } catch (\Throwable) {
+            return null; // the bootstrap payload never fails on this; the API still gates every route
+        }
     }
 }
