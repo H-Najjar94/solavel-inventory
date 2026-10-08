@@ -19,7 +19,10 @@ final class OperationalPartyReadiness
         $org = app(OrganizationContext::class)->idOrFail();
         $mapping = IntegrationOrganizationMapping::query()->where('solastock_organization_id',$org)
             ->where('tenant_database_identity',$db->getDatabaseName())
-            ->whereIn('status',['verified','verified_hold'])->whereIn('activation_state',['active','maintenance_hold'])->first();
+            ->whereIn('status',['verified','verified_hold'])->whereIn('activation_state',['active','maintenance_hold'])->get();
+        if ($mapping->isEmpty()) return;
+        if ($mapping->count()!==1) throw ValidationException::withMessages(['workflow'=>__('inventory.integration.party_posting_connection_review')]);
+        $mapping=$mapping->sole();
         if (! $mapping) return; // Existing native validation decides standalone/connection ownership.
         // Only committed source identities participate. Unsaved caller edits cannot sync another party.
         $native = $document::query()->where('organization_id',$org)->whereKey($document->getKey())->firstOrFail();
