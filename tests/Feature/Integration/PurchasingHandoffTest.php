@@ -93,12 +93,17 @@ final class PurchasingHandoffTest extends TestCase
     protected function tearDown(): void
     {
         try {
-            $this->committedFixture?->restore();
-        } finally {
             if ($this->committedFixture !== null) {
-                $central = DB::connection((string) config('tenancy.central_connection', 'mysql'));
-                while ($central->transactionLevel() > 0) { $central->rollBack(); }
+                // End every fixture-owned transaction before restoring committed rows.
+                foreach (DB::getConnections() as $connection) {
+                    if (in_array($connection->getDatabaseName(), [$this->tenantTestManager->tenantADatabase(), $this->tenantTestManager->centralDatabase()], true)) {
+                        while ($connection->transactionLevel() > 0) { $connection->rollBack(); }
+                    }
+                }
+                $this->committedFixture->restore();
             }
+        } finally {
+            DB::purge('committed_fixture_central');
             parent::tearDown();
         }
     }
@@ -626,8 +631,19 @@ final class PurchasingHandoffTest extends TestCase
         $event = PurchasingDocumentOutbox::sole();
         $event->update(['status' => 'processing', 'lease_token' => (string) Str::uuid(), 'lease_expires_at' => now()->addMinute()]);
         Http::fake(['https://finance.example.invalid/api/v1/purchasing/receipts' => Http::response(['success' => true, 'data' => ['bill_id' => 999, 'status' => 'draft']], 200)]);
-        $central = DB::connection((string) config('tenancy.central_connection', 'mysql'));
+        // TenantManager aliases mysql to tenant A; canonical capability reads must
+        // use the separately provisioned disposable Central schema, not a second
+        // PDO transaction on the same tenant tables.
+        $centralConfig = config('database.connections.tenant');
+        $centralConfig['database'] = $this->tenantTestManager->centralDatabase();
+        config()->set('database.connections.committed_fixture_central', $centralConfig);
+        config()->set('tenancy.central_connection', 'committed_fixture_central');
+        DB::purge('committed_fixture_central');
+        $central = DB::connection('committed_fixture_central');
         \App\Tenancy\TenancySafetyGuard::assertSafeTestDatabase($central->getDatabaseName());
+        \App\Tenancy\TenancySafetyGuard::assertCentralAndTenantDiffer($central->getDatabaseName(), DB::connection('tenant')->getDatabaseName());
+        $this->assertSame($this->tenantTestManager->centralDatabase(), $central->getDatabaseName());
+        $this->assertSame(0, $central->transactionLevel());
         $central->beginTransaction();
         $central->table('entitlement_state_snapshots')->updateOrInsert(
             ['organization_id' => TenantTestManager::ORG_A],
