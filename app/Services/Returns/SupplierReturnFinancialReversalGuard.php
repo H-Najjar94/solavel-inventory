@@ -18,7 +18,9 @@ final class SupplierReturnFinancialReversalGuard
    ->where('m.solastock_organization_id',$return->organization_id)->where('m.tenant_database_identity',$db->getDatabaseName())->where('r.stock_return_id',$return->id)->get(['r.*']);
   if($sources->count()!==1)$this->review();$hint=$sources->sole();
   $mapping=(clone$maps)->where('mapping_uuid',$hint->organization_mapping_uuid)->where('finance_organization_id',$hint->organization_id)->whereIn('status',['verified','verified_hold'])->whereIn('activation_state',['active','maintenance_hold'])->first();
-  if(!$mapping||!$hint->bill_id||!$hint->debit_note_id)$this->review();
+  if(!$mapping)$this->review();
+  if(!$hint->debit_note_id&&$hint->bridge_journal_id)return $this->unbilled($mapping,$hint,$return);
+  if(!$hint->bill_id||!$hint->debit_note_id)$this->review();
   $org=(int)$mapping->finance_organization_id;
   $bill=$db->table('bills')->where('organization_id',$org)->where('id',$hint->bill_id)->lockForUpdate()->first();
   $note=$db->table('debit_notes')->where('organization_id',$org)->where('id',$hint->debit_note_id)->lockForUpdate()->first();
@@ -51,6 +53,33 @@ final class SupplierReturnFinancialReversalGuard
   if($db->table('debit_allocations')->where('organization_id',$org)->where('debit_note_id',$note->id)->lockForUpdate()->exists()||$db->table('supplier_refunds')->where('organization_id',$org)->where('debit_note_id',$note->id)->whereNotIn('status',['draft','void','cancelled'])->lockForUpdate()->exists())$this->review();
   return $mapping;
  }
+ /** No supplier liability exists in this distinct branch; a native credit is never invented. */
+ private function unbilled(object $mapping,object $hint,SupplierReturn $return):object
+ {
+  $db=DB::connection('tenant');$org=(int)$mapping->finance_organization_id;
+  $bill=$hint->bill_id?$db->table('bills')->where('organization_id',$org)->where('id',$hint->bill_id)->lockForUpdate()->first():null;
+  if($hint->bill_id&&(!$bill||$bill->journal_entry_id||$bill->status!=='draft'))$this->review();
+  $source=$db->table('finance_supplier_returns')->where('organization_id',$org)->where('id',$hint->id)->where('organization_mapping_uuid',$mapping->mapping_uuid)->lockForUpdate()->first();
+  if(!$source||$source->debit_note_id||!$source->bridge_journal_id||$source->bill_journal_id||($source->reviewed_bill_journal_id??null)||($source->reversal_journal_id??null))$this->review();
+  $receipt=$db->table('finance_purchase_receipts')->where('organization_id',$org)->where('id',$source->finance_receipt_id)->where('organization_mapping_uuid',$mapping->mapping_uuid)->lockForUpdate()->first();
+  if(!$receipt||$receipt->state==='reversed'||($receipt->bill_id&&(int)$receipt->bill_id!==(int)$source->bill_id))$this->review();
+  if($db->table('finance_supplier_return_credit_allocations')->where('organization_id',$org)->where('supplier_return_id',$source->id)->exists())$this->review();
+  $payload=json_decode($source->payload,true,512,JSON_THROW_ON_ERROR);$facts=$payload['return']??[];
+  if(!hash_equals($source->source_hash,hash('sha256',\App\Services\Integration\SolaStockJournalContract::canonicalJson($payload)))
+    ||($facts['document_uuid']??null)!==$return->return_uuid||(int)($facts['receipt_id']??0)!==(int)$return->goods_receipt_id)$this->review();
+  foreach(['central_client_id','central_organization_id','finance_organization_id','solastock_organization_id']as$field){$claim=$field==='solastock_organization_id'?'inventory_organization_id':$field;if((int)($payload['identity'][$claim]??0)!==(int)$mapping->$field)$this->review();}
+  if(($payload['identity']['organization_mapping_uuid']??null)!==$mapping->mapping_uuid)$this->review();
+  foreach([$source->receipt_journal_id,$source->stock_return_journal_id,$source->bridge_journal_id]as$id){
+   if(!$id||!$db->table('journal_entries')->where('organization_id',$org)->where('id',$id)->where('status','posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->exists())$this->review();
+  }
+  if(!$db->table('journal_entries')->where('organization_id',$org)->where('id',$source->bridge_journal_id)->where('source','AP')
+    ->where('source_type','App\\Services\\Integration\\FinanceSupplierReturnReceiver')->where('source_id',$source->id)->where('source_key','supplier-return-unbilled:'.$source->return_mapping_uuid)->exists())$this->review();
+  $event=$db->table('integration_outbox_events')->where('organization_id',$return->organization_id)->where('event_type','supplier_return.posted')->where('aggregate_id',$return->id)->first();
+  if(!$event||($facts['journal_idempotency_key']??null)!==$event->idempotency_key)$this->review();
+  if(!$db->table('journal_entries')->where('organization_id',$org)->where('id',$source->stock_return_journal_id)->where('source_key','external-api:'.hash('sha256',$event->idempotency_key))->exists())$this->review();
+  return $mapping;
+ }
+
  /** Exact read-only scope check; no Mapping row lock is acquired beneath native source locks. */
  public function assertMappingCurrent(object $mapping,SupplierReturn $return):void
  {

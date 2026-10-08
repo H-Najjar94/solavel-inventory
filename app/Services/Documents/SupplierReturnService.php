@@ -140,7 +140,17 @@ final class SupplierReturnService
     {
         validator(['reason'=>$reason],['reason'=>'required|string|min:3|max:2000'])->validate();
         $org=$this->context->idOrFail();
-        return DB::connection('tenant')->transaction(function()use($return,$reason,$org){
+        abort_unless((int)$return->organization_id===(int)$org,404);
+        $actor=request()->user();
+        abort_unless($actor&&app(\App\Services\Access\InventoryPermissionService::class)->can($actor,'inventory.manage_returns'),403);
+        $snapshot=SupplierReturn::query()->where('organization_id',$org)->whereKey($return->id)->with('lines')->firstOrFail();
+        foreach($snapshot->lines as$line)$this->warehouses->assertAllowed((int)$line->warehouse_id);
+        if($snapshot->status==='reversed'&&$snapshot->reversed_at&&$snapshot->reversal_id){
+            return InventoryReversal::query()->where('organization_id',$org)->whereKey($snapshot->reversal_id)
+                ->where('source_type','supplier_return')->where('source_id',$snapshot->id)->where('status','posted')->firstOrFail();
+        }
+        $capability=app(\App\Services\Returns\SupplierReturnReadiness::class)->prepare($snapshot);
+        return DB::connection('tenant')->transaction(function()use($return,$reason,$org,$capability){
             abort_unless((int)$return->organization_id===(int)$org,404);
             $connected=app(\App\Services\Returns\SupplierReturnFinancialReversalGuard::class)->lockAndAssert($return);
             GoodsReceipt::query()->where('organization_id',$org)->whereKey($return->goods_receipt_id)->lockForUpdate()->firstOrFail();
@@ -149,6 +159,7 @@ final class SupplierReturnService
             abort_unless($return->status==='posted',409);
             foreach($return->lines as$line)$this->warehouses->assertAllowed((int)$line->warehouse_id);
             if($connected)app(\App\Services\Returns\SupplierReturnFinancialReversalGuard::class)->assertMappingCurrent($connected,$return);
+            app(\App\Services\Returns\SupplierReturnReadiness::class)->assertLocked($return,$capability);
             $original=IntegrationOutboxEvent::query()->where('organization_id',$org)->where('event_type','supplier_return.posted')->where('aggregate_id',$return->id)->first();
             $reversal=InventoryReversal::create(['organization_id'=>$org,'reversal_number'=>DocumentNumber::next('REV-SPR',InventoryReversal::class,'reversal_number',$org,'tenant'),
                 'source_type'=>'supplier_return','source_id'=>$return->id,'source_number'=>$return->return_number,'reversal_date'=>now()->toDateString(),
