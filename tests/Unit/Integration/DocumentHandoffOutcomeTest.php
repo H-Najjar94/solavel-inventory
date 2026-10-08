@@ -17,10 +17,16 @@ final class DocumentHandoffOutcomeTest extends TestCase
     }
     public function test_resolved_replay_accepts_actual_native_link():void
     {
-        foreach (['purchasing.receipt.confirmed'=>'bill_id','sales.shipment.confirmed'=>'invoice_id'] as $event=>$field) {
+        foreach (['purchasing.receipt.confirmed'=>'bill_id','sales.shipment.confirmed'=>'invoice_id','sales.return.confirmed'=>'credit_note_id'] as $event=>$field) {
             $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'draft_review',$field=>42,'replayed'=>true]],$event);
             $this->assertTrue($r['successful']);$this->assertFalse($r['intervention']);
         }
+    }
+    public function test_return_source_review_needs_actual_credit_draft():void
+    {
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'source_review','credit_note_id'=>null,'missing_information'=>['original_invoice_required']]],'sales.return.confirmed');
+        $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
+        $this->assertSame(['original_invoice_required'],$r['data']['missing_information']);
     }
     public function test_unknown_http_outcome_remains_retryable_even_with_untrusted_link():void
     {
