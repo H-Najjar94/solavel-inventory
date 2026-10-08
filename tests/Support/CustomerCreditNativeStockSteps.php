@@ -31,7 +31,7 @@ final class CustomerCreditNativeStockSteps
   $permissions=app(\App\Services\Access\InventoryPermissionService::class);
   if($step==='receive')return SupplierCreditNativeStockFixture::receive($org,(int)$metadata['finance_bill_id'],(int)$stock['warehouse_id'],(string)$args['quantity'],(string)$args['date']);
   if($step==='return'){
-   if(!$permissions->can($actor,'inventory.manage_sales_returns'))throw new \LogicException('Actual native return permission required');
+   if(!$permissions->can($actor,'inventory.manage_returns'))throw new \LogicException('Actual native return permission required');
    $shipment=Shipment::query()->where('organization_id',$org)->whereKey((int)$args['shipment_id'])->where('status','posted')->firstOrFail();
    $line=$shipment->lines()->whereKey((int)$args['shipment_line_id'])->firstOrFail();
    $native=app(\App\Services\Documents\SalesReturnService::class);
