@@ -201,7 +201,7 @@ final class FinanceWorkspaceController
             }
             // Financial demand creation is a closed Finance capability. Physical
             // dispatch separately requires current Stock access and native permissions.
-            if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand',
+            if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand','sales.request.open-orders',
                 'sales.fulfillment.options','sales.fulfillment.approve','sales.fulfillment.prepare',
                 'sales.fulfillment.execute','sales.fulfillment.status','sales.fulfillment.abandon'], true)) {
                 abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
@@ -219,6 +219,7 @@ final class FinanceWorkspaceController
                         'sales.request.upsert'=>$service->upsert($data,(int)$actor->id),
                         'sales.request.cancel'=>$service->cancel($data,(int)$actor->id),
                         'sales.request.status'=>$service->sourceStatus($data,(int)$actor->id),
+                        'sales.request.open-orders'=>$service->openOrders($data,(int)$actor->id),
                     };
                 } else {
                     validator($data,['invoice_revision'=>'required|string|size:64'])->validate();

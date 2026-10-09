@@ -45,6 +45,7 @@ final class FulfillmentRequestService
    foreach($data['lines']as$i=>$line){$source=(string)$line['source_line_id'];abort_unless($source!==''&&!isset($ids[$source])&&Decimal::gt((string)$line['quantity'],'0'),422);$ids[$source]=true;
     $lines[]=['source_line_id'=>$source,'item_id'=>$this->local($m,'item',(int)$line['item_external_id'],"lines.$i.item_external_id"),'entered_unit_id'=>$this->local($m,'unit',(int)$line['unit_external_id'],"lines.$i.unit_external_id"),'requested_qty'=>Decimal::qty((string)$line['quantity']),'unit_price'=>Decimal::cost((string)$line['unit_price']),'discount_rate'=>'0.0000'];
    }abort_unless($lines!==[],422);
+   app(OpenOrderClaims::class)->assertUpsertClaim($m,$data,$customer,$lines,$r?->id);
    $attrs=['organization_id'=>$this->context->idOrFail(),'organization_mapping_uuid'=>$m->mapping_uuid,'request_uuid'=>$data['request_uuid'],'source_invoice_id'=>$data['source_invoice_id'],'source_invoice_number'=>$data['source_invoice_number']??null,'source_revision'=>$data['source_revision'],'source_status'=>$data['source_status'],'posted_invoice_journal_id'=>$data['posted_invoice_journal_id']??null,'customer_id'=>$customer,'invoice_date'=>$data['invoice_date'],'requested_ship_date'=>$data['requested_ship_date']??null,'currency_code'=>$data['currency_code'],'base_currency_code'=>$data['base_currency_code'],'exchange_rate'=>$data['exchange_rate']??null,'exchange_rate_date'=>$data['exchange_rate_date']??null,'source_payload'=>$data,'approved_at'=>null,'approved_by'=>null,'approved_revision'=>null];
    if($r){$r->update($attrs);$r->lines()->delete();}else$r=FulfillmentRequest::create($attrs);
    foreach($lines as$l)$r->lines()->create($l+['organization_id'=>$r->organization_id]);return$this->changed($r->fresh('lines'));
@@ -87,18 +88,32 @@ final class FulfillmentRequestService
   if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->whereIn('state',['prepared','reverse_prepared'])->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
  }
  public function validateShipment(Shipment $shipment):void {
-  $request=$this->lockShipmentSource($shipment);if(!$request)return;
+  $request=$this->lockShipmentSource($shipment);
+  if(!$request){
+   // A Finance invoice claimed this order: shipping it natively now would bill it twice.
+   if($shipment->sales_order_id&&($claim=app(OpenOrderClaims::class)->pendingClaim((int)$shipment->sales_order_id)))abort(409,__('inventory.sales_handoff.order_claim_pending',['invoice'=>$claim->source_invoice_number?:('#'.$claim->source_invoice_id)]));
+   return;
+  }
   abort_unless(in_array($request->status,['pending','partial'],true)&&$request->approved_at&&$request->approved_revision===$request->source_revision&&(int)$request->warehouse_id===(int)$shipment->warehouse_id,409,__('inventory.sales_handoff.order_not_dispatchable'));
  }
  public function status(FulfillmentRequest $request, ?CreditDemandScope $scope=null):array {
   $request->loadMissing('lines');if($scope&&$request->sales_order_id)$scope->assertOrder((int)$request->organization_id,(int)$request->sales_order_id);$shipmentQuery=$scope?Shipment::withoutGlobalScope('warehouse_access'):Shipment::query();$shipments=$request->sales_order_id?$shipmentQuery->where('organization_id',$request->organization_id)->where('sales_order_id',$request->sales_order_id)->where('status','posted')->whereNull('reversal_sales_return_id')->whereNotIn('id',array_column((array)data_get($request->source_payload,'origin_order.source_shipment_refs',[]),'id'))->get(['id','shipment_number','ship_date']):collect();
-  return['id'=>$request->id,'request_uuid'=>$request->request_uuid,'number'=>'FR-'.$request->id,'source_invoice_id'=>$request->source_invoice_id,'source_invoice_number'=>$request->source_invoice_number,'source_revision'=>$request->source_revision,'status'=>$request->status,'warehouse_id'=>$request->warehouse_id,'sales_order_id'=>$request->sales_order_id,'approved_at'=>$request->approved_at?->toIso8601String(),'approved_revision'=>$request->approved_revision,'fulfilled_quantity'=>$request->lines->reduce(fn($sum,$line)=>Decimal::add($sum,(string)$line->fulfilled_qty),'0.0000'),'shipment_ids'=>$shipments->pluck('id')->all(),'lines'=>$request->lines->map(fn($l)=>['id'=>$l->id,'source_line_id'=>$l->source_line_id,'item_id'=>$l->item_id,'item_name'=>Item::query()->find($l->item_id)?->name,'entered_unit_id'=>$l->entered_unit_id,'remaining_qty'=>Decimal::sub(Decimal::sub((string)$l->requested_qty,(string)$l->fulfilled_qty),(string)($l->cancelled_qty??'0')),'requested_quantity'=>(string)$l->requested_qty,'fulfilled_quantity'=>(string)$l->fulfilled_qty,'cancelled_quantity'=>(string)($l->cancelled_qty??'0.0000'),'requested_qty'=>(string)$l->requested_qty,'fulfilled_qty'=>(string)$l->fulfilled_qty])->all(),'shipments'=>$shipments->toArray()];
+  $status=['id'=>$request->id,'request_uuid'=>$request->request_uuid,'number'=>'FR-'.$request->id,'source_invoice_id'=>$request->source_invoice_id,'source_invoice_number'=>$request->source_invoice_number,'source_revision'=>$request->source_revision,'status'=>$request->status,'warehouse_id'=>$request->warehouse_id,'sales_order_id'=>$request->sales_order_id,'approved_at'=>$request->approved_at?->toIso8601String(),'approved_revision'=>$request->approved_revision,'fulfilled_quantity'=>$request->lines->reduce(fn($sum,$line)=>Decimal::add($sum,(string)$line->fulfilled_qty),'0.0000'),'shipment_ids'=>$shipments->pluck('id')->all(),'lines'=>$request->lines->map(fn($l)=>['id'=>$l->id,'source_line_id'=>$l->source_line_id,'item_id'=>$l->item_id,'item_name'=>Item::query()->find($l->item_id)?->name,'entered_unit_id'=>$l->entered_unit_id,'remaining_qty'=>Decimal::sub(Decimal::sub((string)$l->requested_qty,(string)$l->fulfilled_qty),(string)($l->cancelled_qty??'0')),'requested_quantity'=>(string)$l->requested_qty,'fulfilled_quantity'=>(string)$l->fulfilled_qty,'cancelled_quantity'=>(string)($l->cancelled_qty??'0.0000'),'requested_qty'=>(string)$l->requested_qty,'fulfilled_qty'=>(string)$l->fulfilled_qty])->all(),'shipments'=>$shipments->toArray()];
+  // A claim that approval would now refuse (claimed order cancelled, shipped, changed or taken) is reported
+  // so Finance can show "claim refused - choose again" through its existing status refresh.
+  if($claim=app(OpenOrderClaims::class)->refusal($request))$status['claim']=$claim;
+  return$status;
  }
  public function approve(FulfillmentRequest $request,int $warehouse):array {
   abort_unless(app(\App\Services\Access\InventoryPermissionService::class)->can(request()->user(),'inventory.manage_sales_orders'),403);
   app(WarehouseAccessService::class)->assertAllowed($warehouse);Warehouse::query()->whereKey($warehouse)->where('is_active',true)->firstOrFail();
   return DB::connection('tenant')->transaction(function()use($request,$warehouse){$this->lockFinanceCommand(app(ReceivingRequestService::class)->mapping(),$request->source_payload,'upsert');$r=FulfillmentRequest::query()->with('lines')->whereKey($request->id)->lockForUpdate()->firstOrFail();abort_unless($r->status==='pending',409);
    if($r->sales_order_id)return$this->status($r);
+   if(data_get($r->source_payload,'origin_order.source_order_claim')===true){
+    // An explicitly claimed open Stock order is reused; no second order is created.
+    $order=app(OpenOrderClaims::class)->lockedClaim($r,$warehouse);
+    $r->update(['sales_order_id'=>$order->id,'warehouse_id'=>$warehouse,'approved_at'=>now(),'approved_by'=>auth()->id(),'approved_revision'=>$r->source_revision]);return$this->changed($r->fresh('lines'));
+   }
    if(array_key_exists('origin_order',(array)$r->source_payload)){
     $order=app(StockBornOrderReuse::class)->lockedOrder($r,$warehouse);
     $r->update(['sales_order_id'=>$order->id,'warehouse_id'=>$warehouse,'approved_at'=>now(),'approved_by'=>auth()->id(),'approved_revision'=>$r->source_revision]);return$this->changed($r->fresh('lines'));
@@ -113,6 +128,17 @@ final class FulfillmentRequestService
  }
  private function cancellationStatus(object $cancel):array {
   return ['id'=>null,'number'=>null,'source_invoice_number'=>data_get(json_decode($cancel->source_payload,true),'source_invoice_number'),'request_uuid'=>$cancel->request_uuid,'source_invoice_id'=>(int)$cancel->source_invoice_id,'source_revision'=>$cancel->source_revision,'status'=>'cancelled','warehouse_id'=>null,'sales_order_id'=>null,'fulfilled_quantity'=>'0.0000','shipment_ids'=>[],'shipments'=>[],'lines'=>[],'cancelled_before_acceptance'=>true];
+ }
+ /**
+  * Read-only: open, unshipped Stock-born orders of this invoice's customer, so Finance can
+  * offer an explicit "fulfil from existing order" choice. The customer comes from Finance's
+  * signed invoice authority, never from the caller. Creates no request, order or claim.
+  */
+ public function openOrders(array $data,int $actor):array {
+  $authority=app(SolaBooksOutboxDeliveryService::class)->authorizeSales($actor,(int)$data['source_invoice_id'],'view');
+  abort_unless((int)($authority['customer_external_id']??0)>0,409);
+  $mapping=app(ReceivingRequestService::class)->mapping();
+  return['source_invoice_id'=>(int)$data['source_invoice_id'],'request_uuid'=>$data['request_uuid']]+app(OpenOrderClaims::class)->list($mapping,(int)$authority['customer_external_id'],(int)$data['source_invoice_id']);
  }
  public function sourceStatus(array $data,int $actor):array {
   app(SolaBooksOutboxDeliveryService::class)->authorizeSales($actor,(int)$data['source_invoice_id'],'view');
@@ -147,6 +173,12 @@ final class FulfillmentRequestService
    abort_unless(($data['expected_revision']??$data['source_revision'])===$r->source_revision,409);
    if($r->status==='cancelled')return $this->status($r);
    if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))abort_if(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$r->organization_id)->where('fulfillment_request_id',$r->id)->whereIn('state',['prepared','reverse_prepared'])->exists(),409,__('inventory.sales_handoff.credit_demand_pending'));
+   $claimed=data_get($r->source_payload,'origin_order.source_order_claim')===true;$r->loadMissing('lines');
+   if($claimed&&$r->lines->every(fn($l)=>!Decimal::gt((string)$l->fulfilled_qty,'0'))){
+    // The claimed order existed before the invoice: release it to Stock unchanged instead of cancelling it.
+    if($r->sales_order_id)SalesOrder::withoutGlobalScope('warehouse_access')->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail();
+    $r->update(['status'=>'cancelled','sales_order_id'=>null]);return $this->changed($r);
+   }
    if($r->sales_order_id){$order=SalesOrder::query()->whereKey($r->sales_order_id)->lockForUpdate()->firstOrFail();if($order->status!=='shipped'&&$order->status!=='cancelled')app(SalesOrderService::class)->cancel($order);}
    $r->update(['status'=>'cancelled']);return $this->changed($r);
   },3);

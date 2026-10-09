@@ -3,6 +3,13 @@
 return [
     'warehouse_setup' => ['default_name' => 'Main Warehouse', 'initialization_failed' => 'Warehouse setup could not be completed. Check the organization’s Stock activation and try again.'],
     'sales_handoff' => [
+        'order_claim_unavailable' => 'This sales order can no longer be used for the invoice: it was shipped, cancelled, or belongs to another customer. Post the invoice as new demand or choose another order.',
+        'order_claim_changed' => 'The sales order changed after it was chosen. Refresh the invoice and choose the order again.',
+        'order_claim_taken' => 'Invoice :invoice already uses this sales order. Choose another order or post the invoice as new demand.',
+        'order_claim_lines' => 'The invoice lines do not match this sales order’s products and units. Correct the invoice or post it as new demand.',
+        'order_claim_partial' => 'The invoice must cover the whole unshipped quantity of this sales order. Adjust the invoice or the sales order, or post the invoice as new demand.',
+        'order_claim_pending' => 'Invoice :invoice will fulfil this sales order. Approve its SolaCount request before shipping, so the goods are not billed twice.',
+        'order_claim_warehouse' => 'Approve this request for the warehouse of the sales order it fulfils.',
         'credit_quantity_precision' => 'The credited quantity cannot be represented in the Stock product unit. Review the credit quantity and unit with the accountant before posting.',
         'credit_demand_pending' => 'A credit is updating undelivered demand. Retry dispatch after the credit finishes, or ask the accountant to resume it.',
         'tracking_required' => 'Choose the required lot, serial number, or variant for this product before dispatching.',
