@@ -15,6 +15,17 @@ trait FinancialOriginFixture
             'integration_safety.financial_origin_expense_handoff_enabled'=>true]);
         $this->assertSame(0, DB::connection('tenant')->table('units')->where('organization_id', \Tests\Support\TenantTestManager::ORG_A)->where('code','SALE-EACH')->count(), 'Previous test leaked committed source fixtures.');
         $this->initializeSalesFixture($physical,$tracking);
+        // Request-only fixtures still represent a connected organization. The shared
+        // sales helper creates the active connection only for physical fixtures.
+        // Preserve zero physical opening stock while providing the real persisted
+        // connection required by canonical FinancialOriginCapabilities admission.
+        if (!$physical) \App\Models\Tenant\IntegrationSetting::create([
+            'integration'=>'solabooks','mode'=>'active','solabooks_organization_id'=>14,
+            'meta'=>['client_id'=>7,'central_organization_id'=>\Tests\Support\TenantTestManager::ORG_A,
+                'signing_key_id'=>'private-test','transport_enabled'=>false,
+                'finance_currency_contract'=>['base_currency_code'=>'JOD','enabled_currency_codes'=>['JOD'],
+                    'money_scale'=>2,'rate_scale'=>8,'inventory_valuation_basis'=>\App\Services\Integration\FinanceBaseValuation::BASIS]],
+        ]);
         $this->assertSame(1, DB::connection('tenant')->transactionLevel());
         $this->assertTrue(DB::connection('tenant')->getPdo()->inTransaction(), 'Native fixture lost its actual SQL rollback transaction.');
         $this->assertTrue(app(\App\Services\Integration\Cash219SchemaReadiness::class)->ready());
