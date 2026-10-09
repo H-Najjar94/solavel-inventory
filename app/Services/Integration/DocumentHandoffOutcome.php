@@ -30,8 +30,11 @@ final class DocumentHandoffOutcome
             default=>true,
         };
         $accepted=($response['successful']??false)===true;
-        $intervention=$accepted && !$linked && in_array($data['state']??null,['intervention','needs_information','source_review','reversal_review','reversal_settlement_pending','credit_voided_review'],true);
+        $pending=$event==='purchasing.return.reversed' && ($data['state']??null)==='reversal_settlement_pending'
+            && (int)($data['source_id']??0)>0 && (int)($data['reversal_proof_id']??0)>0
+            && (int)($data['inverse_import_journal_id']??0)>0 && is_array($data['settlement_uuids']??null) && $data['settlement_uuids']!==[];
+        $intervention=$accepted && !$linked && !$pending && in_array($data['state']??null,['intervention','needs_information','source_review','reversal_review','reversal_settlement_pending','credit_voided_review'],true);
         return ['successful'=>$accepted && $linked,'intervention'=>$intervention,
-            'data'=>$data,'reason'=>$intervention?'commercial_mapping_required':(!$accepted?'delivery_pending':(!$linked?'destination_document_missing':null))];
+            'data'=>$data,'reason'=>$intervention?'commercial_mapping_required':(!$accepted || $pending?'delivery_pending':(!$linked?'destination_document_missing':null))];
     }
 }

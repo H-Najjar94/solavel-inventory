@@ -64,4 +64,17 @@ final class DocumentHandoffOutcomeTest extends TestCase
         }
         $this->assertFalse(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed']],'purchasing.return.reversed')['successful']);
     }
+    public function test_verified_supplier_return_inverse_pending_settlement_is_retryable():void
+    {
+        $data=['state'=>'reversal_settlement_pending','source_id'=>11,'reversal_proof_id'=>12,
+            'inverse_import_journal_id'=>13,'settlement_uuids'=>['immutable-settlement']];
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.reversed');
+        $this->assertFalse($r['successful']);$this->assertFalse($r['intervention']);
+        $this->assertSame('delivery_pending',$r['reason']);
+        foreach (['source_id','reversal_proof_id','inverse_import_journal_id','settlement_uuids'] as $required) {
+            $missing=$data;unset($missing[$required]);
+            $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$missing],'purchasing.return.reversed');
+            $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
+        }
+    }
 }
