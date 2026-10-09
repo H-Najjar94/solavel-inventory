@@ -87,6 +87,36 @@ class AccountingJournalBuilderTest extends TestCase
     }
 
     #[Test]
+    public function grn_journal_value_does_not_depend_on_the_viewers_warehouse_access(): void
+    {
+        $this->useTenantA();
+        $this->mappings();
+        $warehouse = F::warehouse();
+        $item = F::item();
+        $grn = GoodsReceipt::query()->create([
+            'grn_number' => 'GRN-SCOPE', 'receipt_date' => now(), 'warehouse_id' => $warehouse->id, 'status' => 'posted',
+        ]);
+        $line = $grn->lines()->create(['item_id' => $item->id, 'received_qty' => 2, 'accepted_qty' => 2, 'rejected_qty' => 0, 'unit_cost' => 7]);
+        StockLedger::query()->create([
+            'item_id' => $item->id, 'warehouse_id' => $warehouse->id, 'direction' => 'in',
+            'quantity' => 2, 'unit_cost' => 7, 'total_cost' => 14, 'costing_method' => 'average',
+            'source_type' => GoodsReceipt::class, 'source_id' => $grn->id, 'source_line_id' => $line->id,
+            'moved_at' => now(), 'posted_at' => now(), 'idempotency_key' => fake()->uuid(),
+        ]);
+        $event = $this->event('grn.posted', 'GoodsReceipt', $grn->id, 'GRN-SCOPE');
+        $unrestricted = app(AccountingJournalBuilder::class)->build($event, TenantTestManager::ORG_A);
+
+        // A viewer (or signed service actor) with no assignment to this warehouse.
+        $this->mock(\App\Services\Access\WarehouseAccessService::class, fn ($mock) => $mock->shouldReceive('scope')
+            ->andReturnUsing(fn ($query, $column = 'warehouse_id') => $query->whereIn($query->getModel()->qualifyColumn($column), [])));
+        $this->assertSame(0, StockLedger::query()->count(), 'The warehouse restriction must be active for this regression.');
+
+        $restricted = app(AccountingJournalBuilder::class)->build($event, TenantTestManager::ORG_A);
+        $this->assertSame(['14.00', '0.00'], array_column($restricted, 'debit'));
+        $this->assertSame($unrestricted, $restricted);
+    }
+
+    #[Test]
     public function shipment_journal_contains_only_fifo_cogs_and_inventory(): void
     {
         $this->useTenantA();

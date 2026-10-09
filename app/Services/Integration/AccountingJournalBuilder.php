@@ -172,7 +172,9 @@ class AccountingJournalBuilder
 
     private function inventoryValue(IntegrationOutboxEvent $event): string
     {
-        $total = StockLedger::query()
+        // A posted document's accounting value is absolute: never filter its ledger by the current
+        // viewer's warehouse assignment (signed service calls run as actor 0 without one).
+        $total = StockLedger::withoutGlobalScope('warehouse_access')
             ->where('source_type', 'App\\Models\\Tenant\\'.$event->aggregate_type)
             ->where('source_id', $event->aggregate_id)
             ->orderBy('id')->pluck('total_cost')
