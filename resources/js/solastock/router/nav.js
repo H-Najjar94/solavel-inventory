@@ -40,7 +40,9 @@ export function visibleNav(permissions = [], meta = {}) {
     const set = new Set(permissions);
     // Capability-gated entries (cash sale dispatch) stay hidden until the server enables them.
     const features = (typeof window !== 'undefined' && window.SOLASTOCK_FEATURES) || {};
-    // Plan/opt-out availability (landed costs): hidden only when /meta says it is unavailable.
+    // Plan/opt-out availability (landed costs): hidden only when /meta says it is unavailable,
+    // except that an opted-out organization with existing documents keeps the entry (read-only history).
+    const reachable = (a) => a?.available !== false || a?.read_only_history === true;
     return NAV.filter((n) => (!n.perm || set.has(n.perm)) && (!n.feature || features[n.feature] === true)
-        && (!n.availability || meta?.[n.availability]?.available !== false));
+        && (!n.availability || reachable(meta?.[n.availability])));
 }
