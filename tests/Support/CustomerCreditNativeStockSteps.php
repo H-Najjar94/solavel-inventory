@@ -15,7 +15,9 @@ final class CustomerCreditNativeStockSteps
   if($step==='seed'){
    $result=SupplierCreditNativeStockFixture::seed($metadata,'average');
    $setting=\App\Models\Tenant\IntegrationSetting::query()->where('organization_id',$org)->where('integration','solabooks')->sole();
-   $meta=(array)$setting->meta;$meta['transport_enabled_workflows']=['grn.posted','grn.reversed','shipment.posted','shipment.reversed','sales_return.posted'];$setting->meta=$meta;$setting->save();
+   $meta=(array)$setting->meta;// Canonical AccountRolePolicy operations only: Stock reverses a shipment through a sales return (sales_return.posted, journalled
+   // against the original shipment.posted); there is no shipment.reversed journal operation.
+   $meta['transport_enabled_workflows']=['grn.posted','grn.reversed','shipment.posted','sales_return.posted','sales_return.reversed'];$setting->meta=$meta;$setting->save();
    return$result;
   }
   if((int)($stock['organization_id']??0)!==$org)throw new \LogicException('Native Stock fixture identity mismatch');
