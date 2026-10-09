@@ -49,6 +49,7 @@ class SourceDrivenReversalTest extends TestCase
         ]]);
         app(GoodsReceiptService::class)->post($receipt);
 
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::connection('tenant')->transactionLevel());
         $reversal = app(InventoryReversalService::class)->reverseGoodsReceipt($receipt, 'Supplier shipment rejected');
         $again = app(InventoryReversalService::class)->reverseGoodsReceipt($receipt->fresh(), 'Ignored duplicate');
 
@@ -338,6 +339,7 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame('9.7500', (string) $return->lines->first()->unit_cost);
         $this->assertSame('resellable', $return->lines->first()->condition);
 
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::connection('tenant')->transactionLevel());
         app(SalesReturnService::class)->post($return);
         $this->assertSame('4.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame($return->id, (int) $shipment->fresh()->reversal_sales_return_id);

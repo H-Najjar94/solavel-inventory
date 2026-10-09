@@ -9,6 +9,11 @@ EVIDENCE="${STOCK_CONTAINED_EVIDENCE:?An existing /var/tmp evidence directory is
 DEPENDENCIES="${STOCK_CONTAINED_VENDOR:?An explicit installed Stock vendor directory is required}"
 [[ "$EVIDENCE" == /var/tmp/* && -d "$EVIDENCE" && "$(realpath "$EVIDENCE")" == "$EVIDENCE" ]] || exit 2
 [[ -f "$DEPENDENCIES/autoload.php" && "$(realpath "$DEPENDENCIES")" == "$DEPENDENCIES" ]] || exit 2
+# Explicit source-only Finance companion: every byte is pinned before mounting.
+COMPANION="${STOCK_CONTAINED_FINANCE:?Explicit source-only Finance companion required}"
+COMPANION_MANIFEST="${STOCK_CONTAINED_FINANCE_MANIFEST:?Finance companion SHA manifest required}"
+COMPANION_SHA="${STOCK_CONTAINED_FINANCE_SHA:?Exact Finance companion commit required}"
+python3 "$SOURCE/scripts/verify-test-finance-companion.py" "$COMPANION" "$COMPANION_MANIFEST" "$COMPANION_SHA"
 # Cohort selection is internal: every requested test is qualified in its native lifecycle.
 for task_arg in "$@"; do
   case "$task_arg" in
@@ -44,13 +49,14 @@ bwrap --unshare-all --die-with-parent --new-session --cap-drop ALL \
   --ro-bind "$RUN/etc" /etc --ro-bind "$RUN/php" /qualification/php \
   --ro-bind "$RUN/host-net-namespace" /qualification/host-net-namespace \
   --symlink /usr/bin/php8.4 /qualification/bin/php \
-  --ro-bind "$RUN/source" /qualification/source --bind "$EVIDENCE" /evidence \
+  --ro-bind "$RUN/source" /qualification/source --ro-bind "$COMPANION" /qualification/finance --bind "$EVIDENCE" /evidence \
   --clearenv --setenv PATH /qualification/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  --setenv HOME /tmp --setenv PHPRC /qualification/php/php.ini --setenv PHP_INI_SCAN_DIR /qualification/php/empty \
+  --setenv STOCK_PRIVATE_ORIGIN_SCHEMA 1 --setenv HOME /tmp --setenv PHPRC /qualification/php/php.ini --setenv PHP_INI_SCAN_DIR /qualification/php/empty \
   --chdir /qualification/source /bin/bash scripts/run-private-tests.sh "$@"
 TASK_TEST_STATUS=$?
 set -e
 # Source integrity is mandatory even when product/baseline assertions fail.
 (cd "$RUN/source" && sha256sum --check --quiet "$EVIDENCE/source.sha256")
+python3 "$SOURCE/scripts/verify-test-finance-companion.py" "$COMPANION" "$COMPANION_MANIFEST" "$COMPANION_SHA"
 echo STOCK_CONTAINMENT=PASS
 exit "$TASK_TEST_STATUS"

@@ -10,13 +10,27 @@ trait FinancialOriginFixture
     use SalesHandoffFixture;
     protected function initializeOriginFixture(bool $physical=false,string $tracking='none'):void
     {
-        $this->useTenantA();$s=DB::connection('tenant')->getSchemaBuilder();
-        (require base_path('database/migrations/tenant/2026_10_07_186000_create_financial_origin_requests.php'))->up();
-        foreach(['sales_receipts','expenses']as$table)if(!$s->hasTable($table))$s->create($table,function(Blueprint $t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('customer_id')->nullable();$t->unsignedBigInteger('vendor_id')->nullable();});
-        foreach(['sales_receipt_lines'=>'sales_receipt_id','expense_lines'=>'expense_id']as$table=>$parent)if(!$s->hasTable($table))$s->create($table,function(Blueprint $t)use($parent){$t->id();$t->unsignedBigInteger($parent);$t->unsignedBigInteger('inventory_item_id');$t->decimal('qty',24,4);$t->string('unit')->nullable();$t->string('item_usage')->nullable();});
-        if(!$s->hasTable('finance_document_requests'))$s->create('finance_document_requests',function(Blueprint $t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->string('side');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->char('source_revision',64);$t->string('command');$t->json('payload');});
-        if(!$s->hasColumn('journal_entries','source'))$s->table('journal_entries',fn(Blueprint $t)=>$t->string('source')->nullable());
-        $this->tenantTestManager->cleanup();$this->initializeSalesFixture($physical,$tracking);
+        // Schema is installed once by the sealed launcher BEFORE any business transaction.
+        config(['integration_safety.financial_origin_cash_handoff_enabled'=>true,
+            'integration_safety.financial_origin_expense_handoff_enabled'=>true]);
+        $this->assertSame(0, DB::connection('tenant')->table('units')->where('organization_id', \Tests\Support\TenantTestManager::ORG_A)->where('code','SALE-EACH')->count(), 'Previous test leaked committed source fixtures.');
+        $this->initializeSalesFixture($physical,$tracking);
+        // Request-only fixtures still represent a connected organization. The shared
+        // sales helper creates the active connection only for physical fixtures.
+        // Preserve zero physical opening stock while providing the real persisted
+        // connection required by canonical FinancialOriginCapabilities admission.
+        if (!$physical) \App\Models\Tenant\IntegrationSetting::create([
+            'integration'=>'solabooks','mode'=>'active','solabooks_organization_id'=>14,
+            'meta'=>['client_id'=>7,'central_organization_id'=>\Tests\Support\TenantTestManager::ORG_A,
+                'signing_key_id'=>'private-test','transport_enabled'=>false,
+                'finance_currency_contract'=>['base_currency_code'=>'JOD','enabled_currency_codes'=>['JOD'],
+                    'money_scale'=>2,'rate_scale'=>8,'inventory_valuation_basis'=>\App\Services\Integration\FinanceBaseValuation::BASIS]],
+        ]);
+        $this->assertSame(1, DB::connection('tenant')->transactionLevel());
+        $this->assertTrue(DB::connection('tenant')->getPdo()->inTransaction(), 'Native fixture lost its actual SQL rollback transaction.');
+        $this->assertTrue(app(\App\Services\Integration\Cash219SchemaReadiness::class)->ready());
+        $this->assertTrue(DB::connection('tenant')->getSchemaBuilder()->hasTable('finance_document_positions'));
+
     }
     protected function typed(string $type='sales_receipt',bool $anonymous=false):array
     {
@@ -34,7 +48,7 @@ trait FinancialOriginFixture
         $db->table($o->lineTable())->updateOrInsert(['id'=>851],[$o->lineParent()=>850,'inventory_item_id'=>701,'qty'=>'4','unit'=>'Each','item_usage'=>'inventory']);
         $db->table('journal_entries')->updateOrInsert(['id'=>95],['organization_id'=>14,'source'=>$o->journalSource(),'source_type'=>match($o->type){'expense'=>\App\Models\Expense::class,'sales_receipt'=>\App\Models\SalesReceipt::class,'invoice'=>\App\Models\Invoice::class},'source_id'=>850,'status'=>'posted']);
         $db->table('finance_document_requests')->updateOrInsert(['organization_id'=>14,'request_uuid'=>$data['request_uuid']],['organization_mapping_uuid'=>$this->mapping->mapping_uuid,
-            'source_document_type'=>$o->type,'source_document_id'=>850,'source_journal_id'=>95,'source_revision'=>$data['source_revision'],'side'=>$o->domain()==='sales'?'sales':'purchase','command'=>$command,'payload'=>json_encode($data)]);
+            'actor_id'=>323,'source_document_type'=>$o->type,'source_document_id'=>850,'source_journal_id'=>95,'source_revision'=>$data['source_revision'],'side'=>$o->domain()==='sales'?'sales':'purchase','command'=>$command,'payload'=>json_encode($data)]);
         $proof=array_replace(['allowed'=>true,'actor_id'=>323,'source_document_type'=>$o->type,'source_document_id'=>850,'source_journal_id'=>95,
             'request_uuid'=>$data['request_uuid'],'request_revision'=>$data['source_revision'],'canonical_payload'=>$data,
             'command'=>$command,'command_source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision']],$override);

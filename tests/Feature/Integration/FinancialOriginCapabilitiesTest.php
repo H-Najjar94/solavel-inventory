@@ -18,23 +18,12 @@ final class FinancialOriginCapabilitiesTest extends TestCase
 
     private function fixture(): array
     {
-        $this->useTenantA();
-        $previous = DB::getDefaultConnection(); DB::setDefaultConnection('tenant');
-        try {
-            // Genuine pinned Finance DDL from the reviewed readonly companion export, never guessed mirror columns.
-            $finance = rtrim((string) env('FINANCIAL_ORIGIN_FINANCE_SOURCE', '/qualification/finance'), '/');
-            foreach (['2026_10_07_187000_create_financial_origin_intents.php', '2026_10_07_192000_create_financial_origin_reverse_generations.php', '2026_10_08_194000_create_financial_origin_physical_operations.php'] as $name) {
-                $path = $finance.'/database/migrations/finance/'.$name;
-                $this->assertFileExists($path); (require $path)->up();
-            }
-            (require base_path('database/migrations/tenant/2026_10_07_081000_create_purchase_valuation_holds.php'))->up();
-            (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->up();
-        } finally { DB::setDefaultConnection($previous); }
-        $this->tenantTestManager->cleanup(); $this->initializeOriginFixture(true);
+        $this->initializeOriginFixture(true);
         $database = DB::connection('tenant')->getDatabaseName(); $org = $this->mapping->central_organization_id;
         config(['finance_workspace.secret'=>str_repeat('s',48), 'cache.default'=>'array', 'tenancy.central_connection'=>'capability_central',
             'database.connections.capability_central'=>['driver'=>'sqlite','database'=>':memory:','prefix'=>''],
-            'integration_safety.financial_origin_expense_handoff_enabled'=>false]);
+            'integration_safety.financial_origin_expense_handoff_enabled'=>false,
+            'integration_safety.financial_origin_cash_handoff_enabled'=>false]);
         DB::purge('capability_central'); $schema = Schema::connection('capability_central');
         $schema->create('clients',function($t){$t->id();$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
         $schema->create('organizations',function($t){$t->id();$t->unsignedBigInteger('client_id');$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
@@ -50,43 +39,73 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $this->mock(\App\Services\Tenancy\TenantManager::class)->shouldReceive('resolveDatabaseName')->with(7)->andReturn($database)->getMock()->shouldReceive('useTenant')->with($org,$database)->andReturn($database);
         $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class)->shouldReceive('assertComplete')->andReturnNull();
         $this->mock(\App\Services\Integration\FinanceInventoryCapability::class)->shouldReceive('allows')->with(7,$org)->andReturnTrue();
+        // The canonical FinanceWorkspace fixture's verified private commercial snapshot;
+        // real entitlement decision logic and independent Finance-only actor access remain.
+        $entitlements = $this->createStub(\App\Services\Entitlements\EntitlementsCache::class);
+        $entitlements->method('currentClientId')->willReturn(7);
+        $entitlements->method('getProjectSnapshot')->willReturn([
+            'accessible'=>true, 'commercially_entitled'=>true, 'tier'=>'enterprise',
+            'access_until'=>now()->addMonth()->toIso8601String(),
+            'allowed_features'=>['stock.locations_bins','stock.transfers','stock.counts'],
+        ]);
+        $this->app->instance(\App\Services\Entitlements\EntitlementsCache::class, $entitlements);
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturnUsing(fn($actor,$organization,$slug)=>['allowed'=>$slug==='finance','owner'=>false,'roles'=>[]]);
         return ['client_id'=>7,'organization_id'=>$org,'finance_organization_id'=>14,'actor_id'=>335,'action'=>'financial-origin.capabilities','data'=>['source_document_type'=>'expense']];
+    }
+
+    /** Raw tenant rows deliberately ignore mutable HTTP organization/warehouse scopes. */
+    private function durableEffects(): array
+    {
+        $db=DB::connection('tenant'); $snapshot=['database'=>$db->getDatabaseName()];
+        foreach ([FinancialOriginRequest::class,FinancialOriginCommand::class,FinancialOriginOutbox::class,GoodsReceipt::class,Shipment::class,StockLedger::class] as $model) {
+            $table=(new $model)->getTable();
+            $rows=$db->table($table)->orderBy('id')->get()->map(fn($row)=>(array)$row)->all();
+            $snapshot[$table]=['count'=>count($rows),'organizations'=>array_values(array_unique(array_column($rows,'organization_id'))),
+                'sha256'=>hash('sha256',json_encode($rows,JSON_THROW_ON_ERROR))];
+        }
+        return $snapshot;
     }
 
     private function signed(array $body, bool $valid=true): \Illuminate\Testing\TestResponse
     {
         $json=json_encode($body,JSON_UNESCAPED_SLASHES);$timestamp=(string)time();$nonce=bin2hex(random_bytes(24));
-        return $this->call('POST',WorkspaceSignature::PATH,[],[],[],['HTTP_ACCEPT'=>'application/json','CONTENT_TYPE'=>'application/json',
+        $response=$this->call('POST',WorkspaceSignature::PATH,[],[],[],['HTTP_ACCEPT'=>'application/json','CONTENT_TYPE'=>'application/json',
             'HTTP_X_WORKSPACE_TIMESTAMP'=>$timestamp,'HTTP_X_WORKSPACE_NONCE'=>$nonce,'HTTP_X_WORKSPACE_SIGNATURE'=>
             $valid?WorkspaceSignature::sign($json,$timestamp,$nonce,str_repeat('s',48)):str_repeat('0',64)],$json);
+        if ($response->status()===403) fwrite(STDERR,json_encode(['native_capability_status'=>403,'reason'=>$response->json('error.code') ?? $response->json('message') ?? 'not_exposed']).PHP_EOL);
+        return $response;
     }
 
     public function test_signed_finance_only_probe_is_readonly_and_expense_requires_explicit_gate(): void
     {
-        $body=$this->fixture();$before=[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()];
+        $body=$this->fixture();$before=$this->durableEffects();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',[]);
         config(['integration_safety.financial_origin_expense_handoff_enabled'=>true]);
         $response=$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
-        $this->assertSame(['contract_version','supported_source_document_types','schema_ready','finance_core_version','stock_core_version','organization_mapping_uuid','central_client_id','central_organization_id','finance_organization_id','solastock_organization_id'],array_keys($response->json('data')));
+        $this->assertSame(['contract_version','supported_source_document_types','cash_schema_ready','cash_contract_version','schema_ready','finance_core_version','stock_core_version','organization_mapping_uuid','central_client_id','central_organization_id','finance_organization_id','solastock_organization_id'],array_keys($response->json('data')));
+        $response->assertJsonPath('data.cash_schema_ready',true)->assertJsonPath('data.cash_contract_version',\App\Services\Integration\Cash219SchemaReadiness::VERSION);
         $response->assertJsonPath('data.contract_version',FinancialOriginCapabilities::CONTRACT)->assertJsonPath('data.finance_core_version',FinancialOriginCapabilities::CORE_VERSION);
-        $this->assertSame($before,[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()]);
+        $this->assertSame($before,$this->durableEffects());
         $body['data']['source_document_type']='sales_receipt';$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
-        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false]);$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',[]);
+        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false,
+            'integration_safety.financial_origin_cash_handoff_enabled'=>false]);$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',[]);
     }
 
     public function test_probe_rejects_actor_zero_foreign_identity_forged_signature_and_caller_economics(): void
     {
-        $body=$this->fixture();$before=StockLedger::count();$wrong=$body;$wrong['actor_id']=0;$this->signed($wrong)->assertStatus(403);
+        $body=$this->fixture();$before=$this->durableEffects();$wrong=$body;$wrong['actor_id']=0;$this->signed($wrong)->assertStatus(403);
         $wrong=$body;$wrong['finance_organization_id']=15;$this->signed($wrong)->assertStatus(403);
         $this->signed($body,false)->assertStatus(403);
         $wrong=$body;$wrong['data']['unit_price']='1';$this->signed($wrong)->assertStatus(422);
         $wrong=$body;$wrong['action']='financial-origin.dispatch.prepare';$this->signed($wrong)->assertStatus(403); // Metadata admission never grants Stock access.
-        $this->assertSame(0,FinancialOriginRequest::count());$this->assertSame($before,StockLedger::count());
+        $this->assertSame(0,DB::connection('tenant')->table((new FinancialOriginRequest)->getTable())->count());$this->assertSame($before,$this->durableEffects());
     }
+    #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_missing_required_reverse_index_fails_closed_even_with_deployment_gate(): void
     {
         $body=$this->fixture();config(['integration_safety.financial_origin_expense_handoff_enabled'=>true]);
+        $committedFixture=new \Tests\Support\CommittedTenantFixture($this->tenantTestManager);
+        try { $committedFixture->commit();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true);
         Schema::connection('tenant')->table('finance_document_reverse_generations',fn($table)=>$table->dropUnique('fin_origin_reverse_uuid_unique'));
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',false)->assertJsonPath('data.supported_source_document_types',[]);
@@ -96,6 +115,7 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $finance=rtrim((string)env('FINANCIAL_ORIGIN_FINANCE_SOURCE','/qualification/finance'),'/');
         (require $finance.'/database/migrations/finance/2026_10_07_192000_create_financial_origin_reverse_generations.php')->up();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',['expense']);
+        } finally { $committedFixture->restore(); }
     }
 
     /** Native Stock GRN/ledger and command recovery; Finance source authorization/facts remain explicit projections. */
@@ -121,7 +141,8 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $pending=$operation;$pending['operation_uuid']=(string)\Illuminate\Support\Str::uuid();$pending['lines'][0]['quantity']='1';
         $dispatch->prepareNative($pending,323); // Accepted before disable, exact same actor and payload retained.
         $effects=[GoodsReceipt::count(),StockLedger::count(),FinancialOriginOutbox::count(),FinancialOriginCommand::count()];
-        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false]);
+        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false,
+            'integration_safety.financial_origin_cash_handoff_enabled'=>false]);
         $this->assertSame($completed,$dispatch->executeNative($operation,323));$this->assertSame('completed',$dispatch->statusNative($context+['operation_uuid'=>$operation['operation_uuid']],323)['status']);
         $next=$operation;$next['operation_uuid']=(string)\Illuminate\Support\Str::uuid();
         try{$dispatch->prepareNative($next,323);$this->fail('Disabled source created a physical command');}
