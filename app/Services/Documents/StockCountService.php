@@ -168,6 +168,9 @@ class StockCountService
                     continue;
                 }
                 $isIncrease = Decimal::gt($variance, '0');
+                // No unit_cost: a surplus is valued by the adjustment gain policy
+                // (SurplusCostResolver: current average / latest FIFO layer),
+                // never at 0, so the gain journal and later COGS stay right.
                 $adjLines[] = [
                     'item_id' => $line->item_id,
                     'variant_id' => $line->variant_id,

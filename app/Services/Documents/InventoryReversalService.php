@@ -7,6 +7,7 @@ use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationFinancialLineAllocation;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\InventoryReversal;
+use App\Models\Tenant\OpeningStockEntry;
 use App\Models\Tenant\PurchaseOrder;
 use App\Models\Tenant\SalesReturn;
 use App\Models\Tenant\StockAdjustment;
@@ -127,6 +128,44 @@ class InventoryReversalService
             $adjustment->reversed_by = auth()->id();
             $adjustment->markSystemTransition()->save();
             $this->recordEvent($reversal, 'adjustment.reversed');
+
+            return $reversal->fresh();
+        });
+    }
+
+    /**
+     * Reverse a posted opening-stock entry through an InventoryReversal so the
+     * reversal ledger rows, outbox event and Finance journal belong to their own
+     * aggregate. The journal is the exact inverse of the original opening event
+     * (AccountingJournalBuilder::inventoryReversal) and links to it through
+     * original_event_uuid / source.reversal.original_source_key.
+     * The caller has already locked the entry inside the same transaction.
+     */
+    public function reverseOpeningStock(OpeningStockEntry $entry, string $reason): InventoryReversal
+    {
+        return DB::connection($this->connection())->transaction(function () use ($entry, $reason) {
+            $existing = InventoryReversal::query()
+                ->where('source_type', 'opening_stock')->where('source_id', $entry->id)->first();
+            if ($existing) {
+                return $existing;
+            }
+            $this->assertReason($reason);
+            $this->assertInboundSourceStillReversible('opening_stock:'.$entry->id.':post', 'opening');
+            $reversal = $this->createReversal('opening_stock', (int) $entry->id, (string) $entry->entry_number, 'opening_stock.posted', 'REV-OS', $reason);
+            $this->ledger->reverse(
+                'opening_stock:'.$entry->id.':post',
+                'opening_stock:'.$entry->id.':reverse',
+                [
+                    'action' => 'opening_stock.reverse',
+                    'entity_type' => 'opening_stock_entry',
+                    'entity_id' => $entry->id,
+                    'document_ref' => $entry->entry_number,
+                    'reason' => trim($reason),
+                ],
+                InventoryReversal::class,
+                $reversal->id,
+            );
+            $this->recordEvent($reversal, 'opening_stock.reversed');
 
             return $reversal->fresh();
         });

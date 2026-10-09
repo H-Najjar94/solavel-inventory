@@ -9,6 +9,7 @@ use App\Services\Documents\Support\DocumentNumber;
 use App\Services\Integration\IntegrationOutboxService;
 use App\Services\Stock\StockLedgerService;
 use App\Services\Stock\StockMovement;
+use App\Services\Stock\SurplusCostResolver;
 use App\Services\Stock\Support\Decimal;
 use App\Services\Traceability\LotService;
 use App\Services\Traceability\SerialService;
@@ -136,7 +137,16 @@ class StockAdjustmentService
             if (! empty($line['serials']) && ! empty($line['entered_unit_id'])) {
                 throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
             }
-            $unitCost = Decimal::cost((string) ($line['unit_cost'] ?? '0'));
+            // A gain without an entered cost is valued at the item's current
+            // costing basis (shared with stock-count surpluses), never at 0.
+            $unitCost = $direction === 'increase' && (! array_key_exists('unit_cost', $line) || $line['unit_cost'] === null || $line['unit_cost'] === '')
+                ? app(SurplusCostResolver::class)->unitCost(
+                    (int) $line['item_id'], (int) $adj->warehouse_id,
+                    isset($line['variant_id']) ? (int) $line['variant_id'] : null,
+                    isset($line['lot_id']) ? (int) $line['lot_id'] : null,
+                    isset($line['bin_id']) ? (int) $line['bin_id'] : null,
+                )
+                : Decimal::cost((string) ($line['unit_cost'] ?? '0'));
 
             // Increase + serial capture → one qty-1 line per captured serial.
             if ($direction === 'increase') {

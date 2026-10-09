@@ -474,6 +474,140 @@ final class FinanceWorkspaceTest extends TestCase
 
     }
 
+    /** @return array{0:Warehouse,1:Item,2:Unit} */
+    private function connectedOpeningFixture(string $suffix, array $meta = []): array
+    {
+        $org = TenantTestManager::ORG_A;
+        $warehouse = StockTestFactory::warehouse();
+        $unit = Unit::create(['code' => 'OPEN-'.$suffix, 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = StockTestFactory::item(['base_unit_id' => $unit->id]);
+        foreach (['item' => [$item->id, 911], 'unit' => [$unit->id, 912]] as $type => [$stockId, $financeId]) {
+            IntegrationMasterDataMapping::create([
+                'mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => IntegrationOrganizationMapping::query()->firstOrFail()->mapping_uuid,
+                'central_client_id' => self::CLIENT, 'central_organization_id' => $org,
+                'finance_organization_id' => 14, 'solastock_organization_id' => $org,
+                'entity_type' => $type, 'solastock_record_id' => (string) $stockId, 'solabooks_record_id' => (string) $financeId, 'status' => 'verified',
+            ]);
+        }
+        foreach (['inventory_asset' => [801, 'asset'], 'opening_offset' => [802, 'equity']] as $role => [$id, $type]) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $id, 'organization_id' => 14, 'name' => $role, 'type' => $type]);
+            IntegrationAccountMapping::create(['organization_id' => $org, 'integration' => 'solabooks',
+                'mapping_type' => $role, 'solabooks_account_id' => $id, 'status' => 'verified']);
+        }
+        IntegrationSetting::query()->firstOrFail()->update(['meta' => [
+            'client_id' => self::CLIENT, 'central_organization_id' => $org, 'signing_key_id' => 'synthetic-test-key',
+            'transport_enabled_workflows' => ['opening_stock.posted', 'opening_stock.reversed'],
+            'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD'],
+                'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8,
+                'inventory_valuation_basis' => FinanceBaseValuation::BASIS],
+        ] + $meta]);
+
+        return [$warehouse, $item, $unit];
+    }
+
+    public function test_connected_opening_reversal_is_an_exact_linked_inverse_of_the_opening_journal(): void
+    {
+        [$warehouse, $item] = $this->connectedOpeningFixture('REV-EA');
+        $service = app(\App\Services\Documents\OpeningStockService::class);
+        $entry = $service->createDraft(['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01'],
+            [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]);
+        $service->post($entry);
+
+        // Before the fix the reversal summed IN+OUT to 0 and refused with event_no_value.
+        $service->reverse($entry->fresh(), 'Opening entered twice');
+        $service->reverse($entry->fresh(), 'Opening entered twice');
+
+        $this->assertSame('reversed', $entry->fresh()->status);
+        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $reversal = \App\Models\Tenant\InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
+        $posted = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->sole();
+        $reversed = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.reversed')->sole();
+        $this->assertSame('InventoryReversal', $reversed->aggregate_type);
+        $this->assertSame($reversal->id, (int) $reversed->aggregate_id);
+        $this->assertSame('-40.00', $reversed->payload['total_inventory_value_change']);
+        $this->assertSame($posted->event_uuid, $reversed->payload['original_source']['event_uuid']);
+        $this->assertSame($posted->event_uuid, $reversed->depends_on_event_uuid);
+        $this->assertSame($posted->event_uuid, $reversal->original_event_uuid);
+        $this->assertSame($reversed->event_uuid, $reversal->reversal_event_uuid);
+        $this->assertSame(1, StockLedger::query()->where('source_type', \App\Models\Tenant\InventoryReversal::class)
+            ->where('source_id', $reversal->id)->where('direction', 'out')->count());
+
+        $original = app(SolaStockJournalContractBuilder::class)->build($posted);
+        $contract = app(SolaStockJournalContractBuilder::class)->build($reversed);
+        $this->assertNull($original['source']['reversal']);
+        $this->assertSame($posted->idempotency_key, $contract['source']['reversal']['original_source_key']);
+        $this->assertSame([801, 802], array_column($contract['lines'], 'account_id'));
+        $this->assertSame(['0.00', '40.00'], array_column($contract['lines'], 'base_debit'));
+        $this->assertSame(['40.00', '0.00'], array_column($contract['lines'], 'base_credit'));
+        $this->assertSame(array_column($original['lines'], 'base_debit'), array_column($contract['lines'], 'base_credit'));
+        $this->assertSame(array_column($original['lines'], 'base_credit'), array_column($contract['lines'], 'base_debit'));
+        $this->assertSame('4.0000', $contract['inventory_quantities'][0]['base_quantity']);
+        $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $entry->id]])->assertOk()
+            ->assertJsonCount(2, 'data.accounting_events')->assertJsonCount(2, 'data.ledger')
+            ->assertJsonPath('data.accounting_events.1.event_uuid', $reversed->event_uuid);
+    }
+
+    public function test_journals_recorded_while_paused_are_promoted_once_after_resume_but_historical_pending_is_untouched(): void
+    {
+        $org = TenantTestManager::ORG_A;
+        $mapping = IntegrationOrganizationMapping::query()->firstOrFail();
+        // No wizard run in this fixture: the activation baseline is the mapping's verification.
+        $mapping->update(['verified_at' => now()->subDay()]);
+        [$warehouse, $item, $unit] = $this->connectedOpeningFixture('PROMO-EA', ['transport_enabled' => false]);
+        IntegrationSetting::query()->firstOrFail()->update(['mode' => 'paused']);
+        $historical = IntegrationOutboxEvent::query()->create([
+            'organization_id' => $org, 'event_uuid' => (string) Str::uuid(), 'integration' => 'solabooks',
+            'event_type' => 'opening_stock.posted', 'aggregate_type' => 'OpeningStockEntry', 'aggregate_id' => 990001,
+            'aggregate_number' => 'OS-HISTORICAL', 'occurred_at' => now()->subDays(2),
+            'payload' => ['total_inventory_value_change' => '5.00'], 'status' => 'pending', 'mapping_status' => 'incomplete',
+            'attempts' => 0, 'idempotency_key' => 'solabooks:opening_stock.posted:OpeningStockEntry:990001',
+            'contract_version' => 'solastock-journal.v2', 'workflow_key' => 'opening_stock.posted',
+            'ordering_key' => 'OpeningStockEntry:990001',
+        ]);
+        $service = app(\App\Services\Documents\OpeningStockService::class);
+        $service->post($service->createDraft(['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01'],
+            [['item_id' => $item->id, 'quantity' => '2.0000', 'unit_cost' => '10.0000']]));
+        $event = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->where('id', '!=', $historical->id)->sole();
+        $this->assertSame('pending', $event->status);
+        $this->assertNull($event->transport_eligible_at);
+        $hash = $event->payload_hash;
+        $outbox = app(\App\Services\Integration\IntegrationOutboxService::class);
+
+        // Still paused: nothing moves.
+        $this->assertSame(0, $outbox->promoteEligiblePending($org)['promoted']);
+        $this->assertSame('pending', $event->fresh()->status);
+
+        // Resumed (what ConnectionWizardService::resume restores) but the unit is not
+        // mapped yet: catalog comes first, the journal waits.
+        $setting = IntegrationSetting::query()->firstOrFail();
+        $setting->update(['mode' => 'active', 'meta' => ['transport_enabled' => true] + (array) $setting->meta]);
+        $unitMapping = IntegrationMasterDataMapping::query()->where('entity_type', 'unit')->where('solastock_record_id', (string) $unit->id)->sole();
+        $unitMapping->update(['conflict_code' => 'synthetic_unit_conflict']);
+        $this->assertSame(0, $outbox->promoteEligiblePending($org)['promoted']);
+        $this->assertSame('pending', $event->fresh()->status);
+
+        $unitMapping->update(['conflict_code' => null]);
+        $this->assertSame(['examined' => 1, 'promoted' => 1], $outbox->promoteEligiblePending($org));
+        $promoted = $event->fresh();
+        $this->assertSame('ready', $promoted->status);
+        $this->assertSame('complete', $promoted->mapping_status);
+        $this->assertNotNull($promoted->transport_eligible_at);
+        $this->assertSame($hash, $promoted->payload_hash);
+        $this->assertSame('pending', $historical->fresh()->status);
+        $this->assertNull($historical->fresh()->transport_eligible_at);
+
+        // Idempotent: a second pass (e.g. the next supervisor tick) changes nothing.
+        $this->assertSame(0, $outbox->promoteEligiblePending($org)['promoted']);
+        $this->assertSame(1, DB::connection('tenant')->table('integration_outbox_transition_audits')
+            ->where('event_id', $event->id)->where('reason_code', 'pending_promoted_after_activation')->count());
+
+        // The durable worker now claims it exactly once (no delivery attempted here).
+        $transport = app(\App\Services\Integration\DurableOutboxTransportService::class);
+        $claimed = $transport->claim($org, 'promotion-test-worker');
+        $this->assertSame($event->id, $claimed?->id);
+        $this->assertNull($transport->claim($org, 'promotion-test-worker'));
+    }
+
     public function test_opening_access_requires_completed_finance_onboarding(): void
     {
         DB::connection('tenant')->table('organizations')->where('id', 14)->update(['finance_setup_completed_at' => null]);

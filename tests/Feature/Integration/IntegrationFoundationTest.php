@@ -69,6 +69,16 @@ class IntegrationFoundationTest extends TestCase
     }
 
     #[Test]
+    public function opening_stock_reversal_is_its_own_value_gated_inventory_reversal_aggregate(): void
+    {
+        $this->assertSame('InventoryReversal', IntegrationEvents::aggregateType('opening_stock.reversed'));
+        $this->assertSame('OpeningStockEntry', IntegrationEvents::aggregateType('opening_stock.posted'));
+        $this->assertStringContainsString(':InventoryReversal:12', IntegrationEvents::idempotencyKey('opening_stock.reversed', 'InventoryReversal', 12));
+        $this->assertFalse(IntegrationEvents::postsJournalForPayload('opening_stock.reversed', ['total_inventory_value_change' => '0.00']));
+        $this->assertTrue(IntegrationEvents::postsJournalForPayload('opening_stock.reversed', ['total_inventory_value_change' => '-40.00']));
+    }
+
+    #[Test]
     public function integration_routes_are_registered_with_permissions(): void
     {
         $routes = Route::getRoutes();

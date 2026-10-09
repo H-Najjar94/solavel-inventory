@@ -220,6 +220,32 @@ class SourceDrivenReversalTest extends TestCase
     }
 
     #[Test]
+    public function standalone_opening_stock_reversal_is_an_exact_inventory_reversal_without_any_finance_event(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'REV-OS-STD']);
+        $item = F::fifoItem(['sku' => 'REV-OS-STD-ITEM']);
+        $opening = app(OpeningStockService::class);
+        $entry = $opening->createDraft(['entry_number' => 'REV-OS-STD', 'warehouse_id' => $warehouse->id], [['item_id' => $item->id, 'quantity' => '3', 'unit_cost' => '7']]);
+        $opening->post($entry);
+
+        $opening->reverse($entry->fresh(), 'Wrong item counted');
+        $opening->reverse($entry->fresh(), 'Wrong item counted');
+
+        $reversal = InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
+        $this->assertSame('Wrong item counted', $reversal->reason);
+        $this->assertSame('REV-OS-STD', $reversal->source_number);
+        $out = StockLedger::query()->where('source_type', InventoryReversal::class)->where('source_id', $reversal->id)->sole();
+        $this->assertSame('out', $out->direction);
+        $this->assertSame('21.00', (string) $out->total_cost);
+        $this->assertSame('0.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
+        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        // Standalone Stock: no connection, no ownership, so no Finance work at all.
+        $this->assertDatabaseMissing('integration_outbox_events', ['event_type' => 'opening_stock.reversed'], 'tenant');
+        $this->assertNull($reversal->reversal_event_uuid);
+    }
+
+    #[Test]
     public function increase_adjustment_reversal_blocked_downstream_names_the_adjustment_not_a_receipt(): void
     {
         $this->useTenantA();

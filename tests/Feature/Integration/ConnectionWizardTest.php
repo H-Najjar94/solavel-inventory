@@ -791,6 +791,62 @@ final class ConnectionWizardTest extends TestCase
     }
 
     #[Test]
+    public function a_paused_activated_connection_resumes_only_through_the_activation_checks(): void
+    {
+        $this->completeEmptyWorkspace(false);
+        $wizard = app(ConnectionWizardService::class);
+        $runUuid = (string) DB::connection('tenant')->table('integration_connection_wizard_runs')->where('state', 'connected')->value('run_uuid');
+        $workflows = (array) data_get(IntegrationSetting::firstOrFail()->meta, 'transport_enabled_workflows');
+
+        $this->assertSame('paused', $wizard->pause(TenantTestManager::ORG_A, $runUuid, 7001)['state']);
+        $this->assertSame('paused', IntegrationSetting::firstOrFail()->mode);
+        $this->assertFalse(data_get(IntegrationSetting::firstOrFail()->meta, 'transport_enabled'));
+        $this->assertSame('maintenance_hold', IntegrationOrganizationMapping::firstOrFail()->activation_state);
+
+        try {
+            $wizard->resume(TenantTestManager::ORG_A, $runUuid, 'resume please', 7001);
+            $this->fail('Resume requires the activation confirmation phrase.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['organization_scoped_activation_gate_closed'], $e->errors()['connection_wizard']);
+        }
+        $this->commercialApproval(false);
+        try {
+            $wizard->resume(TenantTestManager::ORG_A, $runUuid, 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+            $this->fail('Resume requires current Central commercial approval.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['integration_plan_required'], $e->errors()['connection_wizard']);
+        }
+        $this->assertSame('paused', IntegrationSetting::firstOrFail()->mode);
+
+        $this->commercialApproval(true);
+        $resumed = $wizard->resume(TenantTestManager::ORG_A, $runUuid, 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+        $this->assertSame('connected', $resumed['state']);
+        $setting = IntegrationSetting::firstOrFail();
+        $this->assertSame('active', $setting->mode);
+        $this->assertTrue(data_get($setting->meta, 'transport_enabled'));
+        $this->assertSame($workflows, data_get($setting->meta, 'transport_enabled_workflows'));
+        $this->assertSame('active', IntegrationOrganizationMapping::firstOrFail()->activation_state);
+        $this->assertSame(1, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $runUuid)->where('action', 'organization_connection_resumed')->count());
+
+        // Repeating is a no-op; a run that was never activated cannot be "resumed" into a connection.
+        $this->assertSame('connected', $wizard->resume(TenantTestManager::ORG_A, $runUuid, 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001)['state']);
+        $this->assertSame(1, DB::connection('tenant')->table('integration_connection_wizard_audits')
+            ->where('run_uuid', $runUuid)->where('action', 'organization_connection_resumed')->count());
+        DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)
+            ->update(['state' => 'paused', 'activated_at' => null]);
+        try {
+            $wizard->resume(TenantTestManager::ORG_A, $runUuid, 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY', 7001);
+            $this->fail('Only an activated run may resume.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['paused_activated_run_required'], $e->errors()['connection_wizard']);
+        }
+        $routes = \Illuminate\Support\Facades\Route::getRoutes();
+        $this->assertContains('perm:inventory.integration.connection_manage',
+            $routes->getByName('api.v1.integration.wizard.resume')->gatherMiddleware());
+    }
+
+    #[Test]
     public function approved_legacy_finance_warehouse_diagnostic_connects_without_changing_approved_evidence(): void
     {
         $connection = DB::connection('tenant');
