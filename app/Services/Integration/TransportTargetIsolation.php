@@ -13,6 +13,11 @@ use Throwable;
  * durable diagnostic (client/organization ids, stage, error code and class; never messages,
  * payloads or secrets), only that organization's stage backs off exponentially, and the
  * supervisor continues with every other stage and organization. Success clears the entry.
+ *
+ * Failures are handled at most once per (organization, stage) backoff window, because
+ * attempt() skips a stage while it is backing off. That single warning carries a redacted,
+ * length-capped message and the throw location for operators; the durable diagnostics file
+ * stays message-free.
  */
 final class TransportTargetIsolation
 {
@@ -59,6 +64,84 @@ final class TransportTargetIsolation
     public function diagnostics(): array
     {
         return $this->load();
+    }
+
+    /**
+     * Number of the given targets with at least one recorded (still failing or backing off) stage.
+     *
+     * @param  list<array{client_id:int,organization_id:int}>  $targets
+     */
+    public function failingTargets(array $targets): int
+    {
+        $failing = [];
+        foreach ($this->load() as $entry) {
+            if (is_array($entry)) {
+                $failing[(int) ($entry['client_id'] ?? 0).':'.(int) ($entry['organization_id'] ?? 0)] = true;
+            }
+        }
+        $count = 0;
+        $seen = [];
+        foreach ($targets as $target) {
+            $key = (int) $target['client_id'].':'.(int) $target['organization_id'];
+            if (isset($failing[$key]) && ! isset($seen[$key])) {
+                $count++;
+            }
+            $seen[$key] = true;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Operator-safe exception text: credentials, tokens, signatures, query strings, SQL bindings
+     * and e-mail addresses are removed, control characters collapsed and the result capped.
+     */
+    public static function redact(string $message, int $limit = 300): string
+    {
+        $patterns = [
+            // SQL text and bound values (may hold customer data) from QueryException messages.
+            '/\bSQL:\s[^\n]*/u' => 'SQL: [redacted]',
+            // scheme://user:password@host -> scheme://[redacted]@host
+            '~\b([a-z][a-z0-9+.\-]*://)[^/\s:@]+(?::[^/\s@]*)?@~iu' => '$1[redacted]@',
+            // Any URL query string (signatures, tokens, codes).
+            '~(\b[a-z][a-z0-9+.\-]*://[^\s?#]*)\?[^\s]*~iu' => '$1?[redacted]',
+            // Authorization schemes.
+            '/\b(Bearer|Basic|Digest|Token)\s+[A-Za-z0-9._~+\/=\-]+/iu' => '$1 [redacted]',
+            // JSON Web Tokens.
+            '/\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]*)?/u' => '[redacted]',
+            // key=value / key: value / "key":"value" for secret-looking keys.
+            '/(["\']?\b[\w.\-]*(?:password|passwd|pwd|secret|token|api[_\-]?key|apikey|access[_\-]?key|private[_\-]?key|signature|credential|authorization|cookie|session)[\w.\-]*["\']?\s*(?:=>|=|:)\s*)(["\']?)[^\s"\',;&)}\]]+\2/iu' => '$1[redacted]',
+            // E-mail addresses.
+            '/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu' => '[email]',
+            // Long opaque runs mixing letters and digits (hex/base64 keys, hashes, tokens).
+            // '/' is excluded so file paths in messages stay readable.
+            '/\b(?=[A-Za-z0-9+_\-]*[0-9])(?=[A-Za-z0-9+_\-]*[A-Za-z])[A-Za-z0-9+_\-]{32,}={0,2}/u' => '[redacted]',
+        ];
+        $clean = $message;
+        foreach ($patterns as $pattern => $replacement) {
+            $next = preg_replace($pattern, $replacement, $clean);
+            $clean = is_string($next) ? $next : '[unparseable message]';
+        }
+        $clean = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/[\x00-\x1F\x7F]/u', ' ', $clean)));
+        if (mb_strlen($clean) > $limit) {
+            $clean = rtrim(mb_substr($clean, 0, max(1, $limit - 1))).'…';
+        }
+
+        return $clean;
+    }
+
+    /** Throw site relative to the application root, e.g. app/Services/X.php:42. */
+    public static function location(Throwable $error): string
+    {
+        $file = str_replace('\\', '/', $error->getFile());
+        $root = rtrim(str_replace('\\', '/', base_path()), '/').'/';
+        if (str_starts_with($file, $root)) {
+            $file = substr($file, strlen($root));
+        } elseif (preg_match('#/releases/[^/]+/(.+)$#', $file, $match) === 1) {
+            $file = $match[1];
+        }
+
+        return $file.':'.$error->getLine();
     }
 
     public function path(): string
@@ -123,18 +206,24 @@ final class TransportTargetIsolation
             'stage' => $stage,
             'error_code' => $code,
             'error_class' => class_basename($error),
+            'error_location' => self::location($error),
             'failures' => $failures,
             'first_failed_at' => (string) ($previous['first_failed_at'] ?? $now->toIso8601String()),
             'last_failed_at' => $now->toIso8601String(),
             'next_attempt_at' => $now->copy()->addSeconds($delay)->toIso8601String(),
         ];
         $this->persist($state);
+        // Logged once per backoff window (attempt() skips backed-off stages). The message is
+        // redacted and capped; it never reaches the durable diagnostics file.
         Log::warning('integration.transport.target_failed', [
             'client_id' => (int) $target['client_id'],
             'organization_id' => (int) $target['organization_id'],
             'stage' => $stage,
             'error_code' => $code,
-            'error_class' => class_basename($error),
+            'error_class' => get_class($error),
+            'error_location' => self::location($error),
+            'error_message' => self::redact($error->getMessage()),
+            'previous_class' => $error->getPrevious() ? get_class($error->getPrevious()) : null,
             'failures' => $failures,
             'retry_in_seconds' => $delay,
         ]);

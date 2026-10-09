@@ -96,8 +96,10 @@ final class ContinuousPartySync {
     else $result=app(SolaBooksOutboxDeliveryService::class)->sendPartyChange($mapping,$row);
     if(in_array($result['status']??null,['synced','held','pending','intervention'],true))
      DB::connection('tenant')->table('integration_party_sync_states')->where('id',$row->id)->where('source_revision',$row->source_revision)->where('state_version',$row->state_version)->where('attempts',$row->attempts)->update(['status'=>$row->attempts+1>=40 && in_array($result['status'],['held','pending'],true)?'intervention':$result['status'],'last_error'=>$row->attempts+1>=40 && in_array($result['status'],['held','pending'],true)?'party_retry_exhausted':($result['reason']??null),'attempts'=>$row->attempts+1,'next_attempt_at'=>in_array($result['status'],['held','pending'],true)?now()->addMinute():null,'updated_at'=>now()]);
+    app(SyncIncidentNotificationPublisher::class)->changed('party',(int)$row->id,(string)$mapping->mapping_uuid);
    }catch(\Throwable $e){
     DB::connection('tenant')->table('integration_party_sync_states')->where('id',$row->id)->where('source_revision',$row->source_revision)->where('state_version',$row->state_version)->where('attempts',$row->attempts)->update(['status'=>$row->attempts+1>=40?'intervention':'pending','attempts'=>$row->attempts+1,'last_error'=>$row->attempts+1>=40?'party_retry_exhausted':'party_connection_pending','next_attempt_at'=>now()->addSeconds(min(3600,30*(2**min(7,$row->attempts)))),'updated_at'=>now()]);
+    app(SyncIncidentNotificationPublisher::class)->changed('party',(int)$row->id,(string)$mapping->mapping_uuid);
     report($e);
    }
    $count++;
