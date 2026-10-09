@@ -375,4 +375,29 @@ final class FinancialOriginPhysicalTest extends TestCase
         $reversed=$service->dispatch($input,323);$this->assertSame('reversed',$reversed['state']);$this->assertSame($reversed,$service->dispatch($input,323));$this->assertSame('0.0000',(string)$r->lines()->sole()->cancelled_quantity);$this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());
         } finally { $committedFixture->restore(); }
     }
+    public static function typedReversalSources(): array
+    {
+        return [['expense'],['sales_receipt']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('typedReversalSources')]
+    public function test_typed_reversal_rejects_nested_transaction_before_remote_authorization(string $type):void
+    {
+        [,,$op]=$this->admitted($type);
+        app(OriginDispatchService::class)->executeNative($op,336);
+        $document=$type==='expense'?GoodsReceipt::sole():Shipment::sole();
+        $db=DB::connection('tenant');$this->assertSame(1,$db->transactionLevel());
+        $this->assertSame('completed',FinancialOriginCommand::sole()->status);
+        $remote=\Mockery::mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class);
+        $remote->shouldNotReceive('authorizeOriginPhysicalReversal');
+        $this->app->instance(\App\Services\Integration\SolaBooksOutboxDeliveryService::class,$remote);
+        $before=$db->table('stock_ledger')->count();
+        try {
+            app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->beforeReverse($document);
+            $this->fail('Typed remote authorization entered an existing transaction');
+        } catch (HttpException $error) { $this->assertSame(409,$error->getStatusCode()); }
+        $this->assertSame($before,$db->table('stock_ledger')->count());
+        $this->assertSame('posted',$document->fresh()->status);
+    }
+
 }
