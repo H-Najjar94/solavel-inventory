@@ -26,25 +26,7 @@ final class FinancialOriginReceiptCostTest extends TestCase
     }
     private function fixture():array
     {
-        $this->useTenantA();$db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
-        if(!$schema->hasTable('expenses'))$schema->create('expenses',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('vendor_id')->nullable();});
-        if(!$schema->hasTable('finance_document_requests'))$schema->create('finance_document_requests',function($t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->string('side');$t->string('source_document_type');$t->unsignedBigInteger('source_document_id');$t->unsignedBigInteger('source_journal_id');$t->char('source_revision',64);$t->string('command');$t->json('payload');});
-        (require base_path('tests/Support/FinancialOriginCostProjectionSchema.php'))->up();
-        (require base_path('database/migrations/tenant/2026_10_07_081000_create_purchase_valuation_holds.php'))->up();
-        (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->up();
-        $add=function($table,$name,$callback)use($schema){if(!$schema->hasColumn($table,$name))$schema->table($table,fn($t)=>$callback($t,$name));};
-        $add('expenses','journal_entry_id',fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
-        $add('expenses','posted_at',fn($t,$n)=>$t->timestamp($n)->nullable());
-        $add('expenses','status',fn($t,$n)=>$t->string($n)->nullable());
-        $add('finance_document_requests','state',fn($t,$n)=>$t->string($n)->nullable());
-        $add('finance_document_requests','response',fn($t,$n)=>$t->json($n)->nullable());
-        foreach(['command_actor_id','command_central_actor_id','closing_source_journal_id']as$name)$add('finance_document_requests',$name,fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
-        $add('finance_document_requests','closure_permission',fn($t,$n)=>$t->string($n)->nullable());
-        $add('finance_document_requests','command_expected_revision',fn($t,$n)=>$t->char($n,64)->nullable());
-        $add('journal_entries','source_key',fn($t,$n)=>$t->string($n)->nullable());
-        $add('journal_entries','reverses_entry_id',fn($t,$n)=>$t->unsignedBigInteger($n)->nullable());
-        // DDL commits native fixture transactions; reacquire tenant context before all business fixture rows.
-        $this->tenantTestManager->cleanup();$this->initializeOriginFixture(true);$db=DB::connection('tenant');
+        $this->initializeOriginFixture(true);$db=DB::connection('tenant');
         $s=Supplier::create(['code'=>'QA-COST-EXPENSE','name'=>'QA cost Expense','is_active'=>true]);$this->master('supplier',$s->id,704);
         $db->table('accounts')->insert(['id'=>300,'organization_id'=>14,'code'=>'300','name'=>'GRNI','type'=>'liability','is_active'=>true,'is_postable'=>true]);
         $a=IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>'grni','solabooks_account_id'=>300,'status'=>'verified']);$this->master('account_role',$a->id,300);
@@ -170,7 +152,6 @@ final class FinancialOriginReceiptCostTest extends TestCase
     public function test_new_reverse_generation_requires_acknowledged_native_predecessor_and_rejects_stale_or_unknown_release():void
     {
         [$id] = $this->fixture(); $db = DB::connection('tenant');
-        (require base_path('tests/Support/FinancialOriginReverseGenerationSchema.php'))->up();
         $indexes=$db->getSchemaBuilder()->getIndexes('finance_document_reverse_generations');
         $this->assertTrue(collect($indexes)->contains(fn($index)=>$index['name']==='fin_origin_reverse_uuid_unique' && $index['unique']));
         $request = $db->table('finance_document_requests')->where('request_uuid',$id['request_uuid'])->first();
@@ -209,6 +190,7 @@ final class FinancialOriginReceiptCostTest extends TestCase
     }
 
     /** Canonical Finance192 migration copied verbatim; no generated Finance economic facts in this schema-only case. */
+    #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_reverse_generation_schema_repairs_partial_creation_and_preserves_unique_identity():void
     {
         $this->useTenantA();$db=DB::connection('tenant');$schema=$db->getSchemaBuilder();

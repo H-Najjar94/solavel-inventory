@@ -16,11 +16,12 @@ final class ReturnSourceOwnership
         $db=DB::connection('tenant');$org=(int)$return->organization_id;$shipment=(int)$return->shipment_id;
         if($org<1||$shipment<1)return false;
         $scope=$db->table($commands.' as c')->join($requests.' as r',function($join){
-            $join->on('r.id','=','c.request_id')->on('r.organization_id','=','c.organization_id');
+            $join->on('r.request_uuid','=','c.request_uuid')->on('r.organization_id','=','c.organization_id')
+                ->on('r.source_document_id','=','c.source_document_id')->on('r.source_journal_id','=','c.source_journal_id');
         })->where('c.organization_id',$org)->where('r.organization_id',$org)->where('c.shipment_id',$shipment)
             ->where('c.source_document_type','sales_receipt')->where('r.source_document_type','sales_receipt');
         $command=(clone $scope)->where('c.status','completed')->select('c.*')->first();
-        if($command){$request=$db->table($requests)->where('organization_id',$org)->where('id',$command->request_id)->first();
+        if($command){$request=$db->table($requests)->where('organization_id',$org)->where('request_uuid',$command->request_uuid)->first();
             if($request && self::completedCashCommand((array)$command,(array)$request,$org,$shipment))return true;
         }
         // A typed return keeps its original ownership when the cash operation is
@@ -36,7 +37,11 @@ final class ReturnSourceOwnership
         return $org>0 && $shipment>0 && (int)($command['organization_id']??0)===$org
             && (int)($request['organization_id']??0)===$org
             && (int)($command['shipment_id']??0)===$shipment && ($command['status']??null)==='completed'
-            && (int)($request['id']??0)>0 && (int)($command['request_id']??0)===(int)$request['id']
+            && (int)($request['id']??0)>0
+            && \Illuminate\Support\Str::isUuid((string)($command['request_uuid']??''))
+            && (string)$command['request_uuid']===(string)($request['request_uuid']??'')
+            && (int)($command['source_document_id']??0)>0 && (int)$command['source_document_id']===(int)($request['source_document_id']??0)
+            && (int)($command['source_journal_id']??0)>0 && (int)$command['source_journal_id']===(int)($request['source_journal_id']??0)
             && ($command['source_document_type']??null)==='sales_receipt'
             && ($request['source_document_type']??null)==='sales_receipt';
     }
