@@ -2,13 +2,14 @@
 namespace Tests\Feature\Returns;
 
 use App\Models\Tenant\{IntegrationOrganizationMapping,IntegrationOutboxEvent,StockBalance,StockLedger,Supplier,SupplierReturn,Unit};
-use App\Services\Access\WarehouseAccessService;
+use App\Services\Access\{WarehouseAccessService,CentralAppAccess,InventoryPermissionService};
+use App\Models\User;
 use App\Services\Documents\{GoodsReceiptService,SupplierReturnService};
 use App\Services\Integration\{IntegrationOutboxService,SolaStockJournalContract};
 use App\Services\Returns\SupplierReturnFinancialReversalGuard;
 use App\Services\Sales\SupplierReturnDocumentBuilder;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\{DB,Schema};
+use Illuminate\Support\Facades\{DB,Schema,Auth};
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\StockTestFactory as F;
@@ -30,6 +31,14 @@ final class SupplierReturnFinancialInverseTest extends TestCase
   // Projection DDL is setup only; restore reserved-schema rollback before native documents.
   $this->tenantTestManager->cleanup();$this->setUpTenantAware();$this->useTenantA();
   $scope=$this->createStub(WarehouseAccessService::class);$scope->method('scope')->willReturnCallback(fn($q)=>$q);$this->app->instance(WarehouseAccessService::class,$scope);
+  // Keep real Stock permission resolution: the canonical access boundary grants
+  // a specific Stock manager role, rather than bypassing the returns gate.
+  config(['inventory.demo_tenant.enabled'=>false]);
+  $actor=new User;$actor->id=323;$actor->central_user_id=323;
+  Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);
+  $this->mock(CentralAppAccess::class)->shouldReceive('decision')->with(323,(int)app(\App\Tenancy\OrganizationContext::class)->idOrFail(),'inventory')->andReturn(['allowed'=>true,'owner'=>false,'roles'=>['stock_manager']]);
+  $this->app->forgetInstance(InventoryPermissionService::class);
+  $this->assertTrue(app(InventoryPermissionService::class)->can($actor,'inventory.manage_returns'));
   $this->warehouse=F::warehouse();$this->unit=Unit::create(['code'=>'FIN-RETURN-EACH','name'=>'Each','kind'=>'count','is_active'=>true]);
   $this->item=F::averageItem(['base_unit_id'=>$this->unit->id]);$this->supplier=Supplier::create(['code'=>'FIN-RETURN-SUP','name'=>'Synthetic physical inverse supplier','is_active'=>true]);
  }
@@ -75,6 +84,18 @@ final class SupplierReturnFinancialInverseTest extends TestCase
  private function refused($service,$return):void
  {
   $before=StockLedger::count();try{$service->reverse($return,'Synthetic refused inverse');$this->fail('An unproven inverse was accepted.');}catch(ValidationException$e){$this->assertArrayHasKey('integration',$e->errors());}
+  $this->assertSame($before,StockLedger::count());$this->assertSame('posted',$return->fresh()->status);
+ }
+ public function test_missing_returns_authority_refuses_before_physical_inverse():void
+ {
+  extract($this->source());$this->voidCredit($db);$before=StockLedger::count();
+  $denied=new User;$denied->id=901;$denied->central_user_id=901;
+  Auth::setUser($denied);request()->setUserResolver(fn()=>$denied);
+  $this->mock(CentralAppAccess::class)->shouldReceive('decision')->with(901,$org,'inventory')->andReturn(['allowed'=>false,'owner'=>false,'roles'=>[]]);
+  $this->app->forgetInstance(InventoryPermissionService::class);
+  $this->assertFalse(app(InventoryPermissionService::class)->can($denied,'inventory.manage_returns'));
+  try{$service->reverse($return,'Synthetic unauthorized inverse');$this->fail('Missing returns authority was accepted.');}
+  catch(\Symfony\Component\HttpKernel\Exception\HttpException$e){$this->assertSame(403,$e->getStatusCode());}
   $this->assertSame($before,StockLedger::count());$this->assertSame('posted',$return->fresh()->status);
  }
  public function test_active_credit_and_missing_native_void_audit_refuse_before_physical_inverse():void
