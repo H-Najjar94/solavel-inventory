@@ -68,8 +68,11 @@ class GoodsReceiptController extends ApiController
             : null;
 
         $this->attachLineTraceability($goods_receipt->lines);
+        $linkedRequest = $goods_receipt->receiving_request_id ? ReceivingRequest::query()->findOrFail($goods_receipt->receiving_request_id) : null;
+        $persistedBillStatus = $linkedRequest?->source_payload['source_status'] ?? null;
 
-        return $this->success(['grn' => $goods_receipt, 'ledger' => $ledger, 'purchase_order' => $po, 'receiving_request' => $goods_receipt->receiving_request_id ? app(ReceivingRequestService::class)->status(ReceivingRequest::query()->findOrFail($goods_receipt->receiving_request_id)) : null, 'finance_handoff' => PurchasingDocumentOutbox::query()->where('goods_receipt_id', $goods_receipt->id)->orderByDesc('id')->get()->map(fn ($e) => ['status' => $e->status, 'event_type' => $e->event_type, 'response' => $e->receiver_response, 'message' => $e->last_error])->all()]);
+
+        return $this->success(['source_bill_status' => in_array($persistedBillStatus, ['posted', 'draft'], true) ? $persistedBillStatus : null, 'grn' => $goods_receipt, 'ledger' => $ledger, 'purchase_order' => $po, 'receiving_request' => $goods_receipt->receiving_request_id ? app(ReceivingRequestService::class)->status(ReceivingRequest::query()->findOrFail($goods_receipt->receiving_request_id)) : null, 'finance_handoff' => PurchasingDocumentOutbox::query()->where('goods_receipt_id', $goods_receipt->id)->orderByDesc('id')->get()->map(fn ($e) => ['status' => $e->status, 'event_type' => $e->event_type, 'response' => $e->receiver_response, 'message' => $e->last_error])->all()]);
     }
 
     /**
