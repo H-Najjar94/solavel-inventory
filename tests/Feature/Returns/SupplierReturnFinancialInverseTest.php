@@ -157,8 +157,18 @@ final class SupplierReturnFinancialInverseTest extends TestCase
   app(\App\Services\Integration\ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
   app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($org);
   app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady($org,'supplier_return.posted');
-  \App\Models\Tenant\IntegrationDocumentLifecycleMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$mapping->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>$org,'solastock_organization_id'=>$org,'finance_organization_id'=>14,'tenant_database_identity'=>$db->getDatabaseName(),'source_application'=>'solastock','source_document_type'=>'goods_receipt','source_document_id'=>(string)$receipt->id,'document_version'=>'phase3.v1','lifecycle_status'=>'posted','base_currency_code'=>'JOD']);
-  app(IntegrationOutboxService::class)->record('grn.posted',$receipt,'goods_receipt',$receipt->grn_number,$receipt->receipt_date->format('Y-m-d'));
+  // The native outbox creates the full receipt lifecycle, including its durable
+  // accounting key. A hand-written partial lifecycle would fail the real builder.
+  $receiptEvent=app(IntegrationOutboxService::class)->record('grn.posted',$receipt,'goods_receipt',$receipt->grn_number,$receipt->receipt_date->format('Y-m-d'));
+  $this->assertNotNull($receiptEvent);
+  $this->assertNotEmpty(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($receiptEvent));
+  // Complete the explicitly synthetic historical OUT projection from the real
+  // immutable return ledger and conversion snapshot before committing the fixture.
+  $original=IntegrationOutboxEvent::where('event_type','supplier_return.posted')->where('aggregate_id',$return->id)->sole();
+  $original->payload=app(\App\Services\Integration\EventPayloadBuilder::class)->build('supplier_return.posted',$return,'supplier_return',$return->return_number,$return->return_date->format('Y-m-d'),true);$original->save();
+  \App\Models\Tenant\IntegrationDocumentLifecycleMapping::where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_document_type','supplier_return')->where('source_document_id',(string)$return->id)->update(['accounting_source_key'=>$original->idempotency_key]);
+  app(\App\Services\Integration\WorkflowDocumentMappingService::class)->recordForEvent($original,$return);
+  $this->assertNotEmpty(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($original));
   $this->assertNotNull(app(\App\Services\Purchasing\ReceiptHandoffService::class)->record($receipt));
   config(['services.solabooks.journal_entries_url'=>'https://finance.example.invalid/api/v1/journal-entries']);
   Http::preventStrayRequests();Http::fake(['https://finance.example.invalid/api/v1/purchasing/returns/capabilities'=>function($request)use($mapping,$return,$receipt,$org){
