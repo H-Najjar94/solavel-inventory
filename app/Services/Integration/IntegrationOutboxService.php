@@ -6,6 +6,9 @@ use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\IntegrationSetting;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -145,6 +148,109 @@ class IntegrationOutboxService
                     $event->update(['mapping_status' => $this->coreMappingsComplete($orgId, $event->event_type) ? 'complete' : 'incomplete']);
                 }
             });
+        // A mapping change can make post-activation pending journals deliverable.
+        $this->promoteEligiblePending($orgId);
+    }
+
+    /**
+     * Move journal events that were recorded while transport was not eligible
+     * (paused, workflow not yet enabled, account roles not yet mapped, catalog
+     * not yet mapped) from `pending` to `ready` once they can be delivered.
+     *
+     * - Only for a verified, active v2 connection whose transport is enabled
+     *   for the event's workflow (same rules as record()).
+     * - Never touches events from before the connection's activation baseline
+     *   (first wizard activation, else the mapping's verification time): those
+     *   are historical and were reconciled by the connection wizard cutoff.
+     * - Dependency ordering: the local journal contract must build, which
+     *   requires the item/unit catalog and account-role mappings first; the
+     *   supervisor runs party and catalog sync before this step, and the claim
+     *   still honours ordering_key and depends_on_event_uuid.
+     * - Bounded: examines at most $limit rows per call, resuming from a cursor
+     *   so rows that are still not deliverable cannot starve later rows.
+     * - Never edits the payload (its hash is the idempotency contract).
+     *
+     * @return array{examined:int,promoted:int}
+     */
+    public function promoteEligiblePending(int $orgId, int $limit = 100): array
+    {
+        $result = ['examined' => 0, 'promoted' => 0];
+        $database = (string) DB::connection('tenant')->getDatabaseName();
+        $mapping = IntegrationOrganizationMapping::query()
+            ->where('solastock_organization_id', $orgId)
+            ->where('tenant_database_identity', $database)
+            ->where('contract_version', SolaStockJournalContract::VERSION)
+            ->where('status', 'verified')->where('activation_state', 'active')
+            ->first();
+        $baseline = $mapping ? $this->activationBaseline($mapping) : null;
+        if (! $mapping || $baseline === null || $this->mode($orgId) !== 'active') {
+            return $result;
+        }
+        $cursorKey = 'outbox-pending-promotion:'.hash('sha256', $database.'|'.$mapping->mapping_uuid);
+        $cursor = (int) Cache::store('file')->get($cursorKey, 0);
+        $limit = min(500, max(1, $limit));
+        $candidates = IntegrationOutboxEvent::query()
+            ->where('organization_id', $orgId)
+            ->where('integration', IntegrationEvents::INTEGRATION)
+            ->where('status', 'pending')
+            ->where('contract_version', SolaStockJournalContract::VERSION)
+            ->where('occurred_at', '>=', $baseline)
+            ->where('id', '>', $cursor)
+            ->orderBy('id')->limit($limit)->pluck('id');
+        foreach ($candidates as $id) {
+            $result['examined']++;
+            if ($this->promoteOne($orgId, (int) $id)) {
+                $result['promoted']++;
+            }
+        }
+        Cache::store('file')->forever($cursorKey, $candidates->count() === $limit ? (int) $candidates->last() : 0);
+
+        return $result;
+    }
+
+    /** First activation of this connection identity (same rule as party sync). */
+    public function activationBaseline(IntegrationOrganizationMapping $mapping): ?string
+    {
+        $activated = Schema::connection('tenant')->hasTable('integration_connection_wizard_runs')
+            ? DB::connection('tenant')->table('integration_connection_wizard_runs')
+                ->where('organization_mapping_uuid', $mapping->mapping_uuid)
+                ->whereNotNull('activated_at')->min('activated_at')
+            : null;
+        $baseline = $activated ?? $mapping->verified_at;
+
+        return $baseline === null ? null : \Illuminate\Support\Carbon::parse($baseline)->toDateTimeString();
+    }
+
+    private function promoteOne(int $orgId, int $id): bool
+    {
+        return DB::connection('tenant')->transaction(function () use ($orgId, $id): bool {
+            $event = IntegrationOutboxEvent::query()->lockForUpdate()->find($id);
+            if (! $event || $event->status !== 'pending'
+                || ! IntegrationEvents::postsJournalForPayload((string) $event->event_type, (array) $event->payload)
+                || ! $this->transportEnabled($orgId, (string) $event->event_type)) {
+                return false;
+            }
+            if (! $this->coreMappingsComplete($orgId, (string) $event->event_type)) {
+                if ($event->mapping_status !== 'incomplete') {
+                    $event->update(['mapping_status' => 'incomplete']);
+                }
+
+                return false;
+            }
+            try {
+                // Local only: proves the account roles, catalog identities,
+                // currency and document mapping exist before it becomes claimable.
+                app(SolaStockJournalContractBuilder::class)->build($event);
+            } catch (\Throwable) {
+                return false;
+            }
+            $event->mapping_status = 'complete';
+            $event->transport_eligible_at = now();
+            $event->next_attempt_at = now();
+            app(OutboxStateMachine::class)->transition($event, 'ready', 'pending_promoted_after_activation', 'system');
+
+            return true;
+        });
     }
 
     public function eventMappingsComplete(int $orgId, ?string $eventType = null): bool

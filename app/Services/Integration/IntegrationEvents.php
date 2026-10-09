@@ -16,7 +16,9 @@ final class IntegrationEvents
     public const TYPES = [
         'purchase_order.approved' => ['PurchaseOrder', null, null],
         'opening_stock.posted' => ['OpeningStockEntry', 'inventory_asset', 'opening_offset'],
-        'opening_stock.reversed' => ['OpeningStockEntry', 'opening_offset', 'inventory_asset'],
+        // The reversal is its own InventoryReversal aggregate; its journal is the
+        // exact inverse of the original opening journal (see the builder).
+        'opening_stock.reversed' => ['InventoryReversal', 'opening_offset', 'inventory_asset'],
         'adjustment.posted' => ['StockAdjustment', 'inventory_asset', 'adjustment_gain'], // direction-dependent; see builder
         'adjustment.reversed' => ['InventoryReversal', 'adjustment_gain', 'inventory_asset'],
         'grn.posted' => ['GoodsReceipt', 'inventory_asset', 'grni'],
@@ -60,7 +62,7 @@ final class IntegrationEvents
         if (! self::postsJournal($type)) {
             return false;
         }
-        if (in_array($type, ['stock.historical_fifo_cost_corrected.v1', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
+        if (in_array($type, ['stock.historical_fifo_cost_corrected.v1', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
             return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;
         }
 

@@ -112,7 +112,10 @@ class StockEngineTest extends TestCase
 
         $this->assertSame('reversed', $entry->fresh()->status);
         $this->assertSame('0.0000', $this->balanceFor($item->id, $wh->id)->on_hand_qty);
-        $this->assertSame(2, StockLedger::query()->where('source_id', $entry->id)->count()); // in + reversing out
+        // in on the entry + reversing out on its own InventoryReversal aggregate
+        $this->assertSame(1, StockLedger::query()->where('source_type', \App\Models\Tenant\OpeningStockEntry::class)->where('source_id', $entry->id)->count());
+        $reversal = \App\Models\Tenant\InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
+        $this->assertSame(1, StockLedger::query()->where('source_type', \App\Models\Tenant\InventoryReversal::class)->where('source_id', $reversal->id)->where('direction', 'out')->count());
     }
 
     // 4. Adjustment increase

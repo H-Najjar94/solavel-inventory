@@ -60,11 +60,6 @@ class OpeningStockService
         return 'opening_stock:'.$entry->id.':post';
     }
 
-    private function reverseNamespace(OpeningStockEntry $entry): string
-    {
-        return 'opening_stock:'.$entry->id.':reverse';
-    }
-
     /** Create a draft opening-stock entry with lines. */
     public function createDraft(array $attributes, array $lines): OpeningStockEntry
     {
@@ -287,23 +282,18 @@ class OpeningStockService
                 throw new RuntimeException("Only a posted opening stock entry can be reversed (status '{$entry->status}').");
             }
 
-            // Block once the opened stock was consumed — for average cost too,
-            // not only where FIFO layers happen to catch it.
-            app(InventoryReversalService::class)->assertInboundSourceStillReversible($this->postNamespace($entry), 'opening');
-
-            $this->ledger->reverse($this->postNamespace($entry), $this->reverseNamespace($entry), [
-                'action' => 'opening_stock.reverse',
-                'entity_type' => 'opening_stock_entry',
-                'entity_id' => $entry->id,
-                'document_ref' => $entry->entry_number,
-            ] + ($reason !== null ? ['reason' => trim($reason)] : []));
+            app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady((int) $entry->organization_id, 'opening_stock.reversed');
+            // An exact InventoryReversal (like adjustments): its own ledger rows
+            // and its own opening_stock.reversed event linked to the original
+            // opening event, so Finance inverts the original journal exactly once.
+            // Consumption is blocked there for average cost too, not only FIFO.
+            $reason = trim((string) $reason) !== '' ? (string) $reason : __('inventory.documents.opening_reversal_default_reason');
+            app(InventoryReversalService::class)->reverseOpeningStock($entry, $reason);
 
             $entry->status = 'reversed';
             $entry->reversed_at = now();
             $entry->reversed_by = auth()->id();
             $entry->markSystemTransition()->save();
-
-            $this->outbox->record('opening_stock.reversed', $entry, 'opening_stock', $entry->entry_number, (string) $entry->opening_date);
 
             return $entry;
         });
