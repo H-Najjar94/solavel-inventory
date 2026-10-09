@@ -53,6 +53,19 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         return ['client_id'=>7,'organization_id'=>$org,'finance_organization_id'=>14,'actor_id'=>335,'action'=>'financial-origin.capabilities','data'=>['source_document_type'=>'expense']];
     }
 
+    /** Raw tenant rows deliberately ignore mutable HTTP organization/warehouse scopes. */
+    private function durableEffects(): array
+    {
+        $db=DB::connection('tenant'); $snapshot=['database'=>$db->getDatabaseName()];
+        foreach ([FinancialOriginRequest::class,FinancialOriginCommand::class,FinancialOriginOutbox::class,GoodsReceipt::class,Shipment::class,StockLedger::class] as $model) {
+            $table=(new $model)->getTable();
+            $rows=$db->table($table)->orderBy('id')->get()->map(fn($row)=>(array)$row)->all();
+            $snapshot[$table]=['count'=>count($rows),'organizations'=>array_values(array_unique(array_column($rows,'organization_id'))),
+                'sha256'=>hash('sha256',json_encode($rows,JSON_THROW_ON_ERROR))];
+        }
+        return $snapshot;
+    }
+
     private function signed(array $body, bool $valid=true): \Illuminate\Testing\TestResponse
     {
         $json=json_encode($body,JSON_UNESCAPED_SLASHES);$timestamp=(string)time();$nonce=bin2hex(random_bytes(24));
@@ -65,14 +78,14 @@ final class FinancialOriginCapabilitiesTest extends TestCase
 
     public function test_signed_finance_only_probe_is_readonly_and_expense_requires_explicit_gate(): void
     {
-        $body=$this->fixture();$before=[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()];
+        $body=$this->fixture();$before=$this->durableEffects();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',[]);
         config(['integration_safety.financial_origin_expense_handoff_enabled'=>true]);
         $response=$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
         $this->assertSame(['contract_version','supported_source_document_types','cash_schema_ready','cash_contract_version','schema_ready','finance_core_version','stock_core_version','organization_mapping_uuid','central_client_id','central_organization_id','finance_organization_id','solastock_organization_id'],array_keys($response->json('data')));
         $response->assertJsonPath('data.cash_schema_ready',true)->assertJsonPath('data.cash_contract_version',\App\Services\Integration\Cash219SchemaReadiness::VERSION);
         $response->assertJsonPath('data.contract_version',FinancialOriginCapabilities::CONTRACT)->assertJsonPath('data.finance_core_version',FinancialOriginCapabilities::CORE_VERSION);
-        $this->assertSame($before,[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()]);
+        $this->assertSame($before,$this->durableEffects());
         $body['data']['source_document_type']='sales_receipt';$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
         config(['integration_safety.financial_origin_expense_handoff_enabled'=>false,
             'integration_safety.financial_origin_cash_handoff_enabled'=>false]);$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',[]);
@@ -80,12 +93,12 @@ final class FinancialOriginCapabilitiesTest extends TestCase
 
     public function test_probe_rejects_actor_zero_foreign_identity_forged_signature_and_caller_economics(): void
     {
-        $body=$this->fixture();$before=StockLedger::count();$wrong=$body;$wrong['actor_id']=0;$this->signed($wrong)->assertStatus(403);
+        $body=$this->fixture();$before=$this->durableEffects();$wrong=$body;$wrong['actor_id']=0;$this->signed($wrong)->assertStatus(403);
         $wrong=$body;$wrong['finance_organization_id']=15;$this->signed($wrong)->assertStatus(403);
         $this->signed($body,false)->assertStatus(403);
         $wrong=$body;$wrong['data']['unit_price']='1';$this->signed($wrong)->assertStatus(422);
         $wrong=$body;$wrong['action']='financial-origin.dispatch.prepare';$this->signed($wrong)->assertStatus(403); // Metadata admission never grants Stock access.
-        $this->assertSame(0,FinancialOriginRequest::count());$this->assertSame($before,StockLedger::count());
+        $this->assertSame(0,DB::connection('tenant')->table((new FinancialOriginRequest)->getTable())->count());$this->assertSame($before,$this->durableEffects());
     }
     #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_missing_required_reverse_index_fails_closed_even_with_deployment_gate(): void
