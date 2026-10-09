@@ -27,4 +27,7 @@ export SOLASTOCK_TEST_CENTRAL=solastock_test_central
 export INVENTORY_USE_DERIVED_TENANT_DB_USER=false
 
 export APP_CONFIG_CACHE="${STOCK_PRIVATE_CONFIG_CACHE:-/tmp/phase6a-stock-phpunit-config.php}"
+if [[ "${STOCK_PRIVATE_ORIGIN_SCHEMA:-}" == 1 ]]; then
+  php scripts/initialize-private-origin-schema.php
+fi
 ./vendor/bin/phpunit "$@"

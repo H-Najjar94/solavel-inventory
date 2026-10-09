@@ -9,11 +9,14 @@ final class OriginPhysicalService
 {
     public function beforeReverse(GoodsReceipt|Shipment $document):OriginPhysicalReversalContext|OriginCashPhysicalReversalContext|null
     {
-        $db=DB::connection('tenant');abort_unless($db->transactionLevel()===0,409);
+        $db=DB::connection('tenant');
         if(!$db->getSchemaBuilder()->hasTable('stock_financial_origin_commands'))return null;
         $field=$document instanceof Shipment?'shipment_id':'goods_receipt_id';
         $command=FinancialOriginCommand::query()->where('organization_id',$document->organization_id)->where($field,$document->id)->first();
         if(!$command)return null;
+        // Only a typed source needs remote financial authorization outside SQL.
+        // Unrelated native reversals retain their existing local transaction.
+        abort_unless($db->transactionLevel()===0,409);
         abort_unless($command->status==='completed',409);
         $request=FinancialOriginRequest::query()->where('organization_id',$document->organization_id)->where('request_uuid',$command->request_uuid)->firstOrFail();
         OriginSourceAdmission::stock($request,(int)(request()->user()?->getAuthIdentifier()??0),
