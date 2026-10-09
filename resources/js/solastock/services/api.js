@@ -69,6 +69,9 @@ export const api = {
     approveReceivingRequest: (id,body) => request(`/purchasing/requests/${id}/approve`,{method:'POST',body}),
     receivingRequests: (status = 'active') => request(`/purchasing/requests?status=${encodeURIComponent(status)}`),
     receivingRequest: (id) => request(`/purchasing/requests/${id}`),
+    supplierReturnOptions: (id) => request(`/goods-receipts/${id}/supplier-return`),
+    createSupplierReturn: (id, body) => request(`/goods-receipts/${id}/supplier-return`, { method: 'POST', body }),
+    postSupplierReturn: (id) => request(`/supplier-returns/${id}/post`, { method: 'POST' }),
     meta: () => request('/meta'),
 
     // Tenant (live SSO status + demo selection; not tenant-gated)
