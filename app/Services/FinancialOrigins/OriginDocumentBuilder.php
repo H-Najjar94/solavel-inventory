@@ -43,7 +43,7 @@ final class OriginDocumentBuilder
         $payload['original_event_uuid']=$original->event_uuid;$payload['original_payload_hash']=$original->payload_hash;
         $payload['reversal']=['type'=>$shipment?'sales_return':'inventory_reversal','id'=>(int)$inverse->id,
             'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,
-            'journal_payload_hash'=>SolaStockJournalContract::payloadHash(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal)),'currency'=>(array)data_get($journal->payload,'currency',[])];
+            'journal_payload_hash'=>self::journalHash($journal),'currency'=>(array)data_get($journal->payload,'currency',[])];
         $payload['request']=app(OriginRequestService::class)->summary($request->fresh('lines'));
         return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$request->organization_mapping_uuid,
             'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,'event_type'=>$event,'source_document_type'=>$request->source_document_type,
@@ -96,11 +96,24 @@ final class OriginDocumentBuilder
             'request_uuid'=>$request->request_uuid,'request_revision'=>$request->source_revision,'operation_uuid'=>$command->operation_uuid,
             'physical'=>['type'=>$type,'id'=>$document->id,'mapping_uuid'=>$life->mapping_uuid,
                 'number'=>$shipment?$document->shipment_number:$document->grn_number,'date'=>($shipment?$document->ship_date:$document->receipt_date)?->format('Y-m-d'),
-                'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,'journal_payload_hash'=>SolaStockJournalContract::payloadHash(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal)),
+                'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,'journal_payload_hash'=>self::journalHash($journal),
                 'currency'=>(array)data_get($journal->payload,'currency',[]),'lines'=>$lines],
             'request'=>app(OriginRequestService::class)->summary($request)];
         return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$mapping->mapping_uuid,'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,
             'event_type'=>$event,'source_document_type'=>$request->source_document_type,'source_document_id'=>$request->source_document_id,'source_journal_id'=>$request->source_journal_id,
             'physical_document_type'=>$type,'physical_document_id'=>$document->id,'external_source_key'=>$key,'payload_hash'=>SolaStockJournalContract::payloadHash($payload),'payload'=>$payload,'status'=>'pending']);
+    }
+
+    /** Hash of the canonical signed journal envelope Finance receives (SolaBooksOutboxDeliveryService::sendClaimed), not of the raw outbox payload. */
+    public static function journalHash(\App\Models\Tenant\IntegrationOutboxEvent $journal): string
+    {
+        return SolaStockJournalContract::payloadHash(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal));
+    }
+
+    /** Proofs emitted before the canonical envelope binding carried the raw outbox hash; both are bound to the same native event identity. */
+    public static function journalHashMatches(\App\Models\Tenant\IntegrationOutboxEvent $journal, string $hash): bool
+    {
+        return strlen($hash) === 64 && (hash_equals(SolaStockJournalContract::payloadHash($journal->payload), $hash)
+            || hash_equals(self::journalHash($journal), $hash));
     }
 }

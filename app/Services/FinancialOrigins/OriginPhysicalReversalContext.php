@@ -103,7 +103,7 @@ final readonly class OriginPhysicalReversalContext
         $native=\App\Models\Tenant\IntegrationOutboxEvent::query()->where('organization_id',$this->organizationId)
             ->where('event_type','grn.posted')->where('aggregate_id',$f['physical_document_id'])
             ->where('idempotency_key',$f['physical_journal_key'])->where('event_uuid',$f['physical_journal_event_uuid'])->firstOrFail();
-        abort_unless(SolaStockJournalContract::payloadHash($native->payload)===$f['physical_journal_payload_hash'],409);
+        abort_unless(OriginDocumentBuilder::journalHashMatches($native,(string)$f['physical_journal_payload_hash']),409);
         return $request;
     }
 }
