@@ -9,7 +9,7 @@ use App\Services\Integration\{IntegrationOutboxService,SolaStockJournalContract}
 use App\Services\Returns\SupplierReturnFinancialReversalGuard;
 use App\Services\Sales\SupplierReturnDocumentBuilder;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\{DB,Schema,Auth};
+use Illuminate\Support\Facades\{DB,Schema,Auth,Crypt,Http};
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\StockTestFactory as F;
@@ -56,6 +56,9 @@ final class SupplierReturnFinancialInverseTest extends TestCase
    'debit_allocations'=>function(Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('debit_note_id');},
    'supplier_refunds'=>function(Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->unsignedBigInteger('debit_note_id');$t->string('status');},
   ]as$table=>$definition)if(!$schema->hasTable($table))$schema->create($table,$definition);
+  foreach(['finance_supplier_returns'=>['reviewed_bill_journal_id'=>fn(Blueprint$t)=>$t->unsignedBigInteger('reviewed_bill_journal_id')->nullable()],
+   'finance_supplier_return_credit_allocations'=>['snapshot'=>fn(Blueprint$t)=>$t->longText('snapshot')->nullable()]]as$table=>$columns)
+   foreach($columns as$column=>$definition)if(!$schema->hasColumn($table,$column))$schema->table($table,$definition);
   foreach(['source_key'=>fn(Blueprint$t)=>$t->string('source_key')->nullable(),'void_reason'=>fn(Blueprint$t)=>$t->string('void_reason')->nullable(),'voided_by'=>fn(Blueprint$t)=>$t->unsignedBigInteger('voided_by')->nullable()]as$column=>$definition)
    if(!$schema->hasColumn('journal_entries',$column))$schema->table('journal_entries',$definition);
  }
@@ -83,7 +86,7 @@ final class SupplierReturnFinancialInverseTest extends TestCase
  }
  private function refused($service,$return):void
  {
-  $before=StockLedger::count();try{$service->reverse($return,'Synthetic refused inverse');$this->fail('An unproven inverse was accepted.');}catch(ValidationException$e){$this->assertArrayHasKey('integration',$e->errors());}
+  $before=StockLedger::count();try{app(SupplierReturnFinancialReversalGuard::class)->lockAndAssert($return);$this->fail('An unproven inverse was accepted.');}catch(ValidationException$e){$this->assertArrayHasKey('integration',$e->errors());}
   $this->assertSame($before,StockLedger::count());$this->assertSame('posted',$return->fresh()->status);
  }
  public function test_missing_returns_authority_refuses_before_physical_inverse():void
@@ -102,15 +105,56 @@ final class SupplierReturnFinancialInverseTest extends TestCase
  {
   extract($this->source());$this->refused($service,$return);$this->voidCredit($db,false);$this->refused($service,$return);
  }
+ #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
  public function test_genuine_void_proof_allows_native_physical_inverse_once_and_preserves_original_receipt():void
  {
-  extract($this->source());$this->voidCredit($db);$outbox=$this->createMock(IntegrationOutboxService::class);$outbox->expects($this->once())->method('record')->with('supplier_return.reversed',$this->isInstanceOf(\App\Models\Tenant\InventoryReversal::class),'inventory_reversal',$this->anything(),'2026-10-08')->willReturn(null);$this->app->instance(IntegrationOutboxService::class,$outbox);
-  $delivery=new class {public int$calls=0;public ?string$mapping=null;public function record($return,$inverse,$mapping){$this->calls++;$this->mapping=$mapping;return null;}};$this->app->instance(SupplierReturnDocumentBuilder::class,$delivery);
-  // Re-resolve native service so only the durable transport boundary is replaced.
-  $service=app(SupplierReturnService::class);$before=StockLedger::count();$inverse=$service->reverse($return,'Synthetic genuine credit void');$after=StockLedger::count();
-  $this->assertSame($before+1,$after);$this->assertSame('supplier_return',$inverse->source_type);$this->assertSame('reversed',$return->fresh()->status);$this->assertSame('posted',$receipt->fresh()->status);
-  $balance=StockBalance::query()->where('item_id',$this->item->id)->sole();$this->assertEquals(10,(float)$balance->on_hand_qty);$this->assertEquals(50,(float)$balance->total_value);$this->assertSame(1,$delivery->calls);$this->assertSame($mapping->mapping_uuid,$delivery->mapping);
-  $this->assertSame($inverse->id,$service->reverse($return->fresh(),'Repeated same native inverse')->id);$this->assertSame($after,StockLedger::count());$this->assertSame(1,$delivery->calls);
+  extract($this->source());$fixture=new \Tests\Support\CommittedTenantFixture($this->tenantTestManager);
+  try{
+   $this->voidCredit($db);$this->prepareNativeReadiness($mapping,$return,$receipt);$fixture->commit();
+   $this->assertSame(0,$db->transactionLevel());
+   $service=app(SupplierReturnService::class);$before=StockLedger::count();$inverse=$service->reverse($return,'Synthetic genuine credit void');$after=StockLedger::count();
+   $this->assertSame($before+1,$after);$this->assertSame('supplier_return',$inverse->source_type);$this->assertSame('reversed',$return->fresh()->status);$this->assertSame('posted',$receipt->fresh()->status);
+   $balance=StockBalance::query()->where('item_id',$this->item->id)->sole();$this->assertEquals(10,(float)$balance->on_hand_qty);$this->assertEquals(50,(float)$balance->total_value);
+   $this->assertSame(1,IntegrationOutboxEvent::where('event_type','supplier_return.reversed')->where('aggregate_id',$inverse->id)->count());
+   $this->assertSame(1,\App\Models\Tenant\PurchasingDocumentOutbox::where('event_type','purchasing.return.reversed')->count());
+   $this->assertSame($inverse->id,$service->reverse($return->fresh(),'Repeated same native inverse')->id);$this->assertSame($after,StockLedger::count());
+   $this->assertSame(1,\App\Models\Tenant\PurchasingDocumentOutbox::where('event_type','purchasing.return.reversed')->count());
+  }finally{$fixture->restore();}
+ }
+ private function prepareNativeReadiness($mapping,$return,$receipt):void
+ {
+  $org=(int)$mapping->solastock_organization_id;$db=DB::connection('tenant');
+  $db->table('organizations')->insert(['id'=>14,'central_org_id'=>$org,'setup_status'=>'complete','finance_setup_completed_at'=>now()]);
+  \App\Models\Tenant\IntegrationSetting::create(['integration'=>'solabooks','mode'=>'active','solabooks_organization_id'=>14,'meta'=>[
+   'client_id'=>7,'central_organization_id'=>$org,'api_key_encrypted'=>Crypt::encryptString('private-returns-key'),
+   'signing_key_id'=>'private-return-proof','signing_secret_encrypted'=>Crypt::encryptString('private-return-proof-secret-at-least-thirty-two-bytes'),'signing_protocol_version'=>'v1',
+   'transport_enabled'=>false,'transport_enabled_workflows'=>['supplier_return.posted','supplier_return.reversed','grn.posted'],
+   'finance_currency_contract'=>['base_currency_code'=>'JOD','enabled_currency_codes'=>['JOD'],'money_scale'=>2,'rate_scale'=>8,'inventory_valuation_basis'=>\App\Services\Integration\FinanceBaseValuation::BASIS]]]);
+  foreach(['inventory_asset'=>100,'supplier_return_clearing'=>200]as$role=>$id){
+   $db->table('accounts')->insert(['id'=>$id,'organization_id'=>14,'name'=>'Synthetic projected '.$role,'type'=>'asset','is_active'=>true,'is_postable'=>true]);
+   \App\Models\Tenant\IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>$role,'solabooks_account_id'=>$id,'status'=>'verified']);
+  }
+  // Canonical capability reads the actual dedicated private Central database, not TenantManager's mysql alias.
+  $central=config('database.connections.mysql');$central['database']=$this->tenantTestManager->centralDatabase();
+  config(['database.connections.return_fixture_central'=>$central,'tenancy.central_connection'=>'return_fixture_central']);DB::purge('return_fixture_central');
+  \App\Tenancy\TenancySafetyGuard::assertCentralAndTenantDiffer($central['database'],$db->getDatabaseName());
+  $state=['client_id'=>7,'organization_id'=>$org,'integration_capabilities'=>['connection_activation_delivery_entitled'=>true],'applications'=>[
+   'finance'=>['accessible'=>true,'commercially_entitled'=>true],'inventory'=>['accessible'=>true,'commercially_entitled'=>true]]];
+  DB::connection('return_fixture_central')->table('entitlement_state_snapshots')->updateOrInsert(['organization_id'=>$org],['underlying_subscription_state'=>'active','effective_access_state'=>'active','state_hash'=>hash('sha256',json_encode($state)),'state_payload'=>json_encode($state),'evaluated_at'=>now(),'last_changed_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
+  foreach(['finance','inventory']as$slug)app(\App\Services\Entitlements\EntitlementsCache::class)->storeProjectSnapshot(7,$slug,['accessible'=>true,'commercially_entitled'=>true,'subscription_status'=>'active','access_until'=>now()->addMonth()->toIso8601String()],'private-native-return',now());
+  $this->assertTrue(app(\App\Services\Integration\FinanceInventoryCapability::class)->allows(7,$org));
+  app(\App\Services\Integration\ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+  app(\App\Services\Integration\FinanceOnboardingReadiness::class)->assertComplete($org);
+  app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady($org,'supplier_return.posted');
+  \App\Models\Tenant\IntegrationDocumentLifecycleMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$mapping->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>$org,'solastock_organization_id'=>$org,'finance_organization_id'=>14,'tenant_database_identity'=>$db->getDatabaseName(),'source_application'=>'solastock','source_document_type'=>'goods_receipt','source_document_id'=>(string)$receipt->id,'document_version'=>'phase3.v1','lifecycle_status'=>'posted','base_currency_code'=>'JOD']);
+  app(IntegrationOutboxService::class)->record('grn.posted',$receipt,'goods_receipt',$receipt->grn_number,$receipt->receipt_date->format('Y-m-d'));
+  $this->assertNotNull(app(\App\Services\Purchasing\ReceiptHandoffService::class)->record($receipt));
+  config(['services.solabooks.journal_entries_url'=>'https://finance.example.invalid/api/v1/journal-entries']);
+  Http::preventStrayRequests();Http::fake(['https://finance.example.invalid/api/v1/purchasing/returns/capabilities'=>function($request)use($mapping,$return,$receipt,$org){
+   $payload=$request->data();$this->assertSame(323,$payload['actor_id']);$this->assertSame($return->id,$payload['source_return_id']);$this->assertSame($receipt->id,$payload['source_receipt_id']);
+   $this->assertSame($mapping->mapping_uuid,$payload['identity']['organization_mapping_uuid']);
+   return Http::response(['data'=>['allowed'=>true,'contract_version'=>'supplier-return.v1','organization_mapping_uuid'=>$mapping->mapping_uuid,'finance_organization_id'=>14,'inventory_organization_id'=>$org,'central_organization_id'=>$org,'actor_id'=>323,'source_return_id'=>$return->id,'source_receipt_id'=>$receipt->id,'supported_branches'=>['unbilled','matched_physical','bridged_unmatched'],'base_currency_code'=>'JOD','consumer_schemas'=>[186,190,193],'operations'=>['supplier_return.posted','supplier_return.reversed']]],200);
+  }]);
  }
  public function test_posted_refund_and_prior_unbilled_bridge_remain_closed_after_void():void
  {
