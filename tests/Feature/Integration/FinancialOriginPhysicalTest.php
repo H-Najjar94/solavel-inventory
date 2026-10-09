@@ -384,6 +384,10 @@ final class FinancialOriginPhysicalTest extends TestCase
     public function test_typed_reversal_rejects_nested_transaction_before_remote_authorization(string $type):void
     {
         [,,$op]=$this->admitted($type);
+        if ($type==='expense') {
+            $setting=\App\Models\Tenant\IntegrationSetting::sole();$meta=$setting->meta;
+            $meta['transport_enabled_workflows'][]='grn.posted';$setting->update(['meta'=>$meta]);
+        }
         app(OriginDispatchService::class)->executeNative($op,336);
         $document=$type==='expense'?GoodsReceipt::sole():Shipment::sole();
         $db=DB::connection('tenant');$this->assertSame(1,$db->transactionLevel());
