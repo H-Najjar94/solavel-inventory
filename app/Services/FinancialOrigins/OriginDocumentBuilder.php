@@ -43,7 +43,7 @@ final class OriginDocumentBuilder
         $payload['original_event_uuid']=$original->event_uuid;$payload['original_payload_hash']=$original->payload_hash;
         $payload['reversal']=['type'=>$shipment?'sales_return':'inventory_reversal','id'=>(int)$inverse->id,
             'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,
-            'journal_payload_hash'=>SolaStockJournalContract::payloadHash($journal->payload),'currency'=>(array)data_get($journal->payload,'currency',[])];
+            'journal_payload_hash'=>SolaStockJournalContract::payloadHash(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal)),'currency'=>(array)data_get($journal->payload,'currency',[])];
         $payload['request']=app(OriginRequestService::class)->summary($request->fresh('lines'));
         return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$request->organization_mapping_uuid,
             'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,'event_type'=>$event,'source_document_type'=>$request->source_document_type,
@@ -96,7 +96,7 @@ final class OriginDocumentBuilder
             'request_uuid'=>$request->request_uuid,'request_revision'=>$request->source_revision,'operation_uuid'=>$command->operation_uuid,
             'physical'=>['type'=>$type,'id'=>$document->id,'mapping_uuid'=>$life->mapping_uuid,
                 'number'=>$shipment?$document->shipment_number:$document->grn_number,'date'=>($shipment?$document->ship_date:$document->receipt_date)?->format('Y-m-d'),
-                'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,'journal_payload_hash'=>SolaStockJournalContract::payloadHash($journal->payload),
+                'journal_key'=>$journal->idempotency_key,'journal_event_uuid'=>$journal->event_uuid,'journal_payload_hash'=>SolaStockJournalContract::payloadHash(app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal)),
                 'currency'=>(array)data_get($journal->payload,'currency',[]),'lines'=>$lines],
             'request'=>app(OriginRequestService::class)->summary($request)];
         return FinancialOriginOutbox::create(['organization_id'=>$request->organization_id,'organization_mapping_uuid'=>$mapping->mapping_uuid,'event_uuid'=>$uuid,'operation_uuid'=>$command->operation_uuid,
