@@ -93,6 +93,7 @@ final class PurchasingReturnTransportTest extends TestCase
 
     private function assertRemoteConflict(): void
     {
+        Http::swap(new \Illuminate\Http\Client\Factory());
         Http::fake(fn () => Http::response(['error'=>['code'=>'return_source_conflict']],409));
         $document=$this->document('purchasing.return.confirmed');
         $result=app(SolaBooksOutboxDeliveryService::class)->sendPurchasingDocument($document);
@@ -104,6 +105,7 @@ final class PurchasingReturnTransportTest extends TestCase
 
     private function assertUnsafeInputs(): void
     {
+        Http::swap(new \Illuminate\Http\Client\Factory());
         Http::fake();
         foreach (['unknown','tampered','expired'] as $case) {
             $document=$this->document($case==='unknown'?'purchasing.return.arbitrary':'purchasing.return.confirmed');
