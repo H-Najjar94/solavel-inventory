@@ -39,6 +39,16 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $this->mock(\App\Services\Tenancy\TenantManager::class)->shouldReceive('resolveDatabaseName')->with(7)->andReturn($database)->getMock()->shouldReceive('useTenant')->with($org,$database)->andReturn($database);
         $this->mock(\App\Services\Integration\FinanceOnboardingReadiness::class)->shouldReceive('assertComplete')->andReturnNull();
         $this->mock(\App\Services\Integration\FinanceInventoryCapability::class)->shouldReceive('allows')->with(7,$org)->andReturnTrue();
+        // The canonical FinanceWorkspace fixture's verified private commercial snapshot;
+        // real entitlement decision logic and independent Finance-only actor access remain.
+        $entitlements = $this->createStub(\App\Services\Entitlements\EntitlementsCache::class);
+        $entitlements->method('currentClientId')->willReturn(7);
+        $entitlements->method('getProjectSnapshot')->willReturn([
+            'accessible'=>true, 'commercially_entitled'=>true, 'tier'=>'enterprise',
+            'access_until'=>now()->addMonth()->toIso8601String(),
+            'allowed_features'=>['stock.locations_bins','stock.transfers','stock.counts'],
+        ]);
+        $this->app->instance(\App\Services\Entitlements\EntitlementsCache::class, $entitlements);
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturnUsing(fn($actor,$organization,$slug)=>['allowed'=>$slug==='finance','owner'=>false,'roles'=>[]]);
         return ['client_id'=>7,'organization_id'=>$org,'finance_organization_id'=>14,'actor_id'=>335,'action'=>'financial-origin.capabilities','data'=>['source_document_type'=>'expense']];
     }
