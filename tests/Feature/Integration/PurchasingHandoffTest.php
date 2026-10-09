@@ -379,6 +379,8 @@ final class PurchasingHandoffTest extends TestCase
         $event = PurchasingDocumentOutbox::where('event_type', 'purchasing.receipt.reversed')->sole();
         $this->assertSame(800, $event->payload['receipt']['source_bill_id']);
         $this->assertSame('2.5000', $event->payload['receipt']['lines'][0]['unit_cost']);
+        $this->assertSame('1.00000000', $event->payload['receipt']['lines'][0]['unit_conversion_factor']);
+        $this->assertSame('1.0000', $event->payload['receipt']['lines'][0]['base_quantity']);
     }
 
     public function test_standalone_receipt_without_supplier_is_durable_missing_information_not_invented_bill(): void
@@ -514,6 +516,33 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame('1.0000', $line['quantity']);
         $this->assertSame('25.0000', $line['unit_cost']);
         $this->assertSame(704, $line['unit_external_id']);
+    }
+
+    public function test_receipt_handoff_carries_saved_factor_twelve_and_replay_preserves_immutable_snapshot(): void
+    {
+        $box = Unit::create(['code'=>'PUR-BOX12','name'=>'Box of12','kind'=>'count','is_active'=>true]);
+        $this->master('unit',$box->id,704);
+        $conversion = UnitConversion::create(['item_id'=>$this->item->id,'from_unit_id'=>$box->id,'to_unit_id'=>$this->unit->id,'factor'=>'12']);
+        $data=$this->data();$data['lines'][0]['unit_external_id']=704;
+        $data['lines'][0]['quantity']='2';$data['lines'][0]['unit_cost']='24';
+        app(ReceivingRequestService::class)->upsert($data);
+        $request=ReceivingRequest::sole();app(ReceivingRequestService::class)->approve($request,$this->warehouse->id);
+        $receipt=app(GoodsReceiptService::class)->createDraft(['receiving_request_id'=>$request->id,'supplier_id'=>$request->supplier_id,'warehouse_id'=>$this->warehouse->id,'receipt_date'=>'2026-10-06'],
+            [['receiving_request_line_id'=>$request->lines()->sole()->id,'item_id'=>$this->item->id,'entered_unit_id'=>$box->id,'received_qty'=>'1','accepted_qty'=>'1','unit_cost'=>'24']]);
+        app(GoodsReceiptService::class)->post($receipt);
+        $event=PurchasingDocumentOutbox::sole();$line=$event->payload['receipt']['lines'][0];$native=$receipt->fresh()->lines()->sole();
+        $this->assertSame('12.00000000',$line['unit_conversion_factor']);
+        $this->assertSame('12.0000',$line['base_quantity']);$this->assertSame('1.0000',$line['quantity']);
+        $this->assertSame('24.0000',$line['unit_cost']);$this->assertSame('12.0000',StockBalance::sole()->on_hand_qty);
+        foreach (['base_unit_id','unit_conversion_id','unit_conversion_factor','unit_conversion_version','unit_conversion_hash','unit_conversion_precision','unit_conversion_rounding_mode'] as $field) {
+            $this->assertSame($native->$field,$line[$field]);
+        }
+        $hash=$event->payload_hash;$payload=$event->payload;
+        $conversion->update(['factor'=>'24']);
+        $replay=app(\App\Services\Purchasing\ReceiptHandoffService::class)->record($receipt);
+        $this->assertSame($event->id,$replay->id);$this->assertSame($hash,$replay->payload_hash);
+        $this->assertSame($payload,$replay->payload);$this->assertSame(1,PurchasingDocumentOutbox::count());
+        $this->assertSame(1,StockLedger::count());
     }
 
     public function test_changed_conversion_requires_explicit_request_reapproval_before_receiving(): void
