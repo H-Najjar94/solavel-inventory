@@ -38,4 +38,55 @@ final class DocumentHandoffOutcomeTest extends TestCase
         $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed']],'purchasing.receipt.reversed');
         $this->assertTrue($r['successful']);
     }
+    public function test_supplier_return_requires_native_draft_or_unbilled_bridge():void
+    {
+        foreach ([['state'=>'draft_review','source_id'=>11,'debit_note_id'=>12],
+                  ['state'=>'linked_existing_review','source_id'=>11,'debit_note_id'=>12],
+                  ['state'=>'credit_posted','source_id'=>11,'debit_note_id'=>12],
+                  ['state'=>'unbilled_cleared','source_id'=>11,'journal_id'=>13]] as $data) {
+            $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.confirmed')['successful']);
+        }
+        foreach ([['state'=>'source_review','source_id'=>11],['state'=>'draft_review','source_id'=>11],
+                  ['state'=>'unbilled_cleared','source_id'=>11],['state'=>'unknown','source_id'=>11,'debit_note_id'=>12]] as $data) {
+            $this->assertFalse(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.confirmed')['successful']);
+        }
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'source_review','source_id'=>11]],'purchasing.return.confirmed');
+        $this->assertTrue($r['intervention']);
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'credit_voided_review','source_id'=>11,'debit_note_id'=>12]],'purchasing.return.confirmed');
+        $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
+    }
+    public function test_supplier_return_reversal_requires_persisted_source_and_completed_state():void
+    {
+        $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed','source_id'=>11]],'purchasing.return.reversed')['successful']);
+        foreach (['reversal_review','reversal_settlement_pending'] as $state) {
+            $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>$state,'source_id'=>11]],'purchasing.return.reversed');
+            $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
+        }
+        $this->assertFalse(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed']],'purchasing.return.reversed')['successful']);
+    }
+    public function test_verified_supplier_return_inverse_pending_settlement_is_retryable():void
+    {
+        $data=['state'=>'reversal_settlement_pending','source_id'=>11,'reversal_proof_id'=>12,
+            'inverse_import_journal_id'=>13,'settlement_uuids'=>['immutable-settlement']];
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.reversed');
+        $this->assertFalse($r['successful']);$this->assertFalse($r['intervention']);
+        $this->assertSame('delivery_pending',$r['reason']);
+        foreach (['source_id','reversal_proof_id','inverse_import_journal_id','settlement_uuids'] as $required) {
+            $missing=$data;unset($missing[$required]);
+            $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$missing],'purchasing.return.reversed');
+            $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
+        }
+    }
+    public function test_native_journal_ordering_retries_only_exact_transient_reasons():void
+    {
+        foreach ([['purchasing.return.confirmed','source_review','source_journal_delivery_required'],
+                  ['purchasing.return.reversed','reversal_review','physical_return_inverse_journal_pending']] as [$event,$state,$reason]) {
+            $data=['state'=>$state,'missing_information'=>[$reason]];
+            $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],$event);
+            $this->assertFalse($r['successful']);$this->assertFalse($r['intervention']);
+            $this->assertSame('delivery_pending',$r['reason']);
+            $data['missing_information'][]='original_receipt_required';
+            $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],$event)['intervention']);
+        }
+    }
 }
