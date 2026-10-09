@@ -36,6 +36,7 @@ import CountsPage from '../pages/CountsPage.jsx';
 import CountFormPage from '../pages/CountFormPage.jsx';
 import CountDetailPage from '../pages/CountDetailPage.jsx';
 import ScannerPage from '../pages/ScannerPage.jsx';
+import CashFulfillmentRequestsPage from '../pages/CashFulfillmentRequestsPage.jsx';
 import FulfillmentRequestsPage from '../pages/FulfillmentRequestsPage.jsx';
 import SalesOrdersPage from '../pages/SalesOrdersPage.jsx';
 import SalesOrderFormPage from '../pages/SalesOrderFormPage.jsx';
@@ -146,6 +147,7 @@ export const router = createBrowserRouter(
                 { path: 'goods-receipts/from-po/:poId', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.receive_goods') },
                 { path: 'goods-receipts/:id', element: <GoodsReceiptDetailPage /> },
                 { path: 'goods-receipts/:id/edit', element: protectedElement(<GoodsReceiptFormPage />, 'inventory.receive_goods') },
+                { path: 'cash-fulfillment-requests', element: protectedElement(<CashFulfillmentRequestsPage />, 'inventory.view_sales') },
                 { path: 'fulfillment-requests', element: protectedElement(<FulfillmentRequestsPage />, 'inventory.view_sales') },
                 { path: 'sales-orders', element: <SalesOrdersPage /> },
                 { path: 'sales-orders/new', element: protectedElement(<SalesOrderFormPage />, 'inventory.manage_sales_orders') },

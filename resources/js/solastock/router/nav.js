@@ -18,6 +18,7 @@ export const NAV = [
     { key: 'receiving-requests', label: 'Receiving Requests', path: '/receiving-requests', icon: 'fa-solid fa-dolly', perm: 'inventory.receive_goods', group: 'Purchasing' },
     { key: 'goods-receipts', label: 'Goods Receipts', path: '/goods-receipts', icon: 'fa-solid fa-dolly', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'customers', label: 'Customers', path: '/customers', icon: 'fa-solid fa-address-book', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
+    { key: 'cash-fulfillment-requests', label: 'Cash sale dispatch', path: '/cash-fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment', feature: 'cashHandoff' },
     { key: 'fulfillment-requests', label: 'Fulfillment Requests', path: '/fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'sales-orders', label: 'Sales Orders', path: '/sales-orders', icon: 'fa-solid fa-cart-shopping', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'pick-lists', label: 'Picking', path: '/pick-lists', icon: 'fa-solid fa-hand', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
@@ -36,5 +37,7 @@ export const NAV = [
 
 export function visibleNav(permissions = []) {
     const set = new Set(permissions);
-    return NAV.filter((n) => !n.perm || set.has(n.perm));
+    // Capability-gated entries (cash sale dispatch) stay hidden until the server enables them.
+    const features = (typeof window !== 'undefined' && window.SOLASTOCK_FEATURES) || {};
+    return NAV.filter((n) => (!n.perm || set.has(n.perm)) && (!n.feature || features[n.feature] === true));
 }

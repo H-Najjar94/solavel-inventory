@@ -88,7 +88,8 @@ final class SuperviseSolaBooksTransport extends Command
                         }
 
                         return app(\App\Services\Sales\ShipmentHandoffService::class)->deliverDue(1)
-                            + app(\App\Services\Sales\SalesNotificationPublisher::class)->process(1);
+                            + app(\App\Services\Sales\SalesNotificationPublisher::class)->process(1)
+                            + app(\App\Services\FinancialOrigins\CashNotificationPublisher::class)->process(1);
                     });
                     $processed += (int) $isolation->attempt($target, 'purchasing_notifications', fn () => app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1));
                     $processed += (int) $isolation->attempt($target, 'document_incidents', fn () => app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->process(1));

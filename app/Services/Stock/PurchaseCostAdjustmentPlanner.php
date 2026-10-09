@@ -12,6 +12,8 @@ use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\StockTransfer;
+use App\Services\FinancialOrigins\OriginReceiptCostAuthority;
+use App\Services\Stock\Support\OriginReceiptCostProvenance;
 use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
@@ -90,18 +92,55 @@ final class PurchaseCostAdjustmentPlanner
             'allocated_base_difference' => $posted, 'rounding_residual' => $residual, 'rounding_bound' => $bound, 'components' => $serialized];
     }
 
+    /** Resolve frozen Expense price deltas through actual native receipt disposition. */
+    public function planFinancialOrigin(OriginReceiptCostAuthority $authority): array
+    {
+        abort_unless($authority->organizationId() === app(OrganizationContext::class)->idOrFail(), 403);
+        $components = collect();
+        $exact = '0';
+        foreach ($authority->sourceAllocations() as $source) {
+            $difference = (string) $source['price_delta_base'];
+            $exact = Decimal::add($exact, $difference, 8);
+            if (!Decimal::isZero($difference, 8)) {
+                $components = $components->concat($this->allocationComponents(OriginReceiptCostProvenance::fromAuthority($authority, $source), $difference)->map(function (array $component) use ($source): array {
+                    $component['receipt_line_id'] = (int) $source['receipt_line_id'];
+                    $component['provenance']['financial_origin_source'] = ['receipt_id' => (int) $source['receipt_id'], 'receipt_line_id' => (int) $source['receipt_line_id'], 'position_uuid' => $source['position_uuid']];
+                    return $component;
+                }));
+            }
+        }
+        $posted = '0';
+        $serialized = $components->map(function (array $component) use (&$posted, $authority): array {
+            $scale = $component['destination_role'] === 'inventory_asset' ? 2 : $authority->moneyScale();
+            $component['posted_base_amount'] = Decimal::round($component['exact_base_amount'], $scale);
+            $posted = Decimal::add($posted, $component['posted_base_amount'], 8);
+            return $component;
+        })->values()->all();
+        $residual = Decimal::round(Decimal::sub($exact, $posted, 8), $authority->moneyScale());
+        $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.005'), 6);
+        if (Decimal::gt(ltrim($residual, '-'), $bound, 6)) $this->fail('Cumulative valuation rounding exceeds its deterministic bound.');
+        return ['contract_version' => 'financial-origin.settlement.v1', 'direction' => $authority->direction(), 'organization_mapping_uuid' => $authority->mappingUuid(),
+            'destination_document_type' => 'expense', 'destination_document_id' => $authority->sourceDocumentId(),
+            'destination_fingerprint' => $authority->fingerprint(), 'operation_uuid' => $authority->operationUuid(),
+            'source_document_type' => 'expense', 'source_document_id' => $authority->sourceDocumentId(), 'source_journal_id' => $authority->sourceJournalId(),
+            'currency_code' => $authority->currencyCode(), 'base_currency_code' => $authority->baseCurrencyCode(),
+            'exchange_rate' => $authority->exchangeRate(), 'finance_money_scale' => $authority->moneyScale(), 'stock_money_scale' => 2,
+            'exact_base_difference' => $exact, 'allocated_base_difference' => $posted, 'rounding_residual' => $residual,
+            'rounding_bound' => $bound, 'components' => $serialized];
+    }
+
     /** A scoped Finance purchase may inspect only its receipt's cost provenance. */
-    private function ledgerQuery(IntegrationFinancialLineAllocation $allocation): Builder
+    private function ledgerQuery(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance $allocation): Builder
     {
         $query = StockLedger::query();
-        if ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id)) {
+        if ($allocation instanceof OriginReceiptCostProvenance || ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id))) {
             $query->withoutGlobalScope('warehouse_access');
         }
 
         return $query;
     }
 
-    private function allocationComponents(IntegrationFinancialLineAllocation $allocation, string $difference): Collection
+    private function allocationComponents(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance $allocation, string $difference): Collection
     {
         $origin=request()->attributes->get('verified_return_inverse_cost_origin');
         if(is_array($origin)&&($origin['settlement_uuid']??null)===$allocation->allocation_uuid){

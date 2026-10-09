@@ -18,7 +18,7 @@ final class PurchaseValuationHold extends Model
     {
         self::updating(function (self $hold): void {
             if ($hold->isDirty(['organization_id', 'settlement_uuid', 'plan_revision', 'purpose', 'item_id',
-                'warehouse_id', 'receipt_id', 'source_bill_id', 'plan_fingerprint'])) {
+                'warehouse_id', 'receipt_id', 'source_bill_id', 'source_document_type', 'source_document_id', 'source_journal_id', 'plan_fingerprint'])) {
                 throw ValidationException::withMessages(['settlement_uuid' => __('receiving.valuation_changed')]);
             }
             if ($hold->getOriginal('state') === 'released' && $hold->state !== 'released') {

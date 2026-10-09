@@ -243,6 +243,7 @@ class GoodsReceiptService
         app(\App\Services\Integration\OperationalPartyReadiness::class)->ensure($grn);
 
         return DB::connection($this->connection())->transaction(function () use ($grn) {
+            app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->lockAndValidateDocument($grn);
             $grn = GoodsReceipt::query()->lockForUpdate()->findOrFail($grn->id);
             if ($grn->isPosted()) {
                 return $grn; // idempotent
