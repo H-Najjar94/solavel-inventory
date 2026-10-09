@@ -20,7 +20,7 @@ final class DocumentHandoffOutcome
         $linked=match($event) {
             'purchasing.receipt.confirmed'=>(int)($data['bill_id']??0)>0,
             'purchasing.return.confirmed'=>match($data['state']??null) {
-                'draft_review','linked_existing_review'=>(int)($data['source_id']??0)>0 && (int)($data['debit_note_id']??0)>0,
+                'draft_review','linked_existing_review','credit_posted'=>(int)($data['source_id']??0)>0 && (int)($data['debit_note_id']??0)>0,
                 'unbilled_cleared'=>(int)($data['source_id']??0)>0 && (int)($data['journal_id']??0)>0,
                 default=>false,
             },
@@ -30,7 +30,7 @@ final class DocumentHandoffOutcome
             default=>true,
         };
         $accepted=($response['successful']??false)===true;
-        $intervention=$accepted && !$linked && in_array($data['state']??null,['intervention','needs_information','source_review','reversal_review','reversal_settlement_pending'],true);
+        $intervention=$accepted && !$linked && in_array($data['state']??null,['intervention','needs_information','source_review','reversal_review','reversal_settlement_pending','credit_voided_review'],true);
         return ['successful'=>$accepted && $linked,'intervention'=>$intervention,
             'data'=>$data,'reason'=>$intervention?'commercial_mapping_required':(!$accepted?'delivery_pending':(!$linked?'destination_document_missing':null))];
     }

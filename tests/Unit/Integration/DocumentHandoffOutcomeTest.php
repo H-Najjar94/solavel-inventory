@@ -42,6 +42,7 @@ final class DocumentHandoffOutcomeTest extends TestCase
     {
         foreach ([['state'=>'draft_review','source_id'=>11,'debit_note_id'=>12],
                   ['state'=>'linked_existing_review','source_id'=>11,'debit_note_id'=>12],
+                  ['state'=>'credit_posted','source_id'=>11,'debit_note_id'=>12],
                   ['state'=>'unbilled_cleared','source_id'=>11,'journal_id'=>13]] as $data) {
             $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.confirmed')['successful']);
         }
@@ -51,6 +52,8 @@ final class DocumentHandoffOutcomeTest extends TestCase
         }
         $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'source_review','source_id'=>11]],'purchasing.return.confirmed');
         $this->assertTrue($r['intervention']);
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'credit_voided_review','source_id'=>11,'debit_note_id'=>12]],'purchasing.return.confirmed');
+        $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
     }
     public function test_supplier_return_reversal_requires_persisted_source_and_completed_state():void
     {
