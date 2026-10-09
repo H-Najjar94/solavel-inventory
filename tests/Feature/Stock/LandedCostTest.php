@@ -230,9 +230,16 @@ class LandedCostTest extends TestCase
         $second = $this->draft([$other->lines->sole()->id], [['charge_type' => 'other', 'amount' => '2']]);
         $this->assertSame(__('inventory.landed_cost.disposition_unsupported'), $this->message(fn () => app(LandedCostService::class)->post($second)));
 
+        // Standard-cost stock can never exist in Phase 1 (the receipt itself is refused), so no landed
+        // cost can ever target it; assert the refusal where it actually happens and that nothing posted.
         $standard = F::item(['sku' => 'LC-STD', 'costing_method' => 'standard']);
-        $this->assertNotSame('', $this->message(fn () => $this->draft([$this->receive($warehouse, $standard, '1', '1', 'LC-STD-GRN')->lines->sole()->id],
-            [['charge_type' => 'freight', 'amount' => '1']])));
+        try {
+            $this->receive($warehouse, $standard, '1', '1', 'LC-STD-GRN');
+            $this->fail('A standard-cost receipt was accepted.');
+        } catch (\RuntimeException $refused) {
+            $this->assertStringContainsString("Costing method 'standard' is not supported", $refused->getMessage());
+        }
+        $this->assertSame(0, CostLayer::query()->where('item_id', $standard->id)->count());
     }
 
     #[Test]
@@ -316,8 +323,10 @@ class LandedCostTest extends TestCase
         // A write-off committed after the post (and just before the reversal's lock).
         $this->out($warehouse, $item, '1', StockAdjustment::class, 91012);
         $message = null;
-        $order = $this->lockOrder(function () use ($doc, &$message) {
-            $message = $this->message(fn () => app(LandedCostService::class)->reverse($doc->fresh(), 'Too late'));
+        // Read the document before the measured region: only the service's own queries are lock-ordered.
+        $fresh = $doc->fresh();
+        $order = $this->lockOrder(function () use ($fresh, &$message) {
+            $message = $this->message(fn () => app(LandedCostService::class)->reverse($fresh, 'Too late'));
         });
 
         $this->assertSame(__('inventory.landed_cost.reverse_moved'), $message);
