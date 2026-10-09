@@ -94,7 +94,7 @@ final class FinanceWorkspaceTest extends TestCase
         $cache->method('currentClientId')->willReturn(self::CLIENT);
         $cache->method('getProjectSnapshot')->willReturn(['accessible' => true, 'commercially_entitled' => true,
             'tier' => 'enterprise', 'access_until' => now()->addMonth()->toIso8601String(),
-            'allowed_features' => ['stock.locations_bins', 'stock.transfers', 'stock.counts']]);
+            'allowed_features' => ['stock.locations_bins', 'stock.transfers', 'stock.counts', 'stock.landed_costs']]);
         $this->app->instance(EntitlementsCache::class, $cache);
         // Keep the rollback transaction and resolve only the fixed disposable database.
         $tenants = $this->createMock(TenantManager::class);
