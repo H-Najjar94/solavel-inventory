@@ -129,7 +129,7 @@ export default function AppShell() {
     const meta = useMeta();
     const tenant = useTenant();
     const location = useLocation();
-    const nav = visibleNav(meta.permissions);
+    const nav = visibleNav(meta.permissions, meta);
     const primaryNav = useMemo(() => nav.filter((item) => item.key === 'dashboard'), [nav]);
     const groupedNav = useMemo(() => groupNav(nav.filter((item) => item.key !== 'dashboard')), [nav]);
     const activeGroup = Object.entries(groupedNav).find(([, items]) => (

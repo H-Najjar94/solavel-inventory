@@ -547,6 +547,78 @@ final class FinanceWorkspaceTest extends TestCase
             ->assertJsonPath('data.accounting_events.1.event_uuid', $reversed->event_uuid);
     }
 
+    /**
+     * Batch 10 (landed-cost review N3, all reversal types): a document posted while the
+     * organization was standalone recorded no outbox event, so Finance never booked it.
+     * Reversing it after connecting must stay local: no journal-bearing event that could
+     * never link to an original (it used to dead-letter / fail building the payload).
+     */
+    public function test_reversal_of_a_document_posted_while_standalone_emits_no_finance_journal(): void
+    {
+        [$warehouse, $item] = $this->connectedOpeningFixture('REV-SA');
+        $service = app(\App\Services\Documents\OpeningStockService::class);
+        $entry = $service->createDraft(['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01'],
+            [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]);
+        $service->post($entry);
+        // Standalone-born: IntegrationOutboxService::record() returns null without a connection
+        // identity, so the original has no event at all.
+        IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->delete();
+
+        $service->reverse($entry->fresh(), 'Opening entered twice');
+
+        $this->assertSame('reversed', $entry->fresh()->status);
+        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $reversal = \App\Models\Tenant\InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
+        $this->assertNull($reversal->original_event_uuid);
+        $reversed = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.reversed')->sole();
+        $this->assertSame('ignored', $reversed->status);
+        $this->assertSame('original_posted_standalone_no_journal', $reversed->payload['accounting_policy']);
+        $this->assertNull($reversed->payload['original_source']['event_uuid']);
+        $this->assertNull($reversed->depends_on_event_uuid);
+        $this->assertNull($reversed->contract_version);
+        $this->assertNull($reversed->payload_hash);
+        $this->assertNull($reversed->transport_eligible_at);
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::postsJournalForPayload('opening_stock.reversed', (array) $reversed->payload));
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::isAccountingEventForReconciliation('opening_stock.reversed', (array) $reversed->payload));
+        // Never promoted later either.
+        app(\App\Services\Integration\IntegrationOutboxService::class)->promoteEligiblePending(TenantTestManager::ORG_A, 25);
+        $this->assertSame('ignored', $reversed->fresh()->status);
+    }
+
+    /** Review B1 (Batch 10): only inventory reversals may skip a missing original; a sales return still fails closed. */
+    public function test_only_inventory_reversals_may_lack_an_original_event(): void
+    {
+        $builder = \App\Services\Integration\EventPayloadBuilder::class;
+        $reversal = new \App\Models\Tenant\InventoryReversal;
+        $salesReturn = new \stdClass;
+        $this->assertFalse($builder::mustInheritOriginal(null, $salesReturn));
+        $this->assertFalse($builder::mustInheritOriginal(['event_uuid' => null], $reversal));
+        $this->assertTrue($builder::mustInheritOriginal(['event_uuid' => 'e-1'], $reversal));
+        $this->assertTrue($builder::mustInheritOriginal(['event_uuid' => null], $salesReturn), 'A sales return against a pre-connection shipment must fail closed');
+        $this->assertTrue($builder::mustInheritOriginal(['event_uuid' => 'e-2'], $salesReturn));
+    }
+
+    public function test_every_reversal_type_without_an_original_event_is_excluded_from_journals(): void
+    {
+        $reversalTypes = array_values(array_filter(array_keys(\App\Services\Integration\IntegrationEvents::TYPES),
+            fn (string $type) => \App\Services\Integration\IntegrationEvents::aggregateType($type) === 'InventoryReversal'));
+        $this->assertContains('landed_cost.reversed', $reversalTypes);
+        $this->assertContains('grn.reversed', $reversalTypes);
+        foreach ($reversalTypes as $type) {
+            $payload = ['total_inventory_value_change' => '-40.00', 'landed_cost' => ['total_base_amount' => '40.00'],
+                'original_source' => ['type' => 'x', 'id' => 1, 'number' => 'X-1', 'event_uuid' => null, 'reason' => 'r']];
+            $this->assertTrue(\App\Services\Integration\IntegrationEvents::reversesDocumentUnknownToFinance($type, $payload), $type);
+            $this->assertFalse(\App\Services\Integration\IntegrationEvents::postsJournalForPayload($type, $payload), $type);
+            $this->assertFalse(\App\Services\Integration\IntegrationEvents::isAccountingEventForReconciliation($type, $payload), $type);
+            $payload['original_source']['event_uuid'] = (string) Str::uuid();
+            $this->assertFalse(\App\Services\Integration\IntegrationEvents::reversesDocumentUnknownToFinance($type, $payload), $type);
+            $this->assertSame(\App\Services\Integration\IntegrationEvents::postsJournal($type),
+                \App\Services\Integration\IntegrationEvents::postsJournalForPayload($type, $payload), $type);
+        }
+        // Posted (non-reversal) events are never affected.
+        $this->assertFalse(\App\Services\Integration\IntegrationEvents::reversesDocumentUnknownToFinance('opening_stock.posted', ['original_source' => null]));
+    }
+
     public function test_journals_recorded_while_paused_are_promoted_once_after_resume_but_historical_pending_is_untouched(): void
     {
         $org = TenantTestManager::ORG_A;
@@ -1041,5 +1113,88 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame($original['currency'], $contract['currency']);
         $strip = fn (array $q) => array_map(function ($s) { unset($s['ledger_entry_ids']); return $s; }, $q);
         $this->assertSame($strip($original['inventory_quantities']), $strip($contract['inventory_quantities']));
+    }
+
+    /**
+     * Batch 10 owner decision 2, connected organization: landed costs are available
+     * (a draft saves) but posting is blocked with the setup action until the
+     * clearing account is chosen; setting it up records no journal, allocation or
+     * stock change; an explicit opt-out survives the setup.
+     */
+    public function test_connected_landed_cost_drafts_by_plan_and_posting_waits_for_the_clearing_setup_which_journals_nothing(): void
+    {
+        $org = TenantTestManager::ORG_A;
+        $mapping = IntegrationOrganizationMapping::query()->firstOrFail();
+        $warehouse = StockTestFactory::warehouse();
+        $unit = Unit::create(['code' => 'LCA-EACH', 'name' => 'Each', 'kind' => 'count', 'is_active' => true]);
+        $item = StockTestFactory::averageItem(['base_unit_id' => $unit->id]);
+        $supplier = Supplier::create(['code' => 'LCA-SUP', 'name' => 'Freight supplier', 'is_active' => true]);
+        foreach ([801 => ['1301', 'asset'], 802 => ['2150', 'liability'], 803 => ['5001', 'expense'], 804 => ['6804', 'expense'], 806 => ['1580', 'asset']] as $id => [$code, $type]) {
+            DB::connection('tenant')->table('accounts')->insert(['id' => $id, 'organization_id' => 14, 'code' => $code, 'name' => 'Account '.$code,
+                'type' => $type, 'is_active' => true, 'is_postable' => true]);
+        }
+        $pairs = ['item' => [[$item->id, 911]], 'unit' => [[$unit->id, 912]], 'supplier' => [[$supplier->id, 913]]];
+        foreach (['inventory_asset' => 801, 'grni' => 802, 'cogs' => 803, 'adjustment_loss' => 804] as $role => $id) {
+            $account = IntegrationAccountMapping::create(['integration' => 'solabooks', 'mapping_type' => $role, 'solabooks_account_id' => $id, 'status' => 'verified']);
+            $pairs['account_role'][] = [$account->id, $id];
+        }
+        foreach ($pairs as $type => $entries) {
+            foreach ($entries as [$native, $external]) {
+                IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $mapping->mapping_uuid,
+                    'central_client_id' => self::CLIENT, 'central_organization_id' => $org, 'finance_organization_id' => 14,
+                    'solastock_organization_id' => $org, 'entity_type' => $type, 'solastock_record_id' => (string) $native,
+                    'solabooks_record_id' => (string) $external, 'status' => 'verified']);
+            }
+        }
+        IntegrationSetting::sole()->update(['meta' => ['client_id' => self::CLIENT, 'central_organization_id' => $org,
+            'signing_key_id' => 'fixture', 'transport_enabled_workflows' => ['grn.posted', 'shipment.posted'],
+            'finance_currency_contract' => ['base_currency_code' => 'JOD', 'enabled_currency_codes' => ['JOD'],
+                'currency_precisions' => ['JOD' => 2], 'money_scale' => 2, 'rate_scale' => 8, 'inventory_valuation_basis' => FinanceBaseValuation::BASIS]]]);
+        $receipt = app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $warehouse->id, 'supplier_id' => $supplier->id, 'receipt_date' => '2026-10-06'],
+            [['item_id' => $item->id, 'entered_unit_id' => $unit->id, 'received_qty' => '10', 'accepted_qty' => '10', 'unit_cost' => '5']]);
+        app(GoodsReceiptService::class)->post($receipt);
+
+        // Available by plan: no switch-on step, and a draft saves.
+        $this->assertTrue(app(\App\Services\Documents\LandedCostAvailability::class)->status($org)['available']);
+        $service = app(\App\Services\Documents\LandedCostService::class);
+        $doc = $service->createDraft(['allocation_method' => 'quantity', 'landed_cost_date' => '2026-10-07'],
+            [['charge_type' => 'freight', 'amount' => '20']], [$receipt->lines()->sole()->id]);
+        $this->assertSame('draft', $doc->status);
+
+        // Posting readiness: blocked with the one setup action, and nothing moves.
+        $workflow = app(\App\Services\Integration\LandedCostWorkflow::class);
+        $status = $workflow->status($org);
+        $this->assertSame(['connected', false, true, 'choose_clearing_account'], [$status['mode'], $status['posting_ready'], $status['setup_required'], $status['setup_action']]);
+        try {
+            $service->post($doc);
+            $this->fail('Posting must wait for the clearing account setup.');
+        } catch (\App\Services\Documents\LandedCostSetupRequired $e) {
+            $this->assertSame(__('inventory.landed_cost.connection_not_enabled'), collect($e->errors())->flatten()->first());
+            $this->assertStringStartsWith('Set up landed costs: choose the clearing account', __('inventory.landed_cost.connection_not_enabled'));
+        }
+        $this->assertSame('draft', $doc->fresh()->status);
+
+        // An explicit opt-out recorded before the setup is preserved by it.
+        app(\App\Services\Documents\LandedCostAvailability::class)->setOptOut($org, true, self::ACTOR);
+
+        $before = ['events' => IntegrationOutboxEvent::query()->count(), 'ledger' => StockLedger::query()->count(),
+            'value' => (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'),
+            'components' => DB::connection('tenant')->table('stock_landed_cost_components')->count(),
+            'reversals' => DB::connection('tenant')->table('inventory_reversals')->count()];
+        $this->assertSame('50.00', $before['value']);
+        $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['posting_ready']);
+        $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['posting_ready']); // confirm again: idempotent
+
+        // Setting up journals nothing, allocates nothing and changes no stock or history.
+        $this->assertSame($before, ['events' => IntegrationOutboxEvent::query()->count(), 'ledger' => StockLedger::query()->count(),
+            'value' => (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'),
+            'components' => DB::connection('tenant')->table('stock_landed_cost_components')->count(),
+            'reversals' => DB::connection('tenant')->table('inventory_reversals')->count()]);
+        $this->assertSame(0, IntegrationOutboxEvent::query()->where('event_type', 'like', 'landed_cost.%')->count());
+        $this->assertSame('draft', $doc->fresh()->status);
+        $this->assertTrue(app(\App\Services\Documents\LandedCostAvailability::class)->status($org)['opted_out']);
+        // Each setup/confirm is audited; the clearing binding exists exactly once.
+        $this->assertSame(2, InventoryAuditLog::query()->where('action', 'inventory.solabooks_landed_cost_workflow.enabled')->count());
+        $this->assertSame(1, IntegrationAccountMapping::query()->where('mapping_type', 'landed_cost_clearing')->count());
     }
 }

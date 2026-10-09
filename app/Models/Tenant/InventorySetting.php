@@ -22,6 +22,7 @@ class InventorySetting extends Model
         'adjustment_reason_codes' => 'array',
         'taxes' => 'array',
         'expiry_warning_days' => 'integer',
+        'landed_costs_opted_out_at' => 'datetime',
     ];
 
     public static function expiryWarningDays(): int

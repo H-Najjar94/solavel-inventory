@@ -9,7 +9,9 @@ use App\Models\Tenant\LandedCost;
 use App\Models\Tenant\LandedCostLine;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\WarehouseAccessService;
+use App\Services\Documents\LandedCostAvailability;
 use App\Services\Documents\LandedCostService;
+use App\Services\Documents\LandedCostSetupRequired;
 use App\Services\Integration\LandedCostWorkflow;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
@@ -17,11 +19,22 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 
-/** Landed costs (freight, duty, insurance) on posted receipts. Valuation writes go through LandedCostService. */
+/**
+ * Landed costs (freight, duty, insurance) on posted receipts. Valuation writes go through LandedCostService.
+ *
+ * Three separate checks, in this order:
+ *  1. plan: every route carries feature:stock.landed_costs (route_features), so a
+ *     plan without it gets 402 commercial_entitlement_required;
+ *  2. availability: an organization's explicit opt-out refuses document writes
+ *     (reads stay, so posted history remains auditable);
+ *  3. posting readiness (connected only): post/reverse need the reviewed clearing
+ *     account, refused with landed_cost_setup_required and the setup action.
+ */
 class LandedCostController extends ApiController
 {
     public function __construct(
         private LandedCostService $service,
+        private LandedCostAvailability $availability,
         private WarehouseAccessService $warehouseAccess,
         private OrganizationContext $context,
     ) {}
@@ -53,11 +66,13 @@ class LandedCostController extends ApiController
             'preview' => $landedCost->status === 'draft' ? $this->service->preview($landedCost) : null,
             'accounting_events' => $events,
             'connection' => $this->connectionStatus(),
+            'availability' => $this->availability->status($this->context->idOrFail()),
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
+        $this->availability->assertWritable($this->context->idOrFail());
         $data = $this->validated($request);
         $this->assertReceiptLinesAllowed($data['receipt_line_ids']);
         $doc = $this->service->createDraft($data, $data['charges'], $data['receipt_line_ids']);
@@ -68,6 +83,7 @@ class LandedCostController extends ApiController
     public function update(Request $request, LandedCost $landedCost): JsonResponse
     {
         $this->assertDocumentAllowed($landedCost);
+        $this->availability->assertWritable($this->context->idOrFail());
         $data = $this->validated($request);
         $this->assertReceiptLinesAllowed($data['receipt_line_ids']);
 
@@ -77,8 +93,11 @@ class LandedCostController extends ApiController
     public function post(LandedCost $landedCost): JsonResponse
     {
         $this->assertDocumentAllowed($landedCost);
+        $this->availability->assertWritable($this->context->idOrFail());
         try {
             $doc = $this->service->post($landedCost);
+        } catch (LandedCostSetupRequired $e) {
+            return $this->setupRequired($e);
         } catch (RuntimeException $e) {
             return $this->error('landed_cost_post_failed', $e->getMessage(), 422);
         }
@@ -89,9 +108,12 @@ class LandedCostController extends ApiController
     public function reverse(Request $request, LandedCost $landedCost): JsonResponse
     {
         $this->assertDocumentAllowed($landedCost);
+        $this->availability->assertWritable($this->context->idOrFail());
         $data = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:500']]);
         try {
             $reversal = $this->service->reverse($landedCost, $data['reason']);
+        } catch (LandedCostSetupRequired $e) {
+            return $this->setupRequired($e);
         } catch (RuntimeException $e) {
             return $this->error('landed_cost_reverse_failed', $e->getMessage(), 422);
         }
@@ -102,6 +124,7 @@ class LandedCostController extends ApiController
     /** Posted, unreversed receipts the user can see, with their lines (newest first). */
     public function receiptLines(Request $request): JsonResponse
     {
+        $this->availability->assertWritable($this->context->idOrFail());
         $receipts = GoodsReceipt::query()->with(['lines.item:id,name,sku,weight,costing_method', 'warehouse:id,name,code', 'supplier:id,name'])
             ->where('status', 'posted')->whereNull('reversal_id')
             ->when($request->filled('search'), fn ($q) => $q->where('grn_number', 'like', '%'.$request->query('search').'%'))
@@ -120,10 +143,34 @@ class LandedCostController extends ApiController
 
     public function connection(): JsonResponse
     {
-        return $this->success($this->connectionStatus());
+        return $this->success($this->connectionStatus() + ['availability' => $this->availability->status($this->context->idOrFail())]);
     }
 
-    /** The Finance chart candidates are shown only to users who may enable the workflow. */
+    /** Explicit organization opt-out (or its withdrawal). Never posts, allocates or revalues. */
+    public function preference(Request $request): JsonResponse
+    {
+        $data = $request->validate(['opted_out' => ['required', 'boolean']]);
+
+        return $this->success($this->availability->setOptOut($this->context->idOrFail(), (bool) $data['opted_out'], (int) auth()->id()));
+    }
+
+    /** Posting is blocked until the clearing account is set up: say so, and name the action. */
+    private function setupRequired(LandedCostSetupRequired $e): JsonResponse
+    {
+        $status = $this->connectionStatus();
+        $permissions = app(InventoryPermissionService::class);
+        $canSetUp = $permissions->can(auth()->user(), 'inventory.integration.connection_manage')
+            && $permissions->can(auth()->user(), 'inventory.integration.accounting_review');
+
+        return $this->error('landed_cost_setup_required', (string) collect($e->errors())->flatten()->first(), 422, [
+            'action' => $status['setup_action'] ?? LandedCostSetupRequired::ACTION,
+            'action_label' => __('inventory.landed_cost.setup_action'),
+            'can_set_up' => $canSetUp,
+            'missing_roles' => $status['missing_roles'] ?? [],
+        ]);
+    }
+
+    /** The Finance chart candidates are shown only to users who may set up the clearing account. */
     private function connectionStatus(): array
     {
         $status = app(LandedCostWorkflow::class)->status($this->context->idOrFail());
@@ -134,6 +181,7 @@ class LandedCostController extends ApiController
         return $status;
     }
 
+    /** "Set up landed costs: choose the clearing account" (route name kept for compatibility). */
     public function enableConnection(Request $request): JsonResponse
     {
         $data = $request->validate(['finance_account_id' => ['required', 'integer', 'min:1']]);

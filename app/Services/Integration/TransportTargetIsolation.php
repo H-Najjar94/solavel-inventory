@@ -93,6 +93,35 @@ final class TransportTargetIsolation
     }
 
     /**
+     * The target's connection stage ran and found no active, verified mapping (paused,
+     * unverified, deactivated). None of its later stages run while it is inactive, so their
+     * recorded failures can never be cleared by a success: drop every entry of the target.
+     * Health then counts only real failing ACTIVE targets. A connection stage that throws or
+     * is backing off never reaches this (attempt() records/keeps that entry instead).
+     */
+    public function retireInactive(array $target): void
+    {
+        $state = $this->load();
+        $prefix = (int) $target['client_id'].':'.(int) $target['organization_id'].':';
+        $removed = [];
+        foreach (array_keys($state) as $key) {
+            if (str_starts_with((string) $key, $prefix)) {
+                $removed[] = (string) ($state[$key]['stage'] ?? substr((string) $key, strlen($prefix)));
+                unset($state[$key]);
+            }
+        }
+        if ($removed === []) {
+            return;
+        }
+        $this->persist($state);
+        Log::info('integration.transport.target_inactive', [
+            'client_id' => (int) $target['client_id'],
+            'organization_id' => (int) $target['organization_id'],
+            'cleared_stages' => $removed,
+        ]);
+    }
+
+    /**
      * Operator-safe exception text: credentials, tokens, signatures, query strings, SQL bindings
      * and e-mail addresses are removed, control characters collapsed and the result capped.
      */
