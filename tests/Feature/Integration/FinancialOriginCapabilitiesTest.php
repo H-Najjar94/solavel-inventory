@@ -34,7 +34,8 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $database = DB::connection('tenant')->getDatabaseName(); $org = $this->mapping->central_organization_id;
         config(['finance_workspace.secret'=>str_repeat('s',48), 'cache.default'=>'array', 'tenancy.central_connection'=>'capability_central',
             'database.connections.capability_central'=>['driver'=>'sqlite','database'=>':memory:','prefix'=>''],
-            'integration_safety.financial_origin_expense_handoff_enabled'=>false]);
+            'integration_safety.financial_origin_expense_handoff_enabled'=>false,
+            'integration_safety.financial_origin_cash_handoff_enabled'=>false]);
         DB::purge('capability_central'); $schema = Schema::connection('capability_central');
         $schema->create('clients',function($t){$t->id();$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
         $schema->create('organizations',function($t){$t->id();$t->unsignedBigInteger('client_id');$t->boolean('is_active');$t->timestamp('deleted_at')->nullable();});
@@ -68,11 +69,13 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',[]);
         config(['integration_safety.financial_origin_expense_handoff_enabled'=>true]);
         $response=$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
-        $this->assertSame(['contract_version','supported_source_document_types','schema_ready','finance_core_version','stock_core_version','organization_mapping_uuid','central_client_id','central_organization_id','finance_organization_id','solastock_organization_id'],array_keys($response->json('data')));
+        $this->assertSame(['contract_version','supported_source_document_types','cash_schema_ready','cash_contract_version','schema_ready','finance_core_version','stock_core_version','organization_mapping_uuid','central_client_id','central_organization_id','finance_organization_id','solastock_organization_id'],array_keys($response->json('data')));
+        $response->assertJsonPath('data.cash_schema_ready',true)->assertJsonPath('data.cash_contract_version',\App\Services\Integration\Cash219SchemaReadiness::VERSION);
         $response->assertJsonPath('data.contract_version',FinancialOriginCapabilities::CONTRACT)->assertJsonPath('data.finance_core_version',FinancialOriginCapabilities::CORE_VERSION);
         $this->assertSame($before,[FinancialOriginRequest::count(),FinancialOriginCommand::count(),FinancialOriginOutbox::count(),GoodsReceipt::count(),Shipment::count(),StockLedger::count()]);
         $body['data']['source_document_type']='sales_receipt';$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',['expense']);
-        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false]);$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',[]);
+        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false,
+            'integration_safety.financial_origin_cash_handoff_enabled'=>false]);$this->signed($body)->assertOk()->assertJsonPath('data.supported_source_document_types',[]);
     }
 
     public function test_probe_rejects_actor_zero_foreign_identity_forged_signature_and_caller_economics(): void
@@ -121,7 +124,8 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $pending=$operation;$pending['operation_uuid']=(string)\Illuminate\Support\Str::uuid();$pending['lines'][0]['quantity']='1';
         $dispatch->prepareNative($pending,323); // Accepted before disable, exact same actor and payload retained.
         $effects=[GoodsReceipt::count(),StockLedger::count(),FinancialOriginOutbox::count(),FinancialOriginCommand::count()];
-        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false]);
+        config(['integration_safety.financial_origin_expense_handoff_enabled'=>false,
+            'integration_safety.financial_origin_cash_handoff_enabled'=>false]);
         $this->assertSame($completed,$dispatch->executeNative($operation,323));$this->assertSame('completed',$dispatch->statusNative($context+['operation_uuid'=>$operation['operation_uuid']],323)['status']);
         $next=$operation;$next['operation_uuid']=(string)\Illuminate\Support\Str::uuid();
         try{$dispatch->prepareNative($next,323);$this->fail('Disabled source created a physical command');}
