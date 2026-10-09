@@ -349,6 +349,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());
     }
     /** Native Stock demand operations; Finance authorization/payout facts are explicit remote projections, not financial posting proof. */
+    #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_cash_partial_contract_prepare_commit_replay_and_void_restore_exact_demand():void
     {
         [$data,$context,$op]=$this->admitted();$db=DB::connection('tenant');$schema=$db->getSchemaBuilder();
@@ -358,6 +359,8 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOrigin')->andReturnUsing(function()use($data,$payload,&$phase,&$fingerprint){return['allowed'=>true,'actor_id'=>323,'source_document_type'=>'sales_receipt','source_document_id'=>850,'source_journal_id'=>95,'request_uuid'=>$data['request_uuid'],'request_revision'=>$data['source_revision'],'canonical_payload'=>$data,'command'=>'upsert','command_source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision'],'cash_demand'=>$payload+['purpose'=>$phase,'hold_fingerprint'=>$fingerprint]];});
         $input=$context+['source_revision'=>$r->source_revision,'operation_uuid'=>$uuid,'refund_receipt_id'=>991,'purpose'=>'prepare'];unset($input['request_revision']);
         $service=app(\App\Services\FinancialOrigins\CashRefundDemandService::class);$before=StockLedger::count();
+        $committedFixture=new \Tests\Support\CommittedTenantFixture($this->tenantTestManager);
+        try { $committedFixture->commit();
         $held=$service->dispatch($input,323);$again=$service->dispatch($input,323);$this->assertSame($held,$again);$fingerprint=$held['hold_fingerprint'];
         $this->assertSame('0.0000',(string)$r->lines()->sole()->cancelled_quantity);$this->assertSame($before,StockLedger::count());
         // A native Stock component may consume only a committed, source-bound remote Finance payout projection.
@@ -369,5 +372,6 @@ final class FinancialOriginPhysicalTest extends TestCase
         $db->table('refund_receipts')->where('id',991)->update(['status'=>'void']);$db->table('journal_entries')->where('id',96)->update(['status'=>'voided','voided_at'=>now()]);
         $db->table('finance_cash_refund_demands')->where('operation_uuid',$uuid)->update(['state'=>'reverse_pending','reverse_actor_id'=>323]);$phase='reverse';$input['purpose']=$phase;
         $reversed=$service->dispatch($input,323);$this->assertSame('reversed',$reversed['state']);$this->assertSame($reversed,$service->dispatch($input,323));$this->assertSame('0.0000',(string)$r->lines()->sole()->cancelled_quantity);$this->assertSame($before,StockLedger::count());$this->assertSame(0,Shipment::count());
+        } finally { $committedFixture->restore(); }
     }
 }
