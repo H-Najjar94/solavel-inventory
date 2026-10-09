@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Http\Controllers\Api\V1\StockAdjustmentController;
 use App\Http\Controllers\Api\V1\StockBalanceController;
 use App\Http\Controllers\Api\V1\StockCountController;
+use App\Http\Controllers\Api\V1\LandedCostController;
 use App\Http\Controllers\Api\V1\StockLedgerController;
 use App\Http\Controllers\Api\V1\StockTransferController;
 use App\Http\Controllers\Api\V1\SupplierController;
@@ -384,6 +385,31 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.counts.update');
     Route::post('/counts/{stock_count}/post', [StockCountController::class, 'post'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.counts.post');
+
+    // ── Landed costs (freight, duty, insurance on posted receipts) ──
+    // Valuation-changing writes reuse the inventory valuation permission that
+    // already governs adjustments, counts and receipt reversals.
+    Route::get('/landed-costs', [LandedCostController::class, 'index'])
+        ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.index');
+    Route::get('/landed-costs/receipt-lines', [LandedCostController::class, 'receiptLines'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.landed-costs.receipt-lines');
+    Route::get('/landed-costs/connection', [LandedCostController::class, 'connection'])
+        ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.connection');
+    Route::post('/landed-costs/connection/enable', [LandedCostController::class, 'enableConnection'])
+        // Binding the clearing account is an accounting-role decision: it also needs the
+        // accountant gate (can_review_accounting), so segregation of duties holds.
+        ->middleware(['perm:inventory.integration.connection_manage', 'perm:inventory.integration.accounting_review'])
+        ->name('api.v1.landed-costs.connection.enable');
+    Route::get('/landed-costs/{landed_cost}', [LandedCostController::class, 'show'])->whereNumber('landed_cost')
+        ->middleware('perm:inventory.view_stock')->name('api.v1.landed-costs.show');
+    Route::post('/landed-costs', [LandedCostController::class, 'store'])
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.landed-costs.store');
+    Route::put('/landed-costs/{landed_cost}', [LandedCostController::class, 'update'])->whereNumber('landed_cost')
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.landed-costs.update');
+    Route::post('/landed-costs/{landed_cost}/post', [LandedCostController::class, 'post'])->whereNumber('landed_cost')
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.landed-costs.post');
+    Route::post('/landed-costs/{landed_cost}/reverse', [LandedCostController::class, 'reverse'])->whereNumber('landed_cost')
+        ->middleware('perm:inventory.manage_adjustments')->name('api.v1.landed-costs.reverse');
 
     // ── Sales Fulfillment: Sales Orders ──
     Route::get('/sales-orders', [SalesOrderController::class, 'index'])

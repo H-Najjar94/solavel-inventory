@@ -24,6 +24,10 @@ class EventPayloadBuilder
     public function build(string $eventType, object $document, string $documentType, ?string $number, ?string $date, bool $mappingComplete): array
     {
         if ($document instanceof \App\Models\Tenant\HistoricalFifoCorrection) return $this->historicalFifo($eventType, $document, $mappingComplete);
+        if ($document instanceof \App\Models\Tenant\LandedCost
+            || ($document instanceof InventoryReversal && $document->source_type === 'landed_cost')) {
+            return $this->landedCost($eventType, $document, $documentType, $number, $date, $mappingComplete);
+        }
         $orgId = $document->organization_id;
         $aggregateType = IntegrationEvents::aggregateType($eventType);
 
@@ -117,6 +121,79 @@ class EventPayloadBuilder
                 'costing_method' => 'fifo', 'lot_id' => null, 'serial_id' => null, 'unit_conversion' => $document->conversion_snapshot]],
             'original_source' => null, 'mapping_status' => $mappingComplete ? 'complete' : 'incomplete', 'requires_review' => ! $mappingComplete,
             'suggested_debit_account_mapping' => 'cogs', 'suggested_credit_account_mapping' => 'inventory_asset'];
+    }
+
+    /**
+     * A landed cost writes no ledger rows: it revalues receipts. Its payload
+     * carries one line per revalued receipt ledger row (with that row's frozen
+     * unit-conversion snapshot) and the immutable per-role journal totals.
+     * A reversal reuses the posted landed cost's lines, negated, and links to
+     * the posted event through original_source.
+     */
+    private function landedCost(string $eventType, object $document, string $documentType, ?string $number, ?string $date, bool $mappingComplete): array
+    {
+        $reversal = $document instanceof InventoryReversal;
+        $landed = $reversal ? \App\Models\Tenant\LandedCost::query()->findOrFail($document->source_id) : $document;
+        $sign = $reversal ? '-' : '';
+        $components = \App\Models\Tenant\LandedCostComponent::query()->where('landed_cost_id', $landed->id)->orderBy('id')->get();
+        $journal = ['inventory_asset' => '0.00', 'cogs' => '0.00', 'adjustment_loss' => '0.00'];
+        $perRow = [];
+        foreach ($components as $component) {
+            $journal[$component->destination_role] = Decimal::add($journal[$component->destination_role], (string) $component->posted_base_amount, 2);
+            $rowId = (int) data_get($component->provenance, 'landed_cost_receipt_ledger_id', $component->stock_ledger_id);
+            $perRow[$rowId] ??= ['inventory' => '0.00', 'total' => '0.00'];
+            $perRow[$rowId]['total'] = Decimal::add($perRow[$rowId]['total'], (string) $component->posted_base_amount, 2);
+            if ($component->destination_role === 'inventory_asset') {
+                $perRow[$rowId]['inventory'] = Decimal::add($perRow[$rowId]['inventory'], (string) $component->posted_base_amount, 2);
+            }
+        }
+        $journal['landed_cost_clearing'] = Decimal::add(Decimal::add($journal['inventory_asset'], $journal['cogs'], 2), $journal['adjustment_loss'], 2);
+        ksort($perRow);
+        $lines = [];
+        foreach (StockLedger::query()->withoutGlobalScope('warehouse_access')->where('organization_id', $landed->organization_id)
+            ->whereIn('id', array_keys($perRow))->orderBy('id')->get() as $row) {
+            $lines[] = [
+                'item_id' => (int) $row->item_id, 'sku' => null, 'warehouse_id' => (int) $row->warehouse_id,
+                'bin_id' => $row->bin_id ? (int) $row->bin_id : null, 'quantity' => (string) $row->quantity,
+                'unit_cost' => Decimal::cost(Decimal::div($perRow[$row->id]['total'], (string) $row->quantity)),
+                'total_cost' => $sign === '' ? $perRow[$row->id]['inventory'] : Decimal::money('-'.$perRow[$row->id]['inventory']),
+                'landed_cost_amount' => $perRow[$row->id]['total'],
+                'movement_direction' => 'revaluation', 'ledger_entry_ids' => [(int) $row->id],
+                'costing_method' => $row->costing_method,
+                'lot_id' => $row->lot_id ? (int) $row->lot_id : null, 'serial_id' => $row->serial_id ? (int) $row->serial_id : null,
+                'unit_conversion' => $this->conversionForLedger($row),
+            ];
+        }
+        $original = $reversal ? $this->originalSource($document) : null;
+        $originalPayload = $original && $original['event_uuid'] ? (array) IntegrationOutboxEvent::query()->where('organization_id', $landed->organization_id)
+            ->where('event_uuid', $original['event_uuid'])->firstOrFail()->payload : null;
+        $valuation = $originalPayload === null ? app(FinanceBaseValuation::class)->contract((int) $landed->organization_id) : null;
+
+        return array_merge([
+            'source_app' => 'solastock',
+            'event_type' => $eventType,
+            'organization_id' => (int) $landed->organization_id,
+            'document_type' => $documentType,
+            'document_id' => (int) $document->id,
+            'document_number' => $number,
+            'document_date' => substr((string) ($date ?? ''), 0, 10),
+            'currency' => $this->currencies->resolve($document, $reversal ? 'inventory_reversal' : 'landed_cost', $date),
+            'inventory_valuation_basis' => $originalPayload !== null ? ($originalPayload['inventory_valuation_basis'] ?? null) : ($valuation ? FinanceBaseValuation::BASIS : null),
+            'inventory_value_currency' => $originalPayload !== null ? ($originalPayload['inventory_value_currency'] ?? null) : ($valuation['base_currency_code'] ?? null),
+            'total_inventory_value_change' => $sign === '' ? $journal['inventory_asset'] : Decimal::money('-'.$journal['inventory_asset']),
+            'lines' => $lines,
+            'landed_cost' => [
+                'landed_cost_id' => (int) $landed->id, 'landed_cost_number' => (string) $landed->landed_cost_number,
+                'direction' => $reversal ? 'reversed' : 'posted', 'allocation_method' => (string) $landed->allocation_method,
+                'currency_code' => (string) $landed->currency_code, 'exchange_rate' => (string) $landed->exchange_rate,
+                'supplier_reference' => $landed->supplier_reference, 'total_amount' => (string) $landed->total_amount,
+                'total_base_amount' => $journal['landed_cost_clearing'], 'journal' => $journal,
+            ],
+            'original_source' => $original,
+        ], IntegrationEvents::suggestedAccounts($eventType), [
+            'mapping_status' => $mappingComplete ? 'complete' : 'incomplete',
+            'requires_review' => ! $mappingComplete,
+        ]);
     }
 
     /** @return array<int,array<string,mixed>> */

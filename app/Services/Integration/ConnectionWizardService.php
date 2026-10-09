@@ -934,7 +934,8 @@ final class ConnectionWizardService
                 ->where('integration', 'solabooks')->lockForUpdate()->firstOrFail();
             $meta = (array) $setting->meta;
             $meta['transport_enabled'] = true;
-            $meta['transport_enabled_workflows'] = array_values(json_decode($run->workflow_allowlist ?: '[]', true));
+            // The approved allowlist, plus an owner-enabled landed-cost workflow (never anything else).
+            $meta['transport_enabled_workflows'] = LandedCostWorkflow::preserve($meta, json_decode($run->workflow_allowlist ?: '[]', true));
             if (empty($meta['finance_currency_contract']) && ! empty($current['valuation_contract'])) {
                 $meta['finance_currency_contract'] = $current['valuation_contract'];
             }
@@ -1455,7 +1456,8 @@ final class ConnectionWizardService
                 ->where('integration', 'solabooks')->lockForUpdate()->firstOrFail();
             $meta = (array) $setting->meta;
             $meta['transport_enabled'] = true;
-            $meta['transport_enabled_workflows'] = array_values(json_decode($run->workflow_allowlist ?: '[]', true));
+            // The approved allowlist, plus an owner-enabled landed-cost workflow (never anything else).
+            $meta['transport_enabled_workflows'] = LandedCostWorkflow::preserve($meta, json_decode($run->workflow_allowlist ?: '[]', true));
             $setting->update(['mode' => 'active', 'meta' => $meta, 'updated_at' => now()]);
             $mapping->update(['activation_state' => 'active']);
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)->update([

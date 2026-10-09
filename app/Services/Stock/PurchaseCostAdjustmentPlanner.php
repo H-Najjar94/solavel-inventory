@@ -13,6 +13,7 @@ use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\StockTransfer;
 use App\Services\FinancialOrigins\OriginReceiptCostAuthority;
+use App\Services\Stock\Support\LandedCostProvenance;
 use App\Services\Stock\Support\OriginReceiptCostProvenance;
 use App\Services\Purchasing\PurchasingBillAuthority;
 use App\Services\Stock\Support\Decimal;
@@ -129,8 +130,28 @@ final class PurchaseCostAdjustmentPlanner
             'rounding_bound' => $bound, 'components' => $serialized];
     }
 
+    /**
+     * Split a landed cost (freight, duty, insurance) allocated to one posted
+     * receipt ledger row through that row's actual disposition, with exactly the
+     * rules used for a supplier price delta: the on-hand share revalues the FIFO
+     * layer / weighted-average balance (inventory_asset); the share already
+     * consumed goes to cogs (shipment) or adjustment_loss (adjustment, count).
+     * Transfers and any other disposition fail closed, as they do for PPV.
+     */
+    public function planLandedCost(LandedCostProvenance $source, StockLedger $receipt, string $baseAmount): Collection
+    {
+        if ($receipt->source_type !== GoodsReceipt::class || $receipt->direction !== 'in'
+            || (int) $receipt->id !== $source->receipt_ledger_id) {
+            $this->fail('The receipt valuation ledger provenance is missing.');
+        }
+
+        return $receipt->costing_method === 'fifo'
+            ? $this->fifoComponents($source, $receipt, $baseAmount)
+            : $this->averageComponents($source, $receipt, $baseAmount);
+    }
+
     /** A scoped Finance purchase may inspect only its receipt's cost provenance. */
-    private function ledgerQuery(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance $allocation): Builder
+    private function ledgerQuery(IntegrationFinancialLineAllocation|OriginReceiptCostProvenance|LandedCostProvenance $allocation): Builder
     {
         $query = StockLedger::query();
         if ($allocation instanceof OriginReceiptCostProvenance || ($allocation->source_document_type === 'goods_receipt' && PurchasingBillAuthority::receipt((int) $allocation->source_document_id))) {

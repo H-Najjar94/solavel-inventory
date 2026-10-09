@@ -33,6 +33,9 @@ import TransfersPage from '../pages/TransfersPage.jsx';
 import TransferFormPage from '../pages/TransferFormPage.jsx';
 import TransferDetailPage from '../pages/TransferDetailPage.jsx';
 import CountsPage from '../pages/CountsPage.jsx';
+import LandedCostsPage from '../pages/LandedCostsPage.jsx';
+import LandedCostFormPage from '../pages/LandedCostFormPage.jsx';
+import LandedCostDetailPage from '../pages/LandedCostDetailPage.jsx';
 import CountFormPage from '../pages/CountFormPage.jsx';
 import CountDetailPage from '../pages/CountDetailPage.jsx';
 import ScannerPage from '../pages/ScannerPage.jsx';
@@ -135,6 +138,10 @@ export const router = createBrowserRouter(
                 { path: 'counts/new', element: protectedElement(<CountFormPage />, 'inventory.manage_adjustments') },
                 { path: 'counts/:id', element: <CountDetailPage /> },
                 { path: 'counts/:id/edit', element: protectedElement(<CountFormPage />, 'inventory.manage_adjustments') },
+                { path: 'landed-costs', element: <LandedCostsPage /> },
+                { path: 'landed-costs/new', element: protectedElement(<LandedCostFormPage />, 'inventory.manage_adjustments') },
+                { path: 'landed-costs/:id', element: <LandedCostDetailPage /> },
+                { path: 'landed-costs/:id/edit', element: protectedElement(<LandedCostFormPage />, 'inventory.manage_adjustments') },
                 { path: 'scanner', element: <ScannerPage /> },
                 { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
                 { path: 'purchase-orders/new', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
