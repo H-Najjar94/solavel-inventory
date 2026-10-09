@@ -141,6 +141,8 @@ class LandedCostAvailabilityTest extends TestCase
         $this->assertFalse($status['available']);
         $this->assertTrue($status['entitled']);
         $this->assertSame('opted_out', $status['reason']);
+        // The organization already has a landed-cost document, so the menu stays for read-only history.
+        $this->assertTrue($status['read_only_history']);
         $first = $status['opted_out_at'];
         $this->assertNotNull($first);
         // Idempotent: an existing opt-out keeps its original time and is audited once.
@@ -163,6 +165,7 @@ class LandedCostAvailabilityTest extends TestCase
         $this->assertSame('draft', $doc->fresh()->status);
         $status = app(LandedCostAvailability::class)->setOptOut($org, false, 77);
         $this->assertTrue($status['available']);
+        $this->assertFalse($status['read_only_history']);
         $this->assertNull($status['opted_out_at']);
         $this->assertSame(1, InventoryAuditLog::query()->where('action', 'inventory.landed_costs.opt_out_withdrawn')->count());
         $this->assertSame(0, IntegrationOutboxEvent::query()->count());
@@ -213,5 +216,59 @@ class LandedCostAvailabilityTest extends TestCase
         $this->assertSame(['YES', 'timestamp'], [strtoupper((string) $column->is_nullable), strtolower((string) $column->data_type)]);
         // NULL = follow the plan: no existing organization is opted out by the deploy.
         $this->assertSame(0, InventorySetting::withoutGlobalScopes()->whereNotNull('landed_costs_opted_out_at')->count());
+    }
+
+    #[Test]
+    public function an_opted_out_organization_without_documents_has_no_read_only_history(): void
+    {
+        $this->useTenantA();
+        $org = TenantTestManager::ORG_A;
+        $this->assertSame(0, LandedCost::withoutGlobalScopes()->where('organization_id', $org)->count());
+        $status = $this->plan($this->tier('professional', true))->setOptOut($org, true, 77);
+        $this->assertTrue($status['opted_out']);
+        $this->assertFalse($status['read_only_history']);
+    }
+
+    #[Test]
+    public function the_opt_out_column_check_is_memoized_after_the_first_lookup(): void
+    {
+        $this->useTenantA();
+        $availability = app(LandedCostAvailability::class);
+        $this->assertTrue($availability->status(TenantTestManager::ORG_A)['preference_supported']);
+        $connection = DB::connection(config('tenancy.tenant_connection', 'tenant'));
+        $connection->flushQueryLog();
+        $connection->enableQueryLog();
+        $availability->status(TenantTestManager::ORG_A);
+        $availability->status(TenantTestManager::ORG_A);
+        $schemaLookups = collect($connection->getQueryLog())->filter(fn (array $q) => str_contains(strtolower($q['query']), 'information_schema'));
+        $connection->disableQueryLog();
+        $this->assertCount(0, $schemaLookups);
+    }
+
+    #[Test]
+    public function every_entitlement_refusal_reason_has_a_translated_hint_and_no_raw_code_is_shown(): void
+    {
+        $notice = file_get_contents(resource_path('js/solastock/components/LandedCostAvailabilityNotice.jsx'));
+        $this->assertStringNotContainsString('hint={availability.entitlement_reason', $notice);
+        $js = file_get_contents(resource_path('js/solastock/i18n/landedCosts.js'));
+        [$en, $ar] = explode('export const ar', $js, 2);
+        $reasons = [
+            \App\Services\Entitlements\EntitlementAccessDecision::DENY_NO_ENTITLEMENT,
+            \App\Services\Entitlements\EntitlementAccessDecision::DENY_UNVERIFIED,
+            \App\Services\Entitlements\EntitlementAccessDecision::DENY_EXPIRED,
+            \App\Services\Entitlements\EntitlementAccessDecision::DENY_REVOKED,
+            \App\Services\Entitlements\EntitlementAccessDecision::DENY_NOT_ELIGIBLE,
+            'entitlement_service_unavailable',
+        ];
+        foreach ($reasons as $reason) {
+            $this->assertMatchesRegularExpression('/^\s+'.preg_quote($reason, '/').": '(landedCosts\.availability\.reason\.[A-Za-z]+)',/m", $notice, $reason);
+            preg_match('/^\s+'.preg_quote($reason, '/').": '([^']+)'/m", $notice, $m);
+            $this->assertStringContainsString('"'.$m[1].'":', $en, $reason);
+            $this->assertStringContainsString('"'.$m[1].'":', $ar, $reason);
+        }
+        $this->assertStringContainsString('"landedCosts.availability.reason.generic":', $en);
+        $this->assertStringContainsString('"landedCosts.availability.reason.generic":', $ar);
+        // Opted out with history keeps the menu entry (read-only).
+        $this->assertStringContainsString('read_only_history === true', file_get_contents(resource_path('js/solastock/router/nav.js')));
     }
 }

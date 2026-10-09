@@ -4,6 +4,7 @@ namespace App\Services\Documents;
 
 use App\Models\Tenant\InventoryAuditLog;
 use App\Models\Tenant\InventorySetting;
+use App\Models\Tenant\LandedCost;
 use App\Services\Entitlements\InventoryCommercialEntitlementService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -29,7 +30,7 @@ final class LandedCostAvailability
     public function __construct(private InventoryCommercialEntitlementService $entitlements) {}
 
     /**
-     * @return array{available:bool,reason:string,entitled:bool,entitlement_reason:string,opted_out:bool,opted_out_at:?string,preference_supported:bool}
+     * @return array{available:bool,reason:string,entitled:bool,entitlement_reason:string,opted_out:bool,opted_out_at:?string,preference_supported:bool,read_only_history:bool}
      */
     public function status(int $organizationId): array
     {
@@ -49,6 +50,8 @@ final class LandedCostAvailability
             'opted_out' => $optedOutAt !== null,
             'opted_out_at' => $optedOutAt,
             'preference_supported' => $this->preferenceSupported(),
+            // Opted out but entitled with documents on file: the menu stays so that history remains readable.
+            'read_only_history' => $entitlement['allowed'] && $optedOutAt !== null && $this->hasDocuments($organizationId),
         ];
     }
 
@@ -122,9 +125,29 @@ final class LandedCostAvailability
         return $value !== null ? (string) $value : null;
     }
 
+    private function hasDocuments(int $organizationId): bool
+    {
+        return LandedCost::withoutGlobalScopes()->where('organization_id', $organizationId)->exists();
+    }
+
+    /**
+     * Memoized per process and tenant database (the information_schema lookup otherwise runs on
+     * every /meta call). Only a present column is remembered, so a worker that started before the
+     * migration picks the column up as soon as it exists.
+     */
     private function preferenceSupported(): bool
     {
-        return Schema::connection($this->connection())->hasColumn('inventory_settings', self::COLUMN);
+        static $supported = [];
+        $connection = $this->connection();
+        $key = $connection.':'.DB::connection($connection)->getDatabaseName();
+        if (isset($supported[$key])) {
+            return true;
+        }
+        if (! Schema::connection($connection)->hasColumn('inventory_settings', self::COLUMN)) {
+            return false;
+        }
+
+        return $supported[$key] = true;
     }
 
     private function connection(): string
