@@ -11,15 +11,41 @@ if [[ "${1:-}" != --private-lifecycle ]]; then
       echo 'REFUSING: lifecycle group selection belongs to the contained launcher.' >&2; exit 2;
     }
   done
-  set +e
-  bash "$0" --private-lifecycle rollback "$@" --exclude-group committed-native-transport
-  TASK_ROLLBACK_STATUS=$?
-  bash "$0" --private-lifecycle committed "$@" --group committed-native-transport
-  TASK_COMMITTED_STATUS=$?
-  set -e
-  printf 'STOCK_PRIVATE_COHORT_EXITS rollback=%s committed=%s\n' "$TASK_ROLLBACK_STATUS" "$TASK_COMMITTED_STATUS"
-  TASK_STATUS=$TASK_ROLLBACK_STATUS
-  if (( TASK_COMMITTED_STATUS > TASK_STATUS )); then TASK_STATUS=$TASK_COMMITTED_STATUS; fi
+  export APP_ENV=testing TEST_DATABASE_PREFIX=solastock_test_
+  # Native PHPUnit selection, including caller filter and individual data-set IDs.
+  for cohort in rollback committed; do
+    select_group=(--exclude-group committed-native-transport)
+    [[ "$cohort" != committed ]] || select_group=(--group committed-native-transport)
+    ./vendor/bin/phpunit "$@" "${select_group[@]}" --list-tests-xml "/evidence/selection-$cohort.xml"
+  done
+  python3 scripts/private-test-selection.py enumerate /evidence
+  rollback_count=$(wc -l </evidence/selection-rollback.ids)
+  committed_count=$(wc -l </evidence/selection-committed.ids)
+  (( rollback_count + committed_count > 0 )) || { echo 'LAUNCHER_FAILURE total-zero-selection' >&2; exit 2; }
+  TASK_STATUS=0
+  if (( rollback_count > 0 )); then
+    set +e
+    bash "$0" --private-lifecycle rollback "$@" --exclude-group committed-native-transport
+    status=$?; set -e
+    (( status <= TASK_STATUS )) || TASK_STATUS=$status
+  else echo STOCK_PRIVATE_COHORT=rollback NOT_SELECTED; fi
+  # Original selection has already been applied. Replace only its filter with the
+  # exact selected native ID, retaining suite/file/config arguments and all guards.
+  args=(); skip=0
+  for arg in "$@"; do
+    if (( skip )); then skip=0; continue; fi
+    case "$arg" in --filter) skip=1;; --filter=*) ;; *) args+=("$arg");; esac
+  done
+  index=0
+  while IFS= read -r filter; do
+    index=$((index+1)); printf -v case_index '%04d' "$index"
+    set +e
+    STOCK_PRIVATE_CASE_INDEX="$case_index" bash "$0" --private-lifecycle committed "${args[@]}" --filter "$filter" --group committed-native-transport
+    status=$?; set -e
+    (( status <= TASK_STATUS )) || TASK_STATUS=$status
+  done </evidence/selection-committed.filters
+  if (( committed_count > 0 )); then python3 scripts/private-test-selection.py aggregate /evidence "$committed_count";
+  else echo STOCK_PRIVATE_COHORT=committed NOT_SELECTED; fi
   exit "$TASK_STATUS"
 fi
 shift
@@ -70,7 +96,9 @@ p,socket,pid=sys.argv[1:]
 pathlib.Path(p).write_text(json.dumps({'cohort':'committed-native-transport','socket':socket,'server_pid':int(pid),'disposable_datadir':str(pathlib.Path(p).parent/'data'),'cleanup':'owned-private-server-shutdown-and-schema-lifecycle'}))
 PRIVATE_MANIFEST
 fi
-COHORT_JUNIT="/evidence/cohort-$TASK_COHORT.xml"
+CASE_SUFFIX="${STOCK_PRIVATE_CASE_INDEX:+-${STOCK_PRIVATE_CASE_INDEX}}"
+[[ -z "$CASE_SUFFIX" || "$CASE_SUFFIX" =~ ^-[0-9]{4}$ ]] || exit 2
+COHORT_JUNIT="/evidence/cohort-$TASK_COHORT$CASE_SUFFIX.xml"
 [[ ! -e "$COHORT_JUNIT" ]] || { echo 'REFUSING: existing cohort evidence would be overwritten.' >&2; exit 2; }
 set +e
 bash scripts/run-tests.sh "$@" --log-junit "$COHORT_JUNIT"
@@ -89,7 +117,8 @@ COHORT_COUNTS
 if (( TASK_TEST_STATUS != 0 )); then
   printf 'STOCK_PRIVATE_COHORT=%s FAILED exit=%s\n' "$TASK_COHORT" "$TASK_TEST_STATUS"
 elif [[ $(cat "$RUN/executed-cases") == 0 ]]; then
-  printf 'STOCK_PRIVATE_COHORT=%s NOT_SELECTED\n' "$TASK_COHORT"
+  printf 'STOCK_PRIVATE_COHORT=%s LAUNCHER_FAILURE expected-nonempty-selection\n' "$TASK_COHORT"
+  exit 2
 else
   printf 'STOCK_PRIVATE_COHORT=%s PASS\n' "$TASK_COHORT"
 fi
