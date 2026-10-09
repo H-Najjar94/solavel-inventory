@@ -130,10 +130,21 @@ final class SupplierReturnFinancialInverseTest extends TestCase
    'signing_key_id'=>'private-return-proof','signing_secret_encrypted'=>Crypt::encryptString('private-return-proof-secret-at-least-thirty-two-bytes'),'signing_protocol_version'=>'v1',
    'transport_enabled'=>false,'transport_enabled_workflows'=>['supplier_return.posted','supplier_return.reversed','grn.posted'],
    'finance_currency_contract'=>['base_currency_code'=>'JOD','enabled_currency_codes'=>['JOD'],'money_scale'=>2,'rate_scale'=>8,'inventory_valuation_basis'=>\App\Services\Integration\FinanceBaseValuation::BASIS]]]);
-  foreach(['inventory_asset'=>100,'supplier_return_clearing'=>200]as$role=>$id){
-   $db->table('accounts')->insert(['id'=>$id,'organization_id'=>14,'name'=>'Synthetic projected '.$role,'type'=>'asset','is_active'=>true,'is_postable'=>true]);
-   \App\Models\Tenant\IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>$role,'solabooks_account_id'=>$id,'status'=>'verified']);
+  $operations=['grn.posted','supplier_return.posted','supplier_return.reversed'];
+  $roles=\App\Services\Integration\AccountRolePolicy::forOperations($operations);
+  foreach($roles as$index=>$role){
+   $id=100+$index;$type=\App\Services\Integration\AccountRolePolicy::ROLE_TYPES[$role][0];
+   $db->table('accounts')->insert(['id'=>$id,'organization_id'=>14,'name'=>'Synthetic projected '.$role,'type'=>$type,'is_active'=>true,'is_postable'=>true]);
+   $account=\App\Models\Tenant\IntegrationAccountMapping::create(['integration'=>'solabooks','mapping_type'=>$role,'solabooks_account_id'=>$id,'status'=>'verified']);
+   \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$mapping->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>$org,'finance_organization_id'=>14,'solastock_organization_id'=>$org,'entity_type'=>'account_role','solastock_record_id'=>(string)$account->id,'solabooks_record_id'=>(string)$id,'status'=>'verified']);
   }
+  foreach(['item'=>[$this->item->id,701],'unit'=>[$this->unit->id,702],'supplier'=>[$this->supplier->id,703]]as$type=>[$local,$remote])
+   \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$mapping->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>$org,'finance_organization_id'=>14,'solastock_organization_id'=>$org,'entity_type'=>$type,'solastock_record_id'=>(string)$local,'solabooks_record_id'=>(string)$remote,'status'=>'verified']);
+  $this->assertSame('none',$this->item->tracking_type);$this->assertSame((int)$this->unit->id,(int)$this->item->base_unit_id);
+  $source=$receipt->lines->sole();$this->assertSame((int)$this->unit->id,(int)$source->entered_unit_id);$this->assertNotEmpty($source->unit_conversion_hash);
+  $requirements=app(\App\Services\Integration\OrganizationAccountRequirements::class);
+  $this->assertSame([],$requirements->missingRoles($org));
+  foreach($operations as$operation)$requirements->assertOperationReady($org,$operation);
   // Canonical capability reads the actual dedicated private Central database, not TenantManager's mysql alias.
   $central=config('database.connections.mysql');$central['database']=$this->tenantTestManager->centralDatabase();
   config(['database.connections.return_fixture_central'=>$central,'tenancy.central_connection'=>'return_fixture_central']);DB::purge('return_fixture_central');
