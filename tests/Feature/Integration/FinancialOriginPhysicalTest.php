@@ -123,6 +123,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame(1,Shipment::count());$this->assertSame($before+1,StockLedger::count());$this->assertSame(0,SalesDocumentOutbox::count());
         $event=FinancialOriginOutbox::sole()->payload;$this->assertSame('sales_receipt',$event['source_document_type']);$this->assertSame(850,$event['source_document_id']);$this->assertSame(851,$event['physical']['lines'][0]['source_document_line_id']);
         $this->assertSame('2.0000',$event['physical']['lines'][0]['quantity']);$this->assertNotEmpty($event['physical']['journal_key']);
+        $this->assertCanonicalOriginJournalHash($event['physical']);
         $final=array_replace($op,['operation_uuid'=>(string)Str::uuid()]);$complete=$service->executeNative($final,336);$this->assertSame('complete',$complete['status']);
         $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(2,Shipment::count());$this->assertSame('16.0000',StockBalance::sole()->on_hand_qty);
         $this->assertSame(0,SalesDocumentOutbox::count());
@@ -270,6 +271,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $event=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.reversed')->sole()->payload;
         $this->assertSame(850,$event['source_document_id']);$this->assertSame(95,$event['source_journal_id']);$this->assertSame($inverse->id,$event['reversal']['id']);
         $this->assertNotEmpty($event['original_payload_hash']);$this->assertNotEmpty($event['reversal']['journal_key']);
+        $this->assertCanonicalOriginJournalHash($event['reversal']);
         $original=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.confirmed')->sole()->payload;
         $this->assertSame($original['physical']['lines'][0]['stock_ledger_id'],$event['physical']['lines'][0]['stock_ledger_id']);
         $this->assertSame($original['physical']['lines'][0]['stock_value_base'],$event['physical']['lines'][0]['stock_value_base']);
@@ -402,6 +404,18 @@ final class FinancialOriginPhysicalTest extends TestCase
         } catch (HttpException $error) { $this->assertSame(409,$error->getStatusCode()); }
         $this->assertSame($before,$db->table('stock_ledger')->count());
         $this->assertSame('posted',$document->fresh()->status);
+    }
+
+    private function assertCanonicalOriginJournalHash(array $proof):void
+    {
+        $journal=\App\Models\Tenant\IntegrationOutboxEvent::query()->where('organization_id',app(\App\Tenancy\OrganizationContext::class)->idOrFail())
+            ->where('event_uuid',$proof['journal_event_uuid'])->where('idempotency_key',$proof['journal_key'])->sole();
+        $before=$journal->getRawOriginal();
+        $published=app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal);
+        $wireHash=\App\Services\Integration\SolaStockJournalContract::payloadHash($published);
+        $this->assertNotSame(\App\Services\Integration\SolaStockJournalContract::payloadHash($journal->payload),$wireHash);
+        $this->assertSame($wireHash,$proof['journal_payload_hash']);
+        $this->assertSame($before,$journal->fresh()->getRawOriginal(),'Canonical preview must not rewrite the native event.');
     }
 
 }
