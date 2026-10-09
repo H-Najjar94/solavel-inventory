@@ -29,6 +29,14 @@ class ConnectionManagementPolicyTest extends TestCase
         $this->ensureCentralTables();
         DB::connection('mysql')->beginTransaction();
         $this->seedIdentity();
+        // Product access is decided by CentralAppAccess; answer it from this fixture's own Central rows so
+        // removing a user_projects row still removes that product (no blanket allow).
+        $this->mock(\App\Services\Access\CentralAppAccess::class)->shouldReceive('decision')->andReturnUsing(
+            fn ($user, $organization, $slug) => ['allowed' => DB::connection('mysql')->table('user_projects')
+                ->join('projects', 'projects.id', '=', 'user_projects.project_id')
+                ->where('user_projects.organization_id', $organization)->where('user_projects.user_id', $user)
+                ->where('projects.slug', $slug)->where('user_projects.is_active', true)->exists(),
+                'owner' => false, 'roles' => []]);
     }
 
     protected function tearDown(): void
