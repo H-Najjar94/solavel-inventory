@@ -37,6 +37,7 @@ final class FinancialOriginPhysicalTest extends TestCase
             'lines'=>[['request_line_id'=>$r['lines'][0]['id'],'source_document_line_id'=>851,'quantity'=>'2','unit_id'=>$this->unit->id]]];
         return [$data,$context,$op];
     }
+    #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_expense_receiver_can_assign_and_receive_but_adjustment_authority_cannot_replace_receiving_permission():void
     {
         $this->initializeOriginFixture(true);
@@ -65,11 +66,13 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame(FinancialOriginCommand::sole()->operation_uuid,FinancialOriginOutbox::sole()->payload['operation_uuid']);
         $this->assertFalse($service->optionsNative($context,336)['can_reserve']);
         // Render the native human GET outside the testing wrapper's transaction, as live HTTP does.
-        $db=DB::connection('tenant');while($db->transactionLevel()>0)$db->commit();
+        $db=DB::connection('tenant');$committedFixture=new \Tests\Support\CommittedTenantFixture($this->tenantTestManager);
+        try { $committedFixture->commit();
         $documents=app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents'];
         $this->assertSame(GoodsReceipt::sole()->grn_number,$documents[0]['number']);$this->assertSame('goods_receipt',$documents[0]['type']);
         $this->assertSame([],DB::connection('tenant')->transaction(fn()=>app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents']));
         $this->actor(337);$this->assertSame([],app(OriginRequestService::class)->summary(FinancialOriginRequest::sole())['physical_documents']);
+        } finally { $committedFixture->restore(); }
     }
     public function test_native_operation_status_needs_no_finance_access_but_preserves_actor_revision_and_warehouse_scope():void
     {

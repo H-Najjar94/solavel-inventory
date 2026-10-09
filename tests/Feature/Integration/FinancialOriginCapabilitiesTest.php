@@ -18,19 +18,7 @@ final class FinancialOriginCapabilitiesTest extends TestCase
 
     private function fixture(): array
     {
-        $this->useTenantA();
-        $previous = DB::getDefaultConnection(); DB::setDefaultConnection('tenant');
-        try {
-            // Genuine pinned Finance DDL from the reviewed readonly companion export, never guessed mirror columns.
-            $finance = rtrim((string) env('FINANCIAL_ORIGIN_FINANCE_SOURCE', '/qualification/finance'), '/');
-            foreach (['2026_10_07_187000_create_financial_origin_intents.php', '2026_10_07_192000_create_financial_origin_reverse_generations.php', '2026_10_08_194000_create_financial_origin_physical_operations.php'] as $name) {
-                $path = $finance.'/database/migrations/finance/'.$name;
-                $this->assertFileExists($path); (require $path)->up();
-            }
-            (require base_path('database/migrations/tenant/2026_10_07_081000_create_purchase_valuation_holds.php'))->up();
-            (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->up();
-        } finally { DB::setDefaultConnection($previous); }
-        $this->tenantTestManager->cleanup(); $this->initializeOriginFixture(true);
+        $this->initializeOriginFixture(true);
         $database = DB::connection('tenant')->getDatabaseName(); $org = $this->mapping->central_organization_id;
         config(['finance_workspace.secret'=>str_repeat('s',48), 'cache.default'=>'array', 'tenancy.central_connection'=>'capability_central',
             'database.connections.capability_central'=>['driver'=>'sqlite','database'=>':memory:','prefix'=>''],
@@ -58,9 +46,11 @@ final class FinancialOriginCapabilitiesTest extends TestCase
     private function signed(array $body, bool $valid=true): \Illuminate\Testing\TestResponse
     {
         $json=json_encode($body,JSON_UNESCAPED_SLASHES);$timestamp=(string)time();$nonce=bin2hex(random_bytes(24));
-        return $this->call('POST',WorkspaceSignature::PATH,[],[],[],['HTTP_ACCEPT'=>'application/json','CONTENT_TYPE'=>'application/json',
+        $response=$this->call('POST',WorkspaceSignature::PATH,[],[],[],['HTTP_ACCEPT'=>'application/json','CONTENT_TYPE'=>'application/json',
             'HTTP_X_WORKSPACE_TIMESTAMP'=>$timestamp,'HTTP_X_WORKSPACE_NONCE'=>$nonce,'HTTP_X_WORKSPACE_SIGNATURE'=>
             $valid?WorkspaceSignature::sign($json,$timestamp,$nonce,str_repeat('s',48)):str_repeat('0',64)],$json);
+        if ($response->status()===403) fwrite(STDERR,json_encode(['native_capability_status'=>403,'reason'=>$response->json('error.code') ?? $response->json('message') ?? 'not_exposed']).PHP_EOL);
+        return $response;
     }
 
     public function test_signed_finance_only_probe_is_readonly_and_expense_requires_explicit_gate(): void
@@ -87,9 +77,12 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $wrong=$body;$wrong['action']='financial-origin.dispatch.prepare';$this->signed($wrong)->assertStatus(403); // Metadata admission never grants Stock access.
         $this->assertSame(0,FinancialOriginRequest::count());$this->assertSame($before,StockLedger::count());
     }
+    #[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
     public function test_missing_required_reverse_index_fails_closed_even_with_deployment_gate(): void
     {
         $body=$this->fixture();config(['integration_safety.financial_origin_expense_handoff_enabled'=>true]);
+        $committedFixture=new \Tests\Support\CommittedTenantFixture($this->tenantTestManager);
+        try { $committedFixture->commit();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true);
         Schema::connection('tenant')->table('finance_document_reverse_generations',fn($table)=>$table->dropUnique('fin_origin_reverse_uuid_unique'));
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',false)->assertJsonPath('data.supported_source_document_types',[]);
@@ -99,6 +92,7 @@ final class FinancialOriginCapabilitiesTest extends TestCase
         $finance=rtrim((string)env('FINANCIAL_ORIGIN_FINANCE_SOURCE','/qualification/finance'),'/');
         (require $finance.'/database/migrations/finance/2026_10_07_192000_create_financial_origin_reverse_generations.php')->up();
         $this->signed($body)->assertOk()->assertJsonPath('data.schema_ready',true)->assertJsonPath('data.supported_source_document_types',['expense']);
+        } finally { $committedFixture->restore(); }
     }
 
     /** Native Stock GRN/ledger and command recovery; Finance source authorization/facts remain explicit projections. */
