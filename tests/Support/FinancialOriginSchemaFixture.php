@@ -40,6 +40,20 @@ final class FinancialOriginSchemaFixture
         if (!$s->hasTable('finance_document_requests')) throw new \RuntimeException('Native Finance schema not installed'); // Exact native187 above; never synthesize a weaker contract.
         if(!$s->hasColumn('journal_entries','source'))$s->table('journal_entries',fn(Blueprint $t)=>$t->string('source')->nullable());
 
+        // Finance source/audit projections needed by native reversal tests; schema only,
+        // established before PHPUnit starts its business-row transaction.
+        foreach (['expenses','sales_receipts'] as $table) {
+            foreach (['status'=>'string','journal_entry_id'=>'unsignedBigInteger','posted_at'=>'timestamp'] as $name=>$type)
+                if (!$s->hasColumn($table,$name)) $s->table($table,fn(Blueprint $t)=>$t->$type($name)->nullable());
+        }
+        foreach (['source_key'=>'string','posted_at'=>'timestamp','voided_at'=>'timestamp','deleted_at'=>'timestamp','voided_by'=>'unsignedBigInteger','reverses_entry_id'=>'unsignedBigInteger'] as $name=>$type)
+            if (!$s->hasColumn('journal_entries',$name)) $s->table('journal_entries',fn(Blueprint $t)=>$t->$type($name)->nullable());
+        if (!$s->hasTable('users')) $s->create('users',function(Blueprint $t){$t->id();$t->unsignedBigInteger('central_user_id');});
+        if (!$s->hasColumn('users','central_user_id')) $s->table('users',fn(Blueprint $t)=>$t->unsignedBigInteger('central_user_id')->nullable());
+        if (!$s->hasTable('action_logs')) $s->create('action_logs',function(Blueprint $t){$t->id();$t->string('controller');$t->string('method');$t->unsignedBigInteger('user_id');$t->json('data');});
+        foreach (['journal_entry_id'=>'unsignedBigInteger','number'=>'string','date'=>'date','amount'=>'decimal'] as $name=>$type)
+            if (!$s->hasColumn('refund_receipts',$name)) $s->table('refund_receipts',fn(Blueprint $t)=>$t->$type($name)->nullable());
+
         if (!$s->hasTable('finance_sales_requests')) $s->create('finance_sales_requests',function(Blueprint $t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->unsignedBigInteger('invoice_id');$t->unsignedBigInteger('invoice_journal_id')->nullable();$t->string('source_revision');$t->string('command');});
         if (!$s->hasColumn('journal_entries','source_type')) $s->table('journal_entries',function(Blueprint $t){$t->string('source_type')->nullable();$t->unsignedBigInteger('source_id')->nullable();});
     }

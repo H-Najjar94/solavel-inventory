@@ -11,6 +11,7 @@ use Tests\TestCase;
 use Tests\Traits\TenantAware;
 
 /** Native additive DDL and legacy hold guard; source-document accounting authorization is not exercised here. */
+#[\PHPUnit\Framework\Attributes\Group('committed-native-transport')]
 final class FinancialOriginHoldMigrationTest extends TestCase
 {
     use TenantAware;
