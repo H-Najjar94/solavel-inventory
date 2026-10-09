@@ -63,6 +63,15 @@ cleanup() {
   set +e
   if [[ -S "$SOCKET" ]]; then mariadb-admin --no-defaults --protocol=SOCKET --socket="$SOCKET" -uroot shutdown >/dev/null 2>&1; fi
   if [[ -n "$SERVER_PID" ]]; then kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; fi
+  # Keep proof, release this disposable lifecycle before the next singleton. No
+  # host paths exist in this namespace; current source inventory stays read-only.
+  proof_suffix="${STOCK_PRIVATE_CASE_INDEX:+-${STOCK_PRIVATE_CASE_INDEX}}"
+  [[ ! -f "$RUN/committed-lifecycle.json" ]] || cp "$RUN/committed-lifecycle.json" "/evidence/lifecycle-$TASK_COHORT$proof_suffix.json"
+  [[ ! -f "$RUN/mariadb.log" ]] || cp "$RUN/mariadb.log" "/evidence/sql-$TASK_COHORT$proof_suffix.log"
+  if [[ "$RUN" == /tmp/stock-tests.* && "$(realpath "$RUN")" == "$RUN" && -d "$RUN/data" ]]; then
+    cd /qualification/source
+    rm -rf -- "$RUN"
+  else echo 'REFUSING: disposable lifecycle cleanup identity mismatch' >&2; status=2; fi
   exit "$status"
 }
 trap cleanup EXIT INT TERM HUP
