@@ -5,7 +5,7 @@ use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationOrganizationMapping;
 use App\Models\User;
 use App\Services\Access\{CentralAppAccess,InventoryPermissionService,WarehouseAccessService};
-use App\Services\Integration\{ApprovedFinanceIntegrationEntitlement,ConnectionManagementPolicy,DocumentIncidentFacts,SolaStockJournalContract};
+use App\Services\Integration\{ApprovedFinanceIntegrationEntitlement,ConnectionManagementPolicy,DocumentIncidentFacts,SolaStockJournalContract,SyncIncidentFacts,SyncIncidentNotificationPublisher};
 use App\Services\Tenancy\TenantManager;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
@@ -22,7 +22,7 @@ final class DocumentIncidentContextController
         abort_unless($secret!=='' && ctype_digit($ts) && abs(time()-(int)$ts)<=(int)config('solavel_sync.allowed_skew_seconds',300)
             && hash_equals(hash_hmac('sha256',$ts.'.'.$request->getContent(),$secret),$sig),403);
         $data=$request->validate(['client_id'=>'required|integer|min:1','organization_id'=>'required|integer|min:1',
-            'document_kind'=>'required|in:receipt,shipment','outbox_id'=>'required|integer|min:1','nonce'=>'required|uuid',
+            'document_kind'=>'required|in:receipt,shipment,party,item,unit,category','outbox_id'=>'required|integer|min:1','nonce'=>'required|uuid',
             'user_ids'=>'prohibited','recipients'=>'prohibited','action_url'=>'prohibited']);
         $org=Organization::query()->where('client_id',$data['client_id'])->where('is_active',true)->findOrFail($data['organization_id']);
         $had=$request->attributes->has('tenant_state');$oldState=$request->attributes->get('tenant_state');
@@ -35,6 +35,7 @@ final class DocumentIncidentContextController
                 ->where('solastock_organization_id',$org->id)->where('tenant_database_identity',$db->getDatabaseName())
                 ->where('integration','solabooks')->where('status','verified')->where('activation_state','active')->firstOrFail();
             app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+            if(in_array($data['document_kind'],SyncIncidentFacts::KINDS,true))return $this->syncContext($data,$org,$mapping);
             $sales=$data['document_kind']==='shipment';
             $row=$db->table($sales?'sales_document_outbox':'purchasing_document_outbox')->where('organization_id',$org->id)->where('id',$data['outbox_id'])->first();
             abort_unless($row,404);$payload=json_decode($row->payload,true,512,JSON_THROW_ON_ERROR);
@@ -71,5 +72,34 @@ final class DocumentIncidentContextController
             config(['database.connections.tenant'=>$oldConnection,'database.default'=>$oldDefault]);
             app()->forgetInstance(InventoryPermissionService::class);app()->forgetInstance(WarehouseAccessService::class);
         }
+    }
+    /**
+     * Party/catalog sync incident (stock-sync-incident.v1). Audience is integration
+     * administrators only, never operators: the same rule document incidents use
+     * (connection_manage + integration.view) OR integration.manage + integration.view, each
+     * with Central app access. `catalog_manager_ids` is the subset that may open the catalog
+     * sync page (integration.manage); Central links everyone else to the events page.
+     */
+    private function syncContext(array $data,object $org,object $mapping)
+    {
+        $db=DB::connection('tenant');$kind=$data['document_kind'];
+        $row=$db->table(SyncIncidentFacts::table($kind))->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('id',$data['outbox_id'])->first();
+        abort_unless($row && ($kind==='party' || $row->entity_type===$kind),404);
+        $facts=app(SyncIncidentNotificationPublisher::class)->currentFacts($kind,$row,$mapping,(int)$org->id);
+        abort_unless($facts,404);
+        $members=DB::connection((string)config('tenancy.central_connection','mysql'))->table('user_organizations')
+            ->where('organization_id',$org->id)->where(fn($q)=>$q->whereNull('status')->orWhere('status','active'))->pluck('user_id');
+        $managers=[];$catalogManagers=[];$permissions=app(InventoryPermissionService::class);
+        foreach(User::query()->whereIn('id',$members)->get() as $user) {
+            $audience=SyncIncidentFacts::audience($kind,$permissions->can($user,'inventory.integration.view'),
+                $permissions->can($user,ConnectionManagementPolicy::MANAGEMENT_PERMISSION),$permissions->can($user,'inventory.integration.manage'));
+            if ($audience===null) continue;
+            if (!(app(CentralAppAccess::class)->decision((int)$user->id,(int)$org->id,'inventory')['allowed']??false)) continue;
+            $managers[]=(int)$user->id;
+            if ($audience==='catalog') $catalogManagers[]=(int)$user->id;
+        }
+        return response()->json(['app_key'=>'inventory','client_id'=>(int)$org->client_id,'organization_id'=>(int)$org->id,
+            'document_kind'=>$kind,'outbox_id'=>(int)$row->id,'facts'=>$facts,'fingerprint'=>SyncIncidentFacts::fingerprint($facts),
+            'eligible_manager_ids'=>$managers,'catalog_manager_ids'=>$catalogManagers,'eligible_operator_ids'=>[]])->header('Cache-Control','no-store');
     }
 }

@@ -38,9 +38,13 @@ final class SuperviseSolaBooksTransport extends Command
         }
         $this->installSignals();
         $processed = 0;
+        $lastState = null;
         do {
             $targets = $registry->targets();
-            $heartbeat->write($targets === [] ? 'idle' : 'running', count($targets), $processed);
+            // Health reflects the durable per-target diagnostics: a target stays failing while
+            // any of its stages is recorded (including while backing off) until it succeeds.
+            $failing = $isolation->failingTargets($targets);
+            $heartbeat->write(TransportWorkerHeartbeat::stateFor(count($targets), $failing), count($targets), $processed, $failing);
             foreach ($targets as $target) {
                 if ($this->stop) {
                     break;
@@ -92,12 +96,28 @@ final class SuperviseSolaBooksTransport extends Command
                             + app(\App\Services\FinancialOrigins\CashNotificationPublisher::class)->process(1);
                     });
                     $processed += (int) $isolation->attempt($target, 'purchasing_notifications', fn () => app(\App\Services\Purchasing\PurchasingNotificationPublisher::class)->process(1));
+                    // Queue-only reconciliation of party/catalog sync incidents; delivered below.
+                    $isolation->attempt($target, 'sync_incidents', fn () => app(\App\Services\Integration\SyncIncidentNotificationPublisher::class)->sweep($mapping));
                     $processed += (int) $isolation->attempt($target, 'document_incidents', fn () => app(\App\Services\Integration\DocumentIncidentNotificationPublisher::class)->process(1));
                 } finally {
                     $organizations->forget();
                 }
             }
-            $heartbeat->write($targets === [] ? 'idle' : 'running', count($targets), $processed);
+            $failing = $isolation->failingTargets($targets);
+            $state = TransportWorkerHeartbeat::stateFor(count($targets), $failing);
+            $heartbeat->write($state, count($targets), $processed, $failing);
+            if ($state !== $lastState) {
+                // Logged on health transitions only (never per cycle); per-target detail is
+                // logged once per backoff window by TransportTargetIsolation.
+                \Illuminate\Support\Facades\Log::log(in_array($state, ['degraded', 'failing'], true) ? 'warning' : 'info',
+                    'integration.transport.supervisor_health', [
+                        'state' => $state,
+                        'previous_state' => $lastState,
+                        'approved_targets' => count($targets),
+                        'failing_targets' => $failing,
+                    ]);
+                $lastState = $state;
+            }
             if ($this->option('once') || $this->stop) {
                 break;
             }

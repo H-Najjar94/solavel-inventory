@@ -65,6 +65,9 @@ final class DurableCatalogSync {
     Log::warning('catalog_sync_delivery_pending',['organization_id'=>$map->solastock_organization_id,'mapping_uuid'=>$map->mapping_uuid,'source_uuid'=>$row->source_uuid,'entity_type'=>$row->entity_type,'source_id'=>$row->source_id,'state_version'=>$row->state_version,'attempt'=>$row->attempts+1,'reason'=>$safe]);
    }
    $updated=$db->table(self::TABLE)->where('id',$row->id)->where('lease_uuid',$row->lease_uuid)->where('state_version',$row->state_version)->update($changes+['lease_uuid'=>null,'lease_expires_at'=>null,'updated_at'=>now()]);
+   // Terminal (intervention_required) and resolving (delivered) transitions notify integration
+   // administrators through the durable incident outbox; deduplicated and never fails delivery.
+   if($updated===1&&in_array($changes['state'],['intervention_required','delivered'],true))app(\App\Services\Integration\SyncIncidentNotificationPublisher::class)->changed((string)$row->entity_type,(int)$row->id,(string)$map->mapping_uuid);
    if($updated===1&&$changes['state']==='delivered')app(\App\Services\Integration\CatalogDocumentResumption::class)->resume($map,$row->entity_type,(int)$row->source_id);$count++;
   }return $count;
  }

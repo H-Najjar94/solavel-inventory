@@ -36,4 +36,18 @@ final class DocumentIncidentContextAuthorizationTest extends TestCase
   $request=Request::create('/api/tenancy/document-incident-context','POST',[],[],[],['CONTENT_TYPE'=>'application/json','HTTP_X_SOLAVEL_TIMESTAMP'=>$ts,'HTTP_X_SOLAVEL_SIGNATURE'=>hash_hmac('sha256',$ts.'.'.$body,'isolated-incident-secret')],$body);
   $this->expectException(\Illuminate\Validation\ValidationException::class);$this->invoke($request);
  }
+ public function test_sync_incident_kinds_cannot_choose_recipients_and_unknown_kinds_are_rejected():void {
+  config(['solavel_sync.secret'=>'isolated-incident-secret']);
+  foreach([['document_kind'=>'party','user_ids'=>[999]],['document_kind'=>'item','recipients'=>[999]],['document_kind'=>'catalog']] as $change){
+   $body=json_encode(array_replace(['client_id'=>87,'organization_id'=>165,'document_kind'=>'party','outbox_id'=>1,'nonce'=>(string)Str::uuid()],$change),JSON_THROW_ON_ERROR);$ts=(string)time();
+   $request=Request::create('/api/tenancy/document-incident-context','POST',[],[],[],['CONTENT_TYPE'=>'application/json','HTTP_X_SOLAVEL_TIMESTAMP'=>$ts,'HTTP_X_SOLAVEL_SIGNATURE'=>hash_hmac('sha256',$ts.'.'.$body,'isolated-incident-secret')],$body);
+   try{$this->invoke($request);$this->fail('Accepted '.json_encode($change));}catch(\Illuminate\Validation\ValidationException $e){$this->assertNotEmpty($e->errors());}
+  }
+ }
+ public function test_unsigned_sync_incident_context_is_rejected():void {
+  config(['solavel_sync.secret'=>'isolated-incident-secret','solavel_sync.use_signed_sync'=>false]);
+  $body=json_encode(['client_id'=>87,'organization_id'=>165,'document_kind'=>'unit','outbox_id'=>1,'nonce'=>(string)Str::uuid()],JSON_THROW_ON_ERROR);
+  $request=Request::create('/api/tenancy/document-incident-context','POST',[],[],[],['CONTENT_TYPE'=>'application/json','HTTP_X_SOLAVEL_TIMESTAMP'=>(string)time(),'HTTP_X_SOLAVEL_SIGNATURE'=>'sha256='.str_repeat('0',64)],$body);
+  try{$this->invoke($request);$this->fail('Unsigned sync context accepted.');}catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){$this->assertSame(403,$e->getStatusCode());}
+ }
 }
