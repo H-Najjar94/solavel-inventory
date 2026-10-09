@@ -77,4 +77,16 @@ final class DocumentHandoffOutcomeTest extends TestCase
             $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
         }
     }
+    public function test_native_journal_ordering_retries_only_exact_transient_reasons():void
+    {
+        foreach ([['purchasing.return.confirmed','source_review','source_journal_delivery_required'],
+                  ['purchasing.return.reversed','reversal_review','physical_return_inverse_journal_pending']] as [$event,$state,$reason]) {
+            $data=['state'=>$state,'missing_information'=>[$reason]];
+            $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],$event);
+            $this->assertFalse($r['successful']);$this->assertFalse($r['intervention']);
+            $this->assertSame('delivery_pending',$r['reason']);
+            $data['missing_information'][]='original_receipt_required';
+            $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],$event)['intervention']);
+        }
+    }
 }

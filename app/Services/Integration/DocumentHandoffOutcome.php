@@ -33,8 +33,12 @@ final class DocumentHandoffOutcome
         $pending=$event==='purchasing.return.reversed' && ($data['state']??null)==='reversal_settlement_pending'
             && (int)($data['source_id']??0)>0 && (int)($data['reversal_proof_id']??0)>0
             && (int)($data['inverse_import_journal_id']??0)>0 && is_array($data['settlement_uuids']??null) && $data['settlement_uuids']!==[];
-        $intervention=$accepted && !$linked && !$pending && in_array($data['state']??null,['intervention','needs_information','source_review','reversal_review','reversal_settlement_pending','credit_voided_review'],true);
+        $ordering=$event==='purchasing.return.confirmed' && ($data['state']??null)==='source_review'
+            && ($data['missing_information']??[])===['source_journal_delivery_required']
+            || $event==='purchasing.return.reversed' && ($data['state']??null)==='reversal_review'
+            && ($data['missing_information']??[])===['physical_return_inverse_journal_pending'];
+        $intervention=$accepted && !$linked && !$pending && !$ordering && in_array($data['state']??null,['intervention','needs_information','source_review','reversal_review','reversal_settlement_pending','credit_voided_review'],true);
         return ['successful'=>$accepted && $linked,'intervention'=>$intervention,
-            'data'=>$data,'reason'=>$intervention?'commercial_mapping_required':(!$accepted || $pending?'delivery_pending':(!$linked?'destination_document_missing':null))];
+            'data'=>$data,'reason'=>$intervention?'commercial_mapping_required':(!$accepted || $pending || $ordering?'delivery_pending':(!$linked?'destination_document_missing':null))];
     }
 }
