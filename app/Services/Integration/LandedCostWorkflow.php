@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
+ * Posting readiness for landed costs (availability is LandedCostAvailability's).
+ *
  * Landed costs in a connected organization journal to a reviewed
  * `landed_cost_clearing` account. Existing connections were approved without
  * that workflow, so an owner enables it explicitly: the clearing account is
@@ -31,7 +33,9 @@ final class LandedCostWorkflow
             ->where('integration', IntegrationEvents::INTEGRATION)->first();
         $mapping = $this->mapping($organizationId);
         if (! $mapping || ! $setting || $setting->mode === 'disconnected') {
+            // Without an active connection nothing journals, so no mapping is needed to post.
             return ['mode' => $mapping ? 'connection_required' : 'standalone', 'enabled' => ! $mapping,
+                'posting_ready' => true, 'setup_required' => false, 'setup_action' => null,
                 'base_currency' => null, 'enabled_currencies' => [], 'missing_roles' => [], 'clearing_account' => null, 'candidates' => []];
         }
         $workflows = (array) data_get($setting->meta, 'transport_enabled_workflows', []);
@@ -44,9 +48,17 @@ final class LandedCostWorkflow
             ->where('integration', IntegrationEvents::INTEGRATION)->where('mapping_type', 'landed_cost_clearing')
             ->whereIn('status', ['mapped', 'verified'])->value('solabooks_account_id');
 
+        $ready = $enabled && $missing === [];
+        // Availability is the plan's; posting needs the reviewed clearing account.
+        // Other missing roles belong to the connection review, not to this setup.
+        $clearingMissing = ! $enabled || in_array('landed_cost_clearing', $missing, true);
+
         return [
             'mode' => 'connected',
-            'enabled' => $enabled && $missing === [],
+            'enabled' => $ready,
+            'posting_ready' => $ready,
+            'setup_required' => ! $ready,
+            'setup_action' => $ready ? null : ($clearingMissing ? 'choose_clearing_account' : 'review_connection_mappings'),
             'workflow_enabled' => $enabled,
             'base_currency' => data_get($setting->meta, 'finance_currency_contract.base_currency_code'),
             'enabled_currencies' => array_values((array) data_get($setting->meta, 'finance_currency_contract.enabled_currency_codes', [])),
@@ -58,6 +70,12 @@ final class LandedCostWorkflow
         ];
     }
 
+    /**
+     * "Set up landed costs: choose the clearing account" (also: confirm it again,
+     * idempotently). Writes only the mapping, its account_role binding, the two
+     * workflow operations and an audit row: no landed cost is allocated, no
+     * stock value changes and no outbox event or journal is recorded.
+     */
     public function enable(int $organizationId, int $financeAccountId, int $actorUserId): array
     {
         DB::connection('tenant')->transaction(function () use ($organizationId, $financeAccountId, $actorUserId): void {

@@ -203,7 +203,9 @@ export const api = {
     landedCost: (id) => request(`/landed-costs/${id}`),
     landedCostReceiptLines: (params) => request('/landed-costs/receipt-lines', { params }),
     landedCostConnection: () => request('/landed-costs/connection'),
+    // "Set up landed costs: choose the clearing account" (accounting_review + connection_manage).
     enableLandedCostConnection: (financeAccountId) => request('/landed-costs/connection/enable', { method: 'POST', body: { finance_account_id: financeAccountId } }),
+    setLandedCostPreference: (optedOut) => request('/landed-costs/preference', { method: 'PUT', body: { opted_out: Boolean(optedOut) } }),
     createLandedCost: (body) => request('/landed-costs', { method: 'POST', body }),
     updateLandedCost: (id, body) => request(`/landed-costs/${id}`, { method: 'PUT', body }),
     postLandedCost: (id) => request(`/landed-costs/${id}/post`, { method: 'POST' }),

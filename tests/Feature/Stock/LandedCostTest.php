@@ -62,7 +62,7 @@ class LandedCostTest extends TestCase
      * Runs $call with the tenant query log on and returns the indexes of the
      * item, balance and layer locks and of the first non-locking data read.
      *
-     * @return array{items:int|false,balances:int|false,layers:int|false,first_plain:int|false}
+     * @return array{items:int|false,balances:int|false,layers:int|false,line_locks:int|false,component_locks:int|false,first_plain:int|false}
      */
     private function lockOrder(\Closure $call): array
     {
@@ -81,6 +81,8 @@ class LandedCostTest extends TestCase
             'items' => $find('items'),
             'balances' => $find('stock_balances'),
             'layers' => $find('cost_layers'),
+            'line_locks' => $find('stock_landed_cost_lines'),
+            'component_locks' => $find('stock_landed_cost_components'),
             // A plain SELECT fixes the REPEATABLE READ view; schema probes do not read rows.
             'first_plain' => collect($log)->search(fn ($q) => str_starts_with(ltrim($q), 'select')
                 && ! str_contains($q, 'for update') && ! str_contains($q, 'information_schema')),
@@ -329,6 +331,31 @@ class LandedCostTest extends TestCase
         $this->assertSame('5.0000', (string) $layer->unit_cost);
         $this->assertSame('9.0000', (string) $layer->remaining_qty);
         $this->assertSame('45.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+    }
+
+    #[Test]
+    public function a_reversal_locks_the_document_lines_not_the_components_so_it_cannot_gap_lock_a_concurrent_post(): void
+    {
+        $this->useTenantA();
+        $warehouse = F::warehouse(['code' => 'LC-REVLOCK-WH']);
+        $item = F::fifoItem(['sku' => 'LC-REVLOCK']);
+        $receipt = $this->receive($warehouse, $item, '10', '4', 'LC-REVLOCK-GRN');
+        $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'freight', 'amount' => '10']]);
+        app(LandedCostService::class)->post($doc);
+        $this->assertSame('5.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+
+        $order = $this->lockOrder(fn () => app(LandedCostService::class)->reverse($doc->fresh(), 'Wrong invoice'));
+
+        // Batch 9 F1: the components index is never range-locked by a reversal
+        // (post() inserts into it while holding the item lock).
+        $this->assertFalse($order['component_locks']);
+        $this->assertIsInt($order['line_locks']);
+        $this->assertLessThan($order['items'], $order['line_locks']);
+        // B1 guarantee kept: every stock lock precedes the first plain read.
+        $this->assertLocksPrecedeFirstPlainRead($order);
+        $this->assertSame('reversed', $doc->fresh()->status);
+        $this->assertSame('4.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+        $this->assertSame('40.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
     }
 
     #[Test]

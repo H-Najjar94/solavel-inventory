@@ -68,6 +68,9 @@ final class IntegrationEvents
         if (! self::postsJournal($type)) {
             return false;
         }
+        if (self::reversesDocumentUnknownToFinance($type, $payload)) {
+            return false;
+        }
         if (in_array($type, ['landed_cost.posted', 'landed_cost.reversed'], true)) {
             // The inventory change can be 0 when every unit was already sold;
             // the journal value is the whole landed cost.
@@ -81,12 +84,33 @@ final class IntegrationEvents
     }
 
     /**
+     * A reversal (InventoryReversal aggregate, every *.reversed type) whose original
+     * document was posted while the organization was standalone: no original event was
+     * ever recorded, so Finance never booked the original journal. Its inverse must not
+     * be sent either (it could never link to an original and would dead-letter); the
+     * physical reversal stays fully local, like the original.
+     */
+    public static function reversesDocumentUnknownToFinance(string $type, array $payload): bool
+    {
+        if (self::aggregateType($type) !== 'InventoryReversal') {
+            return false;
+        }
+        $original = $payload['original_source'] ?? null;
+
+        return is_array($original) && ($original['event_uuid'] ?? null) === null;
+    }
+
+    /**
      * Phase 0 reconciliation preserves zero-value adjustment events as
      * accounting events. They remain part of the reviewed historical set even
      * though delivery would treat them as an operational no-op.
      */
     public static function isAccountingEventForReconciliation(string $type, array $payload): bool
     {
+        if (self::reversesDocumentUnknownToFinance($type, $payload)) {
+            return false;
+        }
+
         return self::postsJournalForPayload($type, $payload)
             || in_array($type, ['adjustment.posted', 'adjustment.reversed'], true);
     }

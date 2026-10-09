@@ -7,6 +7,7 @@ import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
 import { EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
+import LandedCostSettingsCard from '../components/LandedCostSettingsCard.jsx';
 
 export default function SettingsPage() {
     const tr = useSettingsTranslation();
@@ -338,6 +339,8 @@ export default function SettingsPage() {
                 </div>
                 <button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? tr('settings.policy.saving') : tr('settings.policy.save')}</button>
             </div>
+
+            <LandedCostSettingsCard />
 
             <div className="panel">
                 <h2>{tr('settings.taxes.title')}</h2>

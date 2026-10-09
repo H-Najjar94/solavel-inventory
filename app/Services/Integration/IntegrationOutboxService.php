@@ -76,9 +76,11 @@ class IntegrationOutboxService
             default => 'pending',
         };
         if (! $postsJournal) {
-            $payload['accounting_policy'] = $eventType === 'transfer.posted'
-                ? 'no_journal_same_entity_inventory_transfer'
-                : 'operational_event_no_journal';
+            $payload['accounting_policy'] = match (true) {
+                $eventType === 'transfer.posted' => 'no_journal_same_entity_inventory_transfer',
+                IntegrationEvents::reversesDocumentUnknownToFinance($eventType, $payload) => 'original_posted_standalone_no_journal',
+                default => 'operational_event_no_journal',
+            };
         }
 
         $event = IntegrationOutboxEvent::create([

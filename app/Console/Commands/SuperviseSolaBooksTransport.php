@@ -51,10 +51,10 @@ final class SuperviseSolaBooksTransport extends Command
                 }
                 // One organization's failure must never stop delivery for the others:
                 // each stage is isolated, diagnosed durably and backed off on its own.
-                $mapping = $isolation->attempt($target, 'connection', function () use ($tenants, $target) {
+                $looked = false;
+                $mapping = $isolation->attempt($target, 'connection', function () use ($tenants, $target, &$looked) {
                     $tenants->switchToDatabase($target['database']);
-
-                    return IntegrationOrganizationMapping::query()
+                    $mapping = IntegrationOrganizationMapping::query()
                         ->where('central_client_id', $target['client_id'])
                         ->where('central_organization_id', $target['organization_id'])
                         ->where('tenant_database_identity', $target['database'])
@@ -62,8 +62,15 @@ final class SuperviseSolaBooksTransport extends Command
                         ->where('status', 'verified')
                         ->where('activation_state', 'active')
                         ->first();
+                    $looked = true;
+
+                    return $mapping;
                 }, null);
                 if (! $mapping) {
+                    if ($looked) {
+                        // Read succeeded, mapping inactive: stale stage failures leave the failing set.
+                        $isolation->retireInactive($target);
+                    }
                     continue;
                 }
                 $organizations->set((int) $mapping->solastock_organization_id);

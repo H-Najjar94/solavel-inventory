@@ -79,6 +79,13 @@ class InventoryCommercialEntitlementService
 
         $accessMode = (string) ($snapshot['access_mode'] ?? 'full');
 
+        // Newer plan features are granted only by an explicit plan flag: a snapshot published before
+        // Central knew the feature (missed repush, rollback) must not fall back to "any paid tier".
+        if ($decision['allowed'] && in_array($featureKey, (array) config('inventory_entitlements.explicit_flag_features', []), true)
+            && ! $this->snapshotNamesFeature((array) $snapshot, $featureKey)) {
+            return $this->decision(false, 'feature_not_in_plan', $accessMode, $snapshot, $featureKey, $meta);
+        }
+
         if ($decision['allowed']) {
             return $this->decision(true, $this->grantReason($snapshot, $meta), $accessMode, $snapshot, $featureKey, $meta);
         }
@@ -88,6 +95,15 @@ class InventoryCommercialEntitlementService
         }
 
         return $this->decision(false, 'feature_not_in_plan', $accessMode, $snapshot, $featureKey, $meta);
+    }
+
+    private function snapshotNamesFeature(array $snapshot, string $featureKey): bool
+    {
+        if (in_array($featureKey, (array) ($snapshot['allowed_features'] ?? []), true)) return true;
+        foreach (['features', 'flags'] as $key) {
+            if (array_key_exists($featureKey, (array) ($snapshot[$key] ?? []))) return true;
+        }
+        return false;
     }
 
     /**
