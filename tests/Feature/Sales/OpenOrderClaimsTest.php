@@ -51,7 +51,7 @@ final class OpenOrderClaimsTest extends TestCase
   try{$call();$this->fail('Claim accepted: '.$reason);}catch(ValidationException $e){$this->assertArrayHasKey('origin_order',$e->errors());$this->assertSame($reason,$e->response->getData(true)['claim']['reason']);}
  }
  public function test_open_orders_read_lists_only_unshipped_stock_born_orders_of_the_invoice_customer():void {
-  $order=$this->fixture();$other=Customer::create(['code'=>'QA-OTHER-CUST','name'=>'Other customer','is_active'=>true]);$this->order($other->id,'2');
+  $order=$this->fixture();$other=Customer::create(['code'=>'QA-OTHER-CUST','name'=>'Other customer','is_active'=>true]);$this->master('customer',$other->id,7031);$this->order($other->id,'2');
   $shipped=$this->order($this->customer->id,'1');$shipping=app(ShipmentService::class);
   $shipping->post($shipping->createDraft(['sales_order_id'=>$shipped->id,'warehouse_id'=>$this->warehouse->id,'shipment_number'=>'QA-SHIPPED-'.Str::uuid()],[['sales_order_line_id'=>$shipped->lines->sole()->id,'item_id'=>$this->item->id,'entered_unit_id'=>$this->unit->id,'quantity'=>'1']]));
   $d=$this->data();$this->intent($d);$before=[SalesOrder::count(),FulfillmentRequest::count(),StockLedger::count()];
