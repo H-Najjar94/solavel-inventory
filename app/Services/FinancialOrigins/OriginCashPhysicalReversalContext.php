@@ -56,7 +56,7 @@ final readonly class OriginCashPhysicalReversalContext
    foreach(['mapping_uuid'=>'physical_mapping_uuid','id'=>'physical_document_id','journal_key'=>'physical_journal_key','journal_event_uuid'=>'physical_journal_event_uuid','journal_payload_hash'=>'physical_journal_payload_hash'] as $native=>$input)
     abort_unless((string)data_get($snapshot,'physical.'.$native)===(string)$f[$input],409);
    $cost=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$match->physical_journal_id)->where('source','SOLASTOCK')
-    ->whereIn('source_type',[\App\Models\Tenant\Shipment::class,'shipment'])->where('source_id',$f['physical_document_id'])->where('source_key','external-api:'.hash('sha256',$f['physical_journal_key']))->first();$this->active($cost);
+    ->whereIn('source_type',['Shipment','shipment'])->where('source_id',$f['physical_document_id'])->where('source_key','external-api:'.hash('sha256',$f['physical_journal_key']))->first();$this->active($cost);
    if(bccomp((string)$match->booked_base,'0',6)>0){$recognition=$db->table('journal_entries')->where('organization_id',$finance)->where('id',$match->journal_entry_id)
      ->where('source','FINANCIAL-ORIGIN')->where('source_type','App\\Models\\SalesReceipt')->where('source_id',$source->id)->where('source_key','financial-origin-match:'.$match->operation_uuid)->first();$this->active($recognition);}
    else abort_unless(!$match->journal_entry_id,409);
