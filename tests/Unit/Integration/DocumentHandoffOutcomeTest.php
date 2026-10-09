@@ -38,4 +38,27 @@ final class DocumentHandoffOutcomeTest extends TestCase
         $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed']],'purchasing.receipt.reversed');
         $this->assertTrue($r['successful']);
     }
+    public function test_supplier_return_requires_native_draft_or_unbilled_bridge():void
+    {
+        foreach ([['state'=>'draft_review','source_id'=>11,'debit_note_id'=>12],
+                  ['state'=>'linked_existing_review','source_id'=>11,'debit_note_id'=>12],
+                  ['state'=>'unbilled_cleared','source_id'=>11,'journal_id'=>13]] as $data) {
+            $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.confirmed')['successful']);
+        }
+        foreach ([['state'=>'source_review','source_id'=>11],['state'=>'draft_review','source_id'=>11],
+                  ['state'=>'unbilled_cleared','source_id'=>11],['state'=>'unknown','source_id'=>11,'debit_note_id'=>12]] as $data) {
+            $this->assertFalse(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>$data],'purchasing.return.confirmed')['successful']);
+        }
+        $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'source_review','source_id'=>11]],'purchasing.return.confirmed');
+        $this->assertTrue($r['intervention']);
+    }
+    public function test_supplier_return_reversal_requires_persisted_source_and_completed_state():void
+    {
+        $this->assertTrue(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed','source_id'=>11]],'purchasing.return.reversed')['successful']);
+        foreach (['reversal_review','reversal_settlement_pending'] as $state) {
+            $r=DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>$state,'source_id'=>11]],'purchasing.return.reversed');
+            $this->assertFalse($r['successful']);$this->assertTrue($r['intervention']);
+        }
+        $this->assertFalse(DocumentHandoffOutcome::classify(['successful'=>true,'data'=>['state'=>'reversed']],'purchasing.return.reversed')['successful']);
+    }
 }

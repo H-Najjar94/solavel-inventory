@@ -357,7 +357,7 @@ class SolaBooksOutboxDeliveryService
         }
         $event = new IntegrationOutboxEvent(['organization_id' => $document->organization_id, 'idempotency_key' => $document->source_key, 'event_uuid' => $document->event_uuid]);
         $payload = $document->payload;
-        if (($payload['schema_version'] ?? null) !== 'purchasing.v1' || ! in_array($payload['event_type'] ?? null, ['purchasing.receipt.confirmed', 'purchasing.receipt.reversed'], true)) {
+        if (($payload['schema_version'] ?? null) !== 'purchasing.v1' || ! in_array($payload['event_type'] ?? null, ['purchasing.receipt.confirmed', 'purchasing.receipt.reversed', 'purchasing.return.confirmed', 'purchasing.return.reversed'], true)) {
             throw new RuntimeException(__('inventory.purchasing.connection_review_required'));
         }
         if (! $document->lease_expires_at || $document->lease_expires_at->isPast()) {
