@@ -353,7 +353,9 @@ class LandedCostTest extends TestCase
         app(LandedCostService::class)->post($doc);
         $this->assertSame('5.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
 
-        $order = $this->lockOrder(fn () => app(LandedCostService::class)->reverse($doc->fresh(), 'Wrong invoice'));
+        // Read the document before the measured region: only the service's own queries are lock-ordered.
+        $fresh = $doc->fresh();
+        $order = $this->lockOrder(fn () => app(LandedCostService::class)->reverse($fresh, 'Wrong invoice'));
 
         // Batch 9 F1: the components index is never range-locked by a reversal
         // (post() inserts into it while holding the item lock).

@@ -58,13 +58,23 @@ final class WorkflowCurrencyResolver
         // Inventory-only documents are explicitly valued in the reviewed Finance
         // base pool. They have no sales/purchase transaction currency to inherit.
         // Receipts resolve separately below; linked documents always retain their source currency.
-        $baseValued = in_array($documentType, ['historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock', 'supplier_return', 'landed_cost'], true);
+        $baseValuedTypes = ['historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock', 'supplier_return', 'landed_cost'];
+        // A reversal with an original event reused its currency above. One without (its source was
+        // posted while standalone) is valued exactly as its source document was.
+        $reversalSource = $documentType === 'inventory_reversal'
+            ? Str::snake(class_basename((string) ($document->source_type ?? ''))) : null;
+        $baseValued = in_array($documentType, $baseValuedTypes, true)
+            || ($reversalSource !== null && in_array($reversalSource, $baseValuedTypes, true));
         $code = $baseValued
             ? (string) (app(FinanceBaseValuation::class)->contract($orgId)['base_currency_code'] ?? '')
             : $this->documentCurrency($document, $documentType, true);
         // A standalone GRN has no transaction currency input or source document.
         // Its costs are entered in the organization's authoritative base currency.
         if ($documentType === 'goods_receipt' && empty($document->purchase_order_id) && $code === '') {
+            $code = $base;
+        }
+        if ($reversalSource === 'goods_receipt' && $code === '' && empty(DB::connection('tenant')->table('goods_receipts')
+            ->where('organization_id', $orgId)->where('id', $document->source_id)->value('purchase_order_id'))) {
             $code = $base;
         }
         $currencyField = $documentType === 'goods_receipt' && ! empty($document->purchase_order_id)
