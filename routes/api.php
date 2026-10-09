@@ -332,6 +332,13 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::post('/finance-allocations/cost-adjustment/apply', [FinancialLineAllocationController::class, 'applyCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.apply');
     Route::post('/finance-allocations/cost-adjustment/reverse', [FinancialLineAllocationController::class, 'reverseCostAdjustment'])->middleware('perm:inventory.integration.setup')->name('api.v1.finance-allocations.cost-adjustment.reverse');
 
+    Route::get('/goods-receipts/{goods_receipt}/supplier-return', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'prepare'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.supplier-returns.prepare');
+    Route::post('/goods-receipts/{goods_receipt}/supplier-return', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'store'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.supplier-returns.store');
+    Route::post('/supplier-returns/{supplier_return}/post', [\App\Http\Controllers\Api\V1\SupplierReturnController::class, 'post'])
+        ->middleware('perm:inventory.manage_returns')->name('api.v1.supplier-returns.post');
+
     Route::get('/goods-receipts', [GoodsReceiptController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.grn.index');
     Route::get('/goods-receipts/{goods_receipt}', [GoodsReceiptController::class, 'show'])

@@ -9,11 +9,17 @@ import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { DocumentStatusBadge, DocumentActions, ConfirmPostModal, ConfirmReverseModal, LedgerPreview } from '../components/document.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
+import SupplierReturnFromReceipt from './SupplierReturnFromReceipt.jsx';
+
+const quantityText = value => String(value ?? '0').replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
+
 export default function GoodsReceiptDetailPage() {
     const { t,locale } = useI18n();const ar=locale==='ar';
     const { id } = useParams();
     const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.receive_goods');
+    const returnGate = useCanCreate('inventory.manage_returns');
+    const [supplierReturn, setSupplierReturn] = useState(false);
     const reverseGate = useCanCreate('inventory.manage_adjustments');
     const [tab, setTab] = useState('lines');
     const [confirmPost, setConfirmPost] = useState(false);
@@ -56,12 +62,15 @@ export default function GoodsReceiptDetailPage() {
             </dl></div>
 
             {data?.receiving_request&&<p><Link to="/receiving-requests">{data.receiving_request.number}</Link> · {data.receiving_request.source_bill_number || (ar?'فاتورة مسودة':'Draft bill')}</p>}
-            {(data?.finance_handoff??[]).map((e,i)=><div className="banner" key={i} style={{overflowWrap:'anywhere'}}>{e.event_type==='purchasing.receipt.reversed'?(ar?'أُرسل عكس الاستلام للمحاسب للمراجعة.':'Receipt reversal sent to the accountant for review.'):e.status==='sent'?(e.response?.status==='needs_information'?(ar?'وصل الاستلام إلى SolaCount لكنه يحتاج مراجعة بيانات المورد أو الأصناف. على المحاسب إكمال التفاصيل وإعادة المحاولة.':'Receipt reached SolaCount and needs supplier or product information. The accountant can complete details and retry.'):(ar?'أُرسل الاستلام إلى المحاسب. تظل الفاتورة مسودة حتى يراجعها ويرحّلها.':'Receipt sent to the accountant. The bill stays a draft until reviewed and posted.')):(ar?'إرسال الاستلام إلى SolaCount قيد الانتظار. ستتم إعادة المحاولة تلقائياً، دون استلام إضافي.':'Sending the receipt to SolaCount is pending. It retries automatically without another receipt.')}{e.response?.bill_id&&<span> · {e.response.bill_number || `${ar?'فاتورة':'Bill'} #${e.response.bill_id}`}</span>}</div>)}
+            {data?.source_bill_status && <p className="muted">{ar ? 'حالة الفاتورة عند آخر مزامنة للطلب: ' : 'Bill status at last request synchronization: '}{data.source_bill_status === 'posted' ? (ar ? 'مرحّلة' : 'Posted') : (ar ? 'مسودة' : 'Draft')}</p>}
+            {(data?.finance_handoff??[]).map((e,i)=><div className="banner" key={i} style={{overflowWrap:'anywhere'}}>{e.event_type==='purchasing.receipt.reversed'?(ar?'أُرسل عكس الاستلام للمحاسب للمراجعة.':'Receipt reversal sent to the accountant for review.'):e.status==='sent'?(e.response?.status==='needs_information'?(ar?'وصل الاستلام إلى SolaCount لكنه يحتاج مراجعة بيانات المورد أو الأصناف. على المحاسب إكمال التفاصيل وإعادة المحاولة.':'Receipt reached SolaCount and needs supplier or product information. The accountant can complete details and retry.'):(ar?'تمت مزامنة الاستلام مع SolaCount. حالة الفاتورة المالية تُدار بشكل مستقل.':'Receipt synchronized with SolaCount. The bill’s financial status is managed separately.')):(ar?'إرسال الاستلام إلى SolaCount قيد الانتظار. ستتم إعادة المحاولة تلقائياً، دون استلام إضافي.':'Sending the receipt to SolaCount is pending. It retries automatically without another receipt.')}{e.response?.bill_id&&<span> · {e.response.bill_number || `${ar?'فاتورة':'Bill'} #${e.response.bill_id}`}</span>}</div>)}
+            {grn.status === 'posted' && !grn.reversal_id && grn.supplier_id && returnGate.allowed && <button className="btn" onClick={() => setSupplierReturn(true)}>{ar ? 'إرجاع إلى المورد' : 'Return to supplier'}</button>}
+            {supplierReturn && <SupplierReturnFromReceipt receiptId={id} onClose={() => setSupplierReturn(false)} onPosted={() => qc.invalidateQueries({ queryKey: ['grn'] })} />}
             <Tabs tabs={[{ key: 'lines', label: t('receiving.common.lines', 'Lines') }, { key: 'ledger', label: t('receiving.grn.tabs.ledgerResult', 'Ledger result') }, { key: 'audit', label: t('receiving.common.audit', 'Audit') }]} active={tab} onChange={setTab} />
 
-            {tab === 'lines' && <div className="panel"><table className="data-table">
+            {tab === 'lines' && <div className="panel" style={{ overflowX: 'auto' }}><table className="data-table">
                 <thead><tr><th>{t('receiving.common.item', 'Item')}</th><th>{t('receiving.grn.fields.received', 'Received')}</th><th>{t('receiving.grn.fields.accepted', 'Accepted')}</th><th>{t('receiving.grn.fields.rejected', 'Rejected')}</th><th>{t('receiving.grn.fields.disposition', 'Disposition')}</th><th>{t('receiving.common.bin', 'Bin')}</th><th>{t('receiving.common.unitCost', 'Unit cost')}</th></tr></thead>
-                <tbody>{(grn.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.received_qty}{l.entered_unit ? <span className="muted"> ({l.entered_qty} {l.entered_unit.code})</span> : null}</td><td>{l.accepted_qty}</td><td>{l.rejected_qty ?? '0.0000'}</td><td>{t(`receiving.disposition.${l.disposition ?? l.inspection_status ?? 'restock'}`, l.disposition ?? l.inspection_status ?? 'restock')}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td>{l.unit_cost}</td></tr>)}</tbody>
+                <tbody>{(grn.lines ?? []).map((l) => <tr key={l.id}><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td style={{ whiteSpace: 'nowrap' }}>{quantityText(l.received_qty)}{l.entered_unit ? <span className="muted"> ({quantityText(l.entered_qty)} {l.entered_unit.code})</span> : null}</td><td style={{ whiteSpace: 'nowrap' }}>{quantityText(l.accepted_qty)}</td><td style={{ whiteSpace: 'nowrap' }}>{quantityText(l.rejected_qty)}</td><td>{t(`receiving.disposition.${l.disposition ?? l.inspection_status ?? 'restock'}`, l.disposition ?? l.inspection_status ?? 'restock')}</td><td>{l.bin_id ? `#${l.bin_id}` : '—'}</td><td style={{ whiteSpace: 'nowrap' }}>{quantityText(l.unit_cost)}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
             {tab === 'audit' && <div className="panel"><EmptyState title={t('receiving.common.auditTimeline', 'Audit timeline')} hint={t('receiving.grn.audit.hint', 'Goods-receipt creation and posting events are recorded in the audit log.')} /></div>}
