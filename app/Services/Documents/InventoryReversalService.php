@@ -171,6 +171,30 @@ class InventoryReversalService
         });
     }
 
+    /**
+     * Landed costs move no quantity: the reversal is its own InventoryReversal
+     * aggregate (so it has its own document mapping and source key), $inverse
+     * undoes the revaluation, and `landed_cost.reversed` links to the posted
+     * event so Finance records the exact inverse journal (reversal_of_id).
+     * The caller has already locked the landed cost inside the same transaction.
+     */
+    public function reverseLandedCost(\App\Models\Tenant\LandedCost $landedCost, string $reason, callable $inverse): InventoryReversal
+    {
+        return DB::connection($this->connection())->transaction(function () use ($landedCost, $reason, $inverse) {
+            $existing = InventoryReversal::query()
+                ->where('source_type', 'landed_cost')->where('source_id', $landedCost->id)->first();
+            if ($existing) {
+                return $existing;
+            }
+            $this->assertReason($reason);
+            $reversal = $this->createReversal('landed_cost', (int) $landedCost->id, (string) $landedCost->landed_cost_number, 'landed_cost.posted', 'REV-LC', $reason);
+            $inverse($reversal);
+            $this->recordEvent($reversal, 'landed_cost.reversed');
+
+            return $reversal->fresh();
+        });
+    }
+
     public function reverseSalesReturn(SalesReturn $return, string $reason): InventoryReversal
     {
         return DB::connection($this->connection())->transaction(function () use ($return, $reason) {
