@@ -411,7 +411,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $journal=\App\Models\Tenant\IntegrationOutboxEvent::query()->where('organization_id',app(\App\Tenancy\OrganizationContext::class)->idOrFail())
             ->where('event_uuid',$proof['journal_event_uuid'])->where('idempotency_key',$proof['journal_key'])->sole();
         $before=$journal->getRawOriginal();
-        $published=app(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->preview($journal);
+        $published=app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($journal);
         $wireHash=\App\Services\Integration\SolaStockJournalContract::payloadHash($published);
         $this->assertNotSame(\App\Services\Integration\SolaStockJournalContract::payloadHash($journal->payload),$wireHash);
         $this->assertSame($wireHash,$proof['journal_payload_hash']);
