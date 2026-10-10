@@ -126,6 +126,7 @@ class StockLedgerService
                 if ((int)$existing->original_ledger_id !== $originalId || Decimal::cmp((string)$existing->quantity,$quantity) !== 0) throw new RuntimeException('return_idempotency_conflict');
                 return $existing;
             }
+            if ($original->serial_id && Decimal::cmp($quantity,'1') !== 0) throw new RuntimeException(__('inventory.consumption.serial_quantity'));
             app(PurchaseValuationHoldService::class)->lockItems([$original->item_id]);
             app(PurchaseValuationHoldService::class)->assertMovable($original->item_id,$original->warehouse_id);
             $prior = (string) StockLedger::query()->where('original_ledger_id',$originalId)->sum('quantity');

@@ -69,6 +69,17 @@ final class InternalConsumptionTest extends TestCase {
         self::assertSame('10.00',$return->lines->first()->total_cost);
         self::assertSame('15.0000',StockBalance::query()->first()->on_hand_qty);
     }
+    public function testSerializedIssueReturnsOnlyTheWholeOriginalUnit(): void {
+        [$wh,,$service]=$this->setupInventory();$item=F::serialItem();$opening=app(OpeningStockService::class);
+        $opening->post($opening->createDraft(['warehouse_id'=>$wh->id],[['item_id'=>$item->id,'quantity'=>'1','unit_cost'=>'9','serials'=>['IC-SERIAL-1']]]));
+        $serial=\App\Models\Tenant\SerialNumber::query()->where('item_id',$item->id)->sole();
+        $issue=$service->post($this->draft($service,$wh,$item,'1',['lines'=>[['item_id'=>$item->id,'quantity'=>'1','serial_id'=>$serial->id]]]));
+        $partial=$this->draft($service,$wh,$item,'0.5',['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'0.5']]]);
+        try{$service->post($partial);self::fail('Fractional serial return accepted');}catch(\RuntimeException $e){self::assertSame('draft',$partial->fresh()->status);}
+        self::assertSame('sold',$serial->fresh()->status);
+        $return=$service->post($this->draft($service,$wh,$item,'1',['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'1']]]));
+        self::assertSame('9.00',$return->lines->first()->total_cost);self::assertSame('in_stock',$serial->fresh()->status);
+    }
     public function testFifoReturnsRestoreOriginalLayersAndPreserveCarrying(): void {
         [$wh,$item,$service]=$this->setupInventory('fifo');$layer=CostLayer::query()->first();
         $issue=$service->post($this->draft($service,$wh,$item));

@@ -327,6 +327,7 @@ return [
         ],
     ],
     'consumption' => [
+        'serial_quantity' => 'Return the whole original serial unit. Serialized units cannot be returned fractionally.',
         'tracking_history' => 'Inventory tracking cannot change after stock movements. Preserve the original item and create a new item with the required tracking.',
         'workflow_scope' => 'Enable internal consumption in the reviewed SolaCount connection workflows before posting. Open connection settings.',
         'not_purchasable'=>'This item is not available for purchase.',
