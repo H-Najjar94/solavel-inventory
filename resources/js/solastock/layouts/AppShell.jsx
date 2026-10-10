@@ -101,7 +101,9 @@ function OrgSwitcher({ tenant, open, onToggle, onClose }) {
             || (tenant.organization_id ? t('shell.organizationNumber', undefined, { id: tenant.organization_id }) : t('shell.noOrganization')));
 
     async function pick(org) {
-        if (org.current || busyId) return;
+        // Already the current organization: just close the menu (no switch, no reload).
+        if (org.current) { onClose(); return; }
+        if (busyId) return;
         setBusyId(org.id);
         try { await tenant.selectOrg(org.id); onClose(); }
         finally { setBusyId(0); }

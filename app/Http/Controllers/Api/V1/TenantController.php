@@ -231,6 +231,17 @@ class TenantController extends ApiController
             return $this->error('invalid', __('inventory.tenancy.organization_required'), 422);
         }
 
+        // Choosing the organization you are already in is a no-op: keep the
+        // session as it is (no re-switch, no client re-key, no app reload).
+        if ((int) $request->session()->get('selected_central_org_id', 0) === $orgId
+            && ! $request->session()->has('inventory_demo_tenant')) {
+            return $this->success([
+                'status' => 'already_current',
+                'organization_id' => $orgId,
+                'client_id' => (int) $request->session()->get('client_id', 0),
+            ]);
+        }
+
         try {
             $org = DB::connection('mysql')->table('user_organizations as uo')
                 ->join('organizations as o', 'o.id', '=', 'uo.organization_id')
