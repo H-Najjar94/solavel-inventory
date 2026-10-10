@@ -63,8 +63,8 @@ test('production serves complete English and Arabic route localization with pers
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
-    await expect(page.locator('.topbar')).not.toContainText('Real data');
-    await expect(page.locator('.topbar')).not.toContainText('Live tenant');
+    await expect(page.locator('.ss-topbar')).not.toContainText('Real data');
+    await expect(page.locator('.ss-topbar')).not.toContainText('Live tenant');
 
     const second = await context.newPage();
     await second.goto('/inventory/items');

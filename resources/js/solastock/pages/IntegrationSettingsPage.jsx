@@ -143,6 +143,8 @@ export default function IntegrationSettingsPage() {
             return undefined;
         }
         const target = { open: current.links?.solacount, manage_plans: current.links?.manage_plans, finish_finance_setup: current.links?.finish_finance_setup }[kind];
+        // The Solavel portal (apps & plans) opens in a new tab so this page stays put.
+        if (target && kind === 'manage_plans') { window.open(target, '_blank', 'noopener,noreferrer'); return undefined; }
         if (target) { window.location.assign(target); return undefined; }
         // SC-UAE-037: a link action this user cannot open must explain the next step, not do nothing.
         if (['open', 'manage_plans', 'finish_finance_setup'].includes(kind)) { setActionError(tr('integration.summary.linkUnavailable')); return undefined; }

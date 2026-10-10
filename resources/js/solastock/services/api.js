@@ -76,6 +76,7 @@ export const api = {
 
     // Tenant (live SSO status + demo selection; not tenant-gated)
     tenantStatus: () => request('/tenant/status'),
+    tenantLauncher: () => request('/tenant/launcher'),
     selectDemoTenant: () => request('/tenant/select-demo', { method: 'POST' }),
     clearTenant: () => request('/tenant/clear', { method: 'POST' }),
     provisionTenant: () => request('/tenant/provision', { method: 'POST' }),
