@@ -94,6 +94,16 @@ final class InternalConsumptionTest extends TestCase {
         try {$doc->lines->first()->update(['quantity'=>'2']);self::fail('Posted line edited');}catch(\RuntimeException $e){}
         self::assertSame('3.0000',$doc->lines->first()->fresh()->quantity);
     }
+    public function testPermissionUpgradePreservesCustomizedBundles(): void {
+        $this->useTenantA();$db=DB::connection('tenant');
+        $role=config('inventory_operational_roles.warehouse_manager.permissions');
+        $old=array_values(array_filter($role,fn($p)=>!str_starts_with($p,'inventory.consumption.')));
+        $db->table('inventory_operational_role_sets')->updateOrInsert(['role_key'=>'warehouse_manager'],['permissions'=>json_encode($old),'created_at'=>now(),'updated_at'=>now()]);
+        $db->table('inventory_operational_role_sets')->updateOrInsert(['role_key'=>'warehouse_operator'],['permissions'=>json_encode(['inventory.view_items']),'created_at'=>now(),'updated_at'=>now()]);
+        $migration=require base_path('database/migrations/tenant/2026_10_10_161000_add_consumption_operational_permissions.php');$migration->up();$migration->up();
+        self::assertSame($role,json_decode($db->table('inventory_operational_role_sets')->where('role_key','warehouse_manager')->value('permissions'),true));
+        self::assertSame(['inventory.view_items'],json_decode($db->table('inventory_operational_role_sets')->where('role_key','warehouse_operator')->value('permissions'),true));
+    }
     public function testPermissionDenialPreventsCreation(): void {
         [$wh,$item]=$this->setupInventory();$this->mock(InventoryPermissionService::class,fn($m)=>$m->shouldReceive('can')->andReturn(false));
         $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
