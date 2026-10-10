@@ -16,7 +16,7 @@ class FinanceOnboardingReadiness
     {
         $result=['state'=>'READINESS_UNAVAILABLE','readiness_available'=>false,'finance_setup_complete'=>false,
             'finance_provisioned'=>false,'premium_entitled'=>false,'can_manage'=>false,'setup_url'=>null,
-            'manage_access_url'=>rtrim((string)config('tenancy.parent_base_url'),'/').'/portal/orgs/by-id/'.$centralOrgId.'/projects','checked_at'=>now()->toIso8601String()];
+            'manage_access_url'=>\App\Services\Access\OtherAppsMenu::manageAppsUrl($centralOrgId),'checked_at'=>now()->toIso8601String()];
         try {
             $access=app(InventoryCommercialEntitlementService::class)->checkConnectionSetupReadiness($centralOrgId);
             if (str_contains($access['reason_code'],'unavailable') || str_contains($access['reason_code'],'identity')) return $result;

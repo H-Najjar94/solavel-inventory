@@ -58,6 +58,7 @@ use Illuminate\Support\Facades\Route;
 // Tenant selection — NOT tenant-gated (this is how a tenant gets selected).
 Route::prefix('v1/tenant')->group(function () {
     Route::get('/status', [TenantController::class, 'status'])->middleware('inv.access')->name('api.v1.tenant.status');
+    Route::get('/launcher', [TenantController::class, 'launcher'])->middleware('inv.access')->name('api.v1.tenant.launcher');
     Route::post('/select-demo', [TenantController::class, 'selectDemo'])->name('api.v1.tenant.select-demo');
     Route::post('/clear', [TenantController::class, 'clear'])->name('api.v1.tenant.clear');
     // First-run provisioning of SolaStock tables for the live org (admin-only;

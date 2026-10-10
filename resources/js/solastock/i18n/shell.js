@@ -40,6 +40,16 @@ export const en = {
     'shell.adminReadiness': 'An administrator must finish SolaStock readiness before this workspace can be used.',
     'shell.startSetup': 'Set up SolaStock', 'shell.initializing': 'Initializing…',
     'shell.finishSetupButton': 'Finish setup',
+    'shell.openMenu': 'Open menu', 'shell.closeMenu': 'Close menu', 'shell.primaryNavigation': 'Primary navigation',
+    'shell.searchPlaceholder': 'Search pages and actions…', 'shell.commandHint': 'Jump to…', 'shell.noResults': 'No matches',
+    'shell.quickAdd': 'Quick add', 'shell.quickItem': 'New item', 'shell.quickPurchaseOrder': 'New purchase order',
+    'shell.quickGoodsReceipt': 'Receive goods', 'shell.quickSalesOrder': 'New sales order', 'shell.quickTransfer': 'New transfer',
+    'shell.quickAdjustment': 'New adjustment', 'shell.quickCount': 'New stock count',
+    'shell.language': 'العربية', 'shell.accountMenu': 'Account menu',
+    'shell.portalTitle': 'Solavel Portal', 'shell.portalDescription': 'Your organizations, members, apps and subscription',
+    'shell.yourApps': 'Your apps', 'shell.appsLoading': 'Loading your apps…', 'shell.profile': 'My profile',
+    'shell.settings': 'Settings', 'shell.logout': 'Sign out', 'shell.opensNewTab': '(opens in a new tab)',
+    'shell.skipToContent': 'Skip to content',
 };
 
 export const ar = {
@@ -84,4 +94,14 @@ export const ar = {
     'shell.adminReadiness': 'يجب على المسؤول إكمال جاهزية SolaStock قبل استخدام مساحة العمل هذه.',
     'shell.startSetup': 'إعداد SolaStock', 'shell.initializing': 'جارٍ التهيئة…',
     'shell.finishSetupButton': 'إكمال الإعداد',
+    'shell.openMenu': 'فتح القائمة', 'shell.closeMenu': 'إغلاق القائمة', 'shell.primaryNavigation': 'التنقل الرئيسي',
+    'shell.searchPlaceholder': 'ابحث في الصفحات والإجراءات…', 'shell.commandHint': 'الانتقال إلى…', 'shell.noResults': 'لا توجد نتائج',
+    'shell.quickAdd': 'إضافة سريعة', 'shell.quickItem': 'صنف جديد', 'shell.quickPurchaseOrder': 'أمر شراء جديد',
+    'shell.quickGoodsReceipt': 'استلام بضاعة', 'shell.quickSalesOrder': 'أمر بيع جديد', 'shell.quickTransfer': 'تحويل جديد',
+    'shell.quickAdjustment': 'تسوية جديدة', 'shell.quickCount': 'جرد جديد',
+    'shell.language': 'English', 'shell.accountMenu': 'قائمة الحساب',
+    'shell.portalTitle': 'بوابة Solavel', 'shell.portalDescription': 'مؤسساتك وأعضاؤها وتطبيقاتك واشتراكك',
+    'shell.yourApps': 'تطبيقاتك', 'shell.appsLoading': 'جارٍ تحميل تطبيقاتك…', 'shell.profile': 'ملفي الشخصي',
+    'shell.settings': 'الإعدادات', 'shell.logout': 'تسجيل الخروج', 'shell.opensNewTab': '(يفتح في علامة تبويب جديدة)',
+    'shell.skipToContent': 'تخطَّ إلى المحتوى',
 };

@@ -8,6 +8,7 @@ use App\Services\Tenancy\TenantManager;
 use App\Services\Tenancy\TenantResolver;
 use App\Services\Tenancy\TenantSchemaAuditService;
 use App\Services\Access\InventoryPermissionService;
+use App\Services\Access\OtherAppsMenu;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -92,6 +93,8 @@ class TenantController extends ApiController
                 ? config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo'))
                 : $this->live->organizationName($s['organization_id']),
             'user' => $principal ? ['name' => $principal['name'] ?? null, 'email' => $principal['email'] ?? null] : null,
+            // Solavel portal (account menu card); the other apps load lazily from /tenant/launcher.
+            'portal_url' => OtherAppsMenu::portalUrl(),
             'database' => $s['database'],
             'authenticated' => $s['authenticated'],
             'can_access' => $s['can_access'],
@@ -106,6 +109,26 @@ class TenantController extends ApiController
             'demo_db' => $readiness['database'],
             'demo_label' => config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo')),
         ]);
+    }
+
+    /**
+     * Account-menu launcher: the Solavel portal card, the user's Solavel profile,
+     * and the other Solavel apps this user may open for the current organization
+     * (Central's access decision, cached briefly). Loaded only when the account
+     * menu is first opened. A menu hint never fails the shell.
+     */
+    public function launcher(Request $request, OtherAppsMenu $menu): JsonResponse
+    {
+        $user = $request->user();
+        $orgId = (int) $this->live->organizationId($request);
+        try {
+            $launcher = $menu->forUser((int) ($user?->central_user_id ?: $user?->id), $orgId ?: null);
+        } catch (\Throwable) {
+            $launcher = ['portal' => null, 'apps' => []];
+        }
+        $launcher['profile_url'] = OtherAppsMenu::portalUrl('/portal/settings');
+
+        return $this->success($launcher);
     }
 
     /** Select the safe demo tenant (operator/dev). Refuses only when misconfigured. */

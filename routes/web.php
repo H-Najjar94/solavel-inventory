@@ -36,6 +36,10 @@ if (app()->environment('staging')) {
 // public/, stripping the /inventory prefix, so Laravel sees /dashboard etc.
 // The live URLs are https://solavel.com/inventory/<path>.
 
+// Account menu sign-out (CSRF-protected POST): ends this app's session, then
+// Central's single sign-out. Outside inv.access so it always works.
+Route::post('/logout', \App\Http\Controllers\LogoutController::class)->name('inventory.logout');
+
 // Root → dashboard (mirrors solavel-projects: redirect '/' to the dashboard).
 Route::get('/', fn () => redirect()->route('inventory.dashboard'));
 
