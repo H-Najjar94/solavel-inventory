@@ -30,7 +30,7 @@ class SolaBooksItemCatalogBridge
             ->where('entity_type', 'item')->where('solastock_record_id', (string) $item->id)->where('status', 'verified')->first();
         $category = $this->financeId($mapping, 'category', $item->category_id);
         $unit = $this->financeId($mapping, 'unit', $item->base_unit_id);
-        if (! $category || ! $unit) throw new RuntimeException('catalog_reference_mapping_required');
+        if (! $category || ($item->item_type === 'inventory' && ! $unit)) throw new RuntimeException('catalog_reference_mapping_required');
         $data = ['entity_type' => 'item', 'finance_id' => $catalog?->solabooks_record_id,
             'name' => (string) $item->name, 'sku' => (string) $item->sku, 'category_id' => $category,
             'unit_id' => $unit, 'item_type' => (string) $item->item_type, 'tracking_type' => (string) $item->tracking_type,
