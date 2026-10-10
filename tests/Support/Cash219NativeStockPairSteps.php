@@ -42,7 +42,7 @@ final class Cash219NativeStockPairSteps
   if($step==='return'||$step==='return-replay'){
    $shipment=Shipment::query()->where('organization_id',$org)->findOrFail($state['shipment_id']);$line=$shipment->lines()->sole();
    $ledger=StockLedger::query()->where('organization_id',$org)->where('source_type',Shipment::class)->where('source_id',$shipment->id)->where('source_line_id',$line->id)->where('direction','out')->sole();
-   $data=['operation_uuid'=>$state['return_uuid'],'shipment_id'=>$shipment->id,'return_date'=>'2024-06-15','reason'=>'Private native partial physical return',
+   $data=['operation_uuid'=>$state['return_uuid'],'shipment_id'=>$shipment->id,'return_number'=>'CASH-RET-QUAL-'.$shipment->id,'return_date'=>'2024-06-15','reason'=>'Private native partial physical return',
     'lines'=>[['source_line_id'=>$line->id,'source_stock_ledger_id'=>$ledger->id,'item_id'=>$line->item_id,'returned_qty'=>'1','entered_qty'=>'1','entered_unit_id'=>$line->entered_unit_id,'condition'=>'resellable']]];
    $service=app(CashPartialReturnService::class);$return=$service->createDraft($data,$actor);$return=$service->post($return,$actor);
    return['sales_return_id'=>$return->id,'status'=>$return->status];
