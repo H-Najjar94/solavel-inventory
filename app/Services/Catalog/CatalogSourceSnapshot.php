@@ -9,8 +9,9 @@ final class CatalogSourceSnapshot {
   $common=['entity_type'=>$type,'source_id'=>(int)$row['id'],'name'=>(string)$row['name'],'active'=>empty($row['deleted_at'])&&(bool)($row['is_active']??true)];
   return $common+match($type){
    'unit'=>['symbol'=>(string)($row['code']??''),'kind'=>(string)($row['kind']??'count')],
-   'category'=>['parent_id'=>empty($row['parent_id'])?null:(int)$row['parent_id']],
+   'category'=>['internal_consumption_account_id'=>$row['internal_consumption_account_id']??null,'parent_id'=>empty($row['parent_id'])?null:(int)$row['parent_id']],
    'item'=>['sku'=>(string)($row['sku']??''),'category_id'=>empty($row['category_id'])?null:(int)$row['category_id'],'base_unit_id'=>(int)$row['base_unit_id'],
+    'available_for_sale'=>$row['available_for_sale']??null,'available_for_purchase'=>$row['available_for_purchase']??null,'track_inventory'=>($row['item_type']??'inventory')==='inventory','internal_consumption_account_id'=>$row['internal_consumption_account_id']??null,
     'tracking_type'=>(string)($row['tracking_type']??'none'),'valuation_method'=>(string)($row['costing_method']??'average'),'conversions'=>self::conversions($conversions)],
   };
  }

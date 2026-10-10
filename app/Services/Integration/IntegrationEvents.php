@@ -14,6 +14,8 @@ final class IntegrationEvents
 
     /** event_type => [aggregate_type, suggested_debit, suggested_credit] */
     public const TYPES = [
+        'internal_consumption.posted' => ['InternalConsumption','internal_consumption_expense','inventory_asset'],
+        'internal_consumption.returned' => ['InternalConsumption','inventory_asset','internal_consumption_expense'],
         'purchase_order.approved' => ['PurchaseOrder', null, null],
         'opening_stock.posted' => ['OpeningStockEntry', 'inventory_asset', 'opening_offset'],
         // The reversal is its own InventoryReversal aggregate; its journal is the
@@ -54,6 +56,7 @@ final class IntegrationEvents
     public static function postsJournal(string $type): bool
     {
         return in_array($type, [
+            'internal_consumption.posted', 'internal_consumption.returned',
             'opening_stock.posted', 'opening_stock.reversed',
             'adjustment.posted', 'adjustment.reversed', 'grn.posted', 'grn.reversed',
             'supplier_return.posted', 'supplier_return.reversed',
@@ -76,7 +79,7 @@ final class IntegrationEvents
             // the journal value is the whole landed cost.
             return abs((float) data_get($payload, 'landed_cost.total_base_amount', 0)) > 0.00001;
         }
-        if (in_array($type, ['stock.historical_fifo_cost_corrected.v1', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
+        if (in_array($type, ['internal_consumption.posted', 'internal_consumption.returned', 'stock.historical_fifo_cost_corrected.v1', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed', 'stock_count.posted', 'sales_return.posted', 'sales_return.reversed'], true)) {
             return abs((float) ($payload['total_inventory_value_change'] ?? 0)) > 0.00001;
         }
 

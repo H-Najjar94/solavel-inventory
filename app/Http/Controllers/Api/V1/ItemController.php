@@ -33,6 +33,9 @@ class ItemController extends ApiController
     /** Strip non-column / transient fields before persisting the item row. */
     private function itemAttributes(array $data): array
     {
+        if (array_key_exists('internal_consumption_account_id',$data)) app(\App\Services\Consumption\ConsumptionAccounts::class)->validateDefault(app(\App\Tenancy\OrganizationContext::class)->idOrFail(),isset($data['internal_consumption_account_id'])?(int)$data['internal_consumption_account_id']:null);
+
+        if (isset($data['item_type'])) $data['track_inventory']=$data['item_type']==='inventory';
         unset($data['track_lot'], $data['track_serial'], $data['track_expiry'], $data['barcode']);
 
         return $data;
@@ -74,6 +77,8 @@ class ItemController extends ApiController
         $perPage = min((int) $request->query('per_page', 25), 100);
 
         $query = Item::query()
+            ->when($request->query('purpose') === 'sale',fn($q)=>$q->where(fn($q)=>$q->whereNull('available_for_sale')->orWhere('available_for_sale',true)))
+            ->when($request->query('purpose') === 'purchase',fn($q)=>$q->where(fn($q)=>$q->whereNull('available_for_purchase')->orWhere('available_for_purchase',true)))
             ->with(['category:id,name', 'brand:id,name', 'baseUnit:id,code,symbol', 'primaryImage:id,item_id,is_primary'])
             ->when($request->filled('search'), function ($q) use ($request) {
                 $s = trim((string) $request->query('search'));
@@ -607,7 +612,14 @@ class ItemController extends ApiController
     {
         $before = $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active']);
         $data = $request->validated();
-        $item->update($this->itemAttributes($data));
+        \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($item, $data) {
+            $locked = Item::query()->lockForUpdate()->findOrFail($item->id);
+            $attributes = $this->itemAttributes($data);
+            if (isset($attributes['item_type']) && $attributes['item_type'] !== $locked->item_type && StockLedger::query()->where('item_id', $locked->id)->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['track_inventory'=>__('inventory.consumption.tracking_history')]);
+            }
+            $locked->update($attributes);
+        });
         if (array_key_exists('barcode', $data)) {
             $this->syncPrimaryBarcode($item, $data['barcode']);
         }

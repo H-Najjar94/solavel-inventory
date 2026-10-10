@@ -70,6 +70,7 @@ import TeamAccessPage from '../pages/TeamAccessPage.jsx';
 import IntegrationSettingsPage from '../pages/IntegrationSettingsPage.jsx';
 import IntegrationEventsPage from '../pages/IntegrationEventsPage.jsx';
 import CatalogSyncPage from '../pages/CatalogSyncPage.jsx';
+import InternalConsumptionPage, {ConsumptionForm,ConsumptionDetail,ConsumptionReport} from '../pages/InternalConsumptionPage.jsx';
 import NotFoundPage from '../pages/NotFoundPage.jsx';
 import { t } from '../i18n/index.js';
 // Onboarding/activation lives entirely in the CENTRAL app
@@ -126,6 +127,10 @@ export const router = createBrowserRouter(
                 { path: 'opening-stock/new', element: protectedElement(<OpeningStockFormPage />, 'inventory.manage_opening_stock') },
                 { path: 'opening-stock/:id', element: <OpeningStockDetailPage /> },
                 { path: 'opening-stock/:id/edit', element: protectedElement(<OpeningStockFormPage />, 'inventory.manage_opening_stock') },
+                {path:'internal-consumptions',element:protectedElement(<InternalConsumptionPage/>,'inventory.consumption.view')},
+                {path:'internal-consumptions/new',element:<ConsumptionForm/>},
+                {path:'internal-consumptions/report',element:protectedElement(<ConsumptionReport/>,'inventory.consumption.view')},
+                {path:'internal-consumptions/:id',element:protectedElement(<ConsumptionDetail/>,'inventory.consumption.view')},
                 { path: 'adjustments', element: <AdjustmentsPage /> },
                 { path: 'adjustments/new', element: protectedElement(<AdjustmentFormPage />, 'inventory.manage_adjustments') },
                 { path: 'adjustments/:id', element: <AdjustmentDetailPage /> },

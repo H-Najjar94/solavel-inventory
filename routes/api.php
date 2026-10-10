@@ -83,6 +83,15 @@ Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
 // SOLASTOCK_FEATURE_ENFORCEMENT=true. Runs alongside perm:, never replacing role
 // auth; routes with no mapped feature pass straight through.
 Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(function () {
+    Route::get('/internal-consumptions/options',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'options'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.options');
+    Route::get('/internal-consumptions/report',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'report'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.report');
+    Route::get('/internal-consumptions/preview',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'preview'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.preview');
+    Route::get('/internal-consumptions',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'index'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.index');
+    Route::post('/internal-consumptions',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'store'])->name('api.v1.consumption.store');
+    Route::get('/internal-consumptions/{consumption}',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'show'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.show');
+    Route::post('/internal-consumptions/{consumption}/approve',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'approve'])->middleware('perm:inventory.consumption.approve')->name('api.v1.consumption.approve');
+    Route::post('/internal-consumptions/{consumption}/post',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'post'])->name('api.v1.consumption.post');
+
     Route::get('/purchasing/notifications', [\App\Http\Controllers\Api\V1\PurchasingNotificationController::class,'index'])->name('api.v1.purchasing.notifications.index');
     Route::post('/purchasing/notifications/{notification}/read', [\App\Http\Controllers\Api\V1\PurchasingNotificationController::class,'read'])->name('api.v1.purchasing.notifications.read');
 

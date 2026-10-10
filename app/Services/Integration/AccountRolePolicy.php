@@ -6,8 +6,10 @@ namespace App\Services\Integration;
 final class AccountRolePolicy
 {
     public const VERSION = 'inventory-account-roles.v1';
-    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'supplier_return_clearing' => ['asset'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability'], 'landed_cost_clearing' => ['asset', 'liability']];
+    public const ROLE_TYPES = ['inventory_asset' => ['asset'], 'internal_consumption_expense' => ['expense'], 'cogs' => ['expense', 'cogs'], 'grni' => ['liability'], 'supplier_return_clearing' => ['asset'], 'opening_offset' => ['equity'], 'adjustment_gain' => ['revenue', 'income'], 'adjustment_loss' => ['expense'], 'purchase_price_variance' => ['expense','cogs'], 'accounts_receivable' => ['asset'], 'accounts_payable' => ['liability'], 'sales_revenue' => ['revenue','income'], 'input_tax' => ['asset'], 'output_tax' => ['liability'], 'landed_cost_clearing' => ['asset', 'liability']];
     public const OPERATIONS = [
+        'internal_consumption.posted' => ['inventory_asset'],
+        'internal_consumption.returned' => ['inventory_asset'],
         'opening_stock.posted' => ['inventory_asset', 'opening_offset'],
         'opening_stock.reversed' => ['inventory_asset', 'opening_offset'],
         'adjustment.posted' => ['inventory_asset', 'adjustment_gain', 'adjustment_loss'],

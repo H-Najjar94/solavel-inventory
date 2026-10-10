@@ -35,6 +35,7 @@ class SolaBooksItemCatalogBridge
             'name' => (string) $item->name, 'sku' => (string) $item->sku, 'category_id' => $category,
             'unit_id' => $unit, 'tracking_type' => (string) $item->tracking_type,
             'valuation_method' => (string) $item->costing_method, 'is_active' => ! $item->trashed() && (bool) $item->is_active];
+        foreach (['available_for_sale','available_for_purchase','track_inventory','internal_consumption_account_id'] as $field) $data[$field]=$field==='track_inventory' ? ($item->item_type==='inventory') : $item->{$field};
         foreach (['inventory_asset' => 'inventory_asset_account_id', 'cogs' => 'cogs_account_id'] as $role => $field) {
             $data[$field] = (int) DB::connection('tenant')->table('integration_account_mappings')
                 ->where('organization_id', $mapping->solastock_organization_id)->where('integration', 'solabooks')

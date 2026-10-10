@@ -216,13 +216,14 @@ class PurchaseOrderController extends ApiController
         $taxTotal = '0';
         $items = Item::query()
             ->whereIn('id', collect($lines)->pluck('item_id')->filter()->unique())
-            ->get(['id', 'tax_code'])
+            ->get(['id', 'tax_code','available_for_purchase'])
             ->keyBy('id');
         foreach ($lines as $line) {
             $line = $this->conversions->normalizeLine($line, 'ordered_qty');
             $unitPrice = $this->baseUnitCost((string) ($line['unit_price'] ?? '0'), $line['unit_conversion_factor'] ?? null);
             $lineSubtotal = Decimal::mul((string) $line['ordered_qty'], $unitPrice);
             $item = $items[$line['item_id']] ?? null;
+            if ($item?->available_for_purchase === false) throw \Illuminate\Validation\ValidationException::withMessages(['lines'=>__('inventory.consumption.not_purchasable')]);
             $tax = $this->taxes->resolve(
                 $line['tax_code'] ?? $item?->tax_code,
                 isset($line['tax_rate']) ? (string) $line['tax_rate'] : null,

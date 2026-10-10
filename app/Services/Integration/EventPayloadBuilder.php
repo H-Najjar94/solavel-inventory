@@ -45,7 +45,7 @@ class EventPayloadBuilder
         // A partial return has its own selected source-line provenance and must
         // use the return ledger row snapshot instead of indexing into all lines
         // from the original shipment.
-        $originalConversionLines = $document instanceof SalesReturn && ! $document->is_source_reversal
+        $originalConversionLines = ($document instanceof SalesReturn && ! $document->is_source_reversal) || $document instanceof \App\Models\Tenant\InternalConsumption
             ? []
             : $this->originalConversionLines($document);
         foreach ($ledger as $index => $row) {
@@ -53,6 +53,8 @@ class EventPayloadBuilder
             $totalChange = Decimal::add($totalChange, $signed);
             $lines[] = [
                 'item_id' => (int) $row->item_id,
+                'source_line_id' => (int)$row->source_line_id,
+                ...($document instanceof \App\Models\Tenant\InternalConsumption ? $this->consumptionAccounts($document,(int)$row->source_line_id) : []),
                 'sku' => null, // resolved lazily by consumer if needed
                 'warehouse_id' => (int) $row->warehouse_id,
                 'bin_id' => $row->bin_id ? (int) $row->bin_id : null,
@@ -226,6 +228,7 @@ class EventPayloadBuilder
             'Shipment' => 'shipment_lines',
             'SalesReturn' => 'sales_return_lines',
             'SupplierReturn' => 'supplier_return_lines',
+            'InternalConsumption' => 'internal_consumption_lines',
             'StockAdjustment' => 'stock_adjustment_lines',
             'StockTransfer' => 'stock_transfer_lines',
             default => null,
@@ -234,6 +237,7 @@ class EventPayloadBuilder
             return null;
         }
         $line = DB::connection('tenant')->table($table)->where('id', $row->source_line_id)->first();
+        if ($line && isset($line->conversion)) $line = (object)array_merge((array)$line,json_decode($line->conversion,true,512,JSON_THROW_ON_ERROR));
         if (! $line || empty($line->unit_conversion_hash)) {
             return null;
         }
@@ -263,8 +267,15 @@ class EventPayloadBuilder
         return ! empty($original['event_uuid']) || ! $document instanceof InventoryReversal;
     }
 
+    private function consumptionAccounts(object $document,int $lineId): array
+    {
+        $line=$document->lines()->findOrFail($lineId);
+        return ['expense_account_id'=>$line->expense_account_id,'inventory_account_id'=>$line->inventory_account_id];
+    }
+
     private function originalSource(object $document): ?array
     {
+        if ($document instanceof \App\Models\Tenant\InternalConsumption && $document->original_issue_id) return ['type'=>'internal_consumption','id'=>(int)$document->original_issue_id,'event_uuid'=>$document->original_event_uuid,'reason'=>$document->reason];
         if ($document instanceof InventoryReversal) {
             return [
                 'type' => $document->source_type,

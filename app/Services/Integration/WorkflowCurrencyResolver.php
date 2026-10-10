@@ -58,7 +58,7 @@ final class WorkflowCurrencyResolver
         // Inventory-only documents are explicitly valued in the reviewed Finance
         // base pool. They have no sales/purchase transaction currency to inherit.
         // Receipts resolve separately below; linked documents always retain their source currency.
-        $baseValuedTypes = ['historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock', 'supplier_return', 'landed_cost'];
+        $baseValuedTypes = ['internal_consumption','historical_fifo_correction', 'stock_adjustment', 'stock_count', 'stock_transfer', 'opening_stock', 'supplier_return', 'landed_cost'];
         // A reversal with an original event reused its currency above. One without (its source was
         // posted while standalone) is valued exactly as its source document was.
         $reversalSource = $documentType === 'inventory_reversal'

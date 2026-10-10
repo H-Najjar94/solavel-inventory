@@ -214,8 +214,10 @@ class SettingsController extends ApiController
         $data = $request->validate([
             'name' => ['required', 'string', 'max:191'],
             'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')->where('organization_id', $orgId)],
+            'internal_consumption_account_id'=>['nullable','integer','min:1'],
         ]);
 
+        if (array_key_exists('internal_consumption_account_id',$data)) app(\App\Services\Consumption\ConsumptionAccounts::class)->validateDefault($orgId,isset($data['internal_consumption_account_id'])?(int)$data['internal_consumption_account_id']:null);
         $parent = ! empty($data['parent_id']) ? ItemCategory::query()->findOrFail($data['parent_id']) : null;
         $data['parent_id'] = $parent?->id;
         $data['level'] = $parent ? ((int) $parent->level + 1) : 0;
@@ -230,9 +232,11 @@ class SettingsController extends ApiController
         $data = $request->validate([
             'name' => ['required', 'string', 'max:191'],
             'parent_id' => ['nullable', 'integer', Rule::exists('item_categories', 'id')->where('organization_id', $orgId)],
+            'internal_consumption_account_id'=>['nullable','integer','min:1'],
             'is_active' => ['boolean'],
         ]);
 
+        if (array_key_exists('internal_consumption_account_id',$data)) app(\App\Services\Consumption\ConsumptionAccounts::class)->validateDefault($orgId,isset($data['internal_consumption_account_id'])?(int)$data['internal_consumption_account_id']:null);
         $parent = ! empty($data['parent_id']) ? ItemCategory::query()->findOrFail($data['parent_id']) : null;
         if ($parent && (int) $parent->id === (int) $category->id) {
             return $this->error('invalid_category_parent', __('inventory.validation.category_self_parent'), 422);
@@ -248,6 +252,7 @@ class SettingsController extends ApiController
             'parent_id' => $parent?->id,
             'level' => $parent ? ((int) $parent->level + 1) : 0,
             'is_active' => $data['is_active'] ?? $category->is_active,
+            'internal_consumption_account_id'=>array_key_exists('internal_consumption_account_id',$data)?$data['internal_consumption_account_id']:$category->internal_consumption_account_id,
         ])->save();
         $this->refreshCategoryChildLevels($category);
 

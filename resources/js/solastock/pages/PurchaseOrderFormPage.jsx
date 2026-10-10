@@ -83,7 +83,7 @@ export default function PurchaseOrderFormPage() {
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly purpose="purchase" value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'qty', label: t('receiving.common.quantity', 'Quantity'), width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
         { key: 'unit', label: t('receiving.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: t('receiving.common.unitCost', 'Unit cost'), width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },

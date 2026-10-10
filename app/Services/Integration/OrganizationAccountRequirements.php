@@ -17,6 +17,8 @@ final class OrganizationAccountRequirements
         return $operations;
     }
 
+    public function configurableRoles(int $organizationId): array { return array_values(array_unique(array_merge($this->roles($organizationId),['internal_consumption_expense']))); }
+
     public function roles(int $organizationId): array
     {
         return AccountRolePolicy::forOperations($this->operations($organizationId));
@@ -34,7 +36,7 @@ final class OrganizationAccountRequirements
         $roles = AccountRolePolicy::forOperations([$operation]);
         if ($roles === []) return;
         if (! in_array($operation, $this->operations($organizationId), true)) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['workflow' => 'operation_not_in_reviewed_scope']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['workflow' => str_starts_with($operation, 'internal_consumption.') ? __('inventory.consumption.workflow_scope'). ' /integrations/solabooks' : 'operation_not_in_reviewed_scope']);
         }
         $available = $this->validMappedRoles($organizationId);
         $missing = array_values(array_diff($roles, $available));

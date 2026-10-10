@@ -72,6 +72,7 @@ Route::view('/sales-returns/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/traceability/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/recalls/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/landed-costs/{any?}', 'solastock-app')->where('any', '.*');
+Route::view('/internal-consumptions/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/reports', 'solastock-app');
 Route::get('/member-management/{centralOrg}/{centralMember}', \App\Http\Controllers\MemberManagementController::class)
     ->middleware('inv.tenant')->whereNumber('centralOrg')->whereNumber('centralMember');

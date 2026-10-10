@@ -18,6 +18,7 @@ class Item extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'available_for_sale'=>'boolean','available_for_purchase'=>'boolean','track_inventory'=>'boolean',
         'is_variant_parent' => 'boolean',
         'enable_reorder_alert' => 'boolean',
         'is_active' => 'boolean',

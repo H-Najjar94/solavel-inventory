@@ -49,6 +49,7 @@ return [
             'item_integration_mappings',
         ],
         'solastock_owned' => [
+            'internal_consumptions','internal_consumption_lines',
             'historical_fifo_plans',
             'historical_fifo_corrections',
             'cost_layer_consumptions',

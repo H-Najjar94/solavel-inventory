@@ -7,6 +7,7 @@ import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
 import { EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
+import {t} from '../i18n/index.js';
 import LandedCostSettingsCard from '../components/LandedCostSettingsCard.jsx';
 
 export default function SettingsPage() {
@@ -58,6 +59,7 @@ export default function SettingsPage() {
     useEffect(() => {
         if (s.settings) {
             setPolicy({
+                approvals: s.settings.approvals ?? {},
                 default_costing_method: s.settings.default_costing_method ?? 'average',
                 allow_negative_stock: !!s.settings.allow_negative_stock,
                 picking_policy: s.settings.picking_policy ?? 'manual',
@@ -129,7 +131,7 @@ export default function SettingsPage() {
     async function addCategory(e) {
         e.preventDefault();
         try {
-            await api.createCategory(category.name, category.parent_id ? Number(category.parent_id) : null);
+            await api.createCategory(category.name, category.parent_id ? Number(category.parent_id) : null, category.internal_consumption_account_id ? Number(category.internal_consumption_account_id) : null);
             setCategory({ name: '', parent_id: '' });
             await qc.invalidateQueries({ queryKey: ['settings'] });
             await qc.invalidateQueries({ queryKey: ['meta'] });
@@ -143,6 +145,7 @@ export default function SettingsPage() {
         try {
             await api.updateCategory(editingCategory.id, {
                 name: editingCategory.name,
+                internal_consumption_account_id: editingCategory.internal_consumption_account_id ? Number(editingCategory.internal_consumption_account_id) : null,
                 parent_id: editingCategory.parent_id ? Number(editingCategory.parent_id) : null,
                 is_active: editingCategory.is_active !== false,
             });
@@ -337,6 +340,7 @@ export default function SettingsPage() {
                         <input className="input" type="number" min="0" max="3650" value={policy.expiry_warning_days} onChange={(e) => setPolicy((current) => ({ ...current, expiry_warning_days: Number(e.target.value) }))} />
                     </Field>
                 </div>
+                <label><input type="checkbox" checked={!!policy.approvals?.internal_consumption} onChange={e=>setPolicy({...policy,approvals:{...policy.approvals,internal_consumption:e.target.checked}})}/>{t('consumption.approvalSetting')}</label>
                 <button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? tr('settings.policy.saving') : tr('settings.policy.save')}</button>
             </div>
 
@@ -391,7 +395,7 @@ export default function SettingsPage() {
                                 {(s.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </Field>
-                        <button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
+                        <Field label={t('consumption.account')}><input className="input" type="number" min="1" value={category.internal_consumption_account_id??''} onChange={e=>setCategory({...category,internal_consumption_account_id:e.target.value})}/></Field><button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
                     </div></form>
                     {/* SC-UAE-041: an empty tenant must be able to create the units items require. */}
                     <form className="card" onSubmit={addUnit}><div className="card-head"><h3>{tr('settings.master.unit')}</h3></div><div className="card-body">
@@ -425,7 +429,7 @@ export default function SettingsPage() {
                             </select> : ((s.categories ?? []).find((p) => p.id === c.parent_id)?.name ?? tr('settings.master.topLevel'))}</td>
                             <td>{c.level ?? 0}</td>
                             <td>{editing ? <label className="check-inline"><input type="checkbox" checked={editingCategory.is_active !== false} onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })} /> {tr('settings.common.active')}</label> : tr(c.is_active === false ? 'settings.common.inactive' : 'settings.common.active')}</td>
-                            <td>{editing ? <><button className="btn btn--primary btn--sm">{tr('settings.common.save')}</button> <button type="button" className="btn btn--sm" onClick={() => setEditingCategory(null)}>{tr('settings.common.cancel')}</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingCategory({ id: c.id, name: c.name, parent_id: c.parent_id ?? '', is_active: c.is_active !== false })}>{tr('settings.common.edit')}</button>}</td>
+                            <td>{editing&&<Field label={t('consumption.account')}><input className="input" type="number" min="1" value={editingCategory.internal_consumption_account_id??''} onChange={e=>setEditingCategory({...editingCategory,internal_consumption_account_id:e.target.value})}/></Field>}{editing ? <><button className="btn btn--primary btn--sm">{tr('settings.common.save')}</button> <button type="button" className="btn btn--sm" onClick={() => setEditingCategory(null)}>{tr('settings.common.cancel')}</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingCategory({ id: c.id, name: c.name, parent_id: c.parent_id ?? '', internal_consumption_account_id:c.internal_consumption_account_id, is_active: c.is_active !== false })}>{tr('settings.common.edit')}</button>}</td>
                         </tr>;
                     })}
                 </tbody></table></form>}
@@ -435,7 +439,7 @@ export default function SettingsPage() {
                         return <tr key={b.id}>
                             <td>{editing ? <input className="input" value={editingBrand.name} onChange={(e) => setEditingBrand({ ...editingBrand, name: e.target.value })} /> : b.name}</td>
                             <td>{editing ? <label className="check-inline"><input type="checkbox" checked={editingBrand.is_active !== false} onChange={(e) => setEditingBrand({ ...editingBrand, is_active: e.target.checked })} /> {tr('settings.common.active')}</label> : tr(b.is_active === false ? 'settings.common.inactive' : 'settings.common.active')}</td>
-                            <td>{editing ? <><button className="btn btn--primary btn--sm">{tr('settings.common.save')}</button> <button type="button" className="btn btn--sm" onClick={() => setEditingBrand(null)}>{tr('settings.common.cancel')}</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingBrand({ id: b.id, name: b.name, is_active: b.is_active !== false })}>{tr('settings.common.edit')}</button>}</td>
+                            <td>{editing&&<Field label={t('consumption.account')}><input className="input" type="number" min="1" value={editingCategory.internal_consumption_account_id??''} onChange={e=>setEditingCategory({...editingCategory,internal_consumption_account_id:e.target.value})}/></Field>}{editing ? <><button className="btn btn--primary btn--sm">{tr('settings.common.save')}</button> <button type="button" className="btn btn--sm" onClick={() => setEditingBrand(null)}>{tr('settings.common.cancel')}</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingBrand({ id: b.id, name: b.name, is_active: b.is_active !== false })}>{tr('settings.common.edit')}</button>}</td>
                         </tr>;
                     })}
                 </tbody></table></form>}

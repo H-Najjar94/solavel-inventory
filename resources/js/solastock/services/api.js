@@ -66,6 +66,15 @@ function requestForm(path,formData) {
 }
 
 export const api = {
+    consumptionOptions: () => request('/internal-consumptions/options'),
+    consumptions: (params) => request('/internal-consumptions', {params}),
+    consumption: (id) => request(`/internal-consumptions/${id}`),
+    createConsumption: (body) => request('/internal-consumptions', {method:'POST',body}),
+    approveConsumption: (id) => request(`/internal-consumptions/${id}/approve`, {method:'POST'}),
+    postConsumption: (id) => request(`/internal-consumptions/${id}/post`, {method:'POST'}),
+    consumptionPreview: (params) => request('/internal-consumptions/preview', {params}),
+    consumptionReport: (params) => request('/internal-consumptions/report', {params}),
+
     approveReceivingRequest: (id,body) => request(`/purchasing/requests/${id}/approve`,{method:'POST',body}),
     receivingRequests: (status = 'active') => request(`/purchasing/requests?status=${encodeURIComponent(status)}`),
     receivingRequest: (id) => request(`/purchasing/requests/${id}`),
@@ -373,7 +382,7 @@ export const api = {
     reviewIntegrationDeadLetter: (id, note, retry = false) => request(`/integration/solabooks/dead-letters/${id}/review`, { method: 'POST', body: { note, retry } }),
 
     // Quick-create master data
-    createCategory: (name, parentId = null) => request('/settings/categories', { method: 'POST', body: { name, parent_id: parentId } }),
+    createCategory: (name, parentId = null, internalAccount = null) => request('/settings/categories', { method: 'POST', body: { name, parent_id: parentId, internal_consumption_account_id: internalAccount } }),
     updateCategory: (id, body) => request(`/settings/categories/${id}`, { method: 'PUT', body }),
     createBrand: (name) => request('/settings/brands', { method: 'POST', body: { name } }),
     updateBrand: (id, body) => request(`/settings/brands/${id}`, { method: 'PUT', body }),

@@ -1,8 +1,8 @@
 <?php
 
-$read = ['inventory.view_dashboard', 'inventory.view_items', 'inventory.view_warehouses', 'inventory.view_stock', 'inventory.view_sales'];
-$operate = array_merge($read, ['inventory.receive_goods', 'inventory.transfer_stock', 'inventory.manage_picking', 'inventory.manage_packing', 'inventory.manage_shipments', 'inventory.manage_reservations']);
-$warehouse = array_merge($operate, ['inventory.manage_warehouse_structure']);
+$read = ['inventory.view_dashboard', 'inventory.view_items', 'inventory.view_warehouses', 'inventory.view_stock', 'inventory.view_sales', 'inventory.consumption.view'];
+$operate = array_merge($read, ['inventory.consumption.create', 'inventory.receive_goods', 'inventory.transfer_stock', 'inventory.manage_picking', 'inventory.manage_packing', 'inventory.manage_shipments', 'inventory.manage_reservations']);
+$warehouse = array_merge($operate, ['inventory.manage_warehouse_structure','inventory.consumption.approve','inventory.consumption.post','inventory.consumption.return']);
 
 return [
     'scoped_inventory_manager' => ['label' => 'Inventory Manager', 'ar' => 'مدير المخزون', 'permissions' => array_merge($warehouse, ['inventory.view_ledger', 'inventory.view_reports', 'inventory.manage_purchase_orders'])],

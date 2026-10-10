@@ -20,7 +20,7 @@ export function DocumentStatusBadge({ status }) {
 export function SourceDocumentLink({ sourceType, sourceId, sourceDisplay, sourceRoute }) {
     const name = (sourceType ?? '').split('\\').pop();
     const map = {
-        OpeningStockEntry: '/opening-stock', StockAdjustment: '/adjustments',
+        InternalConsumption:'/internal-consumptions', OpeningStockEntry: '/opening-stock', StockAdjustment: '/adjustments',
         GoodsReceipt: '/goods-receipts', StockTransfer: '/transfers',
         SalesOrder: '/sales-orders', Shipment: '/shipments', SalesReturn: '/sales-returns',
     };

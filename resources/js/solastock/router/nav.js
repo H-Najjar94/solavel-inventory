@@ -3,6 +3,7 @@
 // (fa-solid), matching the SolaCount (Finance) sidebar style. Order = sidebar order.
 
 export const NAV = [
+    {key:'internal-consumptions',label:'Internal Consumption',path:'/internal-consumptions',icon:'fa-solid fa-box-open',perm:'inventory.consumption.view',group:'Operations'},
     { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'fa-solid fa-gauge-high', perm: 'inventory.view_dashboard', group: 'Overview' },
     { key: 'items', label: 'Items', path: '/items', icon: 'fa-solid fa-boxes-stacked', perm: 'inventory.view_items', group: 'Catalog' },
     { key: 'warehouses', label: 'Warehouses', path: '/warehouses', icon: 'fa-solid fa-warehouse', perm: 'inventory.view_warehouses', group: 'Catalog' },

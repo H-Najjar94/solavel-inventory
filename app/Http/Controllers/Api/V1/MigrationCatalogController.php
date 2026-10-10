@@ -30,6 +30,7 @@ final class MigrationCatalogController extends ApiController
             'unit_price'=>['nullable','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D'],
             'purchase_price'=>['string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','required_with:purchase_currency_code'],
             'purchase_currency_code'=>['string','regex:/^[A-Z]{3}$/D','required_with:purchase_price'],
+            'available_for_sale'=>'nullable|boolean','available_for_purchase'=>'nullable|boolean','track_inventory'=>'nullable|boolean','internal_consumption_account_id'=>'nullable|integer|min:1',
             'item_type'=>'required|in:inventory','valuation_method'=>'required|in:fifo']);
         $references=[];
         foreach (['category'=>'finance_category_id','unit'=>'finance_unit_id'] as $type=>$field) {
@@ -42,6 +43,7 @@ final class MigrationCatalogController extends ApiController
         $native=['name'=>$data['name'],'sku'=>$data['sku'],'barcode'=>$data['barcode']??null,
             'category_id'=>$references['category']['stock_id'],'base_unit_id'=>$references['unit']['stock_id'],
             'item_type'=>'inventory','tracking_type'=>'none','costing_method'=>'fifo','sales_price'=>$data['unit_price']??'0','is_active'=>true];
+        foreach (['available_for_sale','available_for_purchase','track_inventory','internal_consumption_account_id'] as $field) if (array_key_exists($field,$data)) $native[$field]=$data[$field];
         if (array_key_exists('purchase_price',$data)) {
             $setting=IntegrationSetting::query()->where('organization_id',$mapping->solastock_organization_id)
                 ->where('integration','solabooks')->where('mode','active')->first();

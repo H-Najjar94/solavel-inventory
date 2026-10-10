@@ -11,6 +11,13 @@
 
 return [
     'permissions' => [
+        'inventory.consumption.view' => 'View internal consumption',
+        'inventory.consumption.create' => 'Create internal consumption',
+        'inventory.consumption.approve' => 'Approve internal consumption',
+        'inventory.consumption.post' => 'Post internal consumption',
+        'inventory.consumption.return' => 'Return internal consumption',
+        'inventory.consumption.override_account' => 'Override account internal consumption',
+
         'inventory.receive_goods' => 'Receive approved purchase orders without changing valuation',
         'inventory.manage_purchase_orders' => 'Create and edit purchase orders in assigned warehouses',
         'inventory.approve_purchase_orders' => 'Approve and cancel purchase orders in assigned warehouses',
@@ -62,6 +69,7 @@ return [
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.manage_items',
             'inventory.view_warehouses', 'inventory.manage_warehouses', 'inventory.view_stock',
             'inventory.manage_opening_stock', 'inventory.manage_adjustments',
+            'inventory.consumption.view','inventory.consumption.create','inventory.consumption.approve','inventory.consumption.post','inventory.consumption.return',
             'inventory.manage_purchase_orders', 'inventory.approve_purchase_orders',
             'inventory.view_ledger', 'inventory.view_reports', 'inventory.export_reports',
             'inventory.view_settings',
@@ -75,9 +83,10 @@ return [
         'inventory_viewer' => [
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.view_warehouses',
             'inventory.view_stock', 'inventory.view_ledger', 'inventory.view_reports',
-            'inventory.view_settings', 'inventory.view_sales', 'inventory.view_traceability',
+            'inventory.view_settings', 'inventory.view_sales', 'inventory.view_traceability','inventory.consumption.view',
         ],
         'inventory_accountant' => [
+            'inventory.consumption.view',
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.view_stock',
             'inventory.view_ledger', 'inventory.view_reports', 'inventory.view_settings',
             'inventory.integration.view', 'inventory.integration.accounting_review',

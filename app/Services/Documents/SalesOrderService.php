@@ -99,6 +99,7 @@ class SalesOrderService
                 throw new RuntimeException("Only a draft sales order can be confirmed (status '{$so->status}').");
             }
             $so->loadMissing('lines');
+            foreach ($so->lines as $line) if (Item::query()->findOrFail($line->item_id)->available_for_sale === false) throw \Illuminate\Validation\ValidationException::withMessages(['lines'=>__('inventory.consumption.sale_disabled')]);
             $this->workflowValidation->assertOperationalDocumentReady($so, 'sales_order.confirmed');
             $so->status = 'confirmed';
             $so->save();
@@ -230,6 +231,8 @@ class SalesOrderService
     {
         $items = Item::query()->whereIn('id', collect($lines)->pluck('item_id')->filter()->unique())->get(['id', 'sales_price', 'tax_code'])->keyBy('id');
         foreach ($lines as $line) {
+            $selected=Item::query()->findOrFail($line['item_id']);
+            if ($selected->available_for_sale === false) throw \Illuminate\Validation\ValidationException::withMessages(['lines'=>__('inventory.consumption.sale_disabled')]);
             $item = $items[$line['item_id']] ?? null;
             $line = $this->conversions->normalizeLine(array_merge($line, [
                 'entered_qty' => $line['entered_qty'] ?? $line['ordered_qty'],

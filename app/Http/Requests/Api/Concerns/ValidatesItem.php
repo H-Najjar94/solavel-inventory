@@ -58,6 +58,7 @@ trait ValidatesItem
 
     protected function normalizeTracking(): void
     {
+        if ($this->has('track_inventory') && $this->input('track_inventory') !== null) $this->merge(['item_type'=>$this->boolean('track_inventory')?'inventory':($this->input('item_type')==='service'?'service':'non_inventory')]);
         if ($this->has('track_lot') || $this->has('track_serial')) {
             $lot = $this->boolean('track_lot');
             $serial = $this->boolean('track_serial');
@@ -175,6 +176,8 @@ trait ValidatesItem
             'barcode' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
+            'available_for_sale'=>['sometimes','nullable','boolean'],'available_for_purchase'=>['sometimes','nullable','boolean'],'track_inventory'=>['sometimes','nullable','boolean'],
+            'internal_consumption_account_id'=>['nullable','integer','min:1'],
             'item_type' => [$partial ? 'sometimes' : 'required', \Illuminate\Validation\Rule::in(['inventory', 'non_inventory', 'service'])],
             'tracking_type' => ['nullable', \Illuminate\Validation\Rule::in(['none', 'lot', 'serial', 'lot_serial'])],
             'track_lot' => ['boolean'],

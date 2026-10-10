@@ -376,7 +376,7 @@ class IntegrationController extends ApiController
         $existing = IntegrationAccountMapping::query()
             ->where('integration', IntegrationEvents::INTEGRATION)->get()->keyBy('mapping_type');
 
-        $rows = collect(app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles($this->context->idOrFail()))->map(fn ($type) => [
+        $rows = collect(app(\App\Services\Integration\OrganizationAccountRequirements::class)->configurableRoles($this->context->idOrFail()))->map(fn ($type) => [
             'mapping_type' => $type,
             'solabooks_account_id' => $existing[$type]->solabooks_account_id ?? null,
             'account_code' => $existing[$type]->account_code ?? null,
@@ -402,7 +402,12 @@ class IntegrationController extends ApiController
         ]);
 
         foreach ($data['mappings'] as $m) {
-            if (! in_array($m['mapping_type'], app(\App\Services\Integration\OrganizationAccountRequirements::class)->roles($this->context->idOrFail()), true)) {
+            if ($m['mapping_type']==='internal_consumption_expense' && !empty($m['solabooks_account_id'])) {
+                $mapping=app(\App\Services\Consumption\ConsumptionAccounts::class)->connection($orgId);
+                $account=\DB::connection('tenant')->table('accounts')->where('id',$m['solabooks_account_id'])->first();
+                abort_unless(\App\Services\Consumption\ConsumptionAccountSelection::validAccount($account?(array)$account:null,(int)($mapping?->finance_organization_id??0)),422,__('inventory.consumption.mapping_required',['url'=>'/inventory/integrations/solabooks']));
+            }
+            if (! in_array($m['mapping_type'], app(\App\Services\Integration\OrganizationAccountRequirements::class)->configurableRoles($this->context->idOrFail()), true)) {
                 continue;
             }
             IntegrationAccountMapping::query()->updateOrCreate(

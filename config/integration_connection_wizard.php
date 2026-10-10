@@ -13,6 +13,7 @@ return [
     'receiver_confirmed_enabled' => (bool) env('SOLABOOKS_V2_RECEIVER_CONFIRMED_ENABLED', false),
     'confirmation_phrase' => 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY',
     'allowed_workflows' => [
+        'internal_consumption.posted', 'internal_consumption.returned',
         'opening_stock.posted', 'opening_stock.reversed',
         'adjustment.posted', 'adjustment.reversed',
         'grn.posted', 'grn.reversed',

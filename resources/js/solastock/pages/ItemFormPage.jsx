@@ -11,6 +11,7 @@ import { Breadcrumbs, Field, QuickCreateSelect, Skeleton, StatusBadge, fieldErro
 import { t } from '../i18n/index.js';
 
 const EMPTY = {
+    available_for_sale:true, available_for_purchase:true,
     name: '', sku: '', barcode: '', item_type: 'inventory', description: '',
     category_id: null, brand_id: null, base_unit_id: null, preferred_supplier_id: null,
     purchase_price: '', sales_price: '', costing_method: 'average',
@@ -194,6 +195,10 @@ export default function ItemFormPage() {
 
                     <Section title={t('items.inventorySetup')} sub={t('items.inventorySetupHint')}>
                         <div className="fg2">
+                            <label><input type="checkbox" checked={form.available_for_sale !== false} onChange={e=>set('available_for_sale',e.target.checked)}/>{t('consumption.sale')}</label>
+                            <label><input type="checkbox" checked={form.available_for_purchase !== false} onChange={e=>set('available_for_purchase',e.target.checked)}/>{t('consumption.purchase')}</label>
+                            <label><input type="checkbox" checked={form.item_type==='inventory'} onChange={e=>{setForm(f=>({...f,item_type:e.target.checked?'inventory':'non_inventory',track_inventory:e.target.checked}));}}/>{t('consumption.track')}</label>
+                            <Field label={t('consumption.account')}><input className="input" type="number" min="1" value={form.internal_consumption_account_id??''} onChange={e=>set('internal_consumption_account_id',e.target.value?Number(e.target.value):null)}/></Field>
                             <Field label={t('items.itemType')} error={errors.item_type}>
                                 <select className="input" value={form.item_type} onChange={(e) => set('item_type', e.target.value)}>
                                     <option value="inventory">{t('items.inventoryTracksStock')}</option>
@@ -276,9 +281,9 @@ export default function ItemFormPage() {
                             <Field label={t('items.purchasePrice')} error={errors.purchase_price}>
                                 <input className="input" type="number" step="0.0001" value={form.purchase_price ?? ''} onChange={(e) => set('purchase_price', e.target.value)} placeholder="0.00" />
                             </Field>
-                            <Field label={t('items.salesPrice')} error={errors.sales_price}>
+                            {form.available_for_sale !== false && <Field label={t('items.salesPrice')} error={errors.sales_price}>
                                 <input className="input" type="number" step="0.0001" value={form.sales_price ?? ''} onChange={(e) => set('sales_price', e.target.value)} placeholder="0.00" />
-                            </Field>
+                            </Field>}
                             <div className="span2"><span className="field-hint">{t('items.priceBlankHint')}</span></div>
                         </div>
                     </Section>

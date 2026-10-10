@@ -20,9 +20,9 @@ function Select({ value, onChange, options, placeholder, getLabel, disabled }) {
 
 // stockOnly: documents that move stock offer inventory items only; service and
 // non-inventory items cannot hold stock (the ledger rejects them on posting).
-export function ItemPicker({ value, onChange, disabled, stockOnly = false }) {
+export function ItemPicker({ value, onChange, disabled, stockOnly = false, purpose }) {
     const params = stockOnly ? { per_page: 200, is_active: true, item_type: 'inventory' } : { per_page: 200, is_active: true };
-    const { data } = useApiQuery(stockOnly ? ['items-picker', 'inventory'] : ['items-picker'], () => api.items(params), { fallback: [] });
+    const { data } = useApiQuery(['items-picker',stockOnly?'inventory':'all',purpose], () => api.items({...params,purpose}), { fallback: [] });
     const items = Array.isArray(data) ? data : (data?.data ?? []);
     // An existing line may hold an item the stockOnly list excludes (e.g. a
     // service line saved before filtering): show that item as a read-only label.

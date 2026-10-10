@@ -21,6 +21,7 @@ class AccountingJournalBuilder
     {
         app(OrganizationAccountRequirements::class)->assertOperationReady($orgId, $event->event_type);
         return match ($event->event_type) {
+            'internal_consumption.posted', 'internal_consumption.returned' => $this->consumption($event),
             'stock.historical_fifo_cost_corrected.v1' => $this->historicalFifo($event, $orgId),
             'grn.posted' => $this->goodsReceipt($event, $orgId),
             'supplier_return.posted' => $this->supplierReturn($event, $orgId),
@@ -31,6 +32,19 @@ class AccountingJournalBuilder
             'adjustment.posted', 'stock_count.posted' => $this->adjustment($event, $orgId),
             default => $this->twoLine($event, $orgId),
         };
+    }
+
+    private function consumption(IntegrationOutboxEvent $event): array
+    {
+        $return = $event->event_type === 'internal_consumption.returned';
+        $lines=[];
+        foreach ((array)data_get($event->payload,'lines',[]) as $source) {
+            $amount=Decimal::money((string)$source['total_cost']);
+            if (!Decimal::gt($amount,'0')) continue;
+            $lines[]=$this->roleLine((int)$source['expense_account_id'],'internal_consumption_expense',$return?'0':$amount,$return?$amount:'0',$event);
+            $lines[]=$this->roleLine((int)$source['inventory_account_id'],'inventory_asset',$return?$amount:'0',$return?'0':$amount,$event);
+        }
+        return $lines;
     }
 
     private function historicalFifo(IntegrationOutboxEvent $event, int $orgId): array

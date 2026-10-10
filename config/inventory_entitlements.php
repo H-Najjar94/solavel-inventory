@@ -31,6 +31,7 @@ return [
     | for a tenant with no snapshot (fail-open on the base product).
     */
     'free_permissions' => [
+        'inventory.consumption.view','inventory.consumption.create','inventory.consumption.approve','inventory.consumption.post','inventory.consumption.return','inventory.consumption.override_account',
         'inventory.view_dashboard',
         'inventory.view_items',
         'inventory.manage_items',
@@ -49,6 +50,7 @@ return [
     ],
 
     'restricted_safe_permissions' => [
+        'inventory.consumption.view',
         'inventory.view_dashboard',
         'inventory.view_items',
         'inventory.view_warehouses',

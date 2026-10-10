@@ -103,6 +103,42 @@ class StockLedgerService
         });
     }
 
+    /** Read-only estimate using the same costing strategy; posting always costs again under locks. */
+    public function previewOutbound(StockMovement $m): array {
+        $org=$this->context->idOrFail();$item=Item::query()->findOrFail($m->itemId);
+        $query=StockBalance::query()->where('item_id',$m->itemId)->where('warehouse_id',$m->warehouseId);
+        foreach(['variant_id'=>$m->variantId,'lot_id'=>$m->lotId,'bin_id'=>$m->binId]as$field=>$id) $id===null?$query->whereNull($field):$query->where($field,$id);
+        $balance=$query->first();
+        $cost=$this->costing->costOutbound($item->effectiveCostingMethod(),$org,$m->itemId,$m->variantId,$m->warehouseId,$m->lotId,$m->quantity,$balance,(bool)(InventorySetting::query()->first()?->allow_negative_stock??false),true);
+        return $cost+['available_quantity'=>Decimal::sub((string)($balance?->on_hand_qty??'0'),(string)($balance?->reserved_qty??'0'))];
+    }
+
+    /** Restore an unused portion of an issue, preserving its original carrying and FIFO layers. */
+    public function returnIssuedQuantity(int $originalId, string $quantity, string $namespace, int $returnId, int $lineId, string $date): StockLedger
+    {
+        return DB::connection($this->connection())->transaction(function () use ($originalId,$quantity,$namespace,$returnId,$lineId,$date) {
+            $original = StockLedger::query()->lockForUpdate()->findOrFail($originalId);
+            if ($original->source_type !== \App\Models\Tenant\InternalConsumption::class || $original->direction !== 'out') {
+                throw new RuntimeException(__('inventory.consumption.invalid_source'));
+            }
+            $existing = StockLedger::query()->where('idempotency_key', $namespace.'#0')->first();
+            if ($existing) {
+                if ((int)$existing->original_ledger_id !== $originalId || Decimal::cmp((string)$existing->quantity,$quantity) !== 0) throw new RuntimeException('return_idempotency_conflict');
+                return $existing;
+            }
+            app(PurchaseValuationHoldService::class)->lockItems([$original->item_id]);
+            app(PurchaseValuationHoldService::class)->assertMovable($original->item_id,$original->warehouse_id);
+            $prior = (string) StockLedger::query()->where('original_ledger_id',$originalId)->sum('quantity');
+            if (!Decimal::gt($quantity,'0') || Decimal::gt(Decimal::add($prior,$quantity),(string)$original->quantity)) {
+                throw new RuntimeException(__('inventory.consumption.return_exceeds'));
+            }
+            $row = $this->applyExactReversal($original,$namespace,0,\App\Models\Tenant\InternalConsumption::class,$returnId,$quantity,$prior,$lineId,$date);
+            // The inverse row, including provenance, was appended atomically.
+            $this->writeAudit($this->context->idOrFail(), ['action'=>'internal_consumption.return','entity_type'=>'internal_consumption','entity_id'=>$returnId],$namespace,1);
+            return $row;
+        });
+    }
+
     /**
      * Reverse a previously-posted namespace by appending OPPOSITE movements.
      * Never edits/deletes the original rows. Idempotent on the reversal namespace.
@@ -513,6 +549,7 @@ class StockLedgerService
         // Service and non-inventory items have no quantity or valuation; a posted
         // movement would create ledger rows, cost layers and inventory/COGS
         // postings for them. Reversals stay allowed so historical rows unwind.
+        if (!$isReversal && $m->direction === 'out' && $m->sourceType === \App\Models\Tenant\Shipment::class && $item->available_for_sale === false) throw new RuntimeException(__('inventory.consumption.sale_disabled'));
         if (! $isReversal && (string) $item->item_type !== 'inventory') {
             throw new RuntimeException(__('inventory.stock.non_stock_item', ['sku' => (string) $item->sku]));
         }
@@ -695,17 +732,26 @@ class StockLedgerService
         int $index,
         ?string $reversalSourceType = null,
         ?int $reversalSourceId = null,
+        ?string $partialQuantity = null,
+        string $previousQuantity = '0',
+        ?int $returnLineId = null,
+        ?string $returnDate = null,
     ): StockLedger {
         $orgId = $this->context->idOrFail();
-        $item = Item::query()->find((int) $orig->item_id);
+        $item = Item::withTrashed()->find((int) $orig->item_id);
         if (! $item || (int) $item->organization_id !== $orgId) {
             throw new RuntimeException(__('inventory.stock.cross_item_reversal'));
         }
 
         $reverseDirection = $orig->direction === 'in' ? 'out' : 'in';
-        $qty = Decimal::qty((string) $orig->quantity);
+        $qty = Decimal::qty($partialQuantity ?? (string) $orig->quantity);
         $unitCost = Decimal::cost((string) $orig->unit_cost);
         $totalCost = Decimal::money((string) $orig->total_cost);
+        if ($partialQuantity !== null) {
+            $cumulative = Decimal::add($previousQuantity,$qty);
+            $portion = fn (string $value, string $q, int $scale) => Decimal::round(Decimal::mul($value,Decimal::div($q,(string)$orig->quantity,12),12),$scale);
+            $totalCost = Decimal::sub($portion((string)$orig->total_cost,$cumulative,2),$portion((string)$orig->total_cost,$previousQuantity,2),2);
+        }
 
         $movement = new StockMovement(
             direction: $reverseDirection,
@@ -714,14 +760,14 @@ class StockLedgerService
             quantity: $qty,
             sourceType: $reversalSourceType ?? $orig->source_type,
             sourceId: $reversalSourceId ?? (int) $orig->source_id,
-            sourceLineId: $orig->source_line_id ? (int) $orig->source_line_id : null,
+            sourceLineId: $returnLineId ?? ($orig->source_line_id ? (int) $orig->source_line_id : null),
             variantId: $orig->variant_id ? (int) $orig->variant_id : null,
             zoneId: $orig->zone_id ? (int) $orig->zone_id : null,
             binId: $orig->bin_id ? (int) $orig->bin_id : null,
             lotId: $orig->lot_id ? (int) $orig->lot_id : null,
             serialId: $orig->serial_id ? (int) $orig->serial_id : null,
             unitCost: $unitCost,
-            movedAt: now()->toDateTimeString(),
+            movedAt: $returnDate ?? now()->toDateTimeString(),
         );
 
         $balance = $this->lockBalance($orgId, $movement, $item);
@@ -734,14 +780,22 @@ class StockLedgerService
         if ((string) $orig->costing_method === 'fifo' && $orig->direction === 'out') {
             // RESTORE the exact layers this OUT consumed (add back per-layer qty).
             $consumptions = CostLayerConsumption::query()->where('ledger_id', $orig->id)->orderBy('id')->get();
+            $prefix='0';
             foreach ($consumptions as $c) {
+                $previousPrefix=$prefix;$prefix=Decimal::add($prefix,(string)$c->qty);
+                $restoreQty = (string)$c->qty;
+                if ($partialQuantity !== null) {
+                    // Cumulative allocation gives the last return every rounding remainder.
+                    $restoreQty = Decimal::sub(Decimal::sub($portion($prefix,$cumulative,4),$portion($previousPrefix,$cumulative,4),4),Decimal::sub($portion($prefix,$previousQuantity,4),$portion($previousPrefix,$previousQuantity,4),4),4);
+                }
+                if (Decimal::isZero($restoreQty)) continue;
                 $layer = CostLayer::query()->lockForUpdate()->find($c->cost_layer_id);
                 if ($layer) {
                     // A financial cost adjustment may have changed the remaining layer since this OUT.
                     // Restore its captured historical carrying without repricing the units still on hand.
                     $layer->unit_cost = RestoredFifoCarrying::unitCost((string) $layer->remaining_qty,
-                        (string) $layer->unit_cost, (string) $c->qty, (string) $c->unit_cost);
-                    $layer->remaining_qty = Decimal::qty(Decimal::add((string) $layer->remaining_qty, (string) $c->qty));
+                        (string) $layer->unit_cost, $restoreQty, (string) $c->unit_cost);
+                    $layer->remaining_qty = Decimal::qty(Decimal::add((string) $layer->remaining_qty, $restoreQty));
                     $layer->save();
                 }
             }
@@ -774,6 +828,7 @@ class StockLedgerService
         }
 
         [$newOnHand, $newAvg, $newValue] = $this->projectBalance($balance, $reverseDirection, $qty, $unitCost, $totalCost, 'fifo');
+        if ($partialQuantity !== null) $this->enforceBinCapacity($orgId,$movement,$balance,$newOnHand);
         $balance->on_hand_qty = $newOnHand;
         $balance->average_cost = $newAvg;
         $balance->total_value = $newValue;
@@ -798,8 +853,9 @@ class StockLedgerService
             'cost_layer_id' => $layerForLedger,
             'source_type' => $reversalSourceType ?? $orig->source_type,
             'source_id' => $reversalSourceId ?? $orig->source_id,
-            'source_line_id' => $orig->source_line_id,
-            'moved_at' => now(),
+            'source_line_id' => $returnLineId ?? $orig->source_line_id,
+            'original_ledger_id' => $partialQuantity !== null ? $orig->id : null,
+            'moved_at' => $returnDate ?? now(),
             'posted_at' => now(),
             'idempotency_key' => $namespace.'#'.$index,
             'balance_qty_after' => $newOnHand,

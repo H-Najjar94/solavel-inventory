@@ -87,7 +87,8 @@ class CostingEngine
         ?int $lotId,
         string $quantity,
         ?StockBalance $balance,
-        bool $allowNegative
+        bool $allowNegative,
+        bool $readOnly = false
     ): array {
         $this->assertSupported($method);
 
@@ -114,7 +115,7 @@ class CostingEngine
             ->where('remaining_qty', '>', 0)
             ->orderBy('received_at')
             ->orderBy('id')
-            ->lockForUpdate()
+            ->when(!$readOnly, fn($q) => $q->lockForUpdate())
             ->get();
 
         foreach ($layers as $layer) {
@@ -130,7 +131,7 @@ class CostingEngine
 
             // Mutate layer remaining (allowed: inside stock engine).
             $layer->remaining_qty = Decimal::qty(Decimal::sub($available, $take));
-            $layer->save();
+            if (!$readOnly) $layer->save();
 
             $consumed[] = [
                 'layer_id' => (int) $layer->id,

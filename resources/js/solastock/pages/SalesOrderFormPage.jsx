@@ -68,7 +68,7 @@ export default function SalesOrderFormPage() {
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: t('salesOrders.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('salesOrders.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly purpose="sale" value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
         { key: 'qty', label: t('salesOrders.form.orderedQuantity', 'Ordered quantity'), width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
         { key: 'unit', label: t('salesOrders.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: t('salesOrders.form.unitPrice', 'Unit price'), width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
