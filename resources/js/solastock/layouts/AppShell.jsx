@@ -1,3 +1,4 @@
+import { useCloseDrawerOnResize } from '../hooks/useCloseDrawerOnResize.js';
 import PurchasingNotificationBell from '../components/PurchasingNotificationBell.jsx';
 import {FeedbackNavigation} from '../components/FeedbackNavigation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -319,6 +320,7 @@ export default function AppShell() {
     const [collapsed, setCollapsed] = useState(false);
     const [openGroup, setOpenGroup] = useState(activeGroup);
     const [sideOpen, setSideOpen] = useState(false);
+    useCloseDrawerOnResize(setSideOpen);
     const [menu, setMenu] = useState(null); // 'org' | 'quick' | 'user' | null
     const [cmdOpen, setCmdOpen] = useState(false);
     const locale = getLocale();
