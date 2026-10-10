@@ -16,7 +16,7 @@ final class InternalConsumptionController extends ApiController {
             $result[$table]=\Schema::connection('tenant')->hasTable($table) ? DB::connection('tenant')->table($table)->where('organization_id',$org)->orderBy('name')->get(['id','name']) : [];
         }
         $mapping=app(ConsumptionAccounts::class)->connection($org);
-        $result['accounts']=$mapping ? DB::connection('tenant')->table('accounts')->where('organization_id',$mapping->finance_organization_id)->where('type','expense')->where('is_active',true)->where('is_postable',true)->whereNull('deleted_at')->orderBy('code')->get(['id','code','name']) : [];
+        $result['accounts']=$mapping ? DB::connection('tenant')->table('accounts')->where('organization_id',$mapping->finance_organization_id)->where('type','expense')->where('is_active',true)->where('is_postable',true)->when(\Schema::connection('tenant')->hasColumn('accounts','deleted_at'),fn($q)=>$q->whereNull('deleted_at'))->orderBy('code')->get(['id','code','name']) : [];
         return $this->success($result);
     }
     public function index(Request $request) {

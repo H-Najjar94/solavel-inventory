@@ -15,6 +15,7 @@ use Illuminate\Support\Collection;
 class SourceDocumentPresenter
 {
     private const DOCUMENTS = [
+        \App\Models\Tenant\InternalConsumption::class => ['label' => 'Internal consumption', 'label_key'=>'inventory.consumption.title', 'number' => 'document_number', 'route' => '/internal-consumptions'],
         OpeningStockEntry::class => ['label' => 'Opening stock', 'number' => 'entry_number', 'route' => '/opening-stock'],
         StockAdjustment::class => ['label' => 'Adjustment', 'number' => 'adjustment_number', 'route' => '/adjustments'],
         GoodsReceipt::class => ['label' => 'Goods receipt', 'number' => 'grn_number', 'route' => '/goods-receipts'],
@@ -38,6 +39,7 @@ class SourceDocumentPresenter
 
         $class = class_exists($sourceType) ? $sourceType : 'App\\Models\\Tenant\\'.class_basename($sourceType);
         $meta = self::DOCUMENTS[$class] ?? null;
+        if (isset($meta['label_key'])) $meta['label'] = __($meta['label_key']);
         if (! $meta || ! is_a($class, Model::class, true)) {
             $label = class_basename($sourceType);
 
@@ -70,6 +72,7 @@ class SourceDocumentPresenter
             ->each(function (Collection $group, string $sourceType) use (&$lookup, $idKey) {
                 $class = class_exists($sourceType) ? $sourceType : 'App\\Models\\Tenant\\'.class_basename($sourceType);
                 $meta = self::DOCUMENTS[$class] ?? null;
+        if (isset($meta['label_key'])) $meta['label'] = __($meta['label_key']);
                 if (! $meta || ! is_a($class, Model::class, true)) {
                     return;
                 }

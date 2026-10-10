@@ -37,6 +37,7 @@ final class InternalConsumptionTest extends TestCase {
         self::assertSame('17.0000',StockBalance::query()->first()->on_hand_qty);
         self::assertSame('34.00',StockBalance::query()->first()->total_value);
         self::assertSame('6.00',$posted->lines->first()->total_cost);
+        self::assertSame('/internal-consumptions/'.$posted->id,\App\Services\Documents\SourceDocumentPresenter::describe(InternalConsumption::class,$posted->id)['source_route']);
         self::assertSame(1,StockLedger::query()->where('source_type',InternalConsumption::class)->count());
         self::assertFalse($posted->accounting_connected);
         self::assertSame(0,IntegrationOutboxEvent::query()->where('aggregate_type','InternalConsumption')->count());
@@ -128,6 +129,8 @@ final class InternalConsumptionTest extends TestCase {
         $fi=$db->table('inventory_items')->insertGetId(['organization_id'=>14,'name'=>'Materials','sku'=>'IC-MATERIAL','type'=>'inventory','inventory_asset_account_id'=>100,'purchase_account_id'=>100]);
         \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$map->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>$org,'finance_organization_id'=>14,'solastock_organization_id'=>$org,'entity_type'=>'item','solastock_record_id'=>(string)$item->id,'solabooks_record_id'=>(string)$fi,'status'=>'verified']);
         \App\Models\Tenant\IntegrationMasterDataMapping::create(['mapping_uuid'=>(string)Str::uuid(),'organization_mapping_uuid'=>$map->mapping_uuid,'central_client_id'=>7,'central_organization_id'=>$org,'finance_organization_id'=>14,'solastock_organization_id'=>$org,'entity_type'=>'unit','solastock_record_id'=>(string)$unit->id,'solabooks_record_id'=>'700','status'=>'verified']);
+        $options=json_decode(app(\App\Http\Controllers\Api\V1\InternalConsumptionController::class)->options()->getContent(),true,512,JSON_THROW_ON_ERROR);
+        self::assertSame(101,$options['data']['accounts'][0]['id']);
         $db->table('accounting_periods')->insert(['organization_id'=>14,'name'=>'October','period_no'=>10,'start_date'=>'2026-10-01','end_date'=>'2026-10-31','status'=>'open']);
         $issue=$service->post($this->draft($service,$wh,$item));$service->post($issue);
         $event=IntegrationOutboxEvent::where('event_type','internal_consumption.posted')->sole();
