@@ -9,8 +9,8 @@
 - [x] Implement exact-cost partial/full returns and concurrency protection.
 - [x] Extend existing durable accounting contract, synchronization status and links.
 - [x] Register permissions/features and bilingual UI/reporting.
-- [ ] Verify existing-tenant migration and actual SPSB new-tenant provisioning.
+- [x] Verify existing-tenant migration and actual SPSB new-tenant provisioning.
 - [x] Run focused functional, isolation, retry and concurrent-operation tests.
-- [ ] Build and pass required release gates.
-- [ ] Deploy affected applications, refresh workers/caches and verify health/version.
-- [ ] Perform English/Arabic UI smoke checks and record rollback instructions.
+- [x] Build and pass required release gates.
+- [x] Deploy affected applications, refresh workers/caches and verify health/version.
+- [x] Perform English/Arabic UI smoke checks and record rollback instructions.
