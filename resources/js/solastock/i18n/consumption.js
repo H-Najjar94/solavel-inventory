@@ -1,4 +1,7 @@
 export const en = {
+  "consumption.trackingStock": "Required for stock items. Inventory tracking is controlled by the item type.",
+  "consumption.trackingNonStock": "Non-stock items and services do not track inventory and cannot be received or consumed as stock.",
+  "consumption.trackingLegacy": "Legacy tracking differs from the item type. Existing records remain unchanged; review the item before changing its type.",
   "consumption.pages": "Pages",
   "consumption.previous": "Previous",
   "consumption.next": "Next",
@@ -70,6 +73,9 @@ export const en = {
   "consumption.approvalSetting": "Require approval for internal consumption"
 };
 export const ar = {
+  "consumption.trackingStock": "إلزامي للمادة المخزنية. يتحكم نوع الصنف في تتبع المخزون.",
+  "consumption.trackingNonStock": "المواد غير المخزنية والخدمات لا تتتبع المخزون ولا يمكن استلامها أو صرفها كمخزون.",
+  "consumption.trackingLegacy": "إعداد التتبع القديم يختلف عن نوع الصنف. تبقى السجلات الحالية دون تغيير؛ راجع الصنف قبل تغيير نوعه.",
   "consumption.pages": "الصفحات",
   "consumption.previous": "السابق",
   "consumption.next": "التالي",

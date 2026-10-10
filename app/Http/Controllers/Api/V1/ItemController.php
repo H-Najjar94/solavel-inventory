@@ -35,7 +35,6 @@ class ItemController extends ApiController
     {
         if (array_key_exists('internal_consumption_account_id',$data)) app(\App\Services\Consumption\ConsumptionAccounts::class)->validateDefault(app(\App\Tenancy\OrganizationContext::class)->idOrFail(),isset($data['internal_consumption_account_id'])?(int)$data['internal_consumption_account_id']:null);
 
-        if (isset($data['item_type'])) $data['track_inventory']=$data['item_type']==='inventory';
         unset($data['track_lot'], $data['track_serial'], $data['track_expiry'], $data['barcode']);
 
         return $data;

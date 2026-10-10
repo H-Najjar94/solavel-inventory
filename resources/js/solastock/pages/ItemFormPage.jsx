@@ -118,6 +118,7 @@ export default function ItemFormPage() {
         setSaving(true); setErrors({});
         try {
             const payload = { ...form };
+            delete payload.track_inventory; // Type controls tracking; retain untouched legacy flags.
             // opening-stock fields are not item columns — strip before saving.
             delete payload.opening_warehouse_id; delete payload.opening_qty; delete payload.opening_cost;
             if (isService) { payload.track_lot = false; payload.track_serial = false; payload.track_expiry = false; }
@@ -197,7 +198,7 @@ export default function ItemFormPage() {
                         <div className="fg2">
                             <label><input type="checkbox" checked={form.available_for_sale !== false} onChange={e=>set('available_for_sale',e.target.checked)}/>{t('consumption.sale')}</label>
                             <label><input type="checkbox" checked={form.available_for_purchase !== false} onChange={e=>set('available_for_purchase',e.target.checked)}/>{t('consumption.purchase')}</label>
-                            <label><input type="checkbox" checked={form.item_type==='inventory'} onChange={e=>{setForm(f=>({...f,item_type:e.target.checked?'inventory':'non_inventory',track_inventory:e.target.checked}));}}/>{t('consumption.track')}</label>
+                            <div><label><input type="checkbox" checked={isInventory} disabled aria-describedby="tracking-type-help"/>{t('consumption.track')}</label><p id="tracking-type-help" className="sub">{t(isInventory ? 'consumption.trackingStock' : 'consumption.trackingNonStock')}</p>{isEdit && form.track_inventory != null && form.track_inventory !== isInventory && <p role="status">{t('consumption.trackingLegacy')}</p>}</div>
                             <Field label={t('consumption.account')}><input className="input" type="number" min="1" value={form.internal_consumption_account_id??''} onChange={e=>set('internal_consumption_account_id',e.target.value?Number(e.target.value):null)}/></Field>
                             <Field label={t('items.itemType')} error={errors.item_type}>
                                 <select className="input" value={form.item_type} onChange={(e) => set('item_type', e.target.value)}>

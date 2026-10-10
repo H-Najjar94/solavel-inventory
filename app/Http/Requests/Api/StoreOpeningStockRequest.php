@@ -6,6 +6,13 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreOpeningStockRequest extends FormRequest
 {
+    use \App\Http\Requests\Api\Concerns\RejectsNonStockItems;
+
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(fn ($validator) => $this->rejectNonStockItems($validator));
+    }
+
     public function authorize(): bool
     {
         return true;

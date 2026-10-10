@@ -36,6 +36,43 @@ class Item extends Model
         'sales_price' => 'decimal:4',
     ];
 
+    /** All catalog writers (including imports and synchronization) use this boundary. */
+    public function save(array $options = [])
+    {
+        return $this->getConnection()->transaction(function () use ($options) {
+            $current = $this->exists
+                ? static::withTrashed()->whereKey($this->getKey())->lockForUpdate()->firstOrFail()
+                : null;
+            $type = $current && ! $this->isDirty('item_type') ? $current->item_type : ($this->item_type ?? 'inventory');
+            $typeChanged = $current && $type !== $current->item_type;
+            if ($typeChanged && (($type === 'inventory') !== ($current->item_type === 'inventory'))
+                && (StockLedger::query()->where('item_id', $this->getKey())->exists()
+                    || StockBalance::query()->withoutGlobalScopes()->where('organization_id', $current->organization_id)
+                        ->where('item_id', $this->getKey())->where(function ($q) {
+                            $q->where('on_hand_qty', '<>', 0)->orWhere('reserved_qty', '<>', 0)->orWhere('total_value', '<>', 0);
+                        })->exists())) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'item_type' => __('inventory.consumption.tracking_history'),
+                ]);
+            }
+            // An unchanged inconsistent legacy flag is diagnostic only. Never rewrite it
+            // as a side effect of a name/price update or a historical reversal.
+            $trackingChanged = $this->isDirty('track_inventory');
+            if ((! $current || $typeChanged || $trackingChanged)
+                && $this->track_inventory !== null && $trackingChanged
+                && (bool) $this->track_inventory !== ($type === 'inventory')) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'track_inventory' => __('inventory.consumption.tracking_type_controlled'),
+                ]);
+            }
+            if (! $current || $typeChanged || $trackingChanged) {
+                $this->item_type = $type;
+                $this->track_inventory = $type === 'inventory';
+            }
+            return parent::save($options);
+        });
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(ItemCategory::class, 'category_id');

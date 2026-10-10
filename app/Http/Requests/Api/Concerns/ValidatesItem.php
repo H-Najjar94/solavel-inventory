@@ -58,7 +58,6 @@ trait ValidatesItem
 
     protected function normalizeTracking(): void
     {
-        if ($this->has('track_inventory') && $this->input('track_inventory') !== null) $this->merge(['item_type'=>$this->boolean('track_inventory')?'inventory':($this->input('item_type')==='service'?'service':'non_inventory')]);
         if ($this->has('track_lot') || $this->has('track_serial')) {
             $lot = $this->boolean('track_lot');
             $serial = $this->boolean('track_serial');

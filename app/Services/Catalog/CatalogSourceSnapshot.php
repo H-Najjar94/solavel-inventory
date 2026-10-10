@@ -11,9 +11,16 @@ final class CatalogSourceSnapshot {
    'unit'=>['symbol'=>(string)($row['code']??''),'kind'=>(string)($row['kind']??'count')],
    'category'=>['internal_consumption_account_id'=>$row['internal_consumption_account_id']??null,'parent_id'=>empty($row['parent_id'])?null:(int)$row['parent_id']],
    'item'=>['sku'=>(string)($row['sku']??''),'category_id'=>empty($row['category_id'])?null:(int)$row['category_id'],'base_unit_id'=>(int)$row['base_unit_id'],
-    'available_for_sale'=>$row['available_for_sale']??null,'available_for_purchase'=>$row['available_for_purchase']??null,'track_inventory'=>($row['item_type']??'inventory')==='inventory','internal_consumption_account_id'=>$row['internal_consumption_account_id']??null,
+    'item_type'=>(string)($row['item_type']??'inventory'),...self::trackingFields($row),
+    'available_for_sale'=>$row['available_for_sale']??null,'available_for_purchase'=>$row['available_for_purchase']??null,'internal_consumption_account_id'=>$row['internal_consumption_account_id']??null,
     'tracking_type'=>(string)($row['tracking_type']??'none'),'valuation_method'=>(string)($row['costing_method']??'average'),'conversions'=>self::conversions($conversions)],
   };
+ }
+ /** Omit contradictory legacy flags: syncing a name must not repair accounting settings. */
+ public static function trackingFields(array $row):array {
+  $value=$row['track_inventory']??null;
+  if($value!==null && (bool)$value!==(($row['item_type']??'inventory')==='inventory'))return [];
+  return ['track_inventory'=>$value===null?null:(bool)$value];
  }
  public static function conversions(array $rows):array {
   usort($rows,fn($a,$b)=>(int)$a['id']<=>(int)$b['id']);$result=[];

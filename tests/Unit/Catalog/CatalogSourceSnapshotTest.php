@@ -17,4 +17,15 @@ final class CatalogSourceSnapshotTest extends TestCase {
   $fields=CatalogSourceSnapshot::fields('category',['id'=>9,'name'=>'Child','parent_id'=>4,'deleted_at'=>'2026-10-08']);
   self::assertFalse($fields['active']);self::assertSame(9,$fields['source_id']);self::assertSame([['category',4]],CatalogSourceSnapshot::dependencies($fields));
  }
+ public function test_type_and_independent_commercial_flags_survive_sync_without_repairing_legacy_flags():void {
+  foreach(['inventory','non_inventory','service']as$type){
+   $row=['id'=>3,'name'=>'Item','base_unit_id'=>2,'item_type'=>$type,'available_for_sale'=>false,'available_for_purchase'=>true,'track_inventory'=>$type==='inventory'];
+   $fields=CatalogSourceSnapshot::fields('item',$row);
+   self::assertSame($type,$fields['item_type']);self::assertSame($type==='inventory',$fields['track_inventory']);
+   self::assertFalse($fields['available_for_sale']);self::assertTrue($fields['available_for_purchase']);
+   $row['track_inventory']=null;self::assertNull(CatalogSourceSnapshot::fields('item',$row)['track_inventory']);
+   $row['track_inventory']=$type!=='inventory';self::assertArrayNotHasKey('track_inventory',CatalogSourceSnapshot::fields('item',$row));
+  }
+ }
+
 }
