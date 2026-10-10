@@ -1,6 +1,6 @@
 # Internal consumption delivery evidence — 2026-10-10
 
-Implemented issue drafts, configured approval, engine-cost posting, exact-cost partial/full returns, independent sale/purchase/inventory flags, item/category/connection expense defaults, authorized overrides, durable Finance delivery with visible synchronization state, reciprocal document/journal references, permission bundles, English/Arabic screens and a filtered net-consumption report. No second ledger, costing service, accounting transport, approval framework, or signed SPSB baseline was introduced.
+Implemented issue drafts, configured approval, engine-cost posting, exact-cost partial/full returns, independent sale/purchase flags, item/category/connection expense defaults, authorized overrides, durable Finance delivery with visible synchronization state, reciprocal document/journal references, permission bundles, English/Arabic screens and a filtered net-consumption report. No second ledger, costing service, accounting transport, approval framework, or signed SPSB baseline was introduced.
 
 Preserved Stock foundation commits `5748e90` and `7a85afd`, live hotfix branches, and the cash-return fixture fix. Unrelated main checkouts were untouched. Other active agent owns Finance release activation; Stock activation was serialized under the same global root release lock.
 
@@ -35,3 +35,5 @@ Cleanup removes only proven task-created unused stages and task authentication a
 There is no outstanding implementation or deployment blocker. The original helper-only status is superseded by these implementation, native qualification, migration and actual deployment receipts. The final documentation commit records the deployed runtime SHAs; documentation does not require a further runtime release.
 
 Final cleanup verified: removed task-created unused staging releases, older private Finance qualification snapshots, the two completed Finance/Central task worktrees, and the task QA cookies/sessions. Pushed commits, final qualification evidence, all live/rollback releases and the requested original Stock worktree remain preserved. Final health checks still passed after cleanup; disk free space was 15 GiB.
+
+The focused follow-up now makes inventory tracking follow item type. See [the deployed item-type tracking evidence](ITEM_TYPE_TRACKING_20261010.md) for the newer Stock/Finance releases and checks.
