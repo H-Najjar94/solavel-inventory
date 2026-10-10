@@ -2248,3 +2248,34 @@ button.ss-org-pill:hover, .ss-org-pill[aria-expanded='true'] { border-color: var
   .ss-user-menu { width: min(300px, calc(100vw - 20px)); }
   .ss-topbar .btn--sm { padding: 4px 8px; }
 }
+/* Keep the organization, search and actions usable at every shell width. */
+.ss-topbar { container: ss-topbar / inline-size; width: 100%; min-width: 0; box-sizing: border-box; }
+.ss-topbar__start { flex: 1 1 0; min-width: 0; }
+.ss-topbar__end { flex: 0 0 auto; }
+.ss-topbar__icon, .ss-topbar__bell, .ss-user-pill, .ss-topbar__divider { flex-shrink: 0; }
+.ss-org-switch { flex: 0 1 260px; min-width: 0; max-width: 260px; }
+.ss-org-pill { width: 100%; max-width: 100%; box-sizing: border-box; }
+.ss-org-pill__name { flex: 1 1 auto; min-width: 0; }
+.ss-topbar__search { flex: 1 1 240px; width: auto; max-width: 420px; min-width: 40px; box-sizing: border-box; }
+.ss-topbar__search > :is(i, svg, kbd) { flex-shrink: 0; }
+.ss-topbar .ss-menu { box-sizing: border-box; max-width: calc(100vw - 20px); max-height: calc(100dvh - 80px); overflow-y: auto; overflow-x: hidden; }
+@container ss-topbar (max-width: 1120px) {
+  .ss-language__text, .ss-topbar__search kbd { display: none; }
+  .ss-topbar__start, .ss-topbar__end { gap: 4px; }
+  .ss-topbar__chip { display: none; }
+}
+@container ss-topbar (max-width: 900px) {
+  .ss-topbar__search { flex: 0 0 40px; width: 40px; padding: 0; justify-content: center; }
+  .ss-topbar__search-text, .ss-topbar__search kbd { display: none; }
+}
+@media (max-width: 640px) {
+  .ss-topbar { padding-inline: 10px; gap: 6px; }
+  .ss-topbar__start, .ss-topbar__end { gap: 2px; }
+  .ss-org-switch { flex: 1 1 0; max-width: none; }
+  .ss-org-pill { gap: 6px; padding-inline: 4px 8px; }
+  .ss-org-pill__chevron, .ss-user-pill__chevron, .ss-topbar__divider, .ss-topbar__icon--secondary { display: none; }
+  .ss-topbar__icon { flex: 0 0 40px; min-width: 40px; height: 40px; padding: 0; }
+  .ss-user-pill { height: 40px; padding-inline: 4px; }
+  .ss-topbar .ss-menu { position: fixed; inset-inline: 10px !important; top: 72px !important; width: auto; min-width: 0 !important; max-width: none; }
+  .ss-menu__item--phone { display: flex; }
+}
