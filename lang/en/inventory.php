@@ -82,7 +82,7 @@ return [
         'unit_required_for_inventory' => 'A unit is required for inventory items.',
         'expiry_requires_lot' => 'Expiry tracking requires lot tracking.',
         'costing_locked' => 'Costing method cannot change after stock exists.',
-        'item_type_locked' => 'Item type cannot change after stock exists.',
+        'item_type_locked' => 'Item type cannot change while stock balances or historical movements exist. Keep this item for its history and create a new item with the required type.',
         'warehouse_code_unique' => 'Warehouse code must be unique within the organization.',
         'lot_code_required' => 'A lot code is required for lot-tracked items.',
         'supplier_code_unique' => 'Supplier code must be unique.',
