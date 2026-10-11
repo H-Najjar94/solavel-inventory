@@ -8,7 +8,7 @@ final class CatalogSourceSnapshot {
   if(!isset(self::TABLES[$type]))throw new \InvalidArgumentException('Unsupported catalog source');
   $common=['entity_type'=>$type,'source_id'=>(int)$row['id'],'name'=>(string)$row['name'],'active'=>empty($row['deleted_at'])&&(bool)($row['is_active']??true)];
   return $common+match($type){
-   'unit'=>['symbol'=>(string)($row['code']??''),'kind'=>(string)($row['kind']??'count')],
+   'unit'=>['symbol'=>(string)($row['symbol']??$row['code']??''),'kind'=>(string)($row['kind']??'count')],
    'category'=>['internal_consumption_account_id'=>$row['internal_consumption_account_id']??null,'parent_id'=>empty($row['parent_id'])?null:(int)$row['parent_id']],
    'item'=>['sku'=>(string)($row['sku']??''),'category_id'=>empty($row['category_id'])?null:(int)$row['category_id'],'base_unit_id'=>(int)$row['base_unit_id'],
     'item_type'=>(string)($row['item_type']??'inventory'),...self::trackingFields($row),

@@ -164,7 +164,28 @@ class InventoryReportService
     private function reportInventoryValuationAsAt(ReportFilters $f): array
     {
         $asAt = $f->asAt.' 23:59:59';
-        $rows = $this->scoped('stock_ledger as l')
+        $facts = $this->db()->table('stock_ledger')->where('organization_id', $this->orgId())
+            ->select(['organization_id', 'item_id', 'warehouse_id', 'lot_id', 'direction', 'quantity', 'total_cost', 'moved_at']);
+        // Landed cost changes value without creating a physical movement. Include
+        // only the authoritative inventory share, never the consumed/COGS share.
+        if (Schema::connection($this->conn())->hasTable('stock_landed_cost_components')) {
+            $valueFacts = $this->db()->table('stock_landed_cost_components as component')
+                ->join('stock_landed_costs as cost', function ($join) {
+                    $join->on('cost.id', '=', 'component.landed_cost_id')
+                        ->on('cost.organization_id', '=', 'component.organization_id');
+                })->join('stock_ledger as source', function ($join) {
+                    $join->on('source.id', '=', 'component.stock_ledger_id')
+                        ->on('source.organization_id', '=', 'component.organization_id');
+                })->where('component.organization_id', $this->orgId())
+                ->where('component.destination_role', 'inventory_asset')
+                ->whereIn('cost.status', ['posted', 'reversed'])->whereNotNull('cost.posted_at')
+                ->where(fn ($q) => $q->whereNull('cost.reversed_at')->orWhere('cost.reversed_at', '>', $asAt))
+                ->selectRaw('component.organization_id, component.item_id, component.warehouse_id, source.lot_id,
+                    "in" as direction, 0 as quantity, component.posted_base_amount as total_cost,
+                    cost.landed_cost_date as moved_at');
+            $facts->unionAll($valueFacts);
+        }
+        $rows = $this->scoped('stock_ledger as l')->fromSub($facts, 'l')
             ->join('items as i', 'i.id', '=', 'l.item_id')->where('i.item_type', 'inventory')
             ->leftJoin('item_categories as c', 'c.id', '=', 'i.category_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
@@ -224,9 +245,20 @@ class InventoryReportService
         return $row;
     }
 
-    /** The organization's base currency (Central), SAR when unavailable. */
+    /** Connected valuation uses the verified tenant/organization currency contract. */
     public function baseCurrency(): string
     {
+        if (Schema::connection($this->conn())->hasTable('integration_organization_mappings')) {
+            $code = DB::connection($this->conn())->table('integration_organization_mappings')
+                ->where('tenant_database_identity', DB::connection($this->conn())->getDatabaseName())
+                ->where('solastock_organization_id', $this->orgId())
+                ->where('central_organization_id', $this->orgId())
+                ->where('integration', 'solabooks')->where('status', 'verified')
+                ->whereNotNull('currency_verified_at')->value('base_currency_code');
+            if (is_string($code) && preg_match('/^[A-Z]{3}$/D', $code)) {
+                return $code;
+            }
+        }
         try {
             return (string) (DB::connection(config('tenancy.central_connection', 'mysql'))
                 ->table('organizations')

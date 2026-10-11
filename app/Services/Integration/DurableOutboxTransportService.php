@@ -16,6 +16,9 @@ final class DurableOutboxTransportService
     /** Permanent receiver rejections whose unchanged payload can become valid after a reviewed receiver fix. */
     private const REVIEWABLE_RECEIVER_CODES = [
         'unit_conversion_finance_scope_invalid',
+        // An administrator may enable the transaction currency on the receiver
+        // and explicitly retry; every delivery still revalidates that setting.
+        'transaction_currency_disabled',
     ];
 
     public function __construct(

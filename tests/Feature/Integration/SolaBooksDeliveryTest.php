@@ -586,6 +586,44 @@ class SolaBooksDeliveryTest extends TestCase
     }
 
     #[Test]
+    public function supervisor_recovers_receiver_commit_without_sender_ack(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $event = $this->enableDurableTransport($this->event());
+        $transport = app(DurableOutboxTransportService::class);
+        Http::fake(['books.test/*' => Http::sequence()
+            ->push(['data' => ['id' => 7011]], 201)
+            ->push(['data' => ['id' => 7011]], 200)]);
+        $claim = $transport->claim(TenantTestManager::ORG_A, 'crashed-sender');
+        $this->assertSame(201, app(SolaBooksOutboxDeliveryService::class)->sendClaimed($claim)['status']);
+        $claim->update(['lease_expires_at' => now()->subMinutes(5)]);
+        $database = DB::connection('tenant')->getDatabaseName();
+        $registry = \Mockery::mock(\App\Services\Integration\ApprovedTransportTargetRegistry::class);
+        $registry->shouldReceive('targets')->andReturn([[
+            'client_id' => 7, 'organization_id' => TenantTestManager::ORG_A,
+            'database' => $database, 'plan' => 'advanced',
+        ]]);
+        $this->app->instance(\App\Services\Integration\ApprovedTransportTargetRegistry::class, $registry);
+        $tenants = \Mockery::mock(\App\Services\Tenancy\TenantManager::class)->makePartial();
+        $tenants->shouldReceive('switchToDatabase')->once()->with($database)->andReturnNull();
+        $this->app->instance(\App\Services\Tenancy\TenantManager::class, $tenants);
+        $directory = storage_path('framework/testing/supervisor-recovery-'.bin2hex(random_bytes(6)));
+        config(['integration_transport.supervisor.heartbeat_path' => $directory.'/heartbeat.json',
+            'integration_transport.supervisor.diagnostics_path' => $directory.'/diagnostics.json']);
+        try {
+            $this->artisan('integration:transport-supervise', ['--once' => true])->assertExitCode(0);
+            $this->assertSame('sent', $event->fresh()->status);
+            $this->assertSame(2, $event->fresh()->attempts);
+            $this->assertSame('7011', (string) $event->fresh()->external_document_id);
+            $this->assertNull($event->fresh()->lease_token);
+            Http::assertSentCount(2);
+        } finally {
+            \Illuminate\Support\Facades\File::deleteDirectory($directory);
+        }
+    }
+
+    #[Test]
     public function reviewed_retry_allows_the_shared_unit_receiver_fix_but_not_other_permanent_failures(): void
     {
         $this->bootActiveIntegration();
@@ -601,6 +639,17 @@ class SolaBooksDeliveryTest extends TestCase
         $retried = $transport->queueReviewedRetry($event->fresh(), 42);
         $this->assertSame('ready', $retried->status);
         $this->assertSame('unit_conversion_finance_scope_invalid', $retried->failure_code);
+
+        $currency = $this->enableDurableTransport($this->event());
+        $currency->update([
+            'status' => 'failed',
+            'mapping_status' => 'complete',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'transaction_currency_disabled',
+        ]);
+        $retriedCurrency = $transport->queueReviewedRetry($currency->fresh(), 42);
+        $this->assertSame('ready', $retriedCurrency->status);
+        $this->assertSame('transaction_currency_disabled', $retriedCurrency->failure_code);
 
         $blocked = $this->enableDurableTransport($this->event());
         $blocked->update([

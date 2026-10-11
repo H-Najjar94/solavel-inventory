@@ -76,12 +76,12 @@ class IntegrationStatusService
             && $workerHeartbeat->state === 'running'
             && Carbon::parse($workerHeartbeat->last_seen_at)->gte(now()->subMinutes(2));
 
-        // The production supervisor publishes one server-owned heartbeat; the
-        // tenant table belongs to the legacy/staging single-tenant worker.
-        if (app()->environment('production')) {
-            $workerRunning = $organizationMapping && app(TransportWorkerHeartbeat::class)->runningFor(
-                (int)$organizationMapping->central_client_id, $orgId);
-        }
+        // The supervisor publishes a release-verified, server-owned heartbeat.
+        // Paired staging environments use that same supervisor. Only legacy
+        // non-production workers may fall back to their tenant heartbeat.
+        $supervisorRunning = $organizationMapping && app(TransportWorkerHeartbeat::class)->runningFor(
+            (int)$organizationMapping->central_client_id, $orgId);
+        $workerRunning = $supervisorRunning || (! app()->environment('production') && $workerRunning);
 
         $mapped = IntegrationAccountMapping::query()
             ->where('organization_id', $orgId)

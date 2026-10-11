@@ -3,6 +3,7 @@
 namespace App\Services\Integration;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class OrganizationAccountRequirements
 {
@@ -46,6 +47,9 @@ final class OrganizationAccountRequirements
     }
     public function validMappedRoles(int $organizationId): array
     {
+        // Standalone Stock is supported without the Finance companion schema.
+        // No authoritative Finance accounts means no valid mappings, never readiness.
+        if (! Schema::connection('tenant')->hasTable('accounts')) return [];
         $financeOrg = DB::connection('tenant')->table('integration_organization_mappings')
             ->where('solastock_organization_id', $organizationId)
             ->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())

@@ -3,6 +3,13 @@ namespace Tests\Unit\Catalog;
 use App\Services\Catalog\CatalogSourceSnapshot;
 use PHPUnit\Framework\TestCase;
 final class CatalogSourceSnapshotTest extends TestCase {
+ public function test_unit_symbol_preserves_the_verified_symbol_instead_of_its_distinct_code(): void {
+  $snapshot=\App\Services\Catalog\CatalogSourceSnapshot::fields('unit',['id'=>1,'name'=>'Piece','code'=>'PCS','symbol'=>'pcs','kind'=>'count','is_active'=>true]);
+  $this->assertSame('pcs',$snapshot['symbol']);
+  $legacy=\App\Services\Catalog\CatalogSourceSnapshot::fields('unit',['id'=>2,'name'=>'Custom','code'=>'custom']);
+  $this->assertSame('custom',$legacy['symbol']);
+ }
+
  public function test_local_prices_and_audit_timestamps_do_not_change_shared_revision():void {
   $row=['id'=>12,'name'=>'لوح','sku'=>'P12','base_unit_id'=>2,'category_id'=>4,'purchase_price'=>'490','selling_price'=>'550','updated_at'=>'yesterday'];
   $before=CatalogSourceSnapshot::fields('item',$row);$row['purchase_price']='0';$row['updated_at']='today';

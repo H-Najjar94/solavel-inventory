@@ -83,6 +83,9 @@ final class SuperviseSolaBooksTransport extends Command
                     $isolation->attempt($target, 'pending_promotion', fn () => app(\App\Services\Integration\IntegrationOutboxService::class)
                         ->promoteEligiblePending((int) $mapping->solastock_organization_id, $limit));
                     $processed += (int) $isolation->attempt($target, 'journal_outbox', function () use ($transport, $mapping, $limit): int {
+                        // A sender can die after receiver commit but before local ack.
+                        // Recover only this approved target's expired leases before claiming.
+                        $transport->recoverExpiredLeases((int) $mapping->solastock_organization_id);
                         $count = 0;
                         for ($i = 0; $i < $limit; $i++) {
                             $event = $transport->claim((int) $mapping->solastock_organization_id, gethostname().':'.getmypid());

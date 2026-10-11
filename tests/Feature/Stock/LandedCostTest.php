@@ -110,6 +110,33 @@ class LandedCostTest extends TestCase
     }
 
     #[Test]
+    public function dated_valuation_includes_only_posted_inventory_cost_shares_and_dated_reversals(): void
+    {
+        $this->useTenantA();
+        try {
+            \Illuminate\Support\Carbon::setTestNow('2026-03-01 12:00:00');
+            $warehouse = F::warehouse(['code' => 'LC-DATE-WH']);
+            $item = F::fifoItem(['sku' => 'LC-DATE']);
+            $receipt = $this->receive($warehouse, $item, '10', '4', 'LC-DATE-GRN');
+            $reports = app(\App\Services\Reports\InventoryReportService::class);
+            $value = fn ($date) => $reports->run('inventory-valuation',
+                new \App\Services\Reports\ReportFilters(itemId: $item->id, asAt: $date))['summary']['total_value'];
+            \Illuminate\Support\Carbon::setTestNow('2026-03-02 12:00:00');
+            $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'freight', 'amount' => '20']]);
+            $this->assertSame('40.00', $value('2026-03-02')); // draft excluded
+            app(LandedCostService::class)->post($doc);
+            $this->assertSame('40.00', $value('2026-03-01'));
+            $this->assertSame('60.00', $value('2026-03-02'));
+            \Illuminate\Support\Carbon::setTestNow('2026-03-03 12:00:00');
+            app(LandedCostService::class)->reverse($doc->fresh(), 'Synthetic dated reversal');
+            $this->assertSame('60.00', $value('2026-03-02'));
+            $this->assertSame('40.00', $value('2026-03-03'));
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
+    #[Test]
     public function allocation_by_value_quantity_and_weight_sums_exactly_with_largest_remainder(): void
     {
         $this->assertSame(['a' => '33.34', 'b' => '33.33', 'c' => '33.33'], LandedCostService::allocate('100.00', ['a' => '1', 'b' => '1', 'c' => '1']));

@@ -19,6 +19,72 @@ class IntegrationConnectionConfigurationTest extends TestCase
     use TenantAware;
 
     #[Test]
+    public function paired_nonproduction_status_accepts_the_scoped_supervisor_proof(): void
+    {
+        $this->useTenantA();
+        \App\Models\Tenant\IntegrationOrganizationMapping::query()->create([
+            'mapping_uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'central_client_id' => 7,
+            'central_organization_id' => TenantTestManager::ORG_A,
+            'tenant_database_identity' => \Illuminate\Support\Facades\DB::connection('tenant')->getDatabaseName(),
+            'finance_organization_id' => 41,
+            'solastock_organization_id' => TenantTestManager::ORG_A,
+            'contract_version' => 'solastock-journal.v2',
+            'status' => 'verified', 'activation_state' => 'active', 'base_currency_code' => 'AED',
+        ]);
+        $proof = new class {
+            public bool $running = true;
+            public function runningFor(int $clientId, int $organizationId): bool
+            {
+                return $this->running && $clientId === 7 && $organizationId === TenantTestManager::ORG_A;
+            }
+        };
+        $this->app->instance(\App\Services\Integration\TransportWorkerHeartbeat::class, $proof);
+        $this->assertTrue(app(IntegrationStatusService::class)->status(TenantTestManager::ORG_A)['transport']['worker_running']);
+        $proof->running = false;
+        $this->assertFalse(app(IntegrationStatusService::class)->status(TenantTestManager::ORG_A)['transport']['worker_running']);
+    }
+
+    #[Test]
+    public function reports_use_only_the_verified_currency_of_the_scoped_mapping(): void
+    {
+        $this->useTenantA();
+        $mapping = \App\Models\Tenant\IntegrationOrganizationMapping::query()->create([
+            'mapping_uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A,
+            'tenant_database_identity' => \Illuminate\Support\Facades\DB::connection('tenant')->getDatabaseName(),
+            'finance_organization_id' => 41, 'solastock_organization_id' => TenantTestManager::ORG_A,
+            'integration' => 'solabooks', 'contract_version' => 'solastock-journal.v2',
+            'status' => 'verified', 'activation_state' => 'active',
+            'base_currency_code' => 'AED', 'currency_verified_at' => now(),
+        ]);
+        $reports = app(\App\Services\Reports\InventoryReportService::class);
+        $this->assertSame('AED', $reports->baseCurrency());
+        app(\App\Tenancy\OrganizationContext::class)->set(TenantTestManager::ORG_A + 100);
+        $this->assertNotSame('AED', $reports->baseCurrency());
+        app(\App\Tenancy\OrganizationContext::class)->set(TenantTestManager::ORG_A);
+        $mapping->update(['currency_verified_at' => null]);
+        $this->assertNotSame('AED', $reports->baseCurrency());
+    }
+
+    #[Test]
+    public function standalone_schema_without_finance_accounts_has_no_valid_mappings(): void
+    {
+        $this->useTenantA();
+        $database = \Illuminate\Support\Facades\DB::getFacadeRoot();
+        $builder = \Mockery::mock(\Illuminate\Database\Schema\Builder::class);
+        $builder->shouldReceive('hasTable')->once()->with('accounts')->andReturn(false);
+        $connection = \Mockery::mock(\Illuminate\Database\Connection::class);
+        $connection->shouldReceive('getSchemaBuilder')->once()->andReturn($builder);
+        \Illuminate\Support\Facades\DB::shouldReceive('connection')->once()->with('tenant')->andReturn($connection);
+        try {
+            $this->assertSame([], app(\App\Services\Integration\OrganizationAccountRequirements::class)->validMappedRoles(TenantTestManager::ORG_A));
+        } finally {
+            \Illuminate\Support\Facades\DB::swap($database);
+        }
+    }
+
+    #[Test]
     public function account_mapping_details_use_the_configured_workflow_roles(): void
     {
         $this->useTenantA();
