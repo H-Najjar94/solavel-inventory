@@ -90,6 +90,14 @@ class StockAdjustmentService
             $adj->total_decrease_value = $totalDec;
             $adj->markSystemTransition()->save();
 
+            \App\Models\Tenant\InventoryAuditLog::create([
+                'organization_id' => $orgId, 'actor_user_id' => auth()->id(),
+                'action' => 'stock_adjustment.create', 'entity_type' => 'stock_adjustment', 'entity_id' => $adj->id,
+                'document_ref' => $adj->adjustment_number, 'before' => null,
+                'after' => ['status' => 'draft', 'warehouse_id' => $adj->warehouse_id,
+                    'adjustment_date' => $adj->getRawOriginal('adjustment_date'), 'lines' => $adj->lines()->get()->toArray()],
+                'ip' => request()?->ip(), 'created_at' => now(),
+            ]);
             return $adj->fresh('lines');
         });
     }
@@ -266,6 +274,7 @@ class StockAdjustmentService
 
             $this->ledger->post($movements, $this->postNamespace($adj), [
                 'action' => 'stock_adjustment.post',
+                'before' => ['status' => 'draft'], 'after' => ['status' => 'posted'],
                 'entity_type' => 'stock_adjustment',
                 'entity_id' => $adj->id,
                 'document_ref' => $adj->adjustment_number,

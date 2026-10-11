@@ -114,6 +114,7 @@ class InventoryReversalService
                 'inventory_reversal:'.$reversal->id.':post',
                 [
                     'action' => 'stock_adjustment.reverse',
+                    'reason' => trim($reason), 'before' => ['status' => 'posted'], 'after' => ['status' => 'reversed'],
                     'entity_type' => 'inventory_reversal',
                     'entity_id' => $reversal->id,
                     'document_ref' => $reversal->reversal_number,

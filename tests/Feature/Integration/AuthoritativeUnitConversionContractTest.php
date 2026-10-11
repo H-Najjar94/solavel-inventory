@@ -114,6 +114,13 @@ final class AuthoritativeUnitConversionContractTest extends TestCase
         ]);
         $line = ['item_id' => $item->id, 'quantity' => '1.25', 'entered_qty' => '1.25', 'entered_unit_id' => $box->id];
 
+        // The current shipment contract requires an authoritative order line.
+        $source = \App\Models\Tenant\SalesOrderLine::create([
+            'sales_order_id' => $order->id, 'item_id' => $item->id,
+            'ordered_qty' => '12.5', 'entered_qty' => '1.25', 'entered_unit_id' => $box->id,
+        ]);
+        $line['sales_order_line_id'] = $source->id;
+
         $shipment = app(ShipmentService::class)->createDraft([
             'shipment_number' => 'SHP-UNIT', 'sales_order_id' => $order->id,
             'warehouse_id' => $from->id, 'ship_date' => now()->toDateString(),

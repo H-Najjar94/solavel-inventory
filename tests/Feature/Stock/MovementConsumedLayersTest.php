@@ -143,11 +143,11 @@ class MovementConsumedLayersTest extends TestCase
             public function __construct() {}
             public function decision(int $userId, int $organizationId, string $appKey): array
             {
-                return ['allowed' => true, 'owner' => false, 'roles' => ['inventory_viewer'], 'grants' => []];
+                return ['allowed' => true, 'owner' => false, 'roles' => ['client_viewer'], 'grants' => []];
             }
         });
         app(OrganizationContext::class)->set(660066); // non-demo, non-reserved org
-        // Any unknown central role → least-privilege viewer.
+        // Explicit Central client_viewer app assignment caps the local viewer grant.
         $perms = new class(app(OrganizationContext::class), 'some_unknown_role') extends InventoryPermissionService {
             public function __construct(OrganizationContext $ctx, private ?string $forced)
             {

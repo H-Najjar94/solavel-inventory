@@ -1,4 +1,10 @@
 export const en = {
+    'adjustment.auditAction.stock_adjustment.create': 'Draft adjustment created',
+    'adjustment.auditEmpty': 'No audit events were recorded for this document.',
+    'adjustment.auditActor': 'User',
+    'adjustment.auditChanges': 'Recorded changes',
+    'adjustment.auditAction.stock_adjustment.post': 'Adjustment posted',
+    'adjustment.auditAction.stock_adjustment.reverse': 'Adjustment reversed',
     'adjustment.readOnly': 'Posted documents are read-only.',
     'adjustment.addLineRequired': 'Add at least one line.',
     'adjustment.posted': 'Adjustment posted.',
@@ -49,6 +55,12 @@ export const en = {
 };
 
 export const ar = {
+    'adjustment.auditAction.stock_adjustment.create': 'تم إنشاء مسودة التسوية',
+    'adjustment.auditEmpty': 'لا توجد أحداث تدقيق مسجلة لهذا المستند.',
+    'adjustment.auditActor': 'المستخدم',
+    'adjustment.auditChanges': 'التغييرات المسجلة',
+    'adjustment.auditAction.stock_adjustment.post': 'تم ترحيل التسوية',
+    'adjustment.auditAction.stock_adjustment.reverse': 'تم عكس التسوية',
     'adjustment.readOnly': 'المستندات المرحّلة للقراءة فقط.',
     'adjustment.addLineRequired': 'أضف سطراً واحداً على الأقل.',
     'adjustment.posted': 'تم ترحيل التسوية.',

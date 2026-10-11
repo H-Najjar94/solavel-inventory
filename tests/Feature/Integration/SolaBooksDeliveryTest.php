@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Integration;
 
-use App\Models\Landlord\Organization;
 use App\Models\Tenant\IntegrationAccountMapping;
 use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationMasterDataMapping;
@@ -34,6 +33,8 @@ class SolaBooksDeliveryTest extends TestCase
     private function bootActiveIntegration(): void
     {
         $this->useTenantA();
+        // Enable delivery only inside the disposable private fixture; production holds are unchanged.
+        config()->set('integration_safety.solabooks_delivery_enabled', true);
         DB::connection('tenant')->table('tenant_entitlements_snapshots')->updateOrInsert(
             ['client_id' => 7, 'project_slug' => 'inventory'],
             [
@@ -66,11 +67,13 @@ class SolaBooksDeliveryTest extends TestCase
         );
         DB::connection('tenant')->table('organizations')->updateOrInsert(
             ['id' => 14],
-            ['central_org_id' => TenantTestManager::ORG_A]
+            ['central_org_id' => TenantTestManager::ORG_A, 'setup_status' => 'complete', 'finance_setup_completed_at' => now()]
         );
-        Organization::query()->updateOrCreate(
-            ['central_organization_id' => TenantTestManager::ORG_A],
-            ['name' => 'Contract Test Org', 'database_name' => 'solastock_test_a', 'base_currency' => 'JOD', 'is_active' => true]
+        DB::connection('mysql')->table('organizations')->updateOrInsert(
+            ['id' => TenantTestManager::ORG_A],
+            ['central_organization_id' => TenantTestManager::ORG_A, 'client_id' => 7,
+                'name' => 'Contract Test Org',
+                'database_name' => 'solastock_test_a', 'base_currency' => 'JOD', 'is_active' => true]
         );
 
         IntegrationSetting::query()->updateOrCreate(
@@ -135,6 +138,11 @@ class SolaBooksDeliveryTest extends TestCase
             'accounts_receivable' => 606,
             'sales_revenue' => 707,
         ] as $type => $accountId) {
+            DB::connection('tenant')->table('accounts')->updateOrInsert(['id' => $accountId], [
+                'organization_id' => 14, 'code' => (string) $accountId, 'name' => $type,
+                'type' => \App\Services\Integration\AccountRolePolicy::ROLE_TYPES[$type][0],
+                'is_active' => true, 'is_postable' => true,
+            ]);
             IntegrationAccountMapping::query()->updateOrCreate(
                 [
                     'organization_id' => TenantTestManager::ORG_A,

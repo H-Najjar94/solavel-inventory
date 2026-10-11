@@ -52,7 +52,18 @@ export default function AdjustmentDetailPage() {
                 <tbody>{(adj.lines ?? []).map((l) => <tr key={l.id}><td>{t(`adjustment.direction.${l.direction}`, l.direction)}</td><td>{l.item?.name ?? `#${l.item_id}`}{l.item?.sku && <span className="muted"> · {l.item.sku}</span>}</td><td>{l.bin_code ?? l.bin?.code ?? (l.bin_id ? `#${l.bin_id}` : '—')}</td><td>{l.quantity}</td><td>{l.unit_cost}</td></tr>)}</tbody>
             </table></div>}
             {tab === 'ledger' && <div className="panel"><LedgerPreview rows={ledger} /></div>}
-            {tab === 'audit' && <div className="panel"><EmptyState title={t('adjustment.auditTimeline')} hint={t('adjustment.auditHint')} /></div>}
+            {tab === 'audit' && <div className="panel">
+                {(data?.audit ?? []).length === 0 ? <EmptyState title={t('adjustment.auditTimeline')} hint={t('adjustment.auditEmpty')} /> :
+                    <ul className="audit-timeline">{data.audit.map((event) => <li key={event.id}>
+                        <span className="audit-action">{t(`adjustment.auditAction.${event.action}`, event.action)}</span>{' '}
+                        <time dateTime={event.created_at}><bdi>{event.created_at}</bdi></time>{' · '}
+                        <span>{t('adjustment.auditActor')}: <bdi>{event.actor_user_id ?? '—'}</bdi></span>{' · '}
+                        <bdi>{event.document_ref ?? '—'}</bdi>
+                        <details><summary>{t('adjustment.auditChanges')}</summary>
+                            <pre dir="ltr">{JSON.stringify({ before: event.before, after: event.after }, null, 2)}</pre>
+                        </details>
+                    </li>)}</ul>}
+            </div>}
 
             <DocumentActions status={adj.status} canManage={gate.allowed}
                 onPost={() => setConfirmPost(true)} onReverse={() => setConfirmReverse(true)} />

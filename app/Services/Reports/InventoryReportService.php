@@ -431,6 +431,8 @@ class InventoryReportService
             ->selectRaw('a.id, a.adjustment_number, a.adjustment_date, w.name warehouse, a.reason_code, a.status, a.total_increase_value, a.total_decrease_value')
             ->orderByDesc('a.id')->limit($f->limit)->get();
 
+        app(\App\Services\Presentation\AdjustmentValuation::class)->apply($rows);
+
         return ['columns' => ['adjustment_number', 'adjustment_date', 'warehouse', 'reason_code', 'status', 'total_increase_value', 'total_decrease_value'], 'rows' => $rows, 'summary' => ['documents' => $rows->count()]];
     }
 

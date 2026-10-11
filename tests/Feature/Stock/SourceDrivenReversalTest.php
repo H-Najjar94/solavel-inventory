@@ -278,7 +278,7 @@ class SourceDrivenReversalTest extends TestCase
     }
 
     #[Test]
-    public function negative_adjustment_reversal_restores_exact_fifo_layer_and_has_its_own_event_source(): void
+    public function standalone_negative_adjustment_reversal_restores_exact_fifo_layer_without_finance_work(): void
     {
         $this->useTenantA();
         $warehouse = F::warehouse(['code' => 'REV-ADJ-WH']);
@@ -303,11 +303,9 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame('8.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
         $this->assertSame('reversed', $adjustment->fresh()->status);
         $this->assertSame($reversal->id, (int) $adjustment->fresh()->reversal_id);
-        $this->assertDatabaseHas('integration_outbox_events', [
-            'event_type' => 'adjustment.reversed',
-            'aggregate_type' => 'InventoryReversal',
-            'aggregate_id' => $reversal->id,
-        ], 'tenant');
+        // Standalone fixture has no Finance ownership: retain the exact stock inverse without external work.
+        $this->assertDatabaseMissing('integration_outbox_events', ['event_type' => 'adjustment.reversed'], 'tenant');
+        $this->assertNull($reversal->fresh()->reversal_event_uuid);
     }
 
     #[Test]
@@ -463,9 +461,9 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame($reversal->id, $again->id);
         $this->assertSame('reversed', $replacement->fresh()->status);
         $this->assertSame('1.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
-        $this->assertDatabaseHas('integration_outbox_events', [
-            'event_type' => 'sales_return.reversed', 'aggregate_id' => $reversal->id,
-        ], 'tenant');
+        // Standalone fixture has no Finance ownership: retain the exact stock inverse without external work.
+        $this->assertDatabaseMissing('integration_outbox_events', ['event_type' => 'sales_return.reversed'], 'tenant');
+        $this->assertNull($reversal->fresh()->reversal_event_uuid);
     }
 
     #[Test]

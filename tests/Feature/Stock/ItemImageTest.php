@@ -175,7 +175,7 @@ class ItemImageTest extends TestCase
             public function __construct() {}
             public function decision(int $userId, int $organizationId, string $appKey): array
             {
-                return ['allowed' => true, 'owner' => false, 'roles' => ['inventory_viewer'], 'grants' => []];
+                return ['allowed' => true, 'owner' => false, 'roles' => ['client_viewer'], 'grants' => []];
             }
         });
         app(OrganizationContext::class)->set(660066);

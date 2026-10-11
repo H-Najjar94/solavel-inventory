@@ -20,9 +20,22 @@ class InventoryPermissionTest extends TestCase
 {
     private const ORG = 660066; // a non-demo, non-reserved org id
 
+    private function centralDecision(?string $role): void
+    {
+        $this->app->instance(\App\Services\Access\CentralAppAccess::class, new class($role) extends \App\Services\Access\CentralAppAccess {
+            public function __construct(private ?string $role) {}
+            public function decision(int $userId, int $organizationId, string $appKey): array
+            {
+                return ['allowed' => $this->role !== null, 'owner' => $this->role === 'client_owner',
+                    'roles' => $this->role === null ? [] : [$this->role], 'grants' => []];
+            }
+        });
+    }
+
     /** Permission service with an injectable central role (bypasses the DB). */
     private function perms(?string $centralRole): InventoryPermissionService
     {
+        $this->centralDecision($centralRole);
         $policy = new class($centralRole) extends ConnectionManagementPolicy
         {
             public function __construct(private ?string $role) {}
@@ -57,6 +70,7 @@ class InventoryPermissionTest extends TestCase
     #[Test]
     public function central_membership_lookup_never_reuses_the_tenant_local_user_id(): void
     {
+        $this->centralDecision('client_viewer');
         app(OrganizationContext::class)->set(self::ORG);
         $seen = (object) ['user_id' => null];
         $service = new class(app(OrganizationContext::class), app(ConnectionManagementPolicy::class), $seen) extends InventoryPermissionService
@@ -70,11 +84,11 @@ class InventoryPermissionTest extends TestCase
             {
                 $this->seen->user_id = $userId;
 
-                return 'client_owner';
+                return 'client_viewer';
             }
         };
 
-        $this->assertTrue($service->can($this->user(), 'inventory.integration.view'));
+        $this->assertTrue($service->can($this->user(), 'inventory.view_items'));
         $this->assertSame(9004242, $seen->user_id);
         $this->assertNotSame($this->user()->id, $seen->user_id);
     }
@@ -82,6 +96,7 @@ class InventoryPermissionTest extends TestCase
     #[Test]
     public function central_backed_auth_model_uses_its_primary_key_as_the_membership_identity(): void
     {
+        $this->centralDecision('client_viewer');
         app(OrganizationContext::class)->set(self::ORG);
         $seen = (object) ['user_id' => null];
         $service = new class(app(OrganizationContext::class), app(ConnectionManagementPolicy::class), $seen) extends InventoryPermissionService
@@ -95,7 +110,7 @@ class InventoryPermissionTest extends TestCase
             {
                 $this->seen->user_id = $userId;
 
-                return 'client_owner';
+                return 'client_viewer';
             }
         };
         $user = new class
@@ -108,7 +123,7 @@ class InventoryPermissionTest extends TestCase
             }
         };
 
-        $this->assertTrue($service->can($user, 'inventory.integration.view'));
+        $this->assertTrue($service->can($user, 'inventory.view_items'));
         $this->assertSame(3, $seen->user_id);
     }
 
@@ -153,12 +168,22 @@ class InventoryPermissionTest extends TestCase
     public function viewer_cannot_create_post_reverse_or_provision(): void
     {
         app(OrganizationContext::class)->set(self::ORG);
-        // Any unknown central role maps to the least-privilege read-only viewer.
-        $p = $this->perms('some_unknown_role');
+        // An explicit Central read-only app assignment grants reads only.
+        $p = $this->perms('client_viewer');
         $this->assertTrue($p->can($this->user(), 'inventory.view_items'), 'viewer can view');
         $this->assertTrue($p->can($this->user(), 'inventory.view_stock'), 'viewer can view stock');
         foreach (self::WRITE_ACTIONS as $perm) {
             $this->assertFalse($p->can($this->user(), $perm), "viewer must NOT {$perm}");
+        }
+    }
+
+    #[Test]
+    public function unknown_app_role_grants_no_reads_or_mutations(): void
+    {
+        app(OrganizationContext::class)->set(self::ORG);
+        $p = $this->perms('some_unknown_role');
+        foreach (array_merge(self::WRITE_ACTIONS, ['inventory.view_items', 'inventory.view_stock', 'inventory.view_ledger']) as $permission) {
+            $this->assertFalse($p->can($this->user(), $permission));
         }
     }
 
@@ -209,6 +234,8 @@ class InventoryPermissionTest extends TestCase
     {
         app(OrganizationContext::class)->set(self::ORG);
         $p = $this->perms('accountant');
+        // Membership job title and the explicit legacy app assignment are distinct records.
+        $this->centralDecision('client_accountant');
 
         $this->assertTrue($p->can($this->user(), 'inventory.integration.view'));
         $this->assertFalse($p->can($this->user(), 'inventory.integration.accounting_review'));

@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Concerns\ResolvesTraceOverrides;
 use App\Http\Requests\Api\StoreStockAdjustmentRequest;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockLedger;
+use App\Models\Tenant\InventoryAuditLog;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\InventoryReversalService;
 use App\Services\Documents\StockAdjustmentService;
@@ -41,6 +42,7 @@ class StockAdjustmentController extends ApiController
         $this->warehouseAccess->scope($query);
 
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockAdjustment $adjustment) {
+            app(\App\Services\Presentation\AdjustmentValuation::class)->apply([$adjustment]);
             $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
             $adjustment->setAttribute('warehouse_code', $adjustment->warehouse?->code);
 
@@ -53,6 +55,7 @@ class StockAdjustmentController extends ApiController
         $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         $adjustment->load(['lines.item:id,name,sku', 'lines.bin:id,code', 'warehouse:id,name,code', 'reversal']);
+        app(\App\Services\Presentation\AdjustmentValuation::class)->apply([$adjustment]);
         $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);
         $ledger = StockLedger::query()
             ->with(['item:id,name,sku', 'warehouse:id,name,code'])
@@ -68,13 +71,36 @@ class StockAdjustmentController extends ApiController
                 return $row;
             });
 
-        $adjustment->lines->each(function ($line) {
+        $adjustment->lines->each(function ($line) use ($ledger, $adjustment) {
+            if (in_array($adjustment->status, ['posted', 'reversed'], true)) {
+                $rows = $ledger->where('source_line_id', $line->id);
+                $quantity = $rows->reduce(fn ($sum, $row) => \App\Services\Stock\Support\Decimal::add($sum, (string) $row->quantity), '0');
+                if (!\App\Services\Stock\Support\Decimal::isZero($quantity)) {
+                    $cost = $rows->reduce(fn ($sum, $row) => \App\Services\Stock\Support\Decimal::add($sum, (string) $row->total_cost), '0');
+                    $line->setAttribute('unit_cost', \App\Services\Stock\Support\Decimal::cost(\App\Services\Stock\Support\Decimal::div($cost, $quantity)));
+                }
+            }
             $line->setAttribute('bin_code', $line->bin?->code);
         });
 
         $this->attachLineTraceability($adjustment->lines);
 
-        return $this->success(['adjustment' => $adjustment, 'ledger' => $ledger]);
+        // Read only this document's events (and its own reversal), under the
+        // same organization and warehouse scope as the authorized detail.
+        $audit = InventoryAuditLog::query()->where(function ($query) use ($adjustment) {
+            $query->where(function ($original) use ($adjustment) {
+                $original->where('entity_type', 'stock_adjustment')->where('entity_id', $adjustment->id);
+            });
+            if ($adjustment->reversal_id) {
+                $query->orWhere(function ($reversal) use ($adjustment) {
+                    $reversal->where('entity_type', 'inventory_reversal')->where('entity_id', $adjustment->reversal_id);
+                });
+            }
+        })->orderBy('created_at')->orderBy('id')->get([
+            'id', 'created_at', 'actor_user_id', 'action', 'document_ref', 'before', 'after',
+        ]);
+
+        return $this->success(['adjustment' => $adjustment, 'ledger' => $ledger, 'audit' => $audit]);
     }
 
     public function store(StoreStockAdjustmentRequest $request): JsonResponse
