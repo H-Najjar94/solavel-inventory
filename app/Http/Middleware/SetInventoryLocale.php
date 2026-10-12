@@ -32,7 +32,12 @@ class SetInventoryLocale
         }
 
         app()->setLocale($locale);
-        $request->session()->put('solastock_locale', $locale);
+        // Only a language the person chose (?locale=) or the one already in the session is
+        // remembered. The X-Locale header an open page sends with its API calls is just the
+        // language that page shows; storing it let an old tab undo the account language.
+        if (is_string($request->query('locale')) || ! $request->session()->has('solastock_locale')) {
+            $request->session()->put('solastock_locale', $locale);
+        }
 
         // Language picker with "Save as my default language" ON: also store the
         // choice as the account default on Central (best effort), then drop the
