@@ -18,6 +18,27 @@ $tokens = static function (string $text): array {
 $english = $flatten(require "$root/lang/en/inventory.php");
 $keys = array_keys($english); sort($keys);
 $errors = [];
+// Framework upgrades introduce rules independently of our application catalog.
+// Compare nested leaves so password.* and typed size messages cannot fall back to English.
+$frameworkValidation = require "$root/vendor/laravel/framework/src/Illuminate/Translation/lang/en/validation.php";
+unset($frameworkValidation['attributes'], $frameworkValidation['custom']);
+$frameworkValidation = $flatten($frameworkValidation);
+foreach (['en','ar','fr','ru','ur','de','es','zh','pt','tr','it'] as $locale) {
+    $validation = require "$root/lang/$locale/validation.php";
+    $rules = $flatten($validation);
+    foreach ($frameworkValidation as $key => $source) {
+        $target = $rules[$key] ?? null;
+        if (!is_string($target) || trim($target) === '') {
+            $errors[] = "$locale: missing framework validation rule $key";
+        } elseif ($tokens($source) !== $tokens($target)) {
+            $errors[] = "$locale: framework validation variables changed for $key";
+        } elseif ($locale !== 'en' && $target === $source) {
+            $errors[] = "$locale: English framework validation fallback for $key";
+        }
+    }
+    if (count($validation['attributes'] ?? []) < 560) $errors[] = "$locale: missing Stock input field aliases";
+}
+
 $roleConfig = require "$root/config/inventory_permissions.php";
 $operationalRoles = require "$root/config/inventory_operational_roles.php";
 foreach (array_unique(array_merge(array_keys($roleConfig['roles']), array_keys($operationalRoles))) as $role) {
