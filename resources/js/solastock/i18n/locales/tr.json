@@ -3363,7 +3363,7 @@
   "integration.wizard.separateApproval": "Ayrı bir muhasebe onayı gereklidir. Bu büyüleyici tarafından bir journal oluşturulmaz.",
   "integration.wizard.finalApproval": "Değiştirilemez önizleme ve onay",
   "integration.wizard.readOnlyAfter": "Onay, bu kurum için eski Finans envanterini salt okunur yapar. Teslimat, ayrı güvenlik kontrollerine tabi kalır.",
-  "integration.wizard.confirmation": "Tip: CONNECT SOLASTOCK AS INVENTORY AUTHORITY",
+  "integration.wizard.confirmation": "Yazın: CONNECT SOLASTOCK AS INVENTORY AUTHORITY",
   "integration.wizard.approve": "Bağlantı önizlemesini onayla",
   "integration.wizard.approvedHold": "Onaylandı. Bağlantı bakım bekletmede kalıyor.",
   "integration.wizard.activationApproval": "Kurum-kapsamlı dağıtım onay kimliği",

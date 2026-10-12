@@ -2223,7 +2223,7 @@
   "reports.scheduleName": "شیڈول کا نام",
   "reports.weeklyValuation": "ہفتہ وار تشخیص",
   "reports.recipients": "وصول کنندگان",
-  "reports.recipientsPlaceholder": "ops@example.com، finance@example.com",
+  "reports.recipientsPlaceholder": "ops@example.com, finance@example.com",
   "reports.frequency": "تعدد",
   "reports.daily": "روزانہ",
   "reports.weekly": "ہفتہ وار",

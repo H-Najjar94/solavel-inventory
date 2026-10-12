@@ -2223,7 +2223,7 @@
   "reports.scheduleName": "Название расписания",
   "reports.weeklyValuation": "Еженедельная оценка",
   "reports.recipients": "Получатели",
-  "reports.recipientsPlaceholder": "ops@example.com, Finance@example.com",
+  "reports.recipientsPlaceholder": "ops@example.com, finance@example.com",
   "reports.frequency": "Частота",
   "reports.daily": "Ежедневно",
   "reports.weekly": "Еженедельно",

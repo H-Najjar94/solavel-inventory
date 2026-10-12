@@ -1207,10 +1207,10 @@ export const en = {
 };
 
 export const ar = {
-
+    ...en,
     "settings.roles.preset": "قالب الصلاحيات",
     "settings.roles.choosePreset": "اختر قالباً",
-    ...en,
+    "settings.integration.grni": "بضائع مستلمة غير مفوترة / استحقاق",
     'integration.diagnostics.title': 'تفاصيل الاتصال',
     'integration.diagnostics.reason.ready': 'الاتصال جاهز ويمكن متابعة المزامنة.',
     'integration.diagnostics.reason.worker': 'الاتصال مُهيأ، لكن خدمة إرسال البيانات غير متاحة. يجب على المسؤول التحقق من الخدمة قيد التشغيل.',
