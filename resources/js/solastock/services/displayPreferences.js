@@ -97,11 +97,13 @@ export function startAccountPreferenceSync({ currentLocale, onTheme }) {
     const timer = window.setInterval(check, SYNC_INTERVAL_MS);
     window.addEventListener('focus', check);
     document.addEventListener('visibilitychange', check);
+    window.addEventListener('storage', check);
     check();
     return () => {
         stopped = true;
         window.clearInterval(timer);
         window.removeEventListener('focus', check);
         document.removeEventListener('visibilitychange', check);
+        window.removeEventListener('storage', check);
     };
 }

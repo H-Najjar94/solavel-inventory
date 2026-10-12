@@ -119,6 +119,11 @@ function DefaultLanguageSwitch({ on, onChange, className = '' }) {
 
 function useRememberLanguage() {
     const [on, setOn] = useState(getRememberLanguage);
+    useEffect(() => {
+        const sync = () => setOn(getRememberLanguage());
+        window.addEventListener('storage', sync);
+        return () => window.removeEventListener('storage', sync);
+    }, []);
     const update = (value) => { setOn(value); setRememberLanguage(value); };
     return [on, update];
 }

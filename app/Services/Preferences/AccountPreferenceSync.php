@@ -78,7 +78,12 @@ class AccountPreferenceSync
             }
             $now = now()->getTimestamp();
             $checkedAt = (int) $session->get(self::CHECKED_AT_KEY, 0);
-            if ($checkedAt > 0 && $now - $checkedAt < self::THROTTLE_SECONDS) {
+            $cached = $session->get(self::FINGERPRINT_KEY);
+            $cachedLocale = is_array($cached) ? ($cached['locale'] ?? null) : null;
+            $repairLocale = $request->boolean('follow_locale') && is_array($cached)
+                && ($cached['user'] ?? null) === $centralUserId && is_string($cachedLocale)
+                && $result['locale'] !== (in_array($cachedLocale, self::LOCALES, true) ? $cachedLocale : 'en');
+            if ($checkedAt > 0 && $now - $checkedAt < self::THROTTLE_SECONDS && ! $repairLocale) {
                 return $result;
             }
             $session->put(self::CHECKED_AT_KEY, $now);

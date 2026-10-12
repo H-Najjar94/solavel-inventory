@@ -164,7 +164,6 @@ class AccountPreferenceSyncTest extends TestCase
         $this->fakeCentral(['locale' => 'ar', 'theme' => 'light']);
         $this->actingAs($this->user())->getJson('/preferences/sync')->assertOk();
         $this->getJson('/preferences/sync?locale=en')->assertOk();
-        $this->travel(31)->seconds();
         $this->getJson('/preferences/sync?follow_locale=1')->assertOk()->assertJson(['locale' => 'ar', 'changed' => true]);
         $this->assertSame('ar', session('solastock_locale'));
     }
@@ -184,5 +183,22 @@ class AccountPreferenceSyncTest extends TestCase
             ->get('/?locale=ar&remember=1')->assertRedirect('/');
         Http::assertSent(fn (ClientRequest $r) => $r->method() === 'POST'
             && $r['preferred_locale'] === 'ar' && $r['central_user_id'] === 42);
+    }
+
+    public function test_account_switch_reads_and_saves_both_states(): void
+    {
+        foreach ([true, false] as $enabled) {
+            $this->fakeCentral(['locale' => 'ar', 'remember_language' => $enabled]);
+            $this->actingAs($this->user())->getJson('/preferences/sync?language_default=1')
+                ->assertOk()->assertExactJson(['remember_language' => $enabled]);
+            $this->postJson('/preferences/theme', ['remember_language' => $enabled])->assertOk()->assertJson(['saved' => true]);
+            Http::assertSent(fn (ClientRequest $r) => $r->method() === 'POST' && $r['remember_language'] === $enabled);
+        }
+    }
+
+    public function test_switch_save_failure_is_reported_and_guests_cannot_change_it(): void
+    {
+        Http::fake(['central.test/*' => Http::response([], 503)]);
+        $this->actingAs($this->user())->postJson('/preferences/theme', ['remember_language' => false])->assertStatus(502)->assertJson(['saved' => false]);
     }
 }

@@ -40,6 +40,7 @@
     {{-- Vite React app (no CDN React, no in-browser Babel, no window.DB). --}}
     @viteReactRefresh
     @vite(['resources/js/solastock/styles/solastock.css', 'resources/js/solastock/app.jsx'])
+    <script>{!! file_get_contents(resource_path('js/solavel-language-default.js')) !!}</script>
 </head>
 <body>
     <div id="solastock-root"></div>

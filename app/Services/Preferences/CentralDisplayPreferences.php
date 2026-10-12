@@ -24,6 +24,8 @@ class CentralDisplayPreferences
         if (in_array($prefs['preferred_theme'] ?? null, self::THEMES, true)) {
             $payload['preferred_theme'] = $prefs['preferred_theme'];
         }
+        if (is_bool($prefs['remember_language'] ?? null)) $payload['remember_language'] = $prefs['remember_language'];
+
         $secret = (string) config('sso.shared_secret');
         if ($centralUserId <= 0 || count($payload) < 2 || $secret === '') {
             Log::warning('[DisplayPreferences] Not saved to Central: missing user, preference or SSO secret', ['central_user_id' => $centralUserId]);
@@ -77,6 +79,7 @@ class CentralDisplayPreferences
                 $preferences['theme'] = $values['theme'];
             }
 
+            if (is_bool($values['remember_language'] ?? null)) $preferences['remember_language'] = $values['remember_language'];
             return $preferences;
         } catch (\Throwable $e) {
             Log::warning('[DisplayPreferences] Central preference read failed', ['central_user_id' => $centralUserId, 'error' => $e->getMessage()]);
