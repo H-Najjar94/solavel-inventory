@@ -86,6 +86,7 @@ class DisplayPreferenceSaveTest extends TestCase
 
         $this->actingAs($this->user())->get('/__locale-probe?locale=ar')->assertOk()->assertSee('ar');
         $this->assertSame('ar', session('solastock_locale'));
-        Http::assertNothingSent();
+        // Only the (read-only) account preference check may reach Central; nothing is saved.
+        Http::assertNotSent(fn (ClientRequest $r) => $r->method() !== 'GET');
     }
 }

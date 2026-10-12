@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Preferences\AccountPreferenceSync;
 use App\Services\Preferences\CentralDisplayPreferences;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,5 +22,13 @@ class DisplayPreferenceController extends Controller
         $saved = $preferences->save($centralUserId, ['preferred_theme' => $theme]);
 
         return response()->json(['success' => true, 'saved' => $saved]);
+    }
+
+    /** Poll from the open page: has the account language/theme changed elsewhere? */
+    public function sync(Request $request, AccountPreferenceSync $sync): JsonResponse
+    {
+        abort_if(CentralDisplayPreferences::centralUserId($request->user()) <= 0, 401);
+
+        return response()->json($sync->syncForClient($request))->header('Cache-Control', 'no-store');
     }
 }

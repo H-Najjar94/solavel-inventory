@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Saves the signed-in user's language/theme as their Solavel account default
+ * Saves (and reads back) the signed-in user's language/theme as their Solavel account default
  * on Central (POST /api/sso/display-preferences). Best effort: never throws,
  * never blocks the UI beyond a short timeout, logs a warning on failure.
  */
@@ -45,6 +45,44 @@ class CentralDisplayPreferences
         }
 
         return false;
+    }
+
+    /**
+     * Read the account's saved display preferences from Central
+     * (GET /api/sso/display-preferences). Returns ['locale' => ?, 'theme' => ?]
+     * with only known values kept (keys omitted when unset), or null when
+     * Central could not be asked or answered badly. Never throws.
+     */
+    public function fetch(int $centralUserId): ?array
+    {
+        $secret = (string) config('sso.shared_secret');
+        if ($centralUserId <= 0 || $secret === '') {
+            return null;
+        }
+
+        try {
+            $base = rtrim((string) (config('sso.central_app_url') ?: 'https://solavel.com'), '/');
+            $response = Http::acceptJson()->connectTimeout(2)->timeout(2)->withoutRedirecting()
+                ->withHeaders(['X-SSO-SECRET' => $secret])
+                ->get($base.'/api/sso/display-preferences', ['central_user_id' => $centralUserId]);
+            $values = $response->successful() ? $response->json('display_preferences') : null;
+            if (! is_array($values)) {
+                return null;
+            }
+            $preferences = [];
+            if (is_string($values['locale'] ?? null) && in_array($values['locale'], self::LOCALES, true)) {
+                $preferences['locale'] = $values['locale'];
+            }
+            if (in_array($values['theme'] ?? null, self::THEMES, true)) {
+                $preferences['theme'] = $values['theme'];
+            }
+
+            return $preferences;
+        } catch (\Throwable $e) {
+            Log::warning('[DisplayPreferences] Central preference read failed', ['central_user_id' => $centralUserId, 'error' => $e->getMessage()]);
+        }
+
+        return null;
     }
 
     /** Central user id of the signed-in user (the SSO handoff logs in the Central user row itself). */
