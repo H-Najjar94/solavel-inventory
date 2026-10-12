@@ -56,14 +56,26 @@ class VerifySolavelSyncSignature
             ]);
         }
 
+        \App\Services\SystemEvents\VerifiedProvisioningContext::bind($request);
+
         $allowed = (array) config('solavel_sync.allowed_client_ids', []);
         $clientId = $request->input('client_id', $request->input('tenant_id'));
         if ($allowed !== [] && ($clientId === null || ! in_array((string) $clientId, $allowed, true))) {
             Log::warning('Inventory sync rejected unauthorized client_id.', ['client_id' => $clientId]);
+            \App\Services\SystemEvents\SignedSyncFailureReporter::report($request, 403);
             return $this->deny('client_id not authorized for this instance.', 'sync_client_not_allowed', 403);
         }
 
-        return $next($request);
+        try {
+            $response = $next($request);
+            if ($response->getStatusCode() >= 400) {
+                \App\Services\SystemEvents\SignedSyncFailureReporter::report($request, $response->getStatusCode());
+            }
+            return $response;
+        } catch (\Throwable $exception) {
+            \App\Services\SystemEvents\SignedSyncFailureReporter::report($request, 500, $exception);
+            throw $exception;
+        }
     }
 
     private function deny(string $message, string $code, int $status): JsonResponse
