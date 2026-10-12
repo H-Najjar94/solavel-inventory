@@ -329,8 +329,8 @@ return [
     'consumption' => [
         'title' => 'Internal consumption',
         'serial_quantity' => 'Return the whole original serial unit. Serialized units cannot be returned fractionally.',
-        'tracking_type_controlled' => 'Inventory tracking follows the item type. Choose Stock item to track inventory; choose Non-stock item or Service for transactions without stock.',
-        'tracking_history' => 'Item type cannot switch between stock and non-stock while stock balances or historical movements exist. Keep this item for its history and create a new item with the required type.',
+        'tracking_type_controlled' => 'Inventory tracking follows the item type. Choose Inventory to track stock; choose Non-inventory or Service for transactions without stock.',
+        'tracking_history' => 'Item type cannot switch between Inventory and Non-inventory or Service while stock balances or historical movements exist. Keep this item for its history and create a new item with the required type.',
         'workflow_scope' => 'Enable internal consumption in the reviewed SolaCount connection workflows before posting. Open connection settings.',
         'not_purchasable'=>'This item is not available for purchase.',
         'return_date'=>'Return date cannot precede the original issue date.',
