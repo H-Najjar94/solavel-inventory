@@ -2347,3 +2347,14 @@ html[dir="rtl"] .side-collapse__icon { transform:scaleX(-1); }
 .side-nav::-webkit-scrollbar { width:6px; }
 .side-nav::-webkit-scrollbar-thumb { background:transparent; border:0; }
 .side-nav:hover::-webkit-scrollbar-thumb { background:rgba(255,255,255,.18); }
+/* Collapsed rail: every item is the same rounded square, so the active highlight is never a sliver. */
+.sidebar--collapsed .side-link,
+.sidebar--collapsed .side-rail-group {
+  width:40px; height:40px; min-height:40px; padding:0; margin:2px auto 0;
+  display:flex; align-items:center; justify-content:center; border-radius:10px; flex:none;
+}
+.sidebar--collapsed .side-link-icon { width:auto; font-size:15px; }
+.sidebar--collapsed .side-link.is-active { box-shadow:0 4px 12px rgba(224,153,33,.28); }
+.sidebar--collapsed .side-primary { padding-bottom:10px; margin-bottom:8px; }
+.sidebar--collapsed .side-primary .side-link { margin-top:0; }
+.sidebar--collapsed .side-nav { align-items:stretch; }
