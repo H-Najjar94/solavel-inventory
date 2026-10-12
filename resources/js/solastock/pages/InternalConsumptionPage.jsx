@@ -1,3 +1,4 @@
+import {feedback} from '../../shared/feedback/store';
 import React, {useState,useRef,useEffect} from 'react';
 import {Link,useNavigate,useParams,useSearchParams} from 'react-router-dom';
 import {useQuery} from '@tanstack/react-query';
@@ -35,15 +36,19 @@ function LinePreview({line,warehouse}) {
     return <div>{label('available')}: {d?.available_quantity??'—'}<br/>{label('cost')}: {d?.total_cost??'—'}<br/>{label('account')}: {d?.account?.account_name??d?.account?.account_id??(d?.account?.connected===false?label('standalone'):'—')}</div>;
 }
 export function ConsumptionForm() {
-    const [params]=useSearchParams();const sourceId=params.get('issue');const nav=useNavigate();const can=useCan();const toast=useToast();
+    const [params]=useSearchParams();const {id:editId}=useParams();const nav=useNavigate();const can=useCan();const toast=useToast();
+    const existing=useQuery({queryKey:['consumption',editId],queryFn:()=>api.consumption(editId),enabled:!!editId});const draft=body(existing.data)?.document;
+    const sourceId=params.get('issue')??(draft?.kind==='return'?String(draft.original_issue_id):null);
     const [form,setForm]=useState({document_date:today(),warehouse_id:null,reason:'',notes:'',recipient:''});
     const [lines,setLines]=useState([{item_id:null,quantity:'1'}]);const [busy,setBusy]=useState(false);const pending=useRef(false);
     const submission=useRef(crypto.randomUUID());const [error,setError]=useState('');const [uncertain,setUncertain]=useState(false);
-    const original=useQuery({queryKey:['consumption',sourceId],queryFn:()=>api.consumption(sourceId),enabled:!!sourceId});
+    const original=useQuery({queryKey:['consumption',sourceId],queryFn:()=>api.consumption(sourceId),enabled:!!sourceId&&!editId});
     useEffect(()=>{const doc=body(original.data)?.document;if(doc){setForm(f=>({...f,warehouse_id:doc.warehouse_id}));setLines(doc.lines.filter(l=>Number(l.quantity)>Number(l.returned_quantity??0)).map(l=>({original_line_id:l.id,item_id:l.item_id,item_name:l.item?.name,quantity:String((Number(l.quantity)-Number(l.returned_quantity??0))/Number(l.conversion?.unit_conversion_factor??1)),entered_unit_id:l.conversion?.entered_unit_id})));}},[original.data]);
+    useEffect(()=>{if(!draft)return;setForm({document_date:draft.document_date?.slice(0,10),warehouse_id:draft.warehouse_id,reason:draft.reason??'',notes:draft.notes??'',recipient:draft.recipient??'',department_id:draft.department_id,project_id:draft.project_id});
+        setLines(draft.lines.map(l=>({original_line_id:l.original_line_id??undefined,item_id:l.item_id,item_name:l.item?.name,quantity:String(l.conversion?.entered_qty??l.quantity),entered_unit_id:l.conversion?.entered_unit_id,bin_id:l.bin_id,lot_id:l.lot_id,serial_id:l.serial_id,account_override_id:l.account_override_id})));},[draft?.id]);
     const patch=(i,data)=>setLines(ls=>ls.map((l,n)=>n===i?{...l,...data}:l));
     async function save(e){e.preventDefault();if(pending.current||uncertain)return;pending.current=true;setBusy(true);setError('');
-        try{const doc=body(await api.createConsumption({...form,submission_key:submission.current,...(sourceId?{original_issue_id:Number(sourceId)}:{}),lines}));nav(`/internal-consumptions/${doc.id}`);}
+        try{const doc=body(editId?await api.updateConsumption(editId,{...form,lines}):await api.createConsumption({...form,submission_key:submission.current,...(sourceId?{original_issue_id:Number(sourceId)}:{}),lines}));nav(`/internal-consumptions/${doc.id}`);}
         catch(err){setError(err.message);if(err.outcomeUnknown)setUncertain(true);toast.failure(err,err.message);}finally{pending.current=false;setBusy(false);}}
     const columns=[{key:'item',label:label('item'),render:(l,i)=>sourceId?l.item_name:<SearchItem value={l.item_id} onChange={v=>patch(i,{item_id:v})}/>},
         {key:'quantity',label:label('quantity'),render:(l,i)=><input className="input" type="number" min="0.0001" step="0.0001" value={l.quantity} onChange={e=>patch(i,{quantity:e.target.value})}/>},
@@ -53,7 +58,8 @@ export function ConsumptionForm() {
         {key:'serial',label:label('serial'),render:(l,i)=><SerialSelector itemId={l.item_id} warehouseId={form.warehouse_id} value={l.serial_id?[l.serial_id]:[]} expectedQty={1} onChange={v=>patch(i,{serial_id:v[v.length-1]??null,quantity:'1'})}/>},
         {key:'preview',label:label('cost'),render:l=><LinePreview line={l} warehouse={form.warehouse_id}/>}]:[]),
         ...(can('inventory.consumption.override_account')&&!sourceId?[{key:'override',label:label('override'),render:(l,i)=><ConsumptionAccountPicker value={l.account_override_id} onChange={v=>patch(i,{account_override_id:v})}/>}]:[])];
-    return <section className="page"><h1>{sourceId?label('return'):label('new')}</h1><form onSubmit={save}>
+    if(editId&&existing.isLoading)return <Skeleton/>;if(editId&&draft?.status!=='draft')return <EmptyState title={existing.error?.message??label('locked')}/>;
+    return <section className="page"><h1>{editId?label('edit'):sourceId?label('return'):label('new')}</h1><form onSubmit={save}>
         <div className="form-grid"><Field label={label('date')}><input className="input" type="date" required value={form.document_date} onChange={e=>setForm({...form,document_date:e.target.value})}/></Field>
         <Field label={label('warehouse')}><WarehousePicker autoSelectDefault disabled={!!sourceId} value={form.warehouse_id} onChange={v=>setForm({...form,warehouse_id:v})}/></Field>
         <Field label={label('reason')}><input className="input" required minLength={3} maxLength={500} value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/></Field>
@@ -68,7 +74,10 @@ export function ConsumptionDetail() {
     const {id}=useParams();const can=useCan();const toast=useToast();const [busy,setBusy]=useState(false);const [error,setError]=useState('');
     const q=useQuery({queryKey:['consumption',id],queryFn:()=>api.consumption(id),refetchInterval:15000});
     const d=body(q.data)?.document;const accounting=body(q.data)?.accounting;
+    const nav=useNavigate();
     async function action(name){if(busy)return;setBusy(true);try{await api[name](id);await q.refetch();}catch(e){setError(e.message);toast.failure(e,e.message);}finally{setBusy(false);}}
+    async function remove(){if(busy||!await feedback.confirm({title:label('delete'),action:label('delete'),message:label('deleteConfirm'),reference:d.document_number}))return;
+        setBusy(true);try{await api.deleteConsumption(id);nav('/internal-consumptions');}catch(e){setError(e.message);toast.failure(e,e.message);}finally{setBusy(false);}}
     if(q.isLoading)return <Skeleton/>;if(!d)return <EmptyState title={q.error?.message}/>;
     const cols=[{key:'item',label:label('item'),render:l=>l.item?.name??l.item_id},{key:'quantity',label:label('quantity'),render:l=>l.quantity},
         {key:'returned',label:label('returned_quantity'),render:l=>l.returned_quantity??0},{key:'cost',label:label('cost'),render:l=>l.total_cost??'—'},
@@ -79,6 +88,7 @@ export function ConsumptionDetail() {
         <p role="status">{label(accounting?.status??'pending')}</p>{accounting?.last_error&&<p role="alert">{accounting.last_error}</p>}
         {d.accounting_connected&&<Link to="/integrations/events">{label('retry')}</Link>}
         {accounting?.journal_url&&<a href={accounting.journal_url} target="_blank" rel="noreferrer">{label('journal')} · {accounting.external_document_id}</a>}
+        {d.status==='draft'&&can(`inventory.consumption.${d.kind==='return'?'return':'create'}`)&&<><Link className="btn" to={`/internal-consumptions/${d.id}/edit`}>{label('edit')}</Link><button className="btn btn--danger" disabled={busy} onClick={remove}>{label('delete')}</button></>}
         {d.status==='draft'&&can('inventory.consumption.approve')&&<button className="btn" disabled={busy} onClick={()=>action('approveConsumption')}>{label('approve')}</button>}
         {['draft','approved'].includes(d.status)&&can(`inventory.consumption.${d.kind==='return'?'return':'post'}`)&&<button className="btn btn--primary" disabled={busy} onClick={()=>action('postConsumption')}>{label('post')}</button>}
         {d.status==='posted'&&d.kind==='issue'&&can('inventory.consumption.return')&&<Link className="btn" to={`/internal-consumptions/new?issue=${d.id}`}>{label('return')}</Link>}

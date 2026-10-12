@@ -89,6 +89,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
     Route::get('/internal-consumptions',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'index'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.index');
     Route::post('/internal-consumptions',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'store'])->name('api.v1.consumption.store');
     Route::get('/internal-consumptions/{consumption}',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'show'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.show');
+    Route::put('/internal-consumptions/{consumption}',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'update'])->name('api.v1.consumption.update');
+    Route::delete('/internal-consumptions/{consumption}',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'destroy'])->name('api.v1.consumption.destroy');
     Route::post('/internal-consumptions/{consumption}/approve',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'approve'])->middleware('perm:inventory.consumption.approve')->name('api.v1.consumption.approve');
     Route::post('/internal-consumptions/{consumption}/post',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'post'])->name('api.v1.consumption.post');
 

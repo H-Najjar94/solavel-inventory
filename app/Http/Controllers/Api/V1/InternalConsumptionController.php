@@ -40,16 +40,27 @@ final class InternalConsumptionController extends ApiController {
         return $this->success(['document'=>$consumption,'accounting'=>$accounting]);
     }
     public function store(Request $request) {
-        $data=$request->validate([
-            'submission_key'=>'required|uuid','document_date'=>'required|date_format:Y-m-d','warehouse_id'=>'required|integer|min:1',
-            'original_issue_id'=>'nullable|integer|min:1','reason'=>'required|string|min:3|max:500','notes'=>'nullable|string|max:10000',
+        $data=$request->validate(['submission_key'=>'required|uuid','original_issue_id'=>'nullable|integer|min:1']+$this->rules());
+        return $this->success($this->service->create($data),201);
+    }
+    public function update(Request $request,InternalConsumption $consumption) {
+        $data=$request->validate($this->rules($consumption->kind==='return'));
+        return $this->success($this->service->updateDraft($consumption,$data));
+    }
+    public function destroy(InternalConsumption $consumption) {
+        $this->service->deleteDraft($consumption);
+        return $this->success(['deleted'=>true]);
+    }
+    private function rules(bool $return=false): array {
+        return [
+            'document_date'=>'required|date_format:Y-m-d','warehouse_id'=>($return?'nullable':'required').'|integer|min:1',
+            'reason'=>'required|string|min:3|max:500','notes'=>'nullable|string|max:10000',
             'department_id'=>'nullable|integer|min:1','project_id'=>'nullable|integer|min:1','recipient'=>'nullable|string|max:255',
-            'lines'=>'required|array|min:1|max:200','lines.*.item_id'=>'required_without:original_issue_id|integer|min:1',
-            'lines.*.original_line_id'=>'nullable|integer|min:1','lines.*.quantity'=>'required|numeric|gt:0',
+            'lines'=>'required|array|min:1|max:200','lines.*.item_id'=>($return?'nullable':'required_without:original_issue_id').'|integer|min:1',
+            'lines.*.original_line_id'=>($return?'required':'nullable').'|integer|min:1','lines.*.quantity'=>'required|numeric|gt:0',
             'lines.*.entered_unit_id'=>'nullable|integer|min:1','lines.*.variant_id'=>'nullable|integer|min:1','lines.*.bin_id'=>'nullable|integer|min:1',
             'lines.*.lot_id'=>'nullable|integer|min:1','lines.*.serial_id'=>'nullable|integer|min:1','lines.*.account_override_id'=>'nullable|integer|min:1','lines.*.notes'=>'nullable|string|max:2000',
-        ]);
-        return $this->success($this->service->create($data),201);
+        ];
     }
     public function approve(InternalConsumption $consumption) { return $this->success($this->service->approve($consumption)); }
     public function post(InternalConsumption $consumption) { return $this->success($this->service->post($consumption)); }

@@ -1,7 +1,7 @@
 <?php
 namespace App\Services\Consumption;
 
-use App\Models\Tenant\{InternalConsumption,InternalConsumptionLine,InventorySetting,Item,Warehouse,IntegrationOutboxEvent,StockLedger};
+use App\Models\Tenant\{InternalConsumption,InternalConsumptionLine,InventoryAuditLog,InventorySetting,Item,Warehouse,IntegrationOutboxEvent,StockLedger};
 use App\Services\Access\{InventoryPermissionService,WarehouseAccessService};
 use App\Services\Catalog\UnitConversionResolver;
 use App\Services\Documents\Support\DocumentNumber;
@@ -39,9 +39,7 @@ final class InternalConsumptionService {
             $this->warehouses->assertAllowed((int)$warehouse);
             $wh = Warehouse::query()->findOrFail($warehouse);
             if (!$wh->is_active) $this->fail('warehouse_inactive');
-            foreach (['department_id'=>'departments','project_id'=>'projects'] as $field=>$table) {
-                if (!empty($data[$field]) && (!\Schema::connection('tenant')->hasTable($table) || !DB::connection('tenant')->table($table)->where('id',$data[$field])->where('organization_id',$field === 'project_id' ? $this->accounts->projectOrganizationId($org) : $org)->when(\Schema::connection('tenant')->hasColumn($table,'deleted_at'),fn($q)=>$q->whereNull('deleted_at'))->exists())) $this->fail('dimension_invalid');
-            }
+            $this->assertDimensions($data,$org);
             $doc = InternalConsumption::query()->create([
                 'organization_id'=>$org,'document_number'=>DocumentNumber::next($source?'ICR':'IC',InternalConsumption::class,'document_number',$org,'tenant'),
                 'kind'=>$source?'return':'issue','original_issue_id'=>$source?->id,'document_date'=>$data['document_date'],'warehouse_id'=>$warehouse,
@@ -50,32 +48,82 @@ final class InternalConsumptionService {
                 'submission_key'=>$data['submission_key'],'submission_hash'=>$hash,'created_by'=>auth()->id(),
                 'original_event_uuid'=>$source ? IntegrationOutboxEvent::query()->where('event_type','internal_consumption.posted')->where('aggregate_id',$source->id)->value('event_uuid'):null,
             ]);
-            $seen=[];
-            foreach ($data['lines'] as $input) {
-                $original = $source ? $source->lines()->findOrFail($input['original_line_id']??0) : null;
-                if ($original && isset($seen[$original->id])) $this->fail('duplicate_line');
-                if ($original) $seen[$original->id]=true;
-                $item = ($original ? Item::withTrashed() : Item::query())->findOrFail($original?->item_id ?? $input['item_id']);
-                if (!$original && (!$item->is_active || $item->item_type !== 'inventory' || $item->track_inventory === false)) $this->fail('capitalized_inventory_required');
-                if ($original) {
-                    // Returns use the frozen issue UOM, even when the catalog changes.
-                    $normalized = $original->conversion;
-                    if (isset($input['entered_unit_id']) && (int)$input['entered_unit_id'] !== (int)($normalized['entered_unit_id'] ?? 0)) $this->fail('dimension_invalid');
-                    $normalized['entered_qty'] = \App\Services\Stock\Support\Decimal::qty((string)$input['quantity']);
-                    $normalized['quantity'] = \App\Services\Stock\Support\Decimal::qty(\App\Services\Stock\Support\Decimal::mul($normalized['entered_qty'], (string)($normalized['unit_conversion_factor'] ?? '1')));
-                } else {
-                    $normalized = $this->units->normalizeLine(['item_id'=>$item->id,'quantity'=>$input['quantity'],'entered_unit_id'=>$input['entered_unit_id']??$item->base_unit_id],'quantity');
-                }
-                $selected = $original ? ['account_id'=>$original->expense_account_id,'inventory_account_id'=>$original->inventory_account_id,'source'=>'original']
-                    : $this->draftAccounts($item,isset($input['account_override_id'])?(int)$input['account_override_id']:null);
-                $line=['organization_id'=>$org,'item_id'=>$item->id,'original_line_id'=>$original?->id,'quantity'=>$normalized['quantity'],
-                    'conversion'=>$normalized,'expense_account_id'=>$selected['account_id'],'inventory_account_id'=>$selected['inventory_account_id'],
-                    'account_source'=>$selected['source'],'account_override_id'=>$input['account_override_id']??null,'notes'=>$input['notes']??null];
-                foreach (['variant_id','lot_id','serial_id','bin_id'] as $field) $line[$field]=$original?->{$field} ?? ($input[$field]??null);
-                $doc->lines()->create($line);
-            }
+            $this->buildLines($doc,$data['lines'],$source,$org);
             return $doc->load('lines.item');
         },3);
+    }
+    public function updateDraft(InternalConsumption $document,array $data): InternalConsumption {
+        $this->permission($document->kind==='return' ? 'return' : 'create');
+        $org = $this->context->idOrFail();
+        return DB::connection('tenant')->transaction(function () use ($document,$data,$org) {
+            $source=$document->original_issue_id ? InternalConsumption::query()->lockForUpdate()->findOrFail($document->original_issue_id) : null;
+            $doc=InternalConsumption::query()->lockForUpdate()->with('lines')->findOrFail($document->id);
+            $this->warehouses->assertAllowed((int)$doc->warehouse_id);
+            if ($doc->status!=='draft') $this->fail('locked');
+            if ($source && $data['document_date'] < $source->document_date->toDateString()) $this->fail('return_date');
+            if ($source && ($source->kind !== 'issue' || $source->status !== 'posted')) $this->fail('invalid_source');
+            $warehouse = $source?->warehouse_id ?? $data['warehouse_id'];
+            $this->warehouses->assertAllowed((int)$warehouse);
+            if (!Warehouse::query()->findOrFail($warehouse)->is_active) $this->fail('warehouse_inactive');
+            $this->assertDimensions($data,$org);
+            $before=['status'=>$doc->status,'warehouse_id'=>$doc->warehouse_id,'document_date'=>$doc->document_date->toDateString(),'reason'=>$doc->reason,'lines'=>$doc->lines->toArray()];
+            $doc->fill(['document_date'=>$data['document_date'],'warehouse_id'=>$warehouse,'reason'=>$data['reason'],'notes'=>$data['notes']??null,'recipient'=>$data['recipient']??null,
+                'department_id'=>$source?->department_id ?? ($data['department_id']??null),'project_id'=>$source?->project_id ?? ($data['project_id']??null)]);
+            $doc->save();
+            $doc->lines()->get()->each->delete();
+            $this->buildLines($doc,$data['lines'],$source,$org);
+            $doc->load('lines.item');
+            $this->audit($doc,'internal_consumption.update',$before,['status'=>'draft','warehouse_id'=>$doc->warehouse_id,'document_date'=>$doc->document_date->toDateString(),'reason'=>$doc->reason,'lines'=>$doc->lines->toArray()]);
+            return $doc;
+        },3);
+    }
+    public function deleteDraft(InternalConsumption $document): void {
+        $this->permission($document->kind==='return' ? 'return' : 'create');
+        DB::connection('tenant')->transaction(function () use ($document) {
+            $doc=InternalConsumption::query()->lockForUpdate()->with('lines')->findOrFail($document->id);
+            $this->warehouses->assertAllowed((int)$doc->warehouse_id);
+            if ($doc->status!=='draft') $this->fail('locked');
+            $before=['status'=>$doc->status,'kind'=>$doc->kind,'warehouse_id'=>$doc->warehouse_id,'document_date'=>$doc->document_date->toDateString(),'reason'=>$doc->reason,'lines'=>$doc->lines->toArray()];
+            $doc->lines->each->delete();
+            $doc->delete();
+            $this->audit($doc,'internal_consumption.delete',$before,null);
+        },3);
+    }
+    private function assertDimensions(array $data,int $org): void {
+        foreach (['department_id'=>'departments','project_id'=>'projects'] as $field=>$table) {
+            if (!empty($data[$field]) && (!\Schema::connection('tenant')->hasTable($table) || !DB::connection('tenant')->table($table)->where('id',$data[$field])->where('organization_id',$field === 'project_id' ? $this->accounts->projectOrganizationId($org) : $org)->when(\Schema::connection('tenant')->hasColumn($table,'deleted_at'),fn($q)=>$q->whereNull('deleted_at'))->exists())) $this->fail('dimension_invalid');
+        }
+    }
+    private function audit(InternalConsumption $doc,string $action,?array $before,?array $after): void {
+        InventoryAuditLog::create(['organization_id'=>$doc->organization_id,'actor_user_id'=>auth()->id(),'action'=>$action,
+            'entity_type'=>'internal_consumption','entity_id'=>$doc->id,'document_ref'=>$doc->document_number,'before'=>$before,'after'=>$after,
+            'ip'=>request()?->ip(),'created_at'=>now()]);
+    }
+    private function buildLines(InternalConsumption $doc,array $lines,?InternalConsumption $source,int $org): void {
+        $seen=[];
+        foreach ($lines as $input) {
+            $original = $source ? $source->lines()->findOrFail($input['original_line_id']??0) : null;
+            if ($original && isset($seen[$original->id])) $this->fail('duplicate_line');
+            if ($original) $seen[$original->id]=true;
+            $item = ($original ? Item::withTrashed() : Item::query())->findOrFail($original?->item_id ?? $input['item_id']);
+            if (!$original && (!$item->is_active || $item->item_type !== 'inventory' || $item->track_inventory === false)) $this->fail('capitalized_inventory_required');
+            if ($original) {
+                // Returns use the frozen issue UOM, even when the catalog changes.
+                $normalized = $original->conversion;
+                if (isset($input['entered_unit_id']) && (int)$input['entered_unit_id'] !== (int)($normalized['entered_unit_id'] ?? 0)) $this->fail('dimension_invalid');
+                $normalized['entered_qty'] = \App\Services\Stock\Support\Decimal::qty((string)$input['quantity']);
+                $normalized['quantity'] = \App\Services\Stock\Support\Decimal::qty(\App\Services\Stock\Support\Decimal::mul($normalized['entered_qty'], (string)($normalized['unit_conversion_factor'] ?? '1')));
+            } else {
+                $normalized = $this->units->normalizeLine(['item_id'=>$item->id,'quantity'=>$input['quantity'],'entered_unit_id'=>$input['entered_unit_id']??$item->base_unit_id],'quantity');
+            }
+            $selected = $original ? ['account_id'=>$original->expense_account_id,'inventory_account_id'=>$original->inventory_account_id,'source'=>'original']
+                : $this->draftAccounts($item,isset($input['account_override_id'])?(int)$input['account_override_id']:null);
+            $line=['organization_id'=>$org,'item_id'=>$item->id,'original_line_id'=>$original?->id,'quantity'=>$normalized['quantity'],
+                'conversion'=>$normalized,'expense_account_id'=>$selected['account_id'],'inventory_account_id'=>$selected['inventory_account_id'],
+                'account_source'=>$selected['source'],'account_override_id'=>$input['account_override_id']??null,'notes'=>$input['notes']??null];
+            foreach (['variant_id','lot_id','serial_id','bin_id'] as $field) $line[$field]=$original?->{$field} ?? ($input[$field]??null);
+            $doc->lines()->create($line);
+        }
     }
     public function approve(InternalConsumption $document): InternalConsumption {
         $this->permission('approve');

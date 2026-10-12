@@ -129,6 +129,7 @@ export const router = createBrowserRouter(
                 { path: 'opening-stock/:id/edit', element: protectedElement(<OpeningStockFormPage />, 'inventory.manage_opening_stock') },
                 {path:'internal-consumptions',element:protectedElement(<InternalConsumptionPage/>,'inventory.consumption.view')},
                 {path:'internal-consumptions/new',element:<ConsumptionForm/>},
+                {path:'internal-consumptions/:id/edit',element:<ConsumptionForm/>},
                 {path:'internal-consumptions/report',element:protectedElement(<ConsumptionReport/>,'inventory.consumption.view')},
                 {path:'internal-consumptions/:id',element:protectedElement(<ConsumptionDetail/>,'inventory.consumption.view')},
                 { path: 'adjustments', element: <AdjustmentsPage /> },
