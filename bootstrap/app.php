@@ -62,6 +62,8 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->encryptCookies(except: ['solavel_locale']);
+
         // SolaStock middleware aliases (mirrors Finance naming).
         $middleware->alias([
             'perm' => EnsureInventoryPermission::class,

@@ -12,31 +12,31 @@ class SetInventoryLocale
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // Follow the Solavel account language/theme (throttled; a no-op for guests
-        // and when Central is unreachable) before this request's locale is chosen.
+        $supported = AccountPreferenceSync::LOCALES;
+        $normalize = static function ($value) use ($supported): ?string {
+            $locale = is_string($value) ? strtolower(substr(trim($value), 0, 2)) : null;
+            return in_array($locale, $supported, true) ? $locale : null;
+        };
+        $beforeSync = $request->session()->get('solastock_locale');
         if ($request->isMethod('GET')) {
             app(AccountPreferenceSync::class)->sync($request);
         }
-
-        $requested = $request->query('locale')
-            ?? $request->header('X-Locale')
-            ?? $request->session()->get('solastock_locale')
-            ?? $request->header('Accept-Language');
-
-        $locale = is_string($requested)
-            ? strtolower(substr(trim($requested), 0, 2))
-            : null;
-
-        if (! in_array($locale, ['en', 'ar', 'fr', 'ru', 'ur', 'de', 'es', 'zh', 'pt', 'tr', 'it'], true)) {
-            $locale = 'en';
-        }
-
+        $afterSync = $request->session()->get('solastock_locale');
+        $accountChanged = $afterSync !== $beforeSync && $normalize($afterSync) !== null;
+        $incoming = $normalize($request->query('locale'));
+        $saved = $normalize($request->cookie('solavel_locale'));
+        // A previous page's unfinished API request can save an older file-backed
+        // session. The browser preference survives that race and repairs the next
+        // navigation. Genuine account changes and authenticated handoffs still win.
+        $locale = $incoming ?? $normalize($request->header('X-Locale'))
+            ?? ($accountChanged ? $normalize($afterSync) : null)
+            ?? $saved ?? $normalize($afterSync)
+            ?? $normalize($request->header('Accept-Language')) ?? 'en';
         app()->setLocale($locale);
-        // Only a language the person chose (?locale=) or the one already in the session is
-        // remembered. The X-Locale header an open page sends with its API calls is just the
-        // language that page shows; storing it let an old tab undo the account language.
-        if (is_string($request->query('locale')) || ! $request->session()->has('solastock_locale')) {
-            $request->session()->put('solastock_locale', $locale);
+        // An old tab's X-Locale describes that page only; it must not undo the
+        // browser's chosen language or the shared account preference.
+        if ($incoming !== null || $saved !== null || ! $request->session()->has('solastock_locale')) {
+            $request->session()->put('solastock_locale', $incoming ?? ($accountChanged ? $normalize($afterSync) : null) ?? $saved ?? $locale);
         }
 
         // Save an explicit default even when it is already the displayed language.
@@ -52,10 +52,16 @@ class SetInventoryLocale
         if ($request->isMethod('GET') && is_string($request->query('locale')) && ! $request->expectsJson()) {
             $query = $request->query->all();
             unset($query['locale'], $query['remember']);
-            return redirect($request->url().($query ? '?'.http_build_query($query) : ''));
+            $response = redirect($request->url().($query ? '?'.http_build_query($query) : ''));
+        } else {
+            $response = $next($request);
         }
-
-        $response = $next($request);
+        $selected = $normalize($request->session()->get('solastock_locale'));
+        if ($selected !== null && $selected !== $saved) {
+            $host = $request->getHost();
+            $domain = ($host === 'solavel.com' || str_ends_with($host, '.solavel.com')) ? '.solavel.com' : null;
+            $response->headers->setCookie(cookie('solavel_locale', $selected, 60 * 24 * 365, '/', $domain, $request->isSecure(), true, false, 'lax'));
+        }
         $response->headers->set('Content-Language', $locale);
 
         return $response;
