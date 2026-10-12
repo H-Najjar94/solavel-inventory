@@ -42,6 +42,8 @@ Route::post('/logout', \App\Http\Controllers\LogoutController::class)->name('inv
 
 // Theme toggle → the signed-in user's Solavel account default (best effort, CSRF-protected).
 Route::post('/preferences/theme', [\App\Http\Controllers\DisplayPreferenceController::class, 'theme'])->name('inventory.preferences.theme');
+// Open pages poll this to follow account language/theme changes made in other apps.
+Route::get('/preferences/sync', [\App\Http\Controllers\DisplayPreferenceController::class, 'sync'])->name('inventory.preferences.sync');
 
 // Root → dashboard (mirrors solavel-projects: redirect '/' to the dashboard).
 Route::get('/', fn () => redirect()->route('inventory.dashboard'));

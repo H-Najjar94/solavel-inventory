@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Preferences\AccountPreferenceSync;
 use App\Services\Preferences\CentralDisplayPreferences;
 use Closure;
 use Illuminate\Http\Request;
@@ -11,6 +12,12 @@ class SetInventoryLocale
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // Follow the Solavel account language/theme (throttled; a no-op for guests
+        // and when Central is unreachable) before this request's locale is chosen.
+        if ($request->isMethod('GET')) {
+            app(AccountPreferenceSync::class)->sync($request);
+        }
+
         $requested = $request->query('locale')
             ?? $request->header('X-Locale')
             ?? $request->session()->get('solastock_locale')
