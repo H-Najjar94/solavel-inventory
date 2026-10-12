@@ -21,7 +21,7 @@ class AccountPreferenceSync
     public const LOCALES = ['en', 'ar'];
 
     private const CHECKED_AT_KEY = 'account_display_preferences_checked_at';
-    private const FINGERPRINT_KEY = 'account_display_preferences_fingerprint';
+    private const FINGERPRINT_KEY = 'account_display_preferences_fingerprint_v2';
     private const PENDING_KEY = 'account_display_preferences_pending';
     private const RESULT_ATTRIBUTE = 'account_display_preferences_sync';
     private const LOCALE_KEY = 'solastock_locale';
