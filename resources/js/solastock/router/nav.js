@@ -3,7 +3,6 @@
 // (fa-solid), matching the SolaCount (Finance) sidebar style. Order = sidebar order.
 
 export const NAV = [
-    {key:'internal-consumptions',label:'Internal Consumption',path:'/internal-consumptions',icon:'fa-solid fa-box-open',perm:'inventory.consumption.view',group:'Operations'},
     { key: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: 'fa-solid fa-gauge-high', perm: 'inventory.view_dashboard', group: 'Overview' },
     { key: 'items', label: 'Items', path: '/items', icon: 'fa-solid fa-boxes-stacked', perm: 'inventory.view_items', group: 'Catalog' },
     { key: 'warehouses', label: 'Warehouses', path: '/warehouses', icon: 'fa-solid fa-warehouse', perm: 'inventory.view_warehouses', group: 'Catalog' },
@@ -14,28 +13,51 @@ export const NAV = [
     { key: 'transfers', label: 'Transfers', path: '/transfers', icon: 'fa-solid fa-right-left', perm: 'inventory.view_stock', group: 'Operations' },
     { key: 'counts', label: 'Stock Counts', path: '/counts', icon: 'fa-solid fa-list-check', perm: 'inventory.view_stock', group: 'Operations' },
     { key: 'scanner', label: 'Scanner', path: '/scanner', icon: 'fa-solid fa-barcode', perm: 'inventory.view_stock', group: 'Operations' },
-    { key: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: 'fa-solid fa-truck-field', perm: 'inventory.view_items', group: 'Purchasing' },
+    { key: 'internal-consumptions', label: 'Internal Consumption', path: '/internal-consumptions', icon: 'fa-solid fa-people-carry-box', perm: 'inventory.consumption.view', group: 'Operations' },
+    { key: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: 'fa-solid fa-handshake', perm: 'inventory.view_items', group: 'Purchasing' },
     { key: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: 'fa-solid fa-file-invoice', perm: 'inventory.view_stock', group: 'Purchasing' },
-    { key: 'receiving-requests', label: 'Receiving Requests', path: '/receiving-requests', icon: 'fa-solid fa-dolly', perm: 'inventory.receive_goods', group: 'Purchasing' },
+    { key: 'receiving-requests', label: 'Receiving Requests', path: '/receiving-requests', icon: 'fa-solid fa-clipboard-list', perm: 'inventory.receive_goods', group: 'Purchasing' },
     { key: 'goods-receipts', label: 'Goods Receipts', path: '/goods-receipts', icon: 'fa-solid fa-dolly', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'landed-costs', label: 'Landed Costs', path: '/landed-costs', icon: 'fa-solid fa-ship', perm: 'inventory.view_stock', group: 'Purchasing', availability: 'landed_costs' },
     { key: 'customers', label: 'Customers', path: '/customers', icon: 'fa-solid fa-address-book', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
-    { key: 'cash-fulfillment-requests', label: 'Cash sale dispatch', path: '/cash-fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment', feature: 'cashHandoff' },
+    { key: 'cash-fulfillment-requests', label: 'Cash sale dispatch', path: '/cash-fulfillment-requests', icon: 'fa-solid fa-cash-register', perm: 'inventory.view_sales', group: 'Sales / Fulfillment', feature: 'cashHandoff' },
     { key: 'fulfillment-requests', label: 'Fulfillment Requests', path: '/fulfillment-requests', icon: 'fa-solid fa-truck-ramp-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'sales-orders', label: 'Sales Orders', path: '/sales-orders', icon: 'fa-solid fa-cart-shopping', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'pick-lists', label: 'Picking', path: '/pick-lists', icon: 'fa-solid fa-hand', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
-    { key: 'packs', label: 'Packing', path: '/packs', icon: 'fa-solid fa-box', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
+    { key: 'packs', label: 'Packing', path: '/packs', icon: 'fa-solid fa-box-archive', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'shipments', label: 'Shipments', path: '/shipments', icon: 'fa-solid fa-truck-fast', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'sales-returns', label: 'Sales Returns', path: '/sales-returns', icon: 'fa-solid fa-rotate-left', perm: 'inventory.view_sales', group: 'Sales / Fulfillment' },
     { key: 'traceability', label: 'Traceability', path: '/traceability', icon: 'fa-solid fa-magnifying-glass-location', perm: 'inventory.view_traceability', group: 'Traceability' },
-    { key: 'lots', label: 'Lots / Batches', path: '/traceability/lots', icon: 'fa-solid fa-barcode', perm: 'inventory.view_traceability', group: 'Traceability' },
+    { key: 'lots', label: 'Lots / Batches', path: '/traceability/lots', icon: 'fa-solid fa-tags', perm: 'inventory.view_traceability', group: 'Traceability' },
     { key: 'serials', label: 'Serial Numbers', path: '/traceability/serials', icon: 'fa-solid fa-hashtag', perm: 'inventory.view_traceability', group: 'Traceability' },
     { key: 'recalls', label: 'Recalls', path: '/recalls', icon: 'fa-solid fa-triangle-exclamation', perm: 'inventory.view_traceability', group: 'Traceability' },
     { key: 'reports', label: 'Reports', path: '/reports', icon: 'fa-solid fa-chart-line', perm: 'inventory.view_reports', group: 'Insights' },
-    { key: 'integration', label: 'SolaCount', path: '/integrations/solacount', icon: 'fa-solid fa-book-open', perm: 'inventory.integration.view', group: 'Admin' },
+    { key: 'integration', label: 'SolaCount', path: '/integrations/solacount', icon: 'fa-solid fa-plug', perm: 'inventory.integration.view', group: 'Admin' },
     { key: 'team-access', label: 'Team access', path: '/team-access', icon: 'fa-solid fa-users-gear', perm: 'inventory.manage_settings', group: 'Admin' },
     { key: 'settings', label: 'Settings', path: '/settings', icon: 'fa-solid fa-gear', perm: 'inventory.manage_settings', group: 'Admin' },
 ];
+
+// Section order and the icon each section shows in the collapsed rail.
+export const NAV_GROUPS = [
+    { key: 'Catalog', icon: 'fa-solid fa-boxes-stacked' },
+    { key: 'Stock', icon: 'fa-solid fa-layer-group' },
+    { key: 'Operations', icon: 'fa-solid fa-arrows-rotate' },
+    { key: 'Purchasing', icon: 'fa-solid fa-cart-flatbed' },
+    { key: 'Sales / Fulfillment', icon: 'fa-solid fa-truck-fast' },
+    { key: 'Traceability', icon: 'fa-solid fa-magnifying-glass-location' },
+    { key: 'Insights', icon: 'fa-solid fa-chart-line' },
+    { key: 'Admin', icon: 'fa-solid fa-gear' },
+];
+
+/** The most specific nav path that matches the location (detail pages light up their module). */
+export function activeNavKey(items, pathname) {
+    let best = null;
+    for (const n of items) {
+        const hit = pathname === n.path || (n.path !== '/dashboard' && pathname.startsWith(`${n.path}/`));
+        if (hit && (!best || n.path.length > best.path.length)) best = n;
+    }
+    return best?.key ?? null;
+}
 
 export function visibleNav(permissions = [], meta = {}) {
     const set = new Set(permissions);

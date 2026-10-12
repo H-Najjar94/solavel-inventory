@@ -4,7 +4,7 @@ import {FeedbackNavigation} from '../components/FeedbackNavigation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { visibleNav } from '../router/nav.js';
+import { activeNavKey, NAV_GROUPS, visibleNav } from '../router/nav.js';
 import { useMeta } from '../stores/meta.jsx';
 import { useTenant } from '../stores/tenant.jsx';
 import { getTheme, toggleTheme } from '../stores/theme.js';
@@ -12,16 +12,22 @@ import { getLocale, t } from '../i18n/index.js';
 import { api } from '../services/api.js';
 import { getRememberLanguage, saveThemePreference, setRememberLanguage } from '../services/displayPreferences.js';
 
-// Group nav items by their `group` key, preserving first-seen order (Finance-style
-// sectioned sidebar).
+// Group nav items by their `group` key in the NAV_GROUPS order (Finance-style
+// sectioned sidebar); a group without visible items is left out.
 function groupNav(items) {
     const out = {};
+    for (const { key } of NAV_GROUPS) {
+        const inGroup = items.filter((n) => n.group === key);
+        if (inGroup.length) out[key] = inGroup;
+    }
     for (const n of items) {
-        const g = n.group || 'General';
-        (out[g] ||= []).push(n);
+        if (!NAV_GROUPS.some((g) => g.key === n.group)) (out[n.group || 'General'] ||= []).push(n);
     }
     return out;
 }
+
+const GROUP_ICONS = Object.fromEntries(NAV_GROUPS.map((g) => [g.key, g.icon]));
+const COLLAPSED_KEY = 'solastock.sidebar.collapsed';
 
 const NAV_LABELS = {
     dashboard: 'dashboard', items: 'items', warehouses: 'warehouses', balances: 'currentStock',
@@ -374,12 +380,11 @@ export default function AppShell() {
     const nav = visibleNav(meta.permissions, meta);
     const primaryNav = useMemo(() => nav.filter((item) => item.key === 'dashboard'), [nav]);
     const groupedNav = useMemo(() => groupNav(nav.filter((item) => item.key !== 'dashboard')), [nav]);
-    const activeGroup = Object.entries(groupedNav).find(([, items]) => (
-        items.some((item) => location.pathname === item.path
-            || (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`)))
-    ))?.[0] ?? null;
+    const activeKey = activeNavKey(nav, location.pathname);
+    const activeGroup = Object.entries(groupedNav).find(([, items]) => items.some((item) => item.key === activeKey))?.[0] ?? null;
     const [theme, setTheme] = useState(getTheme());
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { return false; } });
+    const [flyout, setFlyout] = useState(null); // collapsed rail: { group, top }
     const [openGroup, setOpenGroup] = useState(activeGroup);
     const [sideOpen, setSideOpen] = useState(false);
     useCloseDrawerOnResize(setSideOpen);
@@ -397,6 +402,22 @@ export default function AppShell() {
     useEffect(() => {
         setOpenGroup(activeGroup);
     }, [activeGroup]);
+
+    useEffect(() => { try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0'); } catch { /* storage unavailable */ } }, [collapsed]);
+    // The rail fly-out closes on navigation, when the rail opens up, on Escape and on an outside click.
+    useEffect(() => { setFlyout(null); }, [location.pathname, railCollapsed]);
+    useEffect(() => {
+        if (!flyout) return undefined;
+        const outside = (event) => { if (!event.target.closest?.('.side-flyout, .side-rail-group')) setFlyout(null); };
+        const escape = (event) => { if (event.key === 'Escape') setFlyout(null); };
+        document.addEventListener('pointerdown', outside);
+        document.addEventListener('keydown', escape);
+        return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+    }, [flyout]);
+    const openFlyout = (group, button) => {
+        const rect = button.getBoundingClientRect();
+        setFlyout((current) => (current?.group === group ? null : { group, top: Math.max(8, Math.min(rect.top, window.innerHeight - 60)) }));
+    };
 
     const closeDrawer = useCallback((restoreFocus = true) => {
         setSideOpen(false);
@@ -538,12 +559,26 @@ export default function AppShell() {
                                 </NavLink>
                             ))}
                         </div>
-                        {Object.entries(groupedNav).map(([group, items]) => {
-                            const isOpen = railCollapsed || openGroup === group;
+                        {railCollapsed && Object.entries(groupedNav).map(([group, items]) => (
+                            <button
+                                key={group}
+                                type="button"
+                                className={`side-link side-rail-group ${group === activeGroup ? 'is-active' : ''} ${flyout?.group === group ? 'is-flyout' : ''}`}
+                                title={t(GROUP_LABELS[group], group)}
+                                aria-label={t(GROUP_LABELS[group], group)}
+                                aria-haspopup="menu"
+                                aria-expanded={flyout?.group === group}
+                                onClick={(event) => openFlyout(group, event.currentTarget)}
+                            >
+                                <i className={`side-link-icon ${GROUP_ICONS[group] || items[0]?.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
+                            </button>
+                        ))}
+                        {!railCollapsed && Object.entries(groupedNav).map(([group, items]) => {
+                            const isOpen = openGroup === group;
 
                             return (
                             <div className={`side-group ${isOpen ? 'is-open' : ''}`} key={group}>
-                                {!railCollapsed && (
+                                {(
                                     <button
                                         type="button"
                                         className="side-group__toggle"
@@ -560,11 +595,12 @@ export default function AppShell() {
                                         key={n.key}
                                         to={n.path}
                                         end={n.path === '/dashboard'}
-                                        className={({ isActive }) => `side-link ${isActive ? 'is-active' : ''}`}
+                                        className={() => `side-link ${n.key === activeKey ? 'is-active' : ''}`}
+                                        aria-current={n.key === activeKey ? 'page' : undefined}
                                         title={t(NAV_LABELS[n.key], n.label)}
                                     >
                                         <i className={`side-link-icon ${n.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
-                                        {!railCollapsed && <span className="side-link-label">{t(NAV_LABELS[n.key], n.label)}</span>}
+                                        <span className="side-link-label">{t(NAV_LABELS[n.key], n.label)}</span>
                                     </NavLink>
                                   ))}
                                 </div>
@@ -583,10 +619,29 @@ export default function AppShell() {
                     </nav>
                 )}
                 {!isDrawer && (
-                    <button className="side-collapse" onClick={() => setCollapsed((c) => !c)}
-                        aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}>
-                        {collapsed ? '»' : `« ${t('shell.collapse')}`}
+                    <button type="button" className="side-collapse" onClick={() => setCollapsed((c) => !c)}
+                        aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
+                        title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}>
+                        <i className={`fa-solid ${collapsed ? 'fa-angles-right' : 'fa-angles-left'} side-collapse__icon`} aria-hidden="true" />
+                        {!collapsed && <span>{t('shell.collapse')}</span>}
                     </button>
+                )}
+                {railCollapsed && flyout && groupedNav[flyout.group] && (
+                    <div className="side-flyout" role="menu" aria-label={t(GROUP_LABELS[flyout.group], flyout.group)} style={{ top: flyout.top }}>
+                        <div className="side-flyout__title">{t(GROUP_LABELS[flyout.group], flyout.group)}</div>
+                        {groupedNav[flyout.group].map((n) => (
+                            <NavLink
+                                key={n.key}
+                                to={n.path}
+                                role="menuitem"
+                                className={() => `side-link ${n.key === activeKey ? 'is-active' : ''}`}
+                                aria-current={n.key === activeKey ? 'page' : undefined}
+                            >
+                                <i className={`side-link-icon ${n.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
+                                <span className="side-link-label">{t(NAV_LABELS[n.key], n.label)}</span>
+                            </NavLink>
+                        ))}
+                    </div>
                 )}
             </aside>
 
