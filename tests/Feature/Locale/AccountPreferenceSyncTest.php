@@ -146,4 +146,16 @@ class AccountPreferenceSyncTest extends TestCase
         $this->getJson('/preferences/sync')->assertStatus(401);
         Http::assertNothingSent();
     }
+
+    public function test_an_open_page_language_header_does_not_overwrite_the_session_language(): void
+    {
+        $this->fakeCentral(['locale' => 'ar']);
+
+        $this->actingAs($this->user())->withSession(['solastock_locale' => 'ar', 'account_display_preferences_checked_at' => time()])
+            ->withHeaders(['X-Locale' => 'en'])->getJson('/preferences/sync')->assertOk();
+        $this->assertSame('ar', session('solastock_locale'));
+
+        $this->withHeaders(['X-Locale' => 'en'])->get('/preferences/sync?locale=en');
+        $this->assertSame('en', session('solastock_locale'));
+    }
 }
