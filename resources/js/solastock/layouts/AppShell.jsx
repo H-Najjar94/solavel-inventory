@@ -207,7 +207,7 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
                     ))}
                     <a className="ss-app-tile ss-app-tile--docs" href={`${docsOrigin}/docs/solavel-stock/index`} target="_blank" rel="noopener" onClick={onClose}
                         title={`${t('shell.documentation')} ${t('shell.opensNewTab')}`}>
-                        <img src={`${basePath()}/imgs/apps/solavel.svg`} alt="" />
+                        <img src={`${basePath()}/imgs/apps/docs.svg`} alt="" />
                         <span>{t('shell.documentation')}</span>
                     </a>
                 </div>
