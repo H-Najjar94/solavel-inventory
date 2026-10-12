@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -110,17 +111,17 @@ export function TenantProvider({ children }) {
     };
 
     const ar = document.documentElement.lang.startsWith('ar');
-    if (!accessDenied && !resolved && !isError) return <div role="status" style={{padding: 40}}>{ar ? 'جارٍ التحقق من الوصول…' : 'Checking application access…'}</div>;
-    if (!opened.current && (accessDenied || isError || !ready || !status.can_access)) return <main dir={ar ? 'rtl' : 'ltr'} style={{padding: 40}}>
-        <h1>{ar ? 'الوصول إلى SolaStock' : 'SolaStock access'}</h1>
-        <p>{accessDenied || error?.message || status.state_message || (ar ? 'تعذر فتح التطبيق لهذا الحساب والمؤسسة.' : 'This application cannot be opened for this account and organization.')}</p>
-        <a href="/portal">{ar ? 'العودة إلى البوابة' : 'Back to portal'}</a>
-        {(isError || accessDenied) && <button onClick={() => {setAccessDenied(null); refetch();}}>{ar ? 'إعادة المحاولة' : 'Retry'}</button>}
+    if (!accessDenied && !resolved && !isError) return <div role="status" style={{padding: 40}}>{sourceText("Checking application access…", "جارٍ التحقق من الوصول…")}</div>;
+    if (!opened.current && (accessDenied || isError || !ready || !status.can_access)) return <main dir={['ar','ur'].includes(document.documentElement.lang) ? 'rtl' : 'ltr'} style={{padding: 40}}>
+        <h1>{sourceText("SolaStock access", "الوصول إلى SolaStock")}</h1>
+        <p>{accessDenied || error?.message || status.state_message || (sourceText("This application cannot be opened for this account and organization.", "تعذر فتح التطبيق لهذا الحساب والمؤسسة."))}</p>
+        <a href="/portal">{sourceText("Back to portal", "العودة إلى البوابة")}</a>
+        {(isError || accessDenied) && <button onClick={() => {setAccessDenied(null); refetch();}}>{sourceText("Retry", "إعادة المحاولة")}</button>}
     </main>;
     return <TenantContext.Provider value={value}>
         {accessPaused && <section role="status" aria-live="polite" style={{padding: '12px 20px'}}>
-            <p>{ar ? 'تعذر تأكيد الوصول حالياً. تبقى الصفحة والمدخلات غير المحفوظة مفتوحة. أعد التحقق لاستئناف العمل.' : 'Access could not be confirmed. Your page and unsaved entries remain open. Check again to resume working.'}</p>
-            <button type="button" onClick={async () => { const result = await refetch(); if (result.data?.can_access && ['real', 'demo'].includes(result.data?.data_state)) setAccessDenied(null); }}>{ar ? 'إعادة التحقق' : 'Check again'}</button>
+            <p>{sourceText("Access could not be confirmed. Your page and unsaved entries remain open. Check again to resume working.", "تعذر تأكيد الوصول حالياً. تبقى الصفحة والمدخلات غير المحفوظة مفتوحة. أعد التحقق لاستئناف العمل.")}</p>
+            <button type="button" onClick={async () => { const result = await refetch(); if (result.data?.can_access && ['real', 'demo'].includes(result.data?.data_state)) setAccessDenied(null); }}>{sourceText("Check again", "إعادة التحقق")}</button>
         </section>}
         <fieldset key="workspace" disabled={accessPaused} style={{display: 'contents', border: 0, margin: 0, padding: 0, minWidth: 0}}>{children}</fieldset>
     </TenantContext.Provider>;

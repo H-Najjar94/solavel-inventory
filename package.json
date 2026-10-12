@@ -10,7 +10,8 @@
         "dev": "vite",
         "test:localization": "node scripts/check-i18n-dictionaries.mjs && bash scripts/check-localization-coverage.sh",
         "test:wizard-state": "node --test tests/js/wizardDraftSync.test.mjs tests/js/connectionReview.test.mjs",
-        "test:browser": "playwright test"
+        "test:browser": "playwright test",
+        "test:locales": "node scripts/check-i18n-dictionaries.mjs && node scripts/check-all-locales.mjs && php scripts/check-backend-locales.php && php -d zend.assertions=1 -d assert.exception=1 scripts/check-public-error-localization.php && php scripts/check-localized-shell.php"
     },
     "devDependencies": {
         "@playwright/test": "^1.61.1",

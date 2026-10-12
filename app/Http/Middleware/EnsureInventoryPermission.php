@@ -26,11 +26,11 @@ class EnsureInventoryPermission
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
-                    'error' => ['code' => 'permission_denied', 'message' => "Missing permission: {$permission}"],
+                    'error' => ['code' => 'permission_denied', 'message' => __('inventory.validation.extra_missing_permission', ['permission' => $permission])],
                 ], 403);
             }
 
-            abort(403, "Missing permission: {$permission}");
+            abort(403, __('inventory.validation.extra_missing_permission', ['permission' => $permission]));
         }
 
         // DARK-LAUNCH: the commercial (paid-plan) layer only denies when feature

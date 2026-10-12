@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import { accountSelectionDirty } from '../services/connectionReview.js';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useId, useRef, useState } from 'react';
@@ -68,16 +69,16 @@ function AccountPicker({ accounts, selected, onSelect, disabled, label, locale }
     return <><button ref={button} type="button" className="wizard-account-select" disabled={disabled}
         aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? id : undefined}
         onClick={() => { setQuery(''); setOpen(value => !value); }}>
-        <span>{selected ? title(selected) : arabic ? 'اختر حساباً' : 'Select account'}</span><span aria-hidden="true">⌄</span>
-    </button>{open && createPortal(<div ref={panel} className="wizard-account-popover" dir={arabic ? 'rtl' : 'ltr'} style={position} onKeyDown={event => {
+        <span>{selected ? title(selected) : sourceText("Select account", "اختر حساباً")}</span><span aria-hidden="true">⌄</span>
+    </button>{open && createPortal(<div ref={panel} className="wizard-account-popover" dir={['ar','ur'].includes(locale) ? 'rtl' : 'ltr'} style={position} onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
         if (event.key === 'Tab') close();
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActive(value => Math.max(0, Math.min(filtered.length - 1, value + (event.key === 'ArrowDown' ? 1 : -1)))); }
         if (event.key === 'Enter' && filtered[active]) { event.preventDefault(); onSelect(filtered[active]); close(); }
     }}>
-        <input ref={search} role="combobox" aria-label={arabic ? 'البحث برمز الحساب أو اسمه' : 'Search account code or name'} aria-expanded="true" aria-controls={id} aria-activedescendant={filtered[active] ? `${id}-${active}` : undefined} autoComplete="off" value={query} onChange={event => setQuery(event.target.value)} placeholder={arabic ? 'ابحث بالرمز أو الاسم' : 'Search code or name'} />
+        <input ref={search} role="combobox" aria-label={sourceText("Search account code or name", "البحث برمز الحساب أو اسمه")} aria-expanded="true" aria-controls={id} aria-activedescendant={filtered[active] ? `${id}-${active}` : undefined} autoComplete="off" value={query} onChange={event => setQuery(event.target.value)} placeholder={sourceText("Search code or name", "ابحث بالرمز أو الاسم")} />
         <div id={id} role="listbox" aria-label={label}>{filtered.map((account, index) => <button type="button" role="option" tabIndex={-1} id={`${id}-${index}`} key={account.id} aria-selected={String(account.id) === String(selected?.id)} className={active === index ? 'is-highlighted' : ''} onPointerMove={() => setActive(index)} onClick={() => { onSelect(account); close(); }}><span><bdi>{account.code}</bdi> · {recordText(account.name, locale)}<small>{account.type}</small></span><span aria-hidden="true">{String(account.id) === String(selected?.id) ? '✓' : ''}</span></button>)}</div>
-        {!filtered.length && <p role="status">{arabic ? 'لا توجد حسابات مطابقة' : 'No matching accounts'}</p>}
+        {!filtered.length && <p role="status">{sourceText("No matching accounts", "لا توجد حسابات مطابقة")}</p>}
     </div>, document.body)}</>;
 }
 export default function AccountingMappingTable({ rows, decisions, choose, canEdit, saving, onDirtyChange }) {
@@ -88,24 +89,24 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
     useEffect(() => { onDirtyChange?.(dirtyCount); }, [dirtyCount, onDirtyChange]);
     const [failed, setFailed] = useState(null);
     const [pending, setPending] = useState(null);
-    return <div className="wizard-account-table"><p className="wizard-account-note">{ar ? 'الاقتراحات ليست اختيارات محفوظة. راجع الحساب واحفظه؛ تبقى الموافقة المحاسبية النهائية خطوة منفصلة.' : 'Proposals are not saved selections. Review and save each account; final accounting approval remains a separate step.'}</p>
+    return <div className="wizard-account-table"><p className="wizard-account-note">{sourceText("Proposals are not saved selections. Review and save each account; final accounting approval remains a separate step.", "الاقتراحات ليست اختيارات محفوظة. راجع الحساب واحفظه؛ تبقى الموافقة المحاسبية النهائية خطوة منفصلة.")}</p>
         {rows.map(row => {
             const detail = row.safe_details || {}, role = detail.role || detail.accounting_role;
             const copy = roles[role];
-            const label = copy?.[ar ? 1 : 0] || role;
+            const label = sourceText(copy?.[0],copy?.[1]) || role;
             const saved = savedAccount(row, decisions);
             const proposed = proposals[row.fingerprint] || saved || detail.recommended_account;
             const choices = detail.available_finance_accounts || [];
             const invalid = detail.current_mapping_invalid || (decisions.has(row.fingerprint) && !saved);
-            const state = accountSelectionDirty(proposals[row.fingerprint], saved) ? (ar ? 'تغيير غير محفوظ' : 'Unsaved change') : !saved && detail.account_proposal ? (detail.account_proposal.kind === 'code_conflict_requires_review' ? (ar ? 'تعارض في رمز الحساب — يلزم المراجعة' : 'Account code conflict — review required') : (ar ? 'حساب افتراضي مفقود — راجع الاقتراح' : 'Missing default — review proposal')) : detail.required === false && !saved ? (ar ? 'اختياري — غير مطلوب للعمليات الحالية' : 'Optional — not required for current operations') : saved ? (ar ? 'اختيار محفوظ' : 'Saved selection') : invalid ? (ar ? 'غير صالح — يلزم المراجعة' : 'Invalid — review required') : !choices.length ? (ar ? 'حساب مطلوب غير متاح' : 'Missing account') : proposed ? (ar ? 'اقتراح للمراجعة' : 'Proposed for review') : (ar ? 'خيارات متعددة — اختر حساباً' : 'Ambiguous — select an account');
+            const state = accountSelectionDirty(proposals[row.fingerprint], saved) ? (sourceText("Unsaved change", "تغيير غير محفوظ")) : !saved && detail.account_proposal ? (detail.account_proposal.kind === 'code_conflict_requires_review' ? (sourceText("Account code conflict — review required", "تعارض في رمز الحساب — يلزم المراجعة")) : (sourceText("Missing default — review proposal", "حساب افتراضي مفقود — راجع الاقتراح"))) : detail.required === false && !saved ? (sourceText("Optional — not required for current operations", "اختياري — غير مطلوب للعمليات الحالية")) : saved ? (sourceText("Saved selection", "اختيار محفوظ")) : invalid ? (sourceText("Invalid — review required", "غير صالح — يلزم المراجعة")) : !choices.length ? (sourceText("Missing account", "حساب مطلوب غير متاح")) : proposed ? (sourceText("Proposed for review", "اقتراح للمراجعة")) : (sourceText("Ambiguous — select an account", "خيارات متعددة — اختر حساباً"));
             return <section className="wizard-account-row" key={row.fingerprint} aria-label={label}>
-                <div><strong>{label}</strong><small>{detail.required === false ? (ar ? 'اختياري للعمليات الحالية' : 'Optional for current operations') : (ar ? 'مطلوب للعمليات المفعلة' : 'Required for enabled operations')}</small><small>{copy?.[ar ? 3 : 2]}</small>
-{detail.current_mapping && <small>{ar ? 'الربط الحالي: ' : 'Current mapping: '}<bdi>{detail.current_mapping.code}</bdi> · {recordText(detail.current_mapping.name, locale)}</small>}</div>
+                <div><strong>{label}</strong><small>{detail.required === false ? (sourceText("Optional for current operations", "اختياري للعمليات الحالية")) : (sourceText("Required for enabled operations", "مطلوب للعمليات المفعلة"))}</small><small>{sourceText(copy?.[2],copy?.[3])}</small>
+{detail.current_mapping && <small>{sourceText("Current mapping: ", "الربط الحالي: ")}<bdi>{detail.current_mapping.code}</bdi> · {recordText(detail.current_mapping.name, locale)}</small>}</div>
                 <div><AccountPicker accounts={choices} selected={proposed} disabled={!canEdit || saving || !choices.length} label={label} locale={locale} onSelect={account => { setProposals(value => ({ ...value, [row.fingerprint]: account })); setFailed(null); }} />
-                    {!saved && detail.recommendation_source === 'verified_finance_default' && <small>{ar ? 'مقترح من إعدادات الحسابات الافتراضية الموثقة في SolaCount.' : 'Proposed from the verified SolaCount default-account mapping.'}</small>}
-                    {detail.account_proposal && <small role="note"><strong>{ar ? 'اقتراح حساب جديد — لم يتم إنشاؤه أو اعتماده' : 'New account proposal — not created or approved'}</strong><br /><bdi>{detail.account_proposal.code}</bdi> · {recordText(detail.account_proposal.name, locale)} · {detail.account_proposal.type}{detail.account_proposal.kind === 'code_conflict_requires_review' && <span>{ar ? ' — الرمز مستخدم؛ يلزم المراجعة' : ' — code already used; review required'}</span>}</small>}
-                    {detail.finance_chart_ready === false && <small>{ar ? 'أكمل إعداد دليل الحسابات في SolaCount أولاً.' : 'Complete the SolaCount chart of accounts setup first.'}</small>}
-                    {!choices.length && <small>{ar ? 'اطلب من مسؤول الحسابات مراجعة دليل الحسابات في SolaCount. لن يتم إنشاء حساب تلقائياً.' : 'An accounting administrator must review the SolaCount chart of accounts. No account will be created automatically.'}</small>}
+                    {!saved && detail.recommendation_source === 'verified_finance_default' && <small>{sourceText("Proposed from the verified SolaCount default-account mapping.", "مقترح من إعدادات الحسابات الافتراضية الموثقة في SolaCount.")}</small>}
+                    {detail.account_proposal && <small role="note"><strong>{sourceText("New account proposal — not created or approved", "اقتراح حساب جديد — لم يتم إنشاؤه أو اعتماده")}</strong><br /><bdi>{detail.account_proposal.code}</bdi> · {recordText(detail.account_proposal.name, locale)} · {detail.account_proposal.type}{detail.account_proposal.kind === 'code_conflict_requires_review' && <span>{sourceText(" — code already used; review required", " — الرمز مستخدم؛ يلزم المراجعة")}</span>}</small>}
+                    {detail.finance_chart_ready === false && <small>{sourceText("Complete the SolaCount chart of accounts setup first.", "أكمل إعداد دليل الحسابات في SolaCount أولاً.")}</small>}
+                    {!choices.length && <small>{sourceText("An accounting administrator must review the SolaCount chart of accounts. No account will be created automatically.", "اطلب من مسؤول الحسابات مراجعة دليل الحسابات في SolaCount. لن يتم إنشاء حساب تلقائياً.")}</small>}
                 </div><div><span className={`wizard-account-state ${saved ? 'is-saved' : 'is-pending'}`} role="status">{state}</span>
                     {canEdit && proposed && String(proposed.id) !== String(saved?.id) && <button type="button" className="btn btn--primary" disabled={saving} onClick={async () => {
                         setPending(row.fingerprint);
@@ -113,7 +114,7 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
                             const result = await choose(row, 'select_account_role', { selected_record_id: String(proposed.id) });
                             setFailed(result ? null : row.fingerprint);
                         } finally { setPending(null); }
-                    }}>{pending === row.fingerprint ? (ar ? 'جارٍ الحفظ…' : 'Saving…') : (ar ? 'حفظ الاختيار' : 'Save selection')}</button>}
+                    }}>{pending === row.fingerprint ? (sourceText("Saving…", "جارٍ الحفظ…")) : (sourceText("Save selection", "حفظ الاختيار"))}</button>}
                     {failed === row.fingerprint && <small role="alert">{feedbackText('unknown')}</small>}
                 </div>
             </section>;

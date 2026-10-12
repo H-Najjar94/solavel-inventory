@@ -1,12 +1,13 @@
+import { localizedPair, sourceText } from '../i18n/locales.js';
 // Recognize only the existing purchasing publisher format; names and references
 // remain untouched. Unknown notification text is never split by script detection.
 const titles = new Map([
- ['Purchase partially received — تم استلام جزء من الشراء', ['Purchase partially received', 'تم استلام جزء من الشراء']],
- ['Purchase fully received — تم استلام الشراء بالكامل', ['Purchase fully received', 'تم استلام الشراء بالكامل']],
- ['Receiving request cancelled — تم إلغاء طلب الاستلام', ['Receiving request cancelled', 'تم إلغاء طلب الاستلام']],
- ['Purchase awaiting warehouse review — شراء بانتظار مراجعة المستودع', ['Purchase awaiting warehouse review', 'شراء بانتظار مراجعة المستودع']],
- ['Purchase ready for receiving — الشراء جاهز للاستلام', ['Purchase ready for receiving', 'الشراء جاهز للاستلام']],
- ['Warehouse setup needed — يلزم إعداد المستودع', ['Warehouse setup needed', 'يلزم إعداد المستودع']],
+ ['Purchase partially received — تم استلام جزء من الشراء', localizedPair("Purchase partially received","تم استلام جزء من الشراء")],
+ ['Purchase fully received — تم استلام الشراء بالكامل', localizedPair("Purchase fully received","تم استلام الشراء بالكامل")],
+ ['Receiving request cancelled — تم إلغاء طلب الاستلام', localizedPair("Receiving request cancelled","تم إلغاء طلب الاستلام")],
+ ['Purchase awaiting warehouse review — شراء بانتظار مراجعة المستودع', localizedPair("Purchase awaiting warehouse review","شراء بانتظار مراجعة المستودع")],
+ ['Purchase ready for receiving — الشراء جاهز للاستلام', localizedPair("Purchase ready for receiving","الشراء جاهز للاستلام")],
+ ['Warehouse setup needed — يلزم إعداد المستودع', localizedPair("Warehouse setup needed","يلزم إعداد المستودع")],
 ]);
 const bodies = [
  id => [`Review received and remaining quantities in RR-${id}.`, `راجع الكميات المستلمة والمتبقية في طلب الاستلام RR-${id}.`],
@@ -17,8 +18,8 @@ const bodies = [
 ];
 export function localizePurchasingNotification(item, locale) {
  const lang = locale === 'ar' ? 'ar' : 'en';
- const structured = item.localized?.[lang] ?? item.translations?.[lang];
- const title = typeof structured?.title === 'string' ? structured.title : (titles.get(item.title)?.[lang === 'ar' ? 1 : 0] ?? item.title);
+ const structured = item.localized?.[locale] ?? item.translations?.[locale];
+ const title = typeof structured?.title === 'string' ? structured.title : (titles.get(item.title)?.[lang === 'ar' ? 1 : 0] ?? sourceText(item.localized?.en?.title ?? item.title, item.localized?.ar?.title, locale));
  if (typeof structured?.body === 'string') return {title, body: structured.body};
  const original = item.body;
  if (typeof original !== 'string') return {title, body: original};
@@ -27,7 +28,7 @@ export function localizePurchasingNotification(item, locale) {
  const id = lines[0].match(/ · RR-([1-9]\d*)$/)?.[1];
  if (!id) return {title, body: original};
  for (const pair of bodies.map(make => make(id))) {
-  if (lines[1] === pair[0] && lines[2] === pair[1]) return {title, body: lines[0] + '\n' + pair[lang === 'ar' ? 1 : 0]};
+  if (lines[1] === pair[0] && lines[2] === pair[1]) return {title, body: lines[0] + '\n' + sourceText(pair[0].replace(`RR-${id}`, 'RR-:ref'), pair[1].replace(`RR-${id}`, 'RR-:ref'), locale).replace(':ref', id)};
  }
  return {title, body: original};
 }

@@ -1,3 +1,4 @@
+import { translatedCatalogs } from './locales.js';
 export const en = {
     'counts.breadcrumb': 'Stock Counts',
     'counts.title': 'Stock Counts',
@@ -261,13 +262,14 @@ export const ar = {
 };
 
 export function translateCounts(locale, key, fallback, params = {}) {
-    const dictionary = locale === 'ar' ? ar : en;
+    const dictionary = translatedCatalogs[locale] ?? (locale === 'ar' ? ar : en);
     const value = dictionary[key] ?? fallback ?? en[key] ?? key;
     return String(value).replace(/:([A-Za-z0-9_]+)/g, (_, name) => params[name] ?? `:${name}`);
 }
 
 export function translateCountPlural(locale, key, count, params = {}) {
-    const language = locale === 'ar' ? 'ar' : 'en';
+    const language = locale;
     const category = new Intl.PluralRules(language).select(Number(count));
-    return translateCounts(locale, `${key}.${category}`, undefined, { ...params, count });
+    const suffix = (translatedCatalogs[locale] ?? (locale === 'ar' ? ar : en))[`${key}.${category}`] ? category : (Number(count) === 1 ? 'one' : 'other');
+    return translateCounts(locale, `${key}.${suffix}`, undefined, { ...params, count });
 }

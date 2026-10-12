@@ -1,25 +1,26 @@
 <!DOCTYPE html>
 @php
-    $allowedLocales = ['en', 'ar'];
+    $allowedLocales = ['en', 'ar', 'fr', 'ru', 'ur', 'de', 'es', 'zh', 'pt', 'tr', 'it'];
     $locale = session('solastock_locale', app()->getLocale());
     if (! in_array($locale, $allowedLocales, true)) {
         $locale = 'en';
     }
     app()->setLocale($locale);
-    $dir = $locale === 'ar' ? 'rtl' : 'ltr';
+    $dir = in_array($locale, ['ar', 'ur'], true) ? 'rtl' : 'ltr';
+    $selectedTranslations = in_array($locale, ['en','ar'], true) ? null : json_decode(file_get_contents(resource_path('js/solastock/i18n/locales/'.$locale.'.json')), true, 512, JSON_THROW_ON_ERROR);
 @endphp
 <html lang="{{ $locale }}" dir="{{ $dir }}">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
-    <title>SolaStock — Inventory Command</title>
+    <title>SolaStock — {{ __('inventory.app_title') }}</title>
 
     <link rel="icon" href="{{ asset('imgs/favicon-solastock.svg') }}" type="image/svg+xml">
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
     {{-- Font Awesome (sidebar/nav icons, matching the SolaCount app) --}}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
@@ -32,6 +33,7 @@
             try { localStorage.setItem("solastock_theme", t); } catch (_) {}
             document.documentElement.setAttribute("data-theme", t);
             window.SOLASTOCK_LOCALE = @json(['locale' => $locale, 'dir' => $dir]);
+            window.SOLASTOCK_TRANSLATIONS = @json($selectedTranslations);
             window.SOLASTOCK_FEATURES = @json(['cashHandoff' => (bool) config('integration_safety.financial_origin_cash_handoff_enabled', false)]);
             window.SOLASTOCK_BASE_PATH = @json(app()->environment('staging') ? '' : '/inventory');
         })();

@@ -1,3 +1,4 @@
+import { normalizeLocale } from '../i18n/locales.js';
 import {statusRoute} from './statusRoute';
 import { feedback } from '../../shared/feedback/store';
 import { text as feedbackText } from '../../shared/feedback/messages';
@@ -10,7 +11,7 @@ function bodyFingerprint(body) {
     let hash=2166136261;for(let i=0;i<raw.length;i++)hash=Math.imul(hash^raw.charCodeAt(i),16777619);return (hash>>>0).toString(36);
 }
 function csrfToken() { return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? ''; }
-function locale() { return window.SOLASTOCK_LOCALE?.locale === 'ar' ? 'ar' : 'en'; }
+function locale() { return normalizeLocale(window.SOLASTOCK_LOCALE?.locale); }
 
 // Presentation-only request boundary. Existing envelopes, permissions, headers and payloads remain intact.
 function transport(url, options) {

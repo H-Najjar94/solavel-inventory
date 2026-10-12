@@ -99,7 +99,7 @@ class ReportExportService
         $columnLabels = $report['column_labels'] ?? [];
         $summaryLabels = $report['summary_labels'] ?? [];
         $locale = app()->getLocale();
-        $direction = $locale === 'ar' ? 'rtl' : 'ltr';
+        $direction = in_array($locale, ['ar', 'ur'], true) ? 'rtl' : 'ltr';
 
         return new StreamedResponse(function () use ($report, $columns, $columnLabels, $summaryLabels, $locale, $direction) {
             echo '<!doctype html><html lang="'.e($locale).'" dir="'.e($direction).'"><head><meta charset="utf-8"><title>'.e($report['title']).'</title>';

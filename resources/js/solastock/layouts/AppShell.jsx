@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import { useCloseDrawerOnResize } from '../hooks/useCloseDrawerOnResize.js';
 import PurchasingNotificationBell from '../components/PurchasingNotificationBell.jsx';
 import {FeedbackNavigation} from '../components/FeedbackNavigation';
@@ -91,7 +92,7 @@ function signOut() {
     form.submit();
 }
 
-const LANGUAGES = [{ code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }];
+const LANGUAGES = [{ code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }, {code:'fr',label:'Français'}, {code:'ru',label:'Русский'}, {code:'ur',label:'اردو'}, {code:'de',label:'Deutsch'}, {code:'es',label:'Español'}, {code:'zh',label:'中文'}, {code:'pt',label:'Português'}, {code:'tr',label:'Türkçe'}, {code:'it',label:'Italiano'}];
 
 // Reload in the chosen language. With "Save as my default language" ON the
 // server also stores it as the Solavel account default (remember=1).
@@ -266,7 +267,7 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
                             <span>{app.name}</span>
                         </a>
                     ))}
-                    <a className="ss-app-tile ss-app-tile--docs" href={`${docsOrigin}/docs/solavel-stock/index`} target="_blank" rel="noopener" onClick={onClose}
+                    <a className="ss-app-tile ss-app-tile--docs" href={`${docsOrigin}/docs/solavel-stock/index?lang=${encodeURIComponent(locale)}`} target="_blank" rel="noopener" onClick={onClose}
                         title={`${t('shell.documentation')} ${t('shell.opensNewTab')}`}>
                         <img src={`${basePath()}/imgs/apps/docs.svg`} alt="" />
                         <span>{t('shell.documentation')}</span>
@@ -809,7 +810,7 @@ function TenantContent({ tenant }) {
     return (
         <>
             {tenant.dataState === 'sample' && <SamplePreviewBanner tenant={tenant} />}
-            {meta.warehouse_scope_empty && <div className="alert alert-info" role="status">{document.documentElement.lang.startsWith('ar') ? 'لم يتم تعيين مستودعات لك بعد. اطلب من مسؤول المؤسسة تعيين المستودعات من صفحة صلاحيات العضو.' : 'No warehouses assigned yet. Ask your organization administrator to assign warehouses from your member permissions page.'}</div>}
+            {meta.warehouse_scope_empty && <div className="alert alert-info" role="status">{sourceText("No warehouses assigned yet. Ask your organization administrator to assign warehouses from your member permissions page.", "لم يتم تعيين مستودعات لك بعد. اطلب من مسؤول المؤسسة تعيين المستودعات من صفحة صلاحيات العضو.")}</div>}
             <Outlet />
         </>
     );

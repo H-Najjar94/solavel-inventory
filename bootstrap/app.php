@@ -87,6 +87,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // in the handoff have no started session and are silently lost.
         $middleware->web(append: [
             SetInventoryLocale::class,
+            \App\Http\Middleware\LocalizeInventoryErrors::class,
             AuthenticateFromInventoryHandoff::class,
             BounceToParentForSso::class,
         ]);
@@ -119,6 +120,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->respond(fn ($response) => \App\Support\PublicUiErrors::localize($response));
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );

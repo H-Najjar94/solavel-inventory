@@ -11,12 +11,12 @@ import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCar
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import { MoneyInput, SupplierPicker } from '../components/pickers.jsx';
-import { t } from '../i18n/index.js';
+import { t, getLocale } from '../i18n/index.js';
 
 // ── helpers ──
 const num = (v) => Number(v ?? 0);
-const money = (v) => num(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (v) => num(v).toLocaleString(undefined, { maximumFractionDigits: 4 });
+const money = (v) => num(v).toLocaleString(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const qty = (v) => num(v).toLocaleString(getLocale(), { maximumFractionDigits: 4 });
 const sourceText = (obj) => obj?.source_display || obj?.source_label || t('itemDetail.sourceUnavailable');
 const sourceLink = (obj) => obj?.source_route || null;
 const layerValue = (remainingQty, unitCost) => money(num(remainingQty) * num(unitCost));

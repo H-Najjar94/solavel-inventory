@@ -1,3 +1,4 @@
+import { translatedCatalogs } from './locales.js';
 export const traceabilityPagesEn = {
     'traceabilityPages.common.traceability': 'Traceability',
     'traceabilityPages.common.lots': 'Lots / Batches',
@@ -235,7 +236,7 @@ export const traceabilityPagesAr = {
 };
 
 export function traceabilityPageText(locale, key, params = {}, fallback) {
-    const dictionary = locale === 'ar' ? traceabilityPagesAr : traceabilityPagesEn;
+    const dictionary = translatedCatalogs[locale] ?? (locale === 'ar' ? traceabilityPagesAr : traceabilityPagesEn);
     const value = dictionary[key] ?? traceabilityPagesEn[key] ?? fallback ?? key;
     return String(value).replace(/:([A-Za-z0-9_]+)/g, (_, name) => params[name] ?? `:${name}`);
 }

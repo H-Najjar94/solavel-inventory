@@ -38,7 +38,7 @@ class OtherAppsMenu
             return null;
         }
 
-        return $central.'/'.ltrim($path, '/').'?'.http_build_query(['lang' => app()->getLocale() === 'ar' ? 'ar' : 'en']);
+        return $central.'/'.ltrim($path, '/').'?'.http_build_query(['lang' => app()->getLocale()]);
     }
 
     /**

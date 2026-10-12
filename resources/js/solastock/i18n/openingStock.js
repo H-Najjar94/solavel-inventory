@@ -1,3 +1,4 @@
+import { translatedCatalogs } from './locales.js';
 export const en = {
     'openingStock.title': 'Opening stock',
     'openingStock.sampleData': 'Sample data',
@@ -143,7 +144,7 @@ export const ar = {
 };
 
 export function openingStockT(locale, key, params = {}) {
-    const dictionary = locale === 'ar' ? ar : en;
+    const dictionary = translatedCatalogs[locale] ?? (locale === 'ar' ? ar : en);
     const value = dictionary[key] ?? en[key] ?? key;
     return String(value).replace(/:([A-Za-z0-9_]+)/g, (_, name) => params[name] ?? `:${name}`);
 }

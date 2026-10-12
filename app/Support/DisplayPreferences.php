@@ -11,7 +11,7 @@ final class DisplayPreferences
     {
         $values = is_array($values) ? $values : [];
         $preferences = [];
-        if (in_array($values['locale'] ?? null, ['en', 'ar'], true)) $preferences['locale'] = $values['locale'];
+        if (in_array($values['locale'] ?? null, ['en', 'ar', 'fr', 'ru', 'ur', 'de', 'es', 'zh', 'pt', 'tr', 'it'], true)) $preferences['locale'] = $values['locale'];
         if (in_array($values['theme'] ?? null, ['light', 'dark'], true)) $preferences['theme'] = $values['theme'];
         $request->session()->put('solavel_display_preferences', $preferences);
         $request->session()->put('display_preferences_user_id', $userId);

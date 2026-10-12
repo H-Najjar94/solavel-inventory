@@ -36,20 +36,20 @@ final class SupplierReturnService
                 'status' => 'draft', 'created_by' => auth()->id()]);
             foreach ($lines as $input) {
                 $source = $receipt->lines->firstWhere('id', (int) $input['goods_receipt_line_id']);
-                if (! $source) throw ValidationException::withMessages(['lines' => 'Select an accepted line from this receipt.']);
+                if (! $source) throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_bb147429bd25')]);
                 $physicalRows = StockLedger::query()->where('organization_id', $org)->where('source_type', GoodsReceipt::class)
                     ->where('source_id', $receipt->id)->where('source_line_id', $source->id)->where('direction', 'in')->get();
                 $physical = ! empty($input['source_stock_ledger_id'])
                     ? $physicalRows->firstWhere('id', (int) $input['source_stock_ledger_id'])
                     : ($physicalRows->count() === 1 ? $physicalRows->first() : null);
-                if (! $physical) throw ValidationException::withMessages(['lines' => 'Choose the received batch or serial number for this return.']);
+                if (! $physical) throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_c8da35cf68a3')]);
                 $warehouse = (int) ($source->warehouse_id ?: $receipt->warehouse_id);
                 $this->warehouses->assertAllowed($warehouse);
                 $factor = (string) $source->unit_conversion_factor;
-                if (! is_numeric($factor) || ! Decimal::gt($factor, '0')) throw ValidationException::withMessages(['lines' => 'The original receipt conversion requires review before returning these goods.']);
+                if (! is_numeric($factor) || ! Decimal::gt($factor, '0')) throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_1a01c2714c67')]);
                 $quantity = Decimal::qty(Decimal::mul((string) $input['entered_qty'], $factor));
                 if (! Decimal::gt($quantity, '0') || Decimal::gt($quantity, (string) $source->accepted_qty) || Decimal::gt($quantity, (string) $physical->quantity)) {
-                    throw ValidationException::withMessages(['lines' => 'Return quantities cannot exceed the accepted receipt quantities.']);
+                    throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_0d11ca9a9be0')]);
                 }
                 $return->lines()->create(['organization_id' => $org, 'goods_receipt_line_id' => $source->id, 'source_stock_ledger_id' => $physical->id, 'item_id' => $source->item_id,
                     'warehouse_id' => $warehouse, 'entered_unit_id' => $source->entered_unit_id, 'entered_qty' => $input['entered_qty'],
@@ -72,7 +72,7 @@ final class SupplierReturnService
             $receipt = GoodsReceipt::query()->where('organization_id', $org)->whereKey($return->goods_receipt_id)->lockForUpdate()->with('lines')->firstOrFail();
             $return = SupplierReturn::query()->where('organization_id', $org)->whereKey($return->id)->lockForUpdate()->with('lines')->firstOrFail();
             if ($return->status === 'posted' && ! $return->reversed_at) return $return;
-            if ($return->status !== 'draft') throw ValidationException::withMessages(['status' => 'Only a draft supplier return can be posted.']);
+            if ($return->status !== 'draft') throw ValidationException::withMessages(['status' => __('inventory.validation.extra_2f46aec756f5')]);
             $this->assertReceipt($receipt);
             $connected = IntegrationOrganizationMapping::query()->where('solastock_organization_id', $org)
                 ->where('tenant_database_identity', DB::connection('tenant')->getDatabaseName())->exists();
@@ -96,12 +96,12 @@ final class SupplierReturnService
                     ->where('documents.status', 'posted')->whereNull('documents.reversed_at')->sum('lines.quantity');
                 if (Decimal::gt(Decimal::add((string) $alreadyReturned, $currentByReceiptLine[$source->id]), (string) $source->accepted_qty)
                     || Decimal::gt(Decimal::add((string) $returnedPhysical, (string) $line->quantity), (string) $physical->quantity)) {
-                    throw ValidationException::withMessages(['lines' => 'This receipt quantity has already been returned. Review the earlier supplier returns.']);
+                    throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_496a2aab6e0c')]);
                 }
                 $available = StockBalance::query()->where('organization_id', $org)->where('item_id', $line->item_id)->where('warehouse_id', $line->warehouse_id)
                     ->when($line->variant_id, fn ($q) => $q->where('variant_id', $line->variant_id), fn ($q) => $q->whereNull('variant_id'))->first();
                 if (! $available || Decimal::gt((string) $line->quantity, (string) $available->on_hand_qty)) {
-                    throw ValidationException::withMessages(['lines' => 'There is not enough available stock in the receipt warehouse to return these goods.']);
+                    throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_a1053f0b7b26')]);
                 }
                 $movements[] = new StockMovement(direction: 'out', itemId: (int) $line->item_id, warehouseId: (int) $line->warehouse_id,
                     quantity: (string) $line->quantity, sourceType: SupplierReturn::class, sourceId: $return->id, sourceLineId: $line->id,
@@ -116,7 +116,7 @@ final class SupplierReturnService
                 $balance = StockBalance::query()->where('organization_id', $org)->where('item_id', $line->item_id)->where('warehouse_id', $line->warehouse_id)
                     ->when($line->variant_id, fn ($q) => $q->where('variant_id', $line->variant_id), fn ($q) => $q->whereNull('variant_id'))->first();
                 if (! $balance || Decimal::lt((string) $balance->on_hand_qty, '0')) {
-                    throw ValidationException::withMessages(['lines' => 'There is not enough available stock to complete this supplier return.']);
+                    throw ValidationException::withMessages(['lines' => __('inventory.validation.extra_d077e01ea0a5')]);
                 }
             }
             foreach ($return->lines as $line) {
@@ -178,7 +178,7 @@ final class SupplierReturnService
     private function assertReceipt(GoodsReceipt $receipt): void
     {
         if ($receipt->status !== 'posted' || $receipt->reversed_at || ! $receipt->supplier_id) {
-            throw ValidationException::withMessages(['goods_receipt_id' => 'Choose a confirmed, unreversed purchase receipt with a supplier.']);
+            throw ValidationException::withMessages(['goods_receipt_id' => __('inventory.validation.extra_37d58b9de9e3')]);
         }
     }
 }

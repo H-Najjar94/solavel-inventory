@@ -74,7 +74,7 @@ export default function RecallDetailPage() {
     function displayDate(value) {
         if (!value) return '';
         const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale === 'ar' ? 'ar-JO' : 'en', {
+        return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale, {
             dateStyle: 'medium', timeStyle: 'short',
         }).format(date);
     }

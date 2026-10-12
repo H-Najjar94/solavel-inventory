@@ -54,7 +54,7 @@ final class MigrationCatalogController extends ApiController
                 && preg_match('/^[A-Z]{3}$/D',$base) && in_array($base,(array)($authority['enabled_currency_codes']??[]),true)
                 && $base===(string)$mapping->base_currency_code && $base===$data['purchase_currency_code'];
             if (!$valid) {
-                throw ValidationException::withMessages(['purchase_currency_code'=>'The purchase default must use the verified Finance base currency. Review the organization connection currency settings.']);
+                throw ValidationException::withMessages(['purchase_currency_code'=>__('inventory.validation.extra_ad9a030a73fb')]);
             }
             $native['purchase_price']=$data['purchase_price'];
         }

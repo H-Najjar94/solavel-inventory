@@ -2358,3 +2358,6 @@ html[dir="rtl"] .side-collapse__icon { transform:scaleX(-1); }
 .sidebar--collapsed .side-primary { padding-bottom:10px; margin-bottom:8px; }
 .sidebar--collapsed .side-primary .side-link { margin-top:0; }
 .sidebar--collapsed .side-nav { align-items:stretch; }
+
+/* Arabic and Urdu share right-to-left layout and a script-capable UI font. */
+html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Tahoma, sans-serif; }

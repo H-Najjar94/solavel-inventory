@@ -28,7 +28,7 @@ function formatMovementDate(value) {
     if (!value) return '—';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat(getLocale() === 'ar' ? 'ar-JO' : 'en-US', {
+    return new Intl.DateTimeFormat(getLocale(), {
         dateStyle: 'medium',
         timeStyle: 'short',
     }).format(date);

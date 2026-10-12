@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {t as documentText} from '../i18n/index';
@@ -195,7 +196,7 @@ export default function GoodsReceiptFormPage() {
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
             {errors.currency && <div className="banner banner--warn" role="alert">{errors.currency}</div>}
-            {!header.supplier_id&&<div className="banner banner--warn">{ar?'لم تحدد مورداً. يمكن تسجيل الاستلام، لكن لا يمكن إنشاء فاتورة مورد تلقائياً في SolaCount دون مورد فعلي مربوط. اختر المورد الصحيح قبل تأكيد الاستلام.':'No supplier selected. You can record receiving, but SolaCount cannot automatically create a supplier bill without a real mapped supplier. Select the correct supplier before confirming receipt.'}</div>}
+            {!header.supplier_id&&<div className="banner banner--warn">{sourceText("No supplier selected. You can record receiving, but SolaCount cannot automatically create a supplier bill without a real mapped supplier. Select the correct supplier before confirming receipt.", "لم تحدد مورداً. يمكن تسجيل الاستلام، لكن لا يمكن إنشاء فاتورة مورد تلقائياً في SolaCount دون مورد فعلي مربوط. اختر المورد الصحيح قبل تأكيد الاستلام.")}</div>}
             <div className="form-grid">
                 <Field label={t('receiving.common.supplier','Supplier')} error={errors.supplier_id}><SupplierPicker activeOnly value={header.supplier_id} onChange={v=>setHeader({...header,supplier_id:v})} disabled={fromPo||fromRequest}/></Field>
                 <Field label={t('receiving.grn.fields.number', 'GRN number')} required error={errors.grn_number}><input className="input" value={header.grn_number} onChange={(e) => setHeader({ ...header, grn_number: e.target.value })} /></Field>

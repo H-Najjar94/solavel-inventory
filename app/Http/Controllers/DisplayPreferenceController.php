@@ -27,7 +27,7 @@ class DisplayPreferenceController extends Controller
         abort_if($centralUserId <= 0, 401);
         $theme = $request->input('theme');
         if (! in_array($theme, CentralDisplayPreferences::THEMES, true)) {
-            return response()->json(['success' => false, 'message' => 'Invalid theme.'], 422);
+            return response()->json(['success' => false, 'message' => __('inventory.validation.extra_invalid_theme')], 422);
         }
 
         $saved = $preferences->save($centralUserId, ['preferred_theme' => $theme]);

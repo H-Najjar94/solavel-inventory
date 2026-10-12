@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import { actionableDecisionError } from '../services/decisionErrors.js';
 import { prepareConnectionReview, validCutoffValue } from '../services/connectionReview.js';
 import {ConfirmedActionButton} from './ConfirmedActionButton';
@@ -185,9 +186,9 @@ export default function GuidedConnectionAssistant({
         const target = Math.min(6, Math.max(1, next));
         setTask(steps.includes(target) ? target : target < task ? [...steps].reverse().find(step => step < target) || 1 : steps.find(step => step > target) || 6);
     };
-    const formatNumber = (value, digits = 2) => Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: digits });
+    const formatNumber = (value, digits = 2) => Number(value || 0).toLocaleString(locale, { maximumFractionDigits: digits });
     const baseCurrency = accounting.base_currency || guided.currency_summary?.base_currency || '';
-    const formatMoney = (value) => `${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${baseCurrency === 'JOD' ? tr('integration.assistant.jod') : baseCurrency}`;
+    const formatMoney = (value) => `${Number(value || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${baseCurrency === 'JOD' ? tr('integration.assistant.jod') : baseCurrency}`;
     const taskLabels = [
         tr('integration.focus.steps.prepare'), tr('integration.focus.steps.business'),
         tr('integration.focus.steps.count'), tr('integration.focus.steps.accountant'),
@@ -831,7 +832,7 @@ export default function GuidedConnectionAssistant({
                 <strong><bdi>{resolvedAccounting}/{requiredAccountingRows.length}</bdi> {tr("integration.review.valid_saved_selections")}</strong></div>
             {!accountingGate.allowed && <div className="focus-accountant-handoff" role="status">{tr('integration.focus.accountingAccessBlockedTitle')}<p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p></div>}
             <AccountingMappingTable onDirtyChange={setRequiredAccountChanges} rows={requiredAccountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
-            {accountingRows.length > requiredAccountingRows.length && <details><summary>{locale === 'ar' ? 'حسابات اختيارية — غير مطلوبة للعمليات الحالية' : 'Optional accounts — not required for current operations'}</summary><AccountingMappingTable onDirtyChange={setOptionalAccountChanges} rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></details>}
+            {accountingRows.length > requiredAccountingRows.length && <details><summary>{sourceText("Optional accounts — not required for current operations", "حسابات اختيارية — غير مطلوبة للعمليات الحالية")}</summary><AccountingMappingTable onDirtyChange={setOptionalAccountChanges} rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></details>}
             {taxReviewRows.map(compactDecisionRow)}
             {footer(tr('integration.focus.continue'), () => go(5), { reason: tr(requiredAccountChanges + optionalAccountChanges ? 'integration.focus.saveAccountChanges' : 'integration.records.accountsFirst'), disabled: requiredAccountChanges + optionalAccountChanges > 0 || accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
         </section>;
@@ -866,7 +867,7 @@ export default function GuidedConnectionAssistant({
             <div className={`focus-outcome ${ready ? 'is-ready' : 'is-warning'}`}><h2 ref={headingRef} tabIndex="-1">{tr(ready ? 'integration.focus.ready' : view.review_ready ? 'integration.focus.finalReviewTitle' : 'integration.focus.notReady')}</h2><p>{tr(ready ? 'integration.focus.readyText' : view.review_ready ? 'integration.focus.finalReviewText' : 'integration.focus.notReadyText')}</p></div>
             <ul className="focus-connect-effects" aria-label={tr('integration.records.effectsTitle')}>
                 <li>{tr('integration.records.effectMappings', { count: Object.values(sections).reduce((sum, c) => sum + (c?.total || 0), 0) })}</li>
-                <li>{tr('integration.records.effectSync', { date: view.cutoff_at ? new Date(view.cutoff_at).toLocaleString(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }) : tr('integration.review.not_reviewed') })}</li>
+                <li>{tr('integration.records.effectSync', { date: view.cutoff_at ? new Date(view.cutoff_at).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) : tr('integration.review.not_reviewed') })}</li>
                 <li>{tr('integration.records.effectNoBalances')}</li>
             </ul>
             <p>{tr("integration.review.solastock_owns_quantities_and_inventory_operations_solacount")}</p>

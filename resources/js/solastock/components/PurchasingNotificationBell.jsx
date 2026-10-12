@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import React, {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {notificationPanelPosition} from './notificationPanelPosition.mjs';
@@ -5,7 +6,7 @@ import {getLocale} from '../i18n/index.js';
 import {localizePurchasingNotification} from './purchasingNotificationLocale.mjs';
 export default function PurchasingNotificationBell({organizationId}) {
  const [open,setOpen]=useState(false),[items,setItems]=useState([]),[unread,setUnread]=useState(0),[error,setError]=useState(false),[busy,setBusy]=useState(false); const box=useRef(null),panel=useRef(null),scope=useRef(organizationId);const [panelPosition,setPanelPosition]=useState(null);scope.current=organizationId;const [dataOrg,setDataOrg]=useState(null);const ar=getLocale()==='ar';const base=(window.SOLASTOCK_BASE_PATH||'/inventory')+'/api/v1/purchasing/notifications';
- const labels={title:ar?'إشعارات المستودع':'Warehouse notifications',empty:ar?'لا توجد إشعارات':'No notifications',error:ar?'تعذر تحميل الإشعارات. حاول مجدداً.':'Notifications could not be loaded. Try again.',retry:ar?'إعادة المحاولة':'Retry'};
+ const labels={title:sourceText("Warehouse notifications", "إشعارات المستودع"),empty:sourceText("No notifications", "لا توجد إشعارات"),error:sourceText("Notifications could not be loaded. Try again.", "تعذر تحميل الإشعارات. حاول مجدداً."),retry:sourceText("Retry", "إعادة المحاولة")};
  async function load(){const requestedOrg=organizationId;if(!requestedOrg)return;setBusy(true);try{const res=await fetch(base,{credentials:'same-origin',headers:{Accept:'application/json'}});const data=await res.json();if(!res.ok||data.success!==true)throw Error();if(scope.current!==requestedOrg)return;setDataOrg(requestedOrg);setItems(data.data.items||[]);setUnread(data.data.unread||0);setError(false);}catch{if(scope.current===requestedOrg)setError(true);}finally{if(scope.current===requestedOrg)setBusy(false)}}
  useEffect(()=>{setOpen(false);setItems([]);setUnread(0);if(!organizationId)return;void load();const timer=setInterval(()=>{if(!document.hidden)void load()},60000);return()=>clearInterval(timer)},[organizationId]);
  useEffect(()=>{if(!open)return;function close(e){if(e.key==='Escape'){setOpen(false);box.current?.querySelector('button')?.focus()}else if(e.type==='pointerdown'&&!box.current?.contains(e.target)&&!panel.current?.contains(e.target))setOpen(false)}document.addEventListener('keydown',close);document.addEventListener('pointerdown',close);return()=>{document.removeEventListener('keydown',close);document.removeEventListener('pointerdown',close)}},[open]);

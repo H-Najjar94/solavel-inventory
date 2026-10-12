@@ -1,3 +1,4 @@
+import { sourceText } from '../../solastock/i18n/locales.js';
 export const messages = {
     "en": {
         "updateAvailable": "An application update is available. Your page and unsaved entries remain open. Refresh when you are ready.",
@@ -496,7 +497,7 @@ export const messages = {
 } as const;
 export type MessageKey = keyof typeof messages.en;
 export function text(key: MessageKey, locale = document.documentElement.lang) {
-    return messages[locale.startsWith('ar') ? 'ar' : 'en'][key];
+    return sourceText(messages.en[key], messages.ar[key], locale);
 }
 
 const serverKeys: Record<string, keyof typeof messages.en> = {'profile-updated':'profileUpdated','profile-updated-email-pending':'profilePending','password-updated':'passwordUpdated','client-updated':'clientUpdated','email-change-confirmed':'emailConfirmed','email-change-conflict':'emailConflict'};

@@ -28,7 +28,7 @@ class CustomRoleController extends ApiController
             'builtin_roles' => collect(array_merge(config('inventory_permissions.roles', []), array_map(fn ($r) => $r['permissions'], config('inventory_operational_roles', []))))
                 ->map(fn ($perms, $key) => [
                     'key' => $key,
-                    'label' => config('inventory_operational_roles.'.$key.'.'.(app()->getLocale() === 'ar' ? 'ar' : 'label'), $key),
+                    'label' => __('inventory.roles.'.$key),
                     'permissions' => $perms === '*' ? $permissions->all() : array_values((array) $perms),
                 ])->values(),
         ]);

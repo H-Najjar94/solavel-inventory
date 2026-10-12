@@ -84,7 +84,7 @@ class SalesReturnService
                     if ($existing) return $existing->fresh('lines');
                     $hasPrior = SalesReturn::query()->where('shipment_id', $sourceShipment->id)
                         ->whereNull('deleted_at')->whereNotIn('status', ['cancelled'])->lockForUpdate()->exists();
-                    if ($hasPrior) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The shipment already has a partial or disposition return; only its remaining quantities can be returned.']);
+                    if ($hasPrior) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_bddcb11727e5')]);
                 }
                 $attributes['is_source_reversal'] = $fullReversal;
                 $attributes['source_reversal_shipment_id'] = $fullReversal ? $sourceShipment->id : null;
@@ -386,7 +386,7 @@ class SalesReturnService
     private function syncAllocatedSourceLines(SalesReturn $return, Shipment $shipment, array $lines, int $orgId, bool $frozenSource = false): void
     {
         if ($lines === []) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Select at least one shipped line and return quantity.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_11c53e1902a9')]);
         }
         $seenSerials = [];
         $requestedBySourceLine = [];
@@ -394,10 +394,10 @@ class SalesReturnService
             $sourceLineId = (int) ($input['source_line_id'] ?? 0);
             $sourceLine = ShipmentLine::query()->where('shipment_id', $shipment->id)->lockForUpdate()->find($sourceLineId);
             if (! $sourceLine || (int) $sourceLine->organization_id !== $orgId) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'A selected line does not belong to the source shipment.']);
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_20cbd438d4c5')]);
             }
             if ((int) $sourceLine->item_id !== (int) $input['item_id']) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The returned item does not match its shipment line.']);
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_523eab36d68c')]);
             }
             $input = $frozenSource ? $this->conversions->normalizeLineFromSnapshot($input, 'returned_qty', $sourceLine) : $this->conversions->normalizeLine($input, 'returned_qty');
             $baseQty = Decimal::qty((string) $input['returned_qty']);
@@ -408,21 +408,21 @@ class SalesReturnService
                 ->whereNotIn('returns.status', ['cancelled'])->sum('lines.returned_qty');
             $requestedBySourceLine[$sourceLine->id] = Decimal::add($requestedBySourceLine[$sourceLine->id] ?? '0', $baseQty);
             if (Decimal::gt(Decimal::add($already, $requestedBySourceLine[$sourceLine->id]), (string) $sourceLine->quantity)) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Cumulative returns cannot exceed the shipped quantity.']);
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_433191a43ed7')]);
             }
             if ((int) ($input['entered_unit_id'] ?? 0) !== (int) ($sourceLine->entered_unit_id ?? 0)
                 || Decimal::cmp((string) ($input['unit_conversion_factor'] ?? 1), (string) ($sourceLine->unit_conversion_factor ?? 1), 8) !== 0) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Return quantities must use the shipment line frozen unit conversion.']);
+                throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_3512acd4158e')]);
             }
             $ledgerQuery = StockLedger::query()->where('organization_id', $orgId)->where('source_type', Shipment::class)
                 ->where('source_id', $shipment->id)->where('source_line_id', $sourceLine->id)->where('direction', 'out')->lockForUpdate();
             $ledger = ! empty($input['source_stock_ledger_id'])
                 ? (clone $ledgerQuery)->whereKey((int) $input['source_stock_ledger_id'])->first()
                 : $ledgerQuery->first();
-            if (! $ledger) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'The shipment cost provenance is unavailable.']);
+            if (! $ledger) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_47a1085bbaed')]);
             if ($sourceLine->serial_id) {
                 if (Decimal::cmp($baseQty, '1') !== 0 || isset($seenSerials[$sourceLine->serial_id])) {
-                    throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'A serial-tracked shipment line can be returned exactly once.']);
+                    throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_fa93258523f6')]);
                 }
                 $seenSerials[$sourceLine->serial_id] = true;
             }
@@ -434,7 +434,7 @@ class SalesReturnService
                 'resellable' => $disposition === 'restock', 'quarantine' => $disposition === 'quarantine',
                 'damaged' => in_array($disposition, ['damage', 'no_restock'], true), 'retired' => in_array($disposition, ['retire', 'no_restock'], true), default => false,
             };
-            if (! $validDisposition) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => 'Return condition and disposition are inconsistent.']);
+            if (! $validDisposition) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_0230da161a33')]);
             $return->lines()->create([
                 'organization_id' => $orgId, 'source_shipment_line_id' => $sourceLine->id,
                 'source_stock_ledger_id' => $ledger->id, 'item_id' => $sourceLine->item_id,

@@ -27,7 +27,7 @@ class SetInventoryLocale
             ? strtolower(substr(trim($requested), 0, 2))
             : null;
 
-        if (! in_array($locale, ['en', 'ar'], true)) {
+        if (! in_array($locale, ['en', 'ar', 'fr', 'ru', 'ur', 'de', 'es', 'zh', 'pt', 'tr', 'it'], true)) {
             $locale = 'en';
         }
 

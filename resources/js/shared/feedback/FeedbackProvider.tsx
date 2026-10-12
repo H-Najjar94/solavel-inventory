@@ -52,8 +52,8 @@ function FeedbackDialog({ item, locale }: { item: Dialog; locale: string }) {
     </>;
     // If a workflow already owns a modal, present feedback within that modal.
     // No second modal and no feedback waiting invisibly behind the first one.
-    if (container) return createPortal(<section ref={inline} className={`sf-inline sf-${item.tone || 'warning'}`} dir={locale.startsWith('ar') ? 'rtl' : 'ltr'} role="alert" aria-labelledby={`sf-title-${item.id}`} onKeyDown={trap}>{content}</section>, container);
-    return <dialog onKeyDown={trap} ref={ref} className={`sf-dialog sf-${item.tone || 'warning'}`} dir={locale.startsWith('ar') ? 'rtl' : 'ltr'} role="alertdialog" aria-labelledby={`sf-title-${item.id}`} aria-describedby={`sf-body-${item.id}`} onCancel={event => { event.preventDefault(); finish(item.id, false); }}>{content}</dialog>;
+    if (container) return createPortal(<section ref={inline} className={`sf-inline sf-${item.tone || 'warning'}`} dir={['ar', 'ur'].includes(locale.split('-')[0]) ? 'rtl' : 'ltr'} role="alert" aria-labelledby={`sf-title-${item.id}`} onKeyDown={trap}>{content}</section>, container);
+    return <dialog onKeyDown={trap} ref={ref} className={`sf-dialog sf-${item.tone || 'warning'}`} dir={['ar', 'ur'].includes(locale.split('-')[0]) ? 'rtl' : 'ltr'} role="alertdialog" aria-labelledby={`sf-title-${item.id}`} aria-describedby={`sf-body-${item.id}`} onCancel={event => { event.preventDefault(); finish(item.id, false); }}>{content}</dialog>;
 }
 function Toast({ item, locale }: { item: Notice; locale: string }) {
     const remaining = useRef(6000), start = useRef(0), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -83,7 +83,7 @@ export function FeedbackProvider({ children, locale: selectedLocale }: { childre
     }, []);
     const locale = selectedLocale || documentLocale;
     const state = useSyncExternalStore(subscribe, snapshot, snapshot);
-    return <>{children}{createPortal(<div className="sf-root" dir={locale.startsWith('ar') ? 'rtl' : 'ltr'}>
+    return <>{children}{createPortal(<div className="sf-root" dir={['ar', 'ur'].includes(locale.split('-')[0]) ? 'rtl' : 'ltr'}>
         <div className="sf-notices" aria-live="polite" aria-relevant="additions text">{state.notices.map(item => <Toast key={item.id} item={item} locale={locale} />)}</div>
         {state.dialogs[0] && <FeedbackDialog key={state.dialogs[0].id} item={state.dialogs[0]} locale={locale} />}
         <span className="sf-sr" role="status">{state.pending.length ? text('pending', locale) : ''}</span>

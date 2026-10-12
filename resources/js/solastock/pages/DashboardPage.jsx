@@ -8,7 +8,7 @@ import { api } from '../services/api.js';
 import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
 import { useCan } from '../stores/meta.jsx';
 import { useToast } from '../stores/toast.jsx';
-import { t } from '../i18n/index.js';
+import { t, getLocale } from '../i18n/index.js';
 
 // Real, zeroed dashboard for a live tenant with no data yet. NEVER mock/sample —
 // the dashboard only ever shows this org's actual numbers.
@@ -21,13 +21,13 @@ const EMPTY_DASHBOARD = {
 };
 
 const n = (v) => Number(v || 0);
-const num = (v) => n(v).toLocaleString();
+const num = (v) => n(v).toLocaleString(getLocale());
 // Organization base currency from the API; never a hard-coded "$".
 const money = (v, currency) => {
     if (currency) {
-        try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(n(v)); } catch { /* unknown code */ }
+        try { return new Intl.NumberFormat(getLocale(), { style: 'currency', currency, maximumFractionDigits: 2 }).format(n(v)); } catch { /* unknown code */ }
     }
-    return `${n(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}${currency ? ` ${currency}` : ''}`;
+    return `${n(v).toLocaleString(getLocale(), { maximumFractionDigits: 2 })}${currency ? ` ${currency}` : ''}`;
 };
 
 const TONE = { good: '#2f7a4f', warn: '#c97f12', danger: '#d64545', default: 'var(--ink,#222)' };

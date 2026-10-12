@@ -1,3 +1,4 @@
+import { sourceText } from '../i18n/locales.js';
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -10,7 +11,7 @@ const copy = {
  ar: { title: 'مزامنة الأصناف', back: 'ربط SolaCount', description: 'تتم مزامنة الأصناف والبيانات المرجعية دون تغيير الكميات أو الأسعار المحلية.', empty: 'لا توجد سجلات للمراجعة', emptyHint: 'تظهر الأصناف والبيانات المرجعية الجديدة أو المعدلة هنا بعد حفظها.', type: 'النوع', record: 'السجل', status: 'الحالة', reason: 'الإجراء المطلوب', retry: 'إعادة المزامنة', busy: 'جارٍ الإرسال…', queued: 'تمت جدولة المزامنة', failed: 'تعذر تحميل حالة المزامنة', unit: 'وحدة', category: 'تصنيف', item: 'صنف', pending: 'قيد الانتظار', retrying: 'إعادة المحاولة', unknown_outcome: 'جارٍ التحقق من التسليم', delivering: 'جارٍ التسليم', delivered: 'تمت المزامنة', intervention_required: 'تحتاج إلى مراجعة', catalog_dependency_pending: 'بانتظار مزامنة الوحدة أو التصنيف المرتبط.', catalog_source_actor_required: 'يلزم أن يعيد محرر مخول مزامنة هذا السجل.', catalog_source_changed: 'تغير السجل المصدر. أعد المحاولة لمراجعة النسخة الحالية.', catalog_field_conflict: 'تختلف الوحدة أو إعدادات التتبع. راجع الربط قبل إعادة المحاولة.', catalog_shared_reference_change: 'تختلف البيانات المرجعية المشتركة في المالية. راجع الربط.', catalog_identity_conflict: 'راجع الربط الحالي؛ لم يتم إنشاء سجل مكرر.', catalog_source_not_authorized: 'لم يعد محرر السجل مخولاً. يمكن لمحرر مخول إعادة المحاولة.', fallback: 'التسليم معلق. أعد المحاولة عندما يكون الاتصال متاحاً.' },
 };
 export default function CatalogSyncPage() {
- const { locale } = useI18n(); const t = copy[locale === 'ar' ? 'ar' : 'en'];
+ const { locale } = useI18n(); const t = Object.fromEntries(Object.entries(copy.en).map(([key,value]) => [key, sourceText(value, copy.ar[key])]));
  const toast = useToast(); const qc = useQueryClient(); const [busy, setBusy] = useState(null);
  const query = useApiQuery(['catalog-sync'], api.catalogSync, { fallback: null });
  const rows = query.data?.rows ?? [];

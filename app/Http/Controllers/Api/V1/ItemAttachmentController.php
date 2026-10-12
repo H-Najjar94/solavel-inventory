@@ -64,7 +64,7 @@ class ItemAttachmentController extends ApiController
         $orgId = (int) $item->organization_id;
         $name = $request->input('name') ?: $file->getClientOriginalName();
         if (mb_strlen($name) > 191) {
-            throw ValidationException::withMessages(['name' => 'The attachment name must not exceed 191 characters.']);
+            throw ValidationException::withMessages(['name' => __('inventory.validation.extra_284952b77b4d')]);
         }
         $ext = strtolower($file->getClientOriginalExtension());
         $mime = $file->getMimeType();

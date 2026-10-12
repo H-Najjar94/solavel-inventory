@@ -33,10 +33,10 @@ final class FinanceBaseValuation
         // Selection of this basis requires a reviewed opening valuation/cutoff.
         // Deployment must never reinterpret an existing mixed-currency cost pool.
         if (($contract['inventory_valuation_basis'] ?? null) !== self::BASIS) {
-            throw ValidationException::withMessages(['valuation' => 'Reviewed Finance-base inventory valuation and cutoff are required before connected stock posting.']);
+            throw ValidationException::withMessages(['valuation' => __('inventory.validation.extra_cd752e2d8c0b')]);
         }
         if ((int) ($contract['money_scale'] ?? -1) !== 2) {
-            throw ValidationException::withMessages(['valuation' => 'The current Stock ledger supports base money scale 2. A qualified schema upgrade is required for another base scale.']);
+            throw ValidationException::withMessages(['valuation' => __('inventory.validation.extra_b7310f3b85d7')]);
         }
         return $contract;
     }

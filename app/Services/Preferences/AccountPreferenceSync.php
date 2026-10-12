@@ -18,7 +18,7 @@ use Illuminate\Http\Request;
 class AccountPreferenceSync
 {
     public const THROTTLE_SECONDS = 30;
-    public const LOCALES = ['en', 'ar'];
+    public const LOCALES = ['en', 'ar', 'fr', 'ru', 'ur', 'de', 'es', 'zh', 'pt', 'tr', 'it'];
 
     private const CHECKED_AT_KEY = 'account_display_preferences_checked_at';
     private const FINGERPRINT_KEY = 'account_display_preferences_fingerprint_v2';
