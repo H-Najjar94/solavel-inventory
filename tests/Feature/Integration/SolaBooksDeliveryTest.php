@@ -651,6 +651,14 @@ class SolaBooksDeliveryTest extends TestCase
         $this->assertSame('ready', $retriedCurrency->status);
         $this->assertSame('transaction_currency_disabled', $retriedCurrency->failure_code);
 
+        $entitlement = $this->enableDurableTransport($this->event());
+        $entitlement->update(['status'=>'failed','mapping_status'=>'complete','failure_category'=>'business_permanent','failure_code'=>'feature_disabled']);
+        $identity=$entitlement->idempotency_key;
+        $retriedEntitlement=$transport->queueReviewedRetry($entitlement->fresh(),42);
+        $this->assertSame('ready',$retriedEntitlement->status);
+        $this->assertSame($identity,$retriedEntitlement->idempotency_key);
+        $this->assertSame('feature_disabled',$retriedEntitlement->failure_code);
+
         $blocked = $this->enableDurableTransport($this->event());
         $blocked->update([
             'status' => 'failed',
