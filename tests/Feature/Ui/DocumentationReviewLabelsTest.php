@@ -21,7 +21,7 @@ class DocumentationReviewLabelsTest extends TestCase
     {
         $page = File::get(resource_path('js/solastock/pages/IntegrationEventsPage.jsx'));
         $this->assertSame(1, preg_match('/const EVENT_TYPES = \[(.*?)\];/s', $page, $match));
-        preg_match_all("/'([^']+)'/", $match[1], $options);
+        preg_match_all("/'([a-z0-9_.]*)'/", $match[1], $options);
 
         $labels = File::get(resource_path('js/solastock/i18n/settingsPages.js'));
         $arStart = strpos($labels, 'export const ar = {');
