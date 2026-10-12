@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => 'Référence d\'entrepôt inter-organisation rejetée.',
     'inbound_cost' => 'Les mouvements entrants nécessitent un coût unitaire.',
     'surplus_cost_required' => 'L’article :sku n’a pas d’historique de coûts pour valoriser ce gain de stock. Saisissez plutôt un coût unitaire pour un ajustement.',
-    'bin_not_found' => 'Le bac sélectionné est introuvable dans cette organisation.',
-    'bin_wrong_warehouse' => 'L\'emplacement sélectionné n\'appartient pas à l\'entrepôt de mouvements.',
-    'bin_inactive' => 'Le bac sélectionné est inactif.',
+    'bin_not_found' => 'L’emplacement sélectionné est introuvable dans cette organisation.',
+    'bin_wrong_warehouse' => 'L’emplacement sélectionné n’appartient pas à l’entrepôt du mouvement.',
+    'bin_inactive' => 'L’emplacement sélectionné est inactif.',
     'cross_item_reversal' => 'Référence d\'article inter-organisation rejetée lors de l\'annulation.',
     'serial_wrong_item' => 'Le numéro de série n\'appartient pas au poste de mouvement.',
     'reservation_create_failed' => 'La réservation n\'a pas pu être créée.',
@@ -198,8 +198,8 @@ return array (
     'bulk_update_empty' => 'Sélectionnez au moins un champ de mise à jour groupée.',
     'zone_code_unique' => 'Le code de zone doit être unique au sein de l\'entrepôt.',
     'zone_has_stock' => 'Impossible de désactiver une zone qui détient encore du stock.',
-    'bin_code_unique' => 'Le code bac doit être unique au sein de l’entrepôt.',
-    'bin_has_stock' => 'Impossible de désactiver un bac qui contient encore du stock.',
+    'bin_code_unique' => 'Le code d’emplacement doit être unique dans l’entrepôt.',
+    'bin_has_stock' => 'Impossible de désactiver un emplacement qui contient encore du stock.',
   ),
   'scanner' =>
   array (

@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => 'Organisationsübergreifende Lagerreferenz abgelehnt.',
     'inbound_cost' => 'Eingehende Bewegungen erfordern einen Stückpreis.',
     'surplus_cost_required' => 'Für den Artikel :sku gibt es keine Kostenhistorie zur Bewertung dieses Aktiengewinns. Geben Sie stattdessen einen Stückpreis für eine Anpassung ein.',
-    'bin_not_found' => 'Der ausgewählte Behälter wurde in dieser Organisation nicht gefunden.',
-    'bin_wrong_warehouse' => 'Der ausgewählte Lagerplatz gehört nicht zum Bewegungslager.',
-    'bin_inactive' => 'Der ausgewählte Behälter ist inaktiv.',
+    'bin_not_found' => 'Der ausgewählte Lagerplatz wurde in dieser Organisation nicht gefunden.',
+    'bin_wrong_warehouse' => 'Der ausgewählte Lagerplatz gehört nicht zum Lager dieser Bewegung.',
+    'bin_inactive' => 'Der ausgewählte Lagerplatz ist inaktiv.',
     'cross_item_reversal' => 'Organisationsübergreifender Artikelverweis wurde beim Stornieren abgelehnt.',
     'serial_wrong_item' => 'Seriennummer gehört nicht zur Bewegungsposition.',
     'reservation_create_failed' => 'Reservierung konnte nicht erstellt werden.',
@@ -199,7 +199,7 @@ return array (
     'zone_code_unique' => 'Der Zonencode muss innerhalb des Lagers eindeutig sein.',
     'zone_has_stock' => 'Eine Zone, in der sich noch Lagerbestände befinden, kann nicht deaktiviert werden.',
     'bin_code_unique' => 'Der Lagerplatzcode muss innerhalb des Lagers eindeutig sein.',
-    'bin_has_stock' => 'Ein Lagerplatz, der noch Lagerbestand enthält, kann nicht deaktiviert werden.',
+    'bin_has_stock' => 'Ein Lagerplatz mit vorhandenem Bestand kann nicht deaktiviert werden.',
   ),
   'scanner' =>
   array (

@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => 'Il riferimento incrociato organizzazione magazzino è stato rifiutato.',
     'inbound_cost' => 'I movimenti in entrata richiedono un costo unitario.',
     'surplus_cost_required' => 'L\'articolo :sku non ha una storia di costi per valutare questo guadagno di scorte. Inserisci un costo unitario in un\'aggiustamento invece.',
-    'bin_not_found' => 'Il contenitore selezionato non è stato trovato in questa organizzazione.',
-    'bin_wrong_warehouse' => 'Il contenitore selezionato non appartiene al magazzino del movimento.',
-    'bin_inactive' => 'Il contenitore selezionato è inattivo.',
+    'bin_not_found' => 'L’ubicazione selezionata non è stata trovata in questa organizzazione.',
+    'bin_wrong_warehouse' => 'L’ubicazione selezionata non appartiene al magazzino di questo movimento.',
+    'bin_inactive' => 'L’ubicazione selezionata è inattiva.',
     'cross_item_reversal' => 'Il riferimento incrociato organizzazione articolo è stato rifiutato durante l\'inversione.',
     'serial_wrong_item' => 'Il numero di serie non appartiene all\'articolo del movimento.',
     'reservation_create_failed' => 'La prenotazione non poteva essere creata.',
@@ -198,8 +198,8 @@ return array (
     'bulk_update_empty' => 'Seleziona almeno un campo per l\'aggiornamento in blocco.',
     'zone_code_unique' => 'Il codice zona deve essere unico all\'interno del magazzino.',
     'zone_has_stock' => 'Non è possibile disattivare una zona che contiene ancora scorte.',
-    'bin_code_unique' => 'Il codice bin deve essere unico all\'interno del magazzino.',
-    'bin_has_stock' => 'Non è possibile disattivare un bin che contiene ancora scorte.',
+    'bin_code_unique' => 'Il codice ubicazione deve essere univoco all’interno del magazzino.',
+    'bin_has_stock' => 'Non è possibile disattivare un’ubicazione che contiene ancora scorte.',
   ),
   'scanner' =>
   array (

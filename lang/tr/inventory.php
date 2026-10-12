@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => 'Çapraşık organizasyon ambarı referansı reddedildi.',
     'inbound_cost' => 'Gelen hareketler birim maliyeti gerektirir.',
     'surplus_cost_required' => ':sku maddesi bu stok kazancı için maliyet geçmişine sahip değil. Bunun yerine bir ayarlamada birim maliyeti girin.',
-    'bin_not_found' => 'Seçilen bu organizzasyonda bulunan bir kutucuk bulunamadı.',
-    'bin_wrong_warehouse' => 'Seçilen kutucuk, hareket ambara ait değil.',
-    'bin_inactive' => 'Seçilen kutucuk pasif.',
+    'bin_not_found' => 'Seçilen depo gözü bu kuruluşta bulunamadı.',
+    'bin_wrong_warehouse' => 'Seçilen depo gözü bu hareketin deposuna ait değil.',
+    'bin_inactive' => 'Seçilen depo gözü etkin değil.',
     'cross_item_reversal' => 'Çapraşık organizasyon maddesi referansı, tersine çevirme sırasında reddedildi.',
     'serial_wrong_item' => 'Seri, hareket maddesine ait değil.',
     'reservation_create_failed' => 'Rezervasyon oluşturulamadı.',
@@ -198,8 +198,8 @@ return array (
     'bulk_update_empty' => 'En az bir toplu güncelleme alanı seçin.',
     'zone_code_unique' => 'Zona kodu, ambarda benzersiz olmalıdır.',
     'zone_has_stock' => 'Stok hâlâ tuttuğu için bir zona pasifleştirilemez.',
-    'bin_code_unique' => 'Kutucuk kodu, ambarda benzersiz olmalıdır.',
-    'bin_has_stock' => 'Stok hâlâ tuttuğu için bir kutucuk pasifleştirilemez.',
+    'bin_code_unique' => 'Depo gözü kodu depo içinde benzersiz olmalıdır.',
+    'bin_has_stock' => 'Hâlâ stok içeren bir depo gözü devre dışı bırakılamaz.',
   ),
   'scanner' =>
   array (

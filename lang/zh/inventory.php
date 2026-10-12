@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => '跨组织仓库引用被拒绝。',
     'inbound_cost' => '入境移动需要单位成本。',
     'surplus_cost_required' => '项目 :sku 没有评估此库存收益的成本历史记录。输入调整的单位成本。',
-    'bin_not_found' => '在此组织中找不到选定的垃圾箱。',
-    'bin_wrong_warehouse' => '所选仓位不属于移动仓库。',
-    'bin_inactive' => '选定的垃圾箱处于非活动状态。',
+    'bin_not_found' => '在此组织中找不到所选库位。',
+    'bin_wrong_warehouse' => '所选库位不属于该库存移动对应的仓库。',
+    'bin_inactive' => '所选库位未启用。',
     'cross_item_reversal' => '冲销期间拒绝跨组织项目引用。',
     'serial_wrong_item' => '序列号不属于机芯项目。',
     'reservation_create_failed' => '无法创建预订。',
@@ -198,8 +198,8 @@ return array (
     'bulk_update_empty' => '至少选择一个批量更新字段。',
     'zone_code_unique' => '区域代码在仓库内必须是唯一的。',
     'zone_has_stock' => '无法停用仍持有库存的区域。',
-    'bin_code_unique' => 'Bin 代码在仓库内必须是唯一的。',
-    'bin_has_stock' => '无法停用仍保留库存的垃圾箱。',
+    'bin_code_unique' => '库位编码在仓库内必须唯一。',
+    'bin_has_stock' => '不能停用仍有库存的库位。',
   ),
   'scanner' =>
   array (

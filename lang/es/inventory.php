@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => 'Se rechazó la referencia de almacén entre organizaciones.',
     'inbound_cost' => 'Los movimientos entrantes requieren un costo unitario.',
     'surplus_cost_required' => 'El artículo :sku no tiene historial de costos para valorar esta ganancia de stock. En su lugar, ingrese un costo unitario en un ajuste.',
-    'bin_not_found' => 'La papelera seleccionada no se encontró en esta organización.',
-    'bin_wrong_warehouse' => 'La ubicación seleccionada no pertenece al almacén de movimientos.',
-    'bin_inactive' => 'El contenedor seleccionado está inactivo.',
+    'bin_not_found' => 'No se encontró la ubicación seleccionada en esta organización.',
+    'bin_wrong_warehouse' => 'La ubicación seleccionada no pertenece al almacén de este movimiento.',
+    'bin_inactive' => 'La ubicación seleccionada está inactiva.',
     'cross_item_reversal' => 'Referencia de artículo entre organizaciones rechazada durante la reversión.',
     'serial_wrong_item' => 'El número de serie no pertenece al artículo de movimiento.',
     'reservation_create_failed' => 'No se pudo crear la reserva.',
@@ -198,8 +198,8 @@ return array (
     'bulk_update_empty' => 'Seleccione al menos un campo de actualización masiva.',
     'zone_code_unique' => 'El código de zona debe ser único dentro del almacén.',
     'zone_has_stock' => 'No se puede desactivar una zona que aún contiene stock.',
-    'bin_code_unique' => 'El código de contenedor debe ser único dentro del almacén.',
-    'bin_has_stock' => 'No se puede desactivar un contenedor que aún contiene stock.',
+    'bin_code_unique' => 'El código de ubicación debe ser único dentro del almacén.',
+    'bin_has_stock' => 'No se puede desactivar una ubicación que todavía contiene existencias.',
   ),
   'scanner' =>
   array (

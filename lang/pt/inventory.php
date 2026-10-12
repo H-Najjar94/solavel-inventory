@@ -153,9 +153,9 @@ return array (
     'cross_warehouse' => 'Referência de armazém entre organizações rejeitada.',
     'inbound_cost' => 'Os movimentos de entrada exigem um custo unitário.',
     'surplus_cost_required' => 'O item :sku não possui histórico de custo para avaliar esse ganho de estoque. Insira um custo unitário em um ajuste.',
-    'bin_not_found' => 'O compartimento selecionado não foi encontrado nesta organização.',
-    'bin_wrong_warehouse' => 'A posição selecionada não pertence ao armazém de movimentação.',
-    'bin_inactive' => 'O compartimento selecionado está inativo.',
+    'bin_not_found' => 'O endereço de armazenagem selecionado não foi encontrado nesta organização.',
+    'bin_wrong_warehouse' => 'O endereço de armazenagem selecionado não pertence ao armazém desta movimentação.',
+    'bin_inactive' => 'O endereço de armazenagem selecionado está inativo.',
     'cross_item_reversal' => 'Referência de item entre organizações rejeitada durante o estorno.',
     'serial_wrong_item' => 'O número de série não pertence ao item de movimento.',
     'reservation_create_failed' => 'Não foi possível criar a reserva.',
@@ -198,8 +198,8 @@ return array (
     'bulk_update_empty' => 'Selecione pelo menos um campo de atualização em massa.',
     'zone_code_unique' => 'O código de zona deve ser exclusivo no armazém.',
     'zone_has_stock' => 'Não é possível desativar uma zona que ainda mantém estoque.',
-    'bin_code_unique' => 'O código do depósito deve ser exclusivo no armazém.',
-    'bin_has_stock' => 'Não é possível desativar uma caixa que ainda contém estoque.',
+    'bin_code_unique' => 'O código do endereço de armazenagem deve ser único no armazém.',
+    'bin_has_stock' => 'Não é possível desativar um endereço de armazenagem que ainda contém estoque.',
   ),
   'scanner' =>
   array (
