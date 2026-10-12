@@ -158,4 +158,31 @@ class AccountPreferenceSyncTest extends TestCase
         $this->withHeaders(['X-Locale' => 'en'])->get('/preferences/sync?locale=en');
         $this->assertSame('en', session('solastock_locale'));
     }
+
+    public function test_following_the_default_repairs_an_old_session_even_if_account_value_is_unchanged(): void
+    {
+        $this->fakeCentral(['locale' => 'ar', 'theme' => 'light']);
+        $this->actingAs($this->user())->getJson('/preferences/sync')->assertOk();
+        $this->getJson('/preferences/sync?locale=en')->assertOk();
+        $this->travel(31)->seconds();
+        $this->getJson('/preferences/sync?follow_locale=1')->assertOk()->assertJson(['locale' => 'ar', 'changed' => true]);
+        $this->assertSame('ar', session('solastock_locale'));
+    }
+
+    public function test_browser_language_pick_is_consumed_once_and_keeps_unrelated_query_parameters(): void
+    {
+        $this->fakeCentral(['locale' => 'ar']);
+        $this->actingAs($this->user())->get('/?locale=en&search=paper')
+            ->assertRedirect('/?search=paper');
+        $this->assertSame('en', session('solastock_locale'));
+    }
+
+    public function test_current_language_can_be_saved_as_the_account_default(): void
+    {
+        $this->fakeCentral(['locale' => 'en']);
+        $this->actingAs($this->user())->withSession(['solastock_locale' => 'ar'])
+            ->get('/?locale=ar&remember=1')->assertRedirect('/');
+        Http::assertSent(fn (ClientRequest $r) => $r->method() === 'POST'
+            && $r['preferred_locale'] === 'ar' && $r['central_user_id'] === 42);
+    }
 }

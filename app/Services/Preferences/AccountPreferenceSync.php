@@ -93,7 +93,9 @@ class AccountPreferenceSync
             $fingerprint = ['user' => $centralUserId, 'locale' => $account['locale'] ?? null, 'theme' => $account['theme'] ?? null];
             $seen = $session->get(self::FINGERPRINT_KEY);
             $seen = is_array($seen) && ($seen['user'] ?? null) === $centralUserId ? $seen : null;
-            $localeChanged = $seen === null || ($seen['locale'] ?? null) !== $fingerprint['locale'];
+            $accountLocale = $fingerprint['locale'] === null ? null : (in_array($fingerprint['locale'], self::LOCALES, true) ? $fingerprint['locale'] : 'en');
+            $localeChanged = $seen === null || ($seen['locale'] ?? null) !== $fingerprint['locale']
+                || ($request->boolean('follow_locale') && $accountLocale !== null && $result['locale'] !== $accountLocale);
             $themeChanged = $seen === null || ($seen['theme'] ?? null) !== $fingerprint['theme'];
             if (! $localeChanged && ! $themeChanged) {
                 return $result;

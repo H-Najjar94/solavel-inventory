@@ -39,16 +39,19 @@ class SetInventoryLocale
             $request->session()->put('solastock_locale', $locale);
         }
 
-        // Language picker with "Save as my default language" ON: also store the
-        // choice as the account default on Central (best effort), then drop the
-        // flag from the URL so a refresh does not save again.
+        // Save an explicit default even when it is already the displayed language.
         if ($request->isMethod('GET') && is_string($request->query('locale')) && $request->query('remember') === '1') {
             $centralUserId = CentralDisplayPreferences::centralUserId($request->user());
             if ($centralUserId > 0) {
                 app(CentralDisplayPreferences::class)->save($centralUserId, ['preferred_locale' => $locale]);
             }
-            $query = $request->except(['remember']);
+        }
 
+        // A picker choice is a one-time action. Leaving it in the URL lets a
+        // refresh overwrite a language subsequently received from the account.
+        if ($request->isMethod('GET') && is_string($request->query('locale')) && ! $request->expectsJson()) {
+            $query = $request->query->all();
+            unset($query['locale'], $query['remember']);
             return redirect($request->url().($query ? '?'.http_build_query($query) : ''));
         }
 

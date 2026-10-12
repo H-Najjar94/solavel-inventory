@@ -2,7 +2,7 @@
 // account through this app's own server (which calls Central). Best effort only:
 // failures never block the UI and are never shown to the user.
 
-const REMEMBER_KEY = 'solastock_remember_language';
+const REMEMBER_KEY = 'solavel_save_default_language';
 
 function basePath() {
     return window.SOLASTOCK_BASE_PATH ?? '/inventory';
@@ -29,7 +29,13 @@ export function saveThemePreference(theme) {
 
 /** "Save as my default language" switch state, remembered on this device. */
 export function getRememberLanguage() {
-    try { return localStorage.getItem(REMEMBER_KEY) === '1'; } catch (_) { return false; }
+    try {
+        if (localStorage.getItem(REMEMBER_KEY) === null) {
+            const enabled = ['hr.language.remember', 'solastock_remember_language'].some(key => localStorage.getItem(key) === '1');
+            localStorage.setItem(REMEMBER_KEY, enabled ? '1' : '0');
+        }
+        return localStorage.getItem(REMEMBER_KEY) === '1';
+    } catch (_) { return false; }
 }
 
 export function setRememberLanguage(on) {
@@ -67,7 +73,7 @@ export function startAccountPreferenceSync({ currentLocale, onTheme }) {
         if (stopped || inFlight || document.visibilityState === 'hidden') return;
         inFlight = true;
         try {
-            fetch(`${basePath()}/preferences/sync`, {
+            fetch(`${basePath()}/preferences/sync${getRememberLanguage() ? '?follow_locale=1' : ''}`, {
                 credentials: 'same-origin',
                 redirect: 'manual',
                 cache: 'no-store',
@@ -90,9 +96,12 @@ export function startAccountPreferenceSync({ currentLocale, onTheme }) {
 
     const timer = window.setInterval(check, SYNC_INTERVAL_MS);
     window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    check();
     return () => {
         stopped = true;
         window.clearInterval(timer);
         window.removeEventListener('focus', check);
+        document.removeEventListener('visibilitychange', check);
     };
 }

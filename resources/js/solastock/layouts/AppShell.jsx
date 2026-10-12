@@ -133,7 +133,7 @@ function LanguageMenu({ locale, onClose }) {
             {LANGUAGES.map((lang) => (
                 <button key={lang.code} type="button" role="menuitemradio" aria-checked={locale === lang.code}
                     className={`ss-menu__item${locale === lang.code ? ' is-current' : ''}`} lang={lang.code}
-                    onClick={() => { if (locale === lang.code) onClose(); else switchLanguage(lang.code, remember); }}>
+                    onClick={() => { if (locale === lang.code && !remember) onClose(); else switchLanguage(lang.code, remember); }}>
                     <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" />
                     <span className="ss-menu__text">{lang.label}</span>
                     {locale === lang.code && <i className="fa-solid fa-check ss-menu__trail ss-menu__check" aria-hidden="true" />}
@@ -284,7 +284,7 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
             {LANGUAGES.map((lang) => (
                 <button key={lang.code} type="button" role="menuitemradio" aria-checked={locale === lang.code} lang={lang.code}
                     className={`ss-menu__item ss-menu__item--phone${locale === lang.code ? ' is-current' : ''}`}
-                    onClick={() => { if (locale !== lang.code) switchLanguage(lang.code, rememberLanguage); }}>
+                    onClick={() => { if (locale !== lang.code || rememberLanguage) switchLanguage(lang.code, rememberLanguage); }}>
                     <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" /><span className="ss-menu__text">{lang.label}</span>
                     {locale === lang.code && <i className="fa-solid fa-check ss-menu__trail ss-menu__check" aria-hidden="true" />}
                 </button>

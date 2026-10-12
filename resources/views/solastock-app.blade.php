@@ -1,10 +1,6 @@
 <!DOCTYPE html>
 @php
-    $requestedLocale = request()->query('locale');
     $allowedLocales = ['en', 'ar'];
-    if (in_array($requestedLocale, $allowedLocales, true)) {
-        session(['solastock_locale' => $requestedLocale]);
-    }
     $locale = session('solastock_locale', app()->getLocale());
     if (! in_array($locale, $allowedLocales, true)) {
         $locale = 'en';
