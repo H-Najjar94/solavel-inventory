@@ -74,6 +74,18 @@ class AccountPreferenceSyncTest extends TestCase
         $this->getJson('/preferences/sync')->assertExactJson(['changed' => true, 'locale' => 'en', 'theme' => 'dark']);
     }
 
+    public function test_a_theme_change_elsewhere_keeps_a_session_only_language(): void
+    {
+        $this->fakeCentral(['locale' => 'ar', 'theme' => 'light']);
+        $this->actingAs($this->user())->getJson('/preferences/sync')->assertOk();
+        $this->getJson('/preferences/sync?locale=en')->assertOk();
+
+        $this->account = ['locale' => 'ar', 'theme' => 'dark'];
+        $this->travel(31)->seconds();
+        $this->getJson('/preferences/sync')->assertExactJson(['changed' => true, 'locale' => 'en', 'theme' => 'dark']);
+        $this->assertSame('en', session('solastock_locale'));
+    }
+
     public function test_unsupported_account_language_means_english(): void
     {
         $this->fakeCentral(['locale' => 'fr']);

@@ -88,29 +88,39 @@ class AccountPreferenceSync
                 return $result; // Central unavailable: keep everything as is.
             }
 
-            $fingerprint = $centralUserId.'|'.($account['locale'] ?? '').'|'.($account['theme'] ?? '');
-            if ($session->get(self::FINGERPRINT_KEY) === $fingerprint) {
+            // Compare each part with the account values this session last saw, so
+            // a theme change elsewhere does not undo a session-only language pick.
+            $fingerprint = ['user' => $centralUserId, 'locale' => $account['locale'] ?? null, 'theme' => $account['theme'] ?? null];
+            $seen = $session->get(self::FINGERPRINT_KEY);
+            $seen = is_array($seen) && ($seen['user'] ?? null) === $centralUserId ? $seen : null;
+            $localeChanged = $seen === null || ($seen['locale'] ?? null) !== $fingerprint['locale'];
+            $themeChanged = $seen === null || ($seen['theme'] ?? null) !== $fingerprint['theme'];
+            if (! $localeChanged && ! $themeChanged) {
                 return $result;
             }
 
             $values = [];
-            if (isset($account['locale'])) {
+            if ($localeChanged && $fingerprint['locale'] !== null) {
                 // Account languages this app does not offer fall back to English.
-                $values['locale'] = in_array($account['locale'], self::LOCALES, true) ? $account['locale'] : 'en';
+                $values['locale'] = in_array($fingerprint['locale'], self::LOCALES, true) ? $fingerprint['locale'] : 'en';
+            } elseif (is_string($result['locale'])) {
+                $values['locale'] = $result['locale'];
             }
-            if (isset($account['theme'])) {
-                $values['theme'] = $account['theme'];
+            if ($themeChanged && $fingerprint['theme'] !== null) {
+                $values['theme'] = $fingerprint['theme'];
+            } elseif (is_string($result['theme'])) {
+                $values['theme'] = $result['theme'];
             }
             DisplayPreferences::hydrate($request, $values, $centralUserId, self::LOCALE_KEY);
             $session->put(self::FINGERPRINT_KEY, $fingerprint);
             $session->put(self::PENDING_KEY, true);
 
             $locale = $session->get(self::LOCALE_KEY);
-            $theme = $values['theme'] ?? null;
+            $theme = $session->get('solavel_display_preferences.theme');
             $result = [
-                'changed' => $locale !== $result['locale'] || ($theme !== null && $theme !== $result['theme']),
+                'changed' => $locale !== $result['locale'] || $theme !== $result['theme'],
                 'locale' => $locale,
-                'theme' => $theme ?? $result['theme'],
+                'theme' => $theme,
             ];
         } catch (\Throwable $e) {
             report($e);
