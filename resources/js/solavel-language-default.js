@@ -12,7 +12,7 @@
         window.solavelAccountPreferences?.sync();
     }
     async function save(on, locale) {
-        revision++;
+        var saveRevision = ++revision;
         pending = true;
         try {
             var token = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -21,7 +21,7 @@
             var response = await fetch(saveUrl, {method: 'POST', credentials: 'same-origin', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token,'X-Requested-With':'XMLHttpRequest'}, body:JSON.stringify(body)});
             if (!response.ok) return false;
             return (await response.json()).saved === true;
-        } catch (_) {return false;} finally {pending = false;}
+        } catch (_) {return false;} finally {if (revision === saveRevision) pending = false;}
     }
     async function check() {
         if (pending || document.visibilityState === 'hidden') return;
@@ -44,6 +44,8 @@
     document.addEventListener('click', function (event) {
         var control = event.target.closest?.('.central-pref-switch,.hr-pref-switch,.ss-pref-switch,[data-save-language-switch],[data-testid="save-default-language"]');
         if (!control) return;
+        revision++;
+        pending = true;
         // Read the state after the owning React/Blade handler completes.
         setTimeout(function () {save(localStorage.getItem(key) === '1', document.documentElement.lang);},0);
     });
