@@ -7,10 +7,10 @@ import { useQuery } from '@tanstack/react-query';
 import { visibleNav } from '../router/nav.js';
 import { useMeta } from '../stores/meta.jsx';
 import { useTenant } from '../stores/tenant.jsx';
-import { getTheme, toggleTheme } from '../stores/theme.js';
+import { applyTheme, getTheme, toggleTheme } from '../stores/theme.js';
 import { getLocale, t } from '../i18n/index.js';
 import { api } from '../services/api.js';
-import { getRememberLanguage, saveThemePreference, setRememberLanguage } from '../services/displayPreferences.js';
+import { getRememberLanguage, saveThemePreference, setRememberLanguage, startAccountPreferenceSync } from '../services/displayPreferences.js';
 
 // Group nav items by their `group` key, preserving first-seen order (Finance-style
 // sectioned sidebar).
@@ -397,6 +397,15 @@ export default function AppShell() {
     useEffect(() => {
         setOpenGroup(activeGroup);
     }, [activeGroup]);
+
+    // Follow the Solavel account language/theme saved in other apps (no re-sign-in).
+    useEffect(() => startAccountPreferenceSync({
+        currentLocale: () => window.SOLASTOCK_LOCALE?.locale ?? getLocale(),
+        onTheme: (next) => {
+            try { applyTheme(next); } catch (_) { /* storage blocked: attribute only */ document.documentElement.setAttribute('data-theme', next); }
+            setTheme(next);
+        },
+    }), []);
 
     const closeDrawer = useCallback((restoreFocus = true) => {
         setSideOpen(false);
