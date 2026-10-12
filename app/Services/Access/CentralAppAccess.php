@@ -36,14 +36,14 @@ class CentralAppAccess
         $appName=['finance'=>'SolaCount','inventory'=>'SolaStock','projects'=>'SolaProjects','hr'=>'SolaHR'][$appKey]??'Solavel';
         $ar=app()->getLocale()==='ar';
         $message=match($reason){
-            'temporarily_unavailable'=>$ar?'تعذر التحقق من الوصول مؤقتاً. حاول مجدداً.':'Application access could not be checked. Please try again shortly.',
-            'email_verification_required'=>$ar?'تحقق من بريدك الإلكتروني قبل فتح التطبيقات.':'Verify your email before opening applications.',
-            'setup_incomplete'=>$ar?'إعداد التطبيق غير مكتمل. تواصل مع مالك المؤسسة.':'Application setup is incomplete. Contact your organization owner.',
-            'membership_inactive'=>$ar?'عضويتك في المؤسسة غير نشطة. تواصل مع مالك المؤسسة.':'Your organization membership is inactive. Contact your organization owner.',
-            'membership_or_setup_unavailable'=>$ar?'عضوية المؤسسة غير نشطة أو إعداد التطبيق غير مكتمل. تواصل مع مالك المؤسسة.':'Your organization membership is inactive or application setup is incomplete. Contact your organization owner.',
-            'no_subscription','app_not_purchased','subscription_missing_project','expired_entitlement'=>$ar?'خطة المؤسسة لا تشمل الوصول الحالي إلى هذا التطبيق. تواصل مع مالك المؤسسة.':'Your organization does not have a current plan for this application. Contact your organization owner.',
-            'action_forbidden'=>$ar?'دورك الحالي لا يسمح بهذا الإجراء.':'Your current role does not permit this action.',
-            default=>$ar?'لم يُمنح حسابك الوصول إلى هذا التطبيق. تواصل مع مالك المؤسسة أو المسؤول.':'Your account has not been granted access to this application. Contact your organization owner or administrator.',
+            'temporarily_unavailable'=>(trans('access')['Application access could not be checked. Please try again shortly.']),
+            'email_verification_required'=>(trans('access')['Verify your email before opening applications.']),
+            'setup_incomplete'=>(trans('access')['Application setup is incomplete. Contact your organization owner.']),
+            'membership_inactive'=>(trans('access')['Your organization membership is inactive. Contact your organization owner.']),
+            'membership_or_setup_unavailable'=>(trans('access')['Your organization membership is inactive or application setup is incomplete. Contact your organization owner.']),
+            'no_subscription','app_not_purchased','subscription_missing_project','expired_entitlement'=>(trans('access')['Your organization does not have a current plan for this application. Contact your organization owner.']),
+            'action_forbidden'=>(trans('access')['Your current role does not permit this action.']),
+            default=>(trans('access')['Your account has not been granted access to this application. Contact your organization owner or administrator.']),
         };
         if ($request->expectsJson() || $request->is('api/*')) return response()->json(['message'=>$message,'code'=>$reason,'app'=>$appKey],$status);
         return response()->view('errors.app-access',compact('appName','message','ar'),$status)->header('Cache-Control','private, no-store');

@@ -51,8 +51,12 @@ class AccountPreferenceSync
     {
         $result = $this->sync($request);
         try {
-            if ($request->hasSession() && $request->session()->pull(self::PENDING_KEY)) {
-                $result['changed'] = true;
+            if ($request->hasSession()) {
+                // Locale middleware may have repaired a stale file-backed session
+                // from the browser cookie after this request cached the sync result.
+                $result['locale'] = $request->session()->get(self::LOCALE_KEY);
+                $result['theme'] = $request->session()->get('solavel_display_preferences.theme');
+                if ($request->session()->pull(self::PENDING_KEY)) $result['changed'] = true;
             }
         } catch (\Throwable $e) {
             report($e);

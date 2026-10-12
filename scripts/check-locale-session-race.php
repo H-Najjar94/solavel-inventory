@@ -1,6 +1,7 @@
 <?php
 // No application bootstrap or DB: stale sessions must not override the picker cookie.
 require __DIR__.'/../vendor/autoload.php';
+require __DIR__.'/../app/Services/Preferences/AccountPreferenceSync.php';
 require __DIR__.'/../app/Http/Middleware/SetInventoryLocale.php';
 $activeLocale = null; $accountNext = null; $writes = 0;
 function app($abstract = null) {
@@ -36,4 +37,10 @@ assert($response->headers->getCookies()[0]->getValue()==='de');
 assert($writes===0);
 $accountNext=null; runCase('https://solavel.com/dashboard?locale=fr&remember=1','en','en');
 assert($writes===1);
+$request = Illuminate\Http\Request::create('https://solavel.com/preferences/sync');
+$session = new Illuminate\Session\Store('test',new Illuminate\Session\ArraySessionHandler(120));
+$session->start(); $session->put('solastock_locale','fr'); $session->put('solavel_display_preferences.theme','dark'); $request->setLaravelSession($session);
+$request->attributes->set('account_display_preferences_sync',['changed'=>false,'locale'=>'en','theme'=>'light']);
+$result = (new App\Services\Preferences\AccountPreferenceSync(new App\Services\Preferences\CentralDisplayPreferences))->syncForClient($request);
+assert($result['locale']==='fr' && $result['theme']==='dark');
 echo "Ten picker languages survive stale sessions; old API headers preserve the browser choice; genuine account changes still win without account writes.\n";

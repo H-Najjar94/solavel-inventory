@@ -23,6 +23,7 @@ $operationalRoles = require "$root/config/inventory_operational_roles.php";
 foreach (array_unique(array_merge(array_keys($roleConfig['roles']), array_keys($operationalRoles))) as $role) {
     if (!isset($english['roles.'.$role])) $errors[] = "Missing built-in role label: $role";
 }
+$accessEnglish = require "$root/lang/en/access.php";
 $publicEnglish = require "$root/lang/en/public_errors.php";
 foreach (['ar','fr','ru','ur','de','es','zh','pt','tr','it'] as $locale) {
     $file = "$root/lang/$locale/inventory.php";
@@ -37,6 +38,11 @@ foreach (['ar','fr','ru','ur','de','es','zh','pt','tr','it'] as $locale) {
     if (array_keys($public) !== array_keys($publicEnglish)) $errors[] = "$locale: missing public operation errors";
     foreach ($publicEnglish as $key => $source) {
         if (!isset($public[$key]) || !is_string($public[$key]) || trim($public[$key]) === '' || $tokens($source) !== $tokens($public[$key])) $errors[] = "$locale: invalid public operation error";
+    }
+    $access = require "$root/lang/$locale/access.php";
+    if (array_keys($access) !== array_keys($accessEnglish)) $errors[] = "$locale: missing app-access messages";
+    foreach ($accessEnglish as $key => $source) {
+        if (!isset($access[$key]) || !is_string($access[$key]) || trim($access[$key]) === '' || $tokens($source) !== $tokens($access[$key])) $errors[] = "$locale: invalid app-access message";
     }
     $validation = require "$root/lang/$locale/validation.php";
     if (count($validation['attributes'] ?? []) < 42) $errors[] = "$locale: missing input field labels";
