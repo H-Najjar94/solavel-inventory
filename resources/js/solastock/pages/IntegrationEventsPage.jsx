@@ -12,8 +12,11 @@ import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
 const EVENT_TYPES = [
     '', 'opening_stock.posted', 'opening_stock.reversed', 'adjustment.posted', 'adjustment.reversed',
-    'grn.posted', 'transfer.posted', 'stock_count.posted', 'sales_order.confirmed', 'stock_reserved',
+    'grn.posted', 'grn.reversed', 'purchase_order.approved', 'supplier_return.posted', 'supplier_return.reversed',
+    'landed_cost.posted', 'landed_cost.reversed', 'transfer.posted', 'stock_count.posted',
+    'internal_consumption.posted', 'internal_consumption.returned', 'sales_order.confirmed', 'stock_reserved',
     'stock_reservation_released', 'pick_list.picked', 'pack.packed', 'shipment.posted', 'sales_return.posted',
+    'sales_return.reversed', 'stock.historical_fifo_cost_corrected.v1',
 ];
 const STATUSES = [
     '', 'pending', 'review_required', 'blocked_mapping', 'blocked_contract',
