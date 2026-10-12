@@ -2281,3 +2281,36 @@ button.ss-org-pill:hover, .ss-org-pill[aria-expanded='true'] { border-color: var
   .ss-topbar .ss-menu { position: fixed; inset-inline: 10px !important; top: 72px !important; width: auto; min-width: 0 !important; max-width: none; }
   .ss-menu__item--phone { display: flex; }
 }
+
+/* Language menu: current-language check + "Save as my default language" switch (iOS style). */
+.ss-language__chevron { font-size: 10px; color: var(--text-3); }
+.ss-menu__check { color: var(--amber); }
+.ss-pref-switch {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--text); font: inherit; text-align: start; cursor: pointer;
+}
+.ss-pref-switch:hover { background: var(--surface-2); }
+.ss-pref-switch:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.ss-pref-switch__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ss-pref-switch__label { font-size: 13px; font-weight: 600; color: var(--text); }
+.ss-pref-switch__hint { font-size: 11.5px; font-weight: 500; color: var(--text-2); }
+.ss-pref-switch__track {
+  position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px;
+  background: var(--line); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); transition: background .18s ease;
+}
+[data-theme="dark"] .ss-pref-switch__track { background: rgba(255,255,255,.16); }
+.ss-pref-switch__thumb {
+  position: absolute; top: 2px; inset-inline-start: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .18s ease;
+}
+.ss-pref-switch__track.is-on, [data-theme="dark"] .ss-pref-switch__track.is-on { background: var(--amber); }
+.ss-pref-switch__track.is-on .ss-pref-switch__thumb { transform: translateX(16px); }
+[dir="rtl"] .ss-pref-switch__track.is-on .ss-pref-switch__thumb { transform: translateX(-16px); }
+.ss-pref-switch--phone, .ss-menu__sep--phone { display: none; }
+@media (max-width: 640px) {
+  .ss-pref-switch--phone { display: flex; }
+  .ss-menu__sep--phone { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-pref-switch__track, .ss-pref-switch__thumb { transition: none; }
+}

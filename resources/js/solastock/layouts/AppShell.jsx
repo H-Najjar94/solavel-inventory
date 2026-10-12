@@ -10,6 +10,7 @@ import { useTenant } from '../stores/tenant.jsx';
 import { getTheme, toggleTheme } from '../stores/theme.js';
 import { getLocale, t } from '../i18n/index.js';
 import { api } from '../services/api.js';
+import { getRememberLanguage, saveThemePreference, setRememberLanguage } from '../services/displayPreferences.js';
 
 // Group nav items by their `group` key, preserving first-seen order (Finance-style
 // sectioned sidebar).
@@ -84,10 +85,58 @@ function signOut() {
     form.submit();
 }
 
-function switchLanguage(locale) {
+const LANGUAGES = [{ code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }];
+
+// Reload in the chosen language. With "Save as my default language" ON the
+// server also stores it as the Solavel account default (remember=1).
+function switchLanguage(target, remember = false) {
     const next = new URL(window.location.href);
-    next.searchParams.set('locale', locale === 'ar' ? 'en' : 'ar');
+    next.searchParams.set('locale', target);
+    if (remember) next.searchParams.set('remember', '1');
+    else next.searchParams.delete('remember');
     window.location.assign(next.toString());
+}
+
+// iOS-style "Save as my default language" switch shown under the language list.
+function DefaultLanguageSwitch({ on, onChange, className = '' }) {
+    return (
+        <button type="button" role="switch" aria-checked={on} className={`ss-pref-switch ${className}`.trim()}
+            onClick={() => onChange(!on)}>
+            <span className="ss-pref-switch__text">
+                <span className="ss-pref-switch__label">{t('shell.saveDefaultLanguage')}</span>
+                <span className="ss-pref-switch__hint">{t('shell.saveDefaultLanguageHint')}</span>
+            </span>
+            <span className={`ss-pref-switch__track${on ? ' is-on' : ''}`} aria-hidden="true"><span className="ss-pref-switch__thumb" /></span>
+        </button>
+    );
+}
+
+function useRememberLanguage() {
+    const [on, setOn] = useState(getRememberLanguage);
+    const update = (value) => { setOn(value); setRememberLanguage(value); };
+    return [on, update];
+}
+
+// Top-bar language menu: the supported languages (check on the current one) and
+// the "Save as my default language" switch.
+function LanguageMenu({ locale, onClose }) {
+    const [remember, setRemember] = useRememberLanguage();
+    return (
+        <div className="ss-menu ss-menu--end" role="menu" style={{ minWidth: 260 }}>
+            <div className="ss-menu__label">{t('language')}</div>
+            {LANGUAGES.map((lang) => (
+                <button key={lang.code} type="button" role="menuitemradio" aria-checked={locale === lang.code}
+                    className={`ss-menu__item${locale === lang.code ? ' is-current' : ''}`} lang={lang.code}
+                    onClick={() => { if (locale === lang.code) onClose(); else switchLanguage(lang.code, remember); }}>
+                    <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" />
+                    <span className="ss-menu__text">{lang.label}</span>
+                    {locale === lang.code && <i className="fa-solid fa-check ss-menu__trail ss-menu__check" aria-hidden="true" />}
+                </button>
+            ))}
+            <div className="ss-menu__sep" />
+            <DefaultLanguageSwitch on={remember} onChange={setRemember} />
+        </div>
+    );
 }
 
 // Top-bar organization switcher. Lists the signed-in user's organizations and
@@ -156,6 +205,7 @@ function OrgSwitcher({ tenant, open, onToggle, onClose }) {
 // Account menu: identity, Solavel portal card and the other apps (new tab), profile,
 // settings, phone-only shortcuts, sign out. The app list loads on first open.
 function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }) {
+    const [rememberLanguage, setRememberLanguageState] = useRememberLanguage();
     const launcher = useQuery({
         queryKey: ['tenant-launcher', tenant.organization_id ?? 0],
         queryFn: async () => (await api.tenantLauncher()).data,
@@ -225,9 +275,16 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
                 </NavLink>
             )}
             {/* On phones the top bar hides these; on wider screens they live in the bar. */}
-            <button type="button" role="menuitem" className="ss-menu__item ss-menu__item--phone" onClick={() => switchLanguage(locale)}>
-                <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" /><span className="ss-menu__text">{t('shell.language')}</span>
-            </button>
+            {LANGUAGES.map((lang) => (
+                <button key={lang.code} type="button" role="menuitemradio" aria-checked={locale === lang.code} lang={lang.code}
+                    className={`ss-menu__item ss-menu__item--phone${locale === lang.code ? ' is-current' : ''}`}
+                    onClick={() => { if (locale !== lang.code) switchLanguage(lang.code, rememberLanguage); }}>
+                    <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" /><span className="ss-menu__text">{lang.label}</span>
+                    {locale === lang.code && <i className="fa-solid fa-check ss-menu__trail ss-menu__check" aria-hidden="true" />}
+                </button>
+            ))}
+            <DefaultLanguageSwitch on={rememberLanguage} onChange={setRememberLanguageState} className="ss-pref-switch--phone" />
+            <div className="ss-menu__sep ss-menu__sep--phone" />
             <button type="button" role="menuitem" className="ss-menu__item ss-menu__item--phone" onClick={onTheme}>
                 <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'} ss-menu__icon`} aria-hidden="true" /><span className="ss-menu__text">{t('shell.toggleTheme')}</span>
             </button>
@@ -326,7 +383,7 @@ export default function AppShell() {
     const [openGroup, setOpenGroup] = useState(activeGroup);
     const [sideOpen, setSideOpen] = useState(false);
     useCloseDrawerOnResize(setSideOpen);
-    const [menu, setMenu] = useState(null); // 'org' | 'quick' | 'user' | null
+    const [menu, setMenu] = useState(null); // 'org' | 'quick' | 'language' | 'user' | null
     const [cmdOpen, setCmdOpen] = useState(false);
     const locale = getLocale();
     const isDrawer = useMediaQuery(DRAWER_QUERY);
@@ -407,7 +464,8 @@ export default function AppShell() {
     }
 
     const toggleMenu = (name) => setMenu((current) => (current === name ? null : name));
-    const onTheme = () => setTheme(toggleTheme());
+    // Every theme change also becomes the account default (fire-and-forget).
+    const onTheme = () => { const next = toggleTheme(); setTheme(next); saveThemePreference(next); };
 
     const badgeClass = tenant.isDemo ? 'badge--demo'
         : tenant.isSetup ? 'badge--warn' : 'badge--warn';
@@ -599,11 +657,16 @@ export default function AppShell() {
                             <div className="ss-topbar__bell"><PurchasingNotificationBell organizationId={tenant.organization_id} /></div>
                         )}
 
-                        <button type="button" className="ss-topbar__icon ss-topbar__icon--secondary ss-language"
-                            onClick={() => switchLanguage(locale)} aria-label={t('language')} title={t('language')}>
-                            <i className="fa-solid fa-globe" aria-hidden="true" />
-                            <span className="ss-language__text">{t('shell.language')}</span>
-                        </button>
+                        <div className="ss-topbar__menu-anchor ss-language-anchor">
+                            <button type="button" className="ss-topbar__icon ss-topbar__icon--secondary ss-language"
+                                aria-haspopup="menu" aria-expanded={menu === 'language'} onClick={() => toggleMenu('language')}
+                                aria-label={t('language')} title={t('language')}>
+                                <i className="fa-solid fa-globe" aria-hidden="true" />
+                                <span className="ss-language__text">{LANGUAGES.find((lang) => lang.code === locale)?.label ?? t('language')}</span>
+                                <i className="fa-solid fa-chevron-down ss-language__chevron" aria-hidden="true" />
+                            </button>
+                            {menu === 'language' && <LanguageMenu locale={locale} onClose={() => setMenu(null)} />}
+                        </div>
 
                         <button type="button" className="ss-topbar__icon ss-topbar__icon--secondary"
                             onClick={onTheme} aria-label={t('shell.toggleTheme')} title={t('shell.toggleTheme')}>
