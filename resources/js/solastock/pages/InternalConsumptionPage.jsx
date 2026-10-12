@@ -6,7 +6,7 @@ import {useCan} from '../stores/meta.jsx';
 import {useToast} from '../stores/toast.jsx';
 import {Field,Skeleton,EmptyState} from '../components/ui.jsx';
 import {DocumentLinesTable} from '../components/document.jsx';
-import {WarehousePicker,UnitPicker,BinPicker} from '../components/pickers.jsx';
+import {WarehousePicker,UnitPicker,BinPicker,ConsumptionAccountPicker} from '../components/pickers.jsx';
 import {LotSelector as LotPicker,SerialSelector} from '../components/traceability.jsx';
 import {t} from '../i18n/index.js';
 const label=(key)=>t(`consumption.${key}`);
@@ -27,10 +27,6 @@ function SearchItem({value,onChange}) {
 function DimensionFields({value,onChange}) {
     const q=useQuery({queryKey:['consumption-options'],queryFn:api.consumptionOptions});const options=body(q.data)??{};
     return <>{[['department_id','departments','department'],['project_id','projects','project']].map(([key,source,labelKey])=>(options[source]?.length>0?<Field key={key} label={label(labelKey)}><select className="input" value={value[key]??''} onChange={e=>onChange({...value,[key]:e.target.value?Number(e.target.value):null})}><option value="">—</option>{options[source].map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></Field>:null))}</>;
-}
-function AccountChoice({value,onChange}) {
-    const q=useQuery({queryKey:['consumption-options'],queryFn:api.consumptionOptions});
-    return <select className="input" value={value??''} onChange={e=>onChange(e.target.value?Number(e.target.value):null)}><option value="">{label('automatic')}</option>{(body(q.data)?.accounts??[]).map(a=><option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select>;
 }
 function LinePreview({line,warehouse}) {
     const q=useQuery({queryKey:['consumption-preview',line.item_id,warehouse,line.account_override_id,line.quantity,line.entered_unit_id,line.bin_id,line.lot_id],queryFn:()=>api.consumptionPreview({item_id:line.item_id,warehouse_id:warehouse,account_override_id:line.account_override_id||undefined,quantity:line.quantity,entered_unit_id:line.entered_unit_id,bin_id:line.bin_id,lot_id:line.lot_id}),enabled:!!(line.item_id&&warehouse),retry:false});
@@ -56,7 +52,7 @@ export function ConsumptionForm() {
         {key:'lot',label:label('lot'),render:(l,i)=><LotPicker itemId={l.item_id} warehouseId={form.warehouse_id} value={l.lot_id} onChange={v=>patch(i,{lot_id:v})}/>},
         {key:'serial',label:label('serial'),render:(l,i)=><SerialSelector itemId={l.item_id} warehouseId={form.warehouse_id} value={l.serial_id?[l.serial_id]:[]} expectedQty={1} onChange={v=>patch(i,{serial_id:v[v.length-1]??null,quantity:'1'})}/>},
         {key:'preview',label:label('cost'),render:l=><LinePreview line={l} warehouse={form.warehouse_id}/>}]:[]),
-        ...(can('inventory.consumption.override_account')&&!sourceId?[{key:'override',label:label('override'),render:(l,i)=><AccountChoice value={l.account_override_id} onChange={v=>patch(i,{account_override_id:v})}/>}]:[])];
+        ...(can('inventory.consumption.override_account')&&!sourceId?[{key:'override',label:label('override'),render:(l,i)=><ConsumptionAccountPicker value={l.account_override_id} onChange={v=>patch(i,{account_override_id:v})}/>}]:[])];
     return <section className="page"><h1>{sourceId?label('return'):label('new')}</h1><form onSubmit={save}>
         <div className="form-grid"><Field label={label('date')}><input className="input" type="date" required value={form.document_date} onChange={e=>setForm({...form,document_date:e.target.value})}/></Field>
         <Field label={label('warehouse')}><WarehousePicker autoSelectDefault disabled={!!sourceId} value={form.warehouse_id} onChange={v=>setForm({...form,warehouse_id:v})}/></Field>

@@ -5,10 +5,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { useMeta } from '../stores/meta.jsx';
+import { useCan, useMeta } from '../stores/meta.jsx';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, QuickCreateSelect, Skeleton, StatusBadge, fieldErrors } from '../components/ui.jsx';
 import { t } from '../i18n/index.js';
+import { ConsumptionAccountPicker } from '../components/pickers.jsx';
 
 const EMPTY = {
     available_for_sale:true, available_for_purchase:true,
@@ -39,6 +40,7 @@ export default function ItemFormPage() {
     const toast = useToast();
     const qc = useQueryClient();
     const meta = useMeta();
+    const can = useCan();
     const gate = useCanCreate('inventory.manage_items');
 
     const [form, setForm] = useState(EMPTY);
@@ -199,7 +201,7 @@ export default function ItemFormPage() {
                             <label><input type="checkbox" checked={form.available_for_sale !== false} onChange={e=>set('available_for_sale',e.target.checked)}/>{t('consumption.sale')}</label>
                             <label><input type="checkbox" checked={form.available_for_purchase !== false} onChange={e=>set('available_for_purchase',e.target.checked)}/>{t('consumption.purchase')}</label>
                             <div><label><input type="checkbox" checked={isInventory} disabled aria-describedby="tracking-type-help"/>{t('consumption.track')}</label><p id="tracking-type-help" className="sub">{t(isInventory ? 'consumption.trackingStock' : 'consumption.trackingNonStock')}</p>{isEdit && form.track_inventory != null && form.track_inventory !== isInventory && <p role="status">{t('consumption.trackingLegacy')}</p>}</div>
-                            <Field label={t('consumption.account')}><input className="input" type="number" min="1" value={form.internal_consumption_account_id??''} onChange={e=>set('internal_consumption_account_id',e.target.value?Number(e.target.value):null)}/></Field>
+                            <Field label={t('consumption.account')}><ConsumptionAccountPicker value={form.internal_consumption_account_id} disabled={!can('inventory.consumption.override_account')} onChange={v=>set('internal_consumption_account_id',v)}/></Field>
                             <Field label={t('items.itemType')} error={errors.item_type}>
                                 <select className="input" value={form.item_type} onChange={(e) => set('item_type', e.target.value)}>
                                     <option value="inventory">{t('items.inventoryTracksStock')}</option>

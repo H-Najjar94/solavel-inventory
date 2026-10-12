@@ -5,10 +5,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
+import { useCan } from '../stores/meta.jsx';
 import { EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import {t} from '../i18n/index.js';
 import LandedCostSettingsCard from '../components/LandedCostSettingsCard.jsx';
+import { ConsumptionAccountPicker } from '../components/pickers.jsx';
 
 export default function SettingsPage() {
     const tr = useSettingsTranslation();
@@ -31,6 +33,7 @@ export default function SettingsPage() {
     const [safetyResult, setSafetyResult] = useState(null);
     const [conversion, setConversion] = useState({ from_unit_id: '', to_unit_id: '', factor: '' });
     const [category, setCategory] = useState({ name: '', parent_id: '' });
+    const canOverrideAccount = useCan()('inventory.consumption.override_account');
     const [unit, setUnit] = useState({ name: '', code: '' });
     const [brand, setBrand] = useState({ name: '' });
     const [editingCategory, setEditingCategory] = useState(null);
@@ -395,7 +398,7 @@ export default function SettingsPage() {
                                 {(s.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </Field>
-                        <Field label={t('consumption.account')}><input className="input" type="number" min="1" value={category.internal_consumption_account_id??''} onChange={e=>setCategory({...category,internal_consumption_account_id:e.target.value})}/></Field><button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
+                        <Field label={t('consumption.account')}><ConsumptionAccountPicker value={category.internal_consumption_account_id} disabled={!canOverrideAccount} onChange={v=>setCategory({...category,internal_consumption_account_id:v})}/></Field><button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
                     </div></form>
                     {/* SC-UAE-041: an empty tenant must be able to create the units items require. */}
                     <form className="card" onSubmit={addUnit}><div className="card-head"><h3>{tr('settings.master.unit')}</h3></div><div className="card-body">
@@ -429,7 +432,7 @@ export default function SettingsPage() {
                             </select> : ((s.categories ?? []).find((p) => p.id === c.parent_id)?.name ?? tr('settings.master.topLevel'))}</td>
                             <td>{c.level ?? 0}</td>
                             <td>{editing ? <label className="check-inline"><input type="checkbox" checked={editingCategory.is_active !== false} onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })} /> {tr('settings.common.active')}</label> : tr(c.is_active === false ? 'settings.common.inactive' : 'settings.common.active')}</td>
-                            <td>{editing&&<Field label={t('consumption.account')}><input className="input" type="number" min="1" value={editingCategory.internal_consumption_account_id??''} onChange={e=>setEditingCategory({...editingCategory,internal_consumption_account_id:e.target.value})}/></Field>}{editing ? <><button className="btn btn--primary btn--sm">{tr('settings.common.save')}</button> <button type="button" className="btn btn--sm" onClick={() => setEditingCategory(null)}>{tr('settings.common.cancel')}</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingCategory({ id: c.id, name: c.name, parent_id: c.parent_id ?? '', internal_consumption_account_id:c.internal_consumption_account_id, is_active: c.is_active !== false })}>{tr('settings.common.edit')}</button>}</td>
+                            <td>{editing&&<Field label={t('consumption.account')}><ConsumptionAccountPicker value={editingCategory.internal_consumption_account_id} disabled={!canOverrideAccount} onChange={v=>setEditingCategory({...editingCategory,internal_consumption_account_id:v})}/></Field>}{editing ? <><button className="btn btn--primary btn--sm">{tr('settings.common.save')}</button> <button type="button" className="btn btn--sm" onClick={() => setEditingCategory(null)}>{tr('settings.common.cancel')}</button></> : <button type="button" className="btn btn--sm" onClick={() => setEditingCategory({ id: c.id, name: c.name, parent_id: c.parent_id ?? '', internal_consumption_account_id:c.internal_consumption_account_id, is_active: c.is_active !== false })}>{tr('settings.common.edit')}</button>}</td>
                         </tr>;
                     })}
                 </tbody></table></form>}

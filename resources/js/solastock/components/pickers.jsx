@@ -1,4 +1,5 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
 import {useTenant} from '../stores/tenant.jsx';
 import {defaultWarehouseDecision} from './warehouseDefaultSelection.mjs';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -97,4 +98,25 @@ export function QuantityInput({ value, onChange, disabled }) {
 export function MoneyInput({ value, onChange, disabled }) {
     return <input className="input input--num" type="number" step="0.0001" min="0" disabled={disabled}
         value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
+}
+
+// Internal-consumption expense accounts from the connected SolaCount chart (server re-validates the id).
+export function ConsumptionAccountPicker({ value, onChange, disabled, placeholder }) {
+    const [search, setSearch] = useState('');
+    const q = useQuery({ queryKey: ['consumption-options'], queryFn: api.consumptionOptions, enabled: !disabled || Boolean(value) });
+    const accounts = (q.data?.data ?? q.data)?.accounts ?? [];
+    const needle = search.trim().toLowerCase();
+    const shown = accounts.filter((a) => !needle || String(a.id) === String(value) || `${a.code} ${a.name}`.toLowerCase().includes(needle));
+    const missing = value && !accounts.some((a) => String(a.id) === String(value));
+    return (
+        <div>
+            {!disabled && <input className="input" type="search" aria-label={t('consumption.searchAccount')} placeholder={t('consumption.searchAccount')} value={search} onChange={(e) => setSearch(e.target.value)} />}
+            <select className="input" aria-label={t('consumption.account')} value={value ?? ''} disabled={disabled}
+                onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">{placeholder ?? t('consumption.automatic')}</option>
+                {missing && <option value={value}>#{value}</option>}
+                {shown.map((a) => <option key={a.id} value={a.id}>{`${a.code} · ${a.name}`}</option>)}
+            </select>
+        </div>
+    );
 }
