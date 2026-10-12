@@ -47,7 +47,7 @@ export const en = {
     'shell.quickAdjustment': 'New adjustment', 'shell.quickCount': 'New stock count',
     'shell.language': 'العربية', 'shell.accountMenu': 'Account menu',
     'shell.portalTitle': 'Solavel Portal', 'shell.portalDescription': 'Your organizations, members, apps and subscription',
-    'shell.yourApps': 'Your apps', 'shell.appsLoading': 'Loading your apps…', 'shell.profile': 'My profile',
+    'shell.yourApps': 'Your apps', 'shell.documentation': 'Documentation', 'shell.appsLoading': 'Loading your apps…', 'shell.profile': 'My profile',
     'shell.settings': 'Settings', 'shell.logout': 'Sign out', 'shell.opensNewTab': '(opens in a new tab)',
     'shell.skipToContent': 'Skip to content',
 };
@@ -101,7 +101,7 @@ export const ar = {
     'shell.quickAdjustment': 'تسوية جديدة', 'shell.quickCount': 'جرد جديد',
     'shell.language': 'English', 'shell.accountMenu': 'قائمة الحساب',
     'shell.portalTitle': 'بوابة Solavel', 'shell.portalDescription': 'مؤسساتك وأعضاؤها وتطبيقاتك واشتراكك',
-    'shell.yourApps': 'تطبيقاتك', 'shell.appsLoading': 'جارٍ تحميل تطبيقاتك…', 'shell.profile': 'ملفي الشخصي',
+    'shell.yourApps': 'تطبيقاتك', 'shell.documentation': 'التوثيق', 'shell.appsLoading': 'جارٍ تحميل تطبيقاتك…', 'shell.profile': 'ملفي الشخصي',
     'shell.settings': 'الإعدادات', 'shell.logout': 'تسجيل الخروج', 'shell.opensNewTab': '(يفتح في علامة تبويب جديدة)',
     'shell.skipToContent': 'تخطَّ إلى المحتوى',
 };

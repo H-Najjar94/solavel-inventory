@@ -167,6 +167,8 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
     const portalUrl = data?.portal?.url ?? tenant.portal_url ?? null;
     const portalLogo = data?.portal?.logo ?? `${basePath()}/imgs/apps/solavel.svg`;
     const apps = data?.apps ?? [];
+    let docsOrigin = 'https://solavel.com';
+    try { if (portalUrl) docsOrigin = new URL(portalUrl, window.location.origin).origin; } catch { /* keep fallback */ }
     const name = tenant.user?.name || tenant.user?.email || t('shell.account');
 
     return (
@@ -193,20 +195,23 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
             {launcher.isLoading && tenant.authenticated && (
                 <div className="ss-app-tiles ss-app-tiles--loading" role="status">{t('shell.appsLoading')}</div>
             )}
-            {apps.length > 0 && (
-                <div className="ss-app-tiles">
-                    <div className="ss-menu__label">{t('shell.yourApps')}</div>
-                    <div className="ss-app-tiles__grid">
-                        {apps.map((app) => (
-                            <a key={app.key} className="ss-app-tile" href={app.url} target="_blank" rel="noopener noreferrer" onClick={onClose}
-                                title={`${app.name} ${t('shell.opensNewTab')}`}>
-                                <img src={app.logo} alt="" />
-                                <span>{app.name}</span>
-                            </a>
-                        ))}
-                    </div>
+            <div className="ss-app-tiles">
+                <div className="ss-menu__label">{t('shell.yourApps')}</div>
+                <div className="ss-app-tiles__grid">
+                    {apps.map((app) => (
+                        <a key={app.key} className="ss-app-tile" href={app.url} target="_blank" rel="noopener noreferrer" onClick={onClose}
+                            title={`${app.name} ${t('shell.opensNewTab')}`}>
+                            <img src={app.logo} alt="" />
+                            <span>{app.name}</span>
+                        </a>
+                    ))}
+                    <a className="ss-app-tile ss-app-tile--docs" href={`${docsOrigin}/docs/solavel-stock/index`} target="_blank" rel="noopener" onClick={onClose}
+                        title={`${t('shell.documentation')} ${t('shell.opensNewTab')}`}>
+                        <img src={`${basePath()}/imgs/apps/solavel.svg`} alt="" />
+                        <span>{t('shell.documentation')}</span>
+                    </a>
                 </div>
-            )}
+            </div>
             <div className="ss-menu__sep" />
             {data?.profile_url && (
                 <a className="ss-menu__item" role="menuitem" href={data.profile_url} target="_blank" rel="noopener noreferrer" onClick={onClose}>

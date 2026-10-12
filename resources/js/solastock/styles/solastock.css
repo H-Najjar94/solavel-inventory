@@ -2183,6 +2183,8 @@ button.ss-org-pill:hover, .ss-org-pill[aria-expanded='true'] { border-color: var
 .ss-app-tile:visited { color: var(--text-2); }
 .ss-app-tile:hover { border-color: var(--amber-soft); background: var(--amber-tint); color: var(--text); }
 .ss-app-tile img { width: 30px; height: 30px; object-fit: contain; }
+.ss-app-tile--docs img { filter: brightness(0); }
+[data-theme="dark"] .ss-app-tile--docs img { filter: brightness(0) invert(1); }
 
 /* Command palette */
 .ss-overlay {
