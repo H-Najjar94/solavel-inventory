@@ -33,12 +33,16 @@
             var data = await response.json();
             if (version !== revision || pending) return;
             if (typeof data.remember_language === 'boolean') apply(data.remember_language);
+            if (window.solavelIsCentral && data.remember_language && data.locale && data.locale !== document.documentElement.lang) {
+                window.location.reload();
+                return;
+            }
             // Migrate an existing checked switch without changing the saved language.
             else if (localStorage.getItem(key) === '1') await save(true);
         } catch (_) {}
     }
     document.addEventListener('click', function (event) {
-        var control = event.target.closest?.('.hr-pref-switch,.ss-pref-switch,[data-save-language-switch],[data-testid="save-default-language"]');
+        var control = event.target.closest?.('.central-pref-switch,.hr-pref-switch,.ss-pref-switch,[data-save-language-switch],[data-testid="save-default-language"]');
         if (!control) return;
         // Read the state after the owning React/Blade handler completes.
         setTimeout(function () {save(localStorage.getItem(key) === '1', document.documentElement.lang);},0);
