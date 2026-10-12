@@ -270,7 +270,7 @@ class EventPayloadBuilder
     private function consumptionAccounts(object $document,int $lineId): array
     {
         $line=$document->lines()->findOrFail($lineId);
-        return ['expense_account_id'=>$line->expense_account_id,'inventory_account_id'=>$line->inventory_account_id];
+        return ['expense_account_id'=>$line->expense_account_id,'inventory_account_id'=>$line->inventory_account_id,'project_id'=>$document->project_id];
     }
 
     private function originalSource(object $document): ?array

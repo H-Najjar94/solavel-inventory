@@ -40,7 +40,7 @@ final class InternalConsumptionService {
             $wh = Warehouse::query()->findOrFail($warehouse);
             if (!$wh->is_active) $this->fail('warehouse_inactive');
             foreach (['department_id'=>'departments','project_id'=>'projects'] as $field=>$table) {
-                if (!empty($data[$field]) && (!\Schema::connection('tenant')->hasTable($table) || !DB::connection('tenant')->table($table)->where('id',$data[$field])->where('organization_id',$org)->exists())) $this->fail('dimension_invalid');
+                if (!empty($data[$field]) && (!\Schema::connection('tenant')->hasTable($table) || !DB::connection('tenant')->table($table)->where('id',$data[$field])->where('organization_id',$field === 'project_id' ? $this->accounts->projectOrganizationId($org) : $org)->when(\Schema::connection('tenant')->hasColumn($table,'deleted_at'),fn($q)=>$q->whereNull('deleted_at'))->exists())) $this->fail('dimension_invalid');
             }
             $doc = InternalConsumption::query()->create([
                 'organization_id'=>$org,'document_number'=>DocumentNumber::next($source?'ICR':'IC',InternalConsumption::class,'document_number',$org,'tenant'),

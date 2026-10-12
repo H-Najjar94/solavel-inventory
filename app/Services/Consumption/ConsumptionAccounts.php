@@ -13,6 +13,13 @@ final class ConsumptionAccounts {
         return IntegrationOrganizationMapping::query()->where('solastock_organization_id',$org)
             ->where('tenant_database_identity',DB::connection('tenant')->getDatabaseName())->first();
     }
+    /** Connected projects use the verified Finance-local organization identity. */
+    public function projectOrganizationId(int $stockOrganizationId): int {
+        $mapping = $this->connection($stockOrganizationId);
+        if (!$mapping) return $stockOrganizationId;
+        return $mapping->status === 'verified' && $mapping->activation_state === 'active'
+            ? (int) $mapping->finance_organization_id : 0;
+    }
     public function resolve(Item $item, ?int $override = null): array {
         $mapping = $this->connection((int)$item->organization_id);
         $setting = IntegrationSetting::query()->where('organization_id',$item->organization_id)->where('integration','solabooks')->first();

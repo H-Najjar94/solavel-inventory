@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class InternalConsumption extends Model {
     use BelongsToOrganization, BelongsToWarehouseScope, LocksWhenPosted;
     protected $guarded = ['id'];
-    protected $casts = ['document_date'=>'date', 'posted_at'=>'datetime', 'approved_at'=>'datetime', 'accounting_connected'=>'boolean'];
+    protected $casts = ['document_date'=>'date:Y-m-d', 'posted_at'=>'datetime', 'approved_at'=>'datetime', 'accounting_connected'=>'boolean'];
     public function lines() { return $this->hasMany(InternalConsumptionLine::class); }
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function originalIssue() { return $this->belongsTo(self::class, 'original_issue_id'); }

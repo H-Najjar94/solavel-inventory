@@ -134,6 +134,7 @@ final class SolaStockJournalContractBuilder
                 'base_credit' => Decimal::round(Decimal::div($credit, $rate), $moneyScale),
                 'description' => $line['description'] ?? null,
             ];
+            if (isset($line['project_id'])) $result['project_id'] = (int) $line['project_id'];
             if (! empty($line['is_tax_line'])) {
                 $taxId = (int) $line['tax_rate_id'];
                 $taxAuthority = (array) data_get($meta, "finance_tax_contract.{$taxId}", []);

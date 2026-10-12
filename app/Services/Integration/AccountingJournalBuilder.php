@@ -44,6 +44,9 @@ class AccountingJournalBuilder
             $lines[]=$this->roleLine((int)$source['expense_account_id'],'internal_consumption_expense',$return?'0':$amount,$return?$amount:'0',$event);
             $lines[]=$this->roleLine((int)$source['inventory_account_id'],'inventory_asset',$return?$amount:'0',$return?'0':$amount,$event);
         }
+        $projectId = data_get($event->payload, 'lines.0.project_id');
+        if ($projectId !== null) foreach ($lines as &$line) $line['project_id'] = (int) $projectId;
+        unset($line);
         return $lines;
     }
 
