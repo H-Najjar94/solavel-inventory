@@ -40,6 +40,9 @@ if (app()->environment('staging')) {
 // Central's single sign-out. Outside inv.access so it always works.
 Route::post('/logout', \App\Http\Controllers\LogoutController::class)->name('inventory.logout');
 
+// Theme toggle → the signed-in user's Solavel account default (best effort, CSRF-protected).
+Route::post('/preferences/theme', [\App\Http\Controllers\DisplayPreferenceController::class, 'theme'])->name('inventory.preferences.theme');
+
 // Root → dashboard (mirrors solavel-projects: redirect '/' to the dashboard).
 Route::get('/', fn () => redirect()->route('inventory.dashboard'));
 
