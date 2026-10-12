@@ -19,6 +19,9 @@ final class DurableOutboxTransportService
         // An administrator may enable the transaction currency on the receiver
         // and explicitly retry; every delivery still revalidates that setting.
         'transaction_currency_disabled',
+        // A reviewed receiver entitlement correction can make the unchanged
+        // event eligible. Delivery still enforces current receiver access.
+        'feature_disabled',
     ];
 
     public function __construct(
