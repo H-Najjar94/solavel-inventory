@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => 'Der Einheitenumrechnungs-Schnappschuss der Quelle ist ungültig.',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => 'Stornieren Sie diesen gespeicherten Barretour-Entwurf und erstellen Sie einen neuen Vorgang, um seine Mengen zu ändern.',
   'A signed durable workspace command is required.' => 'Ein signierter, dauerhafter Arbeitsbereichsbefehl ist erforderlich.',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => 'Verwenden Sie die separat bestätigte physische Rückgabe zum Barverkauf; eine finanzielle Erstattung ist bereits vorhanden.',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => 'Klären Sie den gespeicherten Erstattungsvorgang zum Barverkauf, bevor Sie den Versand stornieren.',
 );

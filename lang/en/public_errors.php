@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => 'The source unit-conversion snapshot is invalid.',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => 'Cancel this saved Cash return draft and create a new operation to change its quantities.',
   'A signed durable workspace command is required.' => 'A signed durable workspace command is required.',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => 'Use the separately confirmed Cash physical return; a financial refund already exists.',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => 'Resolve the saved Cash refund operation before reversing the shipment.',
 );

@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => 'L\'instantané de conversion d\'unité de la source est invalide.',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => 'Annulez ce brouillon de retour en espèces enregistré et créez une nouvelle opération pour modifier ses quantités.',
   'A signed durable workspace command is required.' => 'Une commande d\'espace de travail durable signée est requise.',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => 'Utilisez le retour physique de la vente au comptant confirmé séparément ; un remboursement financier existe déjà.',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => 'Résolvez l’opération de remboursement au comptant enregistrée avant de contrepasser l’expédition.',
 );

@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => 'نسخة تحويل وحدة المصدر غير صالحة.',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => 'ألغِ مسودة المرتجع النقدي المحفوظة وأنشئ عملية جديدة لتغيير كمياتها.',
   'A signed durable workspace command is required.' => 'يلزم أمر مساحة عمل موقّع ومحفوظ بشكل دائم.',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => 'استخدم مرتجع البيع النقدي المخزني المؤكّد بشكل مستقل؛ يوجد بالفعل استرداد مالي.',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => 'سوِّ عملية الاسترداد النقدي المحفوظة قبل عكس الشحنة.',
 );

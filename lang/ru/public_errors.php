@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => 'Снимок преобразования единиц исходного источника недействителен.',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => 'Отмените этот сохраненный черновик возврата наличных и создайте новую операцию для изменения его количеств.',
   'A signed durable workspace command is required.' => 'Требуется подписанная долговечная команда рабочего пространства.',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => 'Используйте отдельно подтверждённый физический возврат по продаже за наличные: финансовый возврат уже существует.',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => 'Урегулируйте сохранённую операцию возврата по продаже за наличные перед сторнированием отгрузки.',
 );

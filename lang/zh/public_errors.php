@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => '源单位换算快照无效。',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => '取消此已保存的现金退货草稿，并创建新操作以更改其数量。',
   'A signed durable workspace command is required.' => '需要一个已签名的持久工作区命令。',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => '请使用另行确认的现金销售实物退货；财务退款已存在。',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => '冲销发货前，请先处理已保存的现金销售退款操作。',
 );

@@ -46,4 +46,6 @@ return array (
   'The source unit-conversion snapshot is invalid.' => 'Kaynak birim dönüşümü anlık görüntüsü geçersiz.',
   'Cancel this saved Cash return draft and create a new operation to change its quantities.' => 'Bu kaydedilmiş Nakit iade taslağını iptal edin ve miktarları değiştirmek için yeni bir işlem oluşturun.',
   'A signed durable workspace command is required.' => 'İmzalanmış dayanıklı çalışma alanı komutu gereklidir.',
+  'Use the separately confirmed Cash physical return; a financial refund already exists.' => 'Ayrıca onaylanmış peşin satışın fiziksel iadesini kullanın; mali geri ödeme zaten mevcut.',
+  'Resolve the saved Cash refund operation before reversing the shipment.' => 'Sevkiyatı ters kayıtla geri almadan önce kaydedilmiş peşin satış geri ödeme işlemini sonuçlandırın.',
 );
