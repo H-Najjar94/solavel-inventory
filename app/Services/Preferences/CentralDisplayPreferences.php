@@ -25,6 +25,7 @@ class CentralDisplayPreferences
             $payload['preferred_theme'] = $prefs['preferred_theme'];
         }
         if (is_bool($prefs['remember_language'] ?? null)) $payload['remember_language'] = $prefs['remember_language'];
+        if (($prefs['remember_language_migrate'] ?? false) === true) $payload['remember_language_migrate'] = true;
 
         $secret = (string) config('sso.shared_secret');
         if ($centralUserId <= 0 || count($payload) < 2 || $secret === '') {

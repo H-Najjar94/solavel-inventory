@@ -11,12 +11,13 @@
         window.dispatchEvent(new StorageEvent('storage', {key: key, newValue: on ? '1' : '0'}));
         window.solavelAccountPreferences?.sync();
     }
-    async function save(on, locale) {
+    async function save(on, locale, migrate) {
         var saveRevision = ++revision;
         pending = true;
         try {
             var token = document.querySelector('meta[name="csrf-token"]')?.content || '';
             var body = {remember_language: on};
+            if (migrate) body.remember_language_migrate = true;
             if (on && locale) body.locale = locale;
             var response = await fetch(saveUrl, {method: 'POST', credentials: 'same-origin', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token,'X-Requested-With':'XMLHttpRequest'}, body:JSON.stringify(body)});
             if (!response.ok) return false;
@@ -38,7 +39,7 @@
                 return;
             }
             // Migrate an existing checked switch without changing the saved language.
-            else if (localStorage.getItem(key) === '1') await save(true);
+            else if (localStorage.getItem(key) === '1') await save(true, null, true);
         } catch (_) {}
     }
     document.addEventListener('click', function (event) {

@@ -13,10 +13,11 @@ class DisplayPreferenceController extends Controller
     public function theme(Request $request, CentralDisplayPreferences $preferences): JsonResponse
     {
         if ($request->has('remember_language')) {
-            $data = $request->validate(['remember_language' => ['required', 'boolean'], 'locale' => ['sometimes', 'string', 'in:en,ar,fr,ru,ur,de,es,tr,it,pt,zh']]);
+            $data = $request->validate(['remember_language' => ['required', 'boolean'], 'remember_language_migrate' => ['sometimes', 'boolean'], 'locale' => ['sometimes', 'string', 'in:en,ar,fr,ru,ur,de,es,tr,it,pt,zh']]);
             $id = CentralDisplayPreferences::centralUserId($request->user());
             abort_if($id <= 0, 401);
             $prefs = ['remember_language' => (bool) $data['remember_language']];
+            if ($request->boolean('remember_language_migrate')) $prefs['remember_language_migrate'] = true;
             if ($prefs['remember_language'] && isset($data['locale'])) $prefs['preferred_locale'] = $data['locale'];
             $saved = $preferences->save($id, $prefs);
             return response()->json(['saved' => $saved], $saved ? 200 : 502);
