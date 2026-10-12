@@ -327,6 +327,7 @@ return [
         ],
     ],
     'consumption' => [
+        'title' => 'Internal consumption',
         'serial_quantity' => 'Return the whole original serial unit. Serialized units cannot be returned fractionally.',
         'tracking_type_controlled' => 'Inventory tracking follows the item type. Choose Stock item to track inventory; choose Non-stock item or Service for transactions without stock.',
         'tracking_history' => 'Item type cannot switch between stock and non-stock while stock balances or historical movements exist. Keep this item for its history and create a new item with the required type.',
