@@ -4079,5 +4079,18 @@
   "consumption.retry": "Revisionare lo stato contabile",
   "consumption.unknown": "L'esito del salvataggio è incerto. Revisionare lo stato del documento prima di riprovare.",
   "consumption.overrideHelp": "Utilizzare un conto spese attivo e registrabile dall'organizzazione collegata.",
-  "consumption.approvalSetting": "Richiedi approvazione per il consumo interno"
+  "consumption.approvalSetting": "Richiedi approvazione per il consumo interno",
+  "notification.title.sales.partial": "Vendita parzialmente spedita",
+  "notification.title.sales.complete": "Vendita completamente spedita",
+  "notification.title.sales.cancelled": "Richiesta di evasione annullata",
+  "notification.title.sales.review": "Vendita in attesa di revisione del magazzino",
+  "notification.title.sales.ready": "Vendita pronta per la spedizione",
+  "notification.title.sales.finished": "Evasione completata",
+  "notification.dispatch.partial": "Verifica le quantità spedite e rimanenti in :request.",
+  "notification.dispatch.complete": "Tutte le quantità richieste in :request sono state spedite.",
+  "notification.dispatch.cancelled": ":request è annullata. Le spedizioni precedentemente registrate sono conservate.",
+  "notification.dispatch.open": "Apri :request e conferma solo le merci fisicamente spedite.",
+  "notification.dispatch.setup": ":request è visibile, ma le merci non possono essere spedite finché non viene configurato un magazzino autorizzato.",
+  "notification.dispatch.credit": "Verifica le quantità spedite e le quantità non consegnate chiuse con nota di credito in :request.",
+  "notification.dispatch.refund": "Verifica le quantità spedite e le quantità non consegnate annullate con rimborso in :request."
 }

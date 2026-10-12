@@ -4079,5 +4079,18 @@
   "consumption.retry": "审查会计状态",
   "consumption.unknown": "保存结果不确定。请在重试前检查文档状态。",
   "consumption.overrideHelp": "请使用已连接组织中的活动、可过账费用账户。",
-  "consumption.approvalSetting": "要求内部消耗需批准"
+  "consumption.approvalSetting": "要求内部消耗需批准",
+  "notification.title.sales.partial": "销售部分发货",
+  "notification.title.sales.complete": "销售全部发货",
+  "notification.title.sales.cancelled": "履约请求已取消",
+  "notification.title.sales.review": "销售等待仓库审核",
+  "notification.title.sales.ready": "销售准备发货",
+  "notification.title.sales.finished": "履约完成",
+  "notification.dispatch.partial": "在 :request 中查看已发货数量和剩余数量。",
+  "notification.dispatch.complete": ":request 中请求的所有数量均已发货。",
+  "notification.dispatch.cancelled": ":request 已取消。之前记录的发货信息已保留。",
+  "notification.dispatch.open": "打开 :request 并确认仅包含实际已发货的货物。",
+  "notification.dispatch.setup": ":request 可见，但在配置授权仓库之前，货物无法发货。",
+  "notification.dispatch.credit": "在 :request 中查看已发货数量以及通过贷项关闭的未交付数量。",
+  "notification.dispatch.refund": "在 :request 中查看已发货数量以及通过退款取消的未交付数量。"
 }

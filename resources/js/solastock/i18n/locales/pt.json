@@ -4079,5 +4079,18 @@
   "consumption.retry": "Revisar status da contabilidade",
   "consumption.unknown": "O resultado do salvamento é incerto. Revise o status do documento antes de tentar novamente.",
   "consumption.overrideHelp": "Use uma conta de despesa ativa e publicável da organização conectada.",
-  "consumption.approvalSetting": "Exigir aprovação para consumo interno"
+  "consumption.approvalSetting": "Exigir aprovação para consumo interno",
+  "notification.title.sales.partial": "Venda parcialmente despachada",
+  "notification.title.sales.complete": "Venda totalmente despachada",
+  "notification.title.sales.cancelled": "Solicitação de atendimento cancelada",
+  "notification.title.sales.review": "Venda aguardando revisão do armazém",
+  "notification.title.sales.ready": "Venda pronta para despacho",
+  "notification.title.sales.finished": "Atendimento concluído",
+  "notification.dispatch.partial": "Revise as quantidades despachadas e restantes em :request.",
+  "notification.dispatch.complete": "Todas as quantidades solicitadas em :request foram despachadas.",
+  "notification.dispatch.cancelled": ":request foi cancelado. Os envios registrados anteriormente são preservados.",
+  "notification.dispatch.open": "Abra :request e confirme apenas as mercadorias fisicamente despachadas.",
+  "notification.dispatch.setup": ":request está visível, mas as mercadorias não podem ser despachadas até que um armazém autorizado seja configurado.",
+  "notification.dispatch.credit": "Revise as quantidades despachadas e as quantidades não entregues encerradas por nota de crédito em :request.",
+  "notification.dispatch.refund": "Revise as quantidades despachadas e as quantidades não entregues canceladas por reembolso em :request."
 }

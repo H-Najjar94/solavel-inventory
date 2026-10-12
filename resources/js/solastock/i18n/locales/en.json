@@ -4079,5 +4079,18 @@
   "consumption.retry": "Review accounting status",
   "consumption.unknown": "The save outcome is uncertain. Review the document status before retrying.",
   "consumption.overrideHelp": "Use an active, postable expense account from the connected organization.",
-  "consumption.approvalSetting": "Require approval for internal consumption"
+  "consumption.approvalSetting": "Require approval for internal consumption",
+  "notification.title.sales.partial": "Sale partially dispatched",
+  "notification.title.sales.complete": "Sale fully dispatched",
+  "notification.title.sales.cancelled": "Fulfillment request cancelled",
+  "notification.title.sales.review": "Sale awaiting warehouse review",
+  "notification.title.sales.ready": "Sale ready for dispatch",
+  "notification.title.sales.finished": "Fulfillment finished",
+  "notification.dispatch.partial": "Review dispatched and remaining quantities in :request.",
+  "notification.dispatch.complete": "All requested quantities in :request have been dispatched.",
+  "notification.dispatch.cancelled": ":request is cancelled. Previously recorded shipments are preserved.",
+  "notification.dispatch.open": "Open :request and confirm only goods physically dispatched.",
+  "notification.dispatch.setup": ":request is visible, but goods cannot be dispatched until an authorized warehouse is configured.",
+  "notification.dispatch.credit": "Review the dispatched quantities and undelivered quantities closed by credit in :request.",
+  "notification.dispatch.refund": "Review the dispatched quantities and undelivered quantities cancelled by refund in :request."
 }

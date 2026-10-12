@@ -4079,5 +4079,18 @@
   "consumption.retry": "Просмотр статуса учета",
   "consumption.unknown": "Результат сохранения неясен. Прежде чем повторить попытку, проверьте статус документа.",
   "consumption.overrideHelp": "Используйте активный, подлежащий учету счет расходов подключенной организации.",
-  "consumption.approvalSetting": "Требовать одобрения для внутреннего потребления"
+  "consumption.approvalSetting": "Требовать одобрения для внутреннего потребления",
+  "notification.title.sales.partial": "Продажа частично отгружена",
+  "notification.title.sales.complete": "Продажа полностью отгружена",
+  "notification.title.sales.cancelled": "Заявка на отгрузку отменена",
+  "notification.title.sales.review": "Продажа ожидает проверки складом",
+  "notification.title.sales.ready": "Продажа готова к отгрузке",
+  "notification.title.sales.finished": "Отгрузка завершена",
+  "notification.dispatch.partial": "Проверьте отгруженные и оставшиеся количества в :request.",
+  "notification.dispatch.complete": "Все запрошенные количества в :request отгружены.",
+  "notification.dispatch.cancelled": ":request отменен. Ранее зафиксированные отгрузки сохранены.",
+  "notification.dispatch.open": "Откройте :request и подтвердите только фактически отгруженные товары.",
+  "notification.dispatch.setup": ":request отображается, но отгрузка товаров невозможна, пока не настроен уполномоченный склад.",
+  "notification.dispatch.credit": "Проверьте отгруженные количества и неотгруженные количества, закрытые кредит-нотой, в :request.",
+  "notification.dispatch.refund": "Проверьте отгруженные количества и неотгруженные количества, отмененные возвратом средств, в :request."
 }

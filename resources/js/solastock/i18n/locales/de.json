@@ -4079,5 +4079,18 @@
   "consumption.retry": "Überprüfen Sie den Buchhaltungsstatus",
   "consumption.unknown": "Der sichere Ausgang ist ungewiss. Überprüfen Sie den Dokumentstatus, bevor Sie es erneut versuchen.",
   "consumption.overrideHelp": "Verwenden Sie ein aktives, buchbares Spesenkonto der angeschlossenen Organisation.",
-  "consumption.approvalSetting": "Für den Eigenverbrauch ist eine Genehmigung erforderlich"
+  "consumption.approvalSetting": "Für den Eigenverbrauch ist eine Genehmigung erforderlich",
+  "notification.title.sales.partial": "Verkauf teilweise versandt",
+  "notification.title.sales.complete": "Verkauf vollständig versandt",
+  "notification.title.sales.cancelled": "Auftragsabwicklungsanfrage storniert",
+  "notification.title.sales.review": "Verkauf wartet auf Lagerprüfung",
+  "notification.title.sales.ready": "Verkauf versandbereit",
+  "notification.title.sales.finished": "Auftragsabwicklung abgeschlossen",
+  "notification.dispatch.partial": "Prüfen Sie die versendeten und verbleibenden Mengen in :request.",
+  "notification.dispatch.complete": "Alle angeforderten Mengen in :request wurden versandt.",
+  "notification.dispatch.cancelled": ":request wurde storniert. Zuvor erfasste Sendungen werden beibehalten.",
+  "notification.dispatch.open": "Öffnen Sie :request und bestätigen Sie nur die tatsächlich versendeten Waren.",
+  "notification.dispatch.setup": ":request ist sichtbar, aber die Waren können nicht versandt werden, bis ein autorisiertes Lager konfiguriert wurde.",
+  "notification.dispatch.credit": "Prüfen Sie die versendeten Mengen und die nicht gelieferten Mengen, die in :request durch Gutschrift geschlossen wurden.",
+  "notification.dispatch.refund": "Prüfen Sie die versendeten Mengen und die nicht gelieferten Mengen, die in :request durch Erstattung storniert wurden."
 }

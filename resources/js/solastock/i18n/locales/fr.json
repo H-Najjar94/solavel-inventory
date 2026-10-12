@@ -4079,5 +4079,18 @@
   "consumption.retry": "Vérifier le statut comptable",
   "consumption.unknown": "Le résultat de la sauvegarde est incertain. Vérifiez l'état du document avant de réessayer.",
   "consumption.overrideHelp": "Utilisez un compte de dépenses actif et postable de l’organisation connectée.",
-  "consumption.approvalSetting": "Exiger une approbation pour la consommation interne"
+  "consumption.approvalSetting": "Exiger une approbation pour la consommation interne",
+  "notification.title.sales.partial": "Vente partiellement expédiée",
+  "notification.title.sales.complete": "Vente entièrement expédiée",
+  "notification.title.sales.cancelled": "Demande de préparation annulée",
+  "notification.title.sales.review": "Vente en attente d'examen de l'entrepôt",
+  "notification.title.sales.ready": "Vente prête à être expédiée",
+  "notification.title.sales.finished": "Préparation terminée",
+  "notification.dispatch.partial": "Vérifiez les quantités expédiées et restantes dans :request.",
+  "notification.dispatch.complete": "Toutes les quantités demandées dans :request ont été expédiées.",
+  "notification.dispatch.cancelled": ":request est annulé. Les expéditions précédemment enregistrées sont conservées.",
+  "notification.dispatch.open": "Ouvrez :request et confirmez uniquement les marchandises physiquement expédiées.",
+  "notification.dispatch.setup": ":request est visible, mais les marchandises ne peuvent pas être expédiées tant qu'un entrepôt autorisé n'est pas configuré.",
+  "notification.dispatch.credit": "Vérifiez les quantités expédiées et les quantités non livrées clôturées par avoir dans :request.",
+  "notification.dispatch.refund": "Vérifiez les quantités expédiées et les quantités non livrées annulées par remboursement dans :request."
 }
