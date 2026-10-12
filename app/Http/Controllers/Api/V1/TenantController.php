@@ -278,10 +278,9 @@ class TenantController extends ApiController
      * First-run provisioning of SolaStock tables for the LIVE organization.
      *
      * Safety: requires a live org + an authorized admin (manage_settings);
-     * refuses forbidden databases; migrates ONLY SolaStock's own tenant
-     * migration path under marker migrated_at_inv. NEVER imports or writes
-     * Finance/Projects tables. If the shared DB doesn't exist or this process
-     * lacks privileges, it returns the exact command for a server admin to run.
+     * refuses forbidden databases and verifies the existing static SPSB
+     * schema. Central owns approved import; this endpoint never creates a
+     * database or runs historical migrations.
      */
     public function provision(Request $request, \App\Services\Tenancy\SecureTenantProvisioner $provisioner,
         ?\App\Services\Catalog\FinanceReferenceDefaultsService $referenceDefaults = null): JsonResponse
@@ -326,13 +325,13 @@ class TenantController extends ApiController
                 ?? app(\App\Services\Catalog\FinanceReferenceDefaultsService::class))
                 ->sync((int) $s['organization_id'], true);
         } catch (\Throwable $e) {
-            // Most likely: this process cannot CREATE DATABASE / migrate (no privs).
+            // Fail closed until Central completes approved static SPSB setup.
             return $this->success([
                 'provisioned' => false,
-                'reason' => 'insufficient_privileges',
+                'reason' => 'spsb_setup_required',
                 'message' => __('inventory.tenancy.provision_admin'),
                 'admin_command' => $this->adminProvisionCommand($db, (int) $s['organization_id']),
-                'error_code' => 'provision_failed',
+                'error_code' => 'spsb_setup_required',
             ]);
         }
 
@@ -369,10 +368,7 @@ class TenantController extends ApiController
 
     private function adminProvisionCommand(string $db, int $orgId): string
     {
-        return implode("\n", [
-            "sudo mysql -e \"CREATE DATABASE IF NOT EXISTS \\`{$db}\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\"",
-            "cd ".base_path(),
-            "TENANT_DB_DATABASE={$db} php artisan migrate --database=tenant --path=database/migrations/tenant --force",
-        ]);
+        // Operators must resume approved static setup, never replay migrations.
+        return 'Complete or retry the approved SPSB workspace setup in Central for organization '.$orgId.'.';
     }
 }
