@@ -3051,7 +3051,7 @@
   "integration.status.superseded": "Reemplazado",
   "integration.status.reversed": "Revertido",
   "integration.events.failureCategory": "Categoría de fallo",
-  "integration.events.leaseExpiry": "Expiración de contrato",
+  "integration.events.leaseExpiry": "Vencimiento del bloqueo de procesamiento",
   "integration.events.search": "Buscar evento, documento o fallo",
   "integration.events.reviewNote": "Nota de revisión",
   "integration.events.markReviewed": "Marcar como revisado",

@@ -3051,7 +3051,7 @@
   "integration.status.superseded": "سپرسیڈ",
   "integration.status.reversed": "اندراج معکوس",
   "integration.events.failureCategory": "ناکامی کا زمرہ",
-  "integration.events.leaseExpiry": "لیز کی میعاد ختم",
+  "integration.events.leaseExpiry": "پروسیسنگ لاک ختم ہونے کا وقت",
   "integration.events.search": "واقعہ، دستاویز، یا ناکامی تلاش کریں۔",
   "integration.events.reviewNote": "جائزہ نوٹ",
   "integration.events.markReviewed": "مارک کا جائزہ لیا گیا۔",

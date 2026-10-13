@@ -3051,7 +3051,7 @@
   "integration.status.superseded": "Yerine geçti",
   "integration.status.reversed": "Ters kayıt oluşturuldu",
   "integration.events.failureCategory": "Başarısızlık kategorisi",
-  "integration.events.leaseExpiry": "Kiraya son verme",
+  "integration.events.leaseExpiry": "İşlem kilidinin sona erme zamanı",
   "integration.events.search": "Olay, belge veya başarısızlık ara",
   "integration.events.reviewNote": "İnceleme notu",
   "integration.events.markReviewed": "İncele olarak işaretle",

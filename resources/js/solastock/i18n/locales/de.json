@@ -3051,7 +3051,7 @@
   "integration.status.superseded": "Abgelöst",
   "integration.status.reversed": "Storniert",
   "integration.events.failureCategory": "Fehlerkategorie",
-  "integration.events.leaseExpiry": "Ablauf des Mietvertrags",
+  "integration.events.leaseExpiry": "Ablauf der Verarbeitungssperre",
   "integration.events.search": "Suchereignis, Dokument oder Fehler",
   "integration.events.reviewNote": "Rezensionsnotiz",
   "integration.events.markReviewed": "Mark überprüft",

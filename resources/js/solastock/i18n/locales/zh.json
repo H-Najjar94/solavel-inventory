@@ -3051,7 +3051,7 @@
   "integration.status.superseded": "取代",
   "integration.status.reversed": "已冲销",
   "integration.events.failureCategory": "故障类别",
-  "integration.events.leaseExpiry": "租约到期",
+  "integration.events.leaseExpiry": "处理锁到期时间",
   "integration.events.search": "搜索事件、文档或失败",
   "integration.events.reviewNote": "复习笔记",
   "integration.events.markReviewed": "标记已审核",

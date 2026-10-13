@@ -3051,7 +3051,7 @@
   "integration.status.superseded": "Sostituito",
   "integration.status.reversed": "Stornato",
   "integration.events.failureCategory": "Categoria di guasto",
-  "integration.events.leaseExpiry": "Scadenza del leasing",
+  "integration.events.leaseExpiry": "Scadenza del blocco di elaborazione",
   "integration.events.search": "Cerca evento, documento o guasto",
   "integration.events.reviewNote": "Nota di revisione",
   "integration.events.markReviewed": "Segna come revisionato",
