@@ -11,7 +11,7 @@ return array (
   'Unsupported financial source type.' => 'Tipo de origen financiero no compatible.',
   'The source and destination document types are incompatible.' => 'Los tipos de documento de origen y destino son incompatibles.',
   'Source and destination currency snapshots do not match.' => 'Las instantáneas de moneda de origen y destino no coinciden.',
-  'The selected source is not posted or was reversed.' => 'El origen seleccionado no está publicado o fue revertido.',
+  'The selected source is not posted or was reversed.' => 'El documento de origen seleccionado no está contabilizado o fue revertido.',
   'The selected source line does not belong to this document.' => 'La línea de origen seleccionada no pertenece a este documento.',
   'The selected item identity does not match its source line.' => 'La identidad del artículo seleccionado no coincide con su línea de origen.',
   'Allocated quantity must be positive.' => 'La cantidad asignada debe ser positiva.',

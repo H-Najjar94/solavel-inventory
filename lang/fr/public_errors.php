@@ -11,7 +11,7 @@ return array (
   'Unsupported financial source type.' => 'Type de source financière non pris en charge.',
   'The source and destination document types are incompatible.' => 'Les types de documents source et destination sont incompatibles.',
   'Source and destination currency snapshots do not match.' => 'Les instantanés de devise source et destination ne correspondent pas.',
-  'The selected source is not posted or was reversed.' => 'La source sélectionnée n\'est pas publiée ou a été inversée.',
+  'The selected source is not posted or was reversed.' => 'Le document source sélectionné n’est pas comptabilisé ou a été contrepassé.',
   'The selected source line does not belong to this document.' => 'La ligne source sélectionnée n\'appartient pas à ce document.',
   'The selected item identity does not match its source line.' => 'L\'identité d\'article sélectionnée ne correspond pas à sa ligne source.',
   'Allocated quantity must be positive.' => 'La quantité allouée doit être positive.',

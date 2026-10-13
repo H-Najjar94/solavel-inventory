@@ -471,7 +471,7 @@ return array (
     'sale_disabled' => 'Dieser Artikel ist nicht zum Verkauf verfügbar. Aktivieren Sie „Zum Verkauf verfügbar“ in den Artikeleinstellungen, um es für einen neuen Verkauf zu verwenden.',
     'invalid_source' => 'Wählen Sie ein gemeldetes internes Verbrauchsproblem aus.',
     'return_exceeds' => 'Die Retoure übersteigt die ausstehende ausgegebene Menge. Aktualisieren Sie das Problem, um frühere Rücksendungen zu überprüfen.',
-    'approval_required' => 'Genehmigen Sie dieses Dokument vor der Veröffentlichung.',
+    'approval_required' => 'Genehmigen Sie diesen Beleg vor dem Buchen.',
     'locked' => 'Gepostete Dokumente können nicht bearbeitet oder gelöscht werden. Nutzen Sie eine Rücksendung gegen die Originalausgabe.',
     'capitalized_inventory_required' => 'Für den internen Verbrauch ist ein aktiver, bestandsverfolgter Artikel erforderlich, der als aktivierter Bestand gehalten wird.',
     'closed_period' => 'Das Buchungsdatum ist gesperrt, geschlossen oder hat keine offene Periode. Wählen Sie in SolaCount ein offenes Buchungsdatum.',
