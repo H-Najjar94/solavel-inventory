@@ -274,7 +274,7 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
                             <span>{app.name}</span>
                         </a>
                     ))}
-                    <a className="ss-app-tile ss-app-tile--docs" href={`${docsOrigin}/docs/solavel-stock/index?lang=${encodeURIComponent(locale)}`} target="_blank" rel="noopener" onClick={onClose}
+                    <a className="ss-app-tile ss-app-tile--docs" href={`${docsOrigin}/docs/solavel-stock/index?lang=${encodeURIComponent(locale)}`} target="_blank" rel="noopener noreferrer" onClick={onClose}
                         title={`${t('shell.documentation')} ${t('shell.opensNewTab')}`}>
                         <img src={`${basePath()}/imgs/apps/docs.svg`} alt="" />
                         <span>{t('shell.documentation')}</span>
