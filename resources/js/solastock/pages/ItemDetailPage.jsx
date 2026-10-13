@@ -197,7 +197,7 @@ function MovementsTable({ rows, onRow }) {
             <thead><tr><th>{t('itemDetail.date')}</th><th>{t('itemDetail.direction')}</th><th>{t('itemDetail.quantity')}</th><th>{t('itemDetail.unitCost')}</th><th>{t('itemDetail.runningQuantity')}</th><th>{t('itemDetail.warehouse')}</th><th>{t('itemDetail.source')}</th><th></th></tr></thead>
             <tbody>{rows.map((m) => (
                 <tr key={m.id} className="clickable-row" onClick={() => onRow(m)} title={t('itemDetail.viewMovement')}>
-                    <td>{m.moved_at}</td><td><Badge tone={m.direction === 'out' ? 'warn' : 'ok'}>{m.direction}</Badge></td>
+                    <td>{m.moved_at}</td><td><Badge tone={m.direction === 'out' ? 'warn' : 'ok'}>{t(`document.direction.${m.direction}`, m.direction)}</Badge></td>
                     <td>{qty(m.quantity)}</td><td>{m.unit_cost ? money(m.unit_cost) : '—'}</td>
                     <td>{m.balance_qty_after ? qty(m.balance_qty_after) : '—'}</td><td>{m.warehouse_name ?? `#${m.warehouse_id}`}</td>
                     <td>{m.source_display ?? m.source_label ?? '—'}</td>

@@ -26,7 +26,7 @@ export default function WarehousesPage() {
                     <td className="wh-thumb-cell">{w.primary_image_url
                         ? <img className="wh-banner-thumb" src={w.primary_image_url} alt="" loading="lazy" />
                         : <span className="wh-banner-thumb wh-banner-thumb--ph">🏬</span>}</td>
-                    <td><Link to={`/warehouses/${w.id}`}>{w.code}</Link></td><td>{w.name}</td><td>{w.type}</td><td>{w.is_active ? t('warehouses.active') : t('warehouses.inactive')}</td></tr>))}</tbody></table>
+                    <td><Link to={`/warehouses/${w.id}`}>{w.code}</Link></td><td>{w.name}</td><td>{t(`warehouseDetail.type.${w.type}`, w.type)}</td><td>{w.is_active ? t('warehouses.active') : t('warehouses.inactive')}</td></tr>))}</tbody></table>
             )}
         </section>
     );

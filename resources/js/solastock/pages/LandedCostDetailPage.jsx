@@ -87,7 +87,7 @@ export default function LandedCostDetailPage() {
                 <p className="muted">{t('landedCosts.journalHint')}</p>
                 {events.length === 0 ? <p className="muted">{t('landedCosts.noEvents')}</p> : (
                     <table className="data-table"><thead><tr><th>{t('landedCosts.number')}</th><th>{t('landedCosts.eventType')}</th><th>{t('landedCosts.eventStatus')}</th><th>{t('landedCosts.date')}</th></tr></thead>
-                        <tbody>{events.map((e) => <tr key={e.id}><td>{e.aggregate_number}</td><td><bdi>{e.event_type}</bdi></td><td>{e.status}</td><td>{e.occurred_at}</td></tr>)}</tbody></table>
+                        <tbody>{events.map((e) => <tr key={e.id}><td>{e.aggregate_number}</td><td><bdi>{t(`integration.eventType.${e.event_type}`, e.event_type)}</bdi></td><td>{t(`integration.status.${e.status}`, e.status)}</td><td>{e.occurred_at}</td></tr>)}</tbody></table>
                 )}
             </div>
 
