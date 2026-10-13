@@ -1,9 +1,15 @@
 import { sourceText } from '../i18n/locales.js';
+import { t } from '../i18n/index.js';
 import { accountSelectionDirty } from '../services/connectionReview.js';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n/context.jsx';
+
+const knownAccountTypes = new Set(['asset', 'liability', 'equity', 'revenue', 'expense', 'income', 'cogs']);
+export function accountTypeLabel(value) {
+    return knownAccountTypes.has(value) ? t(`integration.accountType.${value}`, value) : value;
+}
 
 const roles = {
     inventory_asset: ['Inventory', 'المخزون', 'Value of inventory held.', 'قيمة المخزون المتاح.'],
@@ -44,7 +50,7 @@ function AccountPicker({ accounts, selected, onSelect, disabled, label, locale }
     const button = useRef(null), panel = useRef(null), search = useRef(null);
     const id = useId();
     const arabic = locale === 'ar';
-    const title = account => `${account.code} · ${recordText(account.name, locale)} · ${account.type}`;
+    const title = account => `${account.code} · ${recordText(account.name, locale)} · ${accountTypeLabel(account.type)}`;
     const filtered = accounts.filter(account => title(account).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     const close = () => { setOpen(false); button.current?.focus(); };
     useEffect(() => { setActive(0); }, [query]);
@@ -77,7 +83,7 @@ function AccountPicker({ accounts, selected, onSelect, disabled, label, locale }
         if (event.key === 'Enter' && filtered[active]) { event.preventDefault(); onSelect(filtered[active]); close(); }
     }}>
         <input ref={search} role="combobox" aria-label={sourceText("Search account code or name", "البحث برمز الحساب أو اسمه")} aria-expanded="true" aria-controls={id} aria-activedescendant={filtered[active] ? `${id}-${active}` : undefined} autoComplete="off" value={query} onChange={event => setQuery(event.target.value)} placeholder={sourceText("Search code or name", "ابحث بالرمز أو الاسم")} />
-        <div id={id} role="listbox" aria-label={label}>{filtered.map((account, index) => <button type="button" role="option" tabIndex={-1} id={`${id}-${index}`} key={account.id} aria-selected={String(account.id) === String(selected?.id)} className={active === index ? 'is-highlighted' : ''} onPointerMove={() => setActive(index)} onClick={() => { onSelect(account); close(); }}><span><bdi>{account.code}</bdi> · {recordText(account.name, locale)}<small>{account.type}</small></span><span aria-hidden="true">{String(account.id) === String(selected?.id) ? '✓' : ''}</span></button>)}</div>
+        <div id={id} role="listbox" aria-label={label}>{filtered.map((account, index) => <button type="button" role="option" tabIndex={-1} id={`${id}-${index}`} key={account.id} aria-selected={String(account.id) === String(selected?.id)} className={active === index ? 'is-highlighted' : ''} onPointerMove={() => setActive(index)} onClick={() => { onSelect(account); close(); }}><span><bdi>{account.code}</bdi> · {recordText(account.name, locale)}<small>{accountTypeLabel(account.type)}</small></span><span aria-hidden="true">{String(account.id) === String(selected?.id) ? '✓' : ''}</span></button>)}</div>
         {!filtered.length && <p role="status">{sourceText("No matching accounts", "لا توجد حسابات مطابقة")}</p>}
     </div>, document.body)}</>;
 }
@@ -104,7 +110,7 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
 {detail.current_mapping && <small>{sourceText("Current mapping: ", "الربط الحالي: ")}<bdi>{detail.current_mapping.code}</bdi> · {recordText(detail.current_mapping.name, locale)}</small>}</div>
                 <div><AccountPicker accounts={choices} selected={proposed} disabled={!canEdit || saving || !choices.length} label={label} locale={locale} onSelect={account => { setProposals(value => ({ ...value, [row.fingerprint]: account })); setFailed(null); }} />
                     {!saved && detail.recommendation_source === 'verified_finance_default' && <small>{sourceText("Proposed from the verified SolaCount default-account mapping.", "مقترح من إعدادات الحسابات الافتراضية الموثقة في SolaCount.")}</small>}
-                    {detail.account_proposal && <small role="note"><strong>{sourceText("New account proposal — not created or approved", "اقتراح حساب جديد — لم يتم إنشاؤه أو اعتماده")}</strong><br /><bdi>{detail.account_proposal.code}</bdi> · {recordText(detail.account_proposal.name, locale)} · {detail.account_proposal.type}{detail.account_proposal.kind === 'code_conflict_requires_review' && <span>{sourceText(" — code already used; review required", " — الرمز مستخدم؛ يلزم المراجعة")}</span>}</small>}
+                    {detail.account_proposal && <small role="note"><strong>{sourceText("New account proposal — not created or approved", "اقتراح حساب جديد — لم يتم إنشاؤه أو اعتماده")}</strong><br /><bdi>{detail.account_proposal.code}</bdi> · {recordText(detail.account_proposal.name, locale)} · {accountTypeLabel(detail.account_proposal.type)}{detail.account_proposal.kind === 'code_conflict_requires_review' && <span>{sourceText(" — code already used; review required", " — الرمز مستخدم؛ يلزم المراجعة")}</span>}</small>}
                     {detail.finance_chart_ready === false && <small>{sourceText("Complete the SolaCount chart of accounts setup first.", "أكمل إعداد دليل الحسابات في SolaCount أولاً.")}</small>}
                     {!choices.length && <small>{sourceText("An accounting administrator must review the SolaCount chart of accounts. No account will be created automatically.", "اطلب من مسؤول الحسابات مراجعة دليل الحسابات في SolaCount. لن يتم إنشاء حساب تلقائياً.")}</small>}
                 </div><div><span className={`wizard-account-state ${saved ? 'is-saved' : 'is-pending'}`} role="status">{state}</span>

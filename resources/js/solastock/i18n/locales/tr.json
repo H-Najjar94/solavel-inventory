@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": ":request'ü açın ve yalnızca fiziksel olarak sevk edilen malları onaylayın.",
   "notification.dispatch.setup": ":request görünür, ancak yetkili bir depo yapılandırılana kadar mallar sevk edilemez.",
   "notification.dispatch.credit": ":request içindeki sevk edilen miktarları ve alacak dekontuyla kapatılan teslim edilmemiş miktarları inceleyin.",
-  "notification.dispatch.refund": ":request içindeki sevk edilen miktarları ve para iadesiyle iptal edilen teslim edilmemiş miktarları inceleyin."
+  "notification.dispatch.refund": ":request içindeki sevk edilen miktarları ve para iadesiyle iptal edilen teslim edilmemiş miktarları inceleyin.",
+  "integration.accountType.asset": "Varlık",
+  "integration.accountType.liability": "Borç",
+  "integration.accountType.equity": "Özkaynak",
+  "integration.accountType.revenue": "Gelir",
+  "integration.accountType.expense": "Gider",
+  "integration.accountType.income": "Gelir",
+  "integration.accountType.cogs": "Satılan Malın Maliyeti"
 }

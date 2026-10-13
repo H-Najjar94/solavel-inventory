@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": "Ouvrez :request et confirmez uniquement les marchandises physiquement expédiées.",
   "notification.dispatch.setup": ":request est visible, mais les marchandises ne peuvent pas être expédiées tant qu'un entrepôt autorisé n'est pas configuré.",
   "notification.dispatch.credit": "Vérifiez les quantités expédiées et les quantités non livrées clôturées par avoir dans :request.",
-  "notification.dispatch.refund": "Vérifiez les quantités expédiées et les quantités non livrées annulées par remboursement dans :request."
+  "notification.dispatch.refund": "Vérifiez les quantités expédiées et les quantités non livrées annulées par remboursement dans :request.",
+  "integration.accountType.asset": "Actif",
+  "integration.accountType.liability": "Passif",
+  "integration.accountType.equity": "Capitaux propres",
+  "integration.accountType.revenue": "Produit",
+  "integration.accountType.expense": "Charge",
+  "integration.accountType.income": "Produit",
+  "integration.accountType.cogs": "Coût des ventes"
 }

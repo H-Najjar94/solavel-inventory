@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": ":request کھولیں اور صرف ان اشیاء کی تصدیق کریں جو جسمانی طور پر روانہ کی گئی ہیں۔",
   "notification.dispatch.setup": ":request نظر آ رہا ہے، لیکن جب تک کہ ایک مجاز گودام ترتیب نہ دیا جائے، اشیاء روانہ نہیں کی جا سکتیں۔",
   "notification.dispatch.credit": ":request میں روانہ شدہ مقداروں اور کریڈٹ نوٹ کے ذریعے بند کی گئی غیر ترسیل شدہ مقداروں کا جائزہ لیں۔",
-  "notification.dispatch.refund": ":request میں روانہ شدہ مقداروں اور ری فنڈ کے ذریعے منسوخ کی گئی غیر ترسیل شدہ مقداروں کا جائزہ لیں۔"
+  "notification.dispatch.refund": ":request میں روانہ شدہ مقداروں اور ری فنڈ کے ذریعے منسوخ کی گئی غیر ترسیل شدہ مقداروں کا جائزہ لیں۔",
+  "integration.accountType.asset": "اثاثہ",
+  "integration.accountType.liability": "واجبات",
+  "integration.accountType.equity": "مالکانہ حقوق",
+  "integration.accountType.revenue": "آمدنی",
+  "integration.accountType.expense": "اخراجات",
+  "integration.accountType.income": "آمدنی",
+  "integration.accountType.cogs": "فروخت کردہ سامان کی لاگت"
 }

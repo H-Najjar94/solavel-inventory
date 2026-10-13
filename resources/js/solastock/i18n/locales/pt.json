@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": "Abra :request e confirme apenas as mercadorias fisicamente despachadas.",
   "notification.dispatch.setup": ":request está visível, mas as mercadorias não podem ser despachadas até que um armazém autorizado seja configurado.",
   "notification.dispatch.credit": "Revise as quantidades despachadas e as quantidades não entregues encerradas por nota de crédito em :request.",
-  "notification.dispatch.refund": "Revise as quantidades despachadas e as quantidades não entregues canceladas por reembolso em :request."
+  "notification.dispatch.refund": "Revise as quantidades despachadas e as quantidades não entregues canceladas por reembolso em :request.",
+  "integration.accountType.asset": "Ativo",
+  "integration.accountType.liability": "Passivo",
+  "integration.accountType.equity": "Capital próprio",
+  "integration.accountType.revenue": "Receita",
+  "integration.accountType.expense": "Despesa",
+  "integration.accountType.income": "Receita",
+  "integration.accountType.cogs": "Custo das Mercadorias Vendidas"
 }

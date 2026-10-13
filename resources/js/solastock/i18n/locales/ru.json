@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": "Откройте :request и подтвердите только фактически отгруженные товары.",
   "notification.dispatch.setup": ":request отображается, но отгрузка товаров невозможна, пока не настроен уполномоченный склад.",
   "notification.dispatch.credit": "Проверьте отгруженные количества и неотгруженные количества, закрытые кредит-нотой, в :request.",
-  "notification.dispatch.refund": "Проверьте отгруженные количества и неотгруженные количества, отмененные возвратом средств, в :request."
+  "notification.dispatch.refund": "Проверьте отгруженные количества и неотгруженные количества, отмененные возвратом средств, в :request.",
+  "integration.accountType.asset": "Актив",
+  "integration.accountType.liability": "Обязательство",
+  "integration.accountType.equity": "Капитал",
+  "integration.accountType.revenue": "Доход",
+  "integration.accountType.expense": "Расход",
+  "integration.accountType.income": "Доходы",
+  "integration.accountType.cogs": "Себестоимость продаж"
 }

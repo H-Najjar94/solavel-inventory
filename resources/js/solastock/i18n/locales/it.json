@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": "Apri :request e conferma solo le merci fisicamente spedite.",
   "notification.dispatch.setup": ":request è visibile, ma le merci non possono essere spedite finché non viene configurato un magazzino autorizzato.",
   "notification.dispatch.credit": "Verifica le quantità spedite e le quantità non consegnate chiuse con nota di credito in :request.",
-  "notification.dispatch.refund": "Verifica le quantità spedite e le quantità non consegnate annullate con rimborso in :request."
+  "notification.dispatch.refund": "Verifica le quantità spedite e le quantità non consegnate annullate con rimborso in :request.",
+  "integration.accountType.asset": "Attività",
+  "integration.accountType.liability": "Passività",
+  "integration.accountType.equity": "Patrimonio netto",
+  "integration.accountType.revenue": "Ricavo",
+  "integration.accountType.expense": "Costo",
+  "integration.accountType.income": "Provento",
+  "integration.accountType.cogs": "Costo del venduto"
 }

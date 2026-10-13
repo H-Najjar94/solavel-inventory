@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": "Öffnen Sie :request und bestätigen Sie nur die tatsächlich versendeten Waren.",
   "notification.dispatch.setup": ":request ist sichtbar, aber die Waren können nicht versandt werden, bis ein autorisiertes Lager konfiguriert wurde.",
   "notification.dispatch.credit": "Prüfen Sie die versendeten Mengen und die nicht gelieferten Mengen, die in :request durch Gutschrift geschlossen wurden.",
-  "notification.dispatch.refund": "Prüfen Sie die versendeten Mengen und die nicht gelieferten Mengen, die in :request durch Erstattung storniert wurden."
+  "notification.dispatch.refund": "Prüfen Sie die versendeten Mengen und die nicht gelieferten Mengen, die in :request durch Erstattung storniert wurden.",
+  "integration.accountType.asset": "Vermögenswert",
+  "integration.accountType.liability": "Verbindlichkeit",
+  "integration.accountType.equity": "Eigenkapital",
+  "integration.accountType.revenue": "Ertrag",
+  "integration.accountType.expense": "Aufwand",
+  "integration.accountType.income": "Ertrag",
+  "integration.accountType.cogs": "Umsatzkosten"
 }

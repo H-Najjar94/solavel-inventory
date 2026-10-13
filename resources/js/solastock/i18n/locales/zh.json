@@ -4092,5 +4092,12 @@
   "notification.dispatch.open": "打开 :request 并确认仅包含实际已发货的货物。",
   "notification.dispatch.setup": ":request 可见，但在配置授权仓库之前，货物无法发货。",
   "notification.dispatch.credit": "在 :request 中查看已发货数量以及通过贷项关闭的未交付数量。",
-  "notification.dispatch.refund": "在 :request 中查看已发货数量以及通过退款取消的未交付数量。"
+  "notification.dispatch.refund": "在 :request 中查看已发货数量以及通过退款取消的未交付数量。",
+  "integration.accountType.asset": "资产",
+  "integration.accountType.liability": "负债",
+  "integration.accountType.equity": "所有者权益",
+  "integration.accountType.revenue": "收入",
+  "integration.accountType.expense": "费用",
+  "integration.accountType.income": "收入",
+  "integration.accountType.cogs": "销售成本"
 }
