@@ -2550,7 +2550,7 @@
   "openingStock.value": "Değer",
   "openingStock.readOnly": "Gönderilen belgeler salt okunur.",
   "openingStock.addLineRequired": "En az bir satır ekleyin.",
-  "openingStock.posted": "Açılış stoku posta edildi.",
+  "openingStock.posted": "Açılış stoku muhasebeleştirildi.",
   "openingStock.reversed": "Açılış stoku tersine çevrildi.",
   "openingStock.draftUpdated": "Taslak güncellendi.",
   "openingStock.draftSaved": "Taslak kaydedildi.",

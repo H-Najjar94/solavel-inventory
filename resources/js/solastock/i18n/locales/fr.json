@@ -2550,7 +2550,7 @@
   "openingStock.value": "Valeur",
   "openingStock.readOnly": "Les documents comptabilisés sont en lecture seule.",
   "openingStock.addLineRequired": "Ajoutez au moins une ligne.",
-  "openingStock.posted": "Stock d'ouverture affiché.",
+  "openingStock.posted": "Stock d’ouverture comptabilisé.",
   "openingStock.reversed": "Stock d’ouverture inversé.",
   "openingStock.draftUpdated": "Projet mis à jour.",
   "openingStock.draftSaved": "Brouillon enregistré.",
