@@ -1986,7 +1986,7 @@
   "traceabilityPages.lotDetail.noReturns": "Aucun retour.",
   "traceabilityPages.lotDetail.quarantine": "Quarantaine",
   "traceabilityPages.lotDetail.markActive": "Marquer comme actif",
-  "traceabilityPages.lotDetail.markConsumed": "Marque consommée",
+  "traceabilityPages.lotDetail.markConsumed": "Marquer comme consommé",
   "traceabilityPages.lotDetail.statusUpdated": "Lot marqué :status.",
   "traceabilityPages.serials.title": "Numéros de série",
   "traceabilityPages.serials.search": "Recherche par numéro de série…",
