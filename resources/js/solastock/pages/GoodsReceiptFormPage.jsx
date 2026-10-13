@@ -154,8 +154,8 @@ export default function GoodsReceiptFormPage() {
             { key: 'rem', label: t('receiving.common.remaining', 'Remaining'), width: 90, render: (l) => <span>{l.remaining_qty}</span> },
         ] : []),
         { key: 'recv', label: t('receiving.grn.fields.received', 'Received'), width: 110, render: (l, i) => {
-            const t = trackingOf(l.item_id);
-            const tracksSerial = t.tracking_type === 'serial' || t.tracking_type === 'lot_serial';
+            const trackingInfo = trackingOf(l.item_id);
+            const tracksSerial = trackingInfo.tracking_type === 'serial' || trackingInfo.tracking_type === 'lot_serial';
             return tracksSerial && !l.kept
                 ? <span className="muted" title={t('receiving.grn.form.serialCountHint', 'Quantity equals the number of serial numbers')}>{(l.serials ?? []).length}</span>
                 : <QuantityInput value={l.received_qty} onChange={(v) => setLine(i, { received_qty: v, accepted_qty: v })} />;
