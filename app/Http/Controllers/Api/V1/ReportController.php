@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\InventoryScheduledReport;
 use App\Services\Access\WarehouseAccessService;
+use App\Services\Preferences\AccountPreferenceSync;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Reports\ReportExportService;
 use App\Services\Reports\ReportFilters;
@@ -93,7 +94,7 @@ class ReportController extends ApiController
     public function updateSchedule(Request $request, InventoryScheduledReport $schedule): JsonResponse
     {
         abort_unless($this->warehouseAccess->allowedIds() === null, 403);
-        $schedule->fill($this->validatedSchedule($request))->save();
+        $schedule->fill($this->validatedSchedule($request, $schedule))->save();
 
         return $this->success($schedule->fresh());
     }
@@ -105,7 +106,7 @@ class ReportController extends ApiController
         return $this->success($this->scheduledReports->run($schedule));
     }
 
-    private function validatedSchedule(Request $request): array
+    private function validatedSchedule(Request $request, ?InventoryScheduledReport $schedule = null): array
     {
         $data = $request->validate([
             'report_key' => ['required', 'string', Rule::in(array_keys(InventoryReportService::REPORTS))],
@@ -119,8 +120,19 @@ class ReportController extends ApiController
             'is_active' => ['boolean'],
         ]);
 
+        // Validate metadata separately: nested validation must not remove other
+        // existing report filter keys from the validated parent array.
+        $request->validate(['filters.locale' => ['nullable', 'string', Rule::in(AccountPreferenceSync::LOCALES)]]);
+
         $data['next_run_at'] = $data['next_run_at'] ?? $this->scheduledReports->nextRunAt($data['frequency']);
         $data['is_active'] = $data['is_active'] ?? true;
+
+        // New schedules capture the selected language; edits retain the saved
+        // language. Older/invalid saved metadata has an explicit English fallback.
+        $locale = $schedule ? data_get($schedule->filters, 'locale') : app()->getLocale();
+        $data['filters'] = array_replace((array) ($data['filters'] ?? []), [
+            'locale' => in_array($locale, AccountPreferenceSync::LOCALES, true) ? $locale : 'en',
+        ]);
 
         return $data;
     }

@@ -4,6 +4,7 @@ namespace App\Services\Reports;
 
 use App\Models\Tenant\InventoryScheduledReport;
 use App\Services\Entitlements\InventoryCommercialEntitlementService;
+use App\Services\Preferences\AccountPreferenceSync;
 use Illuminate\Support\Facades\Mail;
 
 class ScheduledReportRunner
@@ -41,39 +42,51 @@ class ScheduledReportRunner
             return ['schedule' => $schedule->fresh(), 'result' => ['title' => '', 'rows' => [], 'summary' => []]];
         }
 
-        $result = $this->reports->run($schedule->report_key, ReportFilters::fromArray((array) $schedule->filters));
-        $recipients = array_values(array_filter((array) $schedule->recipients));
-        $status = 'generated';
-        $error = null;
+        // Keep background delivery in the language selected when the schedule was
+        // created. Older schedules have an explicit English fallback, independent
+        // of the previous job or the language of a manual Run now request.
+        $savedLocale = data_get($schedule->filters, 'locale');
+        $locale = in_array($savedLocale, AccountPreferenceSync::LOCALES, true) ? $savedLocale : 'en';
+        $previousLocale = app()->getLocale();
+        try {
+            app()->setLocale($locale);
+            $result = $this->reports->run($schedule->report_key, ReportFilters::fromArray((array) $schedule->filters));
+            $recipients = array_values(array_filter((array) $schedule->recipients));
+            $status = 'generated';
+            $error = null;
 
-        if ($recipients !== []) {
-            try {
-                $subject = 'SolaStock scheduled report: '.$result['title'];
-                $body = $result['title']."\nRows: ".count($result['rows'] ?? [])."\nSummary: ".json_encode($result['summary'] ?? []);
-                foreach ($recipients as $recipient) {
-                    Mail::raw($body, fn ($message) => $message->to($recipient)->subject($subject));
+            if ($recipients !== []) {
+                try {
+                    $subject = __('scheduled_reports.subject', ['report' => $result['title']]);
+                    $body = $result['title']."\n".__('scheduled_reports.rows').': '.count($result['rows'] ?? [])
+                        ."\n".__('scheduled_reports.summary').': '.json_encode($result['summary'] ?? []);
+                    foreach ($recipients as $recipient) {
+                        Mail::raw($body, fn ($message) => $message->to($recipient)->subject($subject));
+                    }
+                    $status = 'delivered';
+                } catch (\Throwable $e) {
+                    $status = 'failed';
+                    $error = $e->getMessage();
                 }
-                $status = 'delivered';
-            } catch (\Throwable $e) {
-                $status = 'failed';
-                $error = $e->getMessage();
             }
+
+            $schedule->forceFill([
+                'last_run_at' => now(),
+                'last_delivered_at' => $status === 'delivered' ? now() : null,
+                'last_status' => $status,
+                'last_error' => $error,
+                'last_payload' => [
+                    'title' => $result['title'],
+                    'summary' => $result['summary'] ?? [],
+                    'row_count' => count($result['rows'] ?? []),
+                ],
+                'next_run_at' => $this->nextRunAt($schedule->frequency),
+            ])->save();
+
+            return ['schedule' => $schedule->fresh(), 'result' => $result];
+        } finally {
+            app()->setLocale($previousLocale);
         }
-
-        $schedule->forceFill([
-            'last_run_at' => now(),
-            'last_delivered_at' => $status === 'delivered' ? now() : null,
-            'last_status' => $status,
-            'last_error' => $error,
-            'last_payload' => [
-                'title' => $result['title'],
-                'summary' => $result['summary'] ?? [],
-                'row_count' => count($result['rows'] ?? []),
-            ],
-            'next_run_at' => $this->nextRunAt($schedule->frequency),
-        ])->save();
-
-        return ['schedule' => $schedule->fresh(), 'result' => $result];
     }
 
     /** @return array{checked:int,ran:int,failed:int,results:array<int,array{id:int,status:string,error:?string}>} */
