@@ -49,6 +49,16 @@ class StockCountController extends ApiController
         // Eager-load names (org-scoped) so the detail page shows names, not raw #ids.
         $stock_count->load(['lines.item:id,name,sku', 'warehouse:id,name,code']);
         $stock_count->setAttribute('warehouse_name', $stock_count->warehouse?->name);
+        // Resolve display metadata in one tenant/org-scoped read; never change stored lot IDs.
+        $lotIds = $stock_count->lines->pluck('lot_id')->filter()->unique()->values();
+        $lots = $lotIds->isEmpty() ? collect() : Lot::query()
+            ->whereIn('id', $lotIds)->get(['id', 'lot_code', 'expiry_date'])->keyBy('id');
+        $stock_count->lines->each(function ($line) use ($lots) {
+            $lot = $lots->get($line->lot_id);
+            $line->setAttribute('lot_code', $lot?->lot_code);
+            $line->setAttribute('expiry_date', $lot?->expiry_date?->toDateString());
+        });
+
         if ($stock_count->blind_count && $stock_count->status !== 'posted') {
             // Blind count: the expected quantity never leaves the server before posting.
             $stock_count->lines->each(fn ($line) => $line->makeHidden(['system_qty', 'snapshot_qty', 'variance_qty']));

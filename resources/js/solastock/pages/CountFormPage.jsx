@@ -52,7 +52,7 @@ export default function CountFormPage() {
                 freeze_snapshot: !!c.snapshot_at,
                 notes: c.notes ?? '',
             });
-            setLines((c.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id ?? null, system_qty: l.system_qty, snapshot_qty: l.snapshot_qty ?? null, counted_qty: l.counted_qty ?? '' })));
+            setLines((c.lines ?? []).map((l) => ({ item_id: l.item_id, bin_id: l.bin_id, lot_id: l.lot_id ?? null, lot_code: l.lot_code ?? null, expiry_date: l.expiry_date ?? null, system_qty: l.system_qty, snapshot_qty: l.snapshot_qty ?? null, counted_qty: l.counted_qty ?? '' })));
         }
     }, [isEdit, existing.data]);
 
