@@ -94,6 +94,13 @@ function signOut() {
 
 const LANGUAGES = [{ code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }, {code:'fr',label:'Français'}, {code:'ru',label:'Русский'}, {code:'ur',label:'اردو'}, {code:'de',label:'Deutsch'}, {code:'es',label:'Español'}, {code:'zh',label:'中文'}, {code:'pt',label:'Português'}, {code:'tr',label:'Türkçe'}, {code:'it',label:'Italiano'}];
 
+const LANGUAGE_FLAGS = { en: 'gb', ar: 'sa', fr: 'fr', ru: 'ru', ur: 'pk', de: 'de', es: 'es', zh: 'cn', pt: 'pt', tr: 'tr', it: 'it' };
+
+function LanguageFlag({ locale }) {
+    return <img src={`/flags/${LANGUAGE_FLAGS[locale] ?? 'gb'}.svg?v=2`} alt="" width="20" height="15"
+        style={{ width: 20, height: 15, objectFit: 'cover', borderRadius: 3, flexShrink: 0, boxShadow: '0 0 0 1px rgba(0,0,0,.08)' }} />;
+}
+
 // Reload in the chosen language. With "Save as my default language" ON the
 // server also stores it as the Solavel account default (remember=1).
 function switchLanguage(target, remember = false) {
@@ -140,7 +147,7 @@ function LanguageMenu({ locale, onClose }) {
                 <button key={lang.code} type="button" role="menuitemradio" aria-checked={locale === lang.code}
                     className={`ss-menu__item${locale === lang.code ? ' is-current' : ''}`} lang={lang.code}
                     onClick={() => { if (locale === lang.code && !remember) onClose(); else switchLanguage(lang.code, remember); }}>
-                    <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" />
+                    <LanguageFlag locale={lang.code} />
                     <span className="ss-menu__text">{lang.label}</span>
                     {locale === lang.code && <i className="fa-solid fa-check ss-menu__trail ss-menu__check" aria-hidden="true" />}
                 </button>
@@ -291,7 +298,7 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
                 <button key={lang.code} type="button" role="menuitemradio" aria-checked={locale === lang.code} lang={lang.code}
                     className={`ss-menu__item ss-menu__item--phone${locale === lang.code ? ' is-current' : ''}`}
                     onClick={() => { if (locale !== lang.code || rememberLanguage) switchLanguage(lang.code, rememberLanguage); }}>
-                    <i className="fa-solid fa-globe ss-menu__icon" aria-hidden="true" /><span className="ss-menu__text">{lang.label}</span>
+                    <LanguageFlag locale={lang.code} /><span className="ss-menu__text">{lang.label}</span>
                     {locale === lang.code && <i className="fa-solid fa-check ss-menu__trail ss-menu__check" aria-hidden="true" />}
                 </button>
             ))}
