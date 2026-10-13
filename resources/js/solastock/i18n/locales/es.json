@@ -3097,7 +3097,7 @@
   "integration.eventType.supplier_return.posted": "Devolución a proveedor contabilizada",
   "integration.eventType.supplier_return.reversed": "Devolución a proveedor revertida",
   "integration.eventType.landed_cost.posted": "Coste de llegada (Landed cost) contabilizado",
-  "integration.eventType.landed_cost.reversed": "Costo de entrega revertido",
+  "integration.eventType.landed_cost.reversed": "Costes accesorios de adquisición revertidos",
   "integration.eventType.stock.historical_fifo_cost_corrected.v1": "Coste histórico FIFO corregido",
   "integration.eventType.sales_return.reversed": "Devolución de ventas revertida",
   "integration.tabs.wizard": "Asistente de conexión",
