@@ -32,4 +32,14 @@ $check(Decimal::round(Decimal::mul('10.00', '3.67'), 2) === '36.70', 'Foreign no
 $check(Decimal::round(Decimal::div('36.70','3.67'), 3) === '10.000', 'Foreign carrying value changed');
 // 1.01 base at rate1.5 rounds nominal1.515 to1.52: back-conversion1.013 cannot represent1.010.
 $check(Decimal::cmp(Decimal::round(Decimal::div('1.52','1.5'),3),'1.010') !== 0, 'Unrepresentable carrying value concealed');
+$current = ['money_scale'=>3, 'rate_scale'=>8, 'base_currency_code'=>'AED'];
+$old = ['version'=>'trusted-v2', 'currency'=>['money_scale'=>2,'rate_scale'=>6,'rounding_mode'=>'HALF_UP','base_code'=>'AED']];
+$reversal = Precision::reversalContract($current, $old, 'trusted-v2');
+$check($reversal['money_scale'] === 2 && $reversal['rate_scale'] === 6, 'Historical reversal precision changed');
+$check($current['money_scale'] === 3 && $old['currency']['money_scale'] === 2, 'Source or current settings mutated');
+foreach ([null, [], array_replace($old,['version'=>'legacy']), ['version'=>'trusted-v2','currency'=>array_replace($old['currency'],['base_code'=>'USD'])]] as $missing) {
+    $rejected = false;
+    try { Precision::reversalContract($current,$missing,'trusted-v2'); } catch (RuntimeException $e) { $rejected = true; }
+    $check($rejected, 'Missing or untrusted original reversal proof accepted');
+}
 echo "PASS {$checks} pure precision assertions; no database access\n";

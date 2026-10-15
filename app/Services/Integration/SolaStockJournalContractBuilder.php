@@ -76,6 +76,22 @@ final class SolaStockJournalContractBuilder
         }
 
         $eventPayload = (array) $event->payload;
+        if (!empty($eventPayload['original_source']['event_uuid'])) {
+            $originalEvent = IntegrationOutboxEvent::query()->where('organization_id', $orgId)
+                ->where('event_uuid', $eventPayload['original_source']['event_uuid'])->first();
+            if (!$originalEvent || $originalEvent->status !== 'sent'
+                || !Schema::connection($tenantConnection)->hasTable('journal_entries')) {
+                throw new RuntimeException('The posted original Finance journal is required for reversal.');
+            }
+            $originalJournal = DB::connection($tenantConnection)->table('journal_entries')
+                ->where('organization_id', (int)$setting->solabooks_organization_id)
+                ->where('source_key', 'external-api:'.hash('sha256', (string)$originalEvent->idempotency_key))
+                ->where('status', 'posted')->whereNotNull('posted_at')->first();
+            $originalMetadata = $originalJournal ? json_decode((string)$originalJournal->metadata, true) : null;
+            $finance = FinanceMoneyPrecision::reversalContract($finance,
+                is_array($originalMetadata) ? ($originalMetadata['contract'] ?? null) : null,
+                SolaStockJournalContract::VERSION);
+        }
         $transaction = $eventPayload['currency'] ?? null;
         if (! is_array($transaction) || empty($transaction['code'])) {
             throw new RuntimeException(__('inventory.integration.contract_transaction_currency_required'));
