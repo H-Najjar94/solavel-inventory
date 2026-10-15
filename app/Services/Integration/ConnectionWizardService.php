@@ -569,7 +569,7 @@ final class ConnectionWizardService
         $approvalCore['valuation_contract'] = $valuation;
         $approvalHash = $this->hash($approvalCore);
         if ($run->state === 'connected') $approvalHash = (string) $run->approval_payload_hash;
-        $precisionSupported = $valuation === [] || (int) ($valuation['money_scale'] ?? -1) === Decimal::MONEY_SCALE;
+        $precisionSupported = $valuation === [] || FinanceMoneyPrecision::supported($valuation['money_scale'] ?? null);
         $ready = ! $snapshotStale && $precisionSupported && $blocking->isEmpty() && $frozen && $run->cutoff_reviewed_at !== null
             && ($preview['guided_setup']['checks']['base_currency_inherited'] ?? false)
             && ($preview['guided_setup']['checks']['organization_verified'] ?? false);
@@ -604,7 +604,7 @@ final class ConnectionWizardService
             'master_data' => $preview['master_data'] ?? null,
             'readiness' => $preview['readiness'] ?? null,
             'guided_setup' => $this->guidedPresentation($preview, $organizationId),
-            'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock currently supports Finance money precision 2; this organization requires a qualified precision upgrade before activation.']),
+            'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock supports Finance money precision 2 or 3; other precision requires a qualified upgrade before activation.']),
             'blocking' => $blocking->all(),
             'snapshot_frozen_at' => $run->snapshot_frozen_at,
             'owner_approved_at' => $run->owner_approved_at ?? null,

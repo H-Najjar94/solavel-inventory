@@ -114,6 +114,9 @@ final class SolaStockJournalContractBuilder
         if ($baseValuation && ($eventPayload['inventory_value_currency'] ?? null) !== $baseCode) {
             throw new RuntimeException('Inventory valuation base currency does not match Finance.');
         }
+        if (! FinanceMoneyPrecision::supported($finance['money_scale'])) {
+            throw new RuntimeException('Unsupported Finance money precision; reviewed compatibility is required.');
+        }
         $moneyScale = (int) $finance['money_scale'];
         $txScale = (int) ($finance['currency_precisions'][$txCode] ?? $moneyScale);
         $lines = array_map(function (array $line) use ($rate, $moneyScale, $txScale, $meta, $baseValuation): array {
@@ -156,6 +159,11 @@ final class SolaStockJournalContractBuilder
 
             return $result;
         }, $this->journals->build($event, $orgId));
+        if ($baseValuation) {
+            // Native inventory carrying values are authoritative. Never balance
+            // by changing an inventory/COGS line, even by one Finance unit.
+            FinanceMoneyPrecision::assertBalancedInventory($lines, $moneyScale);
+        }
         $lines = $this->balanceBaseLines($lines, $moneyScale, (int) ($meta['finance_rounding_account_id'] ?? 0));
         $documentMapping = IntegrationDocumentLifecycleMapping::query()
             ->where('organization_mapping_uuid', $organizationMapping->mapping_uuid)

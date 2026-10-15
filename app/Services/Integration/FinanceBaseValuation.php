@@ -35,7 +35,7 @@ final class FinanceBaseValuation
         if (($contract['inventory_valuation_basis'] ?? null) !== self::BASIS) {
             throw ValidationException::withMessages(['valuation' => __('inventory.validation.extra_cd752e2d8c0b')]);
         }
-        if ((int) ($contract['money_scale'] ?? -1) !== 2) {
+        if (! FinanceMoneyPrecision::supported($contract['money_scale'] ?? null)) {
             throw ValidationException::withMessages(['valuation' => __('inventory.validation.extra_b7310f3b85d7')]);
         }
         return $contract;
