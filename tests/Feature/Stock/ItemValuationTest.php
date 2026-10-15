@@ -55,7 +55,7 @@ class ItemValuationTest extends TestCase
 
         $val = $this->valuationFor($item->id);
 
-        $this->assertSame('130.00', $val['on_hand_value']);
+        $this->assertSame('130.000', $val['on_hand_value']);
         $this->assertCount(1, $val['warehouses']);
         $w = $val['warehouses'][0];
         // Warehouse name/code surfaced for the UI (not just an id).
@@ -65,14 +65,14 @@ class ItemValuationTest extends TestCase
         $this->assertSame('20.0000', $w['on_hand_qty']);
         $this->assertTrue($w['qty_reconciled'], 'Σ layer qty must equal on-hand qty');
         // Before any consumption FIFO and average agree.
-        $this->assertSame('130.00', $w['fifo_value']);
-        $this->assertSame('130.00', $w['average_value']);
+        $this->assertSame('130.000', $w['fifo_value']);
+        $this->assertSame('130.000', $w['average_value']);
 
         // Layers surfaced in FIFO order with their true per-layer costs.
         $this->assertCount(2, $w['layers']);
         $this->assertSame(['5.0000', '8.0000'], array_column($w['layers'], 'unit_cost'));
         $this->assertSame(['10.0000', '10.0000'], array_column($w['layers'], 'remaining_qty'));
-        $this->assertSame(['50.00', '80.00'], array_column($w['layers'], 'layer_value'));
+        $this->assertSame(['50.000', '80.000'], array_column($w['layers'], 'layer_value'));
         $this->assertSame(['0.0000', '0.0000'], array_column($w['layers'], 'consumed_qty'));
         $this->assertSame($wh->name, $w['layers'][0]['warehouse_name']);
         $this->assertSame('Opening stock V-L1', $w['layers'][0]['source_display']);
@@ -102,17 +102,17 @@ class ItemValuationTest extends TestCase
         $w = $val['warehouses'][0];
         $this->assertSame('5.0000', $w['on_hand_qty']);
         // True FIFO value of the remaining 5 @ $8.
-        $this->assertSame('40.00', $w['fifo_value']);
+        $this->assertSame('40.000', $w['fifo_value']);
         // balance.total_value is now maintained on the FIFO basis for a FIFO item
         // (running ledger in−out cost), so it NO LONGER diverges from the layer
         // value after partial consumption — both are $40.00. (Previously this
         // surfaced a weighted-average $32.50, which drifted from FIFO truth and the
         // integrity checker flagged as a value mismatch — the cost-layer collapse.)
-        $this->assertSame('40.00', $w['average_value']);
+        $this->assertSame('40.000', $w['average_value']);
         // Quantity still reconciles (Σ layer qty == on-hand qty).
         $this->assertTrue($w['qty_reconciled']);
         // Headline on-hand value follows the FIFO basis for a FIFO item.
-        $this->assertSame('40.00', $val['on_hand_value']);
+        $this->assertSame('40.000', $val['on_hand_value']);
         // Only the partially-consumed second layer remains (5 @ $8).
         $this->assertCount(1, $w['layers']);
         $this->assertSame('8.0000', $w['layers'][0]['unit_cost']);
@@ -143,8 +143,8 @@ class ItemValuationTest extends TestCase
         $this->assertCount(1, $valuation['warehouses']);
         $warehouseValue = $valuation['warehouses'][0];
         $this->assertSame('5.0000', $warehouseValue['on_hand_qty']);
-        $this->assertSame('31.00', $warehouseValue['average_value']);
-        $this->assertSame('31.00', $warehouseValue['fifo_value']);
+        $this->assertSame('31.000', $warehouseValue['average_value']);
+        $this->assertSame('31.000', $warehouseValue['fifo_value']);
         $this->assertTrue($warehouseValue['qty_reconciled']);
         $this->assertCount(2, $warehouseValue['layers']);
     }

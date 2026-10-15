@@ -130,7 +130,7 @@ class LandedCostService
             if (! in_array($type, self::CHARGE_TYPES, true) || ! is_numeric($amount) || ! Decimal::gt($amount, '0')) {
                 $this->fail('charge_invalid');
             }
-            $amount = Decimal::round($amount, 4);
+            $amount = Decimal::money($amount);
             $baseAmount = $this->toBase($amount, $rate);
             LandedCostCharge::query()->create([
                 'landed_cost_id' => $doc->id, 'charge_type' => $type,
@@ -138,7 +138,7 @@ class LandedCostService
                 'amount' => $amount, 'base_amount' => $baseAmount,
             ]);
             $total = Decimal::add($total, $amount, 4);
-            $totalBase = Decimal::add($totalBase, $baseAmount, 2);
+            $totalBase = Decimal::add($totalBase, $baseAmount, 3);
         }
         foreach ($receiptLineIds as $lineId) {
             $snapshot = $this->receiptLineSnapshot($lineId);
@@ -152,7 +152,7 @@ class LandedCostService
             'exchange_rate' => $rate,
             'supplier_reference' => isset($attributes['supplier_reference']) ? (mb_substr(trim((string) $attributes['supplier_reference']), 0, 120) ?: null) : $doc->supplier_reference,
             'notes' => array_key_exists('notes', $attributes) ? $attributes['notes'] : $doc->notes,
-            'total_amount' => Decimal::round($total, 4),
+            'total_amount' => Decimal::money($total),
             'total_base_amount' => Decimal::money($totalBase),
         ])->save();
         // Validates the basis now (e.g. a weight method without item weights),
@@ -223,14 +223,14 @@ class LandedCostService
                         'landed_cost_id' => $doc->id, 'landed_cost_line_id' => $line->id,
                     ]);
                 }
-                $lineConsumed = Decimal::add($entry['totals']['cogs'], $entry['totals']['adjustment_loss'], 2);
+                $lineConsumed = Decimal::add($entry['totals']['cogs'], $entry['totals']['adjustment_loss'], 3);
                 $line->fill([
                     'allocated_base_amount' => $entry['allocated'],
                     'inventory_base_amount' => $entry['totals']['inventory_asset'],
                     'consumed_base_amount' => $lineConsumed,
                 ])->save();
-                $inventory = Decimal::add($inventory, $entry['totals']['inventory_asset'], 2);
-                $consumed = Decimal::add($consumed, $lineConsumed, 2);
+                $inventory = Decimal::add($inventory, $entry['totals']['inventory_asset'], 3);
+                $consumed = Decimal::add($consumed, $lineConsumed, 3);
             }
             $components = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->orderBy('id')->get();
             $this->valuation->revalueInventoryComponents($orgId, $components, false);
@@ -323,20 +323,20 @@ class LandedCostService
         if (! Decimal::gt($sum, '0')) {
             throw ValidationException::withMessages(['landed_cost' => __('inventory.landed_cost.basis_zero')]);
         }
-        $cents = bcmul(Decimal::money($total), '100', 0);
+        $minorUnits = bcmul(Decimal::money($total), '1000', 0);
         $floors = [];
         $fractions = [];
         $assigned = '0';
         $order = 0;
         foreach ($bases as $key => $basis) {
-            $share = bcdiv(bcmul($cents, (string) $basis, 12), $sum, 12);
+            $share = bcdiv(bcmul($minorUnits, (string) $basis, 12), $sum, 12);
             $floor = bcadd($share, '0', 0);
             $floors[$key] = $floor;
             $fractions[] = [$key, bcsub($share, $floor, 12), $order++];
             $assigned = bcadd($assigned, $floor, 0);
         }
         usort($fractions, fn ($a, $b) => bccomp($b[1], $a[1], 12) ?: $a[2] <=> $b[2]);
-        $left = (int) bcsub($cents, $assigned, 0);
+        $left = (int) bcsub($minorUnits, $assigned, 0);
         foreach ($fractions as [$key]) {
             if ($left <= 0) {
                 break;
@@ -345,10 +345,10 @@ class LandedCostService
             $left--;
         }
 
-        return array_map(fn (string $c) => bcdiv($c, '100', 2), $floors);
+        return array_map(fn (string $c) => bcdiv($c, '1000', 3), $floors);
     }
 
-    /** Transaction amount → base (2 dp): base = amount ÷ rate. */
+    /** Transaction amount → base (3 dp): base = amount ÷ rate. */
     public function toBase(string $amount, string $rate): string
     {
         return Decimal::money(Decimal::div($amount, $rate, 10));
@@ -457,7 +457,7 @@ class LandedCostService
     {
         $allocations = $this->allocations($doc);
         $result = [];
-        $grand = ['inventory_asset' => '0.00', 'cogs' => '0.00', 'adjustment_loss' => '0.00'];
+        $grand = ['inventory_asset' => '0.000', 'cogs' => '0.000', 'adjustment_loss' => '0.000'];
         foreach ($doc->lines as $line) {
             $allocated = $allocations[$line->id];
             $receipt = GoodsReceipt::query()->findOrFail($line->goods_receipt_id);
@@ -485,12 +485,12 @@ class LandedCostService
                 }
             }
             $components = $this->rounded($components, $allocated);
-            $totals = ['inventory_asset' => '0.00', 'cogs' => '0.00', 'adjustment_loss' => '0.00'];
+            $totals = ['inventory_asset' => '0.000', 'cogs' => '0.000', 'adjustment_loss' => '0.000'];
             foreach ($components as $component) {
-                $totals[$component['destination_role']] = Decimal::add($totals[$component['destination_role']], $component['posted_base_amount'], 2);
+                $totals[$component['destination_role']] = Decimal::add($totals[$component['destination_role']], $component['posted_base_amount'], 3);
             }
             foreach ($totals as $role => $amount) {
-                $grand[$role] = Decimal::add($grand[$role], $amount, 2);
+                $grand[$role] = Decimal::add($grand[$role], $amount, 3);
             }
             $result[] = ['line' => $line, 'allocated' => $allocated, 'components' => $components, 'totals' => $totals];
         }
@@ -508,24 +508,24 @@ class LandedCostService
             }
             unset($components[$i]['provenance']['restored_fifo_layer_slices']);
             $components[$i]['posted_base_amount'] = Decimal::money($component['exact_base_amount']);
-            $posted = Decimal::add($posted, $components[$i]['posted_base_amount'], 2);
+            $posted = Decimal::add($posted, $components[$i]['posted_base_amount'], 3);
         }
-        $residual = Decimal::sub($allocated, $posted, 2);
-        if (! Decimal::isZero($residual, 2)) {
-            $bound = Decimal::mul((string) max(1, count($components)), '0.005', 3);
-            if ($components === [] || Decimal::gt(ltrim($residual, '-'), $bound, 3)) {
+        $residual = Decimal::sub($allocated, $posted, 3);
+        if (! Decimal::isZero($residual, 3)) {
+            $bound = Decimal::mul((string) max(1, count($components)), '0.0005', 4);
+            if ($components === [] || Decimal::gt(ltrim($residual, '-'), $bound, 4)) {
                 $this->fail('rounding_bound');
             }
             $target = array_key_first($components);
             foreach ($components as $i => $component) {
-                if (Decimal::gt($component['posted_base_amount'], $components[$target]['posted_base_amount'], 2)) {
+                if (Decimal::gt($component['posted_base_amount'], $components[$target]['posted_base_amount'], 3)) {
                     $target = $i;
                 }
             }
-            $components[$target]['posted_base_amount'] = Decimal::add($components[$target]['posted_base_amount'], $residual, 2);
+            $components[$target]['posted_base_amount'] = Decimal::add($components[$target]['posted_base_amount'], $residual, 3);
         }
 
-        return array_values(array_filter($components, fn (array $c) => ! Decimal::isZero($c['posted_base_amount'], 2)));
+        return array_values(array_filter($components, fn (array $c) => ! Decimal::isZero($c['posted_base_amount'], 3)));
     }
 
     /**

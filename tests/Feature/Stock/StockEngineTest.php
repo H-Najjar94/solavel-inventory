@@ -74,7 +74,7 @@ class StockEngineTest extends TestCase
         $bal = $this->balanceFor($item->id, $wh->id);
         $this->assertSame('10.0000', $bal->on_hand_qty);
         $this->assertSame('5.0000', $bal->average_cost);
-        $this->assertSame('50.00', $bal->total_value);
+        $this->assertSame('50.000000', $bal->total_value);
     }
 
     // 2. Duplicate opening-stock retry (idempotent)
@@ -230,7 +230,7 @@ class StockEngineTest extends TestCase
         $bal = $this->balanceFor($item->id, $wh->id);
         $this->assertSame('20.0000', $bal->on_hand_qty);
         $this->assertSame('6.0000', $bal->average_cost);
-        $this->assertSame('120.00', $bal->total_value);
+        $this->assertSame('120.000000', $bal->total_value);
     }
 
     // 10. FIFO full layer consumption
@@ -252,7 +252,7 @@ class StockEngineTest extends TestCase
 
         $this->assertSame('0.0000', $this->balanceFor($item->id, $wh->id)->on_hand_qty);
         $out = StockLedger::query()->where('item_id', $item->id)->where('direction', 'out')->first();
-        $this->assertSame('50.00', $out->total_cost); // 10 * 5
+        $this->assertSame('50.000', $out->total_cost); // 10 * 5
         $this->assertSame('0.0000', CostLayer::query()->where('item_id', $item->id)->sum('remaining_qty').'');
     }
 
@@ -273,7 +273,7 @@ class StockEngineTest extends TestCase
         ));
 
         $out = StockLedger::query()->where('item_id', $item->id)->where('direction', 'out')->first();
-        $this->assertSame('20.00', $out->total_cost); // 4 * 5
+        $this->assertSame('20.000', $out->total_cost); // 4 * 5
         $this->assertSame('6.0000', (string) CostLayer::query()->where('item_id', $item->id)->first()->remaining_qty);
     }
 
@@ -300,7 +300,7 @@ class StockEngineTest extends TestCase
         ));
 
         $out = StockLedger::query()->where('item_id', $item->id)->where('direction', 'out')->latest('id')->first();
-        $this->assertSame('90.00', $out->total_cost);
+        $this->assertSame('90.000', $out->total_cost);
         $this->assertSame('5.0000', (string) $this->balanceFor($item->id, $wh->id)->on_hand_qty);
         $this->assertSame('5.0000', (string) CostLayer::query()->where('item_id', $item->id)->sum('remaining_qty'));
     }
@@ -395,7 +395,7 @@ class StockEngineTest extends TestCase
 
         $bal = $this->balanceFor($item->id, $wh->id);
         $this->assertSame('2.5000', $bal->on_hand_qty);
-        $this->assertSame('3.13', $bal->total_value); // 2.5 * 1.25 = 3.125 → 3.13
+        $this->assertSame('3.125000', $bal->total_value); // 2.5 * 1.25 = 3.125 is retained at money precision3
     }
 
     // 23. Ledger/balance reconciliation via IntegrityChecker

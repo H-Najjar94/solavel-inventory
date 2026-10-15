@@ -41,8 +41,16 @@ class ProvisioningElevatedConnectionTest extends TestCase
         config()->set('database.connections.tenant.database', 'solastock_test_a');
         DB::purge('tenant');
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('external canonical orchestrator');
-        app(SecureTenantProvisioner::class)->provisionInventory(970001, 'tenant_prov_it');
+        $ddl = [];
+        DB::listen(function ($query) use (&$ddl): void {
+            if (preg_match('/^\s*(CREATE|ALTER|DROP|TRUNCATE)\b/i', $query->sql)) $ddl[] = $query->sql;
+        });
+        try {
+            app(SecureTenantProvisioner::class)->provisionInventory(970001, 'tenant_prov_it');
+            $this->fail('Unverified local provisioning was accepted.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('verify the active tenant database', $exception->getMessage());
+        }
+        $this->assertSame([], $ddl, 'Refused provisioning must not execute any schema mutation.');
     }
 }

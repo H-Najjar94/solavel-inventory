@@ -81,8 +81,8 @@ class AccountingJournalBuilderTest extends TestCase
 
         $this->assertSame([100, 200], array_column($lines, 'account_id'));
         $this->assertSame(['inventory_asset', 'grni'], array_column($lines, 'account_role'));
-        $this->assertSame(['50.00', '0.00'], array_column($lines, 'debit'));
-        $this->assertSame(['0.00', '50.00'], array_column($lines, 'credit'));
+        $this->assertSame(['50.000', '0.000'], array_column($lines, 'debit'));
+        $this->assertSame(['0.000', '50.000'], array_column($lines, 'credit'));
         $this->assertNotContains(647, array_column($lines, 'account_id'));
     }
 
@@ -112,7 +112,7 @@ class AccountingJournalBuilderTest extends TestCase
         $this->assertSame(0, StockLedger::query()->count(), 'The warehouse restriction must be active for this regression.');
 
         $restricted = app(AccountingJournalBuilder::class)->build($event, TenantTestManager::ORG_A);
-        $this->assertSame(['14.00', '0.00'], array_column($restricted, 'debit'));
+        $this->assertSame(['14.000', '0.000'], array_column($restricted, 'debit'));
         $this->assertSame($unrestricted, $restricted);
     }
 
@@ -152,8 +152,8 @@ class AccountingJournalBuilderTest extends TestCase
 
         $this->assertSame([500, 100], array_column($lines, 'account_id'));
         $this->assertSame(['cogs', 'inventory_asset'], array_column($lines, 'account_role'));
-        $this->assertSame(['30.00', '0.00'], array_column($lines, 'debit'));
-        $this->assertSame(['0.00', '30.00'], array_column($lines, 'credit'));
+        $this->assertSame(['30.000', '0.000'], array_column($lines, 'debit'));
+        $this->assertSame(['0.000', '30.000'], array_column($lines, 'credit'));
         $this->assertNotContains(300, array_column($lines, 'account_id'));
         $this->assertNotContains(400, array_column($lines, 'account_id'));
         $this->assertNotContains(648, array_column($lines, 'account_id'));
@@ -190,8 +190,8 @@ class AccountingJournalBuilderTest extends TestCase
         );
 
         $this->assertSame([500, 100], array_column($lines, 'account_id'));
-        $this->assertSame(['12.00', '0.00'], array_column($lines, 'debit'));
-        $this->assertSame(['0.00', '12.00'], array_column($lines, 'credit'));
+        $this->assertSame(['12.000', '0.000'], array_column($lines, 'debit'));
+        $this->assertSame(['0.000', '12.000'], array_column($lines, 'credit'));
     }
 
     #[Test]
@@ -221,8 +221,8 @@ class AccountingJournalBuilderTest extends TestCase
         $lines = app(AccountingJournalBuilder::class)->build($reversalEvent, TenantTestManager::ORG_A);
 
         $this->assertSame([601, 100], array_column($lines, 'account_id'));
-        $this->assertSame(['0.00', '32.50'], array_column($lines, 'debit'));
-        $this->assertSame(['32.50', '0.00'], array_column($lines, 'credit'));
+        $this->assertSame(['0.000', '32.500'], array_column($lines, 'debit'));
+        $this->assertSame(['32.500', '0.000'], array_column($lines, 'credit'));
         $this->assertSame(['REV-ADJ-98701', 'REV-ADJ-98701'], array_column($lines, 'description'));
     }
 
@@ -265,13 +265,13 @@ class AccountingJournalBuilderTest extends TestCase
         $lines = app(AccountingJournalBuilder::class)->build($reversalEvent, TenantTestManager::ORG_A);
 
         $this->assertSame([100, 700], array_column($originalLines, 'account_id'));
-        $this->assertSame(['40.00', '0.00'], array_column($originalLines, 'debit'));
-        $this->assertSame(['0.00', '40.00'], array_column($originalLines, 'credit'));
+        $this->assertSame(['40.000', '0.000'], array_column($originalLines, 'debit'));
+        $this->assertSame(['0.000', '40.000'], array_column($originalLines, 'credit'));
         // Exact inverse: Dr opening offset / Cr inventory, never Dr inventory again.
         $this->assertSame([100, 700], array_column($lines, 'account_id'));
         $this->assertSame(['inventory_asset', 'opening_offset'], array_column($lines, 'account_role'));
-        $this->assertSame(['0.00', '40.00'], array_column($lines, 'debit'));
-        $this->assertSame(['40.00', '0.00'], array_column($lines, 'credit'));
+        $this->assertSame(['0.000', '40.000'], array_column($lines, 'debit'));
+        $this->assertSame(['40.000', '0.000'], array_column($lines, 'credit'));
         $this->assertSame(['REV-OS-98801', 'REV-OS-98801'], array_column($lines, 'description'));
     }
 

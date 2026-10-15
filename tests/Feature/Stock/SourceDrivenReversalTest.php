@@ -169,7 +169,7 @@ class SourceDrivenReversalTest extends TestCase
 
         $this->assertSame('5.0000', (string) $balance->on_hand_qty);
         $this->assertSame('20.0000', (string) $balance->average_cost);
-        $this->assertSame('100.00', (string) $balance->total_value);
+        $this->assertSame('100.000000', (string) $balance->total_value);
     }
 
     #[Test]
@@ -237,7 +237,7 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame('REV-OS-STD', $reversal->source_number);
         $out = StockLedger::query()->where('source_type', InventoryReversal::class)->where('source_id', $reversal->id)->sole();
         $this->assertSame('out', $out->direction);
-        $this->assertSame('21.00', (string) $out->total_cost);
+        $this->assertSame('21.000', (string) $out->total_cost);
         $this->assertSame('0.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
         $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         // Standalone Stock: no connection, no ownership, so no Finance work at all.
