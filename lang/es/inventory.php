@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'El valor predeterminado de compra debe utilizar la moneda base de Finanzas verificada. Revise la configuración de la moneda de conexión de la organización.',
     'extra_284952b77b4d' => 'El nombre del archivo adjunto no debe exceder los 191 caracteres.',
     'extra_cd752e2d8c0b' => 'Se requiere la valoración de inventario y el cierre de base de Finanzas revisados antes de la contabilización de existencias conectadas.',
-    'extra_b7310f3b85d7' => 'El libro mayor de existencias actual admite una escala de moneda base de 2. Se requiere una actualización de esquema calificada para otra escala base.',
+    'extra_b7310f3b85d7' => 'El libro mayor de existencias actual admite una escala de moneda base de 3. Se requiere una actualización de esquema calificada para otra escala base.',
     'extra_bb147429bd25' => 'Seleccione una línea aceptada de este recibo.',
     'extra_c8da35cf68a3' => 'Elija el número de lote o de serie recibido para esta devolución.',
     'extra_1a01c2714c67' => 'La conversión del recibo original requiere revisión antes de devolver estos productos.',

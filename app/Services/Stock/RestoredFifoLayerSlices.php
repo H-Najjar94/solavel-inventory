@@ -10,11 +10,11 @@ final class RestoredFifoLayerSlices
   $seen=[];$sum='0';
   foreach($slices as&$slice){
    $id=(int)($slice['cost_layer_id']??0);if($id<1||isset($seen[$id])||!Decimal::gt((string)($slice['remaining_quantity']??'0'),'0',8))throw new \LogicException('Distinct actual restored FIFO layers required.');
-   $seen[$id]=true;$slice['posted_base_amount']=Decimal::round((string)$slice['exact_base_amount'],2);$sum=Decimal::add($sum,$slice['posted_base_amount'],8);
+   $seen[$id]=true;$slice['posted_base_amount']=Decimal::round((string)$slice['exact_base_amount'],Decimal::MONEY_SCALE);$sum=Decimal::add($sum,$slice['posted_base_amount'],8);
   }unset($slice);
   $residual=Decimal::sub($componentAmount,$sum,8);
-  if(Decimal::gt(ltrim($residual,'-'),Decimal::mul((string)count($slices),'0.005',8),8))throw new \LogicException('Restored FIFO layer rounding exceeds bound.');
-  $last=array_key_last($slices);$slices[$last]['posted_base_amount']=Decimal::add($slices[$last]['posted_base_amount'],$residual,2);
+  if(Decimal::gt(ltrim($residual,'-'),Decimal::mul((string)count($slices),'0.0005',8),8))throw new \LogicException('Restored FIFO layer rounding exceeds bound.');
+  $last=array_key_last($slices);$slices[$last]['posted_base_amount']=Decimal::add($slices[$last]['posted_base_amount'],$residual,Decimal::MONEY_SCALE);
   return$slices;
  }
 }

@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'La devise de base Finance vérifiée doit être utilisée pour le défaut d\'achat. Vérifiez les paramètres de devise de connexion de l\'organisation.',
     'extra_284952b77b4d' => 'Le nom du fichier joint ne doit pas dépasser 191 caractères.',
     'extra_cd752e2d8c0b' => 'La valorisation du stock dans la devise de base Finance et la date de référence doivent être vérifiées avant toute comptabilisation de stock avec connexion active.',
-    'extra_b7310f3b85d7' => 'Le grand livre des stocks actuel prend en charge une échelle monétaire de base de 2. Une mise à niveau qualifiée du schéma est requise pour une autre échelle de base.',
+    'extra_b7310f3b85d7' => 'Le grand livre des stocks actuel prend en charge une échelle monétaire de base de 3. Une mise à niveau qualifiée du schéma est requise pour une autre échelle de base.',
     'extra_bb147429bd25' => 'Sélectionnez une ligne acceptée de ce reçu.',
     'extra_c8da35cf68a3' => 'Choisissez le lot ou le numéro de série reçu pour ce retour.',
     'extra_1a01c2714c67' => 'La conversion du reçu d\'origine nécessite une révision avant de retourner ces marchandises.',

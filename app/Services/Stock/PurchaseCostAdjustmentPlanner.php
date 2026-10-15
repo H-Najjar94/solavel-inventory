@@ -46,7 +46,7 @@ final class PurchaseCostAdjustmentPlanner
         if ($rows->isEmpty()) {
             $this->fail('No reviewed supplier-bill allocations are available.');
         }
-        $scale = (int) ($input['finance_money_scale'] ?? 2);
+        $scale = (int) ($input['finance_money_scale'] ?? Decimal::MONEY_SCALE);
         if ($scale < 0 || $scale > 6) {
             $this->fail('Finance money precision must be between zero and six decimals.');
         }
@@ -73,7 +73,7 @@ final class PurchaseCostAdjustmentPlanner
         }
         $posted = '0';
         $serialized = $components->map(function (array $component) use (&$posted, $scale): array {
-            $componentScale = $component['destination_role'] === 'inventory_asset' ? 2 : $scale;
+            $componentScale = $component['destination_role'] === 'inventory_asset' ? Decimal::MONEY_SCALE : $scale;
             $component['posted_base_amount'] = Decimal::round($component['exact_base_amount'], $componentScale);
             if(isset($component['provenance']['restored_fifo_layer_slices'])){$component['provenance']['restored_fifo_layer_slices']=RestoredFifoLayerSlices::rounded($component['provenance']['restored_fifo_layer_slices'],$component['posted_base_amount']);}
             $posted = Decimal::add($posted, $component['posted_base_amount'], 8);
@@ -81,7 +81,7 @@ final class PurchaseCostAdjustmentPlanner
             return $component;
         })->values()->all();
         $residual = Decimal::round(Decimal::sub($exactTotal, $posted), $scale);
-        $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.005'), 6);
+        $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.'.str_repeat('0', min($scale, Decimal::MONEY_SCALE)).'5'), 6);
         if (Decimal::gt(ltrim($residual, '-'), $bound, 6)) {
             $this->fail('Cumulative valuation rounding exceeds its deterministic bound.');
         }
@@ -89,7 +89,7 @@ final class PurchaseCostAdjustmentPlanner
         return ['contract_version' => self::CONTRACT_VERSION, 'organization_mapping_uuid' => $connection->mapping_uuid,
             'destination_document_id' => (int) $input['destination_document_id'], 'destination_fingerprint' => $input['destination_fingerprint'],
             'currency_code' => $input['currency_code'], 'base_currency_code' => $input['base_currency_code'], 'exchange_rate' => $input['exchange_rate'],
-            'finance_money_scale' => $scale, 'stock_money_scale' => 2, 'exact_base_difference' => $exactTotal,
+            'finance_money_scale' => $scale, 'stock_money_scale' => Decimal::MONEY_SCALE, 'exact_base_difference' => $exactTotal,
             'allocated_base_difference' => $posted, 'rounding_residual' => $residual, 'rounding_bound' => $bound, 'components' => $serialized];
     }
 
@@ -112,20 +112,20 @@ final class PurchaseCostAdjustmentPlanner
         }
         $posted = '0';
         $serialized = $components->map(function (array $component) use (&$posted, $authority): array {
-            $scale = $component['destination_role'] === 'inventory_asset' ? 2 : $authority->moneyScale();
+            $scale = $component['destination_role'] === 'inventory_asset' ? Decimal::MONEY_SCALE : $authority->moneyScale();
             $component['posted_base_amount'] = Decimal::round($component['exact_base_amount'], $scale);
             $posted = Decimal::add($posted, $component['posted_base_amount'], 8);
             return $component;
         })->values()->all();
         $residual = Decimal::round(Decimal::sub($exact, $posted, 8), $authority->moneyScale());
-        $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.005'), 6);
+        $bound = Decimal::round(Decimal::mul((string) max(1, count($serialized)), '0.'.str_repeat('0', min($authority->moneyScale(), Decimal::MONEY_SCALE)).'5'), 6);
         if (Decimal::gt(ltrim($residual, '-'), $bound, 6)) $this->fail('Cumulative valuation rounding exceeds its deterministic bound.');
         return ['contract_version' => 'financial-origin.settlement.v1', 'direction' => $authority->direction(), 'organization_mapping_uuid' => $authority->mappingUuid(),
             'destination_document_type' => 'expense', 'destination_document_id' => $authority->sourceDocumentId(),
             'destination_fingerprint' => $authority->fingerprint(), 'operation_uuid' => $authority->operationUuid(),
             'source_document_type' => 'expense', 'source_document_id' => $authority->sourceDocumentId(), 'source_journal_id' => $authority->sourceJournalId(),
             'currency_code' => $authority->currencyCode(), 'base_currency_code' => $authority->baseCurrencyCode(),
-            'exchange_rate' => $authority->exchangeRate(), 'finance_money_scale' => $authority->moneyScale(), 'stock_money_scale' => 2,
+            'exchange_rate' => $authority->exchangeRate(), 'finance_money_scale' => $authority->moneyScale(), 'stock_money_scale' => Decimal::MONEY_SCALE,
             'exact_base_difference' => $exact, 'allocated_base_difference' => $posted, 'rounding_residual' => $residual,
             'rounding_bound' => $bound, 'components' => $serialized];
     }

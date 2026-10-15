@@ -25,7 +25,7 @@ class Shipment extends Model
         'package_length' => 'decimal:4',
         'package_width' => 'decimal:4',
         'package_height' => 'decimal:4',
-        'rate_amount' => 'decimal:2',
+        'rate_amount' => 'decimal:3',
         'label_payload' => 'array',
         'label_generated_at' => 'datetime',
         'tracking_events' => 'array',

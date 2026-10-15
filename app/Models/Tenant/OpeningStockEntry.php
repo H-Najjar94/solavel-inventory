@@ -23,7 +23,7 @@ class OpeningStockEntry extends Model
 
     protected $casts = [
         'opening_date' => 'date',
-        'total_value' => 'decimal:2',
+        'total_value' => 'decimal:3',
         'posted_at' => 'datetime',
         'reversed_at' => 'datetime',
     ];

@@ -4,13 +4,13 @@ namespace App\Services\Stock\Support;
 
 /**
  * Deterministic decimal arithmetic via bcmath. No float math is used anywhere in
- * the stock/cost path. Quantities use scale 4; money totals use scale 2; we
+ * the stock/cost path. Quantities use scale 4; money totals use scale 3; we
  * compute at a higher scale (8) internally and round at the boundary.
  */
 final class Decimal
 {
     public const QTY_SCALE = 4;
-    public const MONEY_SCALE = 2;
+    public const MONEY_SCALE = 3;
     public const COST_SCALE = 4;
     private const CALC_SCALE = 10;
 

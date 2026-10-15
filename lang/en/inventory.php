@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'The purchase default must use the verified Finance base currency. Review the organization connection currency settings.',
     'extra_284952b77b4d' => 'The attachment name must not exceed 191 characters.',
     'extra_cd752e2d8c0b' => 'Reviewed Finance-base inventory valuation and cutoff are required before connected stock posting.',
-    'extra_b7310f3b85d7' => 'The current Stock ledger supports base money scale 2. A qualified schema upgrade is required for another base scale.',
+    'extra_b7310f3b85d7' => 'The current Stock ledger supports base money scale 3. A qualified schema upgrade is required for another base scale.',
     'extra_bb147429bd25' => 'Select an accepted line from this receipt.',
     'extra_c8da35cf68a3' => 'Choose the received batch or serial number for this return.',
     'extra_1a01c2714c67' => 'The original receipt conversion requires review before returning these goods.',

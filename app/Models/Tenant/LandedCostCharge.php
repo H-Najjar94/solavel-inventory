@@ -13,5 +13,5 @@ class LandedCostCharge extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['amount' => 'decimal:4', 'base_amount' => 'decimal:2'];
+    protected $casts = ['amount' => 'decimal:4', 'base_amount' => 'decimal:3'];
 }

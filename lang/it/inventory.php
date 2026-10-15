@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'L\'impostazione predefinita di acquisto deve utilizzare la valuta base Finanza verificata. Controllare le impostazioni della valuta di connessione dell\'organizzazione.',
     'extra_284952b77b4d' => 'Il nome dell\'allegato non deve superare i 191 caratteri.',
     'extra_cd752e2d8c0b' => 'Prima della contabilizzazione dello stock connesso, è necessaria la revisione della valutazione dell\'inventario e del cutoff basati sulla Finanza.',
-    'extra_b7310f3b85d7' => 'Il libro mastro dello Stock attuale supporta una scala monetaria base di 2. È richiesto un aggiornamento dello schema qualificato per un\'altra scala base.',
+    'extra_b7310f3b85d7' => 'Il libro mastro dello Stock attuale supporta una scala monetaria base di 3. È richiesto un aggiornamento dello schema qualificato per un\'altra scala base.',
     'extra_bb147429bd25' => 'Selezionare una riga accettata da questa ricevuta.',
     'extra_c8da35cf68a3' => 'Scegliere il numero di lotto o di serie ricevuto per questo reso.',
     'extra_1a01c2714c67' => 'La conversione della ricevuta originale richiede una revisione prima di restituire queste merci.',

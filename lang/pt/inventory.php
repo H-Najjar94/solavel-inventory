@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'O padrão de compra deve usar a moeda base de Finanças verificada. Revise as configurações de moeda de conexão da organização.',
     'extra_284952b77b4d' => 'O nome do anexo não deve exceder 191 caracteres.',
     'extra_cd752e2d8c0b' => 'A avaliação de estoque e o corte (cutoff) baseados em Finanças revisados são necessários antes da contabilização do estoque conectado.',
-    'extra_b7310f3b85d7' => 'O livro razão de Estoque atual suporta escala monetária base 2. Uma atualização de esquema qualificada é necessária para outra escala base.',
+    'extra_b7310f3b85d7' => 'O livro razão de Estoque atual suporta escala monetária base 3. Uma atualização de esquema qualificada é necessária para outra escala base.',
     'extra_bb147429bd25' => 'Selecione uma linha aceita deste recebimento.',
     'extra_c8da35cf68a3' => 'Escolha o lote ou número de série recebido para esta devolução.',
     'extra_1a01c2714c67' => 'A conversão do recebimento original requer revisão antes de devolver estas mercadorias.',

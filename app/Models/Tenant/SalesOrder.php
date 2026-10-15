@@ -22,10 +22,10 @@ class SalesOrder extends Model
     protected $casts = [
         'order_date' => 'date:Y-m-d',
         'requested_ship_date' => 'date:Y-m-d',
-        'subtotal' => 'decimal:2',
-        'discount_total' => 'decimal:2',
-        'tax_total' => 'decimal:2',
-        'total' => 'decimal:2',
+        'subtotal' => 'decimal:3',
+        'discount_total' => 'decimal:3',
+        'tax_total' => 'decimal:3',
+        'total' => 'decimal:3',
     ];
 
     public function lines()

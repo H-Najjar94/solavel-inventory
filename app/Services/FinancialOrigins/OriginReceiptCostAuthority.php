@@ -84,7 +84,7 @@ final readonly class OriginReceiptCostAuthority
         $sourceAcquisitionUnit = Decimal::div(Decimal::add((string) $source['net_amount'], (string) $source['nonrecoverable_tax_amount'], 8), (string) $source['quantity'], 12);
         $expectedAtReceipt = Decimal::round(Decimal::div(Decimal::mul($sourceAcquisitionUnit, (string) $match->quantity, 12), (string) $receipt['exchange_rate'], 12), $scale);
         $ledger = $db->table('stock_ledger')->where('organization_id', $org)->where('id', $receipt['stock_ledger_id'] ?? 0)->where('source_type', GoodsReceipt::class)->where('source_id', $grn->id)->where('source_line_id', $line->id)->where('direction', 'in')->lockForUpdate()->first();
-        abort_unless($ledger && (int) $ledger->item_id === (int) $line->item_id && (int) $ledger->warehouse_id === (int) $grn->warehouse_id && ($receipt['stock_money_scale'] ?? null) === Decimal::MONEY_SCALE, 409);
+        abort_unless($ledger && (int) $ledger->item_id === (int) $line->item_id && (int) $ledger->warehouse_id === (int) $grn->warehouse_id && in_array($receipt['stock_money_scale'] ?? null, [2, Decimal::MONEY_SCALE], true), 409);
         // Each accepted typed GRN line is matched whole. Partial ledger allocation needs its own cumulative residual contract.
         abort_unless(Decimal::cmp((string) $ledger->quantity, $baseQty, 8) === 0 && Decimal::cmp((string) $ledger->quantity, (string) ($receipt['source_quantity_base'] ?? '0'), 8) === 0 && Decimal::cmp((string) $ledger->total_cost, (string) ($receipt['source_value_base'] ?? '-1'), 8) === 0, 409);
         $nativeReceiptBase = (string) $ledger->total_cost;

@@ -3,6 +3,7 @@
 namespace App\Services\InventoryWorkspace;
 
 use App\Services\Documents\OpeningStockService;
+use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,8 +25,8 @@ final class MigrationOpening
                 $item=$items[$line['finance_item_id']];
                 $quantity=bcadd($line['quantity'],'0',4);
                 $cost=bcadd($line['unit_cost'],'0',4);
-                $value=bcadd(bcmul($quantity,$cost,8),'0.005',2);
-                if (bccomp($value,$line['total_value'],2)!==0) $this->fail('total_value','The owner quantity and unit cost do not equal the approved source value.');
+                $value=Decimal::money(bcmul($quantity,$cost,8));
+                if (bccomp($value,$line['total_value'],Decimal::MONEY_SCALE)!==0) $this->fail('total_value','The owner quantity and unit cost do not equal the approved source value.');
                 $lines[]=['item_id'=>$item['stock_item_id'],'quantity'=>$quantity,'unit_cost'=>$cost,
                     'entered_qty'=>$quantity,'entered_unit_id'=>$item['base_unit_id']];
             }
@@ -39,12 +40,12 @@ final class MigrationOpening
             foreach ($input['lines'] as $line) {
                 $id=$line['finance_item_id']; $prior=$items[$id]; $next=$current[$id];
                 $quantity=bcsub($next['quantity'],$prior['quantity'],4);
-                $value=bcsub($next['value'],$prior['value'],2);
-                if (bccomp($quantity,$line['quantity'],4)!==0 || bccomp($value,$line['total_value'],2)!==0) {
+                $value=bcsub($next['value'],$prior['value'],Decimal::MONEY_SCALE);
+                if (bccomp($quantity,$line['quantity'],4)!==0 || bccomp($value,$line['total_value'],Decimal::MONEY_SCALE)!==0) {
                     $this->fail('reconciliation','Native opening valuation differs from the approved source. The owner operation was rolled back.');
                 }
                 $report[]=['finance_item_id'=>$id,'stock_item_id'=>$prior['stock_item_id'],'baseline'=>$prior,'after'=>$next,
-                    'posted_quantity'=>$quantity,'posted_value'=>$value,'quantity_difference'=>'0.0000','value_difference'=>'0.00'];
+                    'posted_quantity'=>$quantity,'posted_value'=>$value,'quantity_difference'=>'0.0000','value_difference'=>Decimal::money('0')];
             }
             return ['entry_id'=>$entry->id,'status'=>$entry->status,'positions'=>$report];
         });

@@ -13,5 +13,5 @@ class LandedCostComponent extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['provenance' => 'array', 'posted_base_amount' => 'decimal:2'];
+    protected $casts = ['provenance' => 'array', 'posted_base_amount' => 'decimal:3'];
 }

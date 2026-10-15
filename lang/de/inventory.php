@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'Der Einkaufsstandard muss die verifizierte Finanz-Basiswährung verwenden. Überprüfen Sie die Währungseinstellungen der Organisationsverbindung.',
     'extra_284952b77b4d' => 'Der Name des Anhangs darf 191 Zeichen nicht überschreiten.',
     'extra_cd752e2d8c0b' => 'Eine geprüfte Finanz-Basis-Inventurbewertung und ein Stichtag sind vor der verbundenen Bestandsbuchung erforderlich.',
-    'extra_b7310f3b85d7' => 'Das aktuelle Lagerbuch unterstützt die Basiswährungsskala 2. Für eine andere Basisskala ist ein qualifiziertes Schema-Upgrade erforderlich.',
+    'extra_b7310f3b85d7' => 'Das aktuelle Lagerbuch unterstützt die Basiswährungsskala 3. Für eine andere Basisskala ist ein qualifiziertes Schema-Upgrade erforderlich.',
     'extra_bb147429bd25' => 'Wählen Sie eine akzeptierte Position aus diesem Beleg aus.',
     'extra_c8da35cf68a3' => 'Wählen Sie die erhaltene Chargen- oder Seriennummer für diese Retoure aus.',
     'extra_1a01c2714c67' => 'Die ursprüngliche Belegumrechnung muss vor der Rückgabe dieser Waren überprüft werden.',

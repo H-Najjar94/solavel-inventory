@@ -751,7 +751,7 @@ class StockLedgerService
         if ($partialQuantity !== null) {
             $cumulative = Decimal::add($previousQuantity,$qty);
             $portion = fn (string $value, string $q, int $scale) => Decimal::round(Decimal::mul($value,Decimal::div($q,(string)$orig->quantity,12),12),$scale);
-            $totalCost = Decimal::sub($portion((string)$orig->total_cost,$cumulative,2),$portion((string)$orig->total_cost,$previousQuantity,2),2);
+            $totalCost = Decimal::sub($portion((string)$orig->total_cost,$cumulative,Decimal::MONEY_SCALE),$portion((string)$orig->total_cost,$previousQuantity,Decimal::MONEY_SCALE),Decimal::MONEY_SCALE);
         }
 
         $movement = new StockMovement(

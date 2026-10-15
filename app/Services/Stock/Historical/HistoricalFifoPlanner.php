@@ -103,7 +103,7 @@ final class HistoricalFifoPlanner
                 $returned[$original] = D::add($already, $qty);
                 $amount = D::money($amount);
             } else throw new RuntimeException('Historical FIFO unsupported movement');
-            $previous = $this->decimal($event['previous_posted_cost'] ?? '0', 2);
+            $previous = $this->decimal($event['previous_posted_cost'] ?? '0', D::MONEY_SCALE);
             $delta = D::money(D::sub($amount, $previous));
             $results[] = array_merge($result, ['status' => 'ready', 'reconstructed_cost' => $amount, 'previous_posted_cost' => $previous,
                 'cogs_delta' => $event['kind'] === 'receipt' ? '0.00' : ($event['kind'] === 'return' ? D::money(D::sub('0', $delta)) : $delta)]);

@@ -26,10 +26,10 @@ class SalesOrderLine extends Model
         'cancelled_qty' => 'decimal:4',
         'unit_price' => 'decimal:4',
         'discount_rate' => 'decimal:4',
-        'discount_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:3',
         'tax_rate' => 'decimal:4',
-        'tax_amount' => 'decimal:2',
-        'line_total' => 'decimal:2',
+        'tax_amount' => 'decimal:3',
+        'line_total' => 'decimal:3',
     ];
 
     /** The item this line is for — used to surface names, not raw IDs. */

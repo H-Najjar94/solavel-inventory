@@ -115,7 +115,8 @@ final class SolaStockJournalContractBuilder
             throw new RuntimeException('Inventory valuation base currency does not match Finance.');
         }
         $moneyScale = (int) $finance['money_scale'];
-        $txScale = (int) ($finance['currency_precisions'][$txCode] ?? $moneyScale);
+        // Monetary posting follows the reviewed Finance precision, including foreign currency.
+        $txScale = $moneyScale;
         $lines = array_map(function (array $line) use ($rate, $moneyScale, $txScale, $meta, $baseValuation): array {
             $debitValue = (string) ($line['debit'] ?? '0');
             $creditValue = (string) ($line['credit'] ?? '0');

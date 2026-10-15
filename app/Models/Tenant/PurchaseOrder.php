@@ -22,9 +22,9 @@ class PurchaseOrder extends Model
     protected $casts = [
         'order_date' => 'date:Y-m-d',
         'expected_date' => 'date:Y-m-d',
-        'subtotal' => 'decimal:2',
-        'tax_total' => 'decimal:2',
-        'total' => 'decimal:2',
+        'subtotal' => 'decimal:3',
+        'tax_total' => 'decimal:3',
+        'total' => 'decimal:3',
     ];
 
     public function lines()

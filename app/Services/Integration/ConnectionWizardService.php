@@ -604,7 +604,7 @@ final class ConnectionWizardService
             'master_data' => $preview['master_data'] ?? null,
             'readiness' => $preview['readiness'] ?? null,
             'guided_setup' => $this->guidedPresentation($preview, $organizationId),
-            'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock currently supports Finance money precision 2; this organization requires a qualified precision upgrade before activation.']),
+            'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock currently supports Finance money precision 3; this organization requires a qualified precision upgrade before activation.']),
             'blocking' => $blocking->all(),
             'snapshot_frozen_at' => $run->snapshot_frozen_at,
             'owner_approved_at' => $run->owner_approved_at ?? null,

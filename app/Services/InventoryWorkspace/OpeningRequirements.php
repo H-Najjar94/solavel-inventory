@@ -54,7 +54,7 @@ final class OpeningRequirements
                 'base_unit_id'=>(int)$item->base_unit_id,'finance_unit_id'=>(int)$unit->solabooks_record_id,
                 'item_mapping_uuid'=>$identity->mapping_uuid,'unit_mapping_uuid'=>$unit->mapping_uuid,
                 'costing_method'=>$item->costing_method,'quantity'=>bcadd((string)($balance?->quantity ?? '0'),'0',4),
-                'value'=>bcadd((string)($balance?->value ?? '0'),'0',2)];
+                'value'=>bcadd((string)($balance?->value ?? '0'),'0',\App\Services\Stock\Support\Decimal::MONEY_SCALE)];
         }
         foreach ($plannedItems as $planned) {
             $unit=IntegrationMasterDataMapping::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type','unit')

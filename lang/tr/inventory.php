@@ -122,7 +122,7 @@ return array (
     'extra_ad9a030a73fb' => 'Satın alma varsayılanı, doğrulanmış Finans baz para birimini kullanmalıdır. Kuruluş bağlantı para birimi ayarlarını gözden geçirin.',
     'extra_284952b77b4d' => 'Ek dosya adı 191 karakteri geçmemelidir.',
     'extra_cd752e2d8c0b' => 'Bağlı stok kaydı öncesinde, incelenmiş Finans bazlı envanter değerlemesi ve kesim tarihi gereklidir.',
-    'extra_b7310f3b85d7' => 'Mevcut Stok defteri 2 baz para ölçeğini desteklemektedir. Başka bir baz ölçeği için uygun bir şema yükseltmesi gereklidir.',
+    'extra_b7310f3b85d7' => 'Mevcut Stok defteri 3 baz para ölçeğini desteklemektedir. Başka bir baz ölçeği için uygun bir şema yükseltmesi gereklidir.',
     'extra_bb147429bd25' => 'Bu makbuzdan kabul edilen bir satır seçin.',
     'extra_c8da35cf68a3' => 'Bu iade için alınan parti veya seri numarasını seçin.',
     'extra_1a01c2714c67' => 'Bu malların iade edilmesi öncesinde orijinal makbuz dönüşümünün incelenmesi gerekmektedir.',

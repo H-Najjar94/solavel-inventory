@@ -34,7 +34,7 @@ class OpeningStockController extends ApiController
             'lines.*.finance_item_id'=>'required|integer|min:1|distinct',
             'lines.*.quantity'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
             'lines.*.unit_cost'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
-            'lines.*.total_value'=>['required','string','regex:/^[0-9]{1,14}(\.[0-9]{1,2})?$/D','numeric','gt:0']]);
+            'lines.*.total_value'=>['required','string','regex:/^[0-9]{1,14}(\.[0-9]{1,3})?$/D','numeric','gt:0']]);
         return $this->success(app(\App\Services\InventoryWorkspace\MigrationOpening::class)->post($data));
     }
 

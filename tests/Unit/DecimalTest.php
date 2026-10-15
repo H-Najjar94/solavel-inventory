@@ -24,8 +24,22 @@ class DecimalTest extends TestCase
     #[Test]
     public function rounding_is_half_up_at_money_scale(): void
     {
-        // 2.5 * 1.25 = 3.125 → 3.13
-        $this->assertSame('3.13', Decimal::money(Decimal::mul('2.5', '1.25')));
+        // 2.5 * 1.25 = 3.125, with the approved universal precision 3.
+        $this->assertSame('3.125', Decimal::money(Decimal::mul('2.5', '1.25')));
+        $this->assertSame('12.346', Decimal::money('12.3455'));
+        $this->assertSame('-12.346', Decimal::money('-12.3455'));
+    }
+
+    #[Test]
+    public function partial_reversal_costs_telescope_to_the_original_three_decimal_amount(): void
+    {
+        $original = '12.345';
+        $prefix = Decimal::money(Decimal::div($original, '3', 12));
+        $secondPrefix = Decimal::money(Decimal::mul(Decimal::div($original, '3', 12), '2', 12));
+        $last = Decimal::sub($original, $secondPrefix, Decimal::MONEY_SCALE);
+        $this->assertSame($original, Decimal::add(Decimal::add($prefix, Decimal::sub($secondPrefix, $prefix)), $last, Decimal::MONEY_SCALE));
+        // Historical two-decimal totals retain their exact value.
+        $this->assertSame('12.340', Decimal::money('12.34'));
     }
 
     #[Test]
