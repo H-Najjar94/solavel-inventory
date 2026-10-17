@@ -78,6 +78,7 @@ final class FinanceWorkspaceSupportController extends ApiController
     public function updateRule(Request $request, \App\Models\Tenant\WarehouseReorderRule $rule)
     {
         $data = $request->validate(collect(['reorder_point','reorder_qty','min_stock','max_stock','safety_stock'])->mapWithKeys(fn ($key) => [$key => 'nullable|numeric|min:0'])->all());
+        \App\Support\ReorderLevels::assertConsistent(array_merge($rule->only(['reorder_point','min_stock','max_stock']), $data));
         $rule->update($data);
         return $this->success($rule->fresh());
     }

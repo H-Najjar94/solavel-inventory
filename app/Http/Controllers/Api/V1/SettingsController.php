@@ -379,6 +379,7 @@ class SettingsController extends ApiController
 
         Item::query()->whereKey($data['item_id'])->where('item_type', 'inventory')->firstOrFail();
         Warehouse::query()->whereKey($data['warehouse_id'])->firstOrFail();
+        \App\Support\ReorderLevels::assertConsistent($data); // NF-1203-04: the full rule is replaced here
 
         $rule = WarehouseReorderRule::query()->updateOrCreate(
             [
