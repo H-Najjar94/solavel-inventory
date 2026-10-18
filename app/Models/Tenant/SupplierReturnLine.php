@@ -5,6 +5,7 @@ use Illuminate\Database\Eloquent\Model;
 final class SupplierReturnLine extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
     protected $table = 'supplier_return_lines';
     protected $guarded = ['id'];
     protected $casts = ['quantity' => 'decimal:4', 'entered_qty' => 'decimal:4', 'unit_conversion_factor' => 'decimal:8', 'actual_return_cost_base' => 'decimal:6'];

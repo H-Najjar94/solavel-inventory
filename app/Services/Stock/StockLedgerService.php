@@ -582,6 +582,10 @@ class StockLedgerService
         // ── lock + resolve the balance row (coordinate granularity) ──
         $balance = $this->lockBalance($orgId, $m, $item);
 
+        // ── Q12.3/Q12.6 inactive items: post() carries only ordinary movements (reversals use
+        // applyExactReversal). Only a stock-adjustment write-off out of positive stock passes. ──
+        \App\Support\InactiveItemPolicy::assertLedgerMovementAllowed($m, (string) $balance->on_hand_qty, $qty, $orgId);
+
         // ── cost ──
         $costLayerId = null;
         if ($m->direction === 'in') {

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OpeningStockEntryLine extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
 
     protected $table = 'opening_stock_entry_lines';
 

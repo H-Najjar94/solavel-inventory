@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class ShipmentLine extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
 
     protected $table = 'shipment_lines';
 

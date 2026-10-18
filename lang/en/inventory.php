@@ -198,6 +198,8 @@ return array (
     'bulk_update_empty' => 'Select at least one bulk update field.',
     'deactivation_blocked' => 'This item cannot be deactivated while it has stock on hand (including negative balances), reserved stock or open stock documents.',
     'bulk_deactivation_blocked' => 'Some selected items cannot be deactivated while they have stock on hand (including negative balances), reserved stock or open stock documents. No items were changed.',
+    'inactive_item_rejected' => 'This item is inactive. New stock documents and movements are not allowed for it; reactivate it first, or reduce its remaining stock with a write-off adjustment.',
+    'inactive_write_off_exceeds_stock' => 'An inactive item can only be written off out of its positive stock on hand; the reduction cannot exceed that stock or create a negative balance.',
     'zone_code_unique' => 'Zone code must be unique within the warehouse.',
     'zone_has_stock' => 'Cannot deactivate a zone that still holds stock.',
     'bin_code_unique' => 'Bin code must be unique within the warehouse.',

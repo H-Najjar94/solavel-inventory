@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Reservation extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
     use BelongsToWarehouseScope;
 
     protected $table = 'reservations';

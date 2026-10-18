@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StockCountLine extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
 
     protected $table = 'stock_count_lines';
 

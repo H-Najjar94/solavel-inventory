@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SalesReturnLine extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
 
     protected $table = 'sales_return_lines';
 

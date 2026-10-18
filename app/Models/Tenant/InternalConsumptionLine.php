@@ -4,6 +4,7 @@ use App\Tenancy\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 class InternalConsumptionLine extends Model {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
     protected $guarded = ['id'];
     protected $casts = ['conversion'=>'array', 'quantity'=>'decimal:4', 'unit_cost'=>'decimal:6', 'total_cost'=>'decimal:2'];
     public function item() { return $this->belongsTo(Item::class)->withTrashed(); }

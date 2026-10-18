@@ -198,6 +198,8 @@ return array (
     'bulk_update_empty' => 'Selecione pelo menos um campo de atualização em massa.',
     'deactivation_blocked' => 'Este item não pode ser desativado enquanto tiver estoque (incluindo saldos negativos), estoque reservado ou documentos de estoque em aberto.',
     'bulk_deactivation_blocked' => 'Alguns itens selecionados não podem ser desativados enquanto tiverem estoque (incluindo saldos negativos), estoque reservado ou documentos de estoque em aberto. Nenhum item foi alterado.',
+    'inactive_item_rejected' => 'Este item está inativo. Não são permitidos novos documentos ou movimentos de stock para ele; reative-o primeiro ou reduza o stock restante com um ajuste de baixa.',
+    'inactive_write_off_exceeds_stock' => 'Um item inativo só pode ser baixado a partir do seu stock positivo disponível; a redução não pode exceder esse stock nem criar um saldo negativo.',
     'zone_code_unique' => 'O código de zona deve ser exclusivo no armazém.',
     'zone_has_stock' => 'Não é possível desativar uma zona que ainda mantém estoque.',
     'bin_code_unique' => 'O código do endereço de armazenagem deve ser único no armazém.',
