@@ -1,4 +1,5 @@
 import {useTenant} from '../stores/tenant.jsx';
+import {PlanSummary} from '../components/PlanAccess.jsx';
 import FinanceReadiness, {FinanceReadinessSkeleton} from '../components/FinanceReadiness.jsx';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -269,6 +270,7 @@ export default function DashboardPage() {
                 <button className="btn btn--primary" onClick={saveLayout}>{t('dashboard.saveLayout')}</button>
             </div>}
 
+            <PlanSummary />
             {layout.filter((row) => row.visible !== false).map((row) => <React.Fragment key={row.key}>{sections[row.key]}</React.Fragment>)}
         </section>
     );

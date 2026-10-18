@@ -37,6 +37,11 @@ class MetaController extends ApiController
             'default_warehouse_id' => $default,
             'permissions' => $uiAccess['permissions'],
             'ui_access' => ['routes'=>$uiAccess['routes']],
+            // Display only: plan management remains authorized by Central.
+            'plan' => [
+                'tier' => app(\App\Services\Entitlements\InventoryCommercialEntitlementService::class)->checkFeature('stock.items')['tier'] ?? null,
+                'manage_url' => \App\Services\Access\OtherAppsMenu::manageAppsUrl($organizationId),
+            ],
             'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],
             'can_schedule_reports' => app(WarehouseAccessService::class)->allowedIds() === null && $permissions->can($request->user(), 'inventory.export_reports'),
             'tenant_mode' => $request->attributes->get('tenant_mode', 'live'), // live|demo

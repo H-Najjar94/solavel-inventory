@@ -5,6 +5,7 @@ import { reportPageView } from '../utils/reportPageView.js';
 import { EmptyState, Skeleton } from '../components/ui.jsx';
 import { useCan, useMeta } from '../stores/meta.jsx';
 import DashboardPage from '../pages/DashboardPage.jsx';
+import PlanAccessPage from '../pages/PlanAccessPage.jsx';
 import ItemsPage from '../pages/ItemsPage.jsx';
 import ItemDetailPage from '../pages/ItemDetailPage.jsx';
 import ItemFormPage from '../pages/ItemFormPage.jsx';
@@ -110,6 +111,7 @@ export const router = createBrowserRouter(
             children: [
                 { index: true, element: <Navigate to="/dashboard" replace /> },
                 { path: 'dashboard', element: <DashboardPage /> },
+                { path: 'plan-access', element: <PlanAccessPage /> },
                 { path: 'items', element: <ItemsPage /> },
                 { path: 'items/new', element: protectedElement(<ItemFormPage />, 'inventory.manage_items') },
                 { path: 'items/:id', element: <ItemDetailPage /> },

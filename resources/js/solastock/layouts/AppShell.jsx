@@ -582,6 +582,10 @@ export default function AppShell() {
                                     {!railCollapsed && <span className="side-link-label">{t(NAV_LABELS[item.key], item.label)}</span>}
                                 </NavLink>
                             ))}
+                            <NavLink to="/plan-access" className={({isActive})=>`side-link side-link--primary ${isActive?'is-active':''}`} title={t('planAccess.title')}>
+                                <i className="side-link-icon fa-solid fa-layer-group" aria-hidden="true" />
+                                {!railCollapsed&&<span className="side-link-label">{t('planAccess.title')}</span>}
+                            </NavLink>
                         </div>
                         {railCollapsed && Object.entries(groupedNav).map(([group, items]) => (
                             <button

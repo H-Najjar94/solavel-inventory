@@ -2605,3 +2605,17 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .opening-stock-import > .btn { align-self:flex-start; min-height:44px; padding:12px 24px; min-width:148px; white-space:nowrap; }
 .opening-stock-import > .muted p { margin:0 0 10px; }
 @media(max-width:600px) { .opening-stock-import > .btn { align-self:stretch; width:100%; } }
+
+.plan-summary,.plan-access-notice { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; }
+.plan-summary>div:first-child,.plan-access-notice>div:first-child { flex:1 1 320px; min-width:0; }
+.plan-summary h2,.plan-access-notice h2,.plan-access-card h2 { margin:0; font-size:18px; }
+.plan-summary p,.plan-access-notice p,.plan-access-card p { line-height:1.7; margin:10px 0 0; }
+.plan-access-actions { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.plan-access-actions .btn,.plan-summary>.btn,.plan-access-card>.btn { min-height:44px; padding:12px 18px; white-space:normal; text-align:center; }
+.plan-access-context { margin:0 0 20px; }
+.plan-access-notice { border-inline-start:4px solid var(--amber,#e09921); }
+.plan-access-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:20px; }
+.plan-access-card { display:flex; flex-direction:column; gap:12px; min-width:0; margin:0; }
+.plan-access-card-head { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; justify-content:space-between; }
+.plan-access-card>.btn { align-self:flex-start; margin-top:auto; }
+@media(max-width:600px){ .plan-summary>.btn,.plan-access-actions,.plan-access-actions>.btn { width:100%; } .plan-access-notice>div:first-child,.plan-summary>div:first-child { flex-basis:100%; } }
