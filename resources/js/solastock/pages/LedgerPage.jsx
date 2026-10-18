@@ -34,7 +34,7 @@ export default function LedgerPage() {
     const auditRows = Array.isArray(audit.data) ? audit.data : (audit.data?.data ?? []);
 
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: t('ledger.title') }]} />
             <header className="page-head"><h1>{t('ledger.title')}</h1><span className="muted">{t('ledger.readOnly')}</span></header>
 
@@ -56,19 +56,19 @@ export default function LedgerPage() {
             </div>
 
             {tab === 'ledger' && <div className="panel">
-                {ledger.isLoading ? <Skeleton rows={6} /> : rows.length === 0 ? <EmptyState title={t('ledger.empty')} /> : <div style={{ overflowX: 'auto' }}><table className="data-table"><thead><tr><th>{t('ledger.date')}</th><th>{t('ledger.item')}</th><th>{t('ledger.warehouse')}</th><th>{t('ledger.direction')}</th><th>{t('ledger.quantity')}</th><th>{t('ledger.unitCost')}</th><th>{t('ledger.total')}</th><th>{t('ledger.runningQuantity')}</th><th>{t('ledger.source')}</th></tr></thead>
+                {ledger.isLoading ? <Skeleton rows={6} /> : rows.length === 0 ? <EmptyState title={t('ledger.empty')} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('ledger.date')}</th><th>{t('ledger.item')}</th><th>{t('ledger.warehouse')}</th><th>{t('ledger.direction')}</th><th>{t('ledger.quantity')}</th><th>{t('ledger.unitCost')}</th><th>{t('ledger.total')}</th><th>{t('ledger.runningQuantity')}</th><th>{t('ledger.source')}</th></tr></thead>
                     <tbody>{rows.map((r) => (<tr key={r.id}>
                         <td>{r.moved_at}</td>
                         <td>{r.item_name ?? `#${r.item_id}`}{r.item_sku && <span className="muted"> · {r.item_sku}</span>}</td>
                         <td>{r.warehouse_name ?? `#${r.warehouse_id}`}</td>
                         <td>{t(`ledger.${r.direction}`, r.direction)}</td><td>{r.quantity}</td><td>{r.unit_cost}</td><td>{r.total_cost}</td><td>{r.balance_qty_after}</td>
                         <td><SourceDocumentLink sourceType={r.source_type} sourceId={r.source_id} sourceDisplay={r.source_display} sourceRoute={r.source_route} /></td>
-                    </tr>))}</tbody></table></div>}
+                    </tr>))}</tbody></table></div></div>}
             </div>}
 
             {tab === 'audit' && <div className="panel">
-                {!canViewAudit ? <EmptyState title={t('ledger.auditNoPermission')} hint={t('ledger.auditNoPermissionHint')} /> : audit.isLoading ? <Skeleton rows={6} /> : auditRows.length === 0 ? <EmptyState title={t('ledger.noAudit')} /> : <div style={{ overflowX: 'auto' }}><table className="data-table"><thead><tr><th>{t('ledger.time')}</th><th>{t('ledger.actor')}</th><th>{t('ledger.action')}</th><th>{t('ledger.entity')}</th><th>{t('ledger.document')}</th><th>{t('ledger.before')}</th><th>{t('ledger.after')}</th></tr></thead>
-                    <tbody>{auditRows.map((r) => <tr key={r.id}><td>{r.created_at}</td><td>{r.actor_user_id ?? t('ledger.system')}</td><td>{r.action}</td><td>{r.entity_type} #{r.entity_id ?? '—'}</td><td>{r.document_ref ?? '—'}</td><td><code>{JSON.stringify(r.before ?? {})}</code></td><td><code>{JSON.stringify(r.after ?? {})}</code></td></tr>)}</tbody></table></div>}
+                {!canViewAudit ? <EmptyState title={t('ledger.auditNoPermission')} hint={t('ledger.auditNoPermissionHint')} /> : audit.isLoading ? <Skeleton rows={6} /> : auditRows.length === 0 ? <EmptyState title={t('ledger.noAudit')} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('ledger.time')}</th><th>{t('ledger.actor')}</th><th>{t('ledger.action')}</th><th>{t('ledger.entity')}</th><th>{t('ledger.document')}</th><th>{t('ledger.before')}</th><th>{t('ledger.after')}</th></tr></thead>
+                    <tbody>{auditRows.map((r) => <tr key={r.id}><td>{r.created_at}</td><td>{r.actor_user_id ?? t('ledger.system')}</td><td>{r.action}</td><td>{r.entity_type} #{r.entity_id ?? '—'}</td><td>{r.document_ref ?? '—'}</td><td><code>{JSON.stringify(r.before ?? {})}</code></td><td><code>{JSON.stringify(r.after ?? {})}</code></td></tr>)}</tbody></table></div></div>}
             </div>}
         </section>
     );

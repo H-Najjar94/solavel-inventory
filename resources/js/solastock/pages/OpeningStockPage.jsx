@@ -66,7 +66,7 @@ export default function OpeningStockPage() {
     }
 
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: t('openingStock.title') }]} />
             <header className="page-head"><h1>{t('openingStock.title')}</h1>{isMock && <span className="badge badge--warn">{t('openingStock.sampleData')}</span>}
                 <Link to="/opening-stock/new" className="btn btn--primary"
@@ -84,8 +84,8 @@ export default function OpeningStockPage() {
                 <CsvColumnsHelp t={t} />
             </div>}
             {rows.length === 0 ? <EmptyState title={t('openingStock.emptyTitle')} hint={t('openingStock.emptyHint')} /> : (
-                <table className="data-table"><thead><tr><th>{t('openingStock.number')}</th><th>{t('openingStock.date')}</th><th>{t('openingStock.warehouseShort')}</th><th>{t('openingStock.status')}</th><th>{t('openingStock.value')}</th></tr></thead>
-                <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}><bdi>{e.entry_number}</bdi></Link></td><td>{e.opening_date}</td><td>{e.warehouse_name ?? <bdi>#{e.warehouse_id}</bdi>}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('openingStock.number')}</th><th>{t('openingStock.date')}</th><th>{t('openingStock.warehouseShort')}</th><th>{t('openingStock.status')}</th><th>{t('openingStock.value')}</th></tr></thead>
+                <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}><bdi>{e.entry_number}</bdi></Link></td><td>{e.opening_date}</td><td>{e.warehouse_name ?? <bdi>#{e.warehouse_id}</bdi>}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table></div>
             )}
         </section>
     );

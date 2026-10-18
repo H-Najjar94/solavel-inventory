@@ -21,14 +21,14 @@ export default function CatalogSyncPage() {
   catch (error) { toast.failure(error, t[error?.message] || t.fallback); }
   finally { setBusy(null); }
  }
- return <section className="page">
+ return <section className="page index-page">
   <Breadcrumbs items={[{ label: t.back, to: '/integrations/solacount' }, { label: t.title }]} />
   <header className="page-head"><h1>{t.title}</h1></header><p>{t.description}</p>
   <div className="panel">
-   {query.isError ? <EmptyState title={t.failed} hint={t.fallback} /> : rows.length === 0 ? <EmptyState title={t.empty} hint={t.emptyHint} /> : <div style={{ overflowX: 'auto' }}><table className="data-table">
+   {query.isError ? <EmptyState title={t.failed} hint={t.fallback} /> : rows.length === 0 ? <EmptyState title={t.empty} hint={t.emptyHint} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table">
     <thead><tr><th>{t.type}</th><th>{t.record}</th><th>{t.status}</th><th>{t.reason}</th><th /></tr></thead>
     <tbody>{rows.map(row => <tr key={row.source_uuid}><td>{t[row.entity_type]}</td><td>{row.name || `#${row.source_id}`}</td><td><span className={`badge ${row.state === 'delivered' ? 'badge--live' : 'badge--warn'}`}>{t[row.state] || t.pending}</span></td><td>{row.last_error ? (t[row.last_error] || t.fallback) : '—'}</td><td>{!['delivered', 'delivering'].includes(row.state) && <button className="btn btn--sm" disabled={busy !== null} onClick={() => retry(row)}>{busy === row.source_uuid ? t.busy : t.retry}</button>}</td></tr>)}</tbody>
-   </table></div>}
+   </table></div></div>}
   </div>
  </section>;
 }

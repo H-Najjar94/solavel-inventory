@@ -2523,3 +2523,51 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .goods-receipt-form-page .banner { margin-bottom:22px;line-height:1.8;padding:14px 18px; }
 @media(max-width:900px) { .goods-receipt-form-page .form-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:20px; } }
 @media(max-width:600px) { .goods-receipt-form-page .form-grid { grid-template-columns:1fr;padding:18px;gap:20px; } .goods-receipt-form-page .panel { padding:16px; } .goods-receipt-form-page .doc-actions .btn { flex:1 1 auto; } }
+
+/* Customer directory uses the same visual treatment as Suppliers. */
+/* Supplier directory: aligned heading, useful empty state and responsive search. */
+.customers-page { max-width:1400px; margin-inline:auto; }
+.customers-heading { justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:22px; }
+.customers-heading h1 { margin:0; }
+.customers-heading p { margin:7px 0 0; color:var(--text-2); font-size:13px; line-height:1.7; }
+.customers-new { margin-inline-start:auto; display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:44px; padding:10px 20px; }
+.customers-directory { overflow:hidden; }
+.customers-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:20px; border-bottom:1px solid var(--line); background:var(--surface-2); }
+.customers-search { position:relative; flex:1 1 280px; max-width:520px; min-width:0; }
+.customers-search svg { position:absolute; inset-inline-start:14px; top:50%; transform:translateY(-50%); color:var(--text-2); pointer-events:none; }
+.customers-search .input { width:100%; min-width:0; min-height:44px; padding-inline-start:43px; box-sizing:border-box; border-radius:10px; }
+.customers-clear { min-height:44px; }
+.customers-count { margin-inline-start:auto; color:var(--text-2); font-size:12px; white-space:nowrap; }
+.customers-empty { display:flex; flex-direction:column; align-items:center; padding:48px 24px; text-align:center; }
+.customers-empty-icon { display:grid; place-items:center; width:72px; height:72px; border-radius:22px; color:var(--amber); background:rgba(224,153,33,.1); margin-bottom:18px; }
+.customers-empty .empty-state { padding:0; max-width:440px; }
+.customers-empty .empty-state-title { font-size:18px; line-height:1.6; }
+.customers-empty .empty-state-hint { margin-top:8px; font-size:13px; line-height:1.8; }
+.customers-empty .btn { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:10px 20px; margin-top:22px; }
+.customers-table .data-table { width:100%; min-width:0; }
+.customers-table .data-table th,.customers-table .data-table td { padding:16px 22px; }
+.customers-name { font-weight:600; color:var(--text); overflow-wrap:anywhere; }
+.customers-status { display:inline-flex; align-items:center; gap:7px; padding:5px 10px; border-radius:30px; font-size:12px; color:var(--text-2); background:var(--surface-2); white-space:nowrap; }
+.customers-status > span { width:6px;height:6px;border-radius:50%;background:currentColor; }
+.customers-status.is-active { color:var(--green); background:rgba(31,157,107,.1); }
+@media(max-width:600px) { .customers-heading { align-items:flex-start; } .customers-new { margin-inline-start:0; } .customers-toolbar { padding:14px; } .customers-search { max-width:none;flex-basis:100%; } .customers-empty { padding:36px 18px; } .customers-table .data-table th,.customers-table .data-table td { padding:14px 10px; } }
+
+/* Shared layout for inventory index pages. */
+.index-page { max-width:1500px; margin-inline:auto; min-width:0; }
+.index-page > .page-head { align-items:center; gap:16px; margin-bottom:22px; }
+.index-page > .page-head .btn--primary { margin-left:0 !important; margin-inline-start:auto; min-height:44px; padding:10px 20px; }
+.index-page > .page-head h1 { line-height:1.5; }
+.index-page > .toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:14px; padding:18px; margin-bottom:20px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.index-page > .toolbar .input { min-width:0; min-height:44px; max-width:100%; box-sizing:border-box; }
+.index-page > .toolbar input:not([type=checkbox]) { flex:1 1 220px; }
+.index-page > .toolbar .btn { min-height:44px; }
+.index-page > .empty-state { border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:44px 24px;margin-top:18px; }
+.index-page .empty-state .btn { min-height:44px;padding:10px 20px;margin-top:18px; }
+.index-page > .muted { font-size:13px;line-height:1.8;margin-bottom:20px; }
+.index-table-scroll { max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;border:1px solid var(--line);border-radius:14px;background:var(--surface);margin-bottom:20px; }
+.index-table-scroll > .data-table { width:100%; }
+.index-table-scroll .data-table th,.index-table-scroll .data-table td { padding:14px 16px; }
+.index-table-scroll .data-table th { line-height:1.6; }
+.index-page .tbl-wrap { max-width:100%; }
+.index-page > .card { margin-bottom:20px; }
+@media(max-width:600px) { .index-page > .page-head { align-items:flex-start; } .index-page > .page-head .btn--primary { margin-inline-start:0; } .index-page > .toolbar { padding:14px;gap:12px; } .index-page > .empty-state { padding:32px 18px; } .index-table-scroll .data-table th,.index-table-scroll .data-table td { padding:12px; } }

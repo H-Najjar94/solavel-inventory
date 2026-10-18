@@ -14,7 +14,7 @@ export default function SuppliersPage() {
     const list = Array.isArray(data) ? data : (data?.data ?? []);
     const gateReason = gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied');
     return (
-        <section className="page suppliers-page">
+        <section className="page index-page suppliers-page">
             <Breadcrumbs items={[{ label: t('partners.common.suppliers') }]} />
             <header className="page-head suppliers-heading">
                 <div><h1>{t('partners.suppliers.list.title')}</h1><p>{t('partners.suppliers.list.designIntro')}</p></div>

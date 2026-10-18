@@ -13,7 +13,7 @@ export default function GoodsReceiptsPage() {
     const { data, isMock } = useApiQuery(['grns'], () => api.goodsReceipts({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts') }]} />
             <header className="page-head"><h1>{t('receiving.grn.list.title', 'Goods Receipts')}</h1>{isMock && <span className="badge badge--warn">{t('receiving.common.sampleData', 'Sample data')}</span>}
                 <Link to="/goods-receipts/new" className="btn btn--primary"
@@ -21,8 +21,8 @@ export default function GoodsReceiptsPage() {
                     title={gate.allowed ? '' : gate.reason}>{t('receiving.grn.actions.new', 'New GRN')}</Link></header>
             <p className="muted">{t('receiving.grn.list.stockNotice', 'Posting a goods receipt adds the accepted quantities to stock and updates its purchase order.')}</p>
             {rows.length === 0 ? <EmptyState title={t('receiving.grn.empty.title', 'No goods receipts')} hint={t('receiving.grn.empty.hint', 'Create one, or receive from an approved purchase order.')} /> : (
-                <table className="data-table"><thead><tr><th>{t('receiving.grn.fields.numberShort', 'GRN #')}</th><th>{t('receiving.po.abbreviation', 'PO')}</th><th>{t('receiving.common.warehouseShort', 'WH')}</th><th>{t('receiving.common.date', 'Date')}</th><th>{t('receiving.common.status', 'Status')}</th></tr></thead>
-                <tbody>{rows.map((g) => (<tr key={g.id}><td><Link to={`/goods-receipts/${g.id}`}>{g.grn_number}</Link></td><td>{g.purchase_order_number ?? (g.purchase_order_id ? `#${g.purchase_order_id}` : '—')}</td><td>{g.warehouse_name ?? `#${g.warehouse_id}`}</td><td>{g.receipt_date}</td><td><DocumentStatusBadge status={g.reversal_id ? 'reversed' : g.status} /></td></tr>))}</tbody></table>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('receiving.grn.fields.numberShort', 'GRN #')}</th><th>{t('receiving.po.abbreviation', 'PO')}</th><th>{t('receiving.common.warehouseShort', 'WH')}</th><th>{t('receiving.common.date', 'Date')}</th><th>{t('receiving.common.status', 'Status')}</th></tr></thead>
+                <tbody>{rows.map((g) => (<tr key={g.id}><td><Link to={`/goods-receipts/${g.id}`}>{g.grn_number}</Link></td><td>{g.purchase_order_number ?? (g.purchase_order_id ? `#${g.purchase_order_id}` : '—')}</td><td>{g.warehouse_name ?? `#${g.warehouse_id}`}</td><td>{g.receipt_date}</td><td><DocumentStatusBadge status={g.reversal_id ? 'reversed' : g.status} /></td></tr>))}</tbody></table></div>
             )}
         </section>
     );

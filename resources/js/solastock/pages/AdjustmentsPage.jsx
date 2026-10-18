@@ -14,7 +14,7 @@ export default function AdjustmentsPage() {
     const rows = Array.isArray(data) ? data : (data?.data ?? mockAdjustments);
 
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: t('adjustments') }]} />
             <header className="page-head"><h1>{t('adjustments.title')}</h1>{isMock && <span className="badge badge--warn">{t('warehouses.sampleData')}</span>}
                 <Link to="/adjustments/new" className="btn btn--primary"
@@ -22,8 +22,8 @@ export default function AdjustmentsPage() {
                     title={gate.allowed ? '' : gate.reason}>{t('adjustments.new')}</Link></header>
             <p className="muted">{t('adjustments.hint')}</p>
             {rows.length === 0 ? <EmptyState title={t('adjustments.empty')} hint={t('adjustments.emptyHint')} /> : (
-                <table className="data-table"><thead><tr><th>{t('adjustments.number')}</th><th>{t('adjustments.date')}</th><th>{t('adjustments.warehouse')}</th><th>{t('adjustments.reason')}</th><th>{t('status')}</th><th>{t('adjustments.increaseValue')}</th><th>{t('adjustments.decreaseValue')}</th></tr></thead>
-                <tbody>{rows.map((a) => (<tr key={a.id}><td><Link to={`/adjustments/${a.id}`}>{a.adjustment_number}</Link></td><td>{a.adjustment_date}</td><td>{a.warehouse_name ?? `#${a.warehouse_id}`}</td><td>{a.reason_code ?? '—'}</td><td><DocumentStatusBadge status={a.status} /></td><td>{a.total_increase_value}</td><td>{a.total_decrease_value}</td></tr>))}</tbody></table>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('adjustments.number')}</th><th>{t('adjustments.date')}</th><th>{t('adjustments.warehouse')}</th><th>{t('adjustments.reason')}</th><th>{t('status')}</th><th>{t('adjustments.increaseValue')}</th><th>{t('adjustments.decreaseValue')}</th></tr></thead>
+                <tbody>{rows.map((a) => (<tr key={a.id}><td><Link to={`/adjustments/${a.id}`}>{a.adjustment_number}</Link></td><td>{a.adjustment_date}</td><td>{a.warehouse_name ?? `#${a.warehouse_id}`}</td><td>{a.reason_code ?? '—'}</td><td><DocumentStatusBadge status={a.status} /></td><td>{a.total_increase_value}</td><td>{a.total_decrease_value}</td></tr>))}</tbody></table></div>
             )}
         </section>
     );

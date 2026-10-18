@@ -13,7 +13,7 @@ export default function PurchaseOrdersPage() {
     const { data, isMock, isLoading, isError, refetch } = useApiQuery(['pos'], () => api.purchaseOrders({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     return (
-        <section className="page purchase-orders-page">
+        <section className="page index-page purchase-orders-page">
             <Breadcrumbs items={[{ label: t('receiving.po.list.title', 'Purchase Orders') }]} />
             <header className="page-head po-heading"><div><h1>{t('receiving.po.list.title')}</h1><p>{t('receiving.po.list.designIntro')}</p></div>{isMock && <span className="badge badge--warn">{t('receiving.common.sampleData')}</span>}
                 {gate.allowed ? <Link to="/purchase-orders/new" className="btn btn--primary po-new">+ {t('receiving.po.actions.new')}</Link> : <button type="button" className="btn btn--primary po-new" disabled title={gate.reason}>{t('receiving.po.actions.new')}</button>}</header>

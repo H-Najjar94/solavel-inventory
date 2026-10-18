@@ -22,7 +22,7 @@ export default function LandedCostsPage() {
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
 
     if (!entitled) {
-        return <section className="page">
+        return <section className="page index-page">
             <Breadcrumbs items={[{ label: t('landedCosts.title') }]} />
             <header className="page-head"><h1>{t('landedCosts.title')}</h1></header>
             <LandedCostAvailabilityNotice availability={meta.landed_costs} canManageSettings={can('inventory.manage_settings')} />
@@ -30,7 +30,7 @@ export default function LandedCostsPage() {
     }
 
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: t('landedCosts.title') }]} />
             <header className="page-head"><h1>{t('landedCosts.title')}</h1>
                 {available && <Link to="/landed-costs/new" className="btn btn--primary"
@@ -40,7 +40,7 @@ export default function LandedCostsPage() {
             <LandedCostAvailabilityNotice availability={meta.landed_costs} canManageSettings={can('inventory.manage_settings')} />
             {available && <LandedCostConnectionPanel status={connection.data} />}
             {isLoading ? <Skeleton /> : rows.length === 0 ? <EmptyState title={t('landedCosts.empty')} hint={t('landedCosts.emptyHint')} /> : (
-                <table className="data-table"><thead><tr>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr>
                     <th>{t('landedCosts.number')}</th><th>{t('landedCosts.date')}</th><th>{t('landedCosts.reference')}</th><th>{t('landedCosts.method')}</th>
                     <th>{t('status')}</th><th>{t('landedCosts.totalBase')}</th><th>{t('landedCosts.onHand')}</th><th>{t('landedCosts.consumed')}</th></tr></thead>
                 <tbody>{rows.map((r) => (<tr key={r.id}>
@@ -48,7 +48,7 @@ export default function LandedCostsPage() {
                     <td>{r.supplier_reference ?? '—'}</td><td>{t(`landedCosts.method.${r.allocation_method}`, r.allocation_method)}</td>
                     <td><DocumentStatusBadge status={r.status} /></td><td>{r.total_base_amount}</td>
                     <td>{r.status === 'draft' ? '—' : r.inventory_base_amount}</td><td>{r.status === 'draft' ? '—' : r.consumed_base_amount}</td>
-                </tr>))}</tbody></table>
+                </tr>))}</tbody></table></div>
             )}
         </section>
     );

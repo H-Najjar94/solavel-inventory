@@ -48,7 +48,7 @@ export default function IntegrationEventsPage() {
     }
 
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: tr('integration.title'), to: '/integrations/solacount' }, { label: tr('integration.events.breadcrumb') }]} />
             <header className="page-head"><h1>{tr('integration.events.title')}</h1>{catalogGate.allowed && <Link className="btn" to="/integrations/solacount/catalog">{sourceText("Catalog synchronization", "مزامنة الأصناف")}</Link>}{isMock && <span className="badge badge--warn">{tr('integration.events.sampleData')}</span>}</header>
             {status.isError && <div className="panel" role="alert"><strong>{tr('integration.loadFailed')}</strong><p>{status.error?.message || tr('settings.common.errorFallback')}</p></div>}
@@ -68,7 +68,7 @@ export default function IntegrationEventsPage() {
 
             <div className="panel">
                 {isError ? <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} /> : rows.length === 0 ? <EmptyState title={tr('integration.events.none')} hint={tr('integration.events.noneHint')} /> : (
-                    <table className="data-table">
+                    <div className="index-table-scroll"><table className="data-table">
                         <thead><tr><th>{tr('integration.events.occurred')}</th><th>{tr('integration.events.event')}</th><th>{tr('integration.events.document')}</th><th>{tr('integration.events.status')}</th><th>{tr('integration.events.mapping')}</th><th></th></tr></thead>
                         <tbody>{rows.map((e) => (
                             <tr key={e.id}>
@@ -79,7 +79,7 @@ export default function IntegrationEventsPage() {
                                 <td><button className="btn btn--sm" onClick={() => setSelected(e)}>{tr('integration.events.view')}</button></td>
                             </tr>
                         ))}</tbody>
-                    </table>
+                    </table></div>
                 )}
             </div>
 

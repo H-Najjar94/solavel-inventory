@@ -50,7 +50,7 @@ export default function ItemsPage() {
     }
 
     return (
-        <section className="page">
+        <section className="page index-page">
             <Breadcrumbs items={[{ label: t('items') }]} />
             <header className="page-head">
                 <h1>{t('items')}</h1>
@@ -82,7 +82,7 @@ export default function ItemsPage() {
                 {['reorder_point', 'reorder_qty'].includes(bulk.field) && <Field label={t('items.value')}><input className="input" type="number" step="0.0001" min="0" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })} required /></Field>}
                 <div style={{ alignSelf: 'end' }}><button className="btn btn--primary" disabled={selected.length === 0}>{t('items.apply')}</button></div>
             </form>}
-            <table className="data-table">
+            <div className="index-table-scroll"><table className="data-table">
                 <thead><tr><th><input type="checkbox" aria-label={t('items.selectAll')} checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><th>SKU</th><th>{t('name')}</th><th>{t('type')}</th><th>{t('category')}</th><th>{t('items.salesPrice')}</th><th>{t('document.status', 'Status')}</th></tr></thead>
                 <tbody>
                     {items.length === 0 && <tr><td colSpan="8"><EmptyState title={t('items.noItems')} /></td></tr>}
@@ -103,7 +103,7 @@ export default function ItemsPage() {
                         </tr>
                     ))}
                 </tbody>
-            </table>
+            </table></div>
         </section>
     );
 }
