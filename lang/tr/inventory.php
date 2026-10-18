@@ -198,6 +198,8 @@ return array (
     'bulk_update_empty' => 'En az bir toplu güncelleme alanı seçin.',
     'deactivation_blocked' => 'Bu ürün, eldeki stok (negatif bakiyeler dahil), rezerve stok veya açık stok belgeleri varken devre dışı bırakılamaz.',
     'bulk_deactivation_blocked' => 'Seçilen bazı ürünler, eldeki stok (negatif bakiyeler dahil), rezerve stok veya açık stok belgeleri varken devre dışı bırakılamaz. Hiçbir ürün değiştirilmedi.',
+    'inactive_item_rejected' => 'Bu ürün pasif. Bu ürün için yeni stok belgeleri ve hareketlerine izin verilmez; önce yeniden etkinleştirin veya kalan stoğu bir zayi düzeltmesiyle azaltın.',
+    'inactive_write_off_exceeds_stock' => 'Pasif bir ürün yalnızca pozitif eldeki stoğundan zayi edilebilir; azaltma bu stoğu aşamaz veya negatif bakiye oluşturamaz.',
     'zone_code_unique' => 'Zona kodu, ambarda benzersiz olmalıdır.',
     'zone_has_stock' => 'Stok hâlâ tuttuğu için bir zona pasifleştirilemez.',
     'bin_code_unique' => 'Depo gözü kodu depo içinde benzersiz olmalıdır.',

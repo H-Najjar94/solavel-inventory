@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 final class ReceivingRequestLine extends Model
 {
     use BelongsToOrganization;
+    use \App\Support\GuardsInactiveItem;
 
     protected $table = 'purchasing_receiving_request_lines';
 

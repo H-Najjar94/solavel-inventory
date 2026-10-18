@@ -41,7 +41,11 @@ class UnitConversionResolver
                 $quantityKey => Decimal::qty((string) ($line[$quantityKey] ?? $enteredQty)),
             ]);
         }
-        if (! $item->base_unit_id || ! (bool) $item->is_active || $item->deleted_at !== null) {
+        // Q12.3/Q12.6: an inactive item gets a clear refusal here; only a stock-adjustment decrease
+        // (controlled write-off) continues, and InactiveItemPolicy re-checks it under the item lock.
+        if ($item->base_unit_id && ! (bool) $item->is_active && $item->deleted_at === null) {
+            \App\Support\InactiveItemPolicy::assertConversionAllowed($item, $line);
+        } elseif (! $item->base_unit_id || ! (bool) $item->is_active || $item->deleted_at !== null) {
             throw new RuntimeException("Item {$item->sku} has no base unit for conversion.");
         }
         $enteredUnitId = (int) ($line['entered_unit_id'] ?? $item->base_unit_id);

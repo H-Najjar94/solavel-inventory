@@ -198,6 +198,8 @@ return array (
     'bulk_update_empty' => 'Sélectionnez au moins un champ de mise à jour groupée.',
     'deactivation_blocked' => 'Cet article ne peut pas être désactivé tant qu\'il a du stock (y compris des soldes négatifs), du stock réservé ou des documents de stock ouverts.',
     'bulk_deactivation_blocked' => 'Certains articles sélectionnés ne peuvent pas être désactivés tant qu\'ils ont du stock (y compris des soldes négatifs), du stock réservé ou des documents de stock ouverts. Aucun article n\'a été modifié.',
+    'inactive_item_rejected' => 'Cet article est inactif. Aucun nouveau document ni mouvement de stock n\'est autorisé pour lui ; réactivez-le d\'abord, ou réduisez son stock restant par un ajustement de mise au rebut.',
+    'inactive_write_off_exceeds_stock' => 'Un article inactif ne peut être sorti que de son stock disponible positif ; la réduction ne peut pas dépasser ce stock ni créer un solde négatif.',
     'zone_code_unique' => 'Le code de zone doit être unique au sein de l\'entrepôt.',
     'zone_has_stock' => 'Impossible de désactiver une zone qui détient encore du stock.',
     'bin_code_unique' => 'Le code d’emplacement doit être unique dans l’entrepôt.',
