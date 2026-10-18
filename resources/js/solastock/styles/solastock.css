@@ -1158,7 +1158,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .assistant summary { min-height:40px; }
 .assistant-card > header { margin-bottom:12px; }
 .assistant-card h2 { margin:0 0 4px; font-size:19px; }
-.assistant-card header p { margin:0; color:var(--muted); font-size:13px; }
+.assistant-card header p { margin:0; color:var(--text-2); font-size:13px; }
 .assistant-checks { border:1px solid var(--line-soft,#eee); border-radius:10px; overflow:hidden; }
 .assistant-checks + .assistant-checks { margin-top:8px; }
 .assistant-checks--incomplete:empty { display:none; }
@@ -2398,3 +2398,14 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 /* toasts follow the app theme instead of a white card */
 .sf-notices .sf-toast { background: var(--surface, #1a1f2b); color: var(--text, inherit); border-color: var(--line-soft, rgba(127,127,127,.25)); box-shadow: 0 12px 32px rgba(0,0,0,.35); padding: 14px 16px; }
 .sf-notices .sf-toast button { color: var(--muted, inherit); }
+
+/* Item media: generous upload targets and a clear image empty state. */
+.item-media-upload.btn { min-height:44px; min-width:140px; padding:10px 22px; font-size:14px; line-height:1.4; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; white-space:normal; }
+.item-image-drop { max-width:none; min-height:248px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:28px 24px; border:1px dashed var(--line); border-radius:16px; background:var(--surface-2); text-align:center; transition:border-color .15s,background .15s; }
+.item-image-drop.is-dragging { border-color:var(--primary,#e09921); box-shadow:inset 0 0 0 1px var(--primary,#e09921); }
+.item-image-drop-icon { width:64px; height:64px; border-radius:18px; display:grid; place-items:center; color:var(--primary,#e09921); background:rgba(224,153,33,.1); }
+.item-image-drop h3 { margin:0; font-size:17px; line-height:1.5; }
+.item-image-drop p { margin:0; max-width:380px; color:var(--text-2); font-size:13px; line-height:1.8; }
+.item-image-drop-actions { display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:4px; }
+.item-images-actions { gap:14px; flex-wrap:wrap; }
+@media(max-width:600px) { .item-image-drop { padding:24px 16px; min-height:240px; } .item-media-upload.btn { min-width:144px; } }

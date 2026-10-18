@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useToast } from '../stores/toast.jsx';
-import { Skeleton, EmptyState } from './ui.jsx';
+import { Skeleton } from './ui.jsx';
 import { t } from '../i18n/index.js';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
@@ -21,6 +21,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
     const qc = useQueryClient();
     const toast = useToast();
     const fileRef = useRef(null);
+    const [dragging, setDragging] = useState(false);
     const [busy, setBusy] = useState(false);
     const [validation,setValidation]=useState('');
     const [progress, setProgress] = useState(null); // {done,total}
@@ -38,7 +39,11 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
     async function onPick(e) {
         const files = Array.from(e.target.files ?? []);
         e.target.value = '';
-        if (!files.length) return;
+        await uploadFiles(files);
+    }
+
+    async function uploadFiles(files) {
+        if (!files.length || busy || !canManage) return;
 
         const valid = [],rejected=[];
         for (const f of files) {
@@ -80,7 +85,7 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
         <>
             {validation&&<p className="field-error" role="alert">{validation}</p>}
             <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={onPick} />
-            <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <button type="button" className="btn btn--primary item-media-upload" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {busy && progress ? t('media.uploading', 'Uploading :done/:total…', progress) : (images.length ? `+ ${t('media.addImages')}` : t('media.uploadImages'))}
             </button>
         </>
@@ -88,10 +93,14 @@ export default function ItemImages({ itemId, canManage, compact = false }) {
 
     if (!images.length) {
         return (
-            <div className="item-gallery-empty">
-                <EmptyState title={t('media.noImages')}
-                    hint={canManage ? t('media.imagesHint') : undefined}
-                    action={uploadBtn} />
+            <div className={`item-gallery-empty item-image-drop${dragging ? ' is-dragging' : ''}`} aria-busy={busy}
+                onDragOver={(e) => { if (canManage && !busy) { e.preventDefault(); setDragging(true); } }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setDragging(false); void uploadFiles(Array.from(e.dataTransfer.files ?? [])); }}>
+                <div className="item-image-drop-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m3 17 5-5 4 4 3-3 6 6"/></svg></div>
+                <h3>{t('media.noImages')}</h3>
+                <p>{canManage ? t('media.imagesHint') : undefined}</p>
+                <div className="item-image-drop-actions">{uploadBtn}</div>
             </div>
         );
     }

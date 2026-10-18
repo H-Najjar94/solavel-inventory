@@ -61,7 +61,7 @@ export default function ItemAttachments({ itemId, canManage }) {
         <>
             {validation&&<p className="field-error" role="alert">{validation}</p>}
             <input ref={fileRef} type="file" hidden onChange={upload} />
-            <button className="btn btn--sm btn--primary" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <button type="button" className="btn btn--primary item-media-upload" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {busy ? t('media.uploading', 'Uploading…') : t('media.uploadAttachment')}
             </button>
         </>
