@@ -1,4 +1,6 @@
 export const en = {
+"partners.suppliers.list.designIntro":"Keep supplier details organized for purchasing and inventory.","partners.suppliers.list.clearSearch":"Clear search","partners.suppliers.list.shown":":count shown","partners.suppliers.list.noMatches":"No matching suppliers","partners.suppliers.list.noMatchesHint":"Try another name or supplier code, or clear your search.",
+
     'partners.common.suppliers': 'Suppliers',
     'partners.common.customers': 'Customers',
     'partners.common.notFound': 'Not found',
@@ -71,6 +73,8 @@ export const en = {
 };
 
 export const ar = {
+"partners.suppliers.list.designIntro":"إدارة بيانات الموردين لاستخدامها في المشتريات والمخزون.","partners.suppliers.list.clearSearch":"مسح البحث","partners.suppliers.list.shown":"المعروض: :count","partners.suppliers.list.noMatches":"لا يوجد موردون مطابقون للبحث","partners.suppliers.list.noMatchesHint":"جرّب اسمًا أو رمزًا آخر، أو امسح البحث لعرض الموردين.",
+
     'partners.common.suppliers': 'الموردون',
     'partners.common.customers': 'العملاء',
     'partners.common.notFound': 'غير موجود',
