@@ -1,5 +1,4 @@
-import {DocumentLineErrors} from '../components/document';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -19,6 +18,10 @@ export default function RecallFormPage() {
     const [header, setHeader] = useState({ recall_number: '', item_id: null, scope: 'lot', reason: '', notes: '' });
     const [lines, setLines] = useState([]);
     const [errors, setErrors] = useState({});
+    const summary=useRef(null);const pending=useRef(false);
+    const [failure,setFailure]=useState('');
+    const [unknown,setUnknown]=useState(false);
+    useEffect(()=>{if(failure||Object.keys(errors).length){summary.current?.focus();summary.current?.scrollIntoView({block:'center',behavior:'smooth'});}},[errors,failure]);
     const [saving, setSaving] = useState(false);
 
     // Serial options for the chosen item (when scope = serial).
@@ -30,26 +33,31 @@ export default function RecallFormPage() {
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
 
     async function save() {
-        if (!gate.allowed) return;
-        setSaving(true); setErrors({});
+        if (!gate.allowed || pending.current || unknown) return;
+        const validation={};
+        if(!header.recall_number.trim())validation.recall_number=t('recallSave.numberRequired');
+        if(!header.item_id)validation.item_id=t('recallSave.itemRequired');
+        if(!lines.length)validation.lines=t('recalls.validation.lineRequired');
+        lines.forEach((line,i)=>{if(!(header.scope==='lot'?line.lot_id:line.serial_id))validation[`lines.${i}.${header.scope==='lot'?'lot_id':'serial_id'}`]=t('recallSave.selectionRequired',undefined,{line:i+1});});
+        if(Object.keys(validation).length){setFailure('');setErrors(validation);return;}
+        pending.current=true;
+        setSaving(true); setErrors({});setFailure('');
         try {
             const payload = {
                 ...header,
-                lines: lines
-                    .filter((l) => (header.scope === 'lot' ? l.lot_id : l.serial_id))
-                    .map((l) => ({ item_id: header.item_id, lot_id: l.lot_id, serial_id: l.serial_id, disposition: l.disposition })),
+                lines: lines.map((l) => ({ item_id: header.item_id, lot_id: l.lot_id, serial_id: l.serial_id, disposition: l.disposition })),
             };
-            if (payload.lines.length === 0) { setErrors({lines:t('recalls.validation.lineRequired', 'Add at least one affected lot or serial number.')}); setSaving(false); return; }
             const res = await api.createRecall(payload);
+            if(!res?.data?.id)throw Object.assign(new Error('Unconfirmed save'),{outcomeUnknown:true});
             toast.push(t('recalls.messages.created', 'Recall case created.'), 'success');
             qc.invalidateQueries({ queryKey: ['recalls'] });
             nav(`/recalls/${res?.data?.id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, err.message || t('recalls.messages.saveFailed', 'The recall case could not be saved.')); }
-        finally { setSaving(false); }
+        } catch (err) { setErrors(fieldErrors(err));setFailure(err.status===422?err.message:t(err.outcomeUnknown?'recallSave.unknown':'recalls.messages.saveFailed'));setUnknown(!!err.outcomeUnknown);if(![422,402,403].includes(err.status)&&!err.outcomeUnknown)toast.failure(err,err.message); }
+        finally { pending.current=false;setSaving(false); }
     }
 
     return (
-        <section className="page">
+        <section className="page" aria-busy={saving}>
             <Breadcrumbs items={[{ label: t('recalls.common.title', 'Recalls'), to: '/recalls' }, { label: t('recalls.common.new', 'New') }]} />
             <header className="page-head"><h1>{t('recalls.form.title', 'New recall case')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
@@ -67,7 +75,6 @@ export default function RecallFormPage() {
             <div className="panel">
                 <h2>{t(header.scope === 'lot' ? 'recalls.form.affectedLots' : 'recalls.form.affectedSerials', header.scope === 'lot' ? 'Affected lots' : 'Affected serial numbers')}</h2>
                 {!header.item_id && <p className="muted">{t('recalls.form.chooseItem', 'Choose an item first.')}</p>}
-                <DocumentLineErrors errors={errors}/>
                 {header.item_id && (
                     <table className="data-table">
                         <thead><tr><th>{t(header.scope === 'lot' ? 'recalls.common.lot' : 'recalls.common.serial', header.scope === 'lot' ? 'Lot' : 'Serial number')}</th><th>{t('recalls.form.disposition', 'Disposition')}</th><th /></tr></thead>
@@ -93,9 +100,10 @@ export default function RecallFormPage() {
                 {header.item_id && <button type="button" className="btn btn--sm" onClick={addLine}>+ {t('recalls.form.addLine', 'Add line')}</button>}
             </div>
 
+            {(failure||Object.keys(errors).length>0)&&<div ref={summary} tabIndex={-1} className="banner banner--warn recall-save-feedback" role="alert" data-feedback-validation><strong>{t(unknown?'recallSave.unconfirmed':'recallSave.notSaved')}</strong>{failure&&<p>{failure}</p>}{Object.keys(errors).length>0&&<ul>{Object.values(errors).map((message,i)=><li key={i}>{message}</li>)}</ul>}{unknown&&<button type="button" className="btn" onClick={()=>nav('/recalls')}>{t('recallSave.review')}</button>}</div>}
             <div className="doc-actions">
                 <button className="btn" onClick={() => nav('/recalls')}>{t('recalls.common.cancel', 'Cancel')}</button>
-                <button className="btn btn--primary" disabled={!gate.allowed || saving} onClick={save}>{saving ? t('recalls.common.saving', 'Saving…') : t('recalls.common.saveDraft', 'Save draft')}</button>
+                <button className="btn btn--primary" disabled={!gate.allowed || saving || unknown} onClick={save}>{saving ? t('recalls.common.saving', 'Saving…') : t('recalls.common.saveDraft', 'Save draft')}</button>
             </div>
         </section>
     );

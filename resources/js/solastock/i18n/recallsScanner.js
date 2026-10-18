@@ -1,4 +1,6 @@
 export const en = {
+"recallSave.notSaved":"Draft not saved","recallSave.numberRequired":"Enter a recall number.","recallSave.itemRequired":"Choose the affected item.","recallSave.selectionRequired":"Line :line: select the affected lot or serial number, or remove the line.","recallSave.unknown":"The save result could not be confirmed. Review the recalls list before trying again to avoid creating a duplicate.","recallSave.unconfirmed":"Save result not confirmed","recallSave.review":"Review recalls",
+
     'recalls.common.title': 'Recalls',
     'recalls.common.new': 'New',
     'recalls.common.item': 'Item',
@@ -150,6 +152,8 @@ export const en = {
 };
 
 export const ar = {
+"recallSave.notSaved":"لم يتم حفظ المسودة","recallSave.numberRequired":"أدخل رقم الاستدعاء.","recallSave.itemRequired":"اختر الصنف المتأثر.","recallSave.selectionRequired":"السطر :line: اختر الدفعة أو الرقم التسلسلي المتأثر، أو احذف السطر.","recallSave.unknown":"تعذر تأكيد نتيجة الحفظ. راجع قائمة الاستدعاءات قبل إعادة المحاولة لتجنب إنشاء سجل مكرر.","recallSave.unconfirmed":"لم تُؤكّد نتيجة الحفظ","recallSave.review":"مراجعة الاستدعاءات",
+
     'recalls.common.title': 'استدعاءات المخزون',
     'recalls.common.new': 'جديد',
     'recalls.common.item': 'الصنف',
