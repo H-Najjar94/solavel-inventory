@@ -6,9 +6,9 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import PartnerCurrencyPicker from '../components/PartnerCurrencyPicker.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
-const CURRENCIES = ['AED', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR', 'JOD', 'EGP', 'USD', 'EUR', 'GBP', 'TRY', 'INR', 'PKR', 'CNY'];
 const EMPTY = { code: '', name: '', email: '', phone: '', address: '', tax_number: '', currency: '', payment_terms: '', is_active: true, notes: '' };
 
 export default function SupplierFormPage() {
@@ -68,11 +68,7 @@ export default function SupplierFormPage() {
                 <Field label={t('partners.common.phone')} error={errors.phone}><input className="input" dir="auto" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} /></Field>
                 <Field label={t('partners.common.address')} error={errors.address}><input className="input" dir="auto" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></Field>
                 <Field label={t('partners.common.taxNumber')} error={errors.tax_number}><input className="input" dir="auto" value={form.tax_number ?? ''} onChange={(e) => set('tax_number', e.target.value)} /></Field>
-                <Field label={t('partners.common.currency')} error={errors.currency}><select className="input" dir="ltr" value={form.currency ?? ''} onChange={(e) => set('currency', e.target.value)}>
-                    <option value="">—</option>
-                    {form.currency && !CURRENCIES.includes(form.currency) && <option value={form.currency}>{form.currency}</option>}
-                    {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select></Field>
+                <PartnerCurrencyPicker value={form.currency} onChange={value=>set('currency',value)} error={errors.currency} />
                 <Field label={t('partners.common.paymentTerms')} error={errors.payment_terms}><input className="input" dir="auto" value={form.payment_terms ?? ''} onChange={(e) => set('payment_terms', e.target.value)} /></Field>
                 <Field label={t('partners.common.status')} error={errors.is_active}><label className="check-inline"><input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> {t('partners.common.active')}</label></Field>
                 <Field label={t('partners.common.notes')} error={errors.notes}><textarea className="input" dir="auto" rows="2" value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field>

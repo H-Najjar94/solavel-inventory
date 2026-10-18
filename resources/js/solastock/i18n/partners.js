@@ -1,4 +1,6 @@
 export const en = {
+"partners.currency.notSpecified":"Not specified","partners.currency.saved":"Saved value","partners.currency.base":"Base currency","partners.currency.sharedHint":"Uses the currencies enabled for this organization in SolaCount.","partners.currency.unconfigured":"No enabled currencies are available. Configure the organization’s currencies in SolaCount.",
+
 "partners.customers.list.designIntro":"Manage customer details for sales and fulfillment.","partners.customers.list.clearSearch":"Clear search","partners.customers.list.shown":":count shown","partners.customers.list.noMatches":"No matching customers","partners.customers.list.noMatchesHint":"Try another name or customer code, or clear your search.",
 
 "access.title":"Account access restriction","access.expired":"The subscription for this application has expired. Ask your organization owner to review the subscription, then reload and try again.","access.blocked":"This organization’s subscription is inactive or access has been withdrawn. Ask your organization owner to review application access.","access.checkUnavailable":"Application entitlement could not be verified. Reload and try again; if it continues, contact your organization administrator.","access.unavailable":"This action is unavailable under the organization’s current application access or plan. Ask the organization owner to review access, then reload and try again.","partners.suppliers.form.cannotSave":"The supplier could not be saved",
@@ -77,6 +79,8 @@ export const en = {
 };
 
 export const ar = {
+"partners.currency.notSpecified":"غير محددة","partners.currency.saved":"القيمة المحفوظة","partners.currency.base":"العملة الأساسية","partners.currency.sharedHint":"تُستخدم العملات المفعّلة لهذه المؤسسة في SolaCount.","partners.currency.unconfigured":"لا توجد عملات مفعّلة متاحة. اضبط عملات المؤسسة في SolaCount.",
+
 "partners.customers.list.designIntro":"إدارة بيانات العملاء لاستخدامها في المبيعات وتجهيز الطلبات.","partners.customers.list.clearSearch":"مسح البحث","partners.customers.list.shown":"المعروض: :count","partners.customers.list.noMatches":"لا يوجد عملاء مطابقون للبحث","partners.customers.list.noMatchesHint":"جرّب اسمًا أو رمزًا آخر، أو امسح البحث لعرض العملاء.",
 
 "access.title":"تعذر تنفيذ الإجراء بسبب صلاحية الاشتراك","access.expired":"انتهت صلاحية اشتراك التطبيق. اطلب من مسؤول المؤسسة مراجعة الاشتراك، ثم حدّث الصفحة وأعد المحاولة.","access.blocked":"اشتراك المؤسسة غير نشط أو تم إيقاف الوصول. اطلب من مسؤول المؤسسة مراجعة صلاحية استخدام التطبيق.","access.checkUnavailable":"تعذر التحقق من صلاحية استخدام التطبيق. حدّث الصفحة وأعد المحاولة، وإذا استمرت المشكلة فتواصل مع مسؤول المؤسسة.","access.unavailable":"هذا الإجراء غير متاح ضمن صلاحية التطبيق أو خطة المؤسسة الحالية. اطلب من مسؤول المؤسسة مراجعة الوصول، ثم حدّث الصفحة وأعد المحاولة.","partners.suppliers.form.cannotSave":"تعذر حفظ المورد",
