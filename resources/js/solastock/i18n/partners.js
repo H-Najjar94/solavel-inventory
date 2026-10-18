@@ -1,4 +1,6 @@
 export const en = {
+"uiAccess.title":"Section unavailable","uiAccess.checkFailed":"Application access could not be checked. Try loading access again.","uiAccess.roleTitle":"Your role does not allow this section","uiAccess.roleHint":"Ask your organization administrator to review your permissions.","uiAccess.planTitle":"This section is not available under your current application access or plan","uiAccess.planHint":"Ask your organization owner to review application access and the current plan.","uiAccess.dashboard":"Go to dashboard",
+
 "partners.currency.notSpecified":"Not specified","partners.currency.saved":"Saved value","partners.currency.base":"Base currency","partners.currency.sharedHint":"Uses the currencies enabled for this organization in SolaCount.","partners.currency.unconfigured":"No enabled currencies are available. Configure the organization’s currencies in SolaCount.",
 
 "partners.customers.list.designIntro":"Manage customer details for sales and fulfillment.","partners.customers.list.clearSearch":"Clear search","partners.customers.list.shown":":count shown","partners.customers.list.noMatches":"No matching customers","partners.customers.list.noMatchesHint":"Try another name or customer code, or clear your search.",
@@ -79,6 +81,8 @@ export const en = {
 };
 
 export const ar = {
+"uiAccess.title":"القسم غير متاح","uiAccess.checkFailed":"تعذر التحقق من صلاحيات التطبيق. حاول تحميل الصلاحيات مرة أخرى.","uiAccess.roleTitle":"صلاحياتك لا تسمح بفتح هذا القسم","uiAccess.roleHint":"اطلب من مسؤول المؤسسة مراجعة الصلاحيات الممنوحة لك.","uiAccess.planTitle":"هذا القسم غير متاح ضمن صلاحية التطبيق أو الخطة الحالية","uiAccess.planHint":"اطلب من مالك المؤسسة مراجعة صلاحية التطبيق والخطة الحالية.","uiAccess.dashboard":"العودة إلى لوحة التحكم",
+
 "partners.currency.notSpecified":"غير محددة","partners.currency.saved":"القيمة المحفوظة","partners.currency.base":"العملة الأساسية","partners.currency.sharedHint":"تُستخدم العملات المفعّلة لهذه المؤسسة في SolaCount.","partners.currency.unconfigured":"لا توجد عملات مفعّلة متاحة. اضبط عملات المؤسسة في SolaCount.",
 
 "partners.customers.list.designIntro":"إدارة بيانات العملاء لاستخدامها في المبيعات وتجهيز الطلبات.","partners.customers.list.clearSearch":"مسح البحث","partners.customers.list.shown":"المعروض: :count","partners.customers.list.noMatches":"لا يوجد عملاء مطابقون للبحث","partners.customers.list.noMatchesHint":"جرّب اسمًا أو رمزًا آخر، أو امسح البحث لعرض العملاء.",

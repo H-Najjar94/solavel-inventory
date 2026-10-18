@@ -16,9 +16,9 @@ export default function WarehousesPage() {
             <Breadcrumbs items={[{ label: t('warehouses') }]} />
             <header className="page-head">
                 <h1>{t('warehouses')}</h1>{isMock && <span className="badge badge--warn">{t('warehouses.sampleData')}</span>}
-                <Link to="/warehouses/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/warehouses/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('warehouses.new')}</Link>
+                    title={gate.allowed ? '' : gate.reason}>{t('warehouses.new')}</Link>}
             </header>
             {list.length === 0 ? <EmptyState title={t('warehouses.empty')} hint={t('warehouses.emptyHint')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th></th><th>{t('warehouses.code')}</th><th>{t('name')}</th><th>{t('warehouses.type')}</th><th>{t('warehouses.status')}</th></tr></thead>

@@ -30,11 +30,13 @@ class MetaController extends ApiController
         $settings = InventorySetting::query()->first();
         $settings?->setAttribute('default_warehouse_id', $default);
 
+        $uiAccess=app(\App\Services\Access\InventoryUiAccess::class)->describe($permissions->permissionsFor($request->user()));
         return $this->success([
             // Lets the SPA reject/cache-isolate metadata from an older org switch.
             'organization_id' => $organizationId,
             'default_warehouse_id' => $default,
-            'permissions' => $permissions->permissionsFor($request->user()),
+            'permissions' => $uiAccess['permissions'],
+            'ui_access' => ['routes'=>$uiAccess['routes']],
             'warehouse_scope_empty' => app(WarehouseAccessService::class)->allowedIds() === [],
             'can_schedule_reports' => app(WarehouseAccessService::class)->allowedIds() === null && $permissions->can($request->user(), 'inventory.export_reports'),
             'tenant_mode' => $request->attributes->get('tenant_mode', 'live'), // live|demo

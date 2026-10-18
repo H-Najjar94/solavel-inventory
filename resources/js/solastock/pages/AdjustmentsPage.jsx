@@ -17,9 +17,9 @@ export default function AdjustmentsPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('adjustments') }]} />
             <header className="page-head"><h1>{t('adjustments.title')}</h1>{isMock && <span className="badge badge--warn">{t('warehouses.sampleData')}</span>}
-                <Link to="/adjustments/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/adjustments/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('adjustments.new')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('adjustments.new')}</Link>}</header>
             <p className="muted">{t('adjustments.hint')}</p>
             {rows.length === 0 ? <EmptyState title={t('adjustments.empty')} hint={t('adjustments.emptyHint')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('adjustments.number')}</th><th>{t('adjustments.date')}</th><th>{t('adjustments.warehouse')}</th><th>{t('adjustments.reason')}</th><th>{t('status')}</th><th>{t('adjustments.increaseValue')}</th><th>{t('adjustments.decreaseValue')}</th></tr></thead>

@@ -25,9 +25,9 @@ export default function TransfersPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('transfers.breadcrumb', 'Transfers') }]} />
             <header className="page-head"><h1>{t('transfers.title', 'Stock Transfers')}</h1>{isMock && <span className="badge badge--warn">{t('transfers.sampleData', 'Sample data')}</span>}
-                <Link to="/transfers/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/transfers/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('transfers.new', 'New transfer')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('transfers.new', 'New transfer')}</Link>}</header>
             <p className="muted">{t('transfers.description', 'Move stock between warehouses through the inventory ledger.')}</p>
             {rows.length === 0 ? <EmptyState title={t('transfers.empty.title', 'No transfers')} hint={t('transfers.empty.hint', 'Create a transfer to move stock between warehouses.')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('transfers.table.number', 'Transfer #')}</th><th>{t('transfers.table.from', 'From')}</th><th>{t('transfers.table.to', 'To')}</th><th>{t('transfers.table.date', 'Date')}</th><th>{t('transfers.table.status', 'Status')}</th></tr></thead>

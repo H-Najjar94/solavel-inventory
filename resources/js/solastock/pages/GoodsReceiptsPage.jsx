@@ -16,9 +16,9 @@ export default function GoodsReceiptsPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts') }]} />
             <header className="page-head"><h1>{t('receiving.grn.list.title', 'Goods Receipts')}</h1>{isMock && <span className="badge badge--warn">{t('receiving.common.sampleData', 'Sample data')}</span>}
-                <Link to="/goods-receipts/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/goods-receipts/new" className="btn btn--primary"
                     style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('receiving.grn.actions.new', 'New GRN')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('receiving.grn.actions.new', 'New GRN')}</Link>}</header>
             <p className="muted">{t('receiving.grn.list.stockNotice', 'Posting a goods receipt adds the accepted quantities to stock and updates its purchase order.')}</p>
             {rows.length === 0 ? <EmptyState title={t('receiving.grn.empty.title', 'No goods receipts')} hint={t('receiving.grn.empty.hint', 'Create one, or receive from an approved purchase order.')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('receiving.grn.fields.numberShort', 'GRN #')}</th><th>{t('receiving.po.abbreviation', 'PO')}</th><th>{t('receiving.common.warehouseShort', 'WH')}</th><th>{t('receiving.common.date', 'Date')}</th><th>{t('receiving.common.status', 'Status')}</th></tr></thead>

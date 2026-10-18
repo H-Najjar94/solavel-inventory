@@ -16,9 +16,9 @@ export default function SalesOrdersPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('salesOrders.common.title', 'Sales Orders') }]} />
             <header className="page-head"><h1>{t('salesOrders.common.title', 'Sales Orders')}</h1>{isMock && <span className="badge badge--warn">{t('salesOrders.common.sampleData', 'Sample data')}</span>}
-                <Link to="/sales-orders/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/sales-orders/new" className="btn btn--primary"
                     style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('salesOrders.list.new', 'New sales order')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('salesOrders.list.new', 'New sales order')}</Link>}</header>
             <p className="muted">{t('salesOrders.list.description', 'Fulfillment documents only — SolaStock reserves and ships stock. Invoices and accounting remain in SolaCount.')}</p>
             {rows.length === 0 ? <EmptyState title={t('salesOrders.list.emptyTitle', 'No sales orders')} hint={t('salesOrders.list.emptyHint', 'Create a sales order to reserve, pick, pack, and ship stock.')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('salesOrders.list.orderNumberShort', 'Order #')}</th><th>{t('salesOrders.common.customer', 'Customer')}</th><th>{t('salesOrders.list.date', 'Date')}</th><th>{t('salesOrders.common.warehouse', 'Warehouse')}</th><th>{t('salesOrders.common.status', 'Status')}</th><th>{t('salesOrders.list.total', 'Total')}</th></tr></thead>

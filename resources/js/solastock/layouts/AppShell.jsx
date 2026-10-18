@@ -1,3 +1,5 @@
+import PageAccessGuard from '../components/PageAccessGuard.jsx';
+import {routeAccess} from '../services/uiAccess.mjs';
 import { sourceText } from '../i18n/locales.js';
 import { useCloseDrawerOnResize } from '../hooks/useCloseDrawerOnResize.js';
 import PurchasingNotificationBell from '../components/PurchasingNotificationBell.jsx';
@@ -522,7 +524,7 @@ export default function AppShell() {
     }[tenant.dataState] ?? null;
 
     const quickActions = tenant.ready && tenant.hasTenant
-        ? QUICK_ACTIONS.filter((action) => permissions.has(action.perm))
+        ? QUICK_ACTIONS.filter((action) => permissions.has(action.perm) && routeAccess(action.to,meta).allowed)
         : [];
 
     const paletteEntries = useMemo(() => {
@@ -818,7 +820,7 @@ function TenantContent({ tenant }) {
         <>
             {tenant.dataState === 'sample' && <SamplePreviewBanner tenant={tenant} />}
             {meta.warehouse_scope_empty && <div className="alert alert-info" role="status">{sourceText("No warehouses assigned yet. Ask your organization administrator to assign warehouses from your member permissions page.", "لم يتم تعيين مستودعات لك بعد. اطلب من مسؤول المؤسسة تعيين المستودعات من صفحة صلاحيات العضو.")}</div>}
-            <Outlet />
+            <PageAccessGuard><Outlet /></PageAccessGuard>
         </>
     );
 }

@@ -69,9 +69,9 @@ export default function OpeningStockPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('openingStock.title') }]} />
             <header className="page-head"><h1>{t('openingStock.title')}</h1>{isMock && <span className="badge badge--warn">{t('openingStock.sampleData')}</span>}
-                <Link to="/opening-stock/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/opening-stock/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('openingStock.newEntry')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('openingStock.newEntry')}</Link>}</header>
             <p className="muted">{t('openingStock.description')}</p>
             {gate.allowed && <div className="panel">
                 <h2>{t('openingStock.bulkImport')}</h2>

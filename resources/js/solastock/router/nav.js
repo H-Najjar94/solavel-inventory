@@ -1,3 +1,4 @@
+import {routeAccess} from '../services/uiAccess.mjs';
 // Permission-aware navigation config. `perm` gates visibility against the
 // current user's inventory permissions (from /meta). `icon` uses Font Awesome
 // (fa-solid), matching the SolaCount (Finance) sidebar style. Order = sidebar order.
@@ -66,6 +67,6 @@ export function visibleNav(permissions = [], meta = {}) {
     // Plan/opt-out availability (landed costs): hidden only when /meta says it is unavailable,
     // except that an opted-out organization with existing documents keeps the entry (read-only history).
     const reachable = (a) => a?.available !== false || a?.read_only_history === true;
-    return NAV.filter((n) => (!n.perm || set.has(n.perm)) && (!n.feature || features[n.feature] === true)
+    return NAV.filter((n) => routeAccess(n.path,meta).allowed && (!n.perm || set.has(n.perm)) && (!n.feature || features[n.feature] === true)
         && (!n.availability || reachable(meta?.[n.availability])));
 }

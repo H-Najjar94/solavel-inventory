@@ -16,9 +16,9 @@ export default function SalesReturnsPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('returns.list.title', 'Sales Returns') }]} />
             <header className="page-head"><h1>{t('returns.list.title', 'Sales Returns')}</h1>{isMock && <span className="badge badge--warn">{t('returns.common.sampleData', 'Sample data')}</span>}
-                <Link to="/sales-returns/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/sales-returns/new" className="btn btn--primary"
                     style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('returns.actions.new', 'New return')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('returns.actions.new', 'New return')}</Link>}</header>
             <p className="muted">{t('returns.list.description', 'Posting a return puts resellable or quarantined units back into stock through the ledger. Damaged units are recorded without being returned to stock.')}</p>
             {rows.length === 0 ? <EmptyState title={t('returns.list.emptyTitle', 'No sales returns')} hint={t('returns.list.emptyHint', 'Record a customer return to bring eligible units back into stock.')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('returns.list.number', 'Return #')}</th><th>{t('returns.common.customer', 'Customer')}</th><th>{t('returns.common.date', 'Date')}</th><th>{t('returns.common.warehouse', 'Warehouse')}</th><th>{t('returns.common.status', 'Status')}</th></tr></thead>

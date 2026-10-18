@@ -19,7 +19,7 @@ export default function CustomersPage() {
             <header className="page-head customers-heading">
                 <div><h1>{t('partners.customers.list.title')}</h1><p>{t('partners.customers.list.designIntro')}</p></div>
                 {isMock && <span className="badge badge--warn">{t('partners.common.sampleData')}</span>}
-                {gate.allowed ? <Link to="/customers/new" className="btn btn--primary customers-new"><span aria-hidden="true">+</span> {t('partners.customers.list.new')}</Link> : <button type="button" className="btn btn--primary customers-new" disabled title={gateReason}>{t('partners.customers.list.new')}</button>}
+                {gate.allowed ? <Link to="/customers/new" className="btn btn--primary customers-new"><span aria-hidden="true">+</span> {t('partners.customers.list.new')}</Link> : null}
             </header>
             <section className="card customers-directory">
                 <div className="customers-toolbar">

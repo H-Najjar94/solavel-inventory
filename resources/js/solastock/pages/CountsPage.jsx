@@ -26,9 +26,9 @@ export default function CountsPage() {
         <section className="page index-page">
             <Breadcrumbs items={[{ label: t('counts.breadcrumb') }]} />
             <header className="page-head"><h1>{t('counts.title')}</h1>{isMock && <span className="badge badge--warn">{t('counts.sampleData')}</span>}
-                <Link to="/counts/new" className="btn btn--primary"
+                {gate.allowed && <Link to="/counts/new" className="btn btn--primary"
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
-                    title={gate.allowed ? '' : gate.reason}>{t('counts.new')}</Link></header>
+                    title={gate.allowed ? '' : gate.reason}>{t('counts.new')}</Link>}</header>
             <p className="muted">{t('counts.description')}</p>
             {rows.length === 0 ? <EmptyState title={t('counts.empty.title')} hint={t('counts.empty.hint')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('counts.table.number')}</th><th>{t('counts.table.type')}</th><th>{t('counts.table.plan')}</th><th>{t('counts.table.warehouse')}</th><th>{t('counts.table.status')}</th><th>{t('counts.table.adjustment')}</th></tr></thead>

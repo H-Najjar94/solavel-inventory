@@ -33,7 +33,7 @@ export function useApiQuery(key, fetcher, { fallback = null, select, ...opts } =
         // Don't retry auth/tenant/permission errors — these are decisive states
         // the AppShell handles (setup/no-access/no-org); retrying only stalls.
         retry: (count, err) => {
-            if (err?.status && [400, 401, 403, 404, 409, 422].includes(err.status)) return false;
+            if (err?.status && [400, 401, 402, 403, 404, 409, 422].includes(err.status)) return false;
             return count < 1;
         },
         staleTime: 30_000,

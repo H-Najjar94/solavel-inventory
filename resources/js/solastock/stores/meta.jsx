@@ -1,4 +1,5 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
+import {useQueryClient} from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useTenant } from './tenant.jsx';
@@ -15,18 +16,19 @@ const FALLBACK_META = {
 };
 
 export function MetaProvider({ children }) {
-    const tenant = useTenant();
+    const tenant = useTenant();const qc=useQueryClient();
     const organizationId = tenant.organization_id ?? 'no-organization';
     // Non-blocking: render the shell immediately, but expose no permissions
     // until /meta resolves. Direct routes must fail closed for restricted users.
-    const { data, isMock, isPlaceholderData } = useApiQuery(['meta', organizationId], api.meta, {
+    const { data, isMock, isPlaceholderData, isError, refetch } = useApiQuery(['meta', organizationId], api.meta, {
         fallback: FALLBACK_META,
         placeholderData: FALLBACK_META,
         enabled: tenant.resolved,
     });
 
+    useEffect(()=>{const refresh=()=>qc.invalidateQueries({queryKey:['meta',organizationId]});window.addEventListener('solastock-access-refresh',refresh);return()=>window.removeEventListener('solastock-access-refresh',refresh);},[qc,organizationId]);
     return (
-        <MetaContext.Provider value={{ ...(data ?? FALLBACK_META), isMock, isPlaceholderData }}>
+        <MetaContext.Provider value={{ ...(data ?? FALLBACK_META), isMock, isPlaceholderData, isError, refetch }}>
             {children}
         </MetaContext.Provider>
     );
