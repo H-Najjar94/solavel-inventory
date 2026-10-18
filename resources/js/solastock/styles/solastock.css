@@ -2596,3 +2596,12 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .traceability-tool-open { display:inline-flex;align-items:center;gap:10px;color:var(--amber);font-weight:700;font-size:13px; }
 @media(max-width:700px) { .traceability-tools { grid-template-columns:1fr;gap:14px; } .traceability-tool { padding:20px;gap:15px; } .traceability-summary .card-body { padding:18px; } .traceability-load-error { gap:14px; } .traceability-load-error > div:nth-child(2) { flex:1 1 180px; } .traceability-load-error .btn { margin-inline-start:0; } }
 @media(prefers-reduced-motion:reduce) { .traceability-tool { transition:none; } }
+
+/* Keep opening-stock import controls and its action comfortably separated. */
+.opening-stock-import { display:flex; flex-direction:column; gap:20px; }
+.opening-stock-import > h2 { margin:0; }
+.opening-stock-import > .fg2 { gap:20px 24px; }
+.opening-stock-import .check-inline { min-height:44px; display:flex; align-items:center; gap:10px; }
+.opening-stock-import > .btn { align-self:flex-start; min-height:44px; padding:12px 24px; min-width:148px; white-space:nowrap; }
+.opening-stock-import > .muted p { margin:0 0 10px; }
+@media(max-width:600px) { .opening-stock-import > .btn { align-self:stretch; width:100%; } }

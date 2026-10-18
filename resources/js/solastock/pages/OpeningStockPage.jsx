@@ -73,7 +73,7 @@ export default function OpeningStockPage() {
                     style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
                     title={gate.allowed ? '' : gate.reason}>{t('openingStock.newEntry')}</Link>}</header>
             <p className="muted">{t('openingStock.description')}</p>
-            {gate.allowed && <div className="panel">
+            {gate.allowed && <div className="panel opening-stock-import">
                 <h2>{t('openingStock.bulkImport')}</h2>
                 <div className="fg2">
                     <Field label={t('openingStock.warehouse')}><WarehousePicker value={importState.warehouse_id} onChange={(v) => setImportState({ ...importState, warehouse_id: v })} /></Field>
