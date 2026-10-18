@@ -1,4 +1,6 @@
 export const en = {
+"receiving.po.list.designIntro":"Organize supplier orders and track their progress through receiving.","receiving.po.list.loadError":"Purchase orders could not be loaded","receiving.po.list.loadErrorHint":"Try loading the list again.",
+
     'receiving.requests.nav':'Receiving requests',
     'receiving.common.audit': 'Audit',
     'receiving.common.auditTimeline': 'Audit timeline',
@@ -126,6 +128,8 @@ export const en = {
 };
 
 export const ar = {
+"receiving.po.list.designIntro":"نظّم طلبات الشراء من الموردين وتابع تقدمها حتى الاستلام.","receiving.po.list.loadError":"تعذر تحميل أوامر الشراء","receiving.po.list.loadErrorHint":"حاول تحميل القائمة مرة أخرى.",
+
     'receiving.requests.nav':'طلبات الاستلام',
     'receiving.common.audit': 'سجل التدقيق',
     'receiving.common.auditTimeline': 'التسلسل الزمني للتدقيق',

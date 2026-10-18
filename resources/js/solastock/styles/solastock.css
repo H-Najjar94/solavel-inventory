@@ -2481,3 +2481,26 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .suppliers-status > span { width:6px;height:6px;border-radius:50%;background:currentColor; }
 .suppliers-status.is-active { color:var(--green); background:rgba(31,157,107,.1); }
 @media(max-width:600px) { .suppliers-heading { align-items:flex-start; } .suppliers-new { margin-inline-start:0; } .suppliers-toolbar { padding:14px; } .suppliers-search { max-width:none;flex-basis:100%; } .suppliers-empty { padding:36px 18px; } .suppliers-table .data-table th,.suppliers-table .data-table td { padding:14px 10px; } }
+/* Purchase orders and readable collapsed-sidebar menus. */
+.purchase-orders-page { max-width:1400px; margin-inline:auto; }
+.po-heading { align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; margin-bottom:20px; }
+.po-heading h1 { margin:0; }
+.po-heading p { margin:7px 0 0; color:var(--text-2); font-size:13px; line-height:1.7; }
+.po-new { margin-inline-start:auto; min-height:44px; padding:10px 20px; display:inline-flex; align-items:center; justify-content:center; }
+.po-stock-notice { display:flex; align-items:flex-start; gap:12px; padding:16px 18px; margin-bottom:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); color:var(--text-2); }
+.po-stock-notice svg { flex-shrink:0; color:var(--amber); }
+.po-stock-notice p { margin:0; font-size:13px; line-height:1.8; }
+.po-directory { overflow:hidden; }
+.po-empty { display:flex; flex-direction:column; align-items:center; text-align:center; padding:48px 24px; }
+.po-empty-icon { display:grid; place-items:center; width:72px; height:72px; border-radius:22px; background:rgba(224,153,33,.1); color:var(--amber); margin-bottom:18px; }
+.po-empty .empty-state { padding:0; max-width:440px; }
+.po-empty .empty-state-title { font-size:18px; line-height:1.6; }
+.po-empty .empty-state-hint { margin-top:8px; font-size:13px;line-height:1.8; }
+.po-empty .btn { display:inline-flex; align-items:center; justify-content:center; min-height:44px;padding:10px 20px;margin-top:22px; }
+.po-table .data-table { min-width:900px; width:100%; }
+.po-table .data-table th,.po-table .data-table td { padding:16px; }
+.sidebar--collapsed .side-flyout { width:248px; min-width:220px; max-width:calc(100vw - 88px); box-sizing:border-box; }
+.sidebar--collapsed .side-flyout .side-link { width:100%; min-width:0; height:auto; min-height:44px; margin:0; padding:10px 12px; box-sizing:border-box; justify-content:flex-start; gap:12px; }
+.sidebar--collapsed .side-flyout .side-link-label { display:block; flex:1; min-width:0; white-space:normal; overflow-wrap:normal; line-height:1.5; }
+.sidebar--collapsed .side-flyout .side-link-icon { width:20px; flex:0 0 20px; font-size:15px; }
+@media(max-width:600px) { .po-new { margin-inline-start:0; } .po-empty { padding:36px 18px; } .po-stock-notice { padding:14px; } }
