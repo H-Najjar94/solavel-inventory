@@ -271,7 +271,7 @@ export default function DashboardPage() {
             </div>}
 
             <PlanSummary />
-            {layout.filter((row) => row.visible !== false).map((row) => <React.Fragment key={row.key}>{sections[row.key]}</React.Fragment>)}
+            <div className="dash-sections">{layout.filter((row) => row.visible !== false).map((row) => <React.Fragment key={row.key}>{sections[row.key]}</React.Fragment>)}</div>
         </section>
     );
 }

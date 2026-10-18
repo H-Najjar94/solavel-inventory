@@ -1,0 +1,295 @@
+/* ─────────────────────────────────────────────────────────────────────
+   SolaStock app shell — sidebar redesign (2026-10-18).
+   Loaded after solastock.css; every rule is scoped under `.app .sidebar`
+   (or the top-bar toggle) so it wins over older shell rules without
+   touching them. Top bar is intentionally left as-is (family look);
+   only the collapse toggle is added there.
+   ───────────────────────────────────────────────────────────────────── */
+
+.app .sidebar {
+  --sb-bg:        #0f1520;
+  --sb-bg-2:      #131b29;
+  --sb-line:      rgba(255, 255, 255, 0.06);
+  --sb-text:      #b4bccb;
+  --sb-text-hi:   #f3f5f9;
+  --sb-muted:     #6f7a8f;
+  --sb-hover:     rgba(255, 255, 255, 0.045);
+  --sb-pill:      linear-gradient(180deg, rgba(224, 153, 33, 0.20), rgba(224, 153, 33, 0.12));
+  --sb-pill-ring: rgba(244, 185, 74, 0.22);
+  --sb-pill-text: #fbe3b4;
+  --sb-icon-act:  #f4b94a;
+  --sb-w:         264px;
+  --sb-w-rail:    72px;
+
+  width: var(--sb-w);
+  flex: none;
+  box-sizing: border-box;
+  padding: 0;
+  gap: 0;
+  color: var(--sb-text);
+  background:
+    radial-gradient(420px 220px at 0% 0%, rgba(224, 153, 33, 0.07), transparent 70%),
+    linear-gradient(180deg, var(--sb-bg-2), var(--sb-bg));
+  border: 0;
+  border-inline-end: 1px solid var(--sb-line);
+  transition: width .28s var(--ease, cubic-bezier(.22, 1, .36, 1));
+  overflow: hidden;
+}
+/* Light theme: the sidebar stays a deep ink panel (family look) but a touch warmer. */
+:root[data-theme="light"] .app .sidebar,
+:root:not([data-theme]) .app .sidebar {
+  --sb-bg:   #121823;
+  --sb-bg-2: #171f2d;
+}
+.app .sidebar.sidebar--collapsed { width: var(--sb-w-rail); }
+html[dir="rtl"] .app .sidebar { border-left: 0; border-right: 0; border-inline-end: 1px solid var(--sb-line); }
+html[dir="rtl"] .app .sidebar .side-link,
+html[dir="rtl"] .app .sidebar .side-group__toggle { text-align: start; }
+
+/* ── Brand ───────────────────────────────────────────────────────── */
+.app .sidebar .side-brand {
+  display: flex; align-items: center; gap: 11px;
+  min-height: 60px; box-sizing: border-box; flex: none;
+  padding: 12px 18px; margin: 0;
+  border-bottom: 1px solid var(--sb-line);
+}
+.app .sidebar .side-logo-img { width: 32px; height: 32px; flex: none; }
+.app .sidebar .side-title { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.app .sidebar .side-name {
+  font-size: 16.5px; font-weight: 650; letter-spacing: -0.01em; color: var(--sb-text-hi); white-space: nowrap;
+}
+.app .sidebar .side-org {
+  display: block; max-width: 180px; margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--sb-muted); font-size: 11.5px; font-weight: 550;
+}
+.app .sidebar .side-name b { font-weight: 800; color: var(--amber-soft, #f4b94a); }
+.app .sidebar.sidebar--collapsed .side-brand { justify-content: center; padding: 0; gap: 0; }
+.app .sidebar.sidebar--collapsed .side-logo-img { width: 32px; height: 32px; }
+
+/* ── Scroll area with soft edge fades ────────────────────────────── */
+.app .sidebar .side-nav {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 0;
+  margin: 0; padding: 12px 12px 20px;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  scrollbar-gutter: auto; scrollbar-width: thin; scrollbar-color: transparent transparent;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent 100%);
+          mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 22px), transparent 100%);
+}
+.app .sidebar .side-nav:hover { scrollbar-color: rgba(255, 255, 255, .14) transparent; }
+.app .sidebar.sidebar--collapsed .side-nav { padding: 12px 0 20px; align-items: center; }
+
+/* ── Links (shared by expanded list, rail and fly-out) ───────────── */
+.app .sidebar .side-link {
+  position: relative;
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; box-sizing: border-box;
+  min-height: 36px; padding: 0 10px; margin: 0;
+  border: 0; border-radius: 10px; background: transparent;
+  color: var(--sb-text); font: inherit; font-size: 13.5px; font-weight: 550; line-height: 1.3;
+  text-decoration: none; cursor: pointer; box-shadow: none;
+  transition: background .16s ease, color .16s ease;
+}
+.app .sidebar .side-link-icon {
+  display: inline-grid !important; place-items: center;
+  width: 20px; flex: 0 0 20px; font-size: 14px; opacity: 1;
+  color: var(--sb-muted); transition: color .16s ease;
+  visibility: visible !important;
+}
+.app .sidebar .side-link-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app .sidebar .side-link:hover { background: var(--sb-hover); color: var(--sb-text-hi); }
+.app .sidebar .side-link:hover .side-link-icon { color: var(--sb-text); }
+
+/* Active = soft amber pill with an even hairline ring and inner top highlight. No side bars. */
+.app .sidebar .side-link.is-active,
+.app .sidebar .side-link[aria-current="page"] {
+  background: var(--sb-pill);
+  color: var(--sb-pill-text);
+  font-weight: 650;
+  box-shadow: inset 0 0 0 1px var(--sb-pill-ring), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.app .sidebar .side-link.is-active .side-link-icon,
+.app .sidebar .side-link[aria-current="page"] .side-link-icon { color: var(--sb-icon-act); }
+.app .sidebar .side-link::before, .app .sidebar .side-link::after { content: none; }
+
+.app .sidebar .side-link:focus-visible,
+.app .sidebar .side-group__toggle:focus-visible,
+.app .sidebar .ss-drawer-close:focus-visible {
+  outline: 2px solid var(--amber, #e09921); outline-offset: 1px;
+}
+
+/* Primary (Dashboard, Plan access) */
+.app .sidebar .side-primary {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 0 0 12px; margin: 0 0 6px;
+  border-bottom: 1px solid var(--sb-line);
+}
+.app .sidebar .side-link--primary { min-height: 38px; font-size: 13.5px; font-weight: 600; }
+
+/* ── Section groups: HR/Projects family pattern — each section is a row with
+   icon + label + chevron; an open section becomes a softly bordered card. ── */
+.app .sidebar .side-group {
+  display: flex; flex-direction: column; flex: none; gap: 0;
+  margin: 6px 0 0; padding: 0;
+  border: 1px solid transparent; border-radius: 12px;
+  transition: background .2s ease, border-color .2s ease, padding .2s ease;
+}
+.app .sidebar .side-group.is-open {
+  background: rgba(255, 255, 255, .032);
+  border-color: rgba(148, 163, 184, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03);
+  padding: 2px 4px 4px;
+}
+.app .sidebar .side-group__toggle {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; box-sizing: border-box;
+  min-height: 36px; padding: 0 10px; margin: 0;
+  border: 0; border-radius: 9px; background: transparent; cursor: pointer;
+  color: #e6e9ef; font: inherit; font-size: 13.5px; font-weight: 650; letter-spacing: .005em;
+  text-transform: none; line-height: 1.3; text-align: start;
+  transition: background .16s ease, color .16s ease;
+}
+.app .sidebar .side-group__toggle:hover { background: var(--sb-hover); color: #fff; }
+.app .sidebar .side-group__icon {
+  width: 20px; flex: 0 0 20px; text-align: center; font-size: 14px; color: #a9b3c4; transition: color .16s ease;
+}
+.app .sidebar .side-group.is-open > .side-group__toggle { color: #fff; }
+.app .sidebar .side-group.is-open > .side-group__toggle .side-group__icon,
+.app .sidebar .side-group__toggle:hover .side-group__icon { color: #e6e9ef; }
+.app .sidebar .side-group__label { flex: 1 1 auto; min-width: 0; text-align: start; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Section that holds the current page, while closed: amber icon + a small amber dot. */
+.app .sidebar .side-group:not(.is-open) > .side-group__toggle.has-active { color: #fff; }
+.app .sidebar .side-group:not(.is-open) > .side-group__toggle.has-active .side-group__icon { color: var(--sb-icon-act); }
+.app .sidebar .side-group:not(.is-open) > .side-group__toggle.has-active .side-group__label::after {
+  content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber, #e09921); margin-inline-start: 8px; vertical-align: middle;
+  box-shadow: 0 0 0 3px rgba(224, 153, 33, .16);
+}
+.app .sidebar .side-group__chevron { flex: none; font-size: 10px; color: var(--sb-muted); transition: transform .22s var(--ease, ease); }
+.app .sidebar .side-group.is-open .side-group__chevron { transform: rotate(180deg); }
+
+/* Smooth open/close: the item list animates its height (grid 0fr -> 1fr). */
+.app .sidebar .side-group__items,
+.app .sidebar .side-group.is-open .side-group__items {
+  display: grid; grid-template-rows: 0fr; padding: 0; margin: 0;
+  transition: grid-template-rows .24s var(--ease, ease);
+  animation: none;
+}
+.app .sidebar .side-group.is-open .side-group__items { grid-template-rows: 1fr; }
+.app .sidebar .side-group__inner {
+  min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column; gap: 1px;
+  visibility: hidden; opacity: 0;
+  transition: opacity .18s ease, visibility 0s linear .24s;
+}
+.app .sidebar .side-group.is-open .side-group__inner {
+  visibility: visible; opacity: 1;
+  margin-top: 2px; padding-top: 3px; border-top: 1px solid rgba(148, 163, 184, .10);
+  transition: opacity .2s ease .04s, visibility 0s;
+}
+.app .sidebar .side-group__items .side-link {
+  min-height: 33px; padding-block: 0; padding-inline: 12px 10px;
+  font-size: 13px; font-weight: 500; color: #c3cad6; border-radius: 9px;
+}
+.app .sidebar .side-group__items .side-link-icon { width: 18px; flex-basis: 18px; font-size: 12.5px; color: #8f9aae; }
+.app .sidebar .side-group__items .side-link:hover { color: #fff; }
+.app .sidebar .side-group__items .side-link.is-active { color: var(--sb-pill-text); font-weight: 600; }
+.app .sidebar .side-group__items .side-link.is-active .side-link-icon { color: var(--sb-icon-act); }
+
+/* ── Plan-locked items: label dims, a small lock chip sits at the end ── */
+.app .sidebar .side-link--plan-locked { color: var(--sb-muted); min-height: 34px; text-align: start; }
+.app .sidebar .side-link--plan-locked .side-link-icon { color: rgba(111, 122, 143, .75); }
+.app .sidebar .side-link--plan-locked:hover { color: var(--sb-text); }
+.app .sidebar .side-plan-lock {
+  flex: none; margin-inline-start: auto;
+  display: inline-grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 6px;
+  background: rgba(255, 255, 255, .05); box-shadow: inset 0 0 0 1px var(--sb-line);
+  color: var(--sb-muted); font-size: 9px;
+}
+.app .sidebar .side-link--plan-locked:hover .side-plan-lock { color: var(--amber-soft, #f4b94a); background: rgba(224, 153, 33, .1); }
+
+/* ── Collapsed rail ──────────────────────────────────────────────── */
+.app .sidebar.sidebar--collapsed .side-primary {
+  width: 100%; align-items: center; padding: 0 0 10px; margin: 0 0 8px;
+}
+.app .sidebar.sidebar--collapsed .side-link,
+.app .sidebar.sidebar--collapsed .side-rail-group {
+  width: 44px; height: 40px; min-height: 40px; padding: 0; margin: 2px auto 0;
+  justify-content: center; gap: 0; border-radius: 11px; flex: none;
+}
+.app .sidebar.sidebar--collapsed .side-link-icon { width: auto; flex: none; font-size: 15px; }
+.app .sidebar .side-rail-group { position: relative; }
+.app .sidebar .side-rail-group.is-active {
+  background: var(--sb-pill); color: var(--sb-pill-text);
+  box-shadow: inset 0 0 0 1px var(--sb-pill-ring), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.app .sidebar .side-rail-group.is-active .side-link-icon { color: var(--sb-icon-act); }
+.app .sidebar .side-rail-group.is-flyout { background: rgba(255, 255, 255, .07); color: var(--sb-text-hi); }
+.app .sidebar .side-rail-group.is-flyout .side-link-icon { color: var(--sb-text-hi); }
+.app .sidebar .side-rail-group:focus-visible { outline: 2px solid var(--amber, #e09921); outline-offset: 1px; }
+.app .sidebar .side-rail-lock {
+  position: absolute; inset-inline-end: 3px; bottom: 3px;
+  display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 4px;
+  background: var(--sb-bg); box-shadow: inset 0 0 0 1px var(--sb-line);
+  color: var(--sb-muted); font-size: 7px; line-height: 1;
+}
+
+/* ── Rail fly-out ────────────────────────────────────────────────── */
+.app .sidebar .side-flyout,
+.app .sidebar.sidebar--collapsed .side-flyout {
+  position: fixed; z-index: 120;
+  inset-inline-start: calc(var(--sb-w-rail) + 8px);
+  width: 252px; min-width: 220px; max-width: calc(100vw - 96px); box-sizing: border-box;
+  max-height: calc(100vh - 16px); overflow-y: auto;
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: linear-gradient(180deg, #172030, #121926);
+  border: 1px solid rgba(255, 255, 255, .08); border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 18px 40px rgba(0, 0, 0, .38), 0 2px 6px rgba(0, 0, 0, .25);
+  animation: ss-shell-pop .16s var(--ease, ease);
+}
+@keyframes ss-shell-pop { from { opacity: 0; transform: translateX(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+html[dir="rtl"] .app .sidebar .side-flyout { animation-name: ss-shell-pop-rtl; }
+@keyframes ss-shell-pop-rtl { from { opacity: 0; transform: translateX(4px) scale(.98); } to { opacity: 1; transform: none; } }
+.app .sidebar .side-flyout__title {
+  padding: 8px 10px 8px; margin: 0 0 4px; border-bottom: 1px solid var(--sb-line);
+  color: var(--sb-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+}
+html[lang="ar"] .app .sidebar .side-flyout__title,
+html[lang="ur"] .app .sidebar .side-flyout__title { letter-spacing: 0; font-size: 12px; text-transform: none; }
+.app .sidebar.sidebar--collapsed .side-flyout .side-link {
+  width: 100%; height: auto; min-height: 38px; margin: 0; padding: 8px 10px;
+  justify-content: flex-start; gap: 12px; border-radius: 9px; font-size: 13px;
+}
+.app .sidebar.sidebar--collapsed .side-flyout .side-link-icon { width: 20px; flex: 0 0 20px; font-size: 13.5px; }
+.app .sidebar.sidebar--collapsed .side-flyout .side-link-label { white-space: normal; line-height: 1.4; }
+
+/* ── Setup / loading states ──────────────────────────────────────── */
+.app .sidebar .side-locked {
+  margin: 4px 0; padding: 12px; border-radius: 12px;
+  border: 1px solid var(--sb-line); background: rgba(255, 255, 255, .025);
+  color: var(--sb-muted); font-size: 12.5px; line-height: 1.5;
+}
+.app .sidebar .side-nav--loading { gap: 8px; }
+.app .sidebar .side-skeleton { height: 32px; border-radius: 10px; }
+.app .sidebar.sidebar--collapsed .side-skeleton { width: 44px; }
+
+/* The old bottom toggle is gone; hide it defensively if a stale markup path renders it. */
+.app .sidebar .side-collapse { display: none !important; }
+
+/* ── Drawer (mobile) ─────────────────────────────────────────────── */
+.app.app--drawer .sidebar { width: min(292px, 86vw); }
+.app.app--drawer .sidebar .side-brand { padding-inline: 18px 10px; }
+.app .sidebar .ss-drawer-close { margin-inline-start: auto; color: var(--sb-text); border-radius: 10px; }
+.app .sidebar .ss-drawer-close:hover { background: var(--sb-hover); color: var(--sb-text-hi); }
+
+/* ── Top bar: only the new collapse toggle (uses the existing icon-button style) ── */
+.ss-topbar .ss-sidebar-toggle { display: inline-flex; flex: none; }
+@media (max-width: 1024px) { .ss-topbar .ss-sidebar-toggle { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .app .sidebar, .app .sidebar .side-link, .app .sidebar .side-group__chevron,
+  .app .sidebar .side-group__items, .app .sidebar .side-group__inner, .app .sidebar .side-group,
+  .app .sidebar .side-flyout { transition: none; animation: none; }
+}

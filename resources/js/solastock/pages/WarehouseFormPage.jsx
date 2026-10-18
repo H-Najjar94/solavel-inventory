@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -12,6 +12,9 @@ const EMPTY = {
     code: '', name: '', type: 'warehouse', is_active: true,
     address: { line1: '', city: '', country: '' }, max_capacity_units: '',
 };
+
+const IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const IMG_MAX = 5 * 1024 * 1024;
 
 function Section({ title, sub, children }) {
     return (
@@ -42,6 +45,19 @@ export default function WarehouseFormPage() {
         }
     }, [isEdit, existing.data]);
 
+    const [images, setImages] = useState([]);
+    const [imageError, setImageError] = useState('');
+    const [dragging, setDragging] = useState(false);
+    const imageInput = useRef(null);
+    useEffect(() => () => images.forEach((i) => URL.revokeObjectURL(i.url)), [images]);
+    function addImages(files) {
+        const list = [...(files ?? [])];
+        const ok = list.filter((f) => IMG_TYPES.includes(f.type) && f.size <= IMG_MAX);
+        setImageError(ok.length < list.length ? t('items.imageInvalid') : '');
+        if (ok.length) setImages((cur) => [...cur, ...ok.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+    }
+    function removeImage(n) { setImages((cur) => cur.filter((_, i) => i !== n)); }
+
     function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
     function setAddr(k, v) { setForm((f) => ({ ...f, address: { ...f.address, [k]: v } })); }
 
@@ -56,6 +72,14 @@ export default function WarehouseFormPage() {
             const res = isEdit ? await api.updateWarehouse(id, form) : await api.createWarehouse(form);
             const newId = res?.data?.id ?? id;
             toast.push(t(isEdit ? 'warehouses.updated' : 'warehouses.created'), 'success');
+            if (!isEdit && images.length) {
+                let failed = 0;
+                for (const img of images) {
+                    try { await api.uploadWarehouseImage(newId, img.file); } catch { failed += 1; }
+                }
+                if (failed) toast.push(t('warehouses.imagesUploadFailed'), 'error');
+                qc.invalidateQueries({ queryKey: ['warehouse-images', String(newId)] });
+            }
             qc.invalidateQueries({ queryKey: ['warehouses'] });
             qc.invalidateQueries({ queryKey: ['warehouse', String(newId)] });
             nav(`/warehouses/${newId}`);
@@ -129,14 +153,36 @@ export default function WarehouseFormPage() {
 
                 <aside className="form-side">
                     <div className="card"><div className="card-body">
-                        <div className="img-dropzone">
-                            <div className="img-dropzone-ico">🏬</div>
-                            <div className="img-dropzone-title">{t('warehouses.banner')}</div>
-                            <div className="img-dropzone-hint">
-                                {isEdit ? t('warehouses.manageBanner') : t('warehouses.saveThenBanner')}
+                        {isEdit ? (
+                            <div className="img-dropzone">
+                                <div className="img-dropzone-ico">🏬</div>
+                                <div className="img-dropzone-title">{t('warehouses.banner')}</div>
+                                <div className="img-dropzone-hint">{t('warehouses.manageBanner')}</div>
+                                <button type="button" className="btn btn--sm" onClick={() => nav(`/warehouses/${id}`)}>{t('warehouses.openMedia')}</button>
                             </div>
-                            {isEdit && <button type="button" className="btn btn--sm" onClick={() => nav(`/warehouses/${id}`)}>{t('warehouses.openMedia')}</button>}
-                        </div>
+                        ) : (
+                            <div className={`img-dropzone${dragging ? ' item-image-dragging' : ''}`}
+                                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                                onDragLeave={() => setDragging(false)}
+                                onDrop={(e) => { e.preventDefault(); setDragging(false); if (!saving) addImages(e.dataTransfer.files); }}>
+                                {images.length === 0 && <div className="img-dropzone-ico">🏬</div>}
+                                {images.length > 0 && <div className="wh-pending-images">
+                                    {images.map((img, n) => (
+                                        <figure key={img.url} className={n === 0 ? 'is-primary' : ''}>
+                                            <img src={img.url} alt={img.file.name} />
+                                            {n === 0 && <span className="wh-pending-badge">{t('warehouses.bannerPrimary')}</span>}
+                                            <button type="button" className="wh-pending-remove" disabled={saving} aria-label={t('items.removeImage')} onClick={() => removeImage(n)}>×</button>
+                                        </figure>
+                                    ))}
+                                </div>}
+                                <div className="img-dropzone-title">{t('warehouses.banner')}</div>
+                                <div className="img-dropzone-hint">{t('warehouses.bannerBeforeSave')}</div>
+                                <input ref={imageInput} type="file" accept={IMG_TYPES.join(',')} multiple hidden disabled={saving}
+                                    onChange={(e) => { addImages(e.target.files); e.target.value = ''; }} />
+                                <button type="button" className="btn btn--sm" disabled={saving} onClick={() => imageInput.current?.click()}>{t(images.length ? 'warehouses.addMoreImages' : 'items.chooseImage')}</button>
+                                {imageError && <div role="alert" style={{ color: 'var(--danger, #dc3545)', marginTop: 8 }}>{imageError}</div>}
+                            </div>
+                        )}
                     </div></div>
 
                     <div className="card"><div className="card-head"><h3>{t('warehouses.setupChecklist')}</h3></div><div className="card-body">

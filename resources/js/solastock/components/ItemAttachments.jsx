@@ -68,7 +68,17 @@ export default function ItemAttachments({ itemId, canManage }) {
     );
 
     if (!rows.length) {
-        return <EmptyState title={t('media.noAttachments')} hint={t('attachments.emptyHint', 'Item documents, specification sheets and supplier files appear here.')} action={action} />;
+        return (
+            <div>
+                <div className="card-head"><h3>{t('attachments.documents', 'Documents')}</h3></div>
+                <div className="item-gallery-empty item-image-drop">
+                    <div className="item-image-drop-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg></div>
+                    <h3>{t('media.noAttachments')}</h3>
+                    <p>{t('attachments.emptyHint', 'Item documents, specification sheets and supplier files appear here.')}</p>
+                    {action && <div className="item-image-drop-actions">{action}</div>}
+                </div>
+            </div>
+        );
     }
 
     return (

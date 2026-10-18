@@ -108,9 +108,9 @@ export default function InternalConsumptionPage() {
 export function ConsumptionReport() {
     const [filters,setFilters]=useState({from:'',to:'',warehouse_id:null,item_id:null});const [applied,setApplied]=useState({});const [page,setPage]=useState(1);
     const q=useQuery({queryKey:['consumption-report',applied,page],queryFn:()=>api.consumptionReport({...applied,page})});
-    return <section className="page"><h1>{label('report')}</h1><form className="form-grid" onSubmit={e=>{e.preventDefault();setApplied({...filters});setPage(1);}}>
+    return <section className="page"><h1>{label('report')}</h1><form className="form-grid consumption-report-filters" onSubmit={e=>{e.preventDefault();setApplied({...filters});setPage(1);}}>
         {['from','to'].map(k=><Field key={k} label={label(k)}><input className="input" type="date" value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})}/></Field>)}
         <Field label={label('warehouse')}><WarehousePicker value={filters.warehouse_id} onChange={v=>setFilters({...filters,warehouse_id:v})}/></Field>
-        <DimensionFields value={filters} onChange={setFilters}/><Field label={label('item')}><SearchItem value={filters.item_id} onChange={v=>setFilters({...filters,item_id:v})}/></Field><button className="btn">{label('filter')}</button>
+        <DimensionFields value={filters} onChange={setFilters}/><Field label={label('item')}><SearchItem value={filters.item_id} onChange={v=>setFilters({...filters,item_id:v})}/></Field><div className="form-actions"><button type="submit" className="btn btn--primary">{label('filter')}</button></div>
     </form>{q.error&&<p role="alert">{q.error.message}</p>}<DocumentLinesTable readOnly lines={rows(q.data)} columns={[{key:'item',label:label('item'),render:r=>r.name},...['issued_quantity','returned_quantity','net_quantity','issued_cost','returned_cost','net_cost'].map(k=>({key:k,label:label(k),render:r=>r[k]}))]}/><Pages response={q.data} page={page} onChange={setPage}/></section>;
 }

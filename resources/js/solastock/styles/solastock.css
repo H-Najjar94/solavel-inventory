@@ -2628,3 +2628,52 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 
 .side-rail-group { position:relative; }
 .side-rail-lock { position:absolute; inset-inline-end:1px; bottom:2px; font-size:10px; line-height:1; }
+
+/* Internal consumption report filters: roomy fields, actions row, gap above results */
+.consumption-report-filters { gap:22px 24px; padding:24px; margin-bottom:20px; align-items:start; }
+.consumption-report-filters .picker-stack { gap:12px; }
+.consumption-report-filters .form-actions { padding-top:4px; border-top:1px solid var(--line-soft,#f1eee9); margin-top:4px; padding-top:16px; }
+.consumption-report-filters .form-actions .btn { min-width:150px; }
+
+/* Dashboard: even breathing room between every section row */
+.dash-sections { display:flex; flex-direction:column; gap:22px; }
+.dash-sections > * { margin-top:0 !important; margin-bottom:0 !important; }
+
+/* New warehouse: pending images picked before save */
+.wh-pending-images { display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:10px; width:100%; margin-bottom:12px; }
+.wh-pending-images figure { position:relative; margin:0; aspect-ratio:1; border-radius:10px; overflow:hidden; border:1px solid var(--line,#e5e1da); }
+.wh-pending-images figure.is-primary { grid-column:1/-1; aspect-ratio:16/9; }
+.wh-pending-images img { width:100%; height:100%; object-fit:cover; display:block; }
+.wh-pending-badge { position:absolute; inset-block-start:6px; inset-inline-start:6px; font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:rgba(0,0,0,.6); color:#fff; }
+.wh-pending-remove { position:absolute; inset-block-start:6px; inset-inline-end:6px; width:24px; height:24px; border-radius:50%; border:0; background:rgba(0,0,0,.6); color:#fff; font-size:16px; line-height:1; cursor:pointer; }
+
+/* Readable placeholders in every field (dark --text-3 was near-invisible) */
+.input::placeholder, input::placeholder, textarea::placeholder { color: var(--text-2); opacity: 1; }
+/* Labelled add-forms on item details: room between fields, button on its own row */
+.item-details-column form.fg2, .item-details-grid form.fg2 { gap:16px 18px; align-items:end; }
+form.fg2 > .btn--primary { grid-column:1/-1; justify-self:start; min-width:180px; }
+
+/* Document lines: add-line button flush with the table edge, clear and roomy */
+.doc-lines > .doc-add-line { display:inline-flex; align-items:center; gap:6px; margin:14px 0 0; margin-inline-start:0; min-height:40px; padding:8px 18px; font-weight:700; color:var(--accent,#e09921); border:1px dashed currentColor; background:transparent; }
+.doc-lines > .doc-add-line:hover { background:rgba(224,153,33,.08); }
+
+/* Opening stock form: breathing room between header fields, cards and line inputs */
+.opening-stock-form-page .form-grid { gap:22px 24px; padding:24px; margin-bottom:22px; }
+.opening-stock-form-page .panel { padding:24px; }
+.opening-stock-form-page .panel > h2 { margin:0 0 16px; }
+.opening-stock-form-page .doc-lines .data-table th, .opening-stock-form-page .doc-lines .data-table td { padding:14px 12px; vertical-align:middle; }
+.opening-stock-form-page .doc-lines .input { min-width:120px; }
+.opening-stock-form-page .doc-totals { margin-top:20px; }
+.opening-stock-form-page .doc-actions { margin-top:22px; gap:12px; }
+
+/* Count form: spacing between header fields, options and lines */
+.count-form-page .form-grid { gap:22px 24px; padding:24px; margin-bottom:20px; }
+.count-form-page > .panel { padding:22px 24px; margin-bottom:20px; }
+.count-form-page .check-row { display:flex; align-items:flex-start; gap:12px; padding:12px 0; }
+.count-form-page .check-row + .check-row { border-top:1px solid var(--line-soft,#f1eee9); }
+.count-form-page .check-row input { margin-top:3px; width:18px; height:18px; flex:none; }
+.check-row__text { display:flex; flex-direction:column; gap:2px; }
+.check-row__text small { color:var(--text-2); font-size:12.5px; line-height:1.5; }
+.count-form-page .doc-lines .data-table th, .count-form-page .doc-lines .data-table td { padding:14px 12px; vertical-align:middle; }
+.count-form-page .doc-lines .input { min-width:120px; }
+.count-form-page .doc-actions { margin-top:22px; gap:12px; }

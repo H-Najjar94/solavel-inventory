@@ -1,1 +1,6 @@
-<!doctype html><html lang="{{ app()->getLocale() }}" dir="{{ in_array(app()->getLocale(), ['ar','ur'], true) ? 'rtl' : 'ltr' }}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ $appName }} · Solavel</title><style>body{font:16px system-ui;background:#f5f7fa;color:#193047;margin:0;display:grid;min-height:100vh;place-items:center}main{max-width:480px;margin:24px;padding:36px;background:white;border:1px solid #dce3eb;border-radius:20px}p{line-height:1.7}a{display:inline-block;padding:12px 18px;background:#087f6c;color:white;border-radius:10px;text-decoration:none}</style><main><strong>{{ $appName }}</strong><h1>{{ trans('access')['Access unavailable'] }}</h1><p>{{ $message }}</p><a href="{{ rtrim(config('sso.central_app_url', 'https://solavel.com'), '/') }}/portal">{{ trans('access')['Back to portal or switch organization'] }}</a></main></html>
+{{-- Back-compat alias: CentralAppAccess/AppAccessDecision now render errors.403 / errors.503 directly. --}}
+@if(($reason ?? null) === 'temporarily_unavailable')
+@include('errors._branded-status', ['code' => 503, 'variant' => 'access_check'])
+@else
+@include('errors._branded-403')
+@endif

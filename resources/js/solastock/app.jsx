@@ -10,6 +10,8 @@ import { applyTheme, getTheme } from './stores/theme.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { I18nProvider } from './i18n/context.jsx';
 import './styles/solastock.css';
+import './styles/components.css';
+import './styles/shell.css';
 
 // Apply persisted theme before first paint (no flash).
 applyTheme(getTheme());

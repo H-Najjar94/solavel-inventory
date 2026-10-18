@@ -1,0 +1,772 @@
+/* ============================================================
+   SolaStock — shared component layer
+   Loaded right after solastock.css. Normalises the shared UI
+   (buttons, fields, cards, tables, feedback) on one token set.
+   Scope: page content + overlays only, via :where() so the
+   specificity stays at single-class level and page-scoped rules
+   (e.g. .po-table .data-table) still win where they exist.
+   The shell (sidebar / top bar) is intentionally untouched.
+   No one-sided accent borders anywhere (owner rule).
+   ============================================================ */
+
+/* ---------- Tokens ---------- */
+:root {
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  --c-radius-sm: 8px;
+  --c-radius:    10px;
+  --c-radius-lg: 14px;
+  --c-radius-xl: 18px;
+
+  --control-h:    42px;
+  --control-h-sm: 34px;
+
+  --c-font-xs: 11.5px;
+  --c-font-sm: 13px;
+  --c-font:    14px;
+
+  --c-dur: 0.16s;
+}
+
+:root, [data-theme="light"] {
+  --layer-0: var(--bg);
+  --layer-1: #ffffff;              /* cards, tables */
+  --layer-2: #fbfaf8;              /* table head, inset wells */
+  --layer-3: #f4f2ee;              /* hover, pressed */
+  --c-line:        #e8e4dd;
+  --c-line-strong: #d9d4cb;
+  --c-placeholder: #a3a09a;
+  --c-elev-1: 0 1px 0 rgba(30,25,15,0.03), 0 1px 3px rgba(30,25,15,0.04);
+  --c-elev-2: 0 1px 2px rgba(30,25,15,0.04), 0 6px 18px rgba(30,25,15,0.06);
+  --c-elev-3: 0 12px 28px rgba(30,25,15,0.10), 0 32px 72px rgba(30,25,15,0.14);
+  --c-focus: 0 0 0 3px rgba(224,153,33,0.28);
+  --c-focus-danger: 0 0 0 3px rgba(224,81,81,0.22);
+  --c-row-hover: #faf8f4;
+  --c-row-zebra: #fcfbf9;
+  --c-row-selected: #fdf6e8;
+  --c-scrim: rgba(17, 20, 27, 0.38);
+  --tone-warn-bg: #fdf5e6;  --tone-warn-fg: #9a5f05;  --tone-warn-line: #f1dfbb;
+  --tone-ok-bg:   #e9f6f0;  --tone-ok-fg:   #157552;  --tone-ok-line:   #c9e8da;
+  --tone-err-bg:  #fdeeee;  --tone-err-fg:  #b93a3a;  --tone-err-line:  #f4cfcf;
+  --tone-info-bg: #ecf2fd;  --tone-info-fg: #2b5fb3;  --tone-info-line: #cfdcf5;
+  --tone-mute-bg: #f2f0ec;  --tone-mute-fg: #6c6a66;  --tone-mute-line: #e4e0d9;
+}
+
+[data-theme="dark"] {
+  --layer-0: var(--bg);
+  --layer-1: #131a27;
+  --layer-2: #161e2c;
+  --layer-3: #1c2536;
+  --c-line:        rgba(255,255,255,0.08);
+  --c-line-strong: rgba(255,255,255,0.14);
+  --c-placeholder: #6b7486;
+  --c-elev-1: 0 1px 0 rgba(255,255,255,0.02) inset, 0 1px 2px rgba(0,0,0,0.35);
+  --c-elev-2: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px rgba(0,0,0,0.38);
+  --c-elev-3: 0 16px 40px rgba(0,0,0,0.5), 0 40px 90px rgba(0,0,0,0.55);
+  --c-focus: 0 0 0 3px rgba(244,185,74,0.30);
+  --c-focus-danger: 0 0 0 3px rgba(224,81,81,0.32);
+  --c-row-hover: rgba(255,255,255,0.025);
+  --c-row-zebra: rgba(255,255,255,0.012);
+  --c-row-selected: rgba(224,153,33,0.09);
+  --c-scrim: rgba(3, 6, 12, 0.62);
+  --tone-warn-bg: rgba(224,153,33,0.12); --tone-warn-fg: #f4c063; --tone-warn-line: rgba(224,153,33,0.26);
+  --tone-ok-bg:   rgba(31,157,107,0.14); --tone-ok-fg:   #5fd3a3; --tone-ok-line:   rgba(31,157,107,0.30);
+  --tone-err-bg:  rgba(224,81,81,0.14);  --tone-err-fg:  #f29090; --tone-err-line:  rgba(224,81,81,0.30);
+  --tone-info-bg: rgba(59,125,224,0.14); --tone-info-fg: #8db4f2; --tone-info-line: rgba(59,125,224,0.30);
+  --tone-mute-bg: rgba(255,255,255,0.05); --tone-mute-fg: #a2abbd; --tone-mute-line: rgba(255,255,255,0.09);
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+:where(.content, .drawer, .modal, .modal-overlay) .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: var(--control-h); min-height: var(--control-h); padding: 0 16px;
+  border-radius: var(--c-radius); border: 1px solid var(--c-line-strong);
+  background: var(--layer-1); color: var(--text);
+  font: inherit; font-size: var(--c-font); font-weight: 700; line-height: 1; letter-spacing: -0.005em;
+  white-space: nowrap; text-decoration: none; cursor: pointer; user-select: none;
+  box-shadow: var(--c-elev-1);
+  transition: background var(--c-dur) var(--ease-soft), border-color var(--c-dur) var(--ease-soft),
+              box-shadow var(--c-dur) var(--ease-soft), color var(--c-dur) var(--ease-soft);
+  transform: none;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn:hover {
+  background: var(--layer-3); border-color: var(--c-line-strong); box-shadow: var(--c-elev-1); transform: none;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn:active { background: var(--layer-3); box-shadow: none; }
+:where(.content, .drawer, .modal, .modal-overlay) .btn:focus-visible { outline: none; box-shadow: var(--c-focus); }
+:where(.content, .drawer, .modal, .modal-overlay) .btn svg,
+:where(.content, .drawer, .modal, .modal-overlay) .btn .fa-solid { width: 16px; height: 16px; font-size: 14px; flex: none; }
+
+/* Primary — amber reserved for the one main action */
+:where(.content, .drawer, .modal, .modal-overlay) .btn--primary {
+  background: var(--amber); border-color: var(--amber-strong); color: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 1px 2px rgba(150,90,0,0.25);
+}
+[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) .btn--primary { color: var(--on-amber); border-color: var(--amber); }
+:where(.content, .drawer, .modal, .modal-overlay) .btn--primary:hover {
+  background: var(--amber-strong); border-color: var(--amber-strong);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 4px 12px var(--amber-glow);
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--primary:focus-visible {
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, var(--c-focus);
+}
+
+:where(.content, .drawer, .modal, .modal-overlay) .btn--secondary {
+  background: var(--layer-2); border-color: var(--c-line);
+}
+
+:where(.content, .drawer, .modal, .modal-overlay) .btn--ghost,
+:where(.content, .drawer, .modal, .modal-overlay) .btn--link {
+  background: transparent; border-color: transparent; box-shadow: none; color: var(--text-2);
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--ghost:hover { background: var(--layer-3); color: var(--text); }
+:where(.content, .drawer, .modal, .modal-overlay) .btn--link { color: var(--link); padding-inline: 6px; height: auto; min-height: 0; }
+:where(.content, .drawer, .modal, .modal-overlay) .btn--link:hover { background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+
+:where(.content, .drawer, .modal, .modal-overlay) .btn--danger {
+  background: var(--layer-1); color: var(--tone-err-fg); border-color: var(--tone-err-line);
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--danger:hover {
+  background: var(--tone-err-bg); border-color: var(--tone-err-line); color: var(--tone-err-fg);
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--danger:focus-visible { box-shadow: var(--c-focus-danger); }
+:where(.content, .drawer, .modal, .modal-overlay) .btn--danger-ghost {
+  background: transparent; border-color: transparent; box-shadow: none; color: var(--text-3);
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--danger-ghost:hover { background: var(--tone-err-bg); color: var(--tone-err-fg); }
+
+:where(.content, .drawer, .modal, .modal-overlay) .btn--sm {
+  height: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0 12px;
+  font-size: var(--c-font-sm); border-radius: var(--c-radius-sm); margin: 0;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--icon,
+:where(.content, .drawer, .modal, .modal-overlay) .btn.icon-only {
+  width: var(--control-h); padding: 0; font-size: 17px;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--sm.btn--icon { width: var(--control-h-sm); font-size: 16px; }
+
+:where(.content, .drawer, .modal, .modal-overlay) .btn:disabled,
+:where(.content, .drawer, .modal, .modal-overlay) .btn[aria-disabled="true"] {
+  opacity: 0.5; cursor: not-allowed; box-shadow: none; pointer-events: none;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn[aria-busy="true"],
+:where(.content, .drawer, .modal, .modal-overlay) .btn.is-loading { position: relative; color: transparent !important; pointer-events: none; }
+:where(.content, .drawer, .modal, .modal-overlay) .btn[aria-busy="true"]::after,
+:where(.content, .drawer, .modal, .modal-overlay) .btn.is-loading::after {
+  content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid currentColor; border-color: var(--text-2) transparent var(--text-2) transparent;
+  animation: c-spin 0.7s linear infinite;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .btn--primary.is-loading::after,
+:where(.content, .drawer, .modal, .modal-overlay) .btn--primary[aria-busy="true"]::after { border-color: #fff transparent #fff transparent; }
+@keyframes c-spin { to { transform: rotate(360deg); } }
+
+/* Old "margin-left:auto" on primary inside page-head was LTR-only */
+.page-head .btn--primary { margin-left: 0; }
+
+/* ============================================================
+   Inputs / selects / textareas
+   ============================================================ */
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .select-input),
+:where(.content, .drawer, .modal, .modal-overlay) .field :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]), select, textarea) {
+  width: 100%; min-width: 0; height: var(--control-h); min-height: var(--control-h);
+  padding: 0 12px; box-sizing: border-box;
+  border: 1px solid var(--c-line-strong); border-radius: var(--c-radius);
+  background: var(--layer-1); color: var(--text);
+  font: inherit; font-size: var(--c-font); font-weight: 500; line-height: 1.4;
+  box-shadow: 0 1px 0 rgba(30,25,15,0.02);
+  transition: border-color var(--c-dur) var(--ease-soft), box-shadow var(--c-dur) var(--ease-soft), background var(--c-dur);
+}
+:where(.content, .drawer, .modal, .modal-overlay) .inline-form .input,
+:where(.content, .drawer, .modal, .modal-overlay) .toolbar .input,
+:where(.content, .drawer, .modal, .modal-overlay) .filter-bar .input,
+:where(.content, .drawer, .modal, .modal-overlay) .filters .input { width: auto; min-width: 160px; }
+:where(.content, .drawer, .modal, .modal-overlay) textarea.input,
+:where(.content, .drawer, .modal, .modal-overlay) .field textarea {
+  height: auto; min-height: 96px; padding: 10px 12px; resize: vertical; line-height: 1.55;
+}
+:where(.content, .drawer, .modal, .modal-overlay) select.input,
+:where(.content, .drawer, .modal, .modal-overlay) .field select {
+  appearance: none; -webkit-appearance: none; padding-inline-end: 34px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239b9893' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 12px;
+}
+html[dir="rtl"] :where(.content, .drawer, .modal, .modal-overlay) select.input,
+html[dir="rtl"] :where(.content, .drawer, .modal, .modal-overlay) .field select { background-position: left 12px center; }
+:where(.content, .drawer, .modal, .modal-overlay) select[multiple] { height: auto; padding: 6px; background-image: none; }
+
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, input, textarea)::placeholder { color: var(--c-placeholder); opacity: 1; font-weight: 500; }
+
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input, .field select, .field textarea):hover:not(:disabled):not(:focus) {
+  border-color: var(--text-3);
+}
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input, .field select, .field textarea):focus {
+  outline: none; border-color: var(--amber); box-shadow: var(--c-focus);
+}
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input, .field select, .field textarea)[aria-invalid="true"] {
+  border-color: var(--tone-err-fg);
+}
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input, .field select, .field textarea)[aria-invalid="true"]:focus {
+  box-shadow: var(--c-focus-danger);
+}
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input, .field select, .field textarea):disabled,
+:where(.content, .drawer, .modal, .modal-overlay) .input.is-disabled,
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input, .field textarea)[readonly] {
+  background: var(--layer-2); color: var(--text-2); cursor: not-allowed; box-shadow: none;
+}
+:where(.content, .drawer, .modal, .modal-overlay) :is(.input, .field input)[readonly] { cursor: default; }
+
+/* Dates: tidy native picker icon, theme-aware */
+:where(.content, .drawer, .modal, .modal-overlay) input:is([type=date], [type=datetime-local], [type=month], [type=time]) { font-variant-numeric: tabular-nums; }
+:where(.content, .drawer, .modal, .modal-overlay) input:is([type=date], [type=datetime-local], [type=month], [type=time])::-webkit-calendar-picker-indicator {
+  opacity: 0.55; cursor: pointer; border-radius: 6px; padding: 2px;
+}
+:where(.content, .drawer, .modal, .modal-overlay) input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; background: var(--layer-3); }
+[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) input::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) :is(input, select, textarea) { color-scheme: dark; }
+
+/* Numbers */
+:where(.content, .drawer, .modal, .modal-overlay) .input--num,
+:where(.content, .drawer, .modal, .modal-overlay) input[type=number] { font-variant-numeric: tabular-nums; text-align: end; }
+:where(.content, .drawer, .modal, .modal-overlay) .input--num { max-width: 140px; }
+
+/* File inputs: replace the raw browser "Choose File" chrome */
+:where(.content, .drawer, .modal, .modal-overlay) input[type=file] {
+  width: 100%; max-width: 100%; box-sizing: border-box; padding: 6px; min-height: var(--control-h);
+  border: 1px dashed var(--c-line-strong); border-radius: var(--c-radius);
+  background: var(--layer-2); color: var(--text-2); font: inherit; font-size: var(--c-font-sm); cursor: pointer;
+  transition: border-color var(--c-dur), background var(--c-dur);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=file]:hover { border-color: var(--amber); background: var(--layer-1); }
+:where(.content, .drawer, .modal, .modal-overlay) input[type=file]:focus-visible { outline: none; box-shadow: var(--c-focus); border-color: var(--amber); }
+:where(.content, .drawer, .modal, .modal-overlay) input[type=file]::file-selector-button {
+  height: 30px; margin-inline-end: 12px; padding: 0 12px;
+  border: 1px solid var(--c-line-strong); border-radius: var(--c-radius-sm);
+  background: var(--layer-1); color: var(--text); font: inherit; font-size: var(--c-font-sm); font-weight: 700;
+  cursor: pointer; box-shadow: var(--c-elev-1); transition: background var(--c-dur);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=file]::file-selector-button:hover { background: var(--layer-3); }
+
+/* ============================================================
+   Fields
+   ============================================================ */
+:where(.content, .drawer, .modal, .modal-overlay) .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+:where(.content, .drawer, .modal, .modal-overlay) .field-label {
+  font-size: var(--c-font-sm); font-weight: 650; color: var(--text); letter-spacing: -0.003em; line-height: 1.4;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .field-req { color: var(--tone-err-fg); font-weight: 700; }
+:where(.content, .drawer, .modal, .modal-overlay) .field-hint { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+:where(.content, .drawer, .modal, .modal-overlay) .field-error {
+  display: inline-flex; align-items: flex-start; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--tone-err-fg); line-height: 1.45; overflow-wrap: anywhere;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .field-error::before {
+  content: "!"; flex: none; display: inline-grid; place-items: center; width: 14px; height: 14px; margin-top: 1px;
+  border-radius: 50%; background: var(--tone-err-bg); font-size: 10px; font-weight: 800;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .quick-create { display: flex; gap: 8px; align-items: center; }
+:where(.content, .drawer, .modal, .modal-overlay) .quick-create .btn--sm { height: var(--control-h); min-height: var(--control-h); }
+
+/* ============================================================
+   Checkboxes / radios / switches
+   ============================================================ */
+:where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):not(.switch input):not([role=switch]) {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0;
+  width: 18px; height: 18px; border: 1.5px solid var(--c-line-strong); background: var(--layer-1);
+  border-radius: 5px; display: inline-grid; place-items: center; cursor: pointer; vertical-align: middle;
+  transition: background var(--c-dur), border-color var(--c-dur), box-shadow var(--c-dur);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=radio]:not([role=switch]) { border-radius: 50%; }
+:where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):not([role=switch]):hover:not(:disabled) { border-color: var(--amber); }
+:where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):not([role=switch]):focus-visible { outline: none; box-shadow: var(--c-focus); }
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox]:not([role=switch]):checked {
+  background: var(--amber) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
+  border-color: var(--amber);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox]:not([role=switch]):indeterminate {
+  background: var(--amber) linear-gradient(#fff, #fff) center / 9px 2px no-repeat; border-color: var(--amber);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=radio]:not([role=switch]):checked {
+  border-color: var(--amber); background: radial-gradient(circle, var(--amber) 0 4.5px, var(--layer-1) 5px);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Switch: <input type=checkbox role=switch> */
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox][role=switch] {
+  appearance: none; -webkit-appearance: none; flex: none; margin: 0; position: relative; cursor: pointer;
+  width: 36px; height: 20px; border-radius: 999px; background: var(--c-line-strong); border: none;
+  transition: background var(--c-dur) var(--ease-soft);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox][role=switch]::before {
+  content: ""; position: absolute; top: 2px; inset-inline-start: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform var(--c-dur) var(--ease);
+}
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox][role=switch]:checked { background: var(--amber); }
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox][role=switch]:checked::before { transform: translateX(16px); }
+html[dir="rtl"] :where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox][role=switch]:checked::before { transform: translateX(-16px); }
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox][role=switch]:focus-visible { outline: none; box-shadow: var(--c-focus); }
+
+:where(.content, .drawer, .modal, .modal-overlay) :is(.check-inline, .check-row label) {
+  display: inline-flex; align-items: center; gap: 9px; min-height: 32px;
+  font-size: var(--c-font); font-weight: 550; color: var(--text); cursor: pointer;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .check-row { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+
+/* ============================================================
+   Page head / breadcrumbs
+   ============================================================ */
+:where(.content) .breadcrumbs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-3); margin-bottom: 10px;
+}
+:where(.content) .breadcrumbs a { color: var(--text-2); text-decoration: none; border-radius: 6px; padding: 2px 4px; margin-inline: -4px; transition: color var(--c-dur), background var(--c-dur); }
+:where(.content) .breadcrumbs a:hover { color: var(--text); background: var(--layer-3); }
+:where(.content) .breadcrumbs-sep { margin: 0 8px; opacity: 0.45; }
+html[dir="rtl"] :where(.content) .breadcrumbs-sep { transform: scaleX(-1); display: inline-block; }
+:where(.content) .breadcrumbs-current { color: var(--text); }
+
+:where(.content) .page-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; margin-bottom: var(--sp-6);
+}
+:where(.content) .page-head h1 {
+  margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.022em; line-height: 1.3; color: var(--text);
+}
+:where(.content) .page-head > :is(.btn, .page-actions, .page-head-actions, .actions):last-child,
+:where(.content) .page-head > div:last-child:not(:first-child) { margin-inline-start: auto; }
+:where(.content) .page-head > div:last-child:not(:first-child) { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+:where(.content) .page-head p,
+:where(.content) .page-head .muted,
+:where(.content) .page-head .page-sub { margin: 4px 0 0; font-size: var(--c-font-sm); color: var(--text-2); line-height: 1.55; max-width: 72ch; }
+@media (max-width: 600px) {
+  :where(.content) .page-head { align-items: flex-start; }
+  :where(.content) .page-head h1 { font-size: 20px; }
+  :where(.content) .page-head > :is(.btn, div:last-child:not(:first-child)) { margin-inline-start: 0; }
+}
+
+/* ============================================================
+   Cards / panels
+   ============================================================ */
+:where(.content, .drawer) :is(.panel, .card, .widget-card, .form-grid) {
+  background: var(--layer-1); border: 1px solid var(--c-line); border-radius: var(--c-radius-lg);
+  box-shadow: var(--c-elev-1);
+}
+:where(.content) .panel { padding: var(--sp-5) var(--sp-6); margin-bottom: var(--sp-5); }
+:where(.content) .panel > :is(h2, h3):first-child {
+  margin: 0 0 var(--sp-4); font-size: 15px; font-weight: 800; letter-spacing: -0.012em; line-height: 1.35;
+}
+:where(.content) .panel--link:hover { border-color: var(--c-line-strong); box-shadow: var(--c-elev-2); }
+:where(.content) .card-head { padding: var(--sp-5) var(--sp-6) 0; }
+:where(.content) .card-body { padding: var(--sp-4) var(--sp-6) var(--sp-6); }
+@media (max-width: 600px) {
+  :where(.content) .panel { padding: var(--sp-4); }
+  :where(.content) .card-head { padding: var(--sp-4) var(--sp-4) 0; }
+  :where(.content) .card-body { padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+}
+
+/* Key / value lists */
+:where(.content, .drawer) .kv { display: grid; grid-template-columns: minmax(120px, 180px) 1fr; gap: 10px 20px; margin: 0; }
+:where(.content, .drawer) .kv dt { color: var(--text-2); font-size: var(--c-font-sm); font-weight: 600; line-height: 1.5; }
+:where(.content, .drawer) .kv dd { margin: 0; font-weight: 650; font-size: var(--c-font); line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 520px) { :where(.content, .drawer) .kv { grid-template-columns: 1fr; gap: 2px; } :where(.content, .drawer) .kv dd { margin-bottom: 10px; } }
+
+:where(.content, .drawer, .modal, .modal-overlay) .muted { color: var(--text-2); }
+
+/* ============================================================
+   Forms
+   ============================================================ */
+:where(.content) .form-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-5) var(--sp-5); padding: var(--sp-6); margin-bottom: var(--sp-5);
+}
+:where(.content) .form-grid > :is(h2, h3, .form-section-title) {
+  grid-column: 1 / -1; margin: var(--sp-2) 0 calc(-1 * var(--sp-2));
+  font-size: 13px; font-weight: 800; letter-spacing: 0.02em; color: var(--text-2);
+}
+:where(.content) .form-grid > :is(h2, h3, .form-section-title):first-child { margin-top: 0; }
+:where(.content) .form-grid > :is(h2, h3, .form-section-title):not(:first-child) {
+  padding-top: var(--sp-5); border-top: 1px solid var(--c-line);
+}
+:where(.content) :is(.form-actions, .doc-actions, .modal-actions) {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px;
+}
+:where(.content) .form-actions { grid-column: 1 / -1; padding-top: var(--sp-4); margin-top: var(--sp-1); border-top: 1px solid var(--c-line); }
+:where(.content) .doc-actions { margin-top: var(--sp-5); }
+@media (max-width: 600px) {
+  :where(.content) .form-grid { padding: var(--sp-4); gap: var(--sp-4); }
+  :where(.content) :is(.form-actions, .doc-actions) > .btn { flex: 1 1 auto; }
+}
+
+/* ============================================================
+   Filter bars / toolbars
+   ============================================================ */
+:where(.content) :is(.toolbar, .filter-bar, .filters, .inline-form) {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin-bottom: var(--sp-4);
+}
+:where(.content) :is(.toolbar, .filter-bar, .filters, .inline-form) > :is(.input, .btn, input, select) { align-self: flex-end; }
+:where(.content) :is(.toolbar, .filter-bar, .filters) .field { flex: 1 1 180px; max-width: 280px; }
+:where(.content) :is(.toolbar, .filter-bar, .filters) .field-label { font-size: 12px; color: var(--text-2); }
+:where(.content) :is(.toolbar, .filter-bar, .filters) input[type=search],
+:where(.content) :is(.toolbar, .filter-bar, .filters) .input[type=search] { flex: 1 1 240px; max-width: 360px; }
+:where(.content) .filter-actions { display: flex; gap: 8px; align-items: flex-end; margin-inline-start: auto; }
+:where(.content) :is(.toolbar, .filter-bar, .filters) .check-inline { min-height: var(--control-h); }
+@media (max-width: 600px) {
+  :where(.content) :is(.toolbar, .filter-bar, .filters) .field,
+  :where(.content) :is(.toolbar, .filter-bar, .filters) > .input { flex-basis: 100%; max-width: none; }
+  :where(.content) .filter-actions { margin-inline-start: 0; width: 100%; }
+  :where(.content) .filter-actions > .btn { flex: 1; }
+}
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+:where(.content, .drawer) .tabs {
+  display: flex; gap: 2px; margin-bottom: var(--sp-5); border-bottom: 1px solid var(--c-line);
+  overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap;
+}
+:where(.content, .drawer) .tabs::-webkit-scrollbar { display: none; }
+:where(.content, .drawer) .tab {
+  position: relative; display: inline-flex; align-items: center; gap: 8px; flex: none;
+  height: 42px; padding: 0 14px; margin: 0; border: none; border-radius: var(--c-radius-sm) var(--c-radius-sm) 0 0;
+  background: none; color: var(--text-2); font: inherit; font-size: var(--c-font); font-weight: 700; white-space: nowrap; cursor: pointer;
+  transition: color var(--c-dur), background var(--c-dur);
+}
+:where(.content, .drawer) .tab::after {
+  content: ""; position: absolute; inset-inline: 10px; bottom: -1px; height: 2px; border-radius: 2px;
+  background: transparent; transition: background var(--c-dur);
+}
+:where(.content, .drawer) .tab:hover { color: var(--text); background: var(--layer-3); }
+:where(.content, .drawer) .tab:focus-visible { outline: none; box-shadow: inset var(--c-focus); }
+:where(.content, .drawer) .tab--active { color: var(--text); border-bottom-color: transparent; }
+:where(.content, .drawer) .tab--active::after { background: var(--amber); }
+:where(.content, .drawer) .tab-icon { display: inline-grid; place-items: center; width: 16px; height: 16px; color: var(--text-3); }
+:where(.content, .drawer) .tab-icon svg { width: 16px; height: 16px; }
+:where(.content, .drawer) .tab--active .tab-icon { color: var(--amber-strong); }
+[data-theme="dark"] :where(.content, .drawer) .tab--active .tab-icon { color: var(--amber-soft); }
+:where(.content, .drawer) .tab-count {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center;
+  background: var(--tone-mute-bg); color: var(--tone-mute-fg); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Badges / status pills
+   ============================================================ */
+.content .badge, .drawer .badge, .modal .badge {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px;
+  border-radius: 999px; border: 1px solid var(--tone-mute-line);
+  background: var(--tone-mute-bg); color: var(--tone-mute-fg);
+  font-size: var(--c-font-xs); font-weight: 700; letter-spacing: 0.005em; line-height: 1; white-space: nowrap;
+  vertical-align: middle;
+}
+.content .badge::before, .drawer .badge::before, .modal .badge::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; flex: none;
+}
+.content .badge:has(.led)::before { display: none; }
+:is(.content, .drawer, .modal) :is(.badge--live, .badge.ok)    { background: var(--tone-ok-bg);   color: var(--tone-ok-fg);   border-color: var(--tone-ok-line); }
+:is(.content, .drawer, .modal) :is(.badge--warn, .badge--demo, .badge.low) { background: var(--tone-warn-bg); color: var(--tone-warn-fg); border-color: var(--tone-warn-line); }
+:is(.content, .drawer, .modal) :is(.badge--danger, .badge.out) { background: var(--tone-err-bg);  color: var(--tone-err-fg);  border-color: var(--tone-err-line); }
+:is(.content, .drawer, .modal) :is(.badge--info, .badge.info)  { background: var(--tone-info-bg); color: var(--tone-info-fg); border-color: var(--tone-info-line); }
+:is(.content, .drawer, .modal) .badge--muted { background: var(--tone-mute-bg); color: var(--tone-mute-fg); border-color: var(--tone-mute-line); }
+
+/* ============================================================
+   Banners / alerts — tinted, even border, icon chip. No accent bars.
+   ============================================================ */
+:where(.content, .drawer, .modal, .modal-overlay) .banner {
+  position: relative; display: block; margin: 0 0 var(--sp-4);
+  padding: 12px 16px 12px 44px; border-radius: var(--c-radius);
+  border: 1px solid var(--tone-info-line); background: var(--tone-info-bg); color: var(--text);
+  font-size: var(--c-font-sm); font-weight: 550; line-height: 1.6;
+  border-left-width: 1px; border-top-width: 1px;
+}
+html[dir="rtl"] :where(.content, .drawer, .modal, .modal-overlay) .banner { padding: 12px 44px 12px 16px; }
+:where(.content, .drawer, .modal, .modal-overlay) .banner::before {
+  content: "i"; position: absolute; top: 12px; inset-inline-start: 14px;
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--tone-info-fg); color: var(--layer-1);
+  font: 800 12px/1 'Manrope', system-ui, sans-serif; font-style: normal;
+}
+:where(.content, .drawer, .modal, .modal-overlay) .banner :is(a, .btn--link) { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+:where(.content, .drawer, .modal, .modal-overlay) .banner .btn { margin-top: 8px; }
+:where(.content, .drawer, .modal, .modal-overlay) .banner strong { font-weight: 800; }
+:where(.content, .drawer, .modal, .modal-overlay) .banner--warn { background: var(--tone-warn-bg); border-color: var(--tone-warn-line); color: var(--text); }
+:where(.content, .drawer, .modal, .modal-overlay) .banner--warn::before { content: "!"; background: var(--tone-warn-fg); }
+:where(.content, .drawer, .modal, .modal-overlay) :is(.banner--error, .banner--danger) { background: var(--tone-err-bg); border-color: var(--tone-err-line); }
+:where(.content, .drawer, .modal, .modal-overlay) :is(.banner--error, .banner--danger)::before { content: "!"; background: var(--tone-err-fg); }
+:where(.content, .drawer, .modal, .modal-overlay) :is(.banner--success, .banner--ok) { background: var(--tone-ok-bg); border-color: var(--tone-ok-line); }
+:where(.content, .drawer, .modal, .modal-overlay) :is(.banner--success, .banner--ok)::before { content: "\2713"; background: var(--tone-ok-fg); }
+[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) .banner::before { color: #0f1520; }
+[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) .banner--warn { color: var(--text); }
+:where(.content, .drawer) .drawer-error { border: 1px solid var(--tone-err-line); background: var(--tone-err-bg); color: var(--tone-err-fg); }
+
+/* ============================================================
+   Empty states / skeletons
+   ============================================================ */
+:where(.content, .drawer) .empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  gap: 6px; padding: var(--sp-10) var(--sp-6); color: var(--text-2);
+}
+:where(.content, .drawer) .empty-state-icon {
+  width: 52px; height: 52px; margin-bottom: 10px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--layer-2); border: 1px solid var(--c-line); color: var(--text-3);
+  box-shadow: var(--c-elev-1);
+}
+:where(.content, .drawer) .empty-state-icon svg { width: 24px; height: 24px; }
+:where(.content, .drawer) .empty-state-title { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
+:where(.content, .drawer) .empty-state-hint { max-width: 420px; font-size: var(--c-font-sm); line-height: 1.6; color: var(--text-2); }
+:where(.content, .drawer) .empty-state > .btn,
+:where(.content, .drawer) .empty-state > a.btn { margin-top: 14px; }
+.index-page > .empty-state { border-radius: var(--c-radius-lg); border-color: var(--c-line); box-shadow: var(--c-elev-1); }
+
+:where(.content, .drawer) .skeleton { display: flex; flex-direction: column; gap: 12px; padding: var(--sp-2) 0; }
+:where(.content, .drawer) .skeleton-row {
+  height: 14px; border-radius: 6px;
+  background: linear-gradient(90deg, var(--layer-3) 0%, var(--layer-2) 40%, var(--layer-3) 80%);
+  background-size: 200% 100%; animation: c-shimmer 1.4s ease-in-out infinite;
+}
+:where(.content, .drawer) .skeleton-row:nth-child(3n+1) { width: 92%; }
+:where(.content, .drawer) .skeleton-row:nth-child(3n+2) { width: 78%; }
+:where(.content, .drawer) .skeleton-row:nth-child(3n)   { width: 64%; }
+[data-theme="dark"] :where(.content, .drawer) .skeleton-row {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 40%, rgba(255,255,255,0.04) 80%);
+  background-size: 200% 100%;
+}
+@keyframes c-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton-row { animation: none !important; } }
+
+/* ============================================================
+   Metric / KPI cards
+   ============================================================ */
+:where(.content) .widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-6); }
+:where(.content) :is(.widget-card, .metric-card) { padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+:where(.content) :is(.widget-card-label, .metric-card-label) {
+  margin: 0; font-size: 12.5px; font-weight: 650; color: var(--text-2); line-height: 1.4;
+}
+:where(.content) :is(.widget-card-value, .metric-card-val) {
+  font-size: 26px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; color: var(--text);
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+:where(.content) .metric-card-sub { font-size: 12px; color: var(--text-3); font-weight: 600; }
+:where(.content) .metric-card--ok .metric-card-val { color: var(--tone-ok-fg); }
+:where(.content) .metric-card--warn .metric-card-val { color: var(--tone-warn-fg); }
+:where(.content) .metric-card--danger .metric-card-val { color: var(--tone-err-fg); }
+:where(.content) .metric-card--info .metric-card-val { color: var(--tone-info-fg); }
+
+/* ============================================================
+   Tables
+   ============================================================ */
+:where(.content, .drawer) :is(.tbl-wrap, .table-wrap, .index-table-scroll) {
+  position: relative; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain;
+  border: 1px solid var(--c-line); border-radius: var(--c-radius-lg); background: var(--layer-1);
+  box-shadow: var(--c-elev-1); margin-bottom: var(--sp-5);
+  /* edge fade when content overflows (scroll-driven shadows) */
+  background:
+    linear-gradient(to right, var(--layer-1) 30%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left,  var(--layer-1) 30%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(0,0,0,0.10), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.10), transparent) right / 12px 100% no-repeat scroll,
+    var(--layer-1);
+  scrollbar-width: thin; scrollbar-color: var(--c-line-strong) transparent;
+}
+[data-theme="dark"] :where(.content, .drawer) :is(.tbl-wrap, .table-wrap, .index-table-scroll) {
+  background:
+    linear-gradient(to right, var(--layer-1) 30%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left,  var(--layer-1) 30%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(0,0,0,0.45), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.45), transparent) right / 12px 100% no-repeat scroll,
+    var(--layer-1);
+}
+/* Table inside a wrapper: wrapper owns the frame */
+:where(.content, .drawer) :is(.tbl-wrap, .table-wrap, .index-table-scroll) > .data-table {
+  border: 0; border-radius: 0; box-shadow: none; background: transparent; margin: 0;
+}
+/* Panels already frame their content — drop the second frame */
+:where(.content) :is(.panel, .card-body, .card) > :is(.tbl-wrap, .table-wrap) { box-shadow: none; margin-bottom: 0; }
+:where(.content) :is(.panel, .card-body) > :is(.tbl-wrap, .table-wrap) + * { margin-top: var(--sp-4); }
+
+:where(.content, .drawer) .data-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  background: var(--layer-1); border: 1px solid var(--c-line); border-radius: var(--c-radius-lg); overflow: hidden;
+  font-size: var(--c-font); color: var(--text);
+}
+:where(.content, .drawer) .data-table :is(th, td) {
+  padding: 12px 16px; text-align: start; vertical-align: middle;
+  border-bottom: 1px solid var(--c-line); font-size: var(--c-font); line-height: 1.5;
+}
+:where(.content, .drawer) .data-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--layer-2); color: var(--text-2);
+  font-size: 12px; font-weight: 650; letter-spacing: 0.01em; white-space: nowrap;
+  padding-top: 10px; padding-bottom: 10px;
+}
+:where(.content, .drawer) .data-table tbody tr:last-child > td { border-bottom: 0; }
+:where(.content, .drawer) .data-table tbody tr:nth-child(even) > td { background: var(--c-row-zebra); }
+:where(.content, .drawer) .data-table tbody tr { transition: background var(--c-dur); }
+:where(.content, .drawer) .data-table tbody tr:hover > td { background: var(--c-row-hover); }
+:where(.content, .drawer) .data-table tbody tr:is(.is-selected, .row--selected, [aria-selected="true"]) > td { background: var(--c-row-selected); }
+:where(.content, .drawer) .data-table tbody tr:is(.is-selected, .row--selected, [aria-selected="true"]) > td:first-child { box-shadow: inset 0 0 0 0 transparent; }
+:where(.content, .drawer) .data-table tbody tr.row--error > td { background: var(--tone-err-bg); }
+:where(.content, .drawer) .data-table tbody tr.row--error > td:first-child { color: var(--tone-err-fg); }
+:where(.content, .drawer) .data-table tfoot :is(td, th) {
+  background: var(--layer-2); font-weight: 750; border-top: 1px solid var(--c-line); border-bottom: 0;
+}
+
+/* Numeric columns: end-aligned, tabular */
+:where(.content, .drawer) .data-table :is(th, td):is(.num, .numeric, .text-end, .right, [data-num]),
+:where(.content, .drawer) .data-table td.mono {
+  text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+:where(.content, .drawer) .data-table td :is(.input--num, input[type=number]) { margin-inline-start: auto; display: block; }
+html[dir="rtl"] :where(.content, .drawer) .data-table :is(th, td):is(.num, .numeric, .text-end, .right, [data-num]) { text-align: left; }
+
+/* Links + actions in rows */
+:where(.content, .drawer) .data-table a:not(.btn) { color: var(--text); font-weight: 700; text-decoration: none; }
+:where(.content, .drawer) .data-table a:not(.btn):hover { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+[data-theme="dark"] :where(.content, .drawer) .data-table a:not(.btn):hover { color: var(--amber-soft); }
+:where(.content, .drawer) .data-table td .btn--sm { height: 30px; min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+:where(.content, .drawer) .data-table td .btn--sm.btn--icon { width: 30px; padding: 0; }
+:where(.content, .drawer) .data-table td .btn + .btn { margin-inline-start: 6px; }
+:where(.content, .drawer) .data-table :is(th, td).col-action { width: 48px; padding-inline: 8px; text-align: center; }
+:where(.content, .drawer) .data-table td .input,
+:where(.content, .drawer) .data-table td :is(select, input:not([type=checkbox]):not([type=radio])) {
+  height: 36px; min-height: 36px; min-width: 90px;
+}
+:where(.content, .drawer) .data-table td.table-empty,
+:where(.content, .drawer) .data-table td[colspan].muted { text-align: center; padding: 28px 16px; color: var(--text-2); font-size: var(--c-font-sm); }
+:where(.content, .drawer) .data-table td .badge { vertical-align: middle; }
+
+@media (max-width: 600px) {
+  :where(.content, .drawer) .data-table :is(th, td) { padding: 10px 12px; }
+}
+
+/* Document lines */
+:where(.content) .doc-lines { margin-bottom: var(--sp-4); }
+:where(.content) .doc-lines .tbl-wrap { margin-bottom: var(--sp-3); }
+:where(.content) .doc-add-line { border-style: dashed; color: var(--text-2); }
+:where(.content) .doc-add-line:hover { color: var(--text); border-color: var(--amber); }
+:where(.content) .doc-totals {
+  display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: flex-end; margin-top: var(--sp-3);
+  padding: 12px 16px; border-radius: var(--c-radius); background: var(--layer-2); border: 1px solid var(--c-line);
+}
+:where(.content) .doc-total { display: flex; gap: 10px; align-items: baseline; font-size: var(--c-font-sm); color: var(--text-2); }
+:where(.content) .doc-total strong { font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Audit timeline */
+:where(.content, .drawer) .audit-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+:where(.content, .drawer) .audit-timeline li {
+  position: relative; padding: 10px 0 10px 22px; border-bottom: 0; font-size: var(--c-font-sm); line-height: 1.55;
+}
+html[dir="rtl"] :where(.content, .drawer) .audit-timeline li { padding: 10px 22px 10px 0; }
+:where(.content, .drawer) .audit-timeline li::before {
+  content: ""; position: absolute; top: 17px; inset-inline-start: 3px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--layer-1); border: 2px solid var(--c-line-strong);
+}
+:where(.content, .drawer) .audit-timeline li:not(:last-child)::after {
+  content: ""; position: absolute; top: 29px; bottom: -7px; inset-inline-start: 7px; width: 1px; background: var(--c-line);
+}
+:where(.content, .drawer) .audit-timeline li:first-child::before { border-color: var(--amber); }
+:where(.content, .drawer) .audit-action { font-weight: 750; color: var(--text); }
+
+/* ============================================================
+   Pagination
+   ============================================================ */
+:where(.content) :is(.pagination, .focus-pagination, .pager) {
+  display: flex; align-items: center; justify-content: center; gap: 12px; margin: var(--sp-4) 0 0;
+  font-size: var(--c-font-sm); color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+:where(.content) :is(.pagination, .focus-pagination, .pager) .btn { height: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0 12px; font-size: var(--c-font-sm); }
+:where(.content) :is(.pagination, .focus-pagination, .pager) bdi {
+  min-width: 64px; text-align: center; font-weight: 700; color: var(--text);
+}
+
+/* ============================================================
+   Drawers
+   ============================================================ */
+.drawer-overlay { background: var(--c-scrim); backdrop-filter: blur(2px); }
+.drawer {
+  background: var(--layer-1); box-shadow: var(--c-elev-3);
+  border-inline-start: 1px solid var(--c-line);
+}
+html[dir="rtl"] .drawer-overlay { justify-content: flex-start; }
+html[dir="rtl"] .drawer { animation-name: c-drawer-rtl; }
+@keyframes c-drawer-rtl { from { transform: translateX(-24px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+.drawer-head {
+  display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--c-line); background: var(--layer-1); position: sticky; top: 0; z-index: 2;
+}
+.drawer-head h3 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.012em; line-height: 1.35; }
+.drawer-sub { margin-top: 3px; font-size: 12.5px; color: var(--text-2); font-weight: 600; }
+.drawer-close {
+  margin-left: 0; margin-inline-start: auto; flex: none; width: 34px; height: 34px; border-radius: var(--c-radius-sm);
+  display: grid; place-items: center; border: 1px solid transparent; background: transparent; color: var(--text-2);
+  font-size: 20px; line-height: 1; transition: background var(--c-dur), color var(--c-dur);
+}
+.drawer-close:hover { background: var(--layer-3); color: var(--text); }
+.drawer-close:focus-visible { outline: none; box-shadow: var(--c-focus); }
+.drawer-body { padding: 20px; flex: 1; }
+.drawer-foot, .drawer-actions {
+  display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px;
+  border-top: 1px solid var(--c-line); background: var(--layer-2); position: sticky; bottom: 0;
+}
+.drawer-note { border: 1px solid var(--c-line); background: var(--layer-2); border-radius: var(--c-radius); }
+
+/* ============================================================
+   Modals
+   ============================================================ */
+.modal-overlay { background: var(--c-scrim); backdrop-filter: blur(2px); padding: 16px; }
+.modal {
+  width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto;
+  background: var(--layer-1); color: var(--text); border: 1px solid var(--c-line);
+  border-radius: var(--c-radius-xl); box-shadow: var(--c-elev-3); padding: 22px 24px;
+  animation: c-modal-in 0.18s var(--ease);
+}
+.modal > :is(h2, h3):first-child { margin: 0 0 8px; font-size: 17px; font-weight: 800; letter-spacing: -0.015em; }
+.modal > p { margin: 0 0 4px; color: var(--text-2); font-size: var(--c-font); line-height: 1.6; }
+.modal-actions {
+  display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px;
+  margin: 20px -24px -22px; padding: 14px 24px; border-top: 1px solid var(--c-line); background: var(--layer-2);
+  border-radius: 0 0 var(--c-radius-xl) var(--c-radius-xl);
+}
+@keyframes c-modal-in { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .modal, .drawer { animation: none !important; } }
+
+/* ============================================================
+   Toasts (.toast-dock list) — neutral surface + tone chip
+   ============================================================ */
+.toast-dock .toast {
+  display: flex; align-items: center; gap: 10px; min-width: 260px; max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 16px; border-radius: var(--c-radius-lg);
+  background: var(--layer-1); color: var(--text); border: 1px solid var(--c-line);
+  font-size: var(--c-font-sm); font-weight: 600; line-height: 1.5; box-shadow: var(--c-elev-3);
+  animation: c-toast-in 0.22s var(--ease);
+}
+.toast-dock .toast::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--tone-info-fg);
+  box-shadow: 0 0 0 4px var(--tone-info-bg);
+}
+.toast-dock .toast--success::before { background: var(--tone-ok-fg); box-shadow: 0 0 0 4px var(--tone-ok-bg); }
+.toast-dock .toast--error { border-color: var(--tone-err-line); }
+.toast-dock .toast--error::before { background: var(--tone-err-fg); box-shadow: 0 0 0 4px var(--tone-err-bg); }
+@keyframes c-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================
+   Page patterns
+   ============================================================ */
+/* List pages: unify the per-page index-page frame with the shared tokens */
+.index-page > .toolbar {
+  border-color: var(--c-line); border-radius: var(--c-radius-lg); background: var(--layer-1);
+  box-shadow: var(--c-elev-1); padding: 14px 16px; align-items: flex-end;
+}
+.index-page > .toolbar .input,
+.index-page > .toolbar .btn { min-height: var(--control-h); height: var(--control-h); }
+.index-page > .page-head .btn--primary { min-height: var(--control-h); padding: 0 18px; }
+.index-table-scroll .data-table :is(th, td) { padding-inline: 16px; }
+
+/* Detail pages: tabs sit directly on a panel */
+:where(.content) .tabs + :is(.panel, .card, .tbl-wrap) { margin-top: 0; }
+
+/* Focus ring for any remaining interactive element in content */
+:where(.content) :is(a, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: none; box-shadow: var(--c-focus); border-radius: 6px;
+}

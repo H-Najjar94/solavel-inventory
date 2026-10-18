@@ -46,6 +46,7 @@ class CentralAppAccess
             default=>(trans('access')['Your account has not been granted access to this application. Contact your organization owner or administrator.']),
         };
         if ($request->expectsJson() || $request->is('api/*')) return response()->json(['message'=>$message,'code'=>$reason,'app'=>$appKey],$status);
-        return response()->view('errors.app-access',compact('appName','message','ar'),$status)->header('Cache-Control','private, no-store');
+        // Branded error page (errors/_branded-403 maps the reason code to its denial variant).
+        return response()->view($status===503?'errors.503':'errors.403',['appName'=>$appName,'appKey'=>$appKey,'reason'=>$reason,'variant'=>$status===503?'access_check':null,'permission'=>$decision['permission']??null,'permission_label'=>$decision['permission_label']??null,'feature'=>$decision['feature']??null],$status)->header('Cache-Control','private, no-store');
     }
 }

@@ -115,7 +115,7 @@ export default function CountFormPage() {
     ];
 
     return (
-        <section className="page">
+        <section className="page count-form-page">
             <Breadcrumbs items={[{ label: t('counts.breadcrumb'), to: '/counts' }, { label: t(isEdit ? 'counts.form.editBreadcrumb' : 'counts.form.newBreadcrumb') }]} />
             <header className="page-head"><h1>{t(isEdit ? 'counts.form.editTitle' : 'counts.form.newTitle')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
@@ -143,8 +143,8 @@ export default function CountFormPage() {
             </div>
 
             <div className="panel">
-                <label className="check-row" title={t('counts.form.blindHelp')}><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> {t('counts.form.blindCount')}</label>
-                <label className="check-row" title={t('counts.form.freezeHelp')}><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> {t('counts.form.freezeSnapshot')}</label>
+                <label className="check-row" title={t('counts.form.blindHelp')}><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> <span className="check-row__text"><strong>{t('counts.form.blindCount')}</strong><small>{t('counts.form.blindHelp')}</small></span></label>
+                <label className="check-row" title={t('counts.form.freezeHelp')}><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> <span className="check-row__text"><strong>{t('counts.form.freezeSnapshot')}</strong><small>{t('counts.form.freezeHelp')}</small></span></label>
             </div>
 
             <div className="panel">

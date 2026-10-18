@@ -40,14 +40,14 @@ export const NAV = [
 
 // Section order and the icon each section shows in the collapsed rail.
 export const NAV_GROUPS = [
-    { key: 'Catalog', icon: 'fa-solid fa-boxes-stacked' },
-    { key: 'Stock', icon: 'fa-solid fa-layer-group' },
+    { key: 'Catalog', icon: 'fa-solid fa-book-open' },
+    { key: 'Stock', icon: 'fa-solid fa-cubes' },
     { key: 'Operations', icon: 'fa-solid fa-arrows-rotate' },
     { key: 'Purchasing', icon: 'fa-solid fa-cart-flatbed' },
-    { key: 'Sales / Fulfillment', icon: 'fa-solid fa-truck-fast' },
-    { key: 'Traceability', icon: 'fa-solid fa-magnifying-glass-location' },
-    { key: 'Insights', icon: 'fa-solid fa-chart-line' },
-    { key: 'Admin', icon: 'fa-solid fa-gear' },
+    { key: 'Sales / Fulfillment', icon: 'fa-solid fa-store' },
+    { key: 'Traceability', icon: 'fa-solid fa-route' },
+    { key: 'Insights', icon: 'fa-solid fa-chart-pie' },
+    { key: 'Admin', icon: 'fa-solid fa-screwdriver-wrench' },
 ];
 
 /** The most specific nav path that matches the location (detail pages light up their module). */

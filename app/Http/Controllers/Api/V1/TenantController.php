@@ -9,6 +9,7 @@ use App\Services\Tenancy\TenantResolver;
 use App\Services\Tenancy\TenantSchemaAuditService;
 use App\Services\Access\InventoryPermissionService;
 use App\Services\Access\OtherAppsMenu;
+use App\Support\CentralOrgLogo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -92,6 +93,7 @@ class TenantController extends ApiController
             'organization_name' => $s['mode'] === 'demo'
                 ? config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo'))
                 : $this->live->organizationName($s['organization_id']),
+            'logo_url' => $s['mode'] === 'live' ? CentralOrgLogo::url($s['organization_id']) : null,
             'user' => $principal ? ['name' => $principal['name'] ?? null, 'email' => $principal['email'] ?? null] : null,
             // Solavel portal (account menu card); the other apps load lazily from /tenant/launcher.
             'portal_url' => OtherAppsMenu::portalUrl(),
@@ -202,6 +204,7 @@ class TenantController extends ApiController
                 'id' => (int) $r->id,
                 'name' => $r->display_name ?: ($r->legal_name ?: ('Organization #' . $r->id)),
                 'client_id' => (int) $r->client_id,
+                'logo_url' => CentralOrgLogo::url($r->id),
                 'inventory_enabled' => in_array((int) $r->id, $enabled, true),
                 'current' => (int) $r->id === $currentOrg,
             ])->values();

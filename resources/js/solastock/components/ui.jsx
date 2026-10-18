@@ -20,16 +20,19 @@ export function Breadcrumbs({ items }) {
 // ── Loading skeleton ──
 export function Skeleton({ rows = 5 }) {
     return (
-        <div className="skeleton">
+        <div className="skeleton" aria-busy="true">
             {Array.from({ length: rows }).map((_, i) => <div key={i} className="skeleton-row" />)}
         </div>
     );
 }
 
 // ── Empty state ──
-export function EmptyState({ title = t('common.empty'), hint, action }) {
+export function EmptyState({ title = t('common.empty'), hint, action, icon }) {
     return (
         <div className="empty-state">
+            <div className="empty-state-icon" aria-hidden="true">{icon ?? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z"/><path d="m3 7.5 9 4.5 9-4.5M12 12v9"/></svg>
+            )}</div>
             <div className="empty-state-title">{title}</div>
             {hint && <div className="empty-state-hint">{hint}</div>}
             {action}
@@ -40,10 +43,12 @@ export function EmptyState({ title = t('common.empty'), hint, action }) {
 // ── Tabs ──
 export function Tabs({ tabs, active, onChange }) {
     return (
-        <div className="tabs">
+        <div className="tabs" role="tablist">
             {tabs.map((t) => (
-                <button key={t.key} className={`tab ${active === t.key ? 'tab--active' : ''}`} onClick={() => onChange(t.key)}>
-                    {t.label}
+                <button key={t.key} type="button" role="tab" aria-selected={active === t.key} className={`tab ${active === t.key ? 'tab--active' : ''}`} onClick={() => onChange(t.key)}>
+                    {t.icon && <span className="tab-icon" aria-hidden="true">{t.icon}</span>}
+                    <span className="tab-label">{t.label}</span>
+                    {t.count != null && <span className="tab-count">{t.count}</span>}
                 </button>
             ))}
         </div>
@@ -128,7 +133,7 @@ export function Drawer({ open, title, subtitle, onClose, children, width = 460 }
                         <h3>{title}</h3>
                         {subtitle && <div className="drawer-sub">{subtitle}</div>}
                     </div>
-                    <button className="drawer-close" onClick={onClose} aria-label={t('common.close')}>×</button>
+                    <button type="button" className="drawer-close btn--icon" onClick={onClose} aria-label={t('common.close')}>×</button>
                 </header>
                 <div className="drawer-body">{children}</div>
             </aside>

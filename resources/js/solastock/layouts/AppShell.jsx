@@ -161,6 +161,21 @@ function LanguageMenu({ locale, onClose }) {
     );
 }
 
+// Org avatar: Central logo image, falling back to the initials badge on error/missing.
+function OrgLogo({ url, name, className }) {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => { setFailed(false); }, [url]);
+    if (url && !failed) {
+        return (
+            <span className={className} aria-hidden="true" style={{ background: '#fff', overflow: 'hidden', padding: 0, flexShrink: 0 }}>
+                <img src={url} alt="" loading="lazy" onError={() => setFailed(true)}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit', display: 'block' }} />
+            </span>
+        );
+    }
+    return <span className={className} aria-hidden="true" style={{ flexShrink: 0 }}>{initials(name)}</span>;
+}
+
 // Top-bar organization switcher. Lists the signed-in user's organizations and
 // switches the active org/client in the SSO session (POST /tenant/select-org),
 // then refetches everything so the whole app reloads in the new org's context.
@@ -186,7 +201,7 @@ function OrgSwitcher({ tenant, open, onToggle, onClose }) {
         return (
             <div className="ss-org-switch">
                 <span className="ss-org-pill ss-org-pill--static" title={t('shell.activeOrganization')}>
-                    <span className="ss-org-pill__logo" aria-hidden="true">{initials(currentName)}</span>
+                    <OrgLogo url={tenant.logo_url} name={currentName} className="ss-org-pill__logo" />
                     <span className="ss-org-pill__name org-name">{currentName}</span>
                 </span>
             </div>
@@ -197,7 +212,7 @@ function OrgSwitcher({ tenant, open, onToggle, onClose }) {
         <div className="ss-org-switch org-switcher">
             <button type="button" className="ss-org-pill org-switcher__btn" aria-expanded={open} aria-haspopup="menu"
                 onClick={onToggle} title={t('shell.switchOrganization')}>
-                <span className="ss-org-pill__logo" aria-hidden="true">{initials(currentName)}</span>
+                <OrgLogo url={tenant.logo_url} name={currentName} className="ss-org-pill__logo" />
                 <span className="ss-org-pill__name org-name">{currentName}</span>
                 <i className="fa-solid fa-chevron-down ss-org-pill__chevron" aria-hidden="true" />
             </button>
@@ -208,7 +223,7 @@ function OrgSwitcher({ tenant, open, onToggle, onClose }) {
                         {orgs.map((org) => (
                             <button key={org.id} type="button" role="menuitem" className={`ss-menu__item${org.current ? ' is-current' : ''}`}
                                 onClick={() => pick(org)} disabled={!!busyId} aria-current={org.current ? 'true' : undefined}>
-                                <i className={`fa-solid ${org.current ? 'fa-circle-check' : 'fa-building'} ss-menu__icon`} aria-hidden="true" />
+                                <OrgLogo url={org.logo_url} name={org.name} className="ss-org-pill__logo" />
                                 <span className="ss-menu__text">{org.name}</span>
                                 {busyId === org.id
                                     ? <i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />
@@ -554,7 +569,12 @@ export default function AppShell() {
                 <div className="side-brand">
                     <img className="side-logo-img" src="/inventory/imgs/favicon-solastock-gradient.svg" alt="SolaStock"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    {!railCollapsed && <span className="side-name">SolaStock</span>}
+                    {!railCollapsed && (
+                        <span className="side-title">
+                            <span className="side-name">Sola<b>Stock</b></span>
+                            {tenant.organization_name && <small className="side-org" title={tenant.organization_name}>{tenant.organization_name}</small>}
+                        </span>
+                    )}
                     {isDrawer && (
                         <button ref={drawerCloseRef} type="button" className="ss-drawer-close" aria-label={t('shell.closeMenu')} onClick={() => closeDrawer()}>
                             <i className="fa-solid fa-xmark" aria-hidden="true" />
@@ -585,7 +605,7 @@ export default function AppShell() {
                                 </NavLink>
                             ))}
                             <NavLink to="/plan-access" className={({isActive})=>`side-link side-link--primary ${isActive?'is-active':''}`} title={t('planAccess.title')}>
-                                <i className="side-link-icon fa-solid fa-layer-group" aria-hidden="true" />
+                                <i className="side-link-icon fa-solid fa-crown" aria-hidden="true" />
                                 {!railCollapsed&&<span className="side-link-label">{t('planAccess.title')}</span>}
                             </NavLink>
                         </div>
@@ -601,7 +621,7 @@ export default function AppShell() {
                                 onClick={(event) => openFlyout(group, event.currentTarget)}
                             >
                                 <i className={`side-link-icon ${GROUP_ICONS[group] || items[0]?.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
-                                {items.every(item=>item.planLocked)&&<span className="side-rail-lock" aria-hidden="true">🔒</span>}
+                                {items.every(item=>item.planLocked)&&<span className="side-rail-lock" aria-hidden="true"><i className="fa-solid fa-lock" /></span>}
                             </button>
                         ))}
                         {!railCollapsed && Object.entries(groupedNav).map(([group, items]) => {
@@ -612,18 +632,20 @@ export default function AppShell() {
                                 {(
                                     <button
                                         type="button"
-                                        className="side-group__toggle"
+                                        className={`side-group__toggle${group === activeGroup ? ' has-active' : ''}`}
                                         aria-expanded={isOpen}
                                         onClick={() => setOpenGroup((current) => current === group ? null : group)}
                                     >
-                                        <span>{t(GROUP_LABELS[group], group)}</span>
-                                        <i className={`fa-solid fa-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden="true" />
+                                        <i className={`side-group__icon ${GROUP_ICONS[group] || items[0]?.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
+                                        <span className="side-group__label">{t(GROUP_LABELS[group], group)}</span>
+                                        <i className="fa-solid fa-chevron-down side-group__chevron" aria-hidden="true" />
                                     </button>
                                 )}
                                 <div className="side-group__items">
+                                  <div className="side-group__inner">
                                   {items.map((n) => (
                                     n.planLocked ? <button key={n.key} type="button" className="side-link side-link--plan-locked" aria-haspopup="dialog" onClick={()=>setLockedFeature(n)} title={t('planAccess.lockedHint')}>
-                                        <i className={`side-link-icon ${n.icon}`} aria-hidden="true"/><span className="side-link-label">{t(NAV_LABELS[n.key],n.label)}</span><span className="side-plan-lock" aria-hidden="true">🔒</span>
+                                        <i className={`side-link-icon ${n.icon}`} aria-hidden="true"/><span className="side-link-label">{t(NAV_LABELS[n.key],n.label)}</span><span className="ss-visually-hidden">{t('planAccess.lockedHint')}</span><span className="side-plan-lock" aria-hidden="true"><i className="fa-solid fa-lock" /></span>
                                     </button> : <NavLink
                                         key={n.key}
                                         to={n.path}
@@ -636,6 +658,7 @@ export default function AppShell() {
                                         <span className="side-link-label">{t(NAV_LABELS[n.key], n.label)}</span>
                                     </NavLink>
                                   ))}
+                                  </div>
                                 </div>
                             </div>
                             );
@@ -651,20 +674,12 @@ export default function AppShell() {
                         )}
                     </nav>
                 )}
-                {!isDrawer && (
-                    <button type="button" className="side-collapse" onClick={() => setCollapsed((c) => !c)}
-                        aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
-                        title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}>
-                        <i className={`fa-solid ${collapsed ? 'fa-angles-right' : 'fa-angles-left'} side-collapse__icon`} aria-hidden="true" />
-                        {!collapsed && <span>{t('shell.collapse')}</span>}
-                    </button>
-                )}
                 {railCollapsed && flyout && groupedNav[flyout.group] && (
                     <div className="side-flyout" role="menu" aria-label={t(GROUP_LABELS[flyout.group], flyout.group)} style={{ top: flyout.top }}>
                         <div className="side-flyout__title">{t(GROUP_LABELS[flyout.group], flyout.group)}</div>
                         {groupedNav[flyout.group].map((n) => (
                             n.planLocked ? <button key={n.key} type="button" role="menuitem" className="side-link side-link--plan-locked" aria-haspopup="dialog" onClick={()=>setLockedFeature(n)} title={t('planAccess.lockedHint')}>
-                                <i className={`side-link-icon ${n.icon}`} aria-hidden="true"/><span className="side-link-label">{t(NAV_LABELS[n.key],n.label)}</span><span className="side-plan-lock" aria-hidden="true">🔒</span>
+                                <i className={`side-link-icon ${n.icon}`} aria-hidden="true"/><span className="side-link-label">{t(NAV_LABELS[n.key],n.label)}</span><span className="ss-visually-hidden">{t('planAccess.lockedHint')}</span><span className="side-plan-lock" aria-hidden="true"><i className="fa-solid fa-lock" /></span>
                             </button> : <NavLink
                                 key={n.key}
                                 to={n.path}
@@ -691,6 +706,15 @@ export default function AppShell() {
                             onClick={() => { setMenu(null); setSideOpen(true); }}>
                             <i className="fa-solid fa-bars" aria-hidden="true" />
                         </button>
+                        {!isDrawer && (
+                            <button type="button" className="ss-topbar__icon ss-sidebar-toggle"
+                                aria-controls="solastock-sidebar" aria-expanded={!collapsed}
+                                aria-label={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
+                                title={collapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
+                                onClick={() => setCollapsed((c) => !c)}>
+                                <i className={`fa-solid ${collapsed ? 'fa-indent' : 'fa-outdent'} ss-flip-rtl`} aria-hidden="true" />
+                            </button>
+                        )}
 
                         <OrgSwitcher tenant={tenant} open={menu === 'org'} onToggle={() => toggleMenu('org')} onClose={() => setMenu(null)} />
 

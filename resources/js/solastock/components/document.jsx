@@ -120,23 +120,23 @@ export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, 
             <div className="tbl-wrap"><table className="data-table">
                 <thead>
                     <tr>
-                        {columns.map((c) => <th key={c.key} style={c.width ? { width: c.width } : undefined}>{c.label}</th>)}
-                        {canRemove && <th style={{ width: 40 }} />}
+                        {columns.map((c) => <th key={c.key} className={c.numeric ? 'num' : undefined} style={c.width ? { width: c.width } : undefined}>{c.label}</th>)}
+                        {canRemove && <th className="col-action" style={{ width: 48 }} />}
                     </tr>
                 </thead>
                 <tbody>
                     {lines.length === 0 && (
-                        <tr><td colSpan={columns.length + (canRemove ? 1 : 0)} className="muted">{t('document.noLines')}</td></tr>
+                        <tr><td colSpan={columns.length + (canRemove ? 1 : 0)} className="muted table-empty">{t('document.noLines')}</td></tr>
                     )}
                     {lines.map((line, i) => (
                         <tr key={i} className={errors[i] ? 'row--error' : ''}>
-                            {columns.map((c) => <td key={c.key}>{c.render(line, i)}</td>)}
-                            {canRemove && <td><button type="button" className="btn btn--sm btn--danger" onClick={() => onRemove(i)}>×</button></td>}
+                            {columns.map((c) => <td key={c.key} className={c.numeric ? 'num' : undefined}>{c.render(line, i)}</td>)}
+                            {canRemove && <td className="col-action"><button type="button" className="btn btn--sm btn--icon btn--danger-ghost" aria-label={t('document.removeLine', 'Remove line')} onClick={() => onRemove(i)}>×</button></td>}
                         </tr>
                     ))}
                 </tbody>
             </table></div>
-            {canAdd && <button type="button" className="btn btn--sm" onClick={onAdd}>+ {addLabel ?? t('document.addLine')}</button>}
+            {canAdd && <button type="button" className="btn btn--sm doc-add-line" onClick={onAdd}>+ {addLabel ?? t('document.addLine')}</button>}
         </div>
     );
 }
@@ -180,13 +180,13 @@ export function ConfirmReverseModal({ open, onConfirm, onCancel, name = 'documen
 export function LedgerPreview({ rows }) {
     if (!rows || rows.length === 0) return <p className="muted">{t('document.noLedger')}</p>;
     return (
-        <table className="data-table">
-            <thead><tr><th>{t('document.date')}</th><th>{t('document.item')}</th><th>{t('document.warehouseShort')}</th><th>{t('document.direction')}</th><th>{t('document.quantity')}</th><th>{t('document.unitCost')}</th><th>{t('document.total')}</th><th>{t('document.runningQuantity')}</th></tr></thead>
+        <div className="tbl-wrap"><table className="data-table">
+            <thead><tr><th>{t('document.date')}</th><th>{t('document.item')}</th><th>{t('document.warehouseShort')}</th><th>{t('document.direction')}</th><th className="num">{t('document.quantity')}</th><th className="num">{t('document.unitCost')}</th><th className="num">{t('document.total')}</th><th className="num">{t('document.runningQuantity')}</th></tr></thead>
             <tbody>{rows.map((r) => (
                 <tr key={r.id}><td>{r.moved_at}</td><td>{r.item_name ?? `#${r.item_id}`}</td><td>{r.warehouse_name ?? `#${r.warehouse_id}`}</td>
-                    <td>{t(`document.direction.${r.direction}`, r.direction)}</td><td>{r.quantity}</td><td>{r.unit_cost}</td><td>{r.total_cost}</td><td>{r.balance_qty_after}</td></tr>
+                    <td>{t(`document.direction.${r.direction}`, r.direction)}</td><td className="num">{r.quantity}</td><td className="num">{r.unit_cost}</td><td className="num">{r.total_cost}</td><td className="num">{r.balance_qty_after}</td></tr>
             ))}</tbody>
-        </table>
+        </table></div>
     );
 }
 

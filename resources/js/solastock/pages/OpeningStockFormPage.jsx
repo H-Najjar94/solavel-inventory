@@ -118,7 +118,7 @@ export default function OpeningStockFormPage() {
     ];
 
     return (
-        <section className="page">
+        <section className="page opening-stock-form-page">
             <Breadcrumbs items={[{ label: t('openingStock.title'), to: '/opening-stock' }, { label: t(isEdit ? 'openingStock.editDraft' : 'openingStock.new') }]} />
             <header className="page-head"><h1>{t(isEdit ? 'openingStock.editTitle' : 'openingStock.newTitle')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}

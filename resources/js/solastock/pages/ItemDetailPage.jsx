@@ -7,7 +7,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
+import { Breadcrumbs, Field, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import { MoneyInput, SupplierPicker } from '../components/pickers.jsx';
@@ -507,10 +507,10 @@ export default function ItemDetailPage() {
                                 {item.variants.map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteVariant(v.id)} title={feedbackText('deleteVariant')} message={feedbackText('deleteVariantBody')} action={feedbackText('deleteVariant')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addVariant} style={{ marginTop: 12 }}>
-                            <input className="input" placeholder={t('itemDetail.variantSku')} value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required dir="ltr" />
-                            <input className="input" placeholder={t('itemDetail.variantOptionPlaceholder')} value={variantForm.option} onChange={(e) => setVariantForm({ ...variantForm, option: e.target.value })} />
-                            <input className="input" placeholder={t('itemDetail.variantValuePlaceholder')} value={variantForm.value} onChange={(e) => setVariantForm({ ...variantForm, value: e.target.value })} />
-                            <input className="input" placeholder={t('itemDetail.variantBarcode')} value={variantForm.barcode_primary} onChange={(e) => setVariantForm({ ...variantForm, barcode_primary: e.target.value })} dir="ltr" />
+                            <Field label={t('itemDetail.variantSku')} required><input className="input" placeholder={t('itemDetail.variantSku')} value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required dir="ltr" /></Field>
+                            <Field label={t('itemDetail.variantOption')}><input className="input" placeholder={t('itemDetail.variantOptionPlaceholder')} value={variantForm.option} onChange={(e) => setVariantForm({ ...variantForm, option: e.target.value })} /></Field>
+                            <Field label={t('itemDetail.variantValue')}><input className="input" placeholder={t('itemDetail.variantValuePlaceholder')} value={variantForm.value} onChange={(e) => setVariantForm({ ...variantForm, value: e.target.value })} /></Field>
+                            <Field label={t('itemDetail.variantBarcode')}><input className="input" placeholder={t('itemDetail.variantBarcode')} value={variantForm.barcode_primary} onChange={(e) => setVariantForm({ ...variantForm, barcode_primary: e.target.value })} dir="ltr" /></Field>
                             <button className="btn btn--primary">{t('itemDetail.addVariant')}</button>
                         </form>}
                     </div></div>
@@ -533,12 +533,12 @@ export default function ItemDetailPage() {
                                 {data.supplier_price_lists.map((p) => <tr key={p.id}><td>{p.supplier?.name ?? `#${p.supplier_id}`}</td><td><bdi>{p.supplier_sku ?? '—'}</bdi></td><td>{p.unit_cost} <bdi>{p.currency_code ?? ''}</bdi></td><td>{p.minimum_qty}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteSupplierPrice(p.id)} title={feedbackText('deleteSupplierPrice')} message={feedbackText('deleteSupplierPriceBody')} action={feedbackText('deleteSupplierPrice')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addSupplierPrice} style={{ marginTop: 12 }}>
-                            <SupplierPicker value={priceForm.supplier_id} onChange={(v) => setPriceForm({ ...priceForm, supplier_id: v })} />
-                            <input className="input" placeholder={t('itemDetail.supplierSku')} value={priceForm.supplier_sku} onChange={(e) => setPriceForm({ ...priceForm, supplier_sku: e.target.value })} dir="ltr" />
-                            <MoneyInput value={priceForm.unit_cost} onChange={(v) => setPriceForm({ ...priceForm, unit_cost: v })} />
-                            <input className="input" type="number" step="0.0001" min="0" value={priceForm.minimum_qty} onChange={(e) => setPriceForm({ ...priceForm, minimum_qty: e.target.value })} />
-                            <input className="input" aria-label={t('itemDetail.priceCurrency')} placeholder={t('itemDetail.priceCurrencyDefault')} value={priceForm.currency_code} maxLength={3} dir="ltr"
-                                onChange={(e) => setPriceForm({ ...priceForm, currency_code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })} />
+                            <Field label={t('itemDetail.supplier')} required><SupplierPicker value={priceForm.supplier_id} onChange={(v) => setPriceForm({ ...priceForm, supplier_id: v })} /></Field>
+                            <Field label={t('itemDetail.supplierSku')}><input className="input" placeholder={t('itemDetail.supplierSkuPlaceholder')} value={priceForm.supplier_sku} onChange={(e) => setPriceForm({ ...priceForm, supplier_sku: e.target.value })} dir="ltr" /></Field>
+                            <Field label={t('itemDetail.priceUnitCost')} required><MoneyInput value={priceForm.unit_cost} onChange={(v) => setPriceForm({ ...priceForm, unit_cost: v })} /></Field>
+                            <Field label={t('itemDetail.minimumQuantity')}><input className="input" type="number" step="0.0001" min="0" value={priceForm.minimum_qty} onChange={(e) => setPriceForm({ ...priceForm, minimum_qty: e.target.value })} /></Field>
+                            <Field label={t('itemDetail.priceCurrency')}><input className="input" placeholder={t('itemDetail.priceCurrencyDefault')} value={priceForm.currency_code} maxLength={3} dir="ltr"
+                                onChange={(e) => setPriceForm({ ...priceForm, currency_code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })} /></Field>
                             <button className="btn btn--primary">{t('itemDetail.addSupplierPrice')}</button>
                         </form>}
                     </div></div>
