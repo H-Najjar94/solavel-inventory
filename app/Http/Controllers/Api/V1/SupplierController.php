@@ -45,18 +45,18 @@ class SupplierController extends ApiController
 
     public function update(Request $request, Supplier $supplier): JsonResponse
     {
-        $data = $this->validateSupplier($request, partial: true);
+        $data = $this->validateSupplier($request, partial: true, existing: $supplier);
         $supplier->update($this->pack($data, $supplier));
 
         return $this->success($supplier->fresh());
     }
 
-    private function validateSupplier(Request $request, bool $partial = false): array
+    private function validateSupplier(Request $request, bool $partial = false, ?Supplier $existing = null): array
     {
         $req = $partial ? 'sometimes' : 'required';
 
         return $request->validate([
-            'code' => [$req, 'string', 'max:50'],
+            'code' => [$req, 'string', 'max:50', \Illuminate\Validation\Rule::unique('inventory_suppliers', 'code')->where('organization_id', app(\App\Tenancy\OrganizationContext::class)->idOrFail())->ignore($existing?->id)],
             'name' => [$req, 'string', 'max:191'],
             'email' => ['nullable', 'email', 'max:191'],
             'phone' => ['nullable', 'string', 'max:50'],
@@ -66,7 +66,7 @@ class SupplierController extends ApiController
             'payment_terms' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['boolean'],
-        ]);
+        ], ['code.unique' => __('inventory.validation.supplier_code_unique')]);
     }
 
     /** Pack flat contact fields into the JSON `contact` column. */

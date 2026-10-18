@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -19,6 +19,9 @@ export default function SupplierFormPage() {
     const gate = useCanCreate('inventory.manage_items');
     const [form, setForm] = useState(EMPTY);
     const [errors, setErrors] = useState({});
+    const [failure,setFailure]=useState('');
+    const summary=useRef(null);
+    useEffect(()=>{if(failure || Object.keys(errors).length)summary.current?.focus();},[failure,errors]);
     const [saving, setSaving] = useState(false);
 
     const existing = useApiQuery(['supplier', id], () => api.supplier(id), { fallback: null, enabled: isEdit });
@@ -34,14 +37,14 @@ export default function SupplierFormPage() {
 
     async function submit(e) {
         e.preventDefault();
-        if (!gate.allowed) return;
-        setSaving(true); setErrors({});
+        if (!gate.allowed || saving) return;
+        setSaving(true); setErrors({});setFailure('');
         try {
             const res = isEdit ? await api.updateSupplier(id, form) : await api.createSupplierFull(form);
             toast.push(t(isEdit ? 'partners.suppliers.form.updated' : 'partners.suppliers.form.created'), 'success');
             qc.invalidateQueries({ queryKey: ['suppliers'] });
             nav(`/suppliers/${res?.data?.id ?? id}`);
-        } catch (err) { setErrors(fieldErrors(err)); toast.failure(err, t('partners.suppliers.form.saveFailed')); }
+        } catch (err) { setErrors(fieldErrors(err));setFailure(err.status===422 || err.status===402 ? err.message : t('partners.suppliers.form.saveFailed'));if(![422,402].includes(err.status))toast.failure(err,t('partners.suppliers.form.saveFailed')); }
         finally { setSaving(false); }
     }
 
@@ -57,10 +60,11 @@ export default function SupplierFormPage() {
             <Breadcrumbs items={[{ label: t('partners.common.suppliers'), to: '/suppliers' }, { label: t(isEdit ? 'partners.suppliers.form.editBreadcrumb' : 'partners.suppliers.form.newBreadcrumb') }]} />
             <header className="page-head"><h1>{t(isEdit ? 'partners.suppliers.form.editTitle' : 'partners.suppliers.form.newTitle')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gateReason}</div>}
+            {(failure || Object.keys(errors).length>0) && <div ref={summary} tabIndex={-1} role="alert" className="banner banner--warn" data-feedback-validation><strong>{t('partners.suppliers.form.cannotSave')}</strong>{failure&&<p>{failure}</p>}{Object.keys(errors).length>0&&<ul>{Object.values(errors).map((message,i)=><li key={i}>{message}</li>)}</ul>}</div>}
             <form className="form-grid" onSubmit={submit}>
-                <Field label={t('partners.common.code')} required error={errors.code}><input className="input" dir="auto" value={form.code} onChange={(e) => set('code', e.target.value)} /></Field>
-                <Field label={t('partners.common.name')} required error={errors.name}><input className="input" dir="auto" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
-                <Field label={t('partners.common.email')} error={errors.email}><input className="input" dir="ltr" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
+                <Field label={t('partners.common.code')} required error={errors.code}><input className="input" name="code" required maxLength={50} dir="auto" value={form.code} onChange={(e) => set('code', e.target.value)} /></Field>
+                <Field label={t('partners.common.name')} required error={errors.name}><input className="input" name="name" required maxLength={191} dir="auto" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
+                <Field label={t('partners.common.email')} error={errors.email}><input className="input" name="email" type="email" maxLength={191} dir="ltr" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Field>
                 <Field label={t('partners.common.phone')} error={errors.phone}><input className="input" dir="auto" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} /></Field>
                 <Field label={t('partners.common.address')} error={errors.address}><input className="input" dir="auto" value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} /></Field>
                 <Field label={t('partners.common.taxNumber')} error={errors.tax_number}><input className="input" dir="auto" value={form.tax_number ?? ''} onChange={(e) => set('tax_number', e.target.value)} /></Field>

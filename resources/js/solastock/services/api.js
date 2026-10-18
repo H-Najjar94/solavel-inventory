@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { normalizeLocale } from '../i18n/locales.js';
 import {statusRoute} from './statusRoute';
 import { feedback } from '../../shared/feedback/store';
@@ -42,10 +43,11 @@ function transport(url, options) {
         }
         if (mutation && (res.status >= 500 || !json || typeof json !== 'object' || (res.ok && json.success !== true && json.success !== false))) throw unknown(metadata);
         if (!res.ok || json?.success === false) {
-            const message = res.status === 422 ? json?.error?.message || json?.message || feedbackText('invalid')
+            const message = res.status === 402 ? t(['subscription_expired','paid_expired_no_fallback','expired'].includes(json?.error?.reason_code)?'access.expired':['subscription_revoked','subscription_suspended','subscription_cancelled','subscription_not_access_eligible'].includes(json?.error?.reason_code)?'access.blocked':json?.error?.reason_code==='entitlement_service_unavailable'?'access.checkUnavailable':'access.unavailable') : res.status === 422 ? json?.error?.message || json?.message || feedbackText('invalid')
                 : feedbackText(res.status === 403 ? 'forbidden' : [401,419].includes(res.status) ? 'expired' : 'failed');
             const err = Object.assign(new Error(message), metadata);
-            if (mutation && res.status !== 422) { void feedback.failure(res.status, false); err.feedbackHandled = true; }
+            if (mutation && res.status === 402) { void feedback.error({title:t('access.title'),message});err.feedbackHandled=true; }
+            else if (mutation && res.status !== 422) { void feedback.failure(res.status, false); err.feedbackHandled = true; }
             throw err;
         }
         if (new URL(url).pathname.endsWith("/tenant/status") && json?.data?.organization_id) organizationScope=String(json.data.organization_id);
