@@ -86,6 +86,7 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
             $central->table('projects')->insert(['id' => $id, 'slug' => $slug, 'is_active' => true]);
             $central->table('organization_projects')->insert(['project_id' => $id, 'organization_id' => TenantTestManager::ORG_A, 'is_active' => true]);
             $central->table('user_projects')->insert(['project_id' => $id, 'organization_id' => TenantTestManager::ORG_A, 'user_id' => self::ACTOR, 'is_active' => true]);
+            $central->table('user_projects')->insert(['project_id' => $id, 'organization_id' => TenantTestManager::ORG_A, 'user_id' => self::APPROVER, 'is_active' => true]);
         }
         $central->table('entitlement_state_snapshots')->updateOrInsert(['organization_id' => TenantTestManager::ORG_A], ['underlying_subscription_state' => 'paid_active',
             'effective_access_state' => 'paid_active', 'state_hash' => str_repeat('a', 64),
