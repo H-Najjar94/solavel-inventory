@@ -2409,3 +2409,14 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .item-image-drop-actions { display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:4px; }
 .item-images-actions { gap:14px; flex-wrap:wrap; }
 @media(max-width:600px) { .item-image-drop { padding:24px 16px; min-height:240px; } .item-media-upload.btn { min-width:144px; } }
+
+/* Stack detail cards independently so shorter cards leave no empty grid rows. */
+.item-details-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
+.item-details-column { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.item-details-column > .card { min-width:0; }
+@media(max-width:920px) { .item-details-columns { grid-template-columns:1fr; } }
+.item-details-column .fg2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.item-details-column .fg2 .input { min-width:0; width:100%; box-sizing:border-box; }
+.item-details-column .fg2 > * { min-width:0; }
+@media(max-width:560px) { .item-details-column .fg2 { grid-template-columns:1fr; } }
+.item-details-column .empty-state { padding:24px 12px; }

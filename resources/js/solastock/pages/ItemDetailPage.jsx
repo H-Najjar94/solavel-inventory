@@ -490,7 +490,8 @@ export default function ItemDetailPage() {
 
             {/* ── Details ── */}
             {tab === 'details' && (
-                <div className="overview-grid">
+                <div className="item-details-columns">
+                    <div className="item-details-column">
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.specifications')}</h3></div><div className="card-body"><dl className="kv">
                         <dt>{t('itemDetail.tracking')}</dt><dd>{t(`tracking.${item.tracking_type}`, item.tracking_type)}</dd>
                         <dt>{t('itemDetail.description')}</dt><dd>{item.description || '—'}</dd>
@@ -500,6 +501,25 @@ export default function ItemDetailPage() {
                         <dt>{t('itemDetail.dimensions')}</dt><dd>{[item.length, item.width, item.height].filter(Boolean).length ? `${qty(item.length)} × ${qty(item.width)} × ${qty(item.height)}` : '—'}</dd>
                         <dt>{t('itemDetail.package')}</dt><dd>{data.package_recommendation ? `${data.package_recommendation.label}${data.package_recommendation.max_dimensions ? ` · ${data.package_recommendation.max_dimensions}` : ''}` : '—'}</dd>
                     </dl></div></div>
+                    <div className="card"><div className="card-head"><h3>{t('itemDetail.variants')}</h3></div><div className="card-body">
+                        {(item.variants?.length ?? 0) === 0 ? <EmptyState title={t('itemDetail.noVariants')} hint={t('itemDetail.noVariantsHint')} />
+                            : <table className="data-table"><thead><tr><th>{t('sku')}</th><th>{t('itemDetail.attributes')}</th><th>{t('itemDetail.barcode')}</th><th>{t('itemDetail.status')}</th><th></th></tr></thead><tbody>
+                                {item.variants.map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteVariant(v.id)} title={feedbackText('deleteVariant')} message={feedbackText('deleteVariantBody')} action={feedbackText('deleteVariant')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
+                            </tbody></table>}
+                        {gate.allowed && <form className="fg2" onSubmit={addVariant} style={{ marginTop: 12 }}>
+                            <input className="input" placeholder={t('itemDetail.variantSku')} value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required dir="ltr" />
+                            <input className="input" placeholder={t('itemDetail.variantOptionPlaceholder')} value={variantForm.option} onChange={(e) => setVariantForm({ ...variantForm, option: e.target.value })} />
+                            <input className="input" placeholder={t('itemDetail.variantValuePlaceholder')} value={variantForm.value} onChange={(e) => setVariantForm({ ...variantForm, value: e.target.value })} />
+                            <input className="input" placeholder={t('itemDetail.variantBarcode')} value={variantForm.barcode_primary} onChange={(e) => setVariantForm({ ...variantForm, barcode_primary: e.target.value })} dir="ltr" />
+                            <button className="btn btn--primary">{t('itemDetail.addVariant')}</button>
+                        </form>}
+                    </div></div>
+                    <div className="card"><div className="card-head"><h3>{t('itemDetail.audit')}</h3></div><div className="card-body"><dl className="kv">
+                        <dt>{t('itemDetail.created')}</dt><dd>{item.created_at ?? '—'}</dd>
+                        <dt>{t('itemDetail.updated')}</dt><dd>{item.updated_at ?? '—'}</dd>
+                    </dl><span className="field-hint">{t('itemDetail.auditHint')}</span></div></div>
+                    </div>
+                    <div className="item-details-column">
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.commercial')}</h3></div><div className="card-body"><dl className="kv">
                         <dt>{t('itemDetail.preferredSupplier')}</dt><dd><bdi>{item.preferred_supplier_id ? `#${item.preferred_supplier_id}` : '—'}</bdi></dd>
                         <dt>{t('itemDetail.primaryBarcode')}</dt><dd><bdi>{data.primary_barcode ?? '—'}</bdi></dd>
@@ -522,28 +542,13 @@ export default function ItemDetailPage() {
                             <button className="btn btn--primary">{t('itemDetail.addSupplierPrice')}</button>
                         </form>}
                     </div></div>
-                    <div className="card"><div className="card-head"><h3>{t('itemDetail.variants')}</h3></div><div className="card-body">
-                        {(item.variants?.length ?? 0) === 0 ? <EmptyState title={t('itemDetail.noVariants')} hint={t('itemDetail.noVariantsHint')} />
-                            : <table className="data-table"><thead><tr><th>{t('sku')}</th><th>{t('itemDetail.attributes')}</th><th>{t('itemDetail.barcode')}</th><th>{t('itemDetail.status')}</th><th></th></tr></thead><tbody>
-                                {item.variants.map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteVariant(v.id)} title={feedbackText('deleteVariant')} message={feedbackText('deleteVariantBody')} action={feedbackText('deleteVariant')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
-                            </tbody></table>}
-                        {gate.allowed && <form className="fg2" onSubmit={addVariant} style={{ marginTop: 12 }}>
-                            <input className="input" placeholder={t('itemDetail.variantSku')} value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required dir="ltr" />
-                            <input className="input" placeholder={t('itemDetail.variantOptionPlaceholder')} value={variantForm.option} onChange={(e) => setVariantForm({ ...variantForm, option: e.target.value })} />
-                            <input className="input" placeholder={t('itemDetail.variantValuePlaceholder')} value={variantForm.value} onChange={(e) => setVariantForm({ ...variantForm, value: e.target.value })} />
-                            <input className="input" placeholder={t('itemDetail.variantBarcode')} value={variantForm.barcode_primary} onChange={(e) => setVariantForm({ ...variantForm, barcode_primary: e.target.value })} dir="ltr" />
-                            <button className="btn btn--primary">{t('itemDetail.addVariant')}</button>
-                        </form>}
-                    </div></div>
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.labels')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={loadLabels}>{t('itemDetail.printLabels')}</button></div><div className="card-body">
                         {!labels ? <EmptyState title={t('itemDetail.noLabelPreview')} hint={t('itemDetail.noLabelPreviewHint')} /> : <div className="label-sheet">
                             {(labels.labels ?? []).map((l) => <div className="label-card" key={l.barcode}><strong>{l.name}</strong><span>{l.sku}</span>{l.barcode_svg && <div className="label-barcode" dangerouslySetInnerHTML={{ __html: l.barcode_svg }} />}<code>{l.barcode}</code><span className="muted">{l.type}</span></div>)}
                         </div>}
                     </div></div>
-                    <div className="card"><div className="card-head"><h3>{t('itemDetail.audit')}</h3></div><div className="card-body"><dl className="kv">
-                        <dt>{t('itemDetail.created')}</dt><dd>{item.created_at ?? '—'}</dd>
-                        <dt>{t('itemDetail.updated')}</dt><dd>{item.updated_at ?? '—'}</dd>
-                    </dl><span className="field-hint">{t('itemDetail.auditHint')}</span></div></div>
+
+                    </div>
                 </div>
             )}
 
