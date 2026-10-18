@@ -196,6 +196,8 @@ return array (
     'variant_item_mismatch' => 'Variante gehört nicht zu diesem Artikel.',
     'supplier_price_item_mismatch' => 'Der Lieferantenpreis gehört nicht zu diesem Artikel.',
     'bulk_update_empty' => 'Wählen Sie mindestens ein Massenaktualisierungsfeld aus.',
+    'deactivation_blocked' => 'Dieser Artikel kann nicht deaktiviert werden, solange Bestand (einschließlich negativer Bestände), reservierter Bestand oder offene Lagerbelege vorhanden sind.',
+    'bulk_deactivation_blocked' => 'Einige ausgewählte Artikel können nicht deaktiviert werden, solange Bestand (einschließlich negativer Bestände), reservierter Bestand oder offene Lagerbelege vorhanden sind. Es wurden keine Artikel geändert.',
     'zone_code_unique' => 'Der Zonencode muss innerhalb des Lagers eindeutig sein.',
     'zone_has_stock' => 'Eine Zone, in der sich noch Lagerbestände befinden, kann nicht deaktiviert werden.',
     'bin_code_unique' => 'Der Lagerplatzcode muss innerhalb des Lagers eindeutig sein.',

@@ -196,6 +196,8 @@ return array (
     'variant_item_mismatch' => '变体不属于该项目。',
     'supplier_price_item_mismatch' => '供应商价格不属于此项目。',
     'bulk_update_empty' => '至少选择一个批量更新字段。',
+    'deactivation_blocked' => '该物料仍有库存（包括负库存）、预留库存或未完成的库存单据，无法停用。',
+    'bulk_deactivation_blocked' => '部分所选物料仍有库存（包括负库存）、预留库存或未完成的库存单据，无法停用。未更改任何物料。',
     'zone_code_unique' => '区域代码在仓库内必须是唯一的。',
     'zone_has_stock' => '无法停用仍持有库存的区域。',
     'bin_code_unique' => '库位编码在仓库内必须唯一。',

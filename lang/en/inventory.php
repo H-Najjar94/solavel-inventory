@@ -196,6 +196,8 @@ return array (
     'variant_item_mismatch' => 'Variant does not belong to this item.',
     'supplier_price_item_mismatch' => 'Supplier price does not belong to this item.',
     'bulk_update_empty' => 'Select at least one bulk update field.',
+    'deactivation_blocked' => 'This item cannot be deactivated while it has stock on hand (including negative balances), reserved stock or open stock documents.',
+    'bulk_deactivation_blocked' => 'Some selected items cannot be deactivated while they have stock on hand (including negative balances), reserved stock or open stock documents. No items were changed.',
     'zone_code_unique' => 'Zone code must be unique within the warehouse.',
     'zone_has_stock' => 'Cannot deactivate a zone that still holds stock.',
     'bin_code_unique' => 'Bin code must be unique within the warehouse.',

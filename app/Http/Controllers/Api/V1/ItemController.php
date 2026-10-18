@@ -614,6 +614,10 @@ class ItemController extends ApiController
         \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($item, $data) {
             $locked = Item::query()->lockForUpdate()->findOrFail($item->id);
             $attributes = $this->itemAttributes($data);
+            // Q12.3 / NF-1194-02: deactivation is refused under the item row lock while any balance (positive or negative), reservation or open document remains.
+            if (array_key_exists('is_active', $attributes) && ! $attributes['is_active'] && $locked->is_active) {
+                \App\Support\ItemDeactivationGuard::assertCanDeactivate($locked);
+            }
             if (isset($attributes['item_type']) && $attributes['item_type'] !== $locked->item_type && StockLedger::query()->where('item_id', $locked->id)->exists()) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['track_inventory'=>__('inventory.consumption.tracking_history')]);
             }
@@ -682,41 +686,60 @@ class ItemController extends ApiController
             return $this->error('bulk_update_empty', __('inventory.catalog.bulk_update_empty'), 422);
         }
 
-        $items = Item::query()->whereIn('id', $data['item_ids'])->get();
-        // NF-1203-04: every item must stay consistent once merged with its stored levels; reject the whole batch otherwise.
-        $invalid = $items->filter(function (Item $item) use ($fields) {
-            try {
-                \App\Support\ReorderLevels::assertConsistent(array_merge($item->only(['reorder_point', 'min_stock', 'max_stock']), $fields));
-            } catch (\Illuminate\Validation\ValidationException) {
-                return true;
+        // Q12.3 / NF-1194-02: check + write in one tenant transaction under item row locks (id order, same as
+        // StockLedgerService), so a concurrent movement and this update serialize; any refusal rejects the whole batch.
+        $result = \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($data, $fields) {
+            $items = Item::query()->whereIn('id', $data['item_ids'])->orderBy('id')->lockForUpdate()->get();
+            if (array_key_exists('is_active', $fields) && ! $fields['is_active']) {
+                $blocked = $items->filter(fn (Item $item) => $item->is_active)
+                    ->map(fn (Item $item) => ['id' => $item->id, 'sku' => $item->sku, 'blockers' => \App\Support\ItemDeactivationGuard::blockers((int) $item->id)])
+                    ->filter(fn (array $row) => $row['blockers'] !== []);
+                if ($blocked->isNotEmpty()) {
+                    return $this->error('bulk_deactivation_blocked', __('inventory.catalog.bulk_deactivation_blocked'), 422, [
+                        'items' => $blocked->values()->all(),
+                    ]);
+                }
+            }
+            // NF-1203-04: every item must stay consistent once merged with its stored levels; reject the whole batch otherwise.
+            $invalid = $items->filter(function (Item $item) use ($fields) {
+                try {
+                    \App\Support\ReorderLevels::assertConsistent(array_merge($item->only(['reorder_point', 'min_stock', 'max_stock']), $fields));
+                } catch (\Illuminate\Validation\ValidationException) {
+                    return true;
+                }
+
+                return false;
+            });
+            if ($invalid->isNotEmpty()) {
+                return $this->error('bulk_update_reorder_levels', __('The reorder point cannot exceed the maximum stock.'), 422, [
+                    'items' => $invalid->map(fn (Item $item) => ['id' => $item->id, 'sku' => $item->sku, 'max_stock' => $item->max_stock])->values()->all(),
+                ]);
+            }
+            $updated = 0;
+            foreach ($items as $item) {
+                $before = $item->only(array_keys($fields));
+                $item->fill($fields)->save();
+                $updated++;
+                InventoryAuditLog::create([
+                    'organization_id' => app(OrganizationContext::class)->id(),
+                    'actor_user_id' => auth()->id(),
+                    'action' => 'item.bulk_updated',
+                    'entity_type' => 'item',
+                    'entity_id' => $item->id,
+                    'before' => $before,
+                    'after' => $item->only(array_keys($fields)),
+                    'document_ref' => $item->sku,
+                    'created_at' => now(),
+                ]);
             }
 
-            return false;
+            return $updated;
         });
-        if ($invalid->isNotEmpty()) {
-            return $this->error('bulk_update_reorder_levels', __('The reorder point cannot exceed the maximum stock.'), 422, [
-                'items' => $invalid->map(fn (Item $item) => ['id' => $item->id, 'sku' => $item->sku, 'max_stock' => $item->max_stock])->values()->all(),
-            ]);
-        }
-        $updated = 0;
-        foreach ($items as $item) {
-            $before = $item->only(array_keys($fields));
-            $item->fill($fields)->save();
-            $updated++;
-            InventoryAuditLog::create([
-                'organization_id' => app(OrganizationContext::class)->id(),
-                'actor_user_id' => auth()->id(),
-                'action' => 'item.bulk_updated',
-                'entity_type' => 'item',
-                'entity_id' => $item->id,
-                'before' => $before,
-                'after' => $item->only(array_keys($fields)),
-                'document_ref' => $item->sku,
-                'created_at' => now(),
-            ]);
+        if ($result instanceof JsonResponse) {
+            return $result;
         }
 
-        return $this->success(['updated' => $updated]);
+        return $this->success(['updated' => $result]);
     }
 
     public function movements(Request $request, Item $item): JsonResponse

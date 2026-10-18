@@ -196,6 +196,8 @@ return array (
     'variant_item_mismatch' => 'Varyant bu maddeye ait değil.',
     'supplier_price_item_mismatch' => 'Tedarikçi fiyatı bu maddeye ait değil.',
     'bulk_update_empty' => 'En az bir toplu güncelleme alanı seçin.',
+    'deactivation_blocked' => 'Bu ürün, eldeki stok (negatif bakiyeler dahil), rezerve stok veya açık stok belgeleri varken devre dışı bırakılamaz.',
+    'bulk_deactivation_blocked' => 'Seçilen bazı ürünler, eldeki stok (negatif bakiyeler dahil), rezerve stok veya açık stok belgeleri varken devre dışı bırakılamaz. Hiçbir ürün değiştirilmedi.',
     'zone_code_unique' => 'Zona kodu, ambarda benzersiz olmalıdır.',
     'zone_has_stock' => 'Stok hâlâ tuttuğu için bir zona pasifleştirilemez.',
     'bin_code_unique' => 'Depo gözü kodu depo içinde benzersiz olmalıdır.',

@@ -196,6 +196,8 @@ return array (
     'variant_item_mismatch' => 'A variante não pertence a este item.',
     'supplier_price_item_mismatch' => 'O preço do fornecedor não pertence a este item.',
     'bulk_update_empty' => 'Selecione pelo menos um campo de atualização em massa.',
+    'deactivation_blocked' => 'Este item não pode ser desativado enquanto tiver estoque (incluindo saldos negativos), estoque reservado ou documentos de estoque em aberto.',
+    'bulk_deactivation_blocked' => 'Alguns itens selecionados não podem ser desativados enquanto tiverem estoque (incluindo saldos negativos), estoque reservado ou documentos de estoque em aberto. Nenhum item foi alterado.',
     'zone_code_unique' => 'O código de zona deve ser exclusivo no armazém.',
     'zone_has_stock' => 'Não é possível desativar uma zona que ainda mantém estoque.',
     'bin_code_unique' => 'O código do endereço de armazenagem deve ser único no armazém.',
