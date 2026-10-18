@@ -52,6 +52,19 @@ class InactiveItemPolicyTest extends TestCase
 {
     use TenantAware;
 
+    /** An identified actor whose permission decision is fixed (corrections of inactive items need one). */
+    private function actor(bool $allowed = true): void
+    {
+        $user = new \App\Models\User;
+        $user->id = 323;
+        \Illuminate\Support\Facades\Auth::setUser($user);
+        request()->setUserResolver(fn () => $user);
+        $this->mock(\App\Services\Access\InventoryPermissionService::class, fn ($m) => $m->shouldReceive('can')->andReturn($allowed));
+        $scope = $this->createStub(\App\Services\Access\WarehouseAccessService::class);
+        $scope->method('scope')->willReturnCallback(fn ($q) => $q);
+        $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $scope);
+    }
+
     private function item(): Item
     {
         return F::averageItem([
@@ -192,6 +205,7 @@ class InactiveItemPolicyTest extends TestCase
     public function a_stock_count_of_an_inactive_item_posts_as_the_controlled_correction_up_or_down_and_is_audited(): void
     {
         $this->useTenantA();
+        $this->actor();
         $warehouse = F::warehouse();
         $up = $this->item();
         $down = $this->item();
@@ -220,6 +234,7 @@ class InactiveItemPolicyTest extends TestCase
     public function an_authorized_write_off_reduces_existing_positive_stock_of_an_inactive_item_and_is_audited(): void
     {
         $this->useTenantA();
+        $this->actor();
         InventorySetting::updateOrCreate(['organization_id' => TenantTestManager::ORG_A], ['allow_negative_stock' => true]);
         $warehouse = F::warehouse();
         $item = $this->item();
@@ -258,6 +273,7 @@ class InactiveItemPolicyTest extends TestCase
     public function reversals_of_posted_documents_still_work_for_an_inactive_item(): void
     {
         $this->useTenantA();
+        $this->actor();
         $warehouse = F::warehouse();
         $item = $this->item();
         $opening = app(OpeningStockService::class);

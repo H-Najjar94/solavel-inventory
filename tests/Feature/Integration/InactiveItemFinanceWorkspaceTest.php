@@ -250,4 +250,21 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
         $created->assertCreated();
         $this->assertSame('decrease', \App\Models\Tenant\StockAdjustment::query()->findOrFail($created->json('data.id'))->lines()->sole()->direction);
     }
+
+    /** Signed Finance workspace: the dispatcher applies the route permission to the signed actor before the controller. */
+    public function test_signed_workspace_count_post_for_an_inactive_item_needs_the_actor_permission(): void
+    {
+        $warehouse = Warehouse::create(['name' => 'Q12 count WS', 'code' => 'Q12-CWS', 'type' => 'warehouse']);
+        $item = $this->catalogItem();
+        StockBalance::create(['organization_id' => TenantTestManager::ORG_A, 'item_id' => $item->id, 'warehouse_id' => $warehouse->id,
+            'on_hand_qty' => '5', 'reserved_qty' => '0', 'average_cost' => '2', 'total_value' => '10']);
+        DB::connection('tenant')->table('items')->where('id', $item->id)->update(['is_active' => false]);
+        $count = app(\App\Services\Documents\StockCountService::class)->createDraft(['warehouse_id' => $warehouse->id], [['item_id' => $item->id, 'system_qty' => '5', 'counted_qty' => '4']]);
+        DB::connection('mysql')->table('user_organizations')->where('user_id', self::ACTOR)->update(['role' => 'viewer']);
+        $this->app->forgetInstance(InventoryPermissionService::class);
+        $this->send(['action' => 'counts.post', 'idempotency_key' => 'q12-count-viewer-'.bin2hex(random_bytes(6)), 'parameters' => ['stock_count' => $count->id], 'revision' => str_repeat('0', 64)])
+            ->assertForbidden();
+        $this->assertSame('draft', $count->fresh()->status);
+        $this->assertSame('5.0000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
+    }
 }

@@ -217,4 +217,77 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         $this->assertSame('10.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame(0, InventoryAuditLog::query()->where('action', 'inactive_item.corrective_movement')->count());
     }
+
+    private function asViewer(): void
+    {
+        $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed' => true, 'owner' => false, 'roles' => ['stock_viewer']]);
+        $this->app->forgetInstance(InventoryPermissionService::class);
+    }
+
+    private function withoutActor(): void
+    {
+        Auth::forgetUser();
+        request()->setUserResolver(fn () => null);
+    }
+
+    private function denied(callable $call): void
+    {
+        try {
+            $call();
+            $this->fail('A correction of an inactive item ran without an authorized actor.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+    }
+
+    /** Direct service callers (jobs, handoffs, future code) cannot skip the permission the HTTP route enforces. */
+    public function test_authorization_direct_supplier_return_service_post_needs_a_permitted_actor(): void
+    {
+        $item = F::averageItem(['base_unit_id' => $this->unit->id]);
+        $receipt = $this->receipt($item, '10');
+        $this->inactive($item);
+        $service = app(SupplierReturnService::class);
+        $draft = $service->createDraft(['goods_receipt_id' => $receipt->id, 'return_date' => now()->toDateString(), 'reason' => 'Direct service caller'],
+            [['goods_receipt_line_id' => $receipt->lines->sole()->id, 'entered_qty' => '2']]);
+        $this->asViewer();
+        $this->denied(fn () => $service->post($draft));
+        $this->withoutActor();
+        $this->denied(fn () => $service->post($draft));
+        $this->assertSame('draft', $draft->fresh()->status);
+        $this->assertSame('10.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+    }
+
+    public function test_authorization_direct_sales_return_service_post_needs_a_permitted_actor(): void
+    {
+        [$item, $shipment] = $this->shipped();
+        $this->inactive($item);
+        $returns = app(SalesReturnService::class);
+        $draft = $returns->createDraft(['return_number' => 'Q12-RMA-'.uniqid(), 'shipment_id' => $shipment->id, 'warehouse_id' => $this->warehouse->id, 'return_date' => now()->toDateString(), 'reason' => 'Direct service caller'],
+            [['source_line_id' => $shipment->lines->sole()->id, 'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable']]);
+        $this->asViewer();
+        $this->denied(fn () => $returns->post($draft));
+        $this->withoutActor();
+        $this->denied(fn () => $returns->post($draft));
+        $this->assertNotSame('posted', $draft->fresh()->status);
+        $this->assertSame('8.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+    }
+
+    public function test_authorization_direct_count_and_write_off_posting_need_a_permitted_actor(): void
+    {
+        $item = F::averageItem(['base_unit_id' => $this->unit->id]);
+        $this->receipt($item, '5');
+        $this->inactive($item);
+        $counts = app(\App\Services\Documents\StockCountService::class);
+        $count = $counts->createDraft(['warehouse_id' => $this->warehouse->id], [['item_id' => $item->id, 'system_qty' => '5', 'counted_qty' => '4']]);
+        $adjustments = app(StockAdjustmentService::class);
+        $writeOff = $adjustments->createDraft(['warehouse_id' => $this->warehouse->id, 'reason_code' => 'DAMAGE'], [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1']]);
+        $this->asViewer();
+        $this->denied(fn () => $counts->post($count));
+        $this->denied(fn () => $adjustments->post($writeOff));
+        $this->withoutActor();
+        $this->denied(fn () => $counts->post($count));
+        $this->denied(fn () => $adjustments->post($writeOff));
+        $this->assertSame('5.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame(0, InventoryAuditLog::query()->where('action', 'like', '%inactive_item%')->count());
+    }
 }
