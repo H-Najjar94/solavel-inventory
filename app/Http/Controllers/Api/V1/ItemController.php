@@ -683,6 +683,21 @@ class ItemController extends ApiController
         }
 
         $items = Item::query()->whereIn('id', $data['item_ids'])->get();
+        // NF-1203-04: every item must stay consistent once merged with its stored levels; reject the whole batch otherwise.
+        $invalid = $items->filter(function (Item $item) use ($fields) {
+            try {
+                \App\Support\ReorderLevels::assertConsistent(array_merge($item->only(['reorder_point', 'min_stock', 'max_stock']), $fields));
+            } catch (\Illuminate\Validation\ValidationException) {
+                return true;
+            }
+
+            return false;
+        });
+        if ($invalid->isNotEmpty()) {
+            return $this->error('bulk_update_reorder_levels', __('The reorder point cannot exceed the maximum stock.'), 422, [
+                'items' => $invalid->map(fn (Item $item) => ['id' => $item->id, 'sku' => $item->sku, 'max_stock' => $item->max_stock])->values()->all(),
+            ]);
+        }
         $updated = 0;
         foreach ($items as $item) {
             $before = $item->only(array_keys($fields));

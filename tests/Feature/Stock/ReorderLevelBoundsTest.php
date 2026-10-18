@@ -3,6 +3,7 @@
 namespace Tests\Feature\Stock;
 
 use App\Http\Controllers\Api\V1\FinanceWorkspaceSupportController;
+use App\Http\Controllers\Api\V1\ItemController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Requests\Api\StoreItemRequest;
 use App\Http\Requests\Api\UpdateItemRequest;
@@ -123,5 +124,29 @@ class ReorderLevelBoundsTest extends TestCase
         $this->assertArrayHasKey('max_stock', $this->errorsOf(fn () => $this->updateRequest($item, ['min_stock' => 10, 'max_stock' => 5, 'reorder_point' => 20])->validateResolved()));
         $this->assertSame([], $this->errorsOf(fn () => $this->updateRequest($item, ['reorder_point' => 25])->validateResolved()));
         $this->assertSame([], $this->errorsOf(fn () => $this->updateRequest($item, ['name' => 'Renamed'])->validateResolved()));
+    }
+
+    #[Test]
+    public function bulk_update_rejects_the_whole_batch_when_any_item_would_exceed_its_max(): void
+    {
+        $this->useTenantA();
+        $ok = F::averageItem(['max_stock' => 100, 'reorder_point' => 1]);
+        $bad = F::averageItem(['max_stock' => 10, 'reorder_point' => 1]);
+        $unbounded = F::averageItem(['max_stock' => null, 'reorder_point' => 1]);
+        $ids = [$ok->id, $bad->id, $unbounded->id];
+
+        $response = app(ItemController::class)->bulkUpdate(Request::create('/x', 'POST', ['item_ids' => $ids, 'reorder_point' => 50]));
+        $this->assertSame(422, $response->getStatusCode());
+        $body = $response->getData(true);
+        $this->assertSame('bulk_update_reorder_levels', $body['error']['code']);
+        $this->assertSame([$bad->id], array_column($body['error']['items'], 'id'));
+        foreach ($ids as $id) {
+            $this->assertSame('1.0000', (string) Item::query()->find($id)->reorder_point, 'nothing may be written');
+        }
+
+        $response = app(ItemController::class)->bulkUpdate(Request::create('/x', 'POST', ['item_ids' => $ids, 'reorder_point' => 8]));
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('8.0000', (string) $bad->fresh()->reorder_point);
+        $this->assertSame('8.0000', (string) $unbounded->fresh()->reorder_point);
     }
 }
