@@ -23,7 +23,7 @@ class StoreItemRequest extends FormRequest
 
     public function rules(): array
     {
-        return $this->baseItemRules(partial: false);
+        return $this->baseItemRules(partial: false) + ['image' => ['nullable', 'image', 'max:5120', 'mimetypes:image/jpeg,image/png,image/webp']];
     }
 
     public function withValidator(Validator $validator): void

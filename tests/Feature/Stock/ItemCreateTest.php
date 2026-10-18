@@ -26,7 +26,7 @@ class ItemCreateTest extends TestCase
     use TenantAware;
 
     /** Run the form payload through the real Store request + controller. */
-    private function createViaRequest(array $payload): array
+    private function createViaRequest(array $payload, ?\Illuminate\Http\UploadedFile $image = null): array
     {
         $payload['category_id'] ??= ItemCategory::query()->firstOrCreate(
             ['name' => 'General'], ['level' => 0, 'is_active' => true]
@@ -36,11 +36,58 @@ class ItemCreateTest extends TestCase
                 ['code' => 'EA'], ['name' => 'Each', 'symbol' => 'ea', 'is_active' => true]
             )->id;
         }
-        $req = StoreItemRequest::create('/api/v1/items', 'POST', $payload);
+        $req = StoreItemRequest::create('/api/v1/items', 'POST', $payload, [], $image ? ['image' => $image] : []);
         $req->setContainer(app())->setRedirector(app('redirect'));
         $req->validateResolved(); // prepareForValidation + rules + domain rules
 
         return app(ItemController::class)->store($req)->getData(true);
+    }
+
+    #[Test]
+    public function oversized_image_is_rejected_before_item_creation(): void
+    {
+        $this->useTenantA();$count=Item::count();
+        try {
+            $this->createViaRequest($this->formPayload(), \Illuminate\Http\UploadedFile::fake()->image('large.png')->size(5121));
+            $this->fail('Oversized image must fail validation.');
+        } catch(ValidationException $e) { $this->assertArrayHasKey('image',$e->errors()); }
+        $this->assertSame($count,Item::count());
+    }
+
+    #[Test]
+    public function selected_image_is_saved_privately_with_the_new_item(): void
+    {
+        $this->useTenantA();
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $result=$this->createViaRequest($this->formPayload(), \Illuminate\Http\UploadedFile::fake()->image('photo.png'));
+        $image=\App\Models\Tenant\ItemImage::where('item_id',$result['data']['id'])->firstOrFail();
+        $this->assertSame(1,(int)$image->is_primary);
+        $this->assertSame((int)app(\App\Tenancy\OrganizationContext::class)->id(),(int)$image->organization_id);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($image->path);
+    }
+
+    #[Test]
+    public function invalid_image_does_not_create_an_item(): void
+    {
+        $this->useTenantA();$count=Item::count();
+        try {
+            $this->createViaRequest($this->formPayload(), \Illuminate\Http\UploadedFile::fake()->create('bad.txt',1,'text/plain'));
+            $this->fail('Invalid image must fail validation.');
+        } catch(ValidationException $e) { $this->assertArrayHasKey('image',$e->errors()); }
+        $this->assertSame($count,Item::count());
+    }
+
+    #[Test]
+    public function image_storage_failure_rolls_back_item_creation(): void
+    {
+        $this->useTenantA();$count=Item::count();
+        $disk=\Mockery::mock();$disk->shouldReceive('putFileAs')->once()->andReturn(false);$disk->shouldReceive('delete')->once();
+        \Illuminate\Support\Facades\Storage::shouldReceive('disk')->with('local')->andReturn($disk);
+        try {
+            $this->createViaRequest($this->formPayload(), \Illuminate\Http\UploadedFile::fake()->image('photo.png'));
+            $this->fail('Storage failure must fail creation.');
+        } catch(\RuntimeException $e) { $this->assertSame('Unable to store item image.',$e->getMessage()); }
+        $this->assertSame($count,Item::count());
     }
 
     #[Test]

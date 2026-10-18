@@ -1,5 +1,5 @@
 import {feedback} from '../../shared/feedback/store';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -44,6 +44,23 @@ export default function ItemFormPage() {
     const gate = useCanCreate('inventory.manage_items');
 
     const [form, setForm] = useState(EMPTY);
+    const [image, setImage] = useState(null);
+    const [imagePreview, setImagePreview] = useState('');
+    const [imageError, setImageError] = useState('');
+    const [dragging, setDragging] = useState(false);
+    const imageInput = useRef(null);
+    useEffect(() => {
+        if (!image) { setImagePreview(''); return; }
+        const url = URL.createObjectURL(image); setImagePreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [image]);
+    function chooseImage(file) {
+        if (!file || saving) return;
+        if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+            setImageError(t('items.imageInvalid')); return;
+        }
+        setImage(file); setImageError('');
+    }
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -125,7 +142,7 @@ export default function ItemFormPage() {
             delete payload.opening_warehouse_id; delete payload.opening_qty; delete payload.opening_cost;
             if (isService) { payload.track_lot = false; payload.track_serial = false; payload.track_expiry = false; }
 
-            const res = isEdit ? await api.updateItem(id, payload) : await api.createItem(payload);
+            const res = isEdit ? await api.updateItem(id, payload) : await api.createItem(payload, image);
             const newId = res?.data?.id ?? id;
             if (!isEdit) await maybePostOpeningStock(newId);
 
@@ -300,12 +317,23 @@ export default function ItemFormPage() {
 
                 <aside className="form-side">
                     <div className="card"><div className="card-body">
-                        <div className="img-dropzone">
-                            <div className="img-dropzone-ico">🖼️</div>
+                        <div className={`img-dropzone${dragging ? ' item-image-dragging' : ''}`}
+                            onDragOver={(e) => { if (!isEdit && !saving) { e.preventDefault(); setDragging(true); } }}
+                            onDragLeave={() => setDragging(false)}
+                            onDrop={(e) => { if (!isEdit) { e.preventDefault(); setDragging(false); chooseImage(e.dataTransfer.files?.[0]); } }}>
+                            {imagePreview ? <img src={imagePreview} alt={t('items.imagePreview')} style={{maxWidth:'100%',maxHeight:220,objectFit:'contain',borderRadius:12}} /> : <div className="img-dropzone-ico" aria-hidden="true">🖼️</div>}
                             <div className="img-dropzone-title">{t('items.image')}</div>
-                            <div className="img-dropzone-hint">
-                                {isEdit ? t('items.manageMedia') : t('items.saveThenMedia')}
-                            </div>
+                            <div className="img-dropzone-hint">{isEdit ? t('items.manageMedia') : t('items.imageHint')}</div>
+                            {!isEdit && <>
+                                <input ref={imageInput} type="file" accept="image/jpeg,image/png,image/webp" aria-label={t('items.chooseImage')} hidden disabled={saving}
+                                    onChange={(e) => { chooseImage(e.target.files?.[0]); e.target.value = ''; }} />
+                                <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap',marginTop:12}}>
+                                    <button type="button" className="btn btn--sm" disabled={saving} onClick={() => imageInput.current?.click()}>{t(image ? 'items.replaceImage' : 'items.chooseImage')}</button>
+                                    {image && <button type="button" className="btn btn--sm" disabled={saving} onClick={() => { setImage(null); setImageError(''); }}>{t('items.removeImage')}</button>}
+                                </div>
+                                {image && <div className="img-dropzone-hint" style={{overflowWrap:'anywhere'}}>{image.name}</div>}
+                                {(imageError || errors.image) && <div role="alert" style={{color:'var(--danger, #dc3545)',marginTop:8}}>{imageError || errors.image}</div>}
+                            </>}
                             {isEdit && <button type="button" className="btn btn--sm" onClick={() => nav(`/items/${id}`)}>{t('items.openMedia')}</button>}
                         </div>
                     </div></div>

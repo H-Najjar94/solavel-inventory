@@ -106,7 +106,13 @@ export const api = {
 
     items: (params) => request('/items', { params }),
     item: (id) => request(`/items/${id}`),
-    createItem: (body) => request('/items', { method: 'POST', body }),
+    createItem: (body, image) => {
+        if (!image) return request('/items', { method: 'POST', body });
+        const fd = new FormData();
+        Object.entries(body).forEach(([key,value]) => { if(value !== undefined) fd.append(key, value === null ? '' : typeof value === 'boolean' ? (value ? '1' : '0') : String(value)); });
+        fd.append('image', image);
+        return requestForm('/items', fd);
+    },
     updateItem: (id, body) => request(`/items/${id}`, { method: 'PUT', body }),
     bulkUpdateItems: (body) => request('/items/bulk-update', { method: 'POST', body }),
     itemMovements: (id, params) => request(`/items/${id}/movements`, { params }),

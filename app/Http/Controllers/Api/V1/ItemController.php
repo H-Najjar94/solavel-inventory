@@ -35,7 +35,7 @@ class ItemController extends ApiController
     {
         if (array_key_exists('internal_consumption_account_id',$data)) app(\App\Services\Consumption\ConsumptionAccounts::class)->validateDefault(app(\App\Tenancy\OrganizationContext::class)->idOrFail(),isset($data['internal_consumption_account_id'])?(int)$data['internal_consumption_account_id']:null);
 
-        unset($data['track_lot'], $data['track_serial'], $data['track_expiry'], $data['barcode']);
+        unset($data['track_lot'], $data['track_serial'], $data['track_expiry'], $data['barcode'], $data['image']);
 
         return $data;
     }
@@ -590,20 +590,26 @@ class ItemController extends ApiController
         $this->enforceLimit('stock.max_items', Item::query()->count());
 
         $data = $request->validated();
-        $item = Item::create($this->itemAttributes($data));
-
-        // Optional primary barcode → item_barcodes row.
-        if (! empty($data['barcode'])) {
-            ItemBarcode::create([
-                'organization_id' => $item->organization_id,
-                'item_id' => $item->id,
-                'barcode' => $data['barcode'],
-                'type' => 'primary',
-            ]);
+        $path = null;
+        try {
+            $item = \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($request, $data, &$path) {
+                $item = Item::create($this->itemAttributes($data));
+                if (! empty($data['barcode'])) {
+                    ItemBarcode::create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'barcode' => $data['barcode'], 'type' => 'primary']);
+                }
+                if ($file = $request->file('image')) {
+                    $path = "inventory/item-images/{$item->organization_id}/{$item->id}/".\Illuminate\Support\Str::uuid().'.'.$file->extension();
+                    $stored = \Illuminate\Support\Facades\Storage::disk('local')->putFileAs(dirname($path), $file, basename($path));
+                    if ($stored === false) throw new \RuntimeException('Unable to store item image.');
+                    \App\Models\Tenant\ItemImage::create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'path' => $path, 'is_primary' => true, 'sort' => 1]);
+                }
+                $this->audit('item.created', $item);
+                return $item;
+            });
+        } catch (\Throwable $error) {
+            if ($path !== null) \Illuminate\Support\Facades\Storage::disk('local')->delete($path);
+            throw $error;
         }
-
-        $this->audit('item.created', $item);
-
         return $this->success($item->fresh(), 201);
     }
 
