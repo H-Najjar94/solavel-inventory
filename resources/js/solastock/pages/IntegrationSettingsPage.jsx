@@ -231,7 +231,7 @@ export default function IntegrationSettingsPage() {
                     <CompactIntegrationStatus status={s} tr={tr} organizationName={tenant.organization_name}
                         onContinue={() => { setWizardResumeStep(2); setTab('wizard'); }} />
                     <div hidden aria-hidden="true">
-                    {!s.delivery_enabled && <div className="panel" role="status" style={{ borderInlineStart: '4px solid var(--warning, #b7791f)' }}>
+                    {!s.delivery_enabled && <div className="panel" role="status">
                         <h2>{tr('integration.phase.activationPaused')}</h2>
                         <p>{tr('integration.phase.setupWhilePaused')}</p>
                     </div>}
