@@ -52,6 +52,8 @@ use Illuminate\Validation\ValidationException;
  *              stock; cumulative returned quantity never above the shipped line quantity;
  *          (c) stock count lines and the count's own variance adjustment (StockCountService::post via
  *              duringCountPosting); decreases never below zero.
+ *       Every allowed correction also requires an identified actor with inventory.manage_returns (returns) or
+ *       inventory.manage_adjustments (write-off, count), checked at the stock effect (assertAuthorizedActor).
  *       Unlinked returns, receipts, transfers, shipments, PO lines, ordinary increasing adjustments stay refused.
  */
 final class InactiveItemPolicy
@@ -124,6 +126,7 @@ final class InactiveItemPolicy
         if ($kind === null) {
             throw self::rejected($m->itemId);
         }
+        self::assertAuthorizedActor($kind);
         if ($m->direction === 'out' && (! Decimal::gt($onHand, '0') || Decimal::lt(Decimal::sub($onHand, $qty), '0'))) {
             throw self::writeOffExceeds($m->itemId); // reductions only out of existing stock, never below zero
         }
@@ -167,6 +170,19 @@ final class InactiveItemPolicy
     }
 
     private static int $countPosting = 0;
+
+    /**
+     * Every corrective movement of an inactive item needs an identified actor holding the workflow's normal
+     * permission, checked here (at the stock effect) and not only by the HTTP route: UI/API routes, the signed
+     * Finance workspace (its dispatcher binds the signed actor as request user) and any direct service, job or
+     * handoff caller all pass through this point. No actor => refused.
+     */
+    private static function assertAuthorizedActor(string $kind): void
+    {
+        $permission = in_array($kind, ['supplier_return', 'sales_return'], true) ? 'inventory.manage_returns' : 'inventory.manage_adjustments';
+        $user = request()?->user() ?? auth()->user();
+        abort_unless($user !== null && app(\App\Services\Access\InventoryPermissionService::class)->can($user, $permission), 403, 'inactive_item_correction_permission_required');
+    }
 
     private static function postedReceiptLine(mixed $grnLineId, int $itemId): ?int
     {

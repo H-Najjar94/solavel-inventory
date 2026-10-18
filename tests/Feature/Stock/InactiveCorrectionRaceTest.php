@@ -153,6 +153,13 @@ final class InactiveCorrectionRaceTest extends TestCase
         $this->useTenantA();
         $fixture = new CommittedTenantFixture($this->tenantTestManager);
         $this->mock(InventoryPermissionService::class, fn ($m) => $m->shouldReceive('can')->andReturn(true));
+        $user = new \App\Models\User;
+        $user->id = 323;
+        \Illuminate\Support\Facades\Auth::setUser($user);
+        request()->setUserResolver(fn () => $user);
+        $scope = $this->createStub(\App\Services\Access\WarehouseAccessService::class);
+        $scope->method('scope')->willReturnCallback(fn ($q) => $q);
+        $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $scope);
         InventorySetting::updateOrCreate(['organization_id' => TenantTestManager::ORG_A], ['allow_negative_stock' => false]);
         $ids = $this->shippedOut();
         $fixture->commit();
