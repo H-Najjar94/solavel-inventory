@@ -2420,3 +2420,38 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .item-details-column .fg2 > * { min-width:0; }
 @media(max-width:560px) { .item-details-column .fg2 { grid-template-columns:1fr; } }
 .item-details-column .empty-state { padding:24px 12px; }
+/* Warehouse transfer editor: route first, then readable line cards. */
+.transfer-form-page { max-width:1400px; margin-inline:auto; }
+.transfer-heading { align-items:center; gap:16px; }
+.transfer-heading p,.transfer-lines-card .card-head p { color:var(--text-2); margin:6px 0 0; font-size:13px; line-height:1.7; }
+.transfer-header-card,.transfer-lines-card { margin-bottom:20px; }
+.transfer-form-page .card-head h2 { font-size:16px; margin:0; }
+.transfer-form-page .card-body { padding:22px; }
+.transfer-form-page .input { width:100%; min-width:0; box-sizing:border-box; min-height:44px; border-radius:10px; }
+.transfer-form-page select.input { text-overflow:ellipsis; }
+.transfer-warehouses { display:grid; grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr); align-items:center; gap:18px; padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--surface-2); }
+.transfer-route-arrow { display:grid; place-items:center; width:40px; height:40px; background:var(--amber-tint); color:var(--amber-strong); border-radius:50%; font-size:24px; margin-top:20px; }
+[dir=rtl] .transfer-route-arrow { transform:scaleX(-1); }
+.transfer-header-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:22px; }
+.transfer-notes { grid-column:1/-1; }
+.transfer-lines-card .card-head { justify-content:space-between; align-items:center; }
+.transfer-lines-list { display:flex; flex-direction:column; gap:16px; }
+.transfer-line { border:1px solid var(--line); border-radius:14px; background:var(--surface-2); overflow:hidden; }
+.transfer-line-heading { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--line); }
+.transfer-line-number { display:grid; place-items:center; width:30px; height:30px; border-radius:9px; background:var(--amber-tint); color:var(--amber-strong); font-weight:700; }
+.transfer-remove { margin-inline-start:auto; color:var(--red); min-height:38px; padding:7px 12px; }
+.transfer-line-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; padding:18px; align-items:start; }
+.transfer-line-field { min-width:0; }
+.transfer-line-field--item { grid-column:span 2; }
+.transfer-line-field--avail { padding:0 12px; }
+.transfer-line-field--avail .field > span:last-child { min-height:44px; display:flex; align-items:center; font-size:19px; font-weight:700; }
+.transfer-line-field--qty { grid-column:4; grid-row:1; }
+.transfer-line-field--trace { grid-column:span 2; }
+.transfer-line-field .trace-cell { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.transfer-line-field .trace-cell > * { max-width:100%; }
+.transfer-add { margin-top:18px; min-height:44px; padding:10px 20px; border-style:dashed; }
+.transfer-footer { padding:18px 22px; border:1px solid var(--line); border-radius:16px; background:var(--surface); display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.transfer-footer p { margin:0; margin-inline-end:auto; max-width:450px; font-size:13px; line-height:1.7; color:var(--text-2); }
+.transfer-footer .btn { min-height:44px; padding:10px 20px; }
+@media(max-width:800px) { .transfer-line-fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .transfer-line-field--qty { grid-column:auto; grid-row:auto; } .transfer-line-field--item,.transfer-line-field--trace { grid-column:1/-1; } .transfer-footer p { flex-basis:100%;max-width:none;margin-bottom:8px; } }
+@media(max-width:560px) { .transfer-form-page .card-body { padding:14px; } .transfer-warehouses { grid-template-columns:1fr; padding:14px;gap:12px; } .transfer-route-arrow { display:none; } .transfer-header-fields { grid-template-columns:1fr;gap:14px; } .transfer-line-fields { padding:14px;gap:14px; } .transfer-line-field--fbin,.transfer-line-field--tbin { grid-column:1/-1; } .transfer-footer { padding:14px; } .transfer-footer .btn { flex:1 1 auto; } }

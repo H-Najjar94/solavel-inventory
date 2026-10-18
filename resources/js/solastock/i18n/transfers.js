@@ -1,4 +1,6 @@
 export const en = {
+"transfers.form.designIntro":"Move stock between warehouses. Choose the route, then add the items to transfer.","transfers.form.designRoute":"Transfer details","transfers.form.designLinesHint":"Set the item, quantity and storage locations for each line.","transfers.form.designRemove":"Remove line","transfers.form.designSaveHint":"Save a draft to review later, or post to move stock.",
+
     'transfers.breadcrumb': 'Transfers',
     'transfers.title': 'Stock Transfers',
     'transfers.sampleData': 'Sample data',
@@ -97,6 +99,8 @@ export const en = {
 };
 
 export const ar = {
+"transfers.form.designIntro":"انقل المخزون بين المستودعات. حدد المصدر والوجهة، ثم أضف الأصناف والكميات.","transfers.form.designRoute":"بيانات التحويل","transfers.form.designLinesHint":"حدد الصنف والكمية ومواقع التخزين لكل سطر.","transfers.form.designRemove":"حذف السطر","transfers.form.designSaveHint":"احفظ مسودة للمراجعة، أو رحّل التحويل لتنفيذ حركة المخزون.",
+
     'transfers.breadcrumb': 'التحويلات',
     'transfers.title': 'تحويلات المخزون',
     'transfers.sampleData': 'بيانات تجريبية',

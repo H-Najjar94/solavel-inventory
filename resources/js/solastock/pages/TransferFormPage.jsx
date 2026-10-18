@@ -9,7 +9,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
-import { DocumentLinesTable } from '../components/document.jsx';
+import { DocumentLineErrors } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput } from '../components/pickers.jsx';
 import { LotSelector, SerialSelector, TraceabilityRequiredBadge, FefoHint } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
@@ -91,7 +91,7 @@ export default function TransferFormPage() {
 
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
     if (isEdit && existing.isError) return (
-        <section className="page">
+        <section className="page transfer-form-page">
             <Breadcrumbs items={[{ label: t('transfers.breadcrumb', 'Transfers'), to: '/transfers' }, { label: t('transfers.form.editBreadcrumb', 'Edit draft') }]} />
             <EmptyState title={t('transfers.form.loadErrorTitle', 'Transfer could not be loaded')}
                 hint={t('transfers.form.loadErrorHint', 'Try loading the transfer again.')}
@@ -124,27 +124,37 @@ export default function TransferFormPage() {
     ];
 
     return (
-        <section className="page">
+        <section className="page transfer-form-page">
             <Breadcrumbs items={[{ label: t('transfers.breadcrumb', 'Transfers'), to: '/transfers' }, { label: isEdit ? t('transfers.form.editBreadcrumb', 'Edit draft') : t('transfers.form.newBreadcrumb', 'New') }]} />
-            <header className="page-head"><h1>{isEdit ? t('transfers.form.editTitle', 'Edit transfer') : t('transfers.form.newTitle', 'New transfer')}</h1></header>
+            <header className="page-head transfer-heading"><div><h1>{isEdit ? t('transfers.form.editTitle', 'Edit transfer') : t('transfers.form.newTitle', 'New transfer')}</h1><p>{t('transfers.form.designIntro')}</p></div><span className="badge badge--muted">{documentText('document.draft')}</span></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
-            <div className="form-grid">
+            <section className="card transfer-header-card"><div className="card-head"><h2>{t('transfers.form.designRoute')}</h2></div><div className="card-body"><div className="transfer-warehouses">
+                <Field label={t('transfers.form.sourceWarehouse')} required error={errors.from_warehouse_id}><WarehousePicker value={header.from_warehouse_id} onChange={(v) => setHeader({ ...header, from_warehouse_id: v })} placeholder={t('transfers.form.sourcePlaceholder')} /></Field>
+                <span className="transfer-route-arrow" aria-hidden="true">→</span>
+                <Field label={t('transfers.form.destinationWarehouse')} required error={errors.to_warehouse_id}><WarehousePicker value={header.to_warehouse_id} onChange={(v) => setHeader({ ...header, to_warehouse_id: v })} placeholder={t('transfers.form.destinationPlaceholder')} /></Field>
+            </div><div className="transfer-header-fields">
                 <Field label={t('transfers.form.number', 'Transfer number')} error={errors.transfer_number}><input className="input" readOnly aria-readonly="true" placeholder={t('transfers.form.numberAuto', 'Assigned automatically when saved')} value={header.transfer_number} /></Field>
                 <Field label={t('transfers.form.date', 'Date')} error={errors.transfer_date}><input className="input" type="date" value={header.transfer_date} onChange={(e) => setHeader({ ...header, transfer_date: e.target.value })} /></Field>
-                <Field label={t('transfers.form.sourceWarehouse', 'Source warehouse')} required error={errors.from_warehouse_id}><WarehousePicker value={header.from_warehouse_id} onChange={(v) => setHeader({ ...header, from_warehouse_id: v })} placeholder={t('transfers.form.sourcePlaceholder', 'Select source warehouse…')} /></Field>
-                <Field label={t('transfers.form.destinationWarehouse', 'Destination warehouse')} required error={errors.to_warehouse_id}><WarehousePicker value={header.to_warehouse_id} onChange={(v) => setHeader({ ...header, to_warehouse_id: v })} placeholder={t('transfers.form.destinationPlaceholder', 'Select destination warehouse…')} /></Field>
-                <Field label={t('transfers.form.notes', 'Notes')}><input className="input" value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field>
-            </div>
+                <div className="transfer-notes"><Field label={t('transfers.form.notes', 'Notes')}><textarea className="input" rows={2} value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></Field></div>
+            </div></div></section>
             {sameWh && <div className="banner banner--warn">{t('transfers.form.warehousesDiffer', 'Source and destination warehouses must be different.')}</div>}
 
-            <div className="panel">
-                <h2>{t('transfers.form.lines', 'Lines')}</h2>
-                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} addLabel={t('transfers.form.addLine', 'Add line')} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
-            </div>
+            <section className="card transfer-lines-card">
+                <div className="card-head"><div><h2>{t('transfers.form.lines')}</h2><p>{t('transfers.form.designLinesHint')}</p></div><span className="badge badge--muted">{lines.length}</span></div>
+                <div className="card-body">
+                    <DocumentLineErrors errors={errors} />
+                    <div className="transfer-lines-list">{lines.map((line,i) => <article className="transfer-line" key={i}>
+                        <div className="transfer-line-heading"><span className="transfer-line-number">{i+1}</span><strong>{t('transfers.form.item')}</strong><button type="button" className="btn transfer-remove" disabled={saving} aria-label={`${t('transfers.form.designRemove')} ${i+1}`} onClick={() => setLines(lines.filter((_,idx)=>idx!==i))}>{t('transfers.form.designRemove')}</button></div>
+                        <div className="transfer-line-fields">{columns.map(column => <div key={column.key} className={`transfer-line-field transfer-line-field--${column.key}`}><Field label={column.label}>{column.render(line,i)}</Field></div>)}</div>
+                    </article>)}</div>
+                    <button type="button" className="btn transfer-add" disabled={saving} onClick={() => setLines([...lines,emptyLine()])}>+ {t('transfers.form.addLine')}</button>
+                </div>
+            </section>
 
             {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/transfers/${statusCheck.id}`:"/transfers")}>{feedbackText("reload")}</button></div>}
-            <div className="doc-actions">
+            <div className="doc-actions transfer-footer">
+                <p>{t('transfers.form.designSaveHint')}</p>
                 <button className="btn" onClick={() => nav('/transfers')}>{t('transfers.form.cancel', 'Cancel')}</button>
                 <button className="btn" disabled={!gate.allowed || saving || !!statusCheck} onClick={() => save(false)}>{saving ? t('transfers.form.saving', 'Saving…') : t('transfers.form.saveDraft', 'Save draft')}</button>
                 <ConfirmedActionButton className="btn btn--primary" disabled={!gate.allowed || saving || !!statusCheck || sameWh} title={documentText("document.confirmPostTitle",undefined,{name:documentText("document.kind.transfer","transfer")})} message={documentText("document.confirmPostMessage")} action={documentText("document.post")} onConfirm={()=>save(true)}>{t('transfers.form.saveAndPost', 'Save and post')}</ConfirmedActionButton>
