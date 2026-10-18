@@ -2619,3 +2619,16 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .plan-access-card-head { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; justify-content:space-between; }
 .plan-access-card>.btn { align-self:flex-start; margin-top:auto; }
 @media(max-width:600px){ .plan-summary>.btn,.plan-access-actions,.plan-access-actions>.btn { width:100%; } .plan-access-notice>div:first-child,.plan-summary>div:first-child { flex-basis:100%; } }
+
+.side-link--plan-locked { width:100%; min-height:44px; text-align:start; color:var(--sidebar-text,#aeb6c6); background:transparent; border:0; }
+.side-plan-lock { margin-inline-start:auto; flex-shrink:0; font-size:12px; }
+.locked-feature-dialog { width:min(560px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); overflow:auto; box-sizing:border-box; border:1px solid var(--line-soft); border-radius:20px; padding:24px; color:var(--ink); background:var(--surface-1); box-shadow:0 20px 80px #0005; }
+.locked-feature-dialog::backdrop { background:#0008; }
+.locked-feature-dialog-head { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.locked-feature-dialog-head h2 { margin:0; font-size:20px; }
+.locked-feature-dialog-head .btn { min-width:44px; min-height:44px; }
+.locked-feature-dialog p { line-height:1.7; }
+.locked-feature-dialog .plan-access-actions { margin-top:20px; }
+
+.side-rail-group { position:relative; }
+.side-rail-lock { position:absolute; inset-inline-end:1px; bottom:2px; font-size:10px; line-height:1; }

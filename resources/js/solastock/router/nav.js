@@ -67,6 +67,14 @@ export function visibleNav(permissions = [], meta = {}) {
     // Plan/opt-out availability (landed costs): hidden only when /meta says it is unavailable,
     // except that an opted-out organization with existing documents keeps the entry (read-only history).
     const reachable = (a) => a?.available !== false || a?.read_only_history === true;
-    return NAV.filter((n) => routeAccess(n.path,meta).allowed && (!n.perm || set.has(n.perm)) && (!n.feature || features[n.feature] === true)
-        && (!n.availability || reachable(meta?.[n.availability])));
+    return NAV.flatMap((n) => {
+        if(n.feature && features[n.feature]!==true)return [];
+        const read=routeAccess(n.path,meta),create=routeAccess(n.path,meta,'POST');
+        // A plan denial is discoverable only after the API has verified the role.
+        const locked=read.reason==='feature_not_in_plan'&&!read.allowed
+            || read.allowed&&!create.allowed&&create.reason==='feature_not_in_plan';
+        if(!locked&&(!read.allowed||(n.perm&&!set.has(n.perm))))return [];
+        if(n.availability&&!reachable(meta?.[n.availability])&&!locked)return [];
+        return [{...n,planLocked:locked,canViewHistory:read.allowed}];
+    });
 }

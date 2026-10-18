@@ -7,11 +7,11 @@ export function PlanName(){
  const meta=useMeta();const {t}=useI18n();const tier=meta.plan?.tier;
  return <bdi>{tier?t(`planAccess.tier.${tier}`,tier):t('planAccess.unknownPlan')}</bdi>;
 }
-export function PlanActions({kind='plan',overview=true}){
+export function PlanActions({kind='plan',overview=true,onNavigate}){
  const meta=useMeta();const {t}=useI18n();
  return <div className="plan-access-actions">
-  {overview&&<Link className="btn" to="/plan-access">{t('planAccess.title')}</Link>}
-  {['plan','subscription'].includes(kind)&&meta.plan?.manage_url&&<a className="btn btn--primary" href={meta.plan.manage_url} target="_blank" rel="noopener noreferrer">{t(kind==='plan'?'planAccess.viewPlans':'planAccess.manageSubscription')}<span className="ss-visually-hidden"> {t('planAccess.newTab')}</span></a>}
+  {overview&&<Link className="btn" to="/plan-access" onClick={onNavigate}>{t('planAccess.title')}</Link>}
+  {['plan','subscription'].includes(kind)&&meta.plan?.manage_url&&<a className="btn btn--primary" href={meta.plan.manage_url} onClick={onNavigate} target="_blank" rel="noopener noreferrer">{t(kind==='plan'?'planAccess.viewPlans':'planAccess.manageSubscription')}<span className="ss-visually-hidden"> {t('planAccess.newTab')}</span></a>}
  </div>;
 }
 export function AccessNotice({reason,viewOnly=false}){

@@ -1,4 +1,5 @@
 import PageAccessGuard from '../components/PageAccessGuard.jsx';
+import LockedFeatureDialog from '../components/LockedFeatureDialog.jsx';
 import {routeAccess} from '../services/uiAccess.mjs';
 import { sourceText } from '../i18n/locales.js';
 import { useCloseDrawerOnResize } from '../hooks/useCloseDrawerOnResize.js';
@@ -399,6 +400,7 @@ export default function AppShell() {
     const activeGroup = Object.entries(groupedNav).find(([, items]) => items.some((item) => item.key === activeKey))?.[0] ?? null;
     const [theme, setTheme] = useState(getTheme());
     const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { return false; } });
+    const [lockedFeature,setLockedFeature]=useState(null);
     const [flyout, setFlyout] = useState(null); // collapsed rail: { group, top }
     const [openGroup, setOpenGroup] = useState(activeGroup);
     const [sideOpen, setSideOpen] = useState(false);
@@ -599,6 +601,7 @@ export default function AppShell() {
                                 onClick={(event) => openFlyout(group, event.currentTarget)}
                             >
                                 <i className={`side-link-icon ${GROUP_ICONS[group] || items[0]?.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
+                                {items.every(item=>item.planLocked)&&<span className="side-rail-lock" aria-hidden="true">🔒</span>}
                             </button>
                         ))}
                         {!railCollapsed && Object.entries(groupedNav).map(([group, items]) => {
@@ -619,7 +622,9 @@ export default function AppShell() {
                                 )}
                                 <div className="side-group__items">
                                   {items.map((n) => (
-                                    <NavLink
+                                    n.planLocked ? <button key={n.key} type="button" className="side-link side-link--plan-locked" aria-haspopup="dialog" onClick={()=>setLockedFeature(n)} title={t('planAccess.lockedHint')}>
+                                        <i className={`side-link-icon ${n.icon}`} aria-hidden="true"/><span className="side-link-label">{t(NAV_LABELS[n.key],n.label)}</span><span className="side-plan-lock" aria-hidden="true">🔒</span>
+                                    </button> : <NavLink
                                         key={n.key}
                                         to={n.path}
                                         end={n.path === '/dashboard'}
@@ -658,7 +663,9 @@ export default function AppShell() {
                     <div className="side-flyout" role="menu" aria-label={t(GROUP_LABELS[flyout.group], flyout.group)} style={{ top: flyout.top }}>
                         <div className="side-flyout__title">{t(GROUP_LABELS[flyout.group], flyout.group)}</div>
                         {groupedNav[flyout.group].map((n) => (
-                            <NavLink
+                            n.planLocked ? <button key={n.key} type="button" role="menuitem" className="side-link side-link--plan-locked" aria-haspopup="dialog" onClick={()=>setLockedFeature(n)} title={t('planAccess.lockedHint')}>
+                                <i className={`side-link-icon ${n.icon}`} aria-hidden="true"/><span className="side-link-label">{t(NAV_LABELS[n.key],n.label)}</span><span className="side-plan-lock" aria-hidden="true">🔒</span>
+                            </button> : <NavLink
                                 key={n.key}
                                 to={n.path}
                                 role="menuitem"
@@ -673,6 +680,7 @@ export default function AppShell() {
                 )}
             </aside>
 
+            {lockedFeature&&<LockedFeatureDialog item={lockedFeature} label={t(NAV_LABELS[lockedFeature.key],lockedFeature.label)} onClose={()=>setLockedFeature(null)}/>}
             {isDrawer && sideOpen && <div className="ss-drawer-overlay" onMouseDown={() => closeDrawer()} aria-hidden="true" />}
 
             <div className="main">

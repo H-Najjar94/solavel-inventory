@@ -1,4 +1,5 @@
 export const en={
+ 'planAccess.lockedHint':'Not included in your plan — view details', 'planAccess.close':'Close',
  'planAccess.title':'Plan & access','planAccess.currentPlan':'Current SolaStock plan','planAccess.unknownPlan':'Not confirmed',
  'planAccess.summary':'See what you can use, which actions are restricted, and how to manage your plan.',
  'planAccess.explanation':'Availability reflects both your organization’s subscription and your assigned permissions. Viewing existing records and creating new transactions can have different access rules.',
@@ -17,6 +18,7 @@ export const en={
  'planAccess.area.items':'Items','planAccess.area.warehouses':'Warehouses','planAccess.area.transfers':'Stock transfers','planAccess.area.suppliers':'Suppliers','planAccess.area.purchaseOrders':'Purchase orders','planAccess.area.goodsReceipts':'Goods receipts','planAccess.area.customers':'Customers','planAccess.area.salesOrders':'Sales orders','planAccess.area.counts':'Stock counts','planAccess.area.openingStock':'Opening stock','planAccess.area.recalls':'Stock recalls','planAccess.area.landedCosts':'Landed costs',
 };
 export const ar={
+ 'planAccess.lockedHint':'غير مشمول في خطتك — عرض التفاصيل', 'planAccess.close':'إغلاق',
  'planAccess.title':'الخطة والصلاحيات','planAccess.currentPlan':'خطة SolaStock الحالية','planAccess.unknownPlan':'لم يتم تأكيدها',
  'planAccess.summary':'تعرّف على الميزات المتاحة لك، والإجراءات المقيّدة، وطريقة إدارة خطتك.',
  'planAccess.explanation':'يتحدد الوصول بحسب اشتراك المؤسسة والصلاحيات الممنوحة لك. قد يُسمح بعرض السجلات السابقة مع تقييد إنشاء معاملات جديدة.',
