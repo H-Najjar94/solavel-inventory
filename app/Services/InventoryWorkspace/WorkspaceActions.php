@@ -80,6 +80,7 @@ final class WorkspaceActions
         'adjustments.store',
         'adjustments.update',
         'adjustments.post',
+        'adjustments.approve-inactive-write-off',
         'adjustments.reverse',
         'lots.index',
         'lots.show',

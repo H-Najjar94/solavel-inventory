@@ -12,6 +12,7 @@ use App\Models\Tenant\InventoryAuditLog;
 use App\Services\Access\WarehouseAccessService;
 use App\Services\Documents\InventoryReversalService;
 use App\Services\Documents\StockAdjustmentService;
+use App\Services\Stock\InactiveItemWriteOffApproval;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -118,7 +119,7 @@ class StockAdjustmentController extends ApiController
             return $this->error('adjustment_create_failed', $e->getMessage(), 422);
         }
 
-        return $this->success($adj, 201);
+        return $this->success($this->withWriteOffPreview($adj), 201);
     }
 
     public function update(StoreStockAdjustmentRequest $request, StockAdjustment $adjustment): JsonResponse
@@ -132,7 +133,7 @@ class StockAdjustmentController extends ApiController
             return $this->error('adjustment_update_failed', $e->getMessage(), 422);
         }
 
-        return $this->success($updated);
+        return $this->success($this->withWriteOffPreview($updated));
     }
 
     public function post(Request $request, StockAdjustment $adjustment): JsonResponse
@@ -145,6 +146,23 @@ class StockAdjustmentController extends ApiController
         }
 
         return $this->success($adjustment->fresh('lines'));
+    }
+
+    /** Q12.6: second-person approval of a draft write-off of an inactive item's remaining stock. */
+    public function approveInactiveWriteOff(Request $request, StockAdjustment $adjustment): JsonResponse
+    {
+        $this->warehouseAccess->assertAllowed((int) $adjustment->warehouse_id);
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+
+        return $this->success(['adjustment_id' => $adjustment->id, 'inactive_write_off' => app(InactiveItemWriteOffApproval::class)->approve($adjustment, $data['note'] ?? null)]);
+    }
+
+    /** Adds the inactive write-off warnings / approval state when the draft needs one (key absent otherwise). */
+    private function withWriteOffPreview(StockAdjustment $adj): mixed
+    {
+        $preview = app(InactiveItemWriteOffApproval::class)->preview($adj);
+
+        return $preview['requires_approval'] ? array_merge($adj->toArray(), ['inactive_write_off' => $preview]) : $adj;
     }
 
     public function reverse(Request $request, StockAdjustment $adjustment): JsonResponse

@@ -55,6 +55,8 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
 
     private const CLIENT = 980072;
 
+    private const APPROVER = 980075;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -76,6 +78,10 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
         $central->table('users')->insert(['id' => self::ACTOR, 'client_id' => self::CLIENT,
             'name' => 'Synthetic owner', 'email' => 'workspace-owner@example.invalid', 'password' => 'not-a-login', 'status' => 'active']);
         $central->table('user_organizations')->insert(['user_id' => self::ACTOR, 'organization_id' => TenantTestManager::ORG_A, 'role' => 'client_owner', 'status' => 'active']);
+        // Q12.6: a second owner-level person for the inactive write-off approval.
+        $central->table('users')->insert(['id' => self::APPROVER, 'client_id' => self::CLIENT,
+            'name' => 'Synthetic approver', 'email' => 'workspace-approver@example.invalid', 'password' => 'not-a-login', 'status' => 'active']);
+        $central->table('user_organizations')->insert(['user_id' => self::APPROVER, 'organization_id' => TenantTestManager::ORG_A, 'role' => 'client_owner', 'status' => 'active']);
         foreach (['finance' => 980073, 'inventory' => 980074] as $slug => $id) {
             $central->table('projects')->insert(['id' => $id, 'slug' => $slug, 'is_active' => true]);
             $central->table('organization_projects')->insert(['project_id' => $id, 'organization_id' => TenantTestManager::ORG_A, 'is_active' => true]);
@@ -249,6 +255,61 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
             'lines' => [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '2']]]]);
         $created->assertCreated();
         $this->assertSame('decrease', \App\Models\Tenant\StockAdjustment::query()->findOrFail($created->json('data.id'))->lines()->sole()->direction);
+    }
+
+    /** Q12.6 (G6): signed workspace write-off needs a second owner-level approval; self-approval and viewers are refused. */
+    public function test_signed_workspace_inactive_write_off_needs_a_second_person_approval_before_posting(): void
+    {
+        $warehouse = Warehouse::create(['name' => 'Q12 approval', 'code' => 'Q12-AP', 'type' => 'warehouse']);
+        $item = $this->catalogItem();
+        StockBalance::create(['organization_id' => TenantTestManager::ORG_A, 'item_id' => $item->id, 'warehouse_id' => $warehouse->id,
+            'on_hand_qty' => '5', 'reserved_qty' => '0', 'average_cost' => '2', 'total_value' => '10']);
+        DB::connection('tenant')->table('items')->where('id', $item->id)->update(['is_active' => false]);
+        $key = fn (string $p) => 'q12-g6-'.$p.'-'.bin2hex(random_bytes(6));
+        $created = $this->send(['action' => 'adjustments.store', 'idempotency_key' => $key('store'), 'data' => [
+            'warehouse_id' => $warehouse->id, 'adjustment_date' => '2026-10-18', 'reason_code' => 'DAMAGE',
+            'lines' => [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '2']]]]);
+        $created->assertCreated();
+        $this->assertTrue($created->json('data.inactive_write_off.requires_approval'));
+        $this->assertNotEmpty($created->json('data.inactive_write_off.warnings'));
+        $id = (int) $created->json('data.id');
+        $revision = fn () => $this->send(['action' => 'adjustments.show', 'parameters' => ['adjustment' => $id]])->json('workspace_revision');
+        $call = fn (string $action, string $tag, int $actor = self::ACTOR) => $this->send(['action' => $action, 'idempotency_key' => $key($tag),
+            'actor_id' => $actor, 'parameters' => ['adjustment' => $id], 'revision' => $revision()]);
+
+        $call('adjustments.post', 'post-unapproved')->assertForbidden();
+        $call('adjustments.approve-inactive-write-off', 'self')->assertForbidden(); // creator cannot approve
+        $approved = $call('adjustments.approve-inactive-write-off', 'approve', self::APPROVER);
+        $approved->assertOk();
+        $this->assertSame(self::APPROVER, $approved->json('data.inactive_write_off.approval.approved_by'));
+        $call('adjustments.post', 'post-by-approver', self::APPROVER)->assertForbidden(); // approver cannot post
+        $this->assertSame('5.0000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
+        $call('adjustments.post', 'post')->assertOk();
+        $this->assertSame('3.0000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
+        $audit = InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_item_write_off')->where('entity_id', $id)->sole();
+        $this->assertSame(self::ACTOR, (int) $audit->actor_user_id);
+        $this->assertSame(TenantTestManager::ORG_A, (int) $audit->organization_id);
+        $this->assertSame(self::APPROVER, $audit->after['approved_by']);
+        $this->assertNotEmpty($audit->after['approval_operation_id']);
+        $this->assertSame('stock_adjustment:'.$id.':post', $audit->after['operation_id']);
+        $this->assertSame(['5.0000', '3.0000'], [$audit->before['on_hand_qty'], $audit->after['on_hand_qty']]);
+    }
+
+    public function test_signed_workspace_inactive_write_off_approval_is_refused_for_a_viewer(): void
+    {
+        $warehouse = Warehouse::create(['name' => 'Q12 approval viewer', 'code' => 'Q12-APV', 'type' => 'warehouse']);
+        $item = $this->catalogItem();
+        StockBalance::create(['organization_id' => TenantTestManager::ORG_A, 'item_id' => $item->id, 'warehouse_id' => $warehouse->id,
+            'on_hand_qty' => '5', 'reserved_qty' => '0', 'average_cost' => '2', 'total_value' => '10']);
+        DB::connection('tenant')->table('items')->where('id', $item->id)->update(['is_active' => false]);
+        $adj = app(\App\Services\Documents\StockAdjustmentService::class)->createDraft(['warehouse_id' => $warehouse->id, 'reason_code' => 'DAMAGE'],
+            [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1']]);
+        DB::connection('mysql')->table('user_organizations')->where('user_id', self::APPROVER)->update(['role' => 'viewer']);
+        $this->app->forgetInstance(InventoryPermissionService::class);
+        $revision = $this->send(['action' => 'adjustments.show', 'parameters' => ['adjustment' => $adj->id]])->json('workspace_revision');
+        $this->send(['action' => 'adjustments.approve-inactive-write-off', 'idempotency_key' => 'q12-g6-viewer-'.bin2hex(random_bytes(6)),
+            'actor_id' => self::APPROVER, 'parameters' => ['adjustment' => $adj->id], 'revision' => $revision])->assertForbidden();
+        $this->assertSame(0, InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_write_off_approved')->count());
     }
 
     /** Signed Finance workspace: the dispatcher applies the route permission to the signed actor before the controller. */

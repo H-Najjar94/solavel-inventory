@@ -52,6 +52,8 @@ use Illuminate\Validation\ValidationException;
  *              stock; cumulative returned quantity never above the shipped line quantity;
  *          (c) stock count lines and the count's own variance adjustment (StockCountService::post via
  *              duringCountPosting); decreases never below zero.
+ *       Write-offs (2.) additionally need inventory.adjustments.write_off_inactive, a matching second-person approval
+ *       and no negative balance of the item anywhere (App\Services\Stock\InactiveItemWriteOffApproval, G6 2026-10-19).
  *       Every allowed correction also requires an identified actor with inventory.manage_returns (returns) or
  *       inventory.manage_adjustments (write-off, count), checked at the stock effect (assertAuthorizedActor).
  *       Unlinked returns, receipts, transfers, shipments, PO lines, ordinary increasing adjustments stay refused.
@@ -126,7 +128,13 @@ final class InactiveItemPolicy
         if ($kind === null) {
             throw self::rejected($m->itemId);
         }
-        self::assertAuthorizedActor($kind);
+        $approval = null;
+        if ($kind === 'write_off') {
+            // Q12.6: dedicated permission + second-person approval + no hidden negatives (InactiveItemWriteOffApproval).
+            $approval = app(\App\Services\Stock\InactiveItemWriteOffApproval::class)->assertPostable($m->sourceId, $m->itemId);
+        } else {
+            self::assertAuthorizedActor($kind);
+        }
         if ($m->direction === 'out' && (! Decimal::gt($onHand, '0') || Decimal::lt(Decimal::sub($onHand, $qty), '0'))) {
             throw self::writeOffExceeds($m->itemId); // reductions only out of existing stock, never below zero
         }
@@ -145,14 +153,16 @@ final class InactiveItemPolicy
         }
         InventoryAuditLog::create([
             'organization_id' => $orgId,
-            'actor_user_id' => auth()->id(),
+            'actor_user_id' => (request()?->user() ?? auth()->user())?->id,
             'action' => $kind === 'write_off' ? 'stock_adjustment.inactive_item_write_off' : 'inactive_item.corrective_movement',
             'entity_type' => match ($kind) { 'supplier_return' => 'supplier_return', 'sales_return' => 'sales_return', default => 'stock_adjustment' },
             'entity_id' => $m->sourceId,
             'before' => ['item_id' => $m->itemId, 'item_inactive' => true, 'kind' => $kind, 'warehouse_id' => $m->warehouseId, 'on_hand_qty' => Decimal::qty($onHand)],
             'after' => ['on_hand_qty' => Decimal::qty($m->direction === 'out' ? Decimal::sub($onHand, $qty) : Decimal::add($onHand, $qty)),
                 'direction' => $m->direction, 'quantity' => Decimal::qty($qty), 'source_line_id' => $m->sourceLineId]
-                + ($kind === 'write_off' ? ['written_off_qty' => Decimal::qty($qty)] : []),
+                + ($kind === 'write_off' ? ['written_off_qty' => Decimal::qty($qty), 'operation_id' => 'stock_adjustment:'.$m->sourceId.':post',
+                    'approval_operation_id' => $approval['operation_id'] ?? null, 'approval_audit_id' => $approval['audit_id'] ?? null,
+                    'approved_by' => $approval['approved_by'] ?? null] : []),
             'document_ref' => $kind.':'.$m->sourceId,
             'created_at' => now(),
         ]);

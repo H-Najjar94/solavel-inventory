@@ -262,6 +262,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.adjustments.update');
     Route::post('/adjustments/{adjustment}/post', [StockAdjustmentController::class, 'post'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.adjustments.post');
+    Route::post('/adjustments/{adjustment}/approve-inactive-write-off', [StockAdjustmentController::class, 'approveInactiveWriteOff'])
+        ->middleware('perm:inventory.adjustments.write_off_inactive')->name('api.v1.adjustments.approve-inactive-write-off');
     Route::post('/adjustments/{adjustment}/reverse', [StockAdjustmentController::class, 'reverse'])
         ->middleware('perm:inventory.manage_adjustments')->name('api.v1.adjustments.reverse');
 

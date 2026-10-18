@@ -65,6 +65,19 @@ class InactiveItemPolicyTest extends TestCase
         $this->app->instance(\App\Services\Access\WarehouseAccessService::class, $scope);
     }
 
+    /** Q12.6 (G6): another permitted person approves the draft write-off; the original actor stays the poster. */
+    private function secondPersonApproves(StockAdjustment $adjustment): void
+    {
+        $poster = \Illuminate\Support\Facades\Auth::user();
+        $approver = new \App\Models\User;
+        $approver->id = 324;
+        \Illuminate\Support\Facades\Auth::setUser($approver);
+        request()->setUserResolver(fn () => $approver);
+        app(\App\Services\Stock\InactiveItemWriteOffApproval::class)->approve($adjustment);
+        \Illuminate\Support\Facades\Auth::setUser($poster);
+        request()->setUserResolver(fn () => $poster);
+    }
+
     private function item(): Item
     {
         return F::averageItem([
@@ -244,6 +257,7 @@ class InactiveItemPolicyTest extends TestCase
 
         $writeOff = $adjustments->createDraft(['warehouse_id' => $warehouse->id, 'reason_code' => 'DAMAGE'],
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '3']]);
+        $this->secondPersonApproves($writeOff); // Q12.6 (G6): inactive write-offs need a second-person approval
         $adjustments->post($writeOff);
         $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $audit = InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_item_write_off')->sole();
@@ -257,6 +271,7 @@ class InactiveItemPolicyTest extends TestCase
         // ... and re-checked under the balance lock at posting, even with negative stock enabled.
         $split = $adjustments->createDraft(['warehouse_id' => $warehouse->id, 'reason_code' => 'DAMAGE'],
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1.5'], ['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1.5']]);
+        $this->secondPersonApproves($split);
         $this->assertRefused(fn () => $adjustments->post($split), $item->id, 'inventory.catalog.inactive_write_off_exceeds_stock');
         $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame('draft', $split->fresh()->status);

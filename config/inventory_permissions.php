@@ -31,6 +31,8 @@ return [
         'inventory.view_stock' => 'View stock balances',
         'inventory.manage_opening_stock' => 'Create / post / reverse opening stock',
         'inventory.manage_adjustments' => 'Create / post / reverse stock adjustments',
+        // Q12.6: not in any default role bundle -> owner / SolaStock Administrator only unless granted in a custom role.
+        'inventory.adjustments.write_off_inactive' => 'Approve and post write-offs of remaining stock of inactive items',
         'inventory.view_ledger' => 'View the stock ledger',
         'inventory.view_reports' => 'View inventory reports',
         'inventory.export_reports' => 'Export inventory reports',
