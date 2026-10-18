@@ -127,6 +127,21 @@ trait ValidatesItem
                 }
             }
 
+            // NF-1203-04: min_stock / reorder_point must not exceed max_stock, checked
+            // against the stored item for partial updates.
+            $levels = [];
+            foreach (['reorder_point', 'min_stock', 'max_stock'] as $f) {
+                $levels[$f] = $this->has($f) ? $this->input($f) : $current?->{$f};
+            }
+            if (is_numeric($levels['max_stock'] ?? null)) {
+                if (is_numeric($levels['min_stock'] ?? null) && (float) $levels['min_stock'] > (float) $levels['max_stock']) {
+                    $v->errors()->add('max_stock', __('Maximum stock must be at least the minimum stock.'));
+                }
+                if (is_numeric($levels['reorder_point'] ?? null) && (float) $levels['reorder_point'] > (float) $levels['max_stock']) {
+                    $v->errors()->add('reorder_point', __('The reorder point cannot exceed the maximum stock.'));
+                }
+            }
+
             // service items cannot track stock
             if ($type === 'service' && $tracking !== 'none') {
                 $v->errors()->add('tracking_type', __('inventory.validation.service_tracking'));
