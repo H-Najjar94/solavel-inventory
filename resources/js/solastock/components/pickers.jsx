@@ -9,11 +9,12 @@ import { t } from '../i18n/index.js';
 // Lightweight API-backed select pickers used across document line editors.
 // Each falls back to an empty list (no tenant) and is plain <select> for now.
 
-function Select({ value, onChange, options, placeholder, getLabel, disabled }) {
+function Select({ value, onChange, options, placeholder, getLabel, disabled, emptyLabel }) {
     return (
         <select className="input" value={value ?? ''} disabled={disabled}
             onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
             <option value="">{placeholder}</option>
+            {options.length === 0 && emptyLabel && <option value="" disabled>{emptyLabel}</option>}
             {options.map((o) => <option key={o.id} value={o.id}>{getLabel(o)}</option>)}
         </select>
     );
@@ -35,7 +36,7 @@ export function ItemPicker({ value, onChange, disabled, stockOnly = false, purpo
         return <span className="input is-disabled" aria-readonly="true">{item ? <bdi>{`${item.sku} · ${item.name}`}</bdi> : <bdi>#{value}</bdi>}</span>;
     }
     return <Select value={value} onChange={onChange} options={items} disabled={disabled}
-        placeholder={t('picker.item')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
+        placeholder={t('picker.item')} emptyLabel={t('picker.noItems', 'No items yet — add items first')} getLabel={(i) => `${i.sku} · ${i.name}`} />;
 }
 
 export function WarehousePicker({ value, onChange, disabled, placeholder, autoSelectDefault = false, defaultContext = 'new' }) {
@@ -109,7 +110,7 @@ export function ConsumptionAccountPicker({ value, onChange, disabled, placeholde
     const shown = accounts.filter((a) => !needle || String(a.id) === String(value) || `${a.code} ${a.name}`.toLowerCase().includes(needle));
     const missing = value && !accounts.some((a) => String(a.id) === String(value));
     return (
-        <div>
+        <div className="picker-stack">
             {!disabled && <input className="input" type="search" aria-label={t('consumption.searchAccount')} placeholder={t('consumption.searchAccount')} value={search} onChange={(e) => setSearch(e.target.value)} />}
             <select className="input" aria-label={t('consumption.account')} value={value ?? ''} disabled={disabled}
                 onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>

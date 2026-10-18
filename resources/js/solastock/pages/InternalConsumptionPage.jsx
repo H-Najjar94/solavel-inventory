@@ -22,8 +22,9 @@ function Pages({response,page,onChange}) {
 function SearchItem({value,onChange}) {
     const [search,setSearch]=useState('');
     const q=useQuery({queryKey:['consumption-items',search],queryFn:()=>api.items({search,is_active:true,item_type:'inventory',per_page:100})});
-    return <div><input className="input" aria-label={label('search')} placeholder={label('search')} value={search} onChange={e=>setSearch(e.target.value)}/>
-        <select className="input" aria-label={label('item')} value={value??''} onChange={e=>onChange(Number(e.target.value)||null)}><option value="">—</option>{rows(q.data).map(i=><option key={i.id} value={i.id}>{i.sku} · {i.name}</option>)}</select></div>;
+    const list=rows(q.data);
+    return <div className="picker-stack"><input className="input" type="search" aria-label={label('search')} placeholder={label('search')} value={search} onChange={e=>setSearch(e.target.value)}/>
+        <select className="input" aria-label={label('item')} value={value??''} onChange={e=>onChange(Number(e.target.value)||null)}><option value="">{t('picker.item')}</option>{list.length===0&&!q.isLoading&&<option value="" disabled>{t('picker.noItems','No items yet — add items first')}</option>}{list.map(i=><option key={i.id} value={i.id}>{i.sku} · {i.name}</option>)}</select></div>;
 }
 function DimensionFields({value,onChange}) {
     const q=useQuery({queryKey:['consumption-options'],queryFn:api.consumptionOptions});const options=body(q.data)??{};
@@ -33,7 +34,7 @@ function LinePreview({line,warehouse}) {
     const q=useQuery({queryKey:['consumption-preview',line.item_id,warehouse,line.account_override_id,line.quantity,line.entered_unit_id,line.bin_id,line.lot_id],queryFn:()=>api.consumptionPreview({item_id:line.item_id,warehouse_id:warehouse,account_override_id:line.account_override_id||undefined,quantity:line.quantity,entered_unit_id:line.entered_unit_id,bin_id:line.bin_id,lot_id:line.lot_id}),enabled:!!(line.item_id&&warehouse),retry:false});
     const d=body(q.data);
     if(q.error)return <span className="field-error">{q.error.message} <Link to="/integrations/solabooks">{label('settings')}</Link></span>;
-    return <div>{label('available')}: {d?.available_quantity??'—'}<br/>{label('cost')}: {d?.total_cost??'—'}<br/>{label('account')}: {d?.account?.account_name??d?.account?.account_id??(d?.account?.connected===false?label('standalone'):'—')}</div>;
+    return <dl className="line-preview"><dt>{label('available')}</dt><dd>{d?.available_quantity??'—'}</dd><dt>{label('cost')}</dt><dd>{d?.total_cost??'—'}</dd><dt>{label('account')}</dt><dd>{d?.account?.account_name??d?.account?.account_id??(d?.account?.connected===false?label('standalone'):'—')}</dd></dl>;
 }
 export function ConsumptionForm() {
     const [params]=useSearchParams();const {id:editId}=useParams();const nav=useNavigate();const can=useCan();const toast=useToast();
@@ -59,7 +60,7 @@ export function ConsumptionForm() {
         {key:'preview',label:label('cost'),render:l=><LinePreview line={l} warehouse={form.warehouse_id}/>}]:[]),
         ...(can('inventory.consumption.override_account')&&!sourceId?[{key:'override',label:label('override'),render:(l,i)=><ConsumptionAccountPicker value={l.account_override_id} onChange={v=>patch(i,{account_override_id:v})}/>}]:[])];
     if(editId&&existing.isLoading)return <Skeleton/>;if(editId&&draft?.status!=='draft')return <EmptyState title={existing.error?.message??label('locked')}/>;
-    return <section className="page"><h1>{editId?label('edit'):sourceId?label('return'):label('new')}</h1><form onSubmit={save}>
+    return <section className="page consumption-form"><header className="page-head"><h1>{editId?label('edit'):sourceId?label('return'):label('new')}</h1></header><form onSubmit={save}>
         <div className="form-grid"><Field label={label('date')}><input className="input" type="date" required value={form.document_date} onChange={e=>setForm({...form,document_date:e.target.value})}/></Field>
         <Field label={label('warehouse')}><WarehousePicker autoSelectDefault disabled={!!sourceId} value={form.warehouse_id} onChange={v=>setForm({...form,warehouse_id:v})}/></Field>
         <Field label={label('reason')}><input className="input" required minLength={3} maxLength={500} value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/></Field>
@@ -67,7 +68,7 @@ export function ConsumptionForm() {
         <Field label={label('notes')}><textarea className="input" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></Field></div>
         <DocumentLinesTable columns={columns} lines={lines} onAdd={sourceId?undefined:()=>setLines([...lines,{item_id:null,quantity:'1'}])} onRemove={i=>setLines(lines.filter((_,n)=>n!==i))} addLabel={label('add')}/>
         {error&&<p role="alert" className="field-error">{error}</p>}{uncertain&&<p role="alert">{label('unknown')} <Link target="_blank" to="/internal-consumptions">{label('retry')}</Link></p>}
-        <button className="btn btn--primary" disabled={busy||uncertain||!lines.length}>{label('save')}</button>
+        <div className="settings-actions"><button className="btn btn--primary" disabled={busy||uncertain||!lines.length}>{label('save')}</button></div>
     </form></section>;
 }
 export function ConsumptionDetail() {
@@ -98,8 +99,8 @@ export function ConsumptionDetail() {
 export default function InternalConsumptionPage() {
     const can=useCan();const [kind,setKind]=useState('issue');const [page,setPage]=useState(1);
     const q=useQuery({queryKey:['consumptions',kind,page],queryFn:()=>api.consumptions({kind,page})});
-    return <section className="page"><h1>{label('title')}</h1><div className="toolbar"><button className="btn" onClick={()=>{setKind('issue');setPage(1);}}>{label('issues')}</button><button className="btn" onClick={()=>{setKind('return');setPage(1);}}>{label('returns')}</button>
-        {can('inventory.consumption.create')&&<Link className="btn btn--primary" to="/internal-consumptions/new">{label('new')}</Link>}<Link className="btn" to="/internal-consumptions/report">{label('report')}</Link></div>
+    return <section className="page"><header className="page-head"><h1>{label('title')}</h1><div className="page-head__actions"><Link className="btn" to="/internal-consumptions/report">{label('report')}</Link>{can('inventory.consumption.create')&&<Link className="btn btn--primary" to="/internal-consumptions/new">+ {label('new')}</Link>}</div></header>
+        <div className="seg-tabs" role="tablist">{[['issue','issues'],['return','returns']].map(([k,l])=><button key={k} type="button" role="tab" aria-selected={kind===k} className={`seg-tab${kind===k?' is-active':''}`} onClick={()=>{setKind(k);setPage(1);}}>{label(l)}</button>)}</div>
         {q.error&&<p role="alert">{q.error.message}</p>}
         <DocumentLinesTable readOnly lines={rows(q.data)} columns={[{key:'number',label:label('number'),render:d=><Link to={`/internal-consumptions/${d.id}`}>{d.document_number}</Link>},{key:'date',label:label('date'),render:d=>d.document_date?.slice(0,10)},{key:'warehouse',label:label('warehouse'),render:d=>d.warehouse?.name},{key:'status',label:label('status'),render:d=>label(d.status)}]}/><Pages response={q.data} page={page} onChange={setPage}/>
     </section>;

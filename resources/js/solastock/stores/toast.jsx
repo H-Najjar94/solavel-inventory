@@ -15,7 +15,7 @@ export function ToastProvider({children}){
    requestAnimationFrame(()=>{
     if(document.querySelector('.field[data-feedback-invalid]'))focusInvalid(error.payload.errors);
     else if(document.querySelector('[data-feedback-validation]'))document.querySelector('[data-feedback-validation]').focus();
-    else void feedback.error({title:feedbackText('invalid'),message:Object.values(error.payload.errors).flat().join(' ')});
+    void feedback.error({title:feedbackText('invalid'),message:Object.values(error.payload.errors).flat().join('\n')});
    });
    return;
   }

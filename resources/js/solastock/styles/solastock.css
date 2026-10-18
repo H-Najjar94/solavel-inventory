@@ -2361,3 +2361,40 @@ html[dir="rtl"] .side-collapse__icon { transform:scaleX(-1); }
 
 /* Arabic and Urdu share right-to-left layout and a script-capable UI font. */
 html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Tahoma, sans-serif; }
+
+/* ── 2026-10-17 layout polish: fields fit their grid column, consistent action rows ── */
+.field { min-width: 0; }
+.field .input { box-sizing: border-box; width: 100%; min-width: 0; }
+.field .input--num { width: 100%; max-width: none; }
+.report-filters > * { min-width: 0; }
+.report-filters { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.report-filter-actions { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-end; padding-top: 4px; }
+.page-head .btn--primary { margin-left: 0; margin-inline-start: auto; }
+.page-head__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-inline-start: auto; }
+.page-head__actions .btn--primary { margin-inline-start: 0; }
+.picker-stack { display: grid; gap: 8px; min-width: 0; }
+.settings-check { display: flex; margin-top: 16px; }
+.settings-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-soft, rgba(127,127,127,.18)); }
+.settings-actions .btn, .card-actions .btn { width: auto; }
+.card-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.master-grid .card-body { display: grid; gap: 12px; }
+.master-grid, .media-grid { align-items: stretch; }
+.media-grid > .card { display: flex; flex-direction: column; }
+.media-grid > .card > .card-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.tax-add { margin-top: 16px; padding: 16px; border: 1px solid var(--line-soft, rgba(127,127,127,.18)); border-radius: 12px; }
+.tax-add__foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.table-scroll { margin-top: 16px; overflow-x: auto; border-radius: 12px; }
+.tax-table { min-width: 760px; }
+.tax-table .input { min-width: 0; width: 100%; box-sizing: border-box; }
+.tax-use { display: grid; gap: 4px; }
+.bulk-bar__count { display: flex; align-items: center; gap: 10px; align-self: end; min-height: 40px; }
+.line-preview { display: grid; grid-template-columns: auto auto; gap: 2px 8px; margin: 0; font-size: 12px; white-space: nowrap; }
+.line-preview dt { color: var(--muted, #888); }
+.line-preview dd { margin: 0; font-weight: 600; }
+.consumption-form .doc-lines .input, .consumption-form .picker-stack .input { min-width: 140px; }
+.seg-tabs { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--line-soft, rgba(127,127,127,.2)); border-radius: 11px; }
+.seg-tab { border: 0; background: transparent; color: var(--muted, #888); font: inherit; font-weight: 600; padding: 7px 16px; border-radius: 8px; cursor: pointer; }
+.seg-tab.is-active { background: var(--surface-2, rgba(127,127,127,.16)); color: var(--text, inherit); }
+/* toasts follow the app theme instead of a white card */
+.sf-notices .sf-toast { background: var(--surface, #1a1f2b); color: var(--text, inherit); border-color: var(--line-soft, rgba(127,127,127,.25)); box-shadow: 0 12px 32px rgba(0,0,0,.35); padding: 14px 16px; }
+.sf-notices .sf-toast button { color: var(--muted, inherit); }

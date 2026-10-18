@@ -483,7 +483,7 @@ export default function ItemDetailPage() {
             )}
 
             {/* ── Media ── */}
-            {tab === 'media' && <div className="overview-grid">
+            {tab === 'media' && <div className="overview-grid media-grid">
                 <div className="card"><div className="card-head"><h3>{t('itemDetail.images')}</h3></div><div className="card-body"><ItemImages itemId={item.id} canManage={gate.allowed} /></div></div>
                 <div className="card"><div className="card-body"><ItemAttachments itemId={item.id} canManage={gate.allowed} /></div></div>
             </div>}

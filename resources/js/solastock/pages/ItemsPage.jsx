@@ -71,8 +71,8 @@ export default function ItemsPage() {
                     <option value="low">{t('items.low')}</option><option value="out">{t('items.out')}</option>
                 </select>
             </div>
-            {gate.allowed && <form className="panel report-filters" onSubmit={applyBulk}>
-                <Field label={t('items.selected')}><input className="input" value={t('items.selectedCount', ':count items selected', { count: selected.length })} readOnly /></Field>
+            {gate.allowed && selected.length > 0 && <form className="panel report-filters bulk-bar" onSubmit={applyBulk}>
+                <div className="bulk-bar__count"><span className="badge">{t('items.selectedCount', ':count items selected', { count: selected.length })}</span><button type="button" className="btn btn--sm btn--ghost" onClick={() => setSelected([])}>{t('ledger.clear', 'Clear')}</button></div>
                 <Field label={t('items.bulkField')}><select className="input" value={bulk.field} onChange={(e) => setBulk({ field: e.target.value, value: e.target.value === 'is_active' || e.target.value === 'enable_reorder_alert' ? '1' : '' })}>
                     <option value="is_active">{t('document.status', 'Status')}</option><option value="category_id">{t('category')}</option><option value="brand_id">{t('brand', 'Brand')}</option><option value="enable_reorder_alert">{t('items.reorderAlerts')}</option><option value="reorder_point">{t('items.reorderPoint')}</option><option value="reorder_qty">{t('items.reorderQuantity')}</option>
                 </select></Field>

@@ -343,8 +343,8 @@ export default function SettingsPage() {
                         <input className="input" type="number" min="0" max="3650" value={policy.expiry_warning_days} onChange={(e) => setPolicy((current) => ({ ...current, expiry_warning_days: Number(e.target.value) }))} />
                     </Field>
                 </div>
-                <label><input type="checkbox" checked={!!policy.approvals?.internal_consumption} onChange={e=>setPolicy({...policy,approvals:{...policy.approvals,internal_consumption:e.target.checked}})}/>{t('consumption.approvalSetting')}</label>
-                <button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? tr('settings.policy.saving') : tr('settings.policy.save')}</button>
+                <label className="check-inline settings-check"><input type="checkbox" checked={!!policy.approvals?.internal_consumption} onChange={e=>setPolicy({...policy,approvals:{...policy.approvals,internal_consumption:e.target.checked}})}/> {t('consumption.approvalSetting')}</label>
+                <div className="settings-actions"><button className="btn btn--primary" disabled={saving} onClick={savePolicy}>{saving ? tr('settings.policy.saving') : tr('settings.policy.save')}</button></div>
             </div>
 
             <LandedCostSettingsCard />
@@ -356,23 +356,25 @@ export default function SettingsPage() {
                     <Field label={tr('settings.taxes.defaultPurchase')}><select className="input" value={defaultTaxes.purchase} onChange={(e) => setDefaultTaxes({ ...defaultTaxes, purchase: e.target.value })}><option value="">{tr('settings.taxes.noDefault')}</option>{taxes.filter((tax) => tax.active && tax.purchase).map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.name}</option>)}</select></Field>
                     <Field label={tr('settings.taxes.defaultSales')}><select className="input" value={defaultTaxes.sales} onChange={(e) => setDefaultTaxes({ ...defaultTaxes, sales: e.target.value })}><option value="">{tr('settings.taxes.noDefault')}</option>{taxes.filter((tax) => tax.active && tax.sales).map((tax) => <option key={tax.code} value={tax.code}>{tax.code} · {tax.name}</option>)}</select></Field>
                 </div>
-                <form className="fg2" onSubmit={addTax}>
+                <form className="fg2 tax-add" onSubmit={addTax}>
                     <Field label={tr('settings.common.code')}><input className="input" value={taxDraft.code} onChange={(e) => setTaxDraft({ ...taxDraft, code: e.target.value })} /></Field>
                     <Field label={tr('settings.common.name')}><input className="input" value={taxDraft.name} onChange={(e) => setTaxDraft({ ...taxDraft, name: e.target.value })} /></Field>
                     <Field label={tr('settings.taxes.rate')}><input className="input" type="number" step="0.0001" min="0" max="100" value={taxDraft.rate} onChange={(e) => setTaxDraft({ ...taxDraft, rate: e.target.value })} /></Field>
                     <Field label={tr('settings.taxes.treatment')}><select className="input" value={taxDraft.treatment} onChange={(e) => setTaxDraft({ ...taxDraft, treatment: e.target.value })}><option value="standard">{tr('settings.policy.standard')}</option><option value="zero">{tr('settings.taxes.zero')}</option><option value="exempt">{tr('settings.taxes.exempt')}</option></select></Field>
-                    <label className="check-inline"><input type="checkbox" checked={taxDraft.active} onChange={(e) => setTaxDraft({ ...taxDraft, active: e.target.checked })} /> {tr('settings.common.active')}</label>
-                    <button className="btn btn--sm">{tr('settings.taxes.add')}</button>
+                    <div className="tax-add__foot">
+                        <label className="check-inline"><input type="checkbox" checked={taxDraft.active} onChange={(e) => setTaxDraft({ ...taxDraft, active: e.target.checked })} /> {tr('settings.common.active')}</label>
+                        <button className="btn">+ {tr('settings.taxes.add')}</button>
+                    </div>
                 </form>
-                <form onSubmit={saveTaxes}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.code')}</th><th>{tr('settings.common.name')}</th><th>{tr('settings.taxes.rate')}</th><th>{tr('settings.taxes.treatment')}</th><th>{tr('settings.common.active')}</th><th>{tr('settings.taxes.use')}</th><th></th></tr></thead><tbody>{taxes.map((tax, i) => <tr key={`${tax.code}-${i}`}>
+                <form onSubmit={saveTaxes}>{taxes.length > 0 && <div className="table-scroll"><table className="data-table tax-table"><thead><tr><th>{tr('settings.common.code')}</th><th>{tr('settings.common.name')}</th><th>{tr('settings.taxes.rate')}</th><th>{tr('settings.taxes.treatment')}</th><th>{tr('settings.common.active')}</th><th>{tr('settings.taxes.use')}</th><th></th></tr></thead><tbody>{taxes.map((tax, i) => <tr key={`${tax.code}-${i}`}>
                     <td>{tax.code}</td>
                     <td><input className="input" aria-label={tr('settings.taxes.nameAria', { code: tax.code })} value={tax.name} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, name: e.target.value } : row))} /></td>
                     <td><input className="input" aria-label={tr('settings.taxes.rateAria', { code: tax.code })} type="number" min="0" max="100" step="0.0001" value={tax.rate} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, rate: Number(e.target.value) } : row))} /></td>
                     <td><select className="input" aria-label={tr('settings.taxes.treatmentAria', { code: tax.code })} value={tax.treatment} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, treatment: e.target.value } : row))}><option value="standard">{tr('settings.policy.standard')}</option><option value="zero">{tr('settings.taxes.zero')}</option><option value="exempt">{tr('settings.taxes.exempt')}</option></select></td>
                     <td><input aria-label={tr('settings.taxes.activeAria', { code: tax.code })} type="checkbox" checked={!!tax.active} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, active: e.target.checked } : row))} /></td>
-                    <td><label className="check-inline"><input aria-label={tr('settings.taxes.purchaseAria', { code: tax.code })} type="checkbox" checked={!!tax.purchase} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, purchase: e.target.checked } : row))} /> {tr('settings.taxes.purchase')}</label><label className="check-inline"><input aria-label={tr('settings.taxes.salesAria', { code: tax.code })} type="checkbox" checked={!!tax.sales} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, sales: e.target.checked } : row))} /> {tr('settings.taxes.sales')}</label></td>
+                    <td><div className="tax-use"><label className="check-inline"><input aria-label={tr('settings.taxes.purchaseAria', { code: tax.code })} type="checkbox" checked={!!tax.purchase} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, purchase: e.target.checked } : row))} /> {tr('settings.taxes.purchase')}</label><label className="check-inline"><input aria-label={tr('settings.taxes.salesAria', { code: tax.code })} type="checkbox" checked={!!tax.sales} onChange={(e) => setTaxes(taxes.map((row, j) => j === i ? { ...row, sales: e.target.checked } : row))} /> {tr('settings.taxes.sales')}</label></div></td>
                     <td><button type="button" className="btn btn--sm" onClick={() => setTaxes(taxes.filter((_, j) => j !== i))}>{tr('settings.common.remove')}</button></td>
-                </tr>)}</tbody></table><button className="btn btn--primary" style={{ marginTop: 12 }}>{tr('settings.taxes.save')}</button></form>
+                </tr>)}</tbody></table></div>}<div className="settings-actions"><button className="btn btn--primary">{tr('settings.taxes.save')}</button></div></form>
             </div>
 
             <div className="panel">
@@ -381,7 +383,7 @@ export default function SettingsPage() {
                 <form className="fg2" onSubmit={saveWarehouseAssignment}>
                     <Field label={memberContext?.name || tr('settings.warehouseScope.userId')}><input className="input" type="number" min="1" readOnly={!!memberContext} title={memberContext?.name} value={warehouseAssignment.user_id} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, user_id: e.target.value })} placeholder={tr('settings.warehouseScope.userIdExample')} /></Field>
                     <div><span className="field-label">{tr('settings.warehouseScope.allowed')}</span>{(s.warehouses ?? []).map((warehouse) => <label className="check-inline" key={warehouse.id}><input type="checkbox" checked={warehouseAssignment.warehouse_ids.includes(Number(warehouse.id))} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, warehouse_ids: e.target.checked ? [...warehouseAssignment.warehouse_ids, Number(warehouse.id)] : warehouseAssignment.warehouse_ids.filter((id) => id !== Number(warehouse.id)) })} /> {warehouse.code} · {warehouse.name}</label>)}</div>
-                    <button className="btn btn--primary">{tr('settings.warehouseScope.save')}</button>
+                    <div className="settings-actions"><button className="btn btn--primary">{tr('settings.warehouseScope.save')}</button></div>
                 </form>
                 {(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.user')}</th><th>{tr('settings.common.warehouse')}</th></tr></thead><tbody>{(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).filter(row => !memberContext || Number(row.user_id) === Number(memberContext.id)).map((row) => <tr key={row.id}><td>{row.user_id}</td><td>{row.warehouse_id}</td></tr>)}</tbody></table>}
             </div>
@@ -389,7 +391,7 @@ export default function SettingsPage() {
             <div className="panel">
                 <h2>{tr('settings.master.title')}</h2>
                 <p className="muted">{tr('settings.master.summary', { units: (s.units ?? []).length, categories: (s.categories ?? []).length, brands: (s.brands ?? []).length })}</p>
-                <div className="overview-grid">
+                <div className="overview-grid master-grid">
                     <form className="card" onSubmit={addCategory}><div className="card-head"><h3>{tr('settings.master.categoryHierarchy')}</h3></div><div className="card-body">
                         <Field label={tr('settings.common.name')}><input className="input" value={category.name} onChange={(e) => setCategory({ ...category, name: e.target.value })} required /></Field>
                         <Field label={tr('settings.master.parent')}>
@@ -398,17 +400,18 @@ export default function SettingsPage() {
                                 {(s.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </Field>
-                        <Field label={t('consumption.account')}><ConsumptionAccountPicker value={category.internal_consumption_account_id} disabled={!canOverrideAccount} onChange={v=>setCategory({...category,internal_consumption_account_id:v})}/></Field><button className="btn btn--primary">{tr('settings.master.addCategory')}</button>
+                        <Field label={t('consumption.account')}><ConsumptionAccountPicker value={category.internal_consumption_account_id} disabled={!canOverrideAccount} onChange={v=>setCategory({...category,internal_consumption_account_id:v})}/></Field>
+                        <div className="card-actions"><button className="btn btn--primary">{tr('settings.master.addCategory')}</button></div>
                     </div></form>
                     {/* SC-UAE-041: an empty tenant must be able to create the units items require. */}
                     <form className="card" onSubmit={addUnit}><div className="card-head"><h3>{tr('settings.master.unit')}</h3></div><div className="card-body">
                         <Field label={tr('settings.common.name')}><input className="input" value={unit.name} onChange={(e) => setUnit({ ...unit, name: e.target.value })} required /></Field>
                         <Field label={tr('settings.master.unitCode')}><input className="input" value={unit.code} maxLength={50} placeholder={(unit.name || '').slice(0, 8).toUpperCase()} onChange={(e) => setUnit({ ...unit, code: e.target.value.toUpperCase() })} /></Field>
-                        <button className="btn btn--primary">{tr('settings.master.addUnit')}</button>
+                        <div className="card-actions"><button className="btn btn--primary">{tr('settings.master.addUnit')}</button></div>
                     </div></form>
                     <form className="card" onSubmit={addBrand}><div className="card-head"><h3>{tr('settings.master.brand')}</h3></div><div className="card-body">
                         <Field label={tr('settings.common.name')}><input className="input" value={brand.name} onChange={(e) => setBrand({ name: e.target.value })} required /></Field>
-                        <button className="btn btn--primary">{tr('settings.master.addBrand')}</button>
+                        <div className="card-actions"><button className="btn btn--primary">{tr('settings.master.addBrand')}</button></div>
                     </div></form>
                     <form className="card" onSubmit={addConversion}><div className="card-head"><h3>{tr('settings.master.unitConversion')}</h3></div><div className="card-body">
                         <Field label={tr('settings.master.fromUnit')}><select className="input" value={conversion.from_unit_id} onChange={(e) => setConversion({ ...conversion, from_unit_id: e.target.value })} required>
