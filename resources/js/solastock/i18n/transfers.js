@@ -1,4 +1,6 @@
 export const en = {
+"transfers.form.sourceRequired":"Choose the source warehouse.","transfers.form.destinationRequired":"Choose the destination warehouse.","transfers.form.itemRequired":"Line :line: choose an item or remove this line.","transfers.form.quantityRequired":"Line :line: enter a quantity greater than zero.","transfers.form.lotRequired":"Line :line: select the lot to transfer.","transfers.form.serialRequired":"Line :line: select the serial number to transfer.","transfers.form.serialSingle":"Line :line: transfer each serial number on a separate line.","transfers.form.cannotComplete":"The transfer could not be completed","transfers.form.draftPreserved":"The draft was saved, but posting failed. Review the reason above and edit this draft to correct it.","transfers.form.reviewDraft":"Review saved draft",
+
 "transfers.form.designIntro":"Move stock between warehouses. Choose the route, then add the items to transfer.","transfers.form.designRoute":"Transfer details","transfers.form.designLinesHint":"Set the item, quantity and storage locations for each line.","transfers.form.designRemove":"Remove line","transfers.form.designSaveHint":"Save a draft to review later, or post to move stock.",
 
     'transfers.breadcrumb': 'Transfers',
@@ -99,6 +101,8 @@ export const en = {
 };
 
 export const ar = {
+"transfers.form.sourceRequired":"اختر المستودع المصدر.","transfers.form.destinationRequired":"اختر المستودع الوجهة.","transfers.form.itemRequired":"السطر :line: اختر الصنف أو احذف السطر.","transfers.form.quantityRequired":"السطر :line: أدخل كمية أكبر من صفر.","transfers.form.lotRequired":"السطر :line: اختر الدفعة المطلوب نقلها.","transfers.form.serialRequired":"السطر :line: اختر الرقم التسلسلي المطلوب نقله.","transfers.form.serialSingle":"السطر :line: أضف كل رقم تسلسلي في سطر مستقل.","transfers.form.cannotComplete":"تعذر إكمال التحويل","transfers.form.draftPreserved":"تم حفظ المسودة، لكن لم يكتمل الترحيل. راجع السبب أعلاه وعدّل المسودة لتصحيحه.","transfers.form.reviewDraft":"مراجعة المسودة المحفوظة",
+
 "transfers.form.designIntro":"انقل المخزون بين المستودعات. حدد المصدر والوجهة، ثم أضف الأصناف والكميات.","transfers.form.designRoute":"بيانات التحويل","transfers.form.designLinesHint":"حدد الصنف والكمية ومواقع التخزين لكل سطر.","transfers.form.designRemove":"حذف السطر","transfers.form.designSaveHint":"احفظ مسودة للمراجعة، أو رحّل التحويل لتنفيذ حركة المخزون.",
 
     'transfers.breadcrumb': 'التحويلات',

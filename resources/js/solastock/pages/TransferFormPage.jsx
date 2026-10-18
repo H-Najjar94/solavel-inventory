@@ -13,6 +13,7 @@ import { DocumentLineErrors } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput } from '../components/pickers.jsx';
 import { LotSelector, SerialSelector, TraceabilityRequiredBadge, FefoHint } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
+import { transferValidation } from '../services/transferValidation.mjs';
 import { useI18n } from '../i18n/context.jsx';
 
 const emptyLine = () => ({ item_id: null, from_bin_id: null, to_bin_id: null, quantity: '', lot_id: null, serial_ids: [] });
@@ -38,6 +39,9 @@ export default function TransferFormPage() {
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
     const savePending=useRef(false);
+    const errorSummary=useRef(null);
+    const [failureReason,setFailureReason]=useState('');
+    useEffect(()=>{ if(failureReason || Object.keys(errors).length) errorSummary.current?.focus(); },[errors,failureReason]);
     const [statusCheck,setStatusCheck]=useState(null);
 
     const existing = useApiQuery(['transfer', id], () => api.transfer(id), { fallback: null, enabled: isEdit });
@@ -58,9 +62,10 @@ export default function TransferFormPage() {
         if(savePending.current||statusCheck)return;
         let savedDocument;
         if (!gate.allowed) return;
-        if (sameWh) { setErrors({to_warehouse_id:t('transfers.form.warehousesDiffer', 'Source and destination warehouses must be different.')}); return; }
+        const validation=transferValidation(header,lines,tracking,post,t);
+        if(Object.keys(validation).length){setErrors(validation);setFailureReason('');return;}
         savePending.current=true;
-        setSaving(true); setErrors({});
+        setSaving(true); setErrors({});setFailureReason('');
         try {
             const { transfer_number: _serverAssignedNumber, ...editableHeader } = header;
             const payload = {
@@ -85,7 +90,12 @@ export default function TransferFormPage() {
             else toast.push(isEdit ? t('transfers.form.updated', 'Draft updated.') : t('transfers.form.saved', 'Draft saved.'), 'success');
             qc.invalidateQueries({ queryKey: ['transfers'] });
             nav(`/transfers/${docId}`);
-        } catch (err) { if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown}); setErrors(fieldErrors(err)); toast.failure(err, err.message || t('transfers.form.saveFailed', 'The transfer could not be saved.')); }
+        } catch (err) {
+            if(err.outcomeUnknown||savedDocument)setStatusCheck({id:savedDocument,unknown:!!err.outcomeUnknown});
+            setErrors(fieldErrors(err));
+            setFailureReason(err.status===422 ? (err.message || t('transfers.form.saveFailed')) : feedbackText(err.outcomeUnknown?'unknown':'failed'));
+            if(err.status!==422)toast.failure(err,err.message);
+        }
         finally { savePending.current=false; setSaving(false); }
     }
 
@@ -129,6 +139,11 @@ export default function TransferFormPage() {
             <header className="page-head transfer-heading"><div><h1>{isEdit ? t('transfers.form.editTitle', 'Edit transfer') : t('transfers.form.newTitle', 'New transfer')}</h1><p>{t('transfers.form.designIntro')}</p></div><span className="badge badge--muted">{documentText('document.draft')}</span></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
 
+            {(failureReason || Object.keys(errors).length>0) && <div ref={errorSummary} tabIndex={-1} className="banner banner--warn transfer-error-summary" role="alert" data-feedback-validation>
+                <strong>{t('transfers.form.cannotComplete')}</strong>
+                {failureReason && <p>{failureReason}</p>}
+                {Object.keys(errors).length>0 && <ul>{[...new Set(Object.values(errors))].map((message,i)=><li key={i}>{message}</li>)}</ul>}
+            </div>}
             <section className="card transfer-header-card"><div className="card-head"><h2>{t('transfers.form.designRoute')}</h2></div><div className="card-body"><div className="transfer-warehouses">
                 <Field label={t('transfers.form.sourceWarehouse')} required error={errors.from_warehouse_id}><WarehousePicker value={header.from_warehouse_id} onChange={(v) => setHeader({ ...header, from_warehouse_id: v })} placeholder={t('transfers.form.sourcePlaceholder')} /></Field>
                 <span className="transfer-route-arrow" aria-hidden="true">→</span>
@@ -146,13 +161,13 @@ export default function TransferFormPage() {
                     <DocumentLineErrors errors={errors} />
                     <div className="transfer-lines-list">{lines.map((line,i) => <article className="transfer-line" key={i}>
                         <div className="transfer-line-heading"><span className="transfer-line-number">{i+1}</span><strong>{t('transfers.form.item')}</strong><button type="button" className="btn transfer-remove" disabled={saving} aria-label={`${t('transfers.form.designRemove')} ${i+1}`} onClick={() => setLines(lines.filter((_,idx)=>idx!==i))}>{t('transfers.form.designRemove')}</button></div>
-                        <div className="transfer-line-fields">{columns.map(column => <div key={column.key} className={`transfer-line-field transfer-line-field--${column.key}`}><Field label={column.label}>{column.render(line,i)}</Field></div>)}</div>
+                        <div className="transfer-line-fields">{columns.map(column => <div key={column.key} className={`transfer-line-field transfer-line-field--${column.key}`}><Field label={column.label} error={errors[`lines.${i}.${({item:'item_id',qty:'quantity',fbin:'from_bin_id',tbin:'to_bin_id',trace:'lot_id'})[column.key]}`] || (column.key==='trace'?errors[`lines.${i}.serial_id`]:undefined)}>{column.render(line,i)}</Field></div>)}</div>
                     </article>)}</div>
                     <button type="button" className="btn transfer-add" disabled={saving} onClick={() => setLines([...lines,emptyLine()])}>+ {t('transfers.form.addLine')}</button>
                 </div>
             </section>
 
-            {statusCheck&&<div className="alert alert--warning" role="status"><p>{feedbackText(statusCheck.unknown?"unknown":"failed")}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/transfers/${statusCheck.id}`:"/transfers")}>{feedbackText("reload")}</button></div>}
+            {statusCheck&&<div className="alert alert--warning" role="status"><p>{statusCheck.unknown?feedbackText('unknown'):t('transfers.form.draftPreserved')}</p><button type="button" className="btn" onClick={()=>nav(statusCheck.id?`/transfers/${statusCheck.id}${statusCheck.unknown?'':'/edit'}`:"/transfers")}>{statusCheck.id&&!statusCheck.unknown?t('transfers.form.reviewDraft'):feedbackText('reload')}</button></div>}
             <div className="doc-actions transfer-footer">
                 <p>{t('transfers.form.designSaveHint')}</p>
                 <button className="btn" onClick={() => nav('/transfers')}>{t('transfers.form.cancel', 'Cancel')}</button>
