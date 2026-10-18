@@ -200,6 +200,7 @@ return array (
     'bulk_deactivation_blocked' => 'Alcuni articoli selezionati non possono essere disattivati finché hanno giacenza (inclusi saldi negativi), scorte riservate o documenti di magazzino aperti. Nessun articolo è stato modificato.',
     'inactive_item_rejected' => 'Questo articolo è inattivo. Non sono consentiti nuovi documenti o movimenti di magazzino; riattivalo prima, oppure riduci la giacenza residua con una rettifica di storno.',
     'inactive_write_off_exceeds_stock' => 'Un articolo inattivo può essere stornato solo dalla sua giacenza positiva; la riduzione non può superare tale giacenza né creare un saldo negativo.',
+    'inactive_return_exceeds_shipped' => 'Un articolo inattivo può essere reso solo a fronte di una spedizione registrata dello stesso, fino alla quantità spedita in origine.',
     'zone_code_unique' => 'Il codice zona deve essere unico all\'interno del magazzino.',
     'zone_has_stock' => 'Non è possibile disattivare una zona che contiene ancora scorte.',
     'bin_code_unique' => 'Il codice ubicazione deve essere univoco all’interno del magazzino.',

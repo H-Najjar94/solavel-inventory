@@ -96,7 +96,7 @@ class InactiveItemPolicyTest extends TestCase
             'reason' => 'q12', 'submission_key' => (string) \Illuminate\Support\Str::uuid(), 'submission_hash' => str_repeat('a', 64),
             'created_at' => now(), 'updated_at' => now()]);
         // The guard runs before the INSERT, whatever service, controller, import or handoff builds the row.
-        foreach ([StockAdjustmentLine::class => ['direction' => 'increase'], StockTransferLine::class => [], StockCountLine::class => [],
+        foreach ([StockAdjustmentLine::class => ['direction' => 'increase'], StockTransferLine::class => [],
             OpeningStockEntryLine::class => [], GoodsReceiptLine::class => [], ShipmentLine::class => [], InternalConsumptionLine::class => ['internal_consumption_id' => $consumption],
             SupplierReturnLine::class => [], SalesReturnLine::class => [], PurchaseOrderLine::class => [], ReceivingRequestLine::class => [],
             PickListLine::class => [], Reservation::class => []] as $class => $extra) {
@@ -134,8 +134,6 @@ class InactiveItemPolicyTest extends TestCase
             [['item_id' => $item->id, 'direction' => 'increase', 'quantity' => '3', 'unit_cost' => '2']]), $item->id);
         $this->assertRefused(fn () => app(StockTransferService::class)->createDraft(['from_warehouse_id' => $warehouse->id, 'to_warehouse_id' => $other->id],
             [['item_id' => $item->id, 'quantity' => '1']]), $item->id);
-        $this->assertRefused(fn () => app(StockCountService::class)->createDraft(['warehouse_id' => $warehouse->id],
-            [['item_id' => $item->id, 'system_qty' => '0', 'counted_qty' => '1']]), $item->id);
         $this->assertRefused(fn () => app(OpeningStockService::class)->createDraft(['warehouse_id' => $warehouse->id],
             [['item_id' => $item->id, 'quantity' => '1', 'unit_cost' => '1']]), $item->id);
         $this->assertRefused(fn () => app(GoodsReceiptService::class)->createDraft(['warehouse_id' => $warehouse->id],
@@ -147,7 +145,7 @@ class InactiveItemPolicyTest extends TestCase
         $this->assertRefused(fn () => app(StockReservationService::class)->reserve($stocked->id, $warehouse->id, '1', 'sales_order', 1), $stocked->id);
         $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $stocked->id)->value('reserved_qty'));
         // Nothing was written for the refused items (scoped by item: committed fixtures of other classes may exist).
-        foreach (['stock_adjustment_lines', 'stock_transfer_lines', 'stock_count_lines', 'opening_stock_entry_lines', 'goods_receipt_lines', 'reservations'] as $table) {
+        foreach (['stock_adjustment_lines', 'stock_transfer_lines', 'opening_stock_entry_lines', 'goods_receipt_lines', 'reservations'] as $table) {
             $this->assertSame(0, DB::connection('tenant')->table($table)->where('item_id', $item->id)->count(), $table.' must be rolled back');
         }
         $this->assertSame(0, DB::connection('tenant')->table('reservations')->where('item_id', $stocked->id)->count());
@@ -186,12 +184,12 @@ class InactiveItemPolicyTest extends TestCase
         ]);
         $this->assertRefused(fn () => app(OpeningStockController::class)->importCsv($request), $item->id);
         @unlink($path);
-        $this->assertSame(0, OpeningStockEntry::query()->count());
+        $this->assertSame(0, DB::connection('tenant')->table('opening_stock_entry_lines')->where('item_id', $item->id)->count());
         $this->assertSame(0, StockLedger::query()->where('item_id', $item->id)->count());
     }
 
     #[Test]
-    public function a_count_posting_cannot_raise_stock_of_an_inactive_item_but_may_write_it_down(): void
+    public function a_stock_count_of_an_inactive_item_posts_as_the_controlled_correction_up_or_down_and_is_audited(): void
     {
         $this->useTenantA();
         $warehouse = F::warehouse();
@@ -199,16 +197,23 @@ class InactiveItemPolicyTest extends TestCase
         $down = $this->item();
         $this->stock($up, $warehouse->id, '2');
         $this->stock($down, $warehouse->id, '5');
-        $counts = app(StockCountService::class);
-        $raise = $counts->createDraft(['warehouse_id' => $warehouse->id], [['item_id' => $up->id, 'system_qty' => '2', 'counted_qty' => '3']]);
-        $lower = $counts->createDraft(['warehouse_id' => $warehouse->id], [['item_id' => $down->id, 'system_qty' => '5', 'counted_qty' => '1']]);
         $this->forceInactive($up);
         $this->forceInactive($down);
-        // System-generated variance adjustment (the count's own posting process) is still policed.
-        $this->assertRefused(fn () => $counts->post($raise), $up->id);
-        $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $up->id)->value('on_hand_qty'));
+        $counts = app(StockCountService::class);
+        // Count drafts of inactive items are allowed (owner adjustment (c)).
+        $raise = $counts->createDraft(['warehouse_id' => $warehouse->id], [['item_id' => $up->id, 'system_qty' => '2', 'counted_qty' => '3']]);
+        $lower = $counts->createDraft(['warehouse_id' => $warehouse->id], [['item_id' => $down->id, 'system_qty' => '5', 'counted_qty' => '0']]);
+        $counts->post($raise);
         $counts->post($lower);
-        $this->assertSame('1.0000', (string) StockBalance::query()->where('item_id', $down->id)->value('on_hand_qty'));
+        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $up->id)->value('on_hand_qty'));
+        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $down->id)->value('on_hand_qty'));
+        $audits = InventoryAuditLog::query()->where('action', 'inactive_item.corrective_movement')->get()
+            ->filter(fn ($a) => ($a->before['kind'] ?? null) === 'stock_count' && in_array((int) $a->before['item_id'], [$up->id, $down->id], true));
+        $this->assertEqualsCanonicalizing([$up->id, $down->id], $audits->map(fn ($a) => $a->before['item_id'])->values()->all());
+        $this->assertTrue($audits->every(fn ($a) => $a->before['item_inactive'] === true));
+        // Outside a count posting, the same increase is an ordinary movement and stays refused.
+        $this->assertRefused(fn () => app(StockAdjustmentService::class)->createDraft(['warehouse_id' => $warehouse->id, 'reason_code' => 'FOUND'],
+            [['item_id' => $up->id, 'direction' => 'increase', 'quantity' => '1', 'unit_cost' => '1']]), $up->id);
     }
 
     #[Test]
