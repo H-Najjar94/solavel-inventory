@@ -190,7 +190,7 @@ export default function GoodsReceiptFormPage() {
     ];
 
     return (
-        <section className="page">
+        <section className="page goods-receipt-form-page">
             <Breadcrumbs items={[{ label: t('receiving.grn.list.title', 'Goods Receipts'), to: '/goods-receipts' }, { label: fromPo ? t('receiving.grn.form.fromPurchaseOrder', 'From :purchaseOrder', { purchaseOrder: sourcePoLabel ?? t('receiving.po.singular', 'purchase order') }) : (isEdit ? t('receiving.common.editDraft', 'Edit draft') : t('receiving.common.new', 'New')) }]} />
             <header className="page-head"><h1>{isEdit ? t('receiving.grn.form.editTitle', 'Edit goods receipt') : t('receiving.grn.form.newTitle', 'New goods receipt')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}

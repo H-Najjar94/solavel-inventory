@@ -2504,3 +2504,22 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .sidebar--collapsed .side-flyout .side-link-label { display:block; flex:1; min-width:0; white-space:normal; overflow-wrap:normal; line-height:1.5; }
 .sidebar--collapsed .side-flyout .side-link-icon { width:20px; flex:0 0 20px; font-size:15px; }
 @media(max-width:600px) { .po-new { margin-inline-start:0; } .po-empty { padding:36px 18px; } .po-stock-notice { padding:14px; } }
+/* Goods receipt form: keep fields and sections comfortably separated. */
+.goods-receipt-form-page { max-width:1500px; margin-inline:auto; }
+.goods-receipt-form-page .form-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px 26px;padding:26px;margin-bottom:24px; }
+.goods-receipt-form-page .field { min-width:0;gap:9px; }
+.goods-receipt-form-page .input { width:100%;min-width:0;min-height:44px;box-sizing:border-box;border-radius:10px; }
+.goods-receipt-form-page .panel { padding:24px;margin-top:24px;margin-bottom:24px; }
+.goods-receipt-form-page .panel h2 { margin:0 0 20px;font-size:17px; }
+.goods-receipt-form-page .doc-lines .data-table { min-width:1480px;table-layout:auto; }
+.goods-receipt-form-page .doc-lines .data-table th,.goods-receipt-form-page .doc-lines .data-table td { padding:16px 12px;vertical-align:top; }
+.goods-receipt-form-page .doc-lines .data-table th { line-height:1.6;white-space:normal; }
+.goods-receipt-form-page .doc-lines .data-table th:first-child { min-width:220px; }
+.goods-receipt-form-page .doc-lines .input { min-width:110px; }
+.goods-receipt-form-page .doc-lines .trace-cell { min-width:180px;display:flex;flex-direction:column;gap:12px; }
+.goods-receipt-form-page .doc-lines .tbl-wrap { padding-bottom:12px;margin-bottom:16px; }
+.goods-receipt-form-page .doc-actions { gap:14px;margin-top:24px;padding-bottom:12px; }
+.goods-receipt-form-page .doc-actions .btn,.goods-receipt-form-page .doc-lines > .btn { min-height:44px;padding:10px 20px; }
+.goods-receipt-form-page .banner { margin-bottom:22px;line-height:1.8;padding:14px 18px; }
+@media(max-width:900px) { .goods-receipt-form-page .form-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:20px; } }
+@media(max-width:600px) { .goods-receipt-form-page .form-grid { grid-template-columns:1fr;padding:18px;gap:20px; } .goods-receipt-form-page .panel { padding:16px; } .goods-receipt-form-page .doc-actions .btn { flex:1 1 auto; } }
