@@ -2571,3 +2571,28 @@ html[lang="ar"] body, html[lang="ur"] body { font-family: "Noto Sans Arabic", Ta
 .index-page .tbl-wrap { max-width:100%; }
 .index-page > .card { margin-bottom:20px; }
 @media(max-width:600px) { .index-page > .page-head { align-items:flex-start; } .index-page > .page-head .btn--primary { margin-inline-start:0; } .index-page > .toolbar { padding:14px;gap:12px; } .index-page > .empty-state { padding:32px 18px; } .index-table-scroll .data-table th,.index-table-scroll .data-table td { padding:12px; } }
+/* Traceability hub remains useful while the expiry summary is unavailable. */
+.traceability-hub { max-width:1400px;margin-inline:auto; }
+.traceability-intro { color:var(--text-2);font-size:13px;line-height:1.8;margin:8px 0 0;max-width:780px; }
+.traceability-summary { margin-bottom:26px; }
+.traceability-summary .card-head { align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.traceability-summary h2,.traceability-sections-heading h2 { font-size:16px;margin:0; }
+.traceability-summary .card-body { padding:24px; }
+.traceability-load-error { display:flex;align-items:center;gap:18px;flex-wrap:wrap; }
+.traceability-error-icon { display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:14px;background:rgba(224,153,33,.12);color:var(--amber);font-size:24px;font-weight:700; }
+.traceability-load-error strong { display:block;font-size:14px;line-height:1.7; }
+.traceability-load-error p { font-size:13px;line-height:1.8;color:var(--text-2);margin:5px 0 0; }
+.traceability-load-error .btn { margin-inline-start:auto;min-height:44px;padding:10px 20px; }
+.traceability-risk { display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:15px;line-height:1.8; }
+.traceability-risk .btn { min-height:44px;padding:10px 20px; }
+.traceability-sections-heading { margin-bottom:16px; }
+.traceability-tools { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px; }
+.traceability-tool { display:flex;align-items:flex-start;gap:20px;padding:24px;text-decoration:none;color:var(--text);transition:border-color .15s,box-shadow .15s;min-width:0; }
+.traceability-tool:hover { border-color:var(--amber);box-shadow:0 4px 20px rgba(0,0,0,.08); }
+.traceability-tool:focus-visible { outline:2px solid var(--amber);outline-offset:3px; }
+.traceability-tool-icon { display:grid;place-items:center;flex:none;width:58px;height:58px;border-radius:16px;background:rgba(224,153,33,.1);color:var(--amber); }
+.traceability-tool h3 { font-size:17px;margin:0 0 8px;line-height:1.6; }
+.traceability-tool p { color:var(--text-2);font-size:13px;line-height:1.8;margin:0 0 14px; }
+.traceability-tool-open { display:inline-flex;align-items:center;gap:10px;color:var(--amber);font-weight:700;font-size:13px; }
+@media(max-width:700px) { .traceability-tools { grid-template-columns:1fr;gap:14px; } .traceability-tool { padding:20px;gap:15px; } .traceability-summary .card-body { padding:18px; } .traceability-load-error { gap:14px; } .traceability-load-error > div:nth-child(2) { flex:1 1 180px; } .traceability-load-error .btn { margin-inline-start:0; } }
+@media(prefers-reduced-motion:reduce) { .traceability-tool { transition:none; } }

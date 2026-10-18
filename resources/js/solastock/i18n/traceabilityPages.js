@@ -1,5 +1,8 @@
 import { translatedCatalogs } from './locales.js';
 export const traceabilityPagesEn = {
+ 'traceabilityPages.hub.expiryLoadError':'The expiry overview could not be loaded.',
+"traceabilityPages.hub.intro":"Follow items by lot or serial number, review expiry risks, and manage recalls.","traceabilityPages.hub.expiryTitle":"Expiry overview","traceabilityPages.hub.period":"Next 90 days","traceabilityPages.hub.tools":"Tracking tools","traceabilityPages.hub.open":"Open section","traceabilityPages.hub.retryHint":"The expiry overview is unavailable. You can still open the tracking sections below.",
+
     'traceabilityPages.common.traceability': 'Traceability',
     'traceabilityPages.common.lots': 'Lots / Batches',
     'traceabilityPages.common.serials': 'Serial Numbers',
@@ -118,6 +121,9 @@ export const traceabilityPagesEn = {
 };
 
 export const traceabilityPagesAr = {
+ 'traceabilityPages.hub.expiryLoadError':'تعذر تحميل ملخص الصلاحية.',
+"traceabilityPages.hub.intro":"تابع الأصناف حسب الدفعات والأرقام التسلسلية، وراجع قرب انتهاء الصلاحية وعمليات الاستدعاء.","traceabilityPages.hub.expiryTitle":"ملخص الصلاحية","traceabilityPages.hub.period":"خلال 90 يومًا","traceabilityPages.hub.tools":"أدوات التتبع","traceabilityPages.hub.open":"فتح القسم","traceabilityPages.hub.retryHint":"ملخص الصلاحية غير متاح حاليًا. يمكنك فتح أقسام التتبع أدناه.",
+
     'traceabilityPages.common.traceability': 'التتبّع',
     'traceabilityPages.common.lots': 'التشغيلات / الدفعات',
     'traceabilityPages.common.serials': 'الأرقام التسلسلية',
