@@ -183,7 +183,9 @@ class StockCountService
             }
 
             if ($adjLines !== []) {
-                $adj = $this->adjustments->createDraft([
+                // Q12 (c): the count's own variance adjustment is the controlled correction for inactive items too.
+                $adj = \App\Support\InactiveItemPolicy::duringCountPosting(function () use ($count, $adjLines) {
+                    $adj = $this->adjustments->createDraft([
                     'adjustment_number' => 'COUNT-'.$count->count_number,
                     'adjustment_date' => now()->toDateString(),
                     'warehouse_id' => $count->warehouse_id,
@@ -192,6 +194,9 @@ class StockCountService
                 ], $adjLines);
 
                 $this->adjustments->post($adj);
+
+                    return $adj;
+                });
                 $count->adjustment_id = $adj->id;
             }
 

@@ -200,6 +200,7 @@ return array (
     'bulk_deactivation_blocked' => '部分所选物料仍有库存（包括负库存）、预留库存或未完成的库存单据，无法停用。未更改任何物料。',
     'inactive_item_rejected' => '该物料已停用。不允许为其创建新的库存单据或库存变动；请先重新启用，或通过报废调整减少其剩余库存。',
     'inactive_write_off_exceeds_stock' => '停用物料只能从其正数现有库存中报废；减少数量不得超过该库存，也不得产生负余额。',
+    'inactive_return_exceeds_shipped' => '停用物料只能针对其已过账的发货进行退货，且不得超过原发货数量。',
     'zone_code_unique' => '区域代码在仓库内必须是唯一的。',
     'zone_has_stock' => '无法停用仍持有库存的区域。',
     'bin_code_unique' => '库位编码在仓库内必须唯一。',

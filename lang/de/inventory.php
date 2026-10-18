@@ -200,6 +200,7 @@ return array (
     'bulk_deactivation_blocked' => 'Einige ausgewählte Artikel können nicht deaktiviert werden, solange Bestand (einschließlich negativer Bestände), reservierter Bestand oder offene Lagerbelege vorhanden sind. Es wurden keine Artikel geändert.',
     'inactive_item_rejected' => 'Dieser Artikel ist inaktiv. Neue Lagerbelege und Bewegungen sind dafür nicht erlaubt; aktivieren Sie ihn zuerst wieder oder reduzieren Sie den Restbestand mit einer Ausbuchungs-Korrektur.',
     'inactive_write_off_exceeds_stock' => 'Ein inaktiver Artikel kann nur aus seinem positiven Bestand ausgebucht werden; die Reduzierung darf diesen Bestand nicht übersteigen und keinen negativen Saldo erzeugen.',
+    'inactive_return_exceeds_shipped' => 'Ein inaktiver Artikel kann nur zu einer gebuchten Lieferung dieses Artikels zurückgenommen werden, höchstens bis zur ursprünglich gelieferten Menge.',
     'zone_code_unique' => 'Der Zonencode muss innerhalb des Lagers eindeutig sein.',
     'zone_has_stock' => 'Eine Zone, in der sich noch Lagerbestände befinden, kann nicht deaktiviert werden.',
     'bin_code_unique' => 'Der Lagerplatzcode muss innerhalb des Lagers eindeutig sein.',
