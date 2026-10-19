@@ -130,14 +130,14 @@ class LandedCostService
             if (! in_array($type, self::CHARGE_TYPES, true) || ! is_numeric($amount) || ! Decimal::gt($amount, '0')) {
                 $this->fail('charge_invalid');
             }
-            $amount = Decimal::round($amount, 4);
+            $amount = Decimal::round($amount, 6);
             $baseAmount = $this->toBase($amount, $rate);
             LandedCostCharge::query()->create([
                 'landed_cost_id' => $doc->id, 'charge_type' => $type,
                 'description' => isset($charge['description']) ? mb_substr(trim((string) $charge['description']), 0, 255) ?: null : null,
                 'amount' => $amount, 'base_amount' => $baseAmount,
             ]);
-            $total = Decimal::add($total, $amount, 4);
+            $total = Decimal::add($total, $amount, 6);
             $totalBase = Decimal::add($totalBase, $baseAmount, 2);
         }
         foreach ($receiptLineIds as $lineId) {
@@ -152,7 +152,7 @@ class LandedCostService
             'exchange_rate' => $rate,
             'supplier_reference' => isset($attributes['supplier_reference']) ? (mb_substr(trim((string) $attributes['supplier_reference']), 0, 120) ?: null) : $doc->supplier_reference,
             'notes' => array_key_exists('notes', $attributes) ? $attributes['notes'] : $doc->notes,
-            'total_amount' => Decimal::round($total, 4),
+            'total_amount' => Decimal::round($total, 6),
             'total_base_amount' => Decimal::money($totalBase),
         ])->save();
         // Validates the basis now (e.g. a weight method without item weights),

@@ -18,6 +18,8 @@ return new class extends Migration {
         'cost_layers' => ['unit_cost','original_qty','remaining_qty'],
         'cost_layer_consumptions' => ['qty','unit_cost'],
         'stock_landed_cost_lines' => ['quantity','receipt_value','weight','allocated_base_amount','inventory_base_amount','consumed_base_amount'],
+        'stock_landed_costs' => ['total_amount'],
+        'stock_landed_cost_charges' => ['amount'],
         'integration_document_lifecycle_mappings' => ['ordered_qty','reserved_qty','received_qty','billed_qty','shipped_qty','invoiced_qty','returned_qty'],
     ];
 

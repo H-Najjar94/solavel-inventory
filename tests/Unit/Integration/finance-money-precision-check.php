@@ -19,7 +19,7 @@ $before = $lines;
 Precision::assertBalancedInventory($lines, 3);
 $check($lines === $before, 'Inventory values mutated');
 Precision::assertBalancedInventory([['base_debit'=>'12.34','base_credit'=>'0'],['base_debit'=>'0','base_credit'=>'12.34']], 2);
-$check(Decimal::MONEY_SCALE === 2 && Decimal::QTY_SCALE === 4 && Decimal::COST_SCALE === 4, 'Native precision changed');
+$check(Decimal::MONEY_SCALE === 2 && Decimal::QTY_SCALE === 6 && Decimal::COST_SCALE === 6, 'Purchase quantity/cost precision changed');
 // A one-unit Finance discrepancy must stop, not change either carrying value.
 foreach (['0.001', '0.010', '-0.001'] as $difference) {
     $rejected = false;
