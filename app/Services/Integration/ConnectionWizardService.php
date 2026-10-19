@@ -522,6 +522,11 @@ final class ConnectionWizardService
         $validDecisions = $decisions->filter(fn ($decision, $fingerprint) => $this->decisionMatchesCandidate(
             $decision, $candidatesByFingerprint->get($fingerprint)
         ));
+        $recoverableDecisions = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+            ->where('run_uuid', $runUuid)->where('status', 'reversed')->get()
+            ->filter(fn ($decision) => $this->decisionMatchesCandidate(
+                $decision, $candidatesByFingerprint->get($decision->candidate_fingerprint)
+            ));
         $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])->merge($preview['guided_setup']['automatic_exclusions'] ?? [])->pluck('fingerprint');
         $blocking = collect($preview['comparison'])->filter(function (array $candidate) use ($validDecisions, $automatic, $organizationId): bool {
             if ($candidate['blocking_reason'] === null || $this->isFinanceOnlyWarehouseDiagnostic($candidate, $organizationId)) {
@@ -617,6 +622,7 @@ final class ConnectionWizardService
                 'approved' => $run->accountant_approved_at !== null,
             ],
             'snapshot_stale' => $snapshotStale,
+            'recoverable_decisions_count' => $recoverableDecisions->count(),
             'recovery' => $snapshotStale ? ['action' => 'reset_draft', 'requires_confirmation' => true,
                 'reason' => 'snapshot_or_before_image_changed'] : null,
             'review_ready' => (bool) $ready,
@@ -823,12 +829,17 @@ final class ConnectionWizardService
             $run = $this->runForOrganization($organizationId, $runUuid, true);
             if ($run->state === 'connected') $this->fail('connected_run_cannot_be_reset');
 
-            $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
-                ->where('run_uuid', $runUuid)->where('status', 'selected')->get();
-            $valid = $selected->filter(fn ($decision) => $this->decisionMatchesCandidate(
+            $reviewed = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                ->where('run_uuid', $runUuid)->whereIn('status', ['selected', 'reversed'])->get();
+            $valid = $reviewed->filter(fn ($decision) => $this->decisionMatchesCandidate(
                 $decision, $candidates->get($decision->candidate_fingerprint)
             ));
-            $invalid = $selected->reject(fn ($decision) => $valid->contains('decision_uuid', $decision->decision_uuid));
+            $invalid = $reviewed->reject(fn ($decision) => $valid->contains('decision_uuid', $decision->decision_uuid));
+            if ($valid->isNotEmpty()) {
+                DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                    ->where('run_uuid', $runUuid)->whereIn('decision_uuid', $valid->pluck('decision_uuid')->all())
+                    ->update(['status' => 'selected', 'actor_user_id' => $actorUserId, 'updated_at' => now()]);
+            }
             if ($invalid->isNotEmpty()) {
                 DB::connection('tenant')->table('integration_connection_wizard_decisions')
                     ->where('run_uuid', $runUuid)->whereIn('decision_uuid', $invalid->pluck('decision_uuid')->all())

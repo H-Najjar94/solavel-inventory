@@ -630,6 +630,10 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             failedDecision={failedDecision}
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
+            restoreProgress={() => runAction(() => api.refreshIntegrationWizardDraft(runUuid), 'integration.wizard.decisionSaved', sourceText(
+                "Saved progress restored. Only new or changed records remain.",
+                "تمت استعادة التقدم المحفوظ. بقيت فقط السجلات الجديدة أو المتغيرة."
+            ))}
             organizationName={organizationName}
             connectionAccess={connectionAccess}
         />;

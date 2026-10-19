@@ -34,7 +34,7 @@ export default function GuidedConnectionAssistant({
     assistantStep, setAssistantStep, allowedActions, canEdit, editableState,
     decide, undoDecision, bulkSelection, toggleBulk, bulk, exportComparison,
     start, runAction, cutoffAt, setCutoffAt, saveState, retrySave, reloadLatest,
-    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad, decisionErrors = {}, failedDecision,
+    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad, decisionErrors = {}, failedDecision, restoreProgress,
 }) {
     const { locale } = useI18n();
     const guided = view.guided_setup || {};
@@ -720,6 +720,11 @@ export default function GuidedConnectionAssistant({
 
         if (task === 2) return <section className="focus-card focus-list-card">
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.businessListTitle')}</h2></div><strong><bdi>{tr('integration.focus.remainingCount', { count: ownerPending.length })}</bdi></strong></div>
+            {view.recoverable_decisions_count > 0 && <div className="focus-attention" role="status">
+                <strong>{sourceText("Your earlier review can be restored", "يمكن استعادة مراجعتك السابقة")}</strong>
+                <p>{sourceText(`${view.recoverable_decisions_count} unchanged decisions are available. Restore them and review only new or changed records.`, `يتوفر ${view.recoverable_decisions_count} قراراً لم يتغير. استعدها وراجع فقط السجلات الجديدة أو المتغيرة.`)}</p>
+                <button type="button" className="btn btn--primary" disabled={saving} onClick={restoreProgress}>{sourceText("Restore saved progress", "استعادة التقدم المحفوظ")}</button>
+            </div>}
             {recordSummary}
             <nav className="focus-category-nav" aria-label={tr('integration.focus.businessSections')}>
                 {ownerSections.map(([section, sectionRows]) => {
