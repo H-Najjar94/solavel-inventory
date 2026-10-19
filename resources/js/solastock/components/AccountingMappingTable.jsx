@@ -95,7 +95,27 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
     useEffect(() => { onDirtyChange?.(dirtyCount); }, [dirtyCount, onDirtyChange]);
     const [failed, setFailed] = useState(null);
     const [pending, setPending] = useState(null);
-    return <div className="wizard-account-table"><p className="wizard-account-note">{sourceText("Proposals are not saved selections. Review and save each account; final accounting approval remains a separate step.", "الاقتراحات ليست اختيارات محفوظة. راجع الحساب واحفظه؛ تبقى الموافقة المحاسبية النهائية خطوة منفصلة.")}</p>
+    const automaticAttempts = useRef(new Set());
+    useEffect(() => {
+        if (!canEdit || saving || pending) return;
+        const row = rows.find(candidate => {
+            const detail = candidate.safe_details || {};
+            return detail.recommendation_source === 'verified_finance_default'
+                && detail.recommended_account?.id
+                && !savedAccount(candidate, decisions)
+                && !proposals[candidate.fingerprint]
+                && !automaticAttempts.current.has(candidate.fingerprint);
+        });
+        if (!row) return;
+        automaticAttempts.current.add(row.fingerprint);
+        setPending(row.fingerprint);
+        Promise.resolve(choose(row, 'select_account_role', {
+            selected_record_id: String(row.safe_details.recommended_account.id),
+        })).then(result => setFailed(result ? null : row.fingerprint))
+            .catch(() => setFailed(row.fingerprint))
+            .finally(() => setPending(null));
+    }, [canEdit, saving, pending, rows, decisions, proposals, choose]);
+    return <div className="wizard-account-table"><p className="wizard-account-note">{sourceText("Verified SolaCount defaults are saved automatically. Review only missing or ambiguous accounts; final accounting approval remains a separate step.", "تُحفظ إعدادات SolaCount الافتراضية الموثقة تلقائياً. راجع فقط الحسابات المفقودة أو غير الواضحة؛ تبقى الموافقة المحاسبية النهائية خطوة منفصلة.")}</p>
         {rows.map(row => {
             const detail = row.safe_details || {}, role = detail.role || detail.accounting_role;
             const copy = roles[role];
@@ -104,7 +124,8 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
             const proposed = proposals[row.fingerprint] || saved || detail.recommended_account;
             const choices = detail.available_finance_accounts || [];
             const invalid = detail.current_mapping_invalid || (decisions.has(row.fingerprint) && !saved);
-            const state = accountSelectionDirty(proposals[row.fingerprint], saved) ? (sourceText("Unsaved change", "تغيير غير محفوظ")) : !saved && detail.account_proposal ? (detail.account_proposal.kind === 'code_conflict_requires_review' ? (sourceText("Account code conflict — review required", "تعارض في رمز الحساب — يلزم المراجعة")) : (sourceText("Missing default — review proposal", "حساب افتراضي مفقود — راجع الاقتراح"))) : detail.required === false && !saved ? (sourceText("Optional — not required for current operations", "اختياري — غير مطلوب للعمليات الحالية")) : saved ? (sourceText("Saved selection", "اختيار محفوظ")) : invalid ? (sourceText("Invalid — review required", "غير صالح — يلزم المراجعة")) : !choices.length ? (sourceText("Missing account", "حساب مطلوب غير متاح")) : proposed ? (sourceText("Proposed for review", "اقتراح للمراجعة")) : (sourceText("Ambiguous — select an account", "خيارات متعددة — اختر حساباً"));
+            const automatic = !saved && detail.recommendation_source === 'verified_finance_default';
+            const state = pending === row.fingerprint && automatic ? (sourceText("Saving verified default…", "جارٍ حفظ الإعداد الافتراضي الموثق…")) : accountSelectionDirty(proposals[row.fingerprint], saved) ? (sourceText("Unsaved change", "تغيير غير محفوظ")) : !saved && detail.account_proposal ? (detail.account_proposal.kind === 'code_conflict_requires_review' ? (sourceText("Account code conflict — review required", "تعارض في رمز الحساب — يلزم المراجعة")) : (sourceText("Missing default — review proposal", "حساب افتراضي مفقود — راجع الاقتراح"))) : detail.required === false && !saved ? (sourceText("Optional — not required for current operations", "اختياري — غير مطلوب للعمليات الحالية")) : saved ? (sourceText("Saved selection", "اختيار محفوظ")) : invalid ? (sourceText("Invalid — review required", "غير صالح — يلزم المراجعة")) : !choices.length ? (sourceText("Missing account", "حساب مطلوب غير متاح")) : automatic ? (sourceText("Verified default", "إعداد افتراضي موثق")) : proposed ? (sourceText("Proposed for review", "اقتراح للمراجعة")) : (sourceText("Ambiguous — select an account", "خيارات متعددة — اختر حساباً"));
             return <section className="wizard-account-row" key={row.fingerprint} aria-label={label}>
                 <div><strong>{label}</strong><small>{detail.required === false ? (sourceText("Optional for current operations", "اختياري للعمليات الحالية")) : (sourceText("Required for enabled operations", "مطلوب للعمليات المفعلة"))}</small><small>{sourceText(copy?.[2],copy?.[3])}</small>
 {detail.current_mapping && <small>{sourceText("Current mapping: ", "الربط الحالي: ")}<bdi>{detail.current_mapping.code}</bdi> · {recordText(detail.current_mapping.name, locale)}</small>}</div>
@@ -114,7 +135,7 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
                     {detail.finance_chart_ready === false && <small>{sourceText("Complete the SolaCount chart of accounts setup first.", "أكمل إعداد دليل الحسابات في SolaCount أولاً.")}</small>}
                     {!choices.length && <small>{sourceText("An accounting administrator must review the SolaCount chart of accounts. No account will be created automatically.", "اطلب من مسؤول الحسابات مراجعة دليل الحسابات في SolaCount. لن يتم إنشاء حساب تلقائياً.")}</small>}
                 </div><div><span className={`wizard-account-state ${saved ? 'is-saved' : 'is-pending'}`} role="status">{state}</span>
-                    {canEdit && proposed && String(proposed.id) !== String(saved?.id) && <button type="button" className="btn btn--primary" disabled={saving} onClick={async () => {
+                    {canEdit && proposed && String(proposed.id) !== String(saved?.id) && (!automatic || failed === row.fingerprint) && <button type="button" className="btn btn--primary" disabled={saving} onClick={async () => {
                         setPending(row.fingerprint);
                         try {
                             const result = await choose(row, 'select_account_role', { selected_record_id: String(proposed.id) });
