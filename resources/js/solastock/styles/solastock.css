@@ -2060,6 +2060,45 @@ html[dir="rtl"] .fifo-total-line strong {
 @media(max-width:900px){.focus-result-grid{grid-template-columns:1fr}.focus-result-hero{grid-template-columns:auto minmax(0,1fr)}.focus-connect-button{grid-column:1/-1;width:100%}}
 @media(max-width:760px){.focus-wizard{padding-inline:6px}.focus-wizard .focus-header{padding:10px}.focus-wizard .focus-footer{margin:18px -14px -14px;padding:12px 14px}.focus-result-hero{grid-template-columns:1fr;text-align:center;padding:17px}.focus-result-mark{margin-inline:auto}.focus-result .focus-outcome{text-align:center}.focus-result-summary{grid-template-columns:1fr}.focus-review-details__body{padding-inline:8px}}
 
+/* Remaining connection steps: approachable status cards, compact optional
+   material, and one obvious place to act. */
+.focus-landing{display:grid;place-items:center;gap:8px;min-height:240px;text-align:center}
+.focus-loading-mark{width:42px;height:42px;border:4px solid var(--surface-3,#e8edf2);border-top-color:var(--brand,#e09921);border-radius:50%;animation:focus-spin .8s linear infinite}
+@keyframes focus-spin{to{transform:rotate(360deg)}}
+.focus-prepared>p:first-of-type{max-width:72ch;color:var(--muted,#667085);line-height:1.6}
+.focus-prepared .focus-check-list{margin:18px 0;gap:10px}
+.focus-prepared .focus-check-list li{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:10px;min-height:58px;padding:12px 14px;border:1px solid #b9dfca;background:#f5fbf7;color:var(--text,#17202a)}
+.focus-prepared .focus-check-list li>span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#dff3e8;color:#216e45;font-weight:800}
+.focus-prepared .focus-check-list li.needs-attention{border-color:#efd39e;background:#fffaf1}
+.focus-prepared .focus-check-list li.needs-attention>span{background:#ffebbf;color:#8a5700}
+.focus-list-card .focus-record-summary{padding:0 2px}
+.focus-list-card .focus-list-section{border-radius:12px;box-shadow:0 3px 12px rgba(16,24,40,.035)}
+.focus-list-card .focus-list-section>header{min-height:48px;padding:8px 12px}
+.focus-list-card .focus-section-tools{display:flex;margin:0;padding:10px 12px;border-bottom:1px solid var(--line,#dfe5ea);background:var(--surface-2,#fafbfc)}
+.focus-list-card .focus-section-tools .input{min-height:42px}
+.focus-batch-progress{position:sticky;top:8px;z-index:7;padding:14px 16px;border-radius:12px;box-shadow:0 10px 28px rgba(16,24,40,.12)}
+.focus-batch-progress progress{height:11px}
+.focus-account-step>.focus-list-heading{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line,#dfe5ea)}
+.focus-optional-accounts{margin-top:14px;border:1px solid var(--line,#dfe5ea);border-radius:12px;overflow:hidden}
+.focus-optional-accounts>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px;padding:10px 14px;background:var(--surface-2,#fafbfc);list-style:none}
+.focus-optional-accounts>summary::-webkit-details-marker{display:none}
+.focus-optional-accounts>summary bdi{display:grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:999px;background:var(--surface-3,#e8edf2);font-size:.75rem}
+.focus-optional-accounts__body{padding:4px 14px 10px}
+.focus-date-heading{display:flex;align-items:flex-start;gap:13px;margin-bottom:18px}
+.focus-date-heading p{margin:3px 0 0;color:var(--muted,#667085);line-height:1.55}
+.focus-date-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:#fff3df;color:#8a5700;font-size:1.3rem}
+.focus-date-picker{max-width:760px;margin:18px 0;padding:18px;border:1px solid var(--line,#dfe5ea);border-radius:12px;background:var(--surface-2,#fafbfc)}
+.focus-date-picker .field{margin:0}
+.focus-date-picker .input{min-height:46px;background:var(--surface,#fff);font-size:1rem}
+.focus-date-picker .focus-draft-note:last-child{margin-bottom:0}
+.focus-date-step .wizard-account-row{margin-inline:-4px;padding:12px;border:1px solid var(--line,#dfe5ea);border-radius:10px;background:var(--surface,#fff)}
+.focus-date-step .wizard-account-row+.wizard-account-row{margin-top:8px}
+[data-theme="dark"] .focus-prepared .focus-check-list li{border-color:rgba(31,157,107,.32);background:var(--green-soft)}
+[data-theme="dark"] .focus-prepared .focus-check-list li.needs-attention{border-color:rgba(224,153,33,.32);background:var(--amber-tint)}
+[data-theme="dark"] .focus-date-icon{background:var(--amber-tint);color:var(--amber-soft)}
+@media(max-width:760px){.focus-prepared .focus-check-list{grid-template-columns:1fr}.focus-category-nav button{flex:1 1 calc(50% - 6px)}.focus-category-nav button span{overflow:hidden;text-overflow:ellipsis}.focus-date-picker{padding:14px}.focus-date-heading{align-items:center}.focus-batch-progress{top:4px}}
+@media(prefers-reduced-motion:reduce){.focus-loading-mark{animation-duration:1.8s}}
+
 /* ── Team access ── */
 .team-access-note { display:flex; align-items:flex-start; gap:10px; padding:14px 16px; }
 .team-access-note i { color: var(--muted,#888); margin-top:3px; }

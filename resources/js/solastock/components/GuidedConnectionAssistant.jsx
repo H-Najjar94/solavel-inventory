@@ -696,6 +696,7 @@ export default function GuidedConnectionAssistant({
     const taskContent = () => {
         // The session starts (or resumes) automatically; this only shows while it opens or if opening failed.
         if (!runUuid) return <section className="focus-card focus-landing" aria-busy={saving}>
+            {saving && <span className="focus-loading-mark" aria-hidden="true" />}
             <p ref={headingRef} tabIndex="-1" className="focus-lead">{saving ? tr('integration.summary.startingSetup') : tr('integration.summary.startFailed')}</p>
             <p className="focus-scenario">{scenarioText}</p>
             {!saving && gate.allowed && footer(tr('integration.summary.action.retry'), () => start(), { hideBack: true })}
@@ -705,10 +706,10 @@ export default function GuidedConnectionAssistant({
             <h1 ref={headingRef} tabIndex="-1">{tr('integration.focus.preparedTitle')}</h1>
             <p>{tr('integration.focus.preparedIntro')}</p>
             <ul className="focus-check-list">
-                <li>{checks.organization_verified ? '✓' : '!'} {tr('integration.focus.organizationReady')}</li>
-                <li>{checks.base_currency_inherited ? '✓' : '!'} {tr('integration.focus.baseCurrency', { currency: guided.currency_summary?.base_currency || tr("integration.review.not_configured_review_finance_settings") })}</li>
-                <li>{checks.tax_exceptions ? '!' : '✓'} {tr('integration.focus.taxesReady')} · {checks.tax_exceptions || 0} {tr("integration.review.need_review")}</li>
-                <li>{resolvedAccounting === requiredAccountingRows.length ? '✓' : '!'} {resolvedAccounting}/{requiredAccountingRows.length} {tr("integration.review.valid_saved_account_selections")}</li>
+                <li className={checks.organization_verified ? 'is-complete' : 'needs-attention'}><span aria-hidden="true">{checks.organization_verified ? '✓' : '!'}</span><strong>{tr('integration.focus.organizationReady')}</strong></li>
+                <li className={checks.base_currency_inherited ? 'is-complete' : 'needs-attention'}><span aria-hidden="true">{checks.base_currency_inherited ? '✓' : '!'}</span><strong>{tr('integration.focus.baseCurrency', { currency: guided.currency_summary?.base_currency || tr("integration.review.not_configured_review_finance_settings") })}</strong></li>
+                <li className={checks.tax_exceptions ? 'needs-attention' : 'is-complete'}><span aria-hidden="true">{checks.tax_exceptions ? '!' : '✓'}</span><strong>{tr('integration.focus.taxesReady')} · {checks.tax_exceptions || 0} {tr("integration.review.need_review")}</strong></li>
+                <li className={resolvedAccounting === requiredAccountingRows.length ? 'is-complete' : 'needs-attention'}><span aria-hidden="true">{resolvedAccounting === requiredAccountingRows.length ? '✓' : '!'}</span><strong>{resolvedAccounting}/{requiredAccountingRows.length} {tr("integration.review.valid_saved_account_selections")}</strong></li>
             </ul>
             {guided.setup_path === 'fresh_workspace' && <p className="wizard-account-note">{tr("integration.review.no_catalog_stock_activity_financial_documents_or")}</p>}
             <div className="focus-attention"><strong>{ownerPending.length + accountingPending.length + physicalPending.length} {tr("integration.review.choices_need_review")}</strong><p>{tr('integration.focus.needsReviewText')}</p></div>
@@ -855,29 +856,29 @@ export default function GuidedConnectionAssistant({
             })}
         </section>;
 
-        if (task === 4) return <section className="focus-card">
+        if (task === 4) return <section className="focus-card focus-account-step">
             <div className="focus-list-heading"><div><h2 ref={headingRef} tabIndex="-1">{tr("integration.review.review_finance_accounts")}</h2>
                 <p>{tr("integration.review.choose_the_finance_accounts_used_by_inventory")}</p></div>
                 <strong><bdi>{resolvedAccounting}/{requiredAccountingRows.length}</bdi> {tr("integration.review.valid_saved_selections")}</strong></div>
             {!accountingGate.allowed && <div className="focus-accountant-handoff" role="status">{tr('integration.focus.accountingAccessBlockedTitle')}<p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p></div>}
             <AccountingMappingTable onDirtyChange={setRequiredAccountChanges} rows={requiredAccountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
-            {accountingRows.length > requiredAccountingRows.length && <details><summary>{sourceText("Optional accounts — not required for current operations", "حسابات اختيارية — غير مطلوبة للعمليات الحالية")}</summary><AccountingMappingTable onDirtyChange={setOptionalAccountChanges} rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></details>}
+            {accountingRows.length > requiredAccountingRows.length && <details className="focus-optional-accounts"><summary><span>{sourceText("Optional accounts — not required for current operations", "حسابات اختيارية — غير مطلوبة للعمليات الحالية")}</span><bdi>{accountingRows.length - requiredAccountingRows.length}</bdi></summary><div className="focus-optional-accounts__body"><AccountingMappingTable onDirtyChange={setOptionalAccountChanges} rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></div></details>}
             {taxReviewRows.map(compactDecisionRow)}
             {footer(tr('integration.focus.continue'), () => go(5), { reason: tr(requiredAccountChanges + optionalAccountChanges ? 'integration.focus.saveAccountChanges' : 'integration.records.accountsFirst'), disabled: requiredAccountChanges + optionalAccountChanges > 0 || accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
         </section>;
 
-        if (task === 5) return <section className="focus-card">
-            <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.startDateTitle')}</h2>
-            <p>{tr('integration.focus.startDateExplanation')}</p>
+        if (task === 5) return <section className="focus-card focus-date-step">
+            <div className="focus-date-heading"><span className="focus-date-icon" aria-hidden="true">◷</span><div><h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.startDateTitle')}</h2>
+            <p>{tr('integration.focus.startDateExplanation')}</p></div></div>
             {(ownerPending.length > 0 || physicalPending.length > 0 || accountingPending.length > 0 || cutoffPending.length > 0) && <div className="focus-attention" role="alert">
                 <strong>{sourceText("Finish the remaining review first", "أكمل المراجعة المتبقية أولاً")}</strong>
                 <p>{sourceText("We will take you to the exact unfinished step. Your saved work will not be lost.", "سننقلك إلى الخطوة غير المكتملة مباشرةً. لن تفقد أي عمل محفوظ.")}</p>
             </div>}
             {[...cutoffRows, ...historyRows].map(row => <div className="wizard-account-row" key={row.fingerprint}><div><strong>{recordText(row.solabooks?.name || row.solastock?.name || row.solabooks?.code || row.solastock?.code, locale)}</strong><small>{row.safe_details?.document_type || row.safe_details?.event_type} · {row.safe_details?.status}</small></div><p>{row.entity_type === 'historical_event' ? tr("integration.review.this_event_stays_excluded_it_will_not") : tr("integration.review.review_this_existing_document_against_the_connection")}</p><button type="button" className="btn" disabled={!gate.allowed || saving || !editableState || confirmedDecisions.has(row.fingerprint)} onClick={() => choose(row, row.entity_type === 'historical_event' ? 'retain_historical_exclusion' : 'review_cutoff_document')}>{confirmedDecisions.has(row.fingerprint) ? tr("integration.review.reviewed") : tr("integration.review.confirm_review")}</button></div>)}
             {cutoffRows.length > 0 && <div className="focus-attention"><strong>{tr('integration.focus.openDocuments', { count: cutoffRows.length })}</strong><p>{tr('integration.focus.openDocumentsText')}</p></div>}
-            <label className="field"><span className="field-label">{tr('integration.focus.startDateLabel')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label>
+            <div className="focus-date-picker"><label className="field"><span className="field-label">{tr('integration.focus.startDateLabel')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label>
             {!view.cutoff_at && <p className="focus-draft-note">{tr('integration.focus.proposedStartDate')}</p>}
-            {run.data?.state !== 'cutoff_review' && <p className="focus-draft-note">{tr('integration.focus.startDatePrerequisites')}</p>}
+            {run.data?.state !== 'cutoff_review' && <p className="focus-draft-note">{tr('integration.focus.startDatePrerequisites')}</p>}</div>
             {footer(tr('integration.focus.continue'), async () => {
                 const prepared = await runAction(() => prepareConnectionReview(api, run.data, cutoffAt,
                     tr('integration.focus.validStartDateFirst'),
