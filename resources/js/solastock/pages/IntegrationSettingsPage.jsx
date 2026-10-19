@@ -473,8 +473,8 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             if (error?.outcomeUnknown) {
                 // Confirm the exact committed decision instead of forcing a
                 // refresh or retrying an operation with an unknown outcome.
-                for (let attempt = 0; attempt < 6; attempt++) {
-                    if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 1500));
+                for (let attempt = 0; attempt < 15; attempt++) {
+                    if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 2000));
                     const latest = (await run.refetch({ cancelRefetch: true }).catch(() => null))?.data;
                     const recovered = canonicalDecision(latest, row.fingerprint);
                     const detailsMatch = Object.entries(extraSafeDetails).every(([key, value]) =>
@@ -493,7 +493,14 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             setPendingDecisions((current) => new Map(current).set(row.fingerprint, {
                 candidate_fingerprint: row.fingerprint, action, persistence_state: conflict ? 'conflict' : 'failed',
             }));
-            setFailedDecision({ row, action, extraSafeDetails, mutationSequence });
+            const validationMessages = Object.values(error?.payload?.errors || {}).flat().filter((value) => typeof value === 'string' && value.trim());
+            const failureMessage = error?.outcomeUnknown
+                ? sourceText(
+                    "The server did not confirm this account selection. Your choice is still here—use Retry; you do not need to refresh the page.",
+                    "لم يؤكد الخادم حفظ اختيار هذا الحساب. اختيارك ما زال موجوداً—استخدم إعادة المحاولة؛ لا حاجة لتحديث الصفحة."
+                )
+                : validationMessages[0] || error?.message || tr('settings.common.errorFallback');
+            setFailedDecision({ row, action, extraSafeDetails, mutationSequence, message: failureMessage });
             setSaveState(conflict ? 'conflict' : 'failed');
             setDecisionErrors(decisionFieldErrors(error));
             toast.failure(error, error.message || tr('settings.common.errorFallback'));
@@ -614,6 +621,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             runAction={runAction} cutoffAt={cutoffAt} setCutoffAt={setCutoffAt}
             confirmation={confirmation} setConfirmation={setConfirmation}
             saveState={saveState} decisionErrors={decisionErrors}
+            failedDecision={failedDecision}
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
             organizationName={organizationName}

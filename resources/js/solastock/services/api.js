@@ -15,6 +15,10 @@ function csrfToken() { return document.querySelector('meta[name="csrf-token"]')?
 function locale() { return normalizeLocale(window.SOLASTOCK_LOCALE?.locale); }
 function validationMessage(value) {
     if (value === 'finance_party_source_missing_or_inactive') return feedbackText('financePartyUnavailable');
+    const arabic = locale() === 'ar';
+    if (value === 'draft_optimistic_lock_conflict') return arabic ? 'تغيّر الإعداد أثناء الحفظ. راجع الحساب ثم أعد المحاولة.' : 'The setup changed while saving. Review this account and try again.';
+    if (value === 'wizard_selected_record_required') return arabic ? 'اختر حساباً من القائمة قبل الحفظ.' : 'Choose an account from the list before saving.';
+    if (value === 'approved_account_role_invalid') return arabic ? 'هذا الحساب غير نشط أو غير صالح لهذا الاستخدام. اختر حساباً آخر.' : 'This account is inactive or is not valid for this use. Choose another account.';
     return value;
 }
 function readableValidationPayload(payload) {
@@ -36,7 +40,10 @@ function transport(url, options) {
         };
         if (mutation && uncertain.has(key)) throw unknown();
         const controller = new AbortController();
-        const timer = mutation ? setTimeout(() => controller.abort(), 45000) : undefined;
+        // A wizard decision returns a refreshed comparison. Large organizations
+        // can legitimately take longer than an ordinary mutation, so do not
+        // turn a successful save into an uncertain result after 45 seconds.
+        const timer = mutation ? setTimeout(() => controller.abort(), recoverableWizardDecision ? 120000 : 45000) : undefined;
         let res, json;
         try {
             res = await fetch(url, {...options, signal: controller.signal});

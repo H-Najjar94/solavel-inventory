@@ -34,7 +34,7 @@ export default function GuidedConnectionAssistant({
     assistantStep, setAssistantStep, allowedActions, canEdit, editableState,
     decide, undoDecision, bulkSelection, toggleBulk, bulk, exportComparison,
     start, runAction, cutoffAt, setCutoffAt, saveState, retrySave, reloadLatest,
-    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad, decisionErrors = {},
+    organizationName, connectionAccess, confirmation, setConfirmation, loadError, retryLoad, decisionErrors = {}, failedDecision,
 }) {
     const { locale } = useI18n();
     const guided = view.guided_setup || {};
@@ -861,8 +861,8 @@ export default function GuidedConnectionAssistant({
                 <p>{tr("integration.review.choose_the_finance_accounts_used_by_inventory")}</p></div>
                 <strong><bdi>{resolvedAccounting}/{requiredAccountingRows.length}</bdi> {tr("integration.review.valid_saved_selections")}</strong></div>
             {!accountingGate.allowed && <div className="focus-accountant-handoff" role="status">{tr('integration.focus.accountingAccessBlockedTitle')}<p>{tr(`integration.focus.connectionAccess.${connectionAccess?.reason || 'policy_unavailable'}`)}</p></div>}
-            <AccountingMappingTable onDirtyChange={setRequiredAccountChanges} rows={requiredAccountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} />
-            {accountingRows.length > requiredAccountingRows.length && <details className="focus-optional-accounts"><summary><span>{sourceText("Optional accounts — not required for current operations", "حسابات اختيارية — غير مطلوبة للعمليات الحالية")}</span><bdi>{accountingRows.length - requiredAccountingRows.length}</bdi></summary><div className="focus-optional-accounts__body"><AccountingMappingTable onDirtyChange={setOptionalAccountChanges} rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} /></div></details>}
+            <AccountingMappingTable onDirtyChange={setRequiredAccountChanges} rows={requiredAccountingRows} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} failedDecision={failedDecision} />
+            {accountingRows.length > requiredAccountingRows.length && <details className="focus-optional-accounts"><summary><span>{sourceText("Optional accounts — not required for current operations", "حسابات اختيارية — غير مطلوبة للعمليات الحالية")}</span><bdi>{accountingRows.length - requiredAccountingRows.length}</bdi></summary><div className="focus-optional-accounts__body"><AccountingMappingTable onDirtyChange={setOptionalAccountChanges} rows={accountingRows.filter(row => row.safe_details?.required === false)} decisions={confirmedDecisions} choose={choose} canEdit={accountingGate.allowed && editableState} saving={saving} failedDecision={failedDecision} /></div></details>}
             {taxReviewRows.map(compactDecisionRow)}
             {footer(tr('integration.focus.continue'), () => go(5), { reason: tr(requiredAccountChanges + optionalAccountChanges ? 'integration.focus.saveAccountChanges' : 'integration.records.accountsFirst'), disabled: requiredAccountChanges + optionalAccountChanges > 0 || accountingPending.length > 0 || taxReviewRows.some(row => !confirmedDecisions.has(row.fingerprint)) || saving })}
         </section>;

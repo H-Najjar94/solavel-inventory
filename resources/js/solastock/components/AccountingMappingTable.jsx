@@ -1,7 +1,6 @@
 import { sourceText } from '../i18n/locales.js';
 import { t } from '../i18n/index.js';
 import { accountSelectionDirty } from '../services/connectionReview.js';
-import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n/context.jsx';
@@ -88,7 +87,7 @@ function AccountPicker({ accounts, selected, onSelect, disabled, label, locale }
         {!filtered.length && <p role="status">{sourceText("No matching accounts", "لا توجد حسابات مطابقة")}</p>}
     </div>, document.body)}</>;
 }
-export default function AccountingMappingTable({ rows, decisions, choose, canEdit, saving, onDirtyChange }) {
+export default function AccountingMappingTable({ rows, decisions, choose, canEdit, saving, onDirtyChange, failedDecision }) {
     const { locale } = useI18n();
     const ar = locale === 'ar';
     const [proposals, setProposals] = useState({});
@@ -143,7 +142,9 @@ export default function AccountingMappingTable({ rows, decisions, choose, canEdi
                             setFailed(result ? null : row.fingerprint);
                         } finally { setPending(null); }
                     }}>{pending === row.fingerprint ? (sourceText("Saving…", "جارٍ الحفظ…")) : (sourceText("Save selection", "حفظ الاختيار"))}</button>}
-                    {failed === row.fingerprint && <small role="alert">{feedbackText('unknown')}</small>}
+                    {failed === row.fingerprint && <small role="alert">{failedDecision?.row?.fingerprint === row.fingerprint
+                        ? failedDecision.message
+                        : sourceText("This account could not be saved. Your selection is still here—try again.", "تعذر حفظ هذا الحساب. اختيارك ما زال موجوداً—حاول مرة أخرى.")}</small>}
                 </div>
             </section>;
         })}
