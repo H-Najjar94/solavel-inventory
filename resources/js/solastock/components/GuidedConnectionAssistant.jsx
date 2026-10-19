@@ -52,6 +52,7 @@ export default function GuidedConnectionAssistant({
     const [requiredAccountChanges, setRequiredAccountChanges] = useState(0);
     const [optionalAccountChanges, setOptionalAccountChanges] = useState(0);
     const [sectionSaveNotice, setSectionSaveNotice] = useState(null);
+    const [batchProgress, setBatchProgress] = useState(null);
     const [bulkReviewOpen, setBulkReviewOpen] = useState(false);
     const [openOwnerSection, setOpenOwnerSection] = useState(undefined);
     const [itemFilter, setItemFilter] = useState('all');
@@ -314,10 +315,20 @@ export default function GuidedConnectionAssistant({
     const saveRecommendationsAndContinue = async () => {
         const selected = selectedOwnerRecommendations;
         setSectionSaveNotice(null);
-        for (const row of selected) {
+        if (selected.length > 0) setBatchProgress({ section: activeOwnerSection?.[0], saved: 0, total: selected.length, current: '' });
+        for (const [index, row] of selected.entries()) {
+            setBatchProgress({
+                section: activeOwnerSection?.[0], saved: index, total: selected.length,
+                current: recordText(row.solabooks?.name || row.solastock?.name, locale),
+            });
             const action = recommendedChoice(row)?.[0];
-            if (!action || !await choose(row, action, recommendationDetails(row, action))) return;
+            if (!action || !await choose(row, action, recommendationDetails(row, action))) {
+                setBatchProgress(null);
+                return;
+            }
+            setBatchProgress({ section: activeOwnerSection?.[0], saved: index + 1, total: selected.length, current: '' });
         }
+        setBatchProgress(null);
         const unresolved = activeSectionPending.filter((row) => !selected.some((saved) => saved.fingerprint === row.fingerprint));
         if (unresolved.length > 0) return;
         if (selected.length > 0) {
@@ -506,12 +517,12 @@ export default function GuidedConnectionAssistant({
                     : <span className="focus-action-prompt">{decisionPrompt}</span>}
                 {recommendation && !showManualChoice && <div className={`focus-recommendation is-${recommendationKind} ${recommendationSelected ? 'is-selected' : ''}`}>
                     <div className="focus-recommendation-top">
-                        <label className="focus-recommendation-check"><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
+                        <label className="focus-recommendation-check"><input type="checkbox" checked={recommendationSelected} disabled={Boolean(batchProgress)} onChange={() => setExcludedRecommendations((currentValues) => {
                             const next = new Set(currentValues);
                             if (next.has(row.fingerprint)) next.delete(row.fingerprint); else next.add(row.fingerprint);
                             return next;
                         })} /><span aria-hidden="true">{recommendationSelected ? '✓' : ''}</span><small>{tr(recommendationKind === 'hold' ? 'integration.focus.safeDefault' : 'integration.focus.recommended')}</small></label>
-                        <button type="button" className="focus-change-action" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
+                        <button type="button" className="focus-change-action" disabled={Boolean(batchProgress)} onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
                     </div>
                     <strong>{recommendation[1]}</strong>
                     <em>{recommendation[2]}</em>
@@ -702,7 +713,7 @@ export default function GuidedConnectionAssistant({
             <nav className="focus-category-nav" aria-label={tr('integration.focus.businessSections')}>
                 {ownerSections.map(([section, sectionRows]) => {
                     const remaining = sectionRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
-                    return <button type="button" key={section} data-section={section} className={activeOwnerSection?.[0] === section ? 'is-active' : remaining === 0 ? 'is-complete' : ''}
+                    return <button type="button" key={section} data-section={section} disabled={Boolean(batchProgress)} className={activeOwnerSection?.[0] === section ? 'is-active' : remaining === 0 ? 'is-complete' : ''}
                         aria-current={activeOwnerSection?.[0] === section ? 'page' : undefined} onClick={() => setOpenOwnerSection(section)}>
                         <SectionIcon section={section} />
                         <span>{tr(`integration.focus.section.${section}`)}</span>
@@ -712,6 +723,14 @@ export default function GuidedConnectionAssistant({
             </nav>
             {selectedOwnerRecommendations.length > 0 && <div className="focus-defaults-summary" role="status">
                 <span>{tr('integration.focus.recommendationsSelected', { count: selectedOwnerRecommendations.length })}</span>
+            </div>}
+            {batchProgress && <div className="focus-batch-progress" role="status" aria-live="polite" aria-busy="true">
+                <div><strong>{sourceText("Saving your selections…", "جارٍ حفظ اختياراتك…")}</strong><bdi>{batchProgress.saved} / {batchProgress.total}</bdi></div>
+                <progress value={batchProgress.saved} max={batchProgress.total} />
+                <small>{batchProgress.current
+                    ? sourceText(`Saving ${batchProgress.current}`, `جارٍ حفظ ${batchProgress.current}`)
+                    : sourceText("Preparing the next record…", "جارٍ تجهيز السجل التالي…")}</small>
+                <span>{sourceText("Keep this page open. You can continue when every selection is confirmed by the server.", "أبقِ هذه الصفحة مفتوحة. يمكنك المتابعة بعد تأكيد الخادم لجميع الاختيارات.")}</span>
             </div>}
             {sectionSaveNotice && <div className="focus-section-save-result" role="status">
                 ✓ {tr('integration.focus.recommendationsSaved', {
@@ -772,7 +791,7 @@ export default function GuidedConnectionAssistant({
             })() : <p>{tr('integration.focus.businessCompleteText')}</p>}</div>
             {footer(tr('integration.focus.continue'), saveRecommendationsAndContinue, {
                 reason: tr('integration.records.decideFirst'),
-                disabled: activeSectionPending.some((row) => !recommendedChoice(row)
+                disabled: Boolean(batchProgress) || activeSectionPending.some((row) => !recommendedChoice(row)
                     || manualChoiceRows.has(row.fingerprint)
                     || excludedRecommendations.has(row.fingerprint))
                     && !activeSectionPending.some((row) => recommendedChoice(row)
