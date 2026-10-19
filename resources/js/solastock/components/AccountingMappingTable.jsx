@@ -18,6 +18,7 @@ const roles = {
     opening_offset: ['Opening balance offset', 'مقابل الرصيد الافتتاحي', 'Offset for reviewed opening inventory.', 'مقابل المخزون الافتتاحي الذي تمت مراجعته.'],
     adjustment_gain: ['Inventory adjustment gain', 'زيادة تسوية المخزون', 'Value gained through an adjustment.', 'قيمة الزيادة الناتجة عن التسوية.'],
     adjustment_loss: ['Inventory adjustment loss', 'خسارة تسوية المخزون', 'Value lost through an adjustment.', 'قيمة النقص الناتج عن التسوية.'],
+    purchase_price_variance: ['Purchase price variance', 'فرق سعر الشراء', 'Difference between the expected and actual purchase cost.', 'الفرق بين تكلفة الشراء المتوقعة والفعلية.'],
     landed_cost_clearing: ['Landed cost clearing', 'تسوية التكاليف الإضافية', 'Costs awaiting inventory allocation.', 'تكاليف بانتظار التوزيع على المخزون.'],
     transfer_clearing: ['Transfer clearing', 'تسوية التحويلات', 'Clearing for applicable transfers.', 'تسوية التحويلات التي تتطلب قيداً.'],
     accounts_receivable: ['Accounts receivable', 'الذمم المدينة', 'Amounts owed by customers.', 'المبالغ المستحقة على العملاء.'],
