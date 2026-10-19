@@ -22,6 +22,9 @@ function validationMessage(value) {
     if (value === 'wizard_run_not_editable') return arabic
         ? 'تقدّم إعداد الاتصال إلى خطوة أخرى. تم تحديث الصفحة؛ راجع الحالة الحالية.'
         : 'The connection setup has moved to another step. The page has been updated; review its current status.';
+    if (value === 'finance_source_sku_required_for_creation') return arabic
+        ? 'سيتم إنشاء رمز الصنف تلقائياً. أعد المحاولة.'
+        : 'An item code will be created automatically. Please try again.';
     return value;
 }
 function readableValidationPayload(payload) {

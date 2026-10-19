@@ -1319,10 +1319,14 @@ final class ConnectionWizardService
         if (! $books || ! (bool) ($books->is_active ?? true) || $books->deleted_at !== null) {
             $this->fail('finance_source_record_inactive_or_missing');
         }
-        if (trim((string) $books->sku) === '') {
-            $this->fail('finance_source_sku_required_for_creation');
+        // Finance users are not required to invent an inventory SKU during
+        // connection. SolaStock still needs a stable internal value, so derive
+        // one from the immutable source organization and record identities.
+        $stockSku = trim((string) $books->sku);
+        if ($stockSku === '') {
+            $stockSku = 'FIN-'.$mapping->finance_organization_id.'-'.$booksId;
         }
-        if (Item::query()->where('organization_id', $mapping->solastock_organization_id)->where('sku', $books->sku)->exists()) {
+        if (Item::query()->where('organization_id', $mapping->solastock_organization_id)->where('sku', $stockSku)->exists()) {
             $this->fail('solastock_sku_conflict_requires_review');
         }
 
@@ -1336,7 +1340,7 @@ final class ConnectionWizardService
         }
         $item = Item::query()->create([
             'organization_id' => $mapping->solastock_organization_id,
-            'sku' => $books->sku,
+            'sku' => $stockSku,
             'name' => $books->name,
             'item_type' => 'inventory',
             'tracking_type' => $books->tracking_type ?: 'none',

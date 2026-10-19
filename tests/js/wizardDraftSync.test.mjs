@@ -21,6 +21,8 @@ test('wizard state failures are translated instead of exposing internal codes', 
     const source = await readFile(new URL('../../resources/js/solastock/services/api.js', import.meta.url), 'utf8');
     assert.match(source, /wizard_run_not_editable/);
     assert.match(source, /connection setup has moved to another step/);
+    assert.match(source, /finance_source_sku_required_for_creation/);
+    assert.match(source, /item code will be created automatically/);
 });
 
 test('canonical response is unwrapped and retains the confirmed decision', () => {
