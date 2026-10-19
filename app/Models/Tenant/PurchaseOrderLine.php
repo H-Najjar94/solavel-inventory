@@ -16,10 +16,10 @@ class PurchaseOrderLine extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'ordered_qty' => 'decimal:4',
-        'received_qty' => 'decimal:4',
-        'unit_price' => 'decimal:4',
-        'entered_qty' => 'decimal:4',
+        'ordered_qty' => 'decimal:6',
+        'received_qty' => 'decimal:6',
+        'unit_price' => 'decimal:6',
+        'entered_qty' => 'decimal:6',
         'unit_conversion_factor' => 'decimal:8',
         'unit_conversion_precision' => 'integer',
         'tax_rate' => 'decimal:4',

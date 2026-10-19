@@ -462,7 +462,7 @@ class StockLedgerService
                     throw new RuntimeException('Historical FIFO projection quantity/value inconsistent');
                 }
                 $balances[$key]->on_hand_qty = Decimal::qty($qty);
-                $balances[$key]->total_value = Decimal::money($running[$key]['value']);
+                $balances[$key]->total_value = Decimal::value($running[$key]['value']);
                 $balances[$key]->average_cost = Decimal::isZero($qty) ? '0' : Decimal::cost(Decimal::div($running[$key]['value'], $qty));
                 $balances[$key]->save();
             }
@@ -494,14 +494,14 @@ class StockLedgerService
     {
         $sign = $direction === 'in' ? '1' : '-1';
         $running['quantity'] = Decimal::qty(Decimal::add($running['quantity'], Decimal::mul($qty, $sign)));
-        $running['value'] = Decimal::money(Decimal::add($running['value'], Decimal::mul($value, $sign)));
+        $running['value'] = Decimal::value(Decimal::add($running['value'], Decimal::mul($value, $sign)));
         if (Decimal::lt($running['quantity'], '0') || Decimal::lt($running['value'], '0')) {
             throw new RuntimeException('Historical FIFO negative current projection');
         }
 
         return StockLedger::query()->create(['organization_id' => $org, 'item_id' => $event['stock_item_id'], 'warehouse_id' => $event['warehouse_id'],
             'direction' => $direction, 'quantity' => Decimal::qty($qty), 'unit_cost' => Decimal::isZero($qty) ? '0' : Decimal::cost(Decimal::div($value, $qty)),
-            'total_cost' => Decimal::money($value), 'costing_method' => 'fifo', 'source_type' => HistoricalFifoCorrection::class,
+            'total_cost' => Decimal::value($value), 'costing_method' => 'fifo', 'source_type' => HistoricalFifoCorrection::class,
             'source_id' => $doc->id, 'source_line_id' => $event['finance_line_id'], 'moved_at' => $event['date'].' 00:00:00', 'posted_at' => now(),
             'idempotency_key' => 'historical-fifo:'.$doc->correction_uuid.':'.$kind, 'balance_qty_after' => $running['quantity'], 'balance_value_after' => $running['value'],
             'created_by' => auth()->id()]);
@@ -944,7 +944,7 @@ class StockLedgerService
         if ($method === 'fifo') {
             $prevValue = (string) $balance->total_value;
             $signedCost = $direction === 'in' ? $totalCost : '-'.$totalCost;
-            $newValue = Decimal::money(Decimal::add($prevValue, $signedCost));
+            $newValue = Decimal::value(Decimal::add($prevValue, $signedCost));
             // Guard tiny negative dust at zero stock.
             if (Decimal::isZero($newQty)) {
                 $newValue = '0.00';
@@ -957,14 +957,14 @@ class StockLedgerService
         // Average costing.
         if ($direction === 'in') {
             $newAvg = $this->costing->newWeightedAverage($prevQty, $prevAvg, $qty, $unitCost);
-            $newValue = Decimal::money(Decimal::mul($newQty, $newAvg));
+            $newValue = Decimal::value(Decimal::mul($newQty, $newAvg));
 
             return [$newQty, $newAvg, $newValue];
         }
 
         // out: average cost unchanged on issue; value = qty * avg.
         $newAvg = $prevAvg;
-        $newValue = Decimal::money(Decimal::mul($newQty, $newAvg));
+        $newValue = Decimal::value(Decimal::mul($newQty, $newAvg));
 
         return [$newQty, $newAvg, $newValue];
     }

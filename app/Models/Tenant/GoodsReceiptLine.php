@@ -16,12 +16,12 @@ class GoodsReceiptLine extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'received_qty' => 'decimal:4',
-        'accepted_qty' => 'decimal:4',
-        'rejected_qty' => 'decimal:4',
-        'quarantine_qty' => 'decimal:4',
-        'unit_cost' => 'decimal:4',
-        'entered_qty' => 'decimal:4',
+        'received_qty' => 'decimal:6',
+        'accepted_qty' => 'decimal:6',
+        'rejected_qty' => 'decimal:6',
+        'quarantine_qty' => 'decimal:6',
+        'unit_cost' => 'decimal:6',
+        'entered_qty' => 'decimal:6',
         'unit_conversion_factor' => 'decimal:8',
         'unit_conversion_precision' => 'integer',
     ];

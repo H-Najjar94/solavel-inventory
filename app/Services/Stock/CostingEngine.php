@@ -43,7 +43,7 @@ class CostingEngine
         $this->assertSupported($method);
 
         $unitCost = Decimal::cost($unitCost);
-        $totalCost = Decimal::money(Decimal::mul($quantity, $unitCost));
+        $totalCost = Decimal::value(Decimal::mul($quantity, $unitCost));
 
         $layerId = null;
         if ($method === 'fifo') {
@@ -95,7 +95,7 @@ class CostingEngine
         if ($method === 'average') {
             $avg = $balance ? (string) $balance->average_cost : '0';
             $unitCost = Decimal::cost($avg);
-            $totalCost = Decimal::money(Decimal::mul($quantity, $unitCost));
+            $totalCost = Decimal::value(Decimal::mul($quantity, $unitCost));
 
             return ['unit_cost' => $unitCost, 'total_cost' => $totalCost, 'consumed' => []];
         }
@@ -155,7 +155,7 @@ class CostingEngine
             $totalCost = Decimal::add($totalCost, $shortCost);
         }
 
-        $totalCost = Decimal::money($totalCost);
+        $totalCost = Decimal::value($totalCost);
         $unitCost = Decimal::isZero($quantity)
             ? '0'
             : Decimal::cost(Decimal::div($totalCost, $quantity));

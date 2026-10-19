@@ -17,10 +17,10 @@ class PurchaseOrderBackorder extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'ordered_qty' => 'decimal:4',
-        'received_qty' => 'decimal:4',
-        'backorder_qty' => 'decimal:4',
-        'unit_price' => 'decimal:4',
+        'ordered_qty' => 'decimal:6',
+        'received_qty' => 'decimal:6',
+        'backorder_qty' => 'decimal:6',
+        'unit_price' => 'decimal:6',
         'expected_date' => 'date',
         'opened_at' => 'datetime',
         'closed_at' => 'datetime',

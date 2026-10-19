@@ -10,7 +10,12 @@ use RuntimeException;
 
 class UnitConversionResolver
 {
-    public const CONTRACT_VERSION = 'solastock-unit-conversion.v1';
+    public const CONTRACT_VERSION = 'solastock-unit-conversion.v2';
+
+    public const SUPPORTED_CONTRACT_PRECISIONS = [
+        'solastock-unit-conversion.v1' => 4,
+        self::CONTRACT_VERSION => Decimal::QTY_SCALE,
+    ];
 
     public const PRECISION = Decimal::QTY_SCALE;
 

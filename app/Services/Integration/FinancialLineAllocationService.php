@@ -268,7 +268,10 @@ final class FinancialLineAllocationService
             'base_unit_id' => $line->base_unit_id, 'unit_conversion_id' => $line->unit_conversion_id,
             'destination_quantity' => $destinationQty, 'destination_unit_id' => $requested['destination_unit_id'],
             'unit_conversion_factor' => $factor, 'unit_conversion_version' => $line->unit_conversion_version,
-            'unit_conversion_hash' => $line->unit_conversion_hash, 'unit_conversion_precision' => $line->unit_conversion_precision ?? 4,
+            'unit_conversion_hash' => $line->unit_conversion_hash,
+            'unit_conversion_precision' => $line->unit_conversion_precision
+                ?? (\App\Services\Catalog\UnitConversionResolver::SUPPORTED_CONTRACT_PRECISIONS[(string) $line->unit_conversion_version]
+                    ?? \App\Services\Catalog\UnitConversionResolver::PRECISION),
             'unit_conversion_rounding_mode' => $line->unit_conversion_rounding_mode ?? 'HALF_UP',
             'source_unit_price' => $sourcePrice, 'destination_unit_price' => $destinationUnitPrice,
             'source_gross' => $sourceGross, 'destination_gross' => $destinationGross,

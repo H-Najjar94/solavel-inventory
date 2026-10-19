@@ -4,15 +4,16 @@ namespace App\Services\Stock\Support;
 
 /**
  * Deterministic decimal arithmetic via bcmath. No float math is used anywhere in
- * the stock/cost path. Quantities use scale 4; money totals use scale 2; we
- * compute at a higher scale (8) internally and round at the boundary.
+ * the stock/cost path. Quantities and unit costs use scale 6; money totals use
+ * their posting scale. Calculations retain a wider internal scale.
  */
 final class Decimal
 {
-    public const QTY_SCALE = 4;
+    public const QTY_SCALE = 6;
     public const MONEY_SCALE = 2;
-    public const COST_SCALE = 4;
-    private const CALC_SCALE = 10;
+    public const COST_SCALE = 6;
+    public const VALUE_SCALE = 6;
+    private const CALC_SCALE = 18;
 
     public static function add(string $a, string $b, int $scale = self::CALC_SCALE): string
     {
@@ -88,5 +89,11 @@ final class Decimal
     public static function money(string $value): string
     {
         return self::round($value, self::MONEY_SCALE);
+    }
+
+    /** Internal inventory carrying value; GL payload builders round separately. */
+    public static function value(string $value): string
+    {
+        return self::round($value, self::VALUE_SCALE);
     }
 }

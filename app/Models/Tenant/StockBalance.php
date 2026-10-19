@@ -16,6 +16,11 @@ class StockBalance extends Model
 
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'on_hand_qty' => 'decimal:6', 'reserved_qty' => 'decimal:6',
+        'average_cost' => 'decimal:6', 'total_value' => 'decimal:6',
+    ];
+
     /** The item this balance is for — used to surface names, not raw IDs. */
     public function item(): BelongsTo
     {

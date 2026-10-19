@@ -201,9 +201,11 @@ final class WorkflowValidationService
             }
         }
         $factor = (string) $line->unit_conversion_factor;
+        $snapshotVersion = (string) $line->unit_conversion_version;
+        $snapshotPrecision = UnitConversionResolver::SUPPORTED_CONTRACT_PRECISIONS[$snapshotVersion] ?? null;
         if (! preg_match('/^\d+(?:\.\d+)?$/', $factor) || Decimal::cmp($factor, '0') <= 0
-            || (string) $line->unit_conversion_version !== UnitConversionResolver::CONTRACT_VERSION
-            || (int) $line->unit_conversion_precision !== UnitConversionResolver::PRECISION
+            || $snapshotPrecision === null
+            || (int) $line->unit_conversion_precision !== $snapshotPrecision
             || (string) $line->unit_conversion_rounding_mode !== UnitConversionResolver::ROUNDING_MODE) {
             $this->conversionFailure($eventType, 'unit_conversion_snapshot_invalid');
         }

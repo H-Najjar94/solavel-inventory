@@ -28,5 +28,5 @@ class CostLayerConsumption extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['qty' => 'decimal:4', 'unit_cost' => 'decimal:4'];
+    protected $casts = ['qty' => 'decimal:6', 'unit_cost' => 'decimal:6'];
 }

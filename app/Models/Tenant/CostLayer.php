@@ -21,4 +21,9 @@ class CostLayer extends Model
     protected $table = 'cost_layers';
 
     protected $guarded = ['id'];
+
+    protected $casts = [
+        'unit_cost' => 'decimal:6', 'original_qty' => 'decimal:6',
+        'remaining_qty' => 'decimal:6',
+    ];
 }

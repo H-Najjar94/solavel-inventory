@@ -14,5 +14,5 @@ final class ReceivingRequestLine extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['requested_qty' => 'decimal:4', 'received_qty' => 'decimal:4', 'unit_cost' => 'decimal:4', 'approval_conversion' => 'array'];
+    protected $casts = ['requested_qty' => 'decimal:6', 'received_qty' => 'decimal:6', 'unit_cost' => 'decimal:6', 'approval_conversion' => 'array'];
 }

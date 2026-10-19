@@ -14,7 +14,7 @@ class LandedCostLine extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['quantity' => 'decimal:4', 'receipt_value' => 'decimal:2', 'weight' => 'decimal:4', 'allocated_base_amount' => 'decimal:2', 'inventory_base_amount' => 'decimal:2', 'consumed_base_amount' => 'decimal:2'];
+    protected $casts = ['quantity' => 'decimal:6', 'receipt_value' => 'decimal:6', 'weight' => 'decimal:6', 'allocated_base_amount' => 'decimal:6', 'inventory_base_amount' => 'decimal:6', 'consumed_base_amount' => 'decimal:6'];
 
     public function item(): BelongsTo
     {
