@@ -603,7 +603,7 @@ final class ConnectionWizardService
             'accounting' => $preview['accounting'] ?? ['accounts' => [], 'complete' => false],
             'master_data' => $preview['master_data'] ?? null,
             'readiness' => $preview['readiness'] ?? null,
-            'guided_setup' => $this->guidedPresentation($preview, $organizationId),
+            'guided_setup' => $this->guidedPresentation($preview, $organizationId, $validDecisions),
             'blockers' => array_merge($preview['blockers'] ?? [], $precisionSupported ? [] : ['Stock supports Finance money precision 2 or 3; other precision requires a qualified upgrade before activation.']),
             'blocking' => $blocking->all(),
             'snapshot_frozen_at' => $run->snapshot_frozen_at,
@@ -2570,16 +2570,24 @@ final class ConnectionWizardService
     }
 
     /** Presentation only: do not change the frozen discovery or approval hash. */
-    private function guidedPresentation(array $preview, int $organizationId): ?array
+    private function guidedPresentation(array $preview, int $organizationId, ?Collection $validDecisions = null): ?array
     {
         $guided = $preview['guided_setup'] ?? null;
         if (! is_array($guided)) return $guided;
+        $validDecisions ??= collect();
         $ignored = collect($preview['comparison'])->filter(fn (array $row) =>
             $this->isFinanceOnlyWarehouseDiagnostic($row, $organizationId))->pluck('fingerprint')->all();
         foreach ($guided['exception_groups'] ?? [] as $group => $fingerprints) {
             $guided['exception_groups'][$group] = array_values(array_diff($fingerprints, $ignored));
         }
         $guided['visible_exception_fingerprints'] = array_values(array_diff($guided['visible_exception_fingerprints'] ?? [], $ignored));
+        foreach (['customer' => 'customers', 'supplier' => 'suppliers', 'item' => 'items', 'unit' => 'units', 'category' => 'categories'] as $type => $section) {
+            $reviewed = collect($preview['comparison'])->where('entity_type', $type)
+                ->filter(fn (array $row) => $validDecisions->has($row['fingerprint']))->count();
+            if ($reviewed === 0 || ! isset($guided['record_sections'][$section])) continue;
+            $guided['record_sections'][$section]['ready'] += $reviewed;
+            $guided['record_sections'][$section]['review'] = max(0, $guided['record_sections'][$section]['review'] - $reviewed);
+        }
         return $guided;
     }
 

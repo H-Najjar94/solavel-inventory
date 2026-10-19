@@ -240,7 +240,26 @@ class IntegrationController extends ApiController
             'confirmation' => ['required', 'string', 'max:100'],
         ]);
 
-        abort_unless($this->permissions->can(auth()->user(), 'inventory.integration.connection_manage'), 403);
+        $user = auth()->user();
+        abort_unless($this->permissions->can($user, 'inventory.integration.connection_manage'), 403);
+
+        // The guided review is already a saved, immutable draft. When the same
+        // authorized user can perform the owner and accounting review, record
+        // both audit approvals as part of the single Connect action instead of
+        // asking them to approve the same completed review two more times.
+        $preview = $wizard->finalPreview($this->context->idOrFail(), $run);
+        if ($preview['owner_approved_at'] === null) {
+            $preview = $wizard->approveRole(
+                $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'owner', (int) auth()->id(),
+                $this->permissions->can($user, 'inventory.integration.setup')
+            );
+        }
+        if ($preview['accountant_approved_at'] === null) {
+            $preview = $wizard->approveRole(
+                $this->context->idOrFail(), $run, $data['approval_payload_hash'], 'accountant', (int) auth()->id(),
+                $this->permissions->can($user, 'inventory.integration.accounting_review')
+            );
+        }
 
         return $this->success($wizard->activate(
             $this->context->idOrFail(), $run, $data['approval_payload_hash'],

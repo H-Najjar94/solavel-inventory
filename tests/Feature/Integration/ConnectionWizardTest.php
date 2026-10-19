@@ -464,6 +464,11 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringContainsString('aria-modal="true"', $assistant);
         $this->assertStringNotContainsString('approvalAvailable &&', $assistant);
         $this->assertStringContainsString('activateIntegrationWizard', $assistant);
+        $this->assertStringNotContainsString('api.approveIntegrationWizard', $assistant,
+            'The guided flow must connect a completed saved review in one action.');
+        $controller = file_get_contents(app_path('Http/Controllers/Api/V1/IntegrationController.php'));
+        $this->assertSame(2, substr_count($controller, '$wizard->approveRole('),
+            'The activation endpoint must audit both approvals during the single Connect action.');
     }
 
     #[Test]
