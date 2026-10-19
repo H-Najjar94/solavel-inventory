@@ -31,7 +31,9 @@ function readableValidationPayload(payload) {
 function transport(url, options) {
     const mutation = !['GET', 'HEAD'].includes(options.method);
     const key = `${organizationScope}:${options.method}:${url}`;
-    const recoverableWizardDecision = options.method === 'PUT' && new URL(url).pathname.endsWith('/decisions');
+    const path = new URL(url).pathname;
+    const recoverableWizardDecision = (options.method === 'PUT' && path.endsWith('/decisions'))
+        || (options.method === 'POST' && path.endsWith('/refresh'));
     const execute = async () => {
         const unknown = (metadata = {}) => {
             uncertain.add(key);

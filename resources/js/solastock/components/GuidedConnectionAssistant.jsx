@@ -723,7 +723,9 @@ export default function GuidedConnectionAssistant({
             {view.recoverable_decisions_count > 0 && <div className="focus-attention" role="status">
                 <strong>{sourceText("Your earlier review can be restored", "يمكن استعادة مراجعتك السابقة")}</strong>
                 <p>{sourceText(`${view.recoverable_decisions_count} unchanged decisions are available. Restore them and review only new or changed records.`, `يتوفر ${view.recoverable_decisions_count} قراراً لم يتغير. استعدها وراجع فقط السجلات الجديدة أو المتغيرة.`)}</p>
-                <button type="button" className="btn btn--primary" disabled={saving} onClick={restoreProgress}>{sourceText("Restore saved progress", "استعادة التقدم المحفوظ")}</button>
+                <button type="button" className="btn btn--primary" disabled={saving} aria-busy={saving} onClick={restoreProgress}>{saving
+                    ? sourceText("Restoring saved progress…", "جارٍ استعادة التقدم المحفوظ…")
+                    : sourceText("Restore saved progress", "استعادة التقدم المحفوظ")}</button>
             </div>}
             {recordSummary}
             <nav className="focus-category-nav" aria-label={tr('integration.focus.businessSections')}>

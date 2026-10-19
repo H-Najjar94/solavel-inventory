@@ -550,6 +550,30 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         finally { setSaving(false); }
     }
 
+    async function restoreReviewProgress() {
+        setSaving(true);
+        setSaveState('saving');
+        try {
+            const response = await api.refreshIntegrationWizardDraft(runUuid);
+            const confirmed = unwrapCanonicalDraft(response);
+            if (!acceptCanonicalRun(confirmed)) throw new Error('wizard_stale_refresh_response');
+            setPendingDecisions(new Map());
+            setFailedDecision(null);
+            setDecisionErrors({});
+            setSaveState('saved');
+            setConfirmation('');
+            toast.push(sourceText(
+                "Saved progress restored. Only new or changed records remain.",
+                "تمت استعادة التقدم المحفوظ. بقيت فقط السجلات الجديدة أو المتغيرة."
+            ), 'success');
+            return true;
+        } catch (error) {
+            setSaveState('failed');
+            toast.failure(error, error.message || tr('settings.common.errorFallback'));
+            return false;
+        } finally { setSaving(false); }
+    }
+
     const decisions = new Map((runView?.decisions || []).filter((decision) => decision.valid_for_current_candidate !== false)
         .map((decision) => [decision.candidate_fingerprint, decision]));
     const displayDecisions = new Map(decisions);
@@ -630,10 +654,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             failedDecision={failedDecision}
             retrySave={() => failedDecision && decide(failedDecision.row, failedDecision.action, failedDecision.extraSafeDetails)}
             reloadLatest={() => reconcileLatest()}
-            restoreProgress={() => runAction(() => api.refreshIntegrationWizardDraft(runUuid), 'integration.wizard.decisionSaved', sourceText(
-                "Saved progress restored. Only new or changed records remain.",
-                "تمت استعادة التقدم المحفوظ. بقيت فقط السجلات الجديدة أو المتغيرة."
-            ))}
+            restoreProgress={restoreReviewProgress}
             organizationName={organizationName}
             connectionAccess={connectionAccess}
         />;
