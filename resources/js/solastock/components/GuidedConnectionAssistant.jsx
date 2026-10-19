@@ -506,11 +506,11 @@ export default function GuidedConnectionAssistant({
                     : <span className="focus-action-prompt">{decisionPrompt}</span>}
                 {recommendation && !showManualChoice && <div className={`focus-recommendation is-${recommendationKind} ${recommendationSelected ? 'is-selected' : ''}`}>
                     <div className="focus-recommendation-top">
-                        <label><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
+                        <label className="focus-recommendation-check"><input type="checkbox" checked={recommendationSelected} onChange={() => setExcludedRecommendations((currentValues) => {
                             const next = new Set(currentValues);
                             if (next.has(row.fingerprint)) next.delete(row.fingerprint); else next.add(row.fingerprint);
                             return next;
-                        })} /><small>{tr(recommendationKind === 'hold' ? 'integration.focus.safeDefault' : 'integration.focus.recommended')}</small></label>
+                        })} /><span aria-hidden="true">{recommendationSelected ? '✓' : ''}</span><small>{tr(recommendationKind === 'hold' ? 'integration.focus.safeDefault' : 'integration.focus.recommended')}</small></label>
                         <button type="button" className="focus-change-action" onClick={() => setManualChoiceRows((currentValues) => new Set(currentValues).add(row.fingerprint))}>{tr('integration.focus.changeDecision')}</button>
                     </div>
                     <strong>{recommendation[1]}</strong>
