@@ -17,6 +17,9 @@ class UpdateItemRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if ($this->has('sku') && trim((string) $this->input('sku')) === '') {
+            $this->request->remove('sku');
+        }
         $this->normalizeNumerics();
         $this->normalizeTracking();
     }

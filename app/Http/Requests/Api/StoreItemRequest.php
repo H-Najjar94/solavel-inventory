@@ -17,6 +17,9 @@ class StoreItemRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if (trim((string) $this->input('sku')) === '') {
+            $this->merge(['sku' => 'AUTO-'.strtoupper((string) \Illuminate\Support\Str::ulid())]);
+        }
         $this->normalizeNumerics();
         $this->normalizeTracking();
     }

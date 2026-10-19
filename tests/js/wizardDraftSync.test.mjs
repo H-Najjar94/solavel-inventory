@@ -33,6 +33,13 @@ test('connection activation verifies an uncertain outcome without a nested gener
     assert.match(pageSource, /Your review is still saved/);
 });
 
+test('the full item form treats SKU as optional', async () => {
+    const form = await readFile(new URL('../../resources/js/solastock/pages/ItemFormPage.jsx', import.meta.url), 'utf8');
+    const store = await readFile(new URL('../../app/Http/Requests/Api/StoreItemRequest.php', import.meta.url), 'utf8');
+    assert.doesNotMatch(form, /<Field label=\{t\(['"]sku['"]\)\} required/);
+    assert.match(store, /AUTO-/);
+});
+
 test('canonical response is unwrapped and retains the confirmed decision', () => {
     const confirmed = unwrapCanonicalDraft({ success: true, data: draft(2, [decision('a', 'approve_exact_binding')]) });
     assert.equal(canonicalDecision(confirmed, 'a').action, 'approve_exact_binding');

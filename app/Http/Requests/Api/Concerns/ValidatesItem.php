@@ -185,7 +185,7 @@ trait ValidatesItem
         );
 
         return [
-            'sku' => [$req, 'string', 'max:191'],
+            'sku' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:191'],
             'name' => [$req, 'string', 'max:191'],
             'barcode' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string'],

@@ -190,7 +190,7 @@ export default function ItemFormPage() {
                             <Field label={t('items.itemName')} required error={errors.name}>
                                 <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder={t('items.itemNamePlaceholder')} />
                             </Field>
-                            <Field label={t('sku')} required error={errors.sku}>
+                            <Field label={t('sku')} error={errors.sku}>
                                 <input className="input" value={form.sku} onChange={(e) => set('sku', e.target.value)} placeholder={t('items.skuPlaceholder')} />
                             </Field>
                             <Field label={t('barcode')} error={errors.barcode}>
