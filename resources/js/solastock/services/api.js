@@ -19,6 +19,9 @@ function validationMessage(value) {
     if (value === 'draft_optimistic_lock_conflict') return arabic ? 'تغيّر الإعداد أثناء الحفظ. راجع الحساب ثم أعد المحاولة.' : 'The setup changed while saving. Review this account and try again.';
     if (value === 'wizard_selected_record_required') return arabic ? 'اختر حساباً من القائمة قبل الحفظ.' : 'Choose an account from the list before saving.';
     if (value === 'approved_account_role_invalid') return arabic ? 'هذا الحساب غير نشط أو غير صالح لهذا الاستخدام. اختر حساباً آخر.' : 'This account is inactive or is not valid for this use. Choose another account.';
+    if (value === 'wizard_run_not_editable') return arabic
+        ? 'تقدّم إعداد الاتصال إلى خطوة أخرى. تم تحديث الصفحة؛ راجع الحالة الحالية.'
+        : 'The connection setup has moved to another step. The page has been updated; review its current status.';
     return value;
 }
 function readableValidationPayload(payload) {

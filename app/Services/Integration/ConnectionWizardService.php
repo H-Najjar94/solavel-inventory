@@ -306,7 +306,10 @@ final class ConnectionWizardService
         $persistenceResult = 'saved';
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $fingerprint, $action, $stockIds, $booksIds, $safeDetails, $actorUserId, $expectedLockVersion, $expectedBeforeHash, $canOwnerReview, $canAccountingReview, &$persistenceResult): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
-            if (! in_array($run->state, ['draft_decisions', 'decisions_complete', 'snapshot_required'], true) || $run->invalidated_at || $run->discarded_at) {
+            // A reviewer may return to an earlier decision after the setup has
+            // advanced. Reopen the draft and invalidate only downstream
+            // snapshot/approval evidence; never make them restart the review.
+            if (in_array($run->state, ['connected', 'discarded'], true) || $run->invalidated_at || $run->discarded_at) {
                 $this->fail('wizard_run_not_editable');
             }
             if ($expectedLockVersion > 0 && (int) $run->lock_version !== $expectedLockVersion) {
@@ -435,6 +438,7 @@ final class ConnectionWizardService
                     'state' => $complete ? 'decisions_complete' : 'draft_decisions',
                     'lock_version' => DB::raw('lock_version + 1'),
                     'decisions_completed_at' => $complete ? now() : null,
+                    'snapshot_frozen_at' => null, 'cutoff_reviewed_at' => null,
                     'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null,
                     'owner_approved_by_user_id' => null, 'owner_approved_at' => null, 'owner_approval_hash' => null,
                     'accountant_approved_by_user_id' => null, 'accountant_approved_at' => null, 'accountant_approval_hash' => null,
@@ -457,7 +461,7 @@ final class ConnectionWizardService
     {
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $decisionUuid, $actorUserId): void {
             $run = $this->runForOrganization($organizationId, $runUuid, true);
-            if (! in_array($run->state, ['draft_decisions', 'decisions_complete', 'snapshot_required'], true)) {
+            if (in_array($run->state, ['connected', 'discarded'], true) || $run->invalidated_at || $run->discarded_at) {
                 $this->fail('wizard_run_not_editable');
             }
             $decision = DB::connection('tenant')->table('integration_connection_wizard_decisions')
@@ -470,8 +474,11 @@ final class ConnectionWizardService
             $this->audit($runUuid, $decisionUuid, 'decision_reversed', (array) $decision, ['status' => 'reversed'], $actorUserId);
             DB::connection('tenant')->table('integration_connection_wizard_runs')->where('run_uuid', $runUuid)
                 ->update(['state' => 'draft_decisions', 'lock_version' => DB::raw('lock_version + 1'),
-                    'decisions_completed_at' => null, 'approval_payload_hash' => null,
-                    'approved_by_user_id' => null, 'approved_at' => null, 'updated_at' => now()]);
+                    'decisions_completed_at' => null, 'snapshot_frozen_at' => null, 'cutoff_reviewed_at' => null,
+                    'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null,
+                    'owner_approved_by_user_id' => null, 'owner_approved_at' => null, 'owner_approval_hash' => null,
+                    'accountant_approved_by_user_id' => null, 'accountant_approved_at' => null, 'accountant_approval_hash' => null,
+                    'updated_at' => now()]);
         });
 
         return $this->finalPreview($organizationId, $runUuid);

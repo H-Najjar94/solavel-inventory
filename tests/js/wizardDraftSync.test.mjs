@@ -17,6 +17,12 @@ test('connection settings imports its localized source text helper', async () =>
     assert.match(source, /import\s*\{\s*sourceText\s*\}\s*from\s*['"]\.\.\/i18n\/locales\.js['"]/);
 });
 
+test('wizard state failures are translated instead of exposing internal codes', async () => {
+    const source = await readFile(new URL('../../resources/js/solastock/services/api.js', import.meta.url), 'utf8');
+    assert.match(source, /wizard_run_not_editable/);
+    assert.match(source, /connection setup has moved to another step/);
+});
+
 test('canonical response is unwrapped and retains the confirmed decision', () => {
     const confirmed = unwrapCanonicalDraft({ success: true, data: draft(2, [decision('a', 'approve_exact_binding')]) });
     assert.equal(canonicalDecision(confirmed, 'a').action, 'approve_exact_binding');
