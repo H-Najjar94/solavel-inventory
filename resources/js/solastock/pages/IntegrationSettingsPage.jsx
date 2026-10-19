@@ -470,6 +470,24 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             setSaveState('saved');
             return confirmed;
           } catch (error) {
+            if (error?.outcomeUnknown) {
+                // Confirm the exact committed decision instead of forcing a
+                // refresh or retrying an operation with an unknown outcome.
+                for (let attempt = 0; attempt < 6; attempt++) {
+                    if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 1500));
+                    const latest = (await run.refetch({ cancelRefetch: true }).catch(() => null))?.data;
+                    const recovered = canonicalDecision(latest, row.fingerprint);
+                    const detailsMatch = Object.entries(extraSafeDetails).every(([key, value]) =>
+                        String(recovered?.safe_details?.[key] ?? '') === String(value ?? ''));
+                    if (latest?.run_uuid === selectedRunUuid && recovered?.action === action && detailsMatch) {
+                        api.confirmIntegrationWizardDecisionOutcome(selectedRunUuid);
+                        acceptCanonicalRun(latest);
+                        setPendingDecisions((current) => { const next = new Map(current); next.delete(row.fingerprint); return next; });
+                        setFailedDecision(null); setDecisionErrors({}); setSaveState('saved');
+                        return latest;
+                    }
+                }
+            }
             const conflict = error?.status === 409 || error?.code === 'draft_optimistic_lock_conflict'
                 || String(error.message || '').includes('draft_optimistic_lock_conflict');
             setPendingDecisions((current) => new Map(current).set(row.fingerprint, {

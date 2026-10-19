@@ -27,11 +27,12 @@ function readableValidationPayload(payload) {
 function transport(url, options) {
     const mutation = !['GET', 'HEAD'].includes(options.method);
     const key = `${organizationScope}:${options.method}:${url}`;
+    const recoverableWizardDecision = options.method === 'PUT' && new URL(url).pathname.endsWith('/decisions');
     const execute = async () => {
         const unknown = (metadata = {}) => {
             uncertain.add(key);
-            void feedback.failure(undefined, true, statusRoute(url,window.SOLASTOCK_BASE_PATH??'/inventory'));
-            return Object.assign(new Error(feedbackText('unknown')), {...metadata, feedbackHandled:true, outcomeUnknown:true});
+            if (!recoverableWizardDecision) void feedback.failure(undefined, true, statusRoute(url,window.SOLASTOCK_BASE_PATH??'/inventory'));
+            return Object.assign(new Error(feedbackText('unknown')), {...metadata, feedbackHandled:!recoverableWizardDecision,outcomeUnknown:true});
         };
         if (mutation && uncertain.has(key)) throw unknown();
         const controller = new AbortController();
@@ -375,6 +376,7 @@ export const api = {
     integrationWizardRun: (run) => request(`/integration/solabooks/wizard/runs/${run}`),
     integrationWizardPreview: (run) => request(`/integration/solabooks/wizard/runs/${run}/preview`),
     saveIntegrationWizardDecision: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/decisions`, { method: 'PUT', body }),
+    confirmIntegrationWizardDecisionOutcome: (run) => uncertain.delete(`${organizationScope}:PUT:${new URL(BASE+`/integration/solabooks/wizard/runs/${run}/decisions`,window.location.origin)}`),
     integrationConnectionManagementAccess: () => request('/integration/solabooks/wizard/connection-management-access'),
     bulkIntegrationWizardDecision: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/bulk-decisions`, { method: 'POST', body }),
     reverseIntegrationWizardDecision: (run, decision) => request(`/integration/solabooks/wizard/runs/${run}/decisions/${decision}`, { method: 'DELETE' }),
