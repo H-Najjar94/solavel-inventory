@@ -278,4 +278,33 @@ class InactiveWriteOffApprovalTest extends TestCase
         app(StockAdjustmentService::class)->post($adj);
         $this->assertSame('3.0000', $this->onHand($item));
     }
+
+    /** Q12.6 UI (G6 r2): the draft detail payload carries warnings + whether THIS user may approve. */
+    #[Test]
+    public function the_draft_detail_payload_tells_the_ui_who_may_approve(): void
+    {
+        $item = $this->inactiveItemWithStock('5');
+        $adj = $this->draft($item, '2');
+        $show = fn () => app(\App\Http\Controllers\Api\V1\StockAdjustmentController::class)->show($adj->fresh())->getData(true)['data'];
+
+        $data = $show(); // creator
+        $this->assertTrue($data['inactive_write_off']['requires_approval']);
+        $this->assertNotEmpty($data['inactive_write_off']['warnings']);
+        $this->assertFalse($data['inactive_write_off']['can_approve']);
+        $this->as(self::MANAGER);
+        $this->assertFalse($show()['inactive_write_off']['can_approve']);
+        $this->as(self::VIEWER);
+        $this->assertFalse($show()['inactive_write_off']['can_approve']);
+        $this->as(self::SECOND_OWNER);
+        $this->assertTrue($show()['inactive_write_off']['can_approve']);
+        $this->approval()->approve($adj);
+        $after = $show();
+        $this->assertFalse($after['inactive_write_off']['can_approve']);
+        $this->assertSame(self::SECOND_OWNER, $after['inactive_write_off']['approval']['approved_by']);
+
+        $active = $this->inactiveItemWithStock('5');
+        DB::connection('tenant')->table('items')->where('id', $active->id)->update(['is_active' => true]);
+        $plain = $this->draft($active, '1');
+        $this->assertArrayNotHasKey('inactive_write_off', app(\App\Http\Controllers\Api\V1\StockAdjustmentController::class)->show($plain)->getData(true)['data']);
+    }
 }

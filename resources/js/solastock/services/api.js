@@ -179,6 +179,7 @@ export const api = {
     createAdjustment: (body) => request('/adjustments', { method: 'POST', body }),
     updateAdjustment: (id, body) => request(`/adjustments/${id}`, { method: 'PUT', body }),
     postAdjustment: (id) => request(`/adjustments/${id}/post`, { method: 'POST' }),
+    approveInactiveWriteOff: (id) => request(`/adjustments/${id}/approve-inactive-write-off`, { method: 'POST' }),
     reverseAdjustment: (id, reason) => request(`/adjustments/${id}/reverse`, { method: 'POST', body: { reason } }),
 
     ledger: (params) => request('/ledger', { params }),

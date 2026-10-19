@@ -1,4 +1,10 @@
 export const en = {
+    'adjustment.inactiveWriteOff.title': 'Write-off of an inactive item',
+    'adjustment.inactiveWriteOff.pending': 'Posting is blocked until a second authorized person approves this write-off.',
+    'adjustment.inactiveWriteOff.approved': 'Approved by user :user. Another authorized person can now post it.',
+    'adjustment.inactiveWriteOff.approve': 'Approve write-off',
+    'adjustment.inactiveWriteOff.approvedToast': 'Write-off approved.',
+    'adjustment.auditAction.stock_adjustment.inactive_write_off_approved': 'Inactive-item write-off approved',
     'adjustment.auditAction.stock_adjustment.create': 'Draft adjustment created',
     'adjustment.auditEmpty': 'No audit events were recorded for this document.',
     'adjustment.auditActor': 'User',
@@ -55,6 +61,12 @@ export const en = {
 };
 
 export const ar = {
+    'adjustment.inactiveWriteOff.title': 'شطب صنف غير نشط',
+    'adjustment.inactiveWriteOff.pending': 'الترحيل محظور حتى يعتمد شخص ثانٍ مخوّل هذا الشطب.',
+    'adjustment.inactiveWriteOff.approved': 'اعتمده المستخدم :user. يمكن الآن لشخص مخوّل آخر ترحيله.',
+    'adjustment.inactiveWriteOff.approve': 'اعتماد الشطب',
+    'adjustment.inactiveWriteOff.approvedToast': 'تم اعتماد الشطب.',
+    'adjustment.auditAction.stock_adjustment.inactive_write_off_approved': 'تم اعتماد شطب صنف غير نشط',
     'adjustment.auditAction.stock_adjustment.create': 'تم إنشاء مسودة التسوية',
     'adjustment.auditEmpty': 'لا توجد أحداث تدقيق مسجلة لهذا المستند.',
     'adjustment.auditActor': 'المستخدم',

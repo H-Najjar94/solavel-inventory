@@ -150,6 +150,17 @@ final class InactiveItemWriteOffApproval
         return $approval;
     }
 
+    /** UI hint (the server re-checks on approve): permitted, not the draft's creator, no valid approval yet. */
+    public function canApprove(StockAdjustment $adj, ?object $user): bool
+    {
+        if ($user === null || $adj->status !== 'draft' || $this->currentApproval($adj) !== null
+            || ! app(InventoryPermissionService::class)->can($user, self::PERMISSION)) {
+            return false;
+        }
+
+        return $this->creatorId($adj) !== (int) $user->id;
+    }
+
     /** Latest approval whose snapshot still matches the draft, or null. */
     public function currentApproval(StockAdjustment $adj): ?array
     {

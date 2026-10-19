@@ -101,7 +101,16 @@ class StockAdjustmentController extends ApiController
             'id', 'created_at', 'actor_user_id', 'action', 'document_ref', 'before', 'after',
         ]);
 
-        return $this->success(['adjustment' => $adjustment, 'ledger' => $ledger, 'audit' => $audit]);
+        $payload = ['adjustment' => $adjustment, 'ledger' => $ledger, 'audit' => $audit];
+        if ($adjustment->status === 'draft') {
+            $approval = app(InactiveItemWriteOffApproval::class);
+            $preview = $approval->preview($adjustment);
+            if ($preview['requires_approval']) {
+                $payload['inactive_write_off'] = $preview + ['can_approve' => $approval->canApprove($adjustment, request()->user())];
+            }
+        }
+
+        return $this->success($payload);
     }
 
     public function store(StoreStockAdjustmentRequest $request): JsonResponse

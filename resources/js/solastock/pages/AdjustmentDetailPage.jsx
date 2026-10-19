@@ -20,6 +20,7 @@ export default function AdjustmentDetailPage() {
     const { data, isLoading, isMock } = useApiQuery(['adjustment', id], () => api.adjustment(id), { fallback: null });
     const adj = data?.adjustment;
     const ledger = data?.ledger ?? [];
+    const writeOff = data?.inactive_write_off ?? null; // Q12.6: only present for a draft write-off of an inactive item
 
     if (isLoading) return <section className="page"><Skeleton /></section>;
     if (!adj) return <section className="page"><Breadcrumbs items={[{ label: t('adjustments'), to: '/adjustments' }, { label: t('adjustment.notFound') }]} /><EmptyState title={t('adjustment.unavailable')} hint={t('adjustment.unavailableHint')} /></section>;
@@ -44,6 +45,16 @@ export default function AdjustmentDetailPage() {
                 <dt>{t('adjustment.reversal')}</dt><dd>{adj.reversal ? `${adj.reversal.reversal_number} — ${adj.reversal.reason}` : '—'}</dd>
                 <dt>{t('adjustment.increaseValue')}</dt><dd>{adj.total_increase_value}</dd><dt>{t('adjustment.decreaseValue')}</dt><dd>{adj.total_decrease_value}</dd>
             </dl></div>
+
+            {writeOff && <div className="panel inactive-write-off" role="alert" data-testid="inactive-write-off">
+                <h2>{t('adjustment.inactiveWriteOff.title')}</h2>
+                <ul>{(writeOff.warnings ?? []).map((w, i) => <li key={i}>{w}</li>)}</ul>
+                <p>{writeOff.approval
+                    ? t('adjustment.inactiveWriteOff.approved', undefined, { user: writeOff.approval.approved_by })
+                    : t('adjustment.inactiveWriteOff.pending')}</p>
+                {writeOff.can_approve && <button type="button" className="btn btn--primary" data-testid="approve-inactive-write-off"
+                    onClick={() => act(api.approveInactiveWriteOff, t('adjustment.inactiveWriteOff.approvedToast'))}>{t('adjustment.inactiveWriteOff.approve')}</button>}
+            </div>}
 
             <Tabs tabs={[{ key: 'lines', label: t('adjustment.lines') }, { key: 'ledger', label: t('adjustment.ledgerResult') }, { key: 'audit', label: t('adjustment.audit') }]} active={tab} onChange={setTab} />
 
