@@ -520,6 +520,7 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             setDecisionErrors({});
             setSaveState('idle');
         }
+        return incoming;
     }
 
     async function undoDecision(decisionUuid) {
@@ -547,7 +548,24 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
             setConfirmation('');
             toast.push(successText || tr(successKey), 'success');
             return true;
-        } catch (error) { setDecisionErrors(decisionFieldErrors(error)); await reconcileLatest().catch(() => undefined); toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
+        } catch (error) {
+            setDecisionErrors(decisionFieldErrors(error));
+            const latest = await reconcileLatest().catch(() => undefined);
+            if (error?.outcomeUnknown && latest?.state === 'connected') {
+                setConfirmation('');
+                toast.push(successText || tr(successKey), 'success');
+                return true;
+            }
+            if (error?.outcomeUnknown) {
+                toast.push(sourceText(
+                    "The connection was not completed. Your review is still saved; you can try Connect again.",
+                    "لم يكتمل الاتصال. ما زالت مراجعتك محفوظة؛ يمكنك محاولة الاتصال مرة أخرى."
+                ), 'info');
+                return false;
+            }
+            toast.failure(error, error.message || tr('settings.common.errorFallback'));
+            return false;
+        }
         finally { setSaving(false); }
     }
 

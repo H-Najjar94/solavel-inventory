@@ -39,7 +39,7 @@ function transport(url, options) {
     const key = `${organizationScope}:${options.method}:${url}`;
     const path = new URL(url).pathname;
     const recoverableWizardDecision = (options.method === 'PUT' && path.endsWith('/decisions'))
-        || (options.method === 'POST' && path.endsWith('/refresh'));
+        || (options.method === 'POST' && (path.endsWith('/refresh') || path.endsWith('/activate')));
     const execute = async () => {
         const unknown = (metadata = {}) => {
             uncertain.add(key);

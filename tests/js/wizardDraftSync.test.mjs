@@ -25,6 +25,14 @@ test('wizard state failures are translated instead of exposing internal codes', 
     assert.match(source, /item code will be created automatically/);
 });
 
+test('connection activation verifies an uncertain outcome without a nested generic dialog', async () => {
+    const apiSource = await readFile(new URL('../../resources/js/solastock/services/api.js', import.meta.url), 'utf8');
+    const pageSource = await readFile(new URL('../../resources/js/solastock/pages/IntegrationSettingsPage.jsx', import.meta.url), 'utf8');
+    assert.match(apiSource, /path\.endsWith\(['"]\/activate['"]\)/);
+    assert.match(pageSource, /error\?\.outcomeUnknown && latest\?\.state === ['"]connected['"]/);
+    assert.match(pageSource, /Your review is still saved/);
+});
+
 test('canonical response is unwrapped and retains the confirmed decision', () => {
     const confirmed = unwrapCanonicalDraft({ success: true, data: draft(2, [decision('a', 'approve_exact_binding')]) });
     assert.equal(canonicalDecision(confirmed, 'a').action, 'approve_exact_binding');

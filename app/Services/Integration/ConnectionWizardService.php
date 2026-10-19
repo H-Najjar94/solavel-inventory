@@ -1338,13 +1338,24 @@ final class ConnectionWizardService
         if (! $unitId) {
             $this->fail('unit_mapping_required_before_inventory_item_creation');
         }
+        $trackingType = match (strtolower(trim((string) ($books->tracking_type ?? '')))) {
+            'lot', 'batch' => 'lot',
+            'serial' => 'serial',
+            'lot_serial', 'batch_serial' => 'lot_serial',
+            default => 'none', // Finance "quantity" is SolaStock's untracked mode.
+        };
+        $costingMethod = match (strtolower(trim((string) ($books->valuation_method ?? '')))) {
+            'fifo' => 'fifo',
+            'standard' => 'standard',
+            default => 'average',
+        };
         $item = Item::query()->create([
             'organization_id' => $mapping->solastock_organization_id,
             'sku' => $stockSku,
             'name' => $books->name,
             'item_type' => 'inventory',
-            'tracking_type' => $books->tracking_type ?: 'none',
-            'costing_method' => $books->valuation_method ?: 'average',
+            'tracking_type' => $trackingType,
+            'costing_method' => $costingMethod,
             'category_id' => $categoryId,
             'base_unit_id' => $unitId,
             'purchase_price' => '0.0000',
