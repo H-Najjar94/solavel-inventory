@@ -6,6 +6,7 @@ use App\Models\Tenant\InventorySetting;
 use App\Models\Tenant\InventoryUserWarehouse;
 use App\Models\Tenant\Warehouse;
 use App\Services\Access\CentralAppAccess;
+use App\Services\Access\WarehouseAccessService;
 use App\Services\Warehouses\DefaultWarehouseService;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Auth\GenericUser;
@@ -43,6 +44,21 @@ final class DefaultWarehouseProvisioningTest extends TestCase
         $this->assertSame(0, InventoryUserWarehouse::count());
         $this->assertSame(0, DB::connection('tenant')->table('stock_ledger')->count());
         $this->assertSame(0, DB::connection('tenant')->table('purchasing_document_outbox')->count());
+    }
+
+    public function test_warehouse_index_repairs_an_older_empty_organization(): void
+    {
+        $access = $this->mock(WarehouseAccessService::class);
+        $access->shouldReceive('scope')->once()->andReturnUsing(fn ($query) => $query);
+
+        $response = (new \App\Http\Controllers\Api\V1\WarehouseController($access))
+            ->index(\Illuminate\Http\Request::create('/api/v1/warehouses'))
+            ->getData(true);
+
+        $this->assertSame(1, Warehouse::query()->count());
+        $this->assertSame('MAIN', Warehouse::query()->firstOrFail()->code);
+        $this->assertSame(1, $response['meta']['total']);
+        $this->assertTrue((bool) $response['data'][0]['is_default']);
     }
 
     public function test_editing_default_name_and_code_preserves_reference_and_customer_changes(): void

@@ -26,7 +26,14 @@ class MetaController extends ApiController
         $connection = IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
         $currency = (array) data_get($connection?->meta, 'finance_currency_contract', []);
 
-        $default = app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId();
+        // The SPA bootstrap is the one request every admitted organization makes.
+        // Repair organizations that were enabled before the first-warehouse
+        // initializer existed so they are usable immediately. The service is
+        // idempotent and preserves any warehouse (including an intentionally
+        // disabled/deleted one), so this never recreates customer data.
+        $warehouses = app(\App\Services\Warehouses\DefaultWarehouseService::class);
+        $warehouses->ensure($organizationId);
+        $default = $warehouses->authorizedId();
         $settings = InventorySetting::query()->first();
         $settings?->setAttribute('default_warehouse_id', $default);
 

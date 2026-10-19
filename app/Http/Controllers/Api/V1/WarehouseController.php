@@ -24,7 +24,11 @@ class WarehouseController extends ApiController
 
     public function index(Request $request): JsonResponse
     {
-        $default = app(\App\Services\Warehouses\DefaultWarehouseService::class)->authorizedId();
+        // Also self-heal direct/API visits that do not load the SPA metadata
+        // first. This creates only the first warehouse for a truly empty org.
+        $warehouses = app(\App\Services\Warehouses\DefaultWarehouseService::class);
+        $warehouses->ensure((int) app(\App\Tenancy\OrganizationContext::class)->idOrFail());
+        $default = $warehouses->authorizedId();
         $perPage = min((int) $request->query('per_page', 25), 100);
         $query = Warehouse::query()
             ->with('primaryImage:id,warehouse_id,is_primary')
