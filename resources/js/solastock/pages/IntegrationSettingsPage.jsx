@@ -13,6 +13,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
+import { sourceText } from '../i18n/locales.js';
 import { useTenant } from '../stores/tenant.jsx';
 import GuidedConnectionAssistant from '../components/GuidedConnectionAssistant.jsx';
 import { canonicalDecision, createSerializedMutationQueue, mayAcceptCanonicalDraft, unwrapCanonicalDraft } from '../services/wizardDraftSync.js';

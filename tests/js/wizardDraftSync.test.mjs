@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
     canonicalDecision,
     createSerializedMutationQueue,
@@ -10,6 +11,11 @@ import {
 const identity = { client_id: 2, central_organization_id: 3, finance_organization_id: 1, solastock_organization_id: 3 };
 const draft = (lock, decisions = []) => ({ run_uuid: 'draft-a', identity, lock_version: lock, decisions });
 const decision = (fingerprint, action, version = 1) => ({ candidate_fingerprint: fingerprint, action, decision_version: version });
+
+test('connection settings imports its localized source text helper', async () => {
+    const source = await readFile(new URL('../../resources/js/solastock/pages/IntegrationSettingsPage.jsx', import.meta.url), 'utf8');
+    assert.match(source, /import\s*\{\s*sourceText\s*\}\s*from\s*['"]\.\.\/i18n\/locales\.js['"]/);
+});
 
 test('canonical response is unwrapped and retains the confirmed decision', () => {
     const confirmed = unwrapCanonicalDraft({ success: true, data: draft(2, [decision('a', 'approve_exact_binding')]) });
