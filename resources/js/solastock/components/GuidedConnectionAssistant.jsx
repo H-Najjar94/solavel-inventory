@@ -897,19 +897,27 @@ export default function GuidedConnectionAssistant({
             Number(totals.total_valuation_difference || 0) !== 0 && tr('integration.focus.blocker.value'),
         ].filter(Boolean);
         const ready = blockers.length === 0 && Number(totals.total_quantity_difference || 0) === 0;
-        return <section className="focus-card focus-result">
-            <div className={`focus-outcome ${ready ? 'is-ready' : 'is-warning'}`}><h2 ref={headingRef} tabIndex="-1">{tr(ready ? 'integration.focus.ready' : view.review_ready ? 'integration.focus.finalReviewTitle' : 'integration.focus.notReady')}</h2><p>{tr(ready ? 'integration.focus.readyText' : view.review_ready ? 'integration.focus.finalReviewText' : 'integration.focus.notReadyText')}</p></div>
-            <ul className="focus-connect-effects" aria-label={tr('integration.records.effectsTitle')}>
-                <li>{tr('integration.records.effectMappings', { count: Object.values(sections).reduce((sum, c) => sum + (c?.total || 0), 0) })}</li>
-                <li>{tr('integration.records.effectSync', { date: view.cutoff_at ? new Date(view.cutoff_at).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) : tr('integration.review.not_reviewed') })}</li>
-                <li>{tr('integration.records.effectNoBalances')}</li>
-            </ul>
-            <p>{tr("integration.review.solastock_owns_quantities_and_inventory_operations_solacount")}</p>
-            <details><summary>{tr("integration.review.review_selected_accounts")}</summary><AccountingMappingTable rows={accountingRows} decisions={confirmedDecisions} choose={choose} canEdit={false} saving={saving} /></details>
-            {ready && ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(view.state) && <ConfirmedActionButton type="button" className="btn btn--primary" disabled={!gate.allowed || !accountingGate.allowed || saving} onConfirm={() => runAction(() => api.activateIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash, confirmation: 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY' }), 'integration.wizard.activated')} title={tr('integration.wizard.activate')} message={feedbackText('activateInventoryIntegrationBody')} action={tr('integration.wizard.activate')}>{tr('integration.wizard.activate')}</ConfirmedActionButton>}
-            {!ready && <ol className="focus-blockers">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ol>}
-            {recordSummary}
+        const connectAction = ready && ['preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'].includes(view.state) && <ConfirmedActionButton type="button" className="btn btn--primary focus-connect-button" disabled={!gate.allowed || !accountingGate.allowed || saving} onConfirm={() => runAction(() => api.activateIntegrationWizard(runUuid, { approval_payload_hash: view.approval_payload_hash, confirmation: 'CONNECT SOLASTOCK AS INVENTORY AUTHORITY' }), 'integration.wizard.activated')} title={tr('integration.wizard.activate')} message={feedbackText('activateInventoryIntegrationBody')} action={tr('integration.wizard.activate')}>{tr('integration.wizard.activate')}</ConfirmedActionButton>;
+        return <section className={`focus-card focus-result ${ready ? 'is-ready' : 'is-blocked'}`}>
+            <div className="focus-result-hero">
+                <span className="focus-result-mark" aria-hidden="true">{ready ? '✓' : '!'}</span>
+                <div className={`focus-outcome ${ready ? 'is-ready' : 'is-warning'}`}><h2 ref={headingRef} tabIndex="-1">{tr(ready ? 'integration.focus.ready' : view.review_ready ? 'integration.focus.finalReviewTitle' : 'integration.focus.notReady')}</h2><p>{tr(ready ? 'integration.focus.readyText' : view.review_ready ? 'integration.focus.finalReviewText' : 'integration.focus.notReadyText')}</p></div>
+                {connectAction}
+            </div>
             <div className="focus-result-summary"><div><span>{tr('integration.focus.quantityDifference')}</span><strong><bdi>{formatNumber(totals.total_quantity_difference, 4)}</bdi></strong></div><div><span>{tr('integration.focus.valueDifference')}</span><strong><bdi>{formatMoney(totals.total_valuation_difference)}</bdi></strong></div><div><span>{tr('integration.focus.startDateLabel')}</span><strong><bdi>{view.cutoff_at || tr("integration.review.not_reviewed")}</bdi></strong></div></div>
+            {!ready && <ol className="focus-blockers">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ol>}
+            <div className="focus-result-grid">
+                <section className="focus-result-section">
+                    <ul className="focus-connect-effects" aria-label={tr('integration.records.effectsTitle')}>
+                        <li>{tr('integration.records.effectMappings', { count: Object.values(sections).reduce((sum, c) => sum + (c?.total || 0), 0) })}</li>
+                        <li>{tr('integration.records.effectSync', { date: view.cutoff_at ? new Date(view.cutoff_at).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) : tr('integration.review.not_reviewed') })}</li>
+                        <li>{tr('integration.records.effectNoBalances')}</li>
+                    </ul>
+                    <p>{tr("integration.review.solastock_owns_quantities_and_inventory_operations_solacount")}</p>
+                </section>
+                <section className="focus-result-section focus-result-records">{recordSummary}</section>
+            </div>
+            <details className="focus-review-details"><summary><span>{tr("integration.review.review_selected_accounts")}</span><span aria-hidden="true">⌄</span></summary><div className="focus-review-details__body"><AccountingMappingTable rows={accountingRows} decisions={confirmedDecisions} choose={choose} canEdit={false} saving={saving} /></div></details>
             {!ready && footer(tr('integration.focus.backToTasks'), () => go(blockers[0] === tr('integration.focus.blocker.count') ? 3 : 2), { disabled: false })}
         </section>;
     };

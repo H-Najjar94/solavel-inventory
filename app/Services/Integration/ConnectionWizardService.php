@@ -1066,6 +1066,19 @@ final class ConnectionWizardService
             $booksId = $createsBooks
                 ? $this->createFinanceCatalogRecordFromStock($organizationMapping, $decision, (string) $stockIds[0])
                 : (string) $booksIds[0];
+            // A customer or supplier can be archived in Finance after the
+            // immutable review snapshot was prepared. It is no longer part of
+            // the live connection scope, so do not fail the whole activation
+            // or create an inactive party in Stock.
+            if ($createsStock && in_array($decision->entity_type, ['customer', 'supplier'], true)) {
+                $financeTable = $decision->entity_type === 'customer' ? 'customers' : 'suppliers';
+                $liveParty = DB::connection('tenant')->table($financeTable)
+                    ->where('organization_id', $organizationMapping->finance_organization_id)
+                    ->where('id', $booksId)->whereNull('deleted_at')->where('is_active', true)->exists();
+                if (! $liveParty) {
+                    continue;
+                }
+            }
             $stockId = $createsStock
                 ? $this->createStockRecordFromFinance($organizationMapping, $decision, $booksId)
                 : (string) $stockIds[0];
@@ -2261,7 +2274,8 @@ final class ConnectionWizardService
         $financeParties = [];
         foreach (['customers' => 'customer', 'suppliers' => 'supplier'] as $table => $entity) {
             $financeParties[$entity] = Schema::connection('tenant')->hasTable($table)
-                ? DB::connection('tenant')->table($table)->where('organization_id', $financeOrgId)->orderBy('id')->get()
+                ? DB::connection('tenant')->table($table)->where('organization_id', $financeOrgId)
+                    ->whereNull('deleted_at')->where('is_active', true)->orderBy('id')->get()
                 : collect();
         }
         // Pair a SolaStock party with its SolaCount counterpart of the SAME role (a contact

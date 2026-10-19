@@ -13,6 +13,15 @@ function bodyFingerprint(body) {
 }
 function csrfToken() { return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? ''; }
 function locale() { return normalizeLocale(window.SOLASTOCK_LOCALE?.locale); }
+function validationMessage(value) {
+    if (value === 'finance_party_source_missing_or_inactive') return feedbackText('financePartyUnavailable');
+    return value;
+}
+function readableValidationPayload(payload) {
+    if (!payload?.errors) return payload;
+    return {...payload, errors:Object.fromEntries(Object.entries(payload.errors).map(([key,value]) => [key,
+        Array.isArray(value) ? value.map(validationMessage) : validationMessage(value)]))};
+}
 
 // Presentation-only request boundary. Existing envelopes, permissions, headers and payloads remain intact.
 function transport(url, options) {
@@ -36,7 +45,7 @@ function transport(url, options) {
             throw Object.assign(new Error(feedbackText('failed')), {status:res?.status,cause:error,mutation:false});
         } finally { clearTimeout(timer); }
         const metadata = {mutation,status:res.status,code:json?.error?.code || json?.code,
-            payload:json?.error || (json?.errors ? {errors:json.errors} : undefined)};
+            payload:readableValidationPayload(json?.error || (json?.errors ? {errors:json.errors} : undefined))};
         // Preserve the existing access event independently of presentation and outcome certainty.
         if ((!res.ok || json?.success === false) && json?.app === 'inventory' && json?.code && !['action_forbidden','temporarily_unavailable'].includes(json.code)) {
             window.dispatchEvent(new CustomEvent('solastock-access-denied', {detail:feedbackText(res.status === 403 ? 'forbidden' : 'failed')}));
@@ -44,7 +53,8 @@ function transport(url, options) {
         if (mutation && (res.status >= 500 || !json || typeof json !== 'object' || (res.ok && json.success !== true && json.success !== false))) throw unknown(metadata);
         if (!res.ok || json?.success === false) {
             if([402,403].includes(res.status)&&!new URL(url).pathname.endsWith('/meta'))window.dispatchEvent(new CustomEvent('solastock-access-refresh'));
-            const message = res.status === 402 ? t(['subscription_expired','paid_expired_no_fallback','expired'].includes(json?.error?.reason_code)?'access.expired':['subscription_revoked','subscription_suspended','subscription_cancelled','subscription_not_access_eligible'].includes(json?.error?.reason_code)?'access.blocked':json?.error?.reason_code==='entitlement_service_unavailable'?'access.checkUnavailable':'access.unavailable') : res.status === 422 ? json?.error?.message || json?.message || feedbackText('invalid')
+            const rawValidationMessage = json?.error?.message || json?.message;
+            const message = res.status === 402 ? t(['subscription_expired','paid_expired_no_fallback','expired'].includes(json?.error?.reason_code)?'access.expired':['subscription_revoked','subscription_suspended','subscription_cancelled','subscription_not_access_eligible'].includes(json?.error?.reason_code)?'access.blocked':json?.error?.reason_code==='entitlement_service_unavailable'?'access.checkUnavailable':'access.unavailable') : res.status === 422 ? validationMessage(rawValidationMessage) || feedbackText('invalid')
                 : feedbackText(res.status === 403 ? 'forbidden' : [401,419].includes(res.status) ? 'expired' : 'failed');
             const err = Object.assign(new Error(message), metadata);
             if (mutation && res.status === 402) { void feedback.error({title:t('access.title'),message});err.feedbackHandled=true; }
