@@ -655,6 +655,8 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
             ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.cutoff-review');
         Route::post('/wizard/runs/{run}/reset', [IntegrationController::class, 'resetWizardDraft'])
             ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.reset');
+        Route::post('/wizard/runs/{run}/refresh', [IntegrationController::class, 'refreshWizardDraft'])
+            ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.refresh');
         Route::delete('/wizard/runs/{run}', [IntegrationController::class, 'discardWizardDraft'])
             ->middleware(['perm:inventory.integration.setup', 'integration.setup'])->name('api.v1.integration.wizard.discard');
         Route::post('/wizard/runs/{run}/approve', [IntegrationController::class, 'approveWizard'])

@@ -391,6 +391,7 @@ export const api = {
     freezeIntegrationWizardSnapshot: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/snapshot/freeze`, { method: 'POST', body }),
     reviewIntegrationWizardCutoff: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/cutoff-review`, { method: 'POST', body }),
     resetIntegrationWizardDraft: (run) => request(`/integration/solabooks/wizard/runs/${run}/reset`, { method: 'POST' }),
+    refreshIntegrationWizardDraft: (run) => request(`/integration/solabooks/wizard/runs/${run}/refresh`, { method: 'POST' }),
     discardIntegrationWizardDraft: (run) => request(`/integration/solabooks/wizard/runs/${run}`, { method: 'DELETE' }),
     approveIntegrationWizard: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/approve`, { method: 'POST', body }),
     accountantApproveIntegrationWizard: (run, body) => request(`/integration/solabooks/wizard/runs/${run}/accountant-approve`, { method: 'POST', body }),

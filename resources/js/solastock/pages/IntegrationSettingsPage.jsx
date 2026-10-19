@@ -537,14 +537,14 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         } finally { setSaving(false); }
     }
 
-    async function runAction(callback, successKey) {
+    async function runAction(callback, successKey, successText = '') {
         setSaving(true);
         try {
             await callback();
             setDecisionErrors({});
             await reconcileLatest();
             setConfirmation('');
-            toast.push(tr(successKey), 'success');
+            toast.push(successText || tr(successKey), 'success');
             return true;
         } catch (error) { setDecisionErrors(decisionFieldErrors(error)); await reconcileLatest().catch(() => undefined); toast.failure(error, error.message || tr('settings.common.errorFallback')); return false; }
         finally { setSaving(false); }
@@ -601,10 +601,16 @@ function ConnectionWizard({ organizationId, gate, accountingGate, connectionAcce
         <h2>{tr('integration.focus.staleReviewTitle')}</h2>
         <p>{tr('integration.focus.staleReviewText')}</p>
         <ConfirmedActionButton type="button" className="btn btn--primary" disabled={!gate.allowed || saving}
-            title={tr('integration.focus.refreshReview')} message={tr('integration.focus.refreshReviewConfirmation')} action={tr('integration.focus.refreshReview')}
+            title={tr('integration.focus.refreshReview')} message={sourceText(
+                "Update this review with the latest records? All unchanged decisions will stay saved. Only new or changed records will need review.",
+                "هل تريد تحديث هذه المراجعة بأحدث السجلات؟ ستبقى جميع القرارات غير المتغيرة محفوظة. ستحتاج فقط السجلات الجديدة أو المتغيرة إلى المراجعة."
+            )} action={tr('integration.focus.refreshReview')}
             onConfirm={async () => {
-                if (await runAction(() => api.resetIntegrationWizardDraft(runUuid), 'integration.wizard.resetDone')) {
-                    setCutoffAt(proposedCutoffValue(null)); cutoffInitialized.current = runUuid; setConfirmation(''); setAssistantStep(1);
+                if (await runAction(() => api.refreshIntegrationWizardDraft(runUuid), 'integration.wizard.decisionSaved', sourceText(
+                    "Review updated. Your unchanged decisions are still saved.",
+                    "تم تحديث المراجعة. قراراتك غير المتغيرة ما زالت محفوظة."
+                ))) {
+                    setConfirmation(''); setAssistantStep(2);
                 }
             }}>{tr('integration.focus.refreshReview')}</ConfirmedActionButton>
     </section>;

@@ -812,6 +812,63 @@ final class ConnectionWizardService
         return $this->finalPreview($organizationId, $runUuid);
     }
 
+    public function refreshDraft(int $organizationId, string $runUuid, int $actorUserId): array
+    {
+        $preview = $this->discover($organizationId);
+        $candidates = collect($preview['comparison'])->keyBy('fingerprint');
+        $automatic = collect($preview['guided_setup']['automatic_bindings'] ?? [])
+            ->merge($preview['guided_setup']['automatic_exclusions'] ?? [])->pluck('fingerprint');
+
+        DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $actorUserId, $preview, $candidates, $automatic): void {
+            $run = $this->runForOrganization($organizationId, $runUuid, true);
+            if ($run->state === 'connected') $this->fail('connected_run_cannot_be_reset');
+
+            $selected = DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                ->where('run_uuid', $runUuid)->where('status', 'selected')->get();
+            $valid = $selected->filter(fn ($decision) => $this->decisionMatchesCandidate(
+                $decision, $candidates->get($decision->candidate_fingerprint)
+            ));
+            $invalid = $selected->reject(fn ($decision) => $valid->contains('decision_uuid', $decision->decision_uuid));
+            if ($invalid->isNotEmpty()) {
+                DB::connection('tenant')->table('integration_connection_wizard_decisions')
+                    ->where('run_uuid', $runUuid)->whereIn('decision_uuid', $invalid->pluck('decision_uuid')->all())
+                    ->update(['status' => 'reversed', 'actor_user_id' => $actorUserId, 'updated_at' => now()]);
+            }
+
+            $validByFingerprint = $valid->keyBy('candidate_fingerprint');
+            $blocking = $candidates->filter(function (array $candidate) use ($validByFingerprint, $automatic, $organizationId): bool {
+                if ($candidate['blocking_reason'] === null || $this->isFinanceOnlyWarehouseDiagnostic($candidate, $organizationId)
+                    || $automatic->contains($candidate['fingerprint'])) return false;
+                $decision = $validByFingerprint->get($candidate['fingerprint']);
+                return ! $decision || in_array($decision->action, ['physical_count_required', 'retain_blocked'], true);
+            });
+            $manifestHash = (string) ($preview['discovery_manifest_hash'] ?? $this->hash($preview['comparison'] ?? []));
+            $beforeImageHash = (string) ($preview['discovery_before_image_hash'] ?? $preview['snapshot_hash']);
+            DB::connection('tenant')->table('integration_connection_wizard_runs')->where('id', $run->id)->update([
+                'state' => $blocking->isEmpty() ? 'decisions_complete' : 'draft_decisions',
+                'draft_version' => DB::raw('draft_version + 1'), 'lock_version' => DB::raw('lock_version + 1'),
+                'snapshot_hash' => $preview['snapshot_hash'], 'discovery_manifest_hash' => $manifestHash,
+                'discovery_before_image_hash' => $beforeImageHash,
+                'comparison_totals' => json_encode($preview['totals']),
+                'snapshot_payload' => $this->canonicalJson(['comparison' => $preview['comparison'], 'totals' => $preview['totals'],
+                    'accounting' => $preview['accounting'], 'master_data' => $preview['master_data'] ?? $preview['readiness'] ?? null]),
+                'snapshot_frozen_at' => null, 'cutoff_reviewed_at' => null,
+                'decisions_completed_at' => $blocking->isEmpty() ? now() : null,
+                'owner_approved_by_user_id' => null, 'owner_approved_at' => null, 'owner_approval_hash' => null,
+                'accountant_approved_by_user_id' => null, 'accountant_approved_at' => null, 'accountant_approval_hash' => null,
+                'approval_payload_hash' => null, 'approved_by_user_id' => null, 'approved_at' => null, 'updated_at' => now(),
+            ]);
+            $this->audit($runUuid, null, 'draft_refreshed', null, [
+                'preserved_decisions' => $valid->count(), 'changed_or_removed_decisions' => $invalid->count(),
+                'remaining_decisions' => $blocking->count(), 'next_draft_version' => (int) $run->draft_version + 1,
+            ], $actorUserId);
+        });
+
+        return $this->finalPreview($organizationId, $runUuid) + [
+            'refresh_result' => 'preserved_unchanged_decisions',
+        ];
+    }
+
     public function discardDraft(int $organizationId, string $runUuid, int $actorUserId): array
     {
         DB::connection('tenant')->transaction(function () use ($organizationId, $runUuid, $actorUserId): void {

@@ -198,6 +198,11 @@ class IntegrationController extends ApiController
         return $this->success($wizard->resetDraft($this->context->idOrFail(), $run, (int) auth()->id()));
     }
 
+    public function refreshWizardDraft(string $run, ConnectionWizardService $wizard): JsonResponse
+    {
+        return $this->success($wizard->refreshDraft($this->context->idOrFail(), $run, (int) auth()->id()));
+    }
+
     public function discardWizardDraft(string $run, ConnectionWizardService $wizard): JsonResponse
     {
         return $this->success($wizard->discardDraft($this->context->idOrFail(), $run, (int) auth()->id()));
