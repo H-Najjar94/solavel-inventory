@@ -78,7 +78,7 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
             'ship_date' => now()->toDateString(),
         ], $draftLines);
         app(ShipmentService::class)->post($shipment);
-        $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         try {
         $return = app(SalesReturnService::class)->createDraft([
@@ -97,7 +97,7 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
             $this->fail('A partial quarantine request must not restock the complete shipment.');
         } catch (\Illuminate\Validation\ValidationException $exception) {
             $this->assertArrayHasKey('lines', $exception->errors());
-            $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+            $this->assertSame('8.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         }
         $return = app(SalesReturnService::class)->createDraft([
             'return_number' => 'B5-RMA-1', 'shipment_id' => $shipment->id, 'customer_id' => $customer->id,

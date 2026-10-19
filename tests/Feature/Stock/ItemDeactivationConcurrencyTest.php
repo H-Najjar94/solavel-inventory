@@ -104,7 +104,7 @@ final class ItemDeactivationConcurrencyTest extends TestCase
 
         DB::purge('tenant');
         self::assertTrue((bool) Item::query()->findOrFail($item->id)->is_active);
-        self::assertSame('5.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        self::assertSame('5.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         foreach (['locked', 'committing', 'a'] as $f) {
             @unlink($root.'/'.$f);
         }

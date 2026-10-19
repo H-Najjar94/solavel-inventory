@@ -288,7 +288,7 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
         $row = InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_write_off_approved')->where('entity_id', $id)->sole();
         $this->assertSame(self::APPROVER, (int) $row->actor_user_id);
         $this->assertSame(self::ACTOR, $row->before['requested_by']);
-        $this->assertSame('5.0000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('5.000000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     public function test_signed_workspace_inactive_write_off_approval_is_refused_for_a_viewer(): void
@@ -322,6 +322,6 @@ final class InactiveItemFinanceWorkspaceTest extends TestCase
         $this->send(['action' => 'counts.post', 'idempotency_key' => 'q12-count-viewer-'.bin2hex(random_bytes(6)), 'parameters' => ['stock_count' => $count->id], 'revision' => str_repeat('0', 64)])
             ->assertForbidden();
         $this->assertSame('draft', $count->fresh()->status);
-        $this->assertSame('5.0000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('5.000000', (string) DB::connection('tenant')->table('stock_balances')->where('item_id', $item->id)->value('on_hand_qty'));
     }
 }

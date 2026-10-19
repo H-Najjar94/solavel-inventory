@@ -101,7 +101,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         $return = $service->post($service->createDraft(['goods_receipt_id' => $receipt->id, 'return_date' => now()->toDateString(), 'reason' => 'Faulty batch back to supplier'],
             [['goods_receipt_line_id' => $receipt->lines->sole()->id, 'entered_qty' => '2']]));
         $this->assertSame('posted', $return->fresh()->status);
-        $this->assertSame('8.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $audit = $this->audit('supplier_return', $item->id);
         $this->assertTrue($audit->before['item_inactive']);
     }
@@ -117,7 +117,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         // Only 1 left: returning 2 would go below zero.
         $this->refused(fn () => $service->createDraft(['goods_receipt_id' => $receipt->id, 'return_date' => now()->toDateString(), 'reason' => 'Return more than on hand'],
             [['goods_receipt_line_id' => $receipt->lines->sole()->id, 'entered_qty' => '2']]), $item->id, 'inventory.catalog.inactive_write_off_exceeds_stock');
-        $this->assertSame('1.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('1.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         // Unlinked line, or a line pointing at a receipt that was never posted: refused.
         $draftReceipt = $this->receipt($other = F::averageItem(['base_unit_id' => $this->unit->id]), '3', false);
         $this->inactive($other);
@@ -144,14 +144,14 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
     public function test_b_a_sales_return_of_a_posted_shipment_restocks_an_inactive_item_up_to_the_shipped_quantity(): void
     {
         [$item, $shipment] = $this->shipped();
-        $this->assertSame('8.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->inactive($item);
         $returns = app(SalesReturnService::class);
         $line = $shipment->lines->sole();
         $return = $returns->createDraft(['return_number' => 'Q12-RMA-'.uniqid(), 'shipment_id' => $shipment->id, 'warehouse_id' => $this->warehouse->id, 'return_date' => now()->toDateString(), 'reason' => 'Customer returned one unit'],
             [['source_line_id' => $line->id, 'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable']]);
         $returns->post($return);
-        $this->assertSame('9.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('9.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertTrue($this->audit('sales_return', $item->id)->before['item_inactive']);
 
         // More than originally shipped (2) in total is refused by the inactive-item guard itself.
@@ -169,7 +169,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         $this->refused(fn () => app(SalesReturnService::class)->createDraft(['return_number' => 'Q12-RMA-'.uniqid(), 'warehouse_id' => $this->warehouse->id, 'customer_name' => 'Walk-in', 'return_date' => now()->toDateString(), 'reason' => 'No source'],
             [['item_id' => $item->id, 'returned_qty' => '1', 'unit_cost' => '5', 'condition' => 'resellable']]), $item->id);
         $this->assertSame(0, DB::connection('tenant')->table('sales_return_lines')->where('item_id', $item->id)->count());
-        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('3.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     public function test_lifecycle_draft_or_cancelled_sources_do_not_authorize_returns_for_an_inactive_item(): void
@@ -214,7 +214,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
             $this->assertSame(403, $e->getStatusCode());
         }
         $this->assertSame('draft', $draft->fresh()->status);
-        $this->assertSame('10.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('10.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame(0, InventoryAuditLog::query()->where('action', 'inactive_item.corrective_movement')->count());
     }
 
@@ -254,7 +254,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         $this->withoutActor();
         $this->denied(fn () => $service->post($draft));
         $this->assertSame('draft', $draft->fresh()->status);
-        $this->assertSame('10.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('10.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     public function test_authorization_direct_sales_return_service_post_needs_a_permitted_actor(): void
@@ -269,7 +269,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         $this->withoutActor();
         $this->denied(fn () => $returns->post($draft));
         $this->assertNotSame('posted', $draft->fresh()->status);
-        $this->assertSame('8.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     public function test_authorization_direct_count_and_write_off_posting_need_a_permitted_actor(): void
@@ -287,7 +287,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         $this->withoutActor();
         $this->denied(fn () => $counts->post($count));
         $this->denied(fn () => $adjustments->post($writeOff));
-        $this->assertSame('5.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('5.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame(0, InventoryAuditLog::query()->where('action', 'like', '%inactive_item%')->count());
     }
 }

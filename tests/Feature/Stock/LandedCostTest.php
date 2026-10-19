@@ -177,8 +177,8 @@ class LandedCostTest extends TestCase
         $this->assertSame(['12.00', '8.00'], $components->pluck('posted_base_amount')->map(fn ($v) => (string) $v)->all());
         $this->assertSame(Shipment::class, $components[1]->destination_source_type);
         $layer = CostLayer::query()->where('item_id', $item->id)->sole();
-        $this->assertSame('6.0000', (string) $layer->unit_cost);
-        $this->assertSame('6.0000', (string) $layer->remaining_qty);
+        $this->assertSame('6.000000', (string) $layer->unit_cost);
+        $this->assertSame('6.000000', (string) $layer->remaining_qty);
         $balance = StockBalance::query()->where('item_id', $item->id)->sole();
         $this->assertSame('36.00', (string) $balance->total_value);
         $this->assertSame('6.0000', (string) $balance->average_cost);
@@ -202,8 +202,8 @@ class LandedCostTest extends TestCase
         $this->assertSame('2.00', (string) $components['adjustment_loss']->posted_base_amount);
         $this->assertSame('8.00', (string) $components['inventory_asset']->posted_base_amount);
         $balance = StockBalance::query()->where('item_id', $item->id)->sole();
-        $this->assertSame('8.0000', (string) $balance->on_hand_qty);
-        $this->assertSame('48.00', (string) $balance->total_value);
+        $this->assertSame('8.000000', (string) $balance->on_hand_qty);
+        $this->assertSame('48.000000', (string) $balance->total_value);
         $this->assertSame('6.0000', (string) $balance->average_cost);
         $this->assertTrue(app(IntegrityChecker::class)->check('tenant', TenantTestManager::ORG_A)['ok']);
     }
@@ -250,7 +250,7 @@ class LandedCostTest extends TestCase
         $this->assertSame(__('inventory.landed_cost.disposition_transfer'), $this->message(fn () => app(LandedCostService::class)->post($doc)));
         $this->assertSame('draft', $doc->fresh()->status);
         $this->assertSame(0, LandedCostComponent::query()->where('landed_cost_id', $doc->id)->count());
-        $this->assertSame('4.0000', (string) CostLayer::query()->where('item_id', $moved->id)->value('unit_cost'));
+        $this->assertSame('4.000000', (string) CostLayer::query()->where('item_id', $moved->id)->value('unit_cost'));
         $this->assertFalse(app(LandedCostService::class)->preview($doc)['ready']);
 
         $odd = F::fifoItem(['sku' => 'LC-ODD']);
@@ -291,8 +291,8 @@ class LandedCostTest extends TestCase
         $this->assertSame(1, InventoryReversal::query()->where('source_type', 'landed_cost')->count());
         $this->assertSame('reversed', $doc->fresh()->status);
         $this->assertSame($reversal->id, (int) $doc->fresh()->reversal_id);
-        $this->assertSame('4.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
-        $this->assertSame('24.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+        $this->assertSame('4.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+        $this->assertSame('24.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
         $this->assertSame(0, IntegrationOutboxEvent::query()->where('event_type', 'like', 'landed_cost.%')->count());
         $this->assertTrue(app(IntegrityChecker::class)->check('tenant', TenantTestManager::ORG_A)['ok']);
 
@@ -325,9 +325,9 @@ class LandedCostTest extends TestCase
         $components = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->get()->keyBy('destination_role');
         $this->assertSame('12.00', (string) $components['inventory_asset']->posted_base_amount);
         $this->assertSame('8.00', (string) $components['cogs']->posted_base_amount);
-        $this->assertSame('6.0000', (string) data_get($components['inventory_asset']->provenance, 'layer_remaining_at_post'));
+        $this->assertSame('6.000000', (string) data_get($components['inventory_asset']->provenance, 'layer_remaining_at_post'));
         $layer = CostLayer::query()->where('item_id', $item->id)->sole();
-        $this->assertSame('6.0000', (string) $layer->unit_cost);
+        $this->assertSame('6.000000', (string) $layer->unit_cost);
         $this->assertSame('6.0000', (string) $layer->remaining_qty);
         $this->assertSame('36.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
         $this->assertTrue(app(IntegrityChecker::class)->check('tenant', TenantTestManager::ORG_A)['ok']);
@@ -347,7 +347,7 @@ class LandedCostTest extends TestCase
         $receipt = $this->receive($warehouse, $item, '10', '4', 'LC-MOVED-GRN');
         $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'duty', 'amount' => '10']]);
         app(LandedCostService::class)->post($doc);
-        $this->assertSame('5.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+        $this->assertSame('5.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
 
         // A write-off committed after the post (and just before the reversal's lock).
         $this->out($warehouse, $item, '1', StockAdjustment::class, 91012);
@@ -364,7 +364,7 @@ class LandedCostTest extends TestCase
         $this->assertNull($doc->fresh()->reversal_id);
         $this->assertSame(0, InventoryReversal::query()->where('source_type', 'landed_cost')->where('source_id', $doc->id)->count());
         $layer = CostLayer::query()->where('item_id', $item->id)->sole();
-        $this->assertSame('5.0000', (string) $layer->unit_cost);
+        $this->assertSame('5.000000', (string) $layer->unit_cost);
         $this->assertSame('9.0000', (string) $layer->remaining_qty);
         $this->assertSame('45.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
     }
@@ -378,7 +378,7 @@ class LandedCostTest extends TestCase
         $receipt = $this->receive($warehouse, $item, '10', '4', 'LC-REVLOCK-GRN');
         $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'freight', 'amount' => '10']]);
         app(LandedCostService::class)->post($doc);
-        $this->assertSame('5.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+        $this->assertSame('5.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
 
         // Read the document before the measured region: only the service's own queries are lock-ordered.
         $fresh = $doc->fresh();
@@ -392,7 +392,7 @@ class LandedCostTest extends TestCase
         // B1 guarantee kept: every stock lock precedes the first plain read.
         $this->assertLocksPrecedeFirstPlainRead($order);
         $this->assertSame('reversed', $doc->fresh()->status);
-        $this->assertSame('4.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
+        $this->assertSame('4.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('unit_cost'));
         $this->assertSame('40.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
     }
 

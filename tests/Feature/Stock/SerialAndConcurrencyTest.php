@@ -127,7 +127,7 @@ class SerialAndConcurrencyTest extends TestCase
             ['adjustment_number' => 'ADJ-22a', 'warehouse_id' => $wh->id],
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1']]
         ));
-        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->first()->on_hand_qty);
+        $this->assertSame('0.000000', StockBalance::query()->where('item_id', $item->id)->first()->on_hand_qty);
 
         // Second outbound must fail (no stock, negative disabled) — proving the
         // balance is read under lock and the policy holds across operations.

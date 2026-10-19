@@ -125,7 +125,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $this->as(self::MANAGER);
         $adj = $this->draft($item, '2');
         $this->forbidden(fn () => app(StockAdjustmentService::class)->post($adj), 'inactive_write_off_permission_required');
-        $this->assertSame('5.0000', $this->onHand($item));
+        $this->assertSame('5.000000', $this->onHand($item));
         $this->assertSame('draft', $adj->fresh()->status);
         $this->assertFalse(in_array(InactiveItemWriteOffApproval::PERMISSION, (array) config('inventory_permissions.roles.inventory_manager'), true));
     }
@@ -136,7 +136,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $item = $this->inactiveItemWithStock('5');
         $adj = $this->draft($item, '2');
         $this->forbidden(fn () => app(StockAdjustmentService::class)->post($adj), 'inactive_write_off_approval_required');
-        $this->assertSame('5.0000', $this->onHand($item));
+        $this->assertSame('5.000000', $this->onHand($item));
         $this->assertSame(0, InventoryAuditLog::query()->where('action', 'like', '%inactive_item_write_off%')->count());
     }
 
@@ -149,7 +149,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $this->as(self::SECOND_OWNER);
         $this->approval()->approve($adj);
         $this->forbidden(fn () => app(StockAdjustmentService::class)->post($adj), 'inactive_write_off_self_approval_forbidden');
-        $this->assertSame('5.0000', $this->onHand($item));
+        $this->assertSame('5.000000', $this->onHand($item));
     }
 
     #[Test]
@@ -166,7 +166,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $this->as(self::VIEWER);
         $this->forbidden(fn () => app(StockAdjustmentService::class)->post($adj), 'inactive_write_off_permission_required');
         $this->assertSame(0, InventoryAuditLog::query()->where('action', InactiveItemWriteOffApproval::APPROVED_ACTION)->count());
-        $this->assertSame('5.0000', $this->onHand($item));
+        $this->assertSame('5.000000', $this->onHand($item));
     }
 
     #[Test]
@@ -214,12 +214,12 @@ class InactiveWriteOffApprovalTest extends TestCase
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '4']]);
         $this->assertNull($this->approval()->currentApproval($adj->fresh()));
         $this->forbidden(fn () => app(StockAdjustmentService::class)->post($adj), 'inactive_write_off_approval_required');
-        $this->assertSame('5.0000', $this->onHand($item));
+        $this->assertSame('5.000000', $this->onHand($item));
         $this->as(self::SECOND_OWNER);
         $this->approval()->approve($adj->fresh());
         $this->as(self::OWNER);
         app(StockAdjustmentService::class)->post($adj);
-        $this->assertSame('1.0000', $this->onHand($item));
+        $this->assertSame('1.000000', $this->onHand($item));
     }
 
     #[Test]
@@ -239,7 +239,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertSame(__('inventory.catalog.inactive_write_off_negative_elsewhere', ['item' => $item->id]), $e->errors()['item_id'][0]);
         }
-        $this->assertSame('5.0000', $this->onHand($item));
+        $this->assertSame('5.000000', $this->onHand($item));
         $second = $this->draft($item, '1');
         $this->as(self::SECOND_OWNER);
         $this->expectException(ValidationException::class);
@@ -263,7 +263,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         try {
             app(StockAdjustmentService::class)->post($adj);
         } finally {
-            $this->assertSame('5.0000', $this->onHand($item));
+            $this->assertSame('5.000000', $this->onHand($item));
         }
     }
 
@@ -276,7 +276,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $adj = $this->draft($item, '2');
         $this->assertFalse($this->approval()->preview($adj)['requires_approval']);
         app(StockAdjustmentService::class)->post($adj);
-        $this->assertSame('3.0000', $this->onHand($item));
+        $this->assertSame('3.000000', $this->onHand($item));
     }
 
     /** Q12.6 UI (G6 r2): the draft detail payload carries warnings + whether THIS user may approve. */

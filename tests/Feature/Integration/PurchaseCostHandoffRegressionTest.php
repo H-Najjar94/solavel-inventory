@@ -112,9 +112,9 @@ final class PurchaseCostHandoffRegressionTest extends TestCase
         $grn = app(GoodsReceiptService::class)->createDraft(['receiving_request_id' => $request->id, 'supplier_id' => $this->supplier->id, 'warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06'], [['receiving_request_line_id' => $request->lines()->sole()->id, 'item_id' => $this->item->id, 'entered_unit_id' => $this->unit->id, 'received_qty' => '10', 'accepted_qty' => '10', 'unit_cost' => '10']]);
         app(GoodsReceiptService::class)->post($grn);
         $receipt = StockLedger::sole();
-        $this->assertSame('5.0000', $receipt->unit_cost);
+        $this->assertSame('5.000000', $receipt->unit_cost);
         $consumed = app(StockLedgerService::class)->post([new StockMovement(direction: 'out', itemId: $this->item->id, warehouseId: $this->warehouse->id, quantity: '4', sourceType: Shipment::class, sourceId: 900, sourceLineId: 901, movedAt: '2026-10-06')], 'qa-cost-consumed:900')[0];
-        $this->assertSame('20.00', $consumed->total_cost);
+        $this->assertSame('20.000000', $consumed->total_cost);
         $this->assertSame('6.0000', StockBalance::sole()->on_hand_qty);
         $this->assertSame('30.00', StockBalance::sole()->total_value);
         $life = IntegrationDocumentLifecycleMapping::where('source_document_type', 'goods_receipt')->where('source_document_id', (string) $grn->id)->sole();

@@ -169,7 +169,7 @@ class InactiveItemPolicyTest extends TestCase
         $this->stock($stocked, $warehouse->id, '2');
         $this->forceInactive($stocked);
         $this->assertRefused(fn () => app(StockReservationService::class)->reserve($stocked->id, $warehouse->id, '1', 'sales_order', 1), $stocked->id);
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $stocked->id)->value('reserved_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $stocked->id)->value('reserved_qty'));
         // Nothing was written for the refused items (scoped by item: committed fixtures of other classes may exist).
         foreach (['stock_adjustment_lines', 'stock_transfer_lines', 'opening_stock_entry_lines', 'goods_receipt_lines', 'reservations'] as $table) {
             $this->assertSame(0, DB::connection('tenant')->table($table)->where('item_id', $item->id)->count(), $table.' must be rolled back');
@@ -232,8 +232,8 @@ class InactiveItemPolicyTest extends TestCase
         $lower = $counts->createDraft(['warehouse_id' => $warehouse->id], [['item_id' => $down->id, 'system_qty' => '5', 'counted_qty' => '0']]);
         $counts->post($raise);
         $counts->post($lower);
-        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $up->id)->value('on_hand_qty'));
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $down->id)->value('on_hand_qty'));
+        $this->assertSame('3.000000', (string) StockBalance::query()->where('item_id', $up->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $down->id)->value('on_hand_qty'));
         $audits = InventoryAuditLog::query()->where('action', 'inactive_item.corrective_movement')->get()
             ->filter(fn ($a) => ($a->before['kind'] ?? null) === 'stock_count' && in_array((int) $a->before['item_id'], [$up->id, $down->id], true));
         $this->assertEqualsCanonicalizing([$up->id, $down->id], $audits->map(fn ($a) => $a->before['item_id'])->values()->all());
@@ -259,10 +259,10 @@ class InactiveItemPolicyTest extends TestCase
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '3']]);
         $this->secondPersonApproves($writeOff); // Q12.6 (G6): inactive write-offs need a second-person approval
         $adjustments->post($writeOff);
-        $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('2.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $audit = InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_item_write_off')->sole();
         $this->assertSame($writeOff->id, (int) $audit->entity_id);
-        $this->assertSame('5.0000', $audit->before['on_hand_qty']);
+        $this->assertSame('5.000000', $audit->before['on_hand_qty']);
         $this->assertSame('2.0000', $audit->after['on_hand_qty']);
 
         // Never more than the positive stock on hand: refused at draft ...
@@ -302,7 +302,7 @@ class InactiveItemPolicyTest extends TestCase
 
         // Reversal of the posted write-off restores the quantity (exact inverse rows, not a new receipt).
         app(InventoryReversalService::class)->reverseNegativeAdjustment($writeOff->fresh(), 'Wrong write-off');
-        $this->assertSame('4.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('4.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertFalse((bool) $item->fresh()->is_active);
 
         // A posted opening entry of an inactive item can be reversed back to zero.
@@ -311,7 +311,7 @@ class InactiveItemPolicyTest extends TestCase
         $opening->post($second);
         $this->forceInactive($other);
         $opening->reverse($second->fresh(), 'Opening entered twice');
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $other->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $other->id)->value('on_hand_qty'));
         $this->assertFalse((bool) $other->fresh()->is_active);
     }
 
@@ -324,6 +324,6 @@ class InactiveItemPolicyTest extends TestCase
         $this->forceInactive($item);
         DB::connection('tenant')->table('items')->where('id', $item->id)->update(['is_active' => true]);
         $this->stock($item, $warehouse->id, '3');
-        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('3.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 }

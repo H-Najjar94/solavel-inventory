@@ -32,6 +32,6 @@ class TransferAvailabilityTest extends TestCase
             'warehouse_id' => $warehouse->id,
         ]));
 
-        $this->assertSame('3.0000', $response->getData(true)['data']['available_qty']);
+        $this->assertSame('3.000000', $response->getData(true)['data']['available_qty']);
     }
 }

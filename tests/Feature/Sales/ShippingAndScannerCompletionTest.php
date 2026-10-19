@@ -143,7 +143,7 @@ class ShippingAndScannerCompletionTest extends TestCase
         $this->assertStringContainsString('<svg', $label['qr_svg']);
 
         app(ShipmentService::class)->post($shipment->fresh());
-        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         $serial = $serial->fresh();
         $this->assertSame('sold', $serial->status);

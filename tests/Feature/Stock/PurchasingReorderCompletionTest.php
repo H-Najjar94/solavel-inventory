@@ -113,11 +113,11 @@ class PurchasingReorderCompletionTest extends TestCase
 
         $backorder = PurchaseOrderBackorder::query()->where('purchase_order_line_id', $line->id)->firstOrFail();
         $this->assertSame('open', $backorder->status);
-        $this->assertSame('10.0000', (string) $backorder->backorder_qty);
+        $this->assertSame('10.000000', (string) $backorder->backorder_qty);
         $this->assertSame(0, StockLedger::query()->where('source_type', PurchaseOrder::class)->where('source_id', $po->id)->count());
 
         $detail = app(PurchaseOrderController::class)->show($po->fresh())->getData(true)['data'];
-        $this->assertSame('10.0000', $detail['open_backorder_qty']);
+        $this->assertSame('10.000000', $detail['open_backorder_qty']);
         $this->assertSame('10.0000', $detail['lines'][0]['backorder_qty']);
     }
 
@@ -159,10 +159,10 @@ class PurchasingReorderCompletionTest extends TestCase
 
         $backorder = PurchaseOrderBackorder::query()->where('purchase_order_line_id', $line->id)->firstOrFail();
         $this->assertSame('open', $backorder->status);
-        $this->assertSame('4.0000', (string) $backorder->backorder_qty);
+        $this->assertSame('4.000000', (string) $backorder->backorder_qty);
         $this->assertSame('partially_received', $po->fresh()->status);
         $this->assertSame(1, StockLedger::query()->where('source_type', GoodsReceipt::class)->where('source_id', $partial->id)->count());
-        $this->assertSame('6.0000', (string) CostLayer::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->firstOrFail()->remaining_qty);
+        $this->assertSame('6.000000', (string) CostLayer::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->firstOrFail()->remaining_qty);
 
         $final = app(GoodsReceiptService::class)->createDraft([
             'grn_number' => 'GRN-BO-FINAL',
@@ -213,7 +213,7 @@ class PurchasingReorderCompletionTest extends TestCase
             'service_factor' => 1.65,
         ]))->getData(true)['data'];
 
-        $this->assertSame('20.0000', $calculation['total_demand']);
+        $this->assertSame('20.000000', $calculation['total_demand']);
         $this->assertGreaterThan(0, (float) $calculation['calculated_safety_stock']);
         $this->assertGreaterThan(0, (float) $calculation['calculated_reorder_point']);
 

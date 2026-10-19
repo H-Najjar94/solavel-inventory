@@ -119,7 +119,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $this->assertCount(2, $result['correction_ids']);
         $this->assertSame($original, StockLedger::query()->whereIn('id', array_column($original, 'id'))->orderBy('id')->get()->map->getAttributes()->all());
         $balance = StockBalance::query()->where('item_id', $item->id)->first();
-        $this->assertSame('3.0000', $balance->on_hand_qty); $this->assertSame('12.00', $balance->total_value);
+        $this->assertSame('3.000000', $balance->on_hand_qty); $this->assertSame('12.000000', $balance->total_value);
         $this->assertSame(2, StockLedger::query()->where('source_type', \App\Models\Tenant\HistoricalFifoCorrection::class)->count());
         $this->assertSame(1, StockLedger::query()->where('quantity', 0)->count());
         $this->assertSame(count($oldConsumptions), CostLayerConsumption::withoutGlobalScope('active_fifo_projection')->whereNotNull('superseded_fifo_correction_id')->count());
@@ -141,7 +141,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $review = app(HistoricalFifoReviewService::class)->review((string) Str::uuid(), (string) Str::uuid(), $events, $openings, 337);
         app(StockLedgerService::class)->applyHistoricalFifo($review);
         $balance = StockBalance::query()->where('item_id', $item->id)->first();
-        $this->assertSame('4.0000', $balance->on_hand_qty); $this->assertSame('14.00', $balance->total_value);
+        $this->assertSame('4.000000', $balance->on_hand_qty); $this->assertSame('14.000000', $balance->total_value);
         $return = \App\Models\Tenant\HistoricalFifoCorrection::query()->where('source_id', 'return:1')->firstOrFail();
         $this->assertSame('2.00', $return->causal_payload['reconstructed_cost']);
         $this->assertSame('-2.00', $return->causal_payload['cogs_delta']);
@@ -162,7 +162,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
         \Illuminate\Support\Facades\Schema::shouldReceive('hasColumn')->andReturn(false);
         \Illuminate\Support\Facades\Schema::shouldReceive('hasTable')->andReturn(false);
         app(StockLedgerService::class)->reverse('fifo-fixture:later', 'fifo-fixture:old-schema-reversal');
-        $this->assertSame('10.0000', StockBalance::query()->where('item_id', $item->id)->first()->on_hand_qty);
+        $this->assertSame('10.000000', StockBalance::query()->where('item_id', $item->id)->first()->on_hand_qty);
         $this->assertSame(4, StockLedger::query()->count());
     }
 

@@ -68,7 +68,7 @@ class ItemMovementsPayloadTest extends TestCase
         // The OUT row's running on-hand is 6 (10 in − 4 out).
         $out = collect($rows)->firstWhere('direction', 'out');
         $this->assertNotNull($out);
-        $this->assertSame('6.0000', $out['balance_qty_after']);
+        $this->assertSame('6.000000', $out['balance_qty_after']);
     }
 
     #[Test]

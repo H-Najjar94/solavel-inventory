@@ -245,13 +245,13 @@ final class FinanceDocumentLifecycleDispatchTest extends TestCase
         app(\App\Services\Stock\PurchaseCostAdjustmentService::class)->prepare($plan + ['currency_code' => 'JOD', 'base_currency_code' => 'JOD',
             'exchange_rate' => '1', 'finance_money_scale' => 3, 'discount_posting_mode' => 'net']);
         $value = fn (): string => (string) \App\Models\Tenant\StockBalance::query()->withoutGlobalScopes()->where('item_id', $line->item_id)->value('total_value');
-        $this->assertSame('40.00', $value());
+        $this->assertSame('40.000000', $value());
 
         // The accountant has no warehouse assignment at all; the reviewed plan, not the actor, fixes the rows.
         $this->assertSame([403, 'workspace_permission_required'], array_slice($this->send('finance-allocations.cost-adjustment.prepare', $plan, str_repeat('q', 32)), 0, 2));
         [$status, $body] = $this->send('finance-allocations.cost-adjustment.apply', $plan, str_repeat('a', 32));
         $this->assertSame(200, $status, json_encode($body));
-        $this->assertSame('44.00', $value());
+        $this->assertSame('44.000000', $value());
         [$status, , $replayed] = $this->send('finance-allocations.cost-adjustment.apply', $plan, str_repeat('a', 32));
         $this->assertSame([200, true], [$status, $replayed]);
         // Even a fresh key cannot apply the same plan twice: the adjustment state machine is idempotent.

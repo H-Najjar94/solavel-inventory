@@ -437,10 +437,10 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(200, $posted->status(), $posted->getContent());
         $posted->assertJsonPath('data.status', 'posted');
         $this->send($post)->assertOk()->assertHeader('X-Workspace-Replayed', 'true');
-        $this->assertSame('4.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('4.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $ledger = StockLedger::query()->where('source_type', OpeningStockEntry::class)->where('source_id', $id)->get();
         $this->assertCount(1, $ledger);
-        $this->assertSame('40.00', $ledger[0]->total_cost);
+        $this->assertSame('40.000000', $ledger[0]->total_cost);
         $events = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->get();
         $this->assertCount(1, $events);
         $contract = app(SolaStockJournalContractBuilder::class)->build($events[0]);
@@ -513,12 +513,29 @@ final class FinanceWorkspaceTest extends TestCase
             [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]);
         $service->post($entry);
 
+        $postedJournal = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->sole();
+        $postedJournal->forceFill(['status' => 'sent', 'sent_at' => now()])->save();
+        DB::connection('tenant')->table('journal_entries')->insert([
+            'id' => 1000000 + $postedJournal->id,
+            'organization_id' => 14,
+            'source' => 'SOLASTOCK',
+            'source_type' => 'opening_stock',
+            'source_id' => $entry->id,
+            'source_key' => 'external-api:'.hash('sha256', $postedJournal->idempotency_key),
+            'status' => 'posted',
+            'posted_at' => now(),
+            'metadata' => json_encode(['contract' => [
+                'version' => \App\Services\Integration\SolaStockJournalContract::VERSION,
+                'currency' => ['money_scale' => 2, 'rate_scale' => 8, 'rounding_mode' => 'HALF_UP', 'base_code' => 'JOD'],
+            ]], JSON_THROW_ON_ERROR),
+        ]);
+
         // Before the fix the reversal summed IN+OUT to 0 and refused with event_no_value.
         $service->reverse($entry->fresh(), 'Opening entered twice');
         $service->reverse($entry->fresh(), 'Opening entered twice');
 
         $this->assertSame('reversed', $entry->fresh()->status);
-        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $reversal = \App\Models\Tenant\InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
         $posted = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->sole();
         $reversed = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.reversed')->sole();
@@ -541,7 +558,7 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(['40.00', '0.00'], array_column($contract['lines'], 'base_credit'));
         $this->assertSame(array_column($original['lines'], 'base_debit'), array_column($contract['lines'], 'base_credit'));
         $this->assertSame(array_column($original['lines'], 'base_credit'), array_column($contract['lines'], 'base_debit'));
-        $this->assertSame('4.0000', $contract['inventory_quantities'][0]['base_quantity']);
+        $this->assertSame('4.000000', $contract['inventory_quantities'][0]['base_quantity']);
         $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $entry->id]])->assertOk()
             ->assertJsonCount(2, 'data.accounting_events')->assertJsonCount(2, 'data.ledger')
             ->assertJsonPath('data.accounting_events.1.event_uuid', $reversed->event_uuid);
@@ -567,7 +584,7 @@ final class FinanceWorkspaceTest extends TestCase
         $service->reverse($entry->fresh(), 'Opening entered twice');
 
         $this->assertSame('reversed', $entry->fresh()->status);
-        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $reversal = \App\Models\Tenant\InventoryReversal::query()->where('source_type', 'opening_stock')->where('source_id', $entry->id)->sole();
         $this->assertNull($reversal->original_event_uuid);
         $reversed = IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.reversed')->sole();
@@ -936,11 +953,11 @@ final class FinanceWorkspaceTest extends TestCase
         } catch (HttpException $exception) {
             $this->assertSame(409, $exception->getStatusCode());
         }
-        $this->assertSame('50.00', StockBalance::sole()->total_value);
+        $this->assertSame('50.000000', StockBalance::sole()->total_value);
         $projection->table('finance_purchase_positions')->update(['state' => 'active']);
         $call('apply', $apply);
         $call('apply', $apply);
-        $this->assertSame('10.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('10.000000', StockBalance::sole()->on_hand_qty);
         $this->assertSame('66.00', StockBalance::sole()->total_value);
         $this->assertSame(1, StockLedger::count());
         $projection->table('finance_purchase_positions')->update(['state' => 'reversal_pending']);
@@ -1033,7 +1050,7 @@ final class FinanceWorkspaceTest extends TestCase
             $this->assertSame(__('inventory.landed_cost.connection_not_enabled'), collect($e->errors())->flatten()->first());
         }
         $this->assertSame('draft', $doc->fresh()->status);
-        $this->assertSame('30.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+        $this->assertSame('30.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
 
         $workflow = app(\App\Services\Integration\LandedCostWorkflow::class);
         $status = $workflow->status($org);
@@ -1075,7 +1092,7 @@ final class FinanceWorkspaceTest extends TestCase
         $service->post($doc->fresh());
         $service->post($doc->fresh());
         $balance = StockBalance::query()->where('item_id', $item->id)->sole();
-        $this->assertSame('42.00', (string) $balance->total_value);
+        $this->assertSame('42.000000', (string) $balance->total_value);
         $this->assertSame('7.0000', (string) $balance->average_cost);
         $posted = IntegrationOutboxEvent::query()->where('event_type', 'landed_cost.posted')->sole();
         $this->assertSame('LandedCost', $posted->aggregate_type);
@@ -1181,7 +1198,7 @@ final class FinanceWorkspaceTest extends TestCase
             'value' => (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'),
             'components' => DB::connection('tenant')->table('stock_landed_cost_components')->count(),
             'reversals' => DB::connection('tenant')->table('inventory_reversals')->count()];
-        $this->assertSame('50.00', $before['value']);
+        $this->assertSame('50.000000', $before['value']);
         $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['posting_ready']);
         $this->assertTrue($workflow->enable($org, 806, self::ACTOR)['posting_ready']); // confirm again: idempotent
 

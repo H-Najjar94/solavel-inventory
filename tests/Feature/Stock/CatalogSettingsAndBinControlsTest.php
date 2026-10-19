@@ -329,7 +329,7 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $this->assertNotNull($row);
         $this->assertSame('10.0000', (string) $row->reorder_point);
         $this->assertSame('25.0000', (string) $row->reorder_qty);
-        $this->assertSame('4.0000', (string) $row->shortage_qty);
+        $this->assertSame('4.000000', (string) $row->shortage_qty);
     }
 
     #[Test]
@@ -425,8 +425,8 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         ]);
         $po = app(PurchaseOrderController::class)->store($poRequest)->getData(true)['data'];
         $poLine = \App\Models\Tenant\PurchaseOrderLine::query()->where('purchase_order_id', $po['id'])->firstOrFail();
-        $this->assertSame('24.0000', (string) $poLine->ordered_qty);
-        $this->assertSame('2.0000', (string) $poLine->entered_qty);
+        $this->assertSame('24.000000', (string) $poLine->ordered_qty);
+        $this->assertSame('2.000000', (string) $poLine->entered_qty);
         $this->assertSame('10.0000', (string) $poLine->unit_price);
 
         app(PurchaseOrderController::class)->approve(\App\Models\Tenant\PurchaseOrder::query()->findOrFail($po['id']));

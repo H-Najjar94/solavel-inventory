@@ -17,11 +17,11 @@ class WarehouseReorderRule extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'reorder_point' => 'decimal:4',
-        'reorder_qty' => 'decimal:4',
-        'min_stock' => 'decimal:4',
-        'max_stock' => 'decimal:4',
-        'safety_stock' => 'decimal:4',
+        'reorder_point' => 'decimal:6',
+        'reorder_qty' => 'decimal:6',
+        'min_stock' => 'decimal:6',
+        'max_stock' => 'decimal:6',
+        'safety_stock' => 'decimal:6',
     ];
 
     public function item(): BelongsTo

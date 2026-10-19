@@ -26,13 +26,13 @@ final class ShipmentCreditedQuantityPrefillTest extends TestCase
  }
  public function test_partial_credited_quantity_is_excluded_and_converted_without_movements():void {
   $order=$this->order('10','3','2','2');$before=StockLedger::count();$lines=app(ShipmentService::class)->fromSalesOrder($order);
-  $this->assertCount(1,$lines);$this->assertSame('2.5000',$lines[0]['quantity']);
+  $this->assertCount(1,$lines);$this->assertSame('2.500000',$lines[0]['quantity']);
   $this->assertSame($before,StockLedger::count());$this->assertSame('2.0000',(string)$order->lines()->sole()->cancelled_qty);
  }
  public function test_fully_dispatched_or_credited_source_has_no_prefilled_dispatch():void {
   $order=$this->order('10','6','4');$this->assertSame([],app(ShipmentService::class)->fromSalesOrder($order));
  }
  public function test_ordinary_uncancelled_source_prefill_remains_correct():void {
-  $order=$this->order('10','3','0');$lines=app(ShipmentService::class)->fromSalesOrder($order);$this->assertSame('7.0000',$lines[0]['quantity']);
+  $order=$this->order('10','3','0');$lines=app(ShipmentService::class)->fromSalesOrder($order);$this->assertSame('7.000000',$lines[0]['quantity']);
  }
 }

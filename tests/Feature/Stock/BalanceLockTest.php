@@ -67,7 +67,7 @@ class BalanceLockTest extends TestCase
             ['entry_number' => 'C3-OS', 'warehouse_id' => $wh->id],
             [['item_id' => $item->id, 'quantity' => '10.0000', 'unit_cost' => '4.0000']]
         ));
-        $this->assertSame('10.0000', $this->balanceFor($item->id, $wh->id)->on_hand_qty);
+        $this->assertSame('10.000000', $this->balanceFor($item->id, $wh->id)->on_hand_qty);
 
         // An OUT of 15 must be blocked against the locked balance (10 < 15).
         $adj = app(StockAdjustmentService::class)->createDraft(
@@ -93,7 +93,7 @@ class BalanceLockTest extends TestCase
             [['item_id' => $item->id, 'quantity' => '5.0000', 'unit_cost' => '5.0000']]));
 
         $bal = $this->balanceFor($item->id, $wh->id);
-        $this->assertSame('15.0000', $bal->on_hand_qty, 'second inbound must accumulate, not overwrite');
-        $this->assertSame('75.00', $bal->total_value);
+        $this->assertSame('15.000000', $bal->on_hand_qty, 'second inbound must accumulate, not overwrite');
+        $this->assertSame('75.000000', $bal->total_value);
     }
 }

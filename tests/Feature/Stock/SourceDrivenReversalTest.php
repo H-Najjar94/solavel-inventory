@@ -56,8 +56,8 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame($reversal->id, $again->id);
         $this->assertSame('goods_receipt', $reversal->source_type);
         $this->assertSame($receipt->id, (int) $reversal->source_id);
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
-        $this->assertSame('0.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
         $this->assertSame(1, InventoryReversal::query()->where('source_type', 'goods_receipt')->where('source_id', $receipt->id)->count());
         $this->assertSame(1, StockLedger::query()->where('source_type', InventoryReversal::class)->where('source_id', $reversal->id)->count());
         $this->assertSame($reversal->id, (int) $receipt->fresh()->reversal_id);
@@ -90,7 +90,7 @@ class SourceDrivenReversalTest extends TestCase
             $this->assertStringContainsString('downstream', $e->getMessage());
         }
 
-        $this->assertSame('4.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('4.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertNull($receipt->fresh()->reversal_id);
         $this->assertSame(0, InventoryReversal::query()->where('source_id', $receipt->id)->count());
     }
@@ -140,8 +140,8 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertNotSame('sold', $serial->fresh()->status);
         $this->assertSame($lotLedger->lot_id, $reversedLot->lot_id);
         $this->assertSame($expiry, (string) $reversedLot->expiry_date);
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $lotItem->id)->value('on_hand_qty'));
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $serialItem->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $lotItem->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $serialItem->id)->value('on_hand_qty'));
     }
 
     #[Test]
@@ -167,8 +167,8 @@ class SourceDrivenReversalTest extends TestCase
         app(InventoryReversalService::class)->reverseGoodsReceipt($first, 'Remove exact first receipt');
         $balance = StockBalance::query()->where('item_id', $item->id)->firstOrFail();
 
-        $this->assertSame('5.0000', (string) $balance->on_hand_qty);
-        $this->assertSame('20.0000', (string) $balance->average_cost);
+        $this->assertSame('5.000000', (string) $balance->on_hand_qty);
+        $this->assertSame('20.000000', (string) $balance->average_cost);
         $this->assertSame('100.00', (string) $balance->total_value);
     }
 
@@ -192,7 +192,7 @@ class SourceDrivenReversalTest extends TestCase
             $this->assertSame(__('inventory.documents.opening_reversal_downstream'), $e->getMessage());
         }
         $this->assertSame('posted', $entry->fresh()->status);
-        $this->assertSame('7.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('7.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     #[Test]
@@ -237,8 +237,8 @@ class SourceDrivenReversalTest extends TestCase
         $this->assertSame('REV-OS-STD', $reversal->source_number);
         $out = StockLedger::query()->where('source_type', InventoryReversal::class)->where('source_id', $reversal->id)->sole();
         $this->assertSame('out', $out->direction);
-        $this->assertSame('21.00', (string) $out->total_cost);
-        $this->assertSame('0.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
+        $this->assertSame('21.000000', (string) $out->total_cost);
+        $this->assertSame('0.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
         $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         // Standalone Stock: no connection, no ownership, so no Finance work at all.
         $this->assertDatabaseMissing('integration_outbox_events', ['event_type' => 'opening_stock.reversed'], 'tenant');
@@ -299,8 +299,8 @@ class SourceDrivenReversalTest extends TestCase
 
         $reversal = app(InventoryReversalService::class)->reverseNegativeAdjustment($adjustment, 'Damage count corrected');
 
-        $this->assertSame('8.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
-        $this->assertSame('8.0000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
+        $this->assertSame('8.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', (string) CostLayer::query()->where('item_id', $item->id)->value('remaining_qty'));
         $this->assertSame('reversed', $adjustment->fresh()->status);
         $this->assertSame($reversal->id, (int) $adjustment->fresh()->reversal_id);
         // Standalone fixture has no Finance ownership: retain the exact stock inverse without external work.
@@ -365,7 +365,7 @@ class SourceDrivenReversalTest extends TestCase
 
         $this->assertSame(1, \Illuminate\Support\Facades\DB::connection('tenant')->transactionLevel());
         app(SalesReturnService::class)->post($return);
-        $this->assertSame('4.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('4.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame($return->id, (int) $shipment->fresh()->reversal_sales_return_id);
         $this->assertSame(1, StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $return->id)->count());
     }
@@ -399,7 +399,7 @@ class SourceDrivenReversalTest extends TestCase
             'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'resellable']]);
         $this->assertFalse($partial->is_source_reversal);
         app(SalesReturnService::class)->post($partial);
-        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('3.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame($sourceLine->id, (int) $partial->lines->sole()->source_shipment_line_id);
         $this->assertSame($sourceLedger->id, (int) $partial->lines->sole()->source_stock_ledger_id);
 
@@ -409,7 +409,7 @@ class SourceDrivenReversalTest extends TestCase
         ], [['source_line_id' => $sourceLine->id, 'source_stock_ledger_id' => $sourceLedger->id,
             'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'damaged', 'disposition' => 'damage']]);
         app(SalesReturnService::class)->post($damaged);
-        $this->assertSame('3.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('3.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame(0, StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $damaged->id)->count());
 
         $this->expectException(\Illuminate\Validation\ValidationException::class);
@@ -454,13 +454,13 @@ class SourceDrivenReversalTest extends TestCase
             'warehouse_id' => $warehouse->id, 'reason' => 'Accepted replacement return',
         ], [$line]);
         app(SalesReturnService::class)->post($replacement);
-        $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('2.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         $reversal = app(InventoryReversalService::class)->reverseSalesReturn($replacement, 'Customer retained returned item');
         $again = app(InventoryReversalService::class)->reverseSalesReturn($replacement->fresh(), 'Ignored retry');
         $this->assertSame($reversal->id, $again->id);
         $this->assertSame('reversed', $replacement->fresh()->status);
-        $this->assertSame('1.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('1.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         // Standalone fixture has no Finance ownership: retain the exact stock inverse without external work.
         $this->assertDatabaseMissing('integration_outbox_events', ['event_type' => 'sales_return.reversed'], 'tenant');
         $this->assertNull($reversal->fresh()->reversal_event_uuid);
@@ -487,7 +487,7 @@ class SourceDrivenReversalTest extends TestCase
         ], 'returned-serial:out');
 
         $this->assertSame('sold', $serial->fresh()->status);
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     #[Test]

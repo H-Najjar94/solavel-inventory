@@ -99,7 +99,7 @@ class WarehouseOperationsCompletionTest extends TestCase
         $this->assertSame('posted', $grn->fresh()->status);
         $this->assertSame('quarantine', $grn->fresh()->inspection_status);
         $this->assertSame('quarantined', Lot::query()->where('lot_code', 'QC-LOT-001')->firstOrFail()->status);
-        $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->where('bin_id', $bin->id)->firstOrFail()->on_hand_qty);
+        $this->assertSame('8.000000', StockBalance::query()->where('item_id', $item->id)->where('bin_id', $bin->id)->firstOrFail()->on_hand_qty);
         $this->assertSame(1, StockLedger::query()->where('source_type', GoodsReceipt::class)->where('source_id', $grn->id)->count());
 
         $rows = app(StockBalanceController::class)->index(Request::create('/balances', 'GET', [
@@ -108,7 +108,7 @@ class WarehouseOperationsCompletionTest extends TestCase
         ]))->getData(true)['data'];
 
         $this->assertSame('quarantined', $rows[0]['availability_status']);
-        $this->assertSame('0.0000', $rows[0]['sellable_available_qty']);
+        $this->assertSame('0.000000', $rows[0]['sellable_available_qty']);
         $this->assertSame('8.0000', $rows[0]['quarantine_qty']);
     }
 
@@ -141,12 +141,12 @@ class WarehouseOperationsCompletionTest extends TestCase
 
         app(StockTransferService::class)->ship($transfer);
         $this->assertSame('in_transit', $transfer->fresh()->status);
-        $this->assertSame('5.0000', StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $source->id)->firstOrFail()->on_hand_qty);
+        $this->assertSame('5.000000', StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $source->id)->firstOrFail()->on_hand_qty);
         $this->assertNull(StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->first());
 
         app(StockTransferService::class)->receive($transfer->fresh());
         $this->assertSame('received', $transfer->fresh()->status);
-        $this->assertSame('5.0000', StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->firstOrFail()->on_hand_qty);
+        $this->assertSame('5.000000', StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->firstOrFail()->on_hand_qty);
         $this->assertSame('5.0000', CostLayer::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->firstOrFail()->remaining_qty);
         $this->assertSame(2, StockLedger::query()->where('source_id', $transfer->id)->where('source_type', \App\Models\Tenant\StockTransfer::class)->count());
     }

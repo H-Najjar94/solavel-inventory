@@ -155,10 +155,10 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $this->assertSame(3,$prepared['finance_money_scale']);
         $this->assertSame('10.00000000',$prepared['exact_base_difference']);
         $this->assertSame('inventory_asset',$prepared['components'][0]['destination_role']);
-        $this->assertSame('40.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertSame('40.000000',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
         $applied=$service->apply($input); $service->apply($input);
         $this->assertSame('applied',$applied['state']);
-        $this->assertSame('50.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertSame('50.000000',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
         $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant',TenantTestManager::ORG_A)['ok']);
         $reversed=$service->reverse($input); $service->reverse($input);
         $this->assertSame('reversed',$reversed['state']);
@@ -188,7 +188,7 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $this->assertSame(-2.0,$byRole['cogs']);
         $this->assertSame(-3.0,$byRole['inventory_asset']);
         app(PurchaseCostAdjustmentService::class)->apply($input);
-        $this->assertSame('21.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertSame('21.000000',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
     }
 
     #[Test]
@@ -211,8 +211,8 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $byRole=collect($plan['components'])->groupBy('destination_role')->map(fn($rows)=>$rows->sum(fn($r)=>(float)$r['posted_base_amount']));
         $this->assertSame(4.0,$byRole['cogs']);$this->assertSame(6.0,$byRole['inventory_asset']);
         app(PurchaseCostAdjustmentService::class)->apply($input);
-        $this->assertSame('30.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
-        $this->assertSame('5.0000',(string)\App\Models\Tenant\CostLayer::query()->value('unit_cost'));
+        $this->assertSame('30.000000',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertSame('5.000000',(string)\App\Models\Tenant\CostLayer::query()->value('unit_cost'));
     }
 
     private function payload(int $documentId, int $lineId, string $entered, string $base, string $destinationQty,

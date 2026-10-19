@@ -149,7 +149,7 @@ class DocumentNumberingTest extends TestCase
         // Posting the draft moves stock on hand.
         app(OpeningStockService::class)->post($entry);
         $onHand = StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $wh->id)->value('on_hand_qty');
-        $this->assertSame('5.0000', $onHand);
+        $this->assertSame('5.000000', $onHand);
     }
 
     #[Test]

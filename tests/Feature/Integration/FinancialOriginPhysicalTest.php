@@ -122,10 +122,10 @@ final class FinancialOriginPhysicalTest extends TestCase
         $partial=$service->executeNative($op,336);$this->assertSame($partial,$service->executeNative($op,336));$this->assertSame('partial',$partial['status']);
         $this->assertSame(1,Shipment::count());$this->assertSame($before+1,StockLedger::count());$this->assertSame(0,SalesDocumentOutbox::count());
         $event=FinancialOriginOutbox::sole()->payload;$this->assertSame('sales_receipt',$event['source_document_type']);$this->assertSame(850,$event['source_document_id']);$this->assertSame(851,$event['physical']['lines'][0]['source_document_line_id']);
-        $this->assertSame('2.0000',$event['physical']['lines'][0]['quantity']);$this->assertNotEmpty($event['physical']['journal_key']);
+        $this->assertSame('2.000000',$event['physical']['lines'][0]['quantity']);$this->assertNotEmpty($event['physical']['journal_key']);
         $this->assertCanonicalOriginJournalHash($event['physical']);
         $final=array_replace($op,['operation_uuid'=>(string)Str::uuid()]);$complete=$service->executeNative($final,336);$this->assertSame('complete',$complete['status']);
-        $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(2,Shipment::count());$this->assertSame('16.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(2,Shipment::count());$this->assertSame('16.000000',StockBalance::sole()->on_hand_qty);
         $this->assertSame(0,SalesDocumentOutbox::count());
     }
     public function test_native_post_replay_of_completed_typed_receipt_and_shipment_preserves_all_durable_effects():void
@@ -191,7 +191,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         [,,$op]=$this->admitted(tracking:'serial',anonymous:true);$serials=\App\Models\Tenant\SerialNumber::query()->orderBy('id')->limit(2)->pluck('id')->all();$op['lines'][0]['serial_ids']=$serials;$op['reserve_stock']=true;
         $before=StockLedger::count();app(OriginDispatchService::class)->executeNative($op,336);
         $this->assertNull(\App\Models\Tenant\SalesOrder::sole()->customer_id);$this->assertSame(2,Shipment::sole()->lines()->count());$this->assertSame($before+2,StockLedger::count());
-        $event=FinancialOriginOutbox::sole()->payload;$this->assertCount(2,$event['physical']['lines']);foreach($event['physical']['lines']as$line){$this->assertSame(851,$line['source_document_line_id']);$this->assertSame('1.0000',$line['quantity']);}
+        $event=FinancialOriginOutbox::sole()->payload;$this->assertCount(2,$event['physical']['lines']);foreach($event['physical']['lines']as$line){$this->assertSame(851,$line['source_document_line_id']);$this->assertSame('1.000000',$line['quantity']);}
         $this->assertSame(0,SalesDocumentOutbox::count());
     }
     public function test_stock_only_expense_receipt_uses_native_grn_once_and_never_creates_a_bill_draft():void
@@ -207,7 +207,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $this->assertSame($native->id,$event['physical']['lines'][0]['stock_ledger_id']);
         $this->assertSame((string)$native->total_cost,$event['physical']['lines'][0]['stock_value_base']);
         $this->assertSame(\App\Services\Stock\Support\Decimal::MONEY_SCALE,$event['physical']['lines'][0]['stock_money_scale']);
-        $this->assertSame('22.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame('22.000000',StockBalance::sole()->on_hand_qty);
     }
     public function test_finance_only_or_unassigned_actor_cannot_move_typed_stock_and_prepared_correction_requires_abandon_ack():void
     {
@@ -245,7 +245,9 @@ final class FinancialOriginPhysicalTest extends TestCase
             'unpost_central_actor_id'=>323,'unpost_audit_controller'=>'ReversalEngine','unpost_audit_method'=>'unpostExpense','source_document_type'=>'App\\Models\\Expense',
             'source_document_id'=>850,'source_status'=>'draft','source_voided_by'=>701,'source_voided_at'=>$at];
         $physical=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.confirmed')->sole()->payload['physical'];$line=$physical['lines'][0];
-        $db->table('finance_document_matches')->insert(['physical_mapping_uuid'=>$physical['mapping_uuid'],'physical_document_id'=>$physical['id'],'physical_line_id'=>$line['physical_line_id'],'physical_journal_id'=>96,'quantity'=>'2','base_quantity'=>'2','unit_conversion_factor'=>'1','unit_conversion_hash'=>$line['unit_conversion_hash'],'booked_base'=>'20','snapshot'=>'{}','organization_id'=>14,'request_uuid'=>$r->request_uuid,'operation_uuid'=>$match,'position_uuid'=>$position,
+        $nativeJournal=\App\Models\Tenant\IntegrationOutboxEvent::query()->where('event_type','grn.posted')->where('aggregate_id',$physical['id'])->sole();$nativeJournal->forceFill(['status'=>'sent','sent_at'=>now()])->save();
+        $db->table('journal_entries')->insert(['id'=>98,'organization_id'=>14,'source'=>'SOLASTOCK','source_type'=>'goods_receipt','source_id'=>$physical['id'],'source_key'=>'external-api:'.hash('sha256',$nativeJournal->idempotency_key),'status'=>'posted','posted_at'=>$at,'metadata'=>json_encode(['contract'=>['version'=>\App\Services\Integration\SolaStockJournalContract::VERSION,'currency'=>['money_scale'=>2,'rate_scale'=>8,'rounding_mode'=>'HALF_UP','base_code'=>'JOD']]])]);
+        $db->table('finance_document_matches')->insert(['physical_mapping_uuid'=>$physical['mapping_uuid'],'physical_document_id'=>$physical['id'],'physical_line_id'=>$line['physical_line_id'],'physical_journal_id'=>98,'quantity'=>'2','base_quantity'=>'2','unit_conversion_factor'=>'1','unit_conversion_hash'=>$line['unit_conversion_hash'],'booked_base'=>'20','snapshot'=>'{}','organization_id'=>14,'request_uuid'=>$r->request_uuid,'operation_uuid'=>$match,'position_uuid'=>$position,
             'reversal_operation_uuid'=>$reverse,'source_document_line_id'=>851,'journal_entry_id'=>96,'reversal_journal_id'=>97,'state'=>'reversed','reverse_state'=>'committed','closure_state'=>'completed','closure_snapshot'=>json_encode($snapshot)]);
         $this->mock(\App\Services\Integration\SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeOriginPhysicalReversal')->andReturnUsing(fn($facts)=>$facts+[
             'allowed'=>true,'actor_id'=>0,'authority_kind'=>'posted_financial_origin_physical_reversal','finance_organization_id'=>14,'central_organization_id'=>$this->mapping->central_organization_id,
@@ -265,7 +267,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $grn=$this->reversedExpenseFixture();$before=StockLedger::count();$service=app(\App\Services\Documents\InventoryReversalService::class);
         $inverse=$service->reverseGoodsReceipt($grn,'QA exact typed audited reversal');
         $this->assertSame($inverse->id,$service->reverseGoodsReceipt($grn->fresh(),'QA repeat')->id);
-        $this->assertSame($before+1,StockLedger::count());$this->assertSame('20.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame($before+1,StockLedger::count());$this->assertSame('20.000000',StockBalance::sole()->on_hand_qty);
         $this->assertSame('cancelled',FinancialOriginRequest::sole()->status);$this->assertSame('2.0000',FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity);
         $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(0,\App\Models\Tenant\PurchasingDocumentOutbox::count());
         $event=FinancialOriginOutbox::query()->where('event_type','financial-origin.receipt.reversed')->sole()->payload;
@@ -300,7 +302,8 @@ final class FinancialOriginPhysicalTest extends TestCase
         $position=(string)Str::uuid();$match=(string)Str::uuid();$snapshot=['physical'=>$physical];$at='2026-10-07 12:00:00';
         $db->table('sales_receipts')->where('id',850)->update(['status'=>'posted']);$db->table('journal_entries')->where('id',95)->update(['posted_at'=>$at]);
         $db->table('finance_document_positions')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'position_uuid'=>$position,'source_document_type'=>'sales_receipt','source_document_id'=>850,'source_journal_id'=>95,'source_document_line_id'=>851,'side'=>'sale','inventory_item_id'=>701,'entered_unit_id'=>702,'quantity'=>'4','booked_net_base'=>'40','booked_acquisition_base'=>'40','holding_account_id'=>400,'destination_account_id'=>200,'snapshot'=>'{}']);
-        $db->table('journal_entries')->insert(['id'=>96,'organization_id'=>14,'source'=>'SOLASTOCK','source_type'=>'shipment','source_id'=>$shipment->id,'source_key'=>'external-api:'.hash('sha256',$physical['journal_key']),'status'=>'posted','posted_at'=>$at]);
+        $nativeJournal=\App\Models\Tenant\IntegrationOutboxEvent::query()->where('event_type','shipment.posted')->where('aggregate_id',$shipment->id)->sole();$nativeJournal->forceFill(['status'=>'sent','sent_at'=>now()])->save();
+        $db->table('journal_entries')->insert(['id'=>96,'organization_id'=>14,'source'=>'SOLASTOCK','source_type'=>'shipment','source_id'=>$shipment->id,'source_key'=>'external-api:'.hash('sha256',$nativeJournal->idempotency_key),'status'=>'posted','posted_at'=>$at,'metadata'=>json_encode(['contract'=>['version'=>\App\Services\Integration\SolaStockJournalContract::VERSION,'currency'=>['money_scale'=>2,'rate_scale'=>8,'rounding_mode'=>'HALF_UP','base_code'=>'JOD']]])]);
         $db->table('journal_entries')->insert(['id'=>97,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>'App\\Models\\SalesReceipt','source_id'=>850,'source_key'=>'financial-origin-match:'.$match,'status'=>'posted','posted_at'=>$at]);
         $db->table('finance_document_matches')->insert(['organization_id'=>14,'request_uuid'=>$r->request_uuid,'operation_uuid'=>$match,'position_uuid'=>$position,'physical_mapping_uuid'=>$physical['mapping_uuid'],'physical_document_id'=>$shipment->id,'physical_line_id'=>$physical['lines'][0]['physical_line_id'],'source_document_line_id'=>851,'physical_journal_id'=>96,'journal_entry_id'=>97,'state'=>'settled','quantity'=>'2','base_quantity'=>'2','unit_conversion_factor'=>'1','unit_conversion_hash'=>$physical['lines'][0]['unit_conversion_hash'],'booked_base'=>'14','snapshot'=>json_encode($snapshot)]);
         $db->table('finance_document_physical_events')->insert(['organization_mapping_uuid'=>$r->organization_mapping_uuid,'event_uuid'=>$event->event_uuid,'source_key'=>$event->external_source_key,'physical_document_type'=>'shipment','organization_id'=>14,'request_uuid'=>$r->request_uuid,'event_type'=>'financial-origin.shipment.confirmed','physical_mapping_uuid'=>$physical['mapping_uuid'],'physical_document_id'=>$shipment->id,'state'=>'reviewed','source_hash'=>$event->payload_hash,'payload'=>json_encode($event->payload)]);
@@ -323,7 +326,7 @@ final class FinancialOriginPhysicalTest extends TestCase
         $db->table('journal_entries')->insert(['id'=>98,'organization_id'=>14,'source'=>'FINANCIAL-ORIGIN','source_type'=>'App\\Models\\SalesReceipt','source_id'=>850,'source_key'=>'financial-origin-match-reversal:'.$match,'status'=>'posted','posted_at'=>$at,'reverses_entry_id'=>97]);
         $db->table('finance_document_matches')->where('operation_uuid',$match)->update(['state'=>'reversed','reverse_state'=>'committed','reversal_journal_id'=>98]);
         $this->assertSame($result->id,$service->post($result->fresh())->id);
-        $this->assertSame($before+1,StockLedger::count());$this->assertSame('20.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame($before+1,StockLedger::count());$this->assertSame('20.000000',StockBalance::sole()->on_hand_qty);
         $this->assertSame('2.0000',FinancialOriginRequest::sole()->lines()->sole()->fulfilled_quantity);
         $this->assertSame(2,FinancialOriginOutbox::count());$this->assertSame(0,SalesDocumentOutbox::count());
         $this->assertSame(850,FinancialOriginOutbox::where('event_type','financial-origin.shipment.reversed')->sole()->payload['source_document_id']);

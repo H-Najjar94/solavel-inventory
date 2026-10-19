@@ -196,7 +196,7 @@ class LandedCostAvailabilityTest extends TestCase
         $posted = app(LandedCostService::class)->post($doc);
 
         $this->assertSame('posted', $posted->status);
-        $this->assertSame('70.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+        $this->assertSame('70.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
         $this->assertSame(0, \App\Models\Tenant\IntegrationAccountMapping::query()->count());
         $this->assertSame(0, IntegrationOutboxEvent::query()->where('event_type', 'like', 'landed_cost.%')->count());
     }

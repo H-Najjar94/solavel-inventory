@@ -42,7 +42,7 @@ class ShipmentSourceCapacityTest extends TestCase
         $tooMuch=$create('4');try{$service->post($tooMuch);$this->fail('Overdispatch accepted');}catch(\RuntimeException $e){$this->assertSame(__('inventory.sales_handoff.exceeds_remaining'),$e->getMessage());}
         $this->assertSame($count,StockLedger::query()->count());$this->assertSame('draft',$tooMuch->fresh()->status);
         $service->post($create('3'));$this->assertSame('5.0000',(string)$source->fresh()->shipped_qty);
-        $this->assertSame('15.0000',(string)StockBalance::query()->where('item_id',$item->id)->value('on_hand_qty'));
+        $this->assertSame('15.000000',(string)StockBalance::query()->where('item_id',$item->id)->value('on_hand_qty'));
     }
     public function test_repeated_source_lines_are_aggregated_before_capacity_check(): void
     {
@@ -70,11 +70,11 @@ class ShipmentSourceCapacityTest extends TestCase
         $create=fn($qty)=>$shipments->createDraft(['shipment_number'=>'QA-PART-'.\Illuminate\Support\Str::uuid(),'sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[['sales_order_line_id'=>$source->id,'item_id'=>$item->id,'quantity'=>$qty]]);
         $first=$shipments->post($create('2'));$count=StockLedger::query()->count();
         $this->assertSame('3.0000',(string)\App\Models\Tenant\Reservation::query()->where('source_id',$order->id)->where('status','active')->sole()->qty);
-        $this->assertSame('3.0000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->reserved_qty);
+        $this->assertSame('3.000000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->reserved_qty);
         $shipments->post($first);$this->assertSame($count,StockLedger::query()->count());
         $this->assertSame('3.0000',(string)\App\Models\Tenant\Reservation::query()->where('source_id',$order->id)->where('status','active')->sole()->qty);
         $shipments->post($create('3'));$this->assertSame(0,\App\Models\Tenant\Reservation::query()->where('source_id',$order->id)->where('status','active')->count());
-        $this->assertSame('0.0000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->reserved_qty);
+        $this->assertSame('0.000000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->reserved_qty);
         $this->assertSame('15.0000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->on_hand_qty);
     }
     public function test_partial_serial_shipment_preserves_remaining_serial_hold_and_final_dispatch(): void

@@ -188,7 +188,7 @@ final class Phase3WorkflowContractTest extends TestCase
             $this->assertSame('posted', $receipt->fresh()->status);
             $movements = \App\Models\Tenant\StockLedger::where('source_type', $receipt::class)->where('source_id', $receipt->id)->get();
             $this->assertCount(1, $movements);
-            $this->assertSame($expected === 'USD' ? '5.0000' : '10.0000', (string) $movements->first()->unit_cost);
+            $this->assertSame($expected === 'USD' ? '5.000000' : '10.000000', (string) $movements->first()->unit_cost);
             $events = IntegrationOutboxEvent::where('aggregate_id', $receipt->id)->where('event_type', 'grn.posted')->get();
             $this->assertCount(1, $events);
             $this->assertSame($expected, data_get($events->first()->payload, 'currency.code'));
@@ -443,7 +443,7 @@ final class Phase3WorkflowContractTest extends TestCase
         $preview = app(WorkflowPreviewService::class)->preview('inventory_reversal', $reversal->id);
 
         $this->assertSame('supplier_return', $mapping->source_document_type);
-        $this->assertSame('2.5000', $mapping->returned_qty);
+        $this->assertSame('2.500000', $mapping->returned_qty);
         $this->assertSame($mapping->mapping_uuid, data_get($preview, 'operational_source.mapping_uuid'));
         $this->assertSame(-2.5, (float) data_get($preview, 'quantity_effect.owned_qty'));
     }
@@ -526,8 +526,8 @@ final class Phase3WorkflowContractTest extends TestCase
         $receipts->post($receipt);
         $receipts->post($receipt->fresh());
         $movement = \App\Models\Tenant\StockLedger::query()->where('source_type', get_class($receipt))->where('source_id', $receipt->id)->sole();
-        $this->assertSame('10.0000', $movement->unit_cost);
-        $this->assertSame('50.00', $movement->total_cost);
+        $this->assertSame('10.000000', $movement->unit_cost);
+        $this->assertSame('50.000000', $movement->total_cost);
         $this->assertSame('5.0000', $poLine->fresh()->received_qty);
         $event = IntegrationOutboxEvent::query()->where('event_type', 'grn.posted')->where('aggregate_id', $receipt->id)->sole();
         $journal = app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($event);

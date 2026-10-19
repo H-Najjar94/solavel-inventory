@@ -226,7 +226,7 @@ class OperationalInventoryRolesTest extends TestCase
         $data = ['purchase_order_id' => 1, 'warehouse_id' => 11, 'supplier_id' => 999, 'lines' => [['purchase_order_line_id' => 1, 'item_id' => 9, 'unit_cost' => '30', 'entered_unit_id' => 999]]];
         $safe = $service->prepare($data);
         $this->assertSame(5, $safe['supplier_id']);
-        $this->assertSame('30.0000', $safe['lines'][0]['unit_cost']);
+        $this->assertSame('30.000000', $safe['lines'][0]['unit_cost']);
         $this->assertSame(2, $safe['lines'][0]['entered_unit_id']);
         $receipt = (new GoodsReceipt)->forceFill(['purchase_order_id' => 1, 'warehouse_id' => 11]);
         $receipt->setRelation('lines', collect([(new GoodsReceiptLine)->forceFill(['purchase_order_line_id' => 1, 'item_id' => 9, 'unit_cost' => 3, 'unit_conversion_factor' => 10])]));

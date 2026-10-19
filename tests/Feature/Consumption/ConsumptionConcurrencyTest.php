@@ -24,11 +24,11 @@ final class ConsumptionConcurrencyTest extends TestCase {
         for($i=0;$i<2;$i++)$drafts[]=$service->create(['submission_key'=>(string)Str::uuid(),'warehouse_id'=>$wh->id,'document_date'=>'2026-10-10','reason'=>'Concurrent office use','lines'=>[['item_id'=>$item->id,'quantity'=>'15']]])->id;
         $fixture->commit();
         self::assertSame([0,1],$this->race($drafts));
-        self::assertSame('5.0000',StockBalance::first()->on_hand_qty);
+        self::assertSame('5.000000',StockBalance::first()->on_hand_qty);
         $issue=InternalConsumption::where('status','posted')->with('lines')->sole();$returns=[];
         for($i=0;$i<2;$i++)$returns[]=$service->create(['submission_key'=>(string)Str::uuid(),'warehouse_id'=>$wh->id,'document_date'=>'2026-10-10','reason'=>'Unused materials','original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'10']]])->id;
         self::assertSame([0,1],$this->race($returns));
-        self::assertSame('15.0000',StockBalance::first()->on_hand_qty);self::assertSame('30.00',StockBalance::first()->total_value);
+        self::assertSame('15.000000',StockBalance::first()->on_hand_qty);self::assertSame('30.000000',StockBalance::first()->total_value);
         $fixture->restore();
     }
     private function race(array $ids): array {

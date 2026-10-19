@@ -34,7 +34,7 @@ final class AuthoritativeUnitConversionContractTest extends TestCase
         $line = $resolver->normalizeLine([
             'item_id' => $item->id, 'entered_qty' => '2', 'entered_unit_id' => $box->id, 'quantity' => '2',
         ], 'quantity');
-        $this->assertSame('20.0000', $line['quantity']);
+        $this->assertSame('20.000000', $line['quantity']);
         $this->assertSame('10.00000000', $line['unit_conversion_factor']);
         $this->assertSame($conversion->id, $line['unit_conversion_id']);
         $this->assertSame(UnitConversionResolver::CONTRACT_VERSION, $line['unit_conversion_version']);
@@ -43,7 +43,7 @@ final class AuthoritativeUnitConversionContractTest extends TestCase
         $fractional = $resolver->normalizeLine([
             'item_id' => $item->id, 'entered_qty' => '0.12345', 'entered_unit_id' => $box->id, 'quantity' => '0.12345',
         ], 'quantity');
-        $this->assertSame('0.1235', $fractional['entered_qty']);
+        $this->assertSame('0.123450', $fractional['entered_qty']);
         $this->assertSame('1.2350', $fractional['quantity']);
     }
 
@@ -94,7 +94,7 @@ final class AuthoritativeUnitConversionContractTest extends TestCase
 
         UnitConversion::query()->where('item_id', $item->id)->update(['factor' => '2']);
         $normalized = app(UnitConversionResolver::class)->normalizeLine($input, 'quantity');
-        $this->assertSame('2.0000', $normalized['quantity']);
+        $this->assertSame('2.000000', $normalized['quantity']);
     }
 
     public function test_alternate_units_are_persisted_for_shipment_return_transfer_and_adjustment_lines(): void

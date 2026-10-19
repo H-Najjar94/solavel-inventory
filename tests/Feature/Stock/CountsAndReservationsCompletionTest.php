@@ -76,7 +76,7 @@ class CountsAndReservationsCompletionTest extends TestCase
         $this->assertSame('10.0000', (string) $line->snapshot_qty, 'frozen snapshot is preserved for audit');
         $this->assertSame('13.0000', (string) $line->system_qty, 'posting expected qty is recomputed under lock from live stock');
         $this->assertSame('-5.0000', (string) $line->variance_qty);
-        $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertNotNull($count->fresh()->adjustment_id);
 
         $next = StockCount::query()
@@ -120,7 +120,7 @@ class CountsAndReservationsCompletionTest extends TestCase
 
         $reservation = Reservation::query()->where('source_id', $order->id)->firstOrFail();
         $this->assertSame(25, (int) $reservation->priority);
-        $this->assertSame('4.0000', StockBalance::query()->where('item_id', $item->id)->value('reserved_qty'));
+        $this->assertSame('4.000000', StockBalance::query()->where('item_id', $item->id)->value('reserved_qty'));
 
         $report = app(InventoryReportService::class)->run('reservation', new ReportFilters);
         $this->assertSame(25, (int) $report['rows']->first()->priority);
@@ -131,7 +131,7 @@ class CountsAndReservationsCompletionTest extends TestCase
             'expires_at' => now()->addHour()->toDateTimeString(),
         ]);
         $this->assertSame(1, Reservation::query()->where('source_id', $order->id)->where('status', 'active')->count(), 'duplicate reserve updates the same hold');
-        $this->assertSame('4.0000', StockBalance::query()->where('item_id', $item->id)->value('reserved_qty'), 'duplicate reserve does not double-hold stock');
+        $this->assertSame('4.000000', StockBalance::query()->where('item_id', $item->id)->value('reserved_qty'), 'duplicate reserve does not double-hold stock');
 
         $reservation->forceFill(['expires_at' => now()->subMinute()])->save();
         $this->assertSame(1, app(StockReservationService::class)->expireOverdue('sales_order', (int) $order->id));

@@ -210,7 +210,7 @@ final class InactiveCorrectionRaceTest extends TestCase
         self::salesReturn($wh, $item, $line, $shipment, true);
         $this->finish($pid, $root, $started, microtime(true));
         self::assertFalse((bool) Item::query()->findOrFail($item)->is_active);
-        self::assertSame('1.0000', self::onHand($item));
+        self::assertSame('1.000000', self::onHand($item));
         self::assertTrue($this->correctiveAudit($item, 'sales_return'));
         $fixture->restore();
     }
@@ -237,7 +237,7 @@ final class InactiveCorrectionRaceTest extends TestCase
         self::stockCount($wh, $item, true);
         $this->finish($pid, $root, $started, microtime(true));
         self::assertFalse((bool) Item::query()->findOrFail($item)->is_active);
-        self::assertSame('1.0000', self::onHand($item));
+        self::assertSame('1.000000', self::onHand($item));
         self::assertTrue($this->correctiveAudit($item, 'stock_count'));
         $fixture->restore();
     }

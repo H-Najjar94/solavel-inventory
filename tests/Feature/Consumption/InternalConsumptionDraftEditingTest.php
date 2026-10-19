@@ -41,12 +41,12 @@ final class InternalConsumptionDraftEditingTest extends TestCase {
         self::assertSame(1,$updated->lines->count());
         self::assertSame('5.0000',$updated->lines->first()->quantity);
         self::assertSame(1,InternalConsumptionLine::query()->where('internal_consumption_id',$draft->id)->count());
-        self::assertSame('20.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
         $audit=InventoryAuditLog::query()->where('entity_type','internal_consumption')->where('entity_id',$draft->id)->where('action','internal_consumption.update')->sole();
         self::assertSame('Office supplies',$audit->before['reason']);
         self::assertSame('Workshop use',$audit->after['reason']);
         self::assertSame('5.0000',$service->post($updated)->lines->first()->quantity);
-        self::assertSame('15.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('15.000000',StockBalance::query()->first()->on_hand_qty);
     }
     public function testDraftCanBeDeletedAndIsAudited(): void {
         [$wh,$item,$service]=$this->setupInventory();$draft=$this->draft($service,$wh,$item);
@@ -55,7 +55,7 @@ final class InternalConsumptionDraftEditingTest extends TestCase {
         self::assertSame(0,InternalConsumptionLine::query()->where('internal_consumption_id',$draft->id)->count());
         $audit=InventoryAuditLog::query()->where('entity_type','internal_consumption')->where('entity_id',$draft->id)->where('action','internal_consumption.delete')->sole();
         self::assertSame($draft->document_number,$audit->document_ref);
-        self::assertSame('20.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
     }
     public function testPostedAndApprovedDocumentsCannotBeEditedOrDeleted(): void {
         [$wh,$item,$service]=$this->setupInventory();

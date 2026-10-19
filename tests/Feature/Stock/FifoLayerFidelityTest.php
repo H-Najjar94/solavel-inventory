@@ -104,7 +104,7 @@ class FifoLayerFidelityTest extends TestCase
 
         // After the OUT: layer1 = 0, layer2 = 5 → value $40, on-hand 5.
         $this->assertSame('40.00', $this->layerValue($wh->id));
-        $this->assertSame('5.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('5.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         // Reverse → the EXACT layers are restored (10 + 5 back), NOT a blended layer.
         app(StockLedgerService::class)->reverse('fifo-rev:out', 'fifo-rev:out:reversed');
@@ -131,7 +131,7 @@ class FifoLayerFidelityTest extends TestCase
 
         // Layer valuation and on-hand return to the pre-move state.
         $this->assertSame('130.00', $this->layerValue($wh->id), 'FIFO layer value restored exactly');
-        $this->assertSame('20.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('20.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     #[Test]
@@ -159,9 +159,9 @@ class FifoLayerFidelityTest extends TestCase
 
         // Source fully restored (exact layers + value + on-hand); destination empty.
         $this->assertSame('130.00', $this->layerValue($src->id), 'source value restored');
-        $this->assertSame('20.0000', StockBalance::query()->where('warehouse_id', $src->id)->value('on_hand_qty'));
+        $this->assertSame('20.000000', StockBalance::query()->where('warehouse_id', $src->id)->value('on_hand_qty'));
         $this->assertSame('0.00', $this->layerValue($dst->id), 'destination layers cleared');
-        $this->assertSame('0.0000', StockBalance::query()->where('warehouse_id', $dst->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', StockBalance::query()->where('warehouse_id', $dst->id)->value('on_hand_qty'));
     }
 
     /**

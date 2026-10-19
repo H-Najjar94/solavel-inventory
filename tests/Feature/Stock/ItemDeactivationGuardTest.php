@@ -106,7 +106,7 @@ class ItemDeactivationGuardTest extends TestCase
         $this->balance($item, $warehouse->id, '0');
         $this->balance($item, $warehouse->id, '-2', '0', $this->bin($warehouse->id));
         $this->assertRefused($item, 'negative_stock_on_hand');
-        $this->assertSame('-2.0000', (string) StockBalance::query()->where('item_id', $item->id)->whereNotNull('bin_id')->value('on_hand_qty'));
+        $this->assertSame('-2.000000', (string) StockBalance::query()->where('item_id', $item->id)->whereNotNull('bin_id')->value('on_hand_qty'));
     }
 
     #[Test]
@@ -174,7 +174,7 @@ class ItemDeactivationGuardTest extends TestCase
         $adjustments = app(StockAdjustmentService::class);
         $adjustments->post($adjustments->createDraft(['adjustment_number' => 'DG-ZERO-ADJ', 'warehouse_id' => $warehouse->id, 'reason_code' => 'DAMAGE'],
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '2']]));
-        $this->assertSame('0.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('0.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         [$status] = $this->deactivate($item);
         $this->assertSame(200, $status);
@@ -204,8 +204,8 @@ class ItemDeactivationGuardTest extends TestCase
         foreach ($ids as $id) {
             $this->assertTrue((bool) Item::query()->find($id)->is_active, 'nothing may be written');
         }
-        $this->assertSame('5.0000', (string) StockBalance::query()->where('item_id', $stocked->id)->value('on_hand_qty'));
-        $this->assertSame('-1.0000', (string) StockBalance::query()->where('item_id', $negative->id)->value('on_hand_qty'));
+        $this->assertSame('5.000000', (string) StockBalance::query()->where('item_id', $stocked->id)->value('on_hand_qty'));
+        $this->assertSame('-1.000000', (string) StockBalance::query()->where('item_id', $negative->id)->value('on_hand_qty'));
 
         $response = app(ItemController::class)->bulkUpdate(Request::create('/x', 'POST', ['item_ids' => [$clean->id], 'is_active' => false]));
         $this->assertSame(200, $response->getStatusCode());

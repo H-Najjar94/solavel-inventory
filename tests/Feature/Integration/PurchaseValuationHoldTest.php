@@ -56,8 +56,8 @@ final class PurchaseValuationHoldTest extends TestCase
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('item_id', $exception->errors());
         }
-        $this->assertSame('10.0000', StockBalance::sole()->on_hand_qty);
-        $this->assertSame('50.00', StockBalance::sole()->total_value);
+        $this->assertSame('10.000000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('50.000000', StockBalance::sole()->total_value);
         $this->assertSame(1, StockLedger::count());
         $this->assertSame('active', PurchaseValuationHold::sole()->state);
         $hold->update(['state' => 'released']);

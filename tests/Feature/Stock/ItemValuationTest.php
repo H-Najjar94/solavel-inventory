@@ -62,7 +62,7 @@ class ItemValuationTest extends TestCase
         $this->assertSame($wh->id, $w['warehouse_id']);
         $this->assertSame($wh->name, $w['warehouse_name']);
         $this->assertSame($wh->code, $w['warehouse_code']);
-        $this->assertSame('20.0000', $w['on_hand_qty']);
+        $this->assertSame('20.000000', $w['on_hand_qty']);
         $this->assertTrue($w['qty_reconciled'], 'Σ layer qty must equal on-hand qty');
         // Before any consumption FIFO and average agree.
         $this->assertSame('130.00', $w['fifo_value']);
@@ -100,7 +100,7 @@ class ItemValuationTest extends TestCase
 
         $val = $this->valuationFor($item->id);
         $w = $val['warehouses'][0];
-        $this->assertSame('5.0000', $w['on_hand_qty']);
+        $this->assertSame('5.000000', $w['on_hand_qty']);
         // True FIFO value of the remaining 5 @ $8.
         $this->assertSame('40.00', $w['fifo_value']);
         // balance.total_value is now maintained on the FIFO basis for a FIFO item
@@ -115,7 +115,7 @@ class ItemValuationTest extends TestCase
         $this->assertSame('40.00', $val['on_hand_value']);
         // Only the partially-consumed second layer remains (5 @ $8).
         $this->assertCount(1, $w['layers']);
-        $this->assertSame('8.0000', $w['layers'][0]['unit_cost']);
+        $this->assertSame('8.000000', $w['layers'][0]['unit_cost']);
         $this->assertSame('5.0000', $w['layers'][0]['remaining_qty']);
         $this->assertSame('5.0000', $w['layers'][0]['consumed_qty']);
         $this->assertSame('Opening stock V-C2', $w['layers'][0]['source_display']);
@@ -142,7 +142,7 @@ class ItemValuationTest extends TestCase
 
         $this->assertCount(1, $valuation['warehouses']);
         $warehouseValue = $valuation['warehouses'][0];
-        $this->assertSame('5.0000', $warehouseValue['on_hand_qty']);
+        $this->assertSame('5.000000', $warehouseValue['on_hand_qty']);
         $this->assertSame('31.00', $warehouseValue['average_value']);
         $this->assertSame('31.00', $warehouseValue['fifo_value']);
         $this->assertTrue($warehouseValue['qty_reconciled']);

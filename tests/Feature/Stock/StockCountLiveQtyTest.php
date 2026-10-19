@@ -58,13 +58,13 @@ class StockCountLiveQtyTest extends TestCase
             ['adjustment_number' => 'CNT-MOVE', 'warehouse_id' => $wh->id],
             [['item_id' => $item->id, 'direction' => 'increase', 'quantity' => '5', 'unit_cost' => '5.0000']]
         ));
-        $this->assertSame('15.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('15.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         // Post the count. With the bug, it would add the stale +2 → 17. Fixed, it
         // recomputes variance against the LIVE 15 (12 - 15 = -3) and lands on 12.
         app(StockCountService::class)->post($count);
 
-        $this->assertSame('12.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'),
+        $this->assertSame('12.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'),
             'count must reconcile to the PHYSICAL count (12) using live on-hand, not the stale system_qty');
     }
 }

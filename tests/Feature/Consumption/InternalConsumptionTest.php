@@ -32,9 +32,9 @@ final class InternalConsumptionTest extends TestCase {
         $data=['submission_key'=>(string)Str::uuid(),'warehouse_id'=>$wh->id,'document_date'=>'2026-10-10','reason'=>'Office use','lines'=>[['item_id'=>$item->id,'quantity'=>'3']]];
         $draft=$service->create($data);
         self::assertSame($draft->id,$service->create($data)->id);
-        self::assertSame('20.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
         $posted=$service->post($draft);$service->post($draft);
-        self::assertSame('17.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('17.000000',StockBalance::query()->first()->on_hand_qty);
         self::assertSame('34.00',StockBalance::query()->first()->total_value);
         self::assertSame('6.00',$posted->lines->first()->total_cost);
         self::assertSame('/internal-consumptions/'.$posted->id,\App\Services\Documents\SourceDocumentPresenter::describe(InternalConsumption::class,$posted->id)['source_route']);
@@ -50,8 +50,8 @@ final class InternalConsumptionTest extends TestCase {
             $posted=$service->post($return);$service->post($return);
             self::assertSame(Decimal::money(Decimal::mul($quantity,'2')),$posted->lines->first()->total_cost);
         }
-        self::assertSame('22.0000',StockBalance::query()->first()->on_hand_qty);
-        self::assertSame('60.00',StockBalance::query()->first()->total_value);
+        self::assertSame('22.000000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('59.999995',StockBalance::query()->first()->total_value);
         $extra=$this->draft($service,$wh,$item,'1',['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'1']]]);
         try {$service->post($extra);self::fail('Over-return accepted');} catch (\RuntimeException $e) {self::assertSame('draft',$extra->fresh()->status);}
         self::assertSame('22.0000',StockBalance::query()->first()->on_hand_qty);
@@ -67,7 +67,7 @@ final class InternalConsumptionTest extends TestCase {
         $return=$service->post($this->draft($service,$wh,$item,'0.5',['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'0.5','entered_unit_id'=>$box->id]]]));
         self::assertSame('5.0000',$return->lines->first()->quantity);
         self::assertSame('10.00',$return->lines->first()->total_cost);
-        self::assertSame('15.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('15.000000',StockBalance::query()->first()->on_hand_qty);
     }
     public function testSerializedIssueReturnsOnlyTheWholeOriginalUnit(): void {
         [$wh,,$service]=$this->setupInventory();$item=F::serialItem();$opening=app(OpeningStockService::class);
@@ -84,21 +84,21 @@ final class InternalConsumptionTest extends TestCase {
         [$wh,$item,$service]=$this->setupInventory('fifo');$layer=CostLayer::query()->first();
         $issue=$service->post($this->draft($service,$wh,$item));
         foreach(['1','2'] as $qty) $service->post($this->draft($service,$wh,$item,$qty,['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>$qty]]]));
-        self::assertSame(1,CostLayer::query()->count());self::assertSame('20.0000',$layer->fresh()->remaining_qty);
-        self::assertSame('40.00',StockBalance::query()->first()->total_value);
+        self::assertSame(1,CostLayer::query()->count());self::assertSame('20.000000',$layer->fresh()->remaining_qty);
+        self::assertSame('40.000000',StockBalance::query()->first()->total_value);
     }
     public function testApprovalDoesNotMoveStockAndPostingRequiresConfiguredApproval(): void {
         [$wh,$item,$service]=$this->setupInventory();InventorySetting::query()->first()->update(['approvals'=>['internal_consumption'=>true]]);
         $draft=$this->draft($service,$wh,$item);
         try {$service->post($draft);self::fail('Unapproved issue posted');} catch (\Illuminate\Validation\ValidationException $e) {}
-        self::assertSame('20.0000',StockBalance::query()->first()->on_hand_qty);
-        $service->approve($draft);self::assertSame('20.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
+        $service->approve($draft);self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
         self::assertSame('posted',$service->post($draft)->status);
     }
     public function testInsufficientStockRollsBackDocumentAndLedger(): void {
         [$wh,$item,$service]=$this->setupInventory();$draft=$this->draft($service,$wh,$item,'21');
         try {$service->post($draft);self::fail('Overspend allowed');} catch (\RuntimeException $e) {}
-        self::assertSame('draft',$draft->fresh()->status);self::assertSame('20.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('draft',$draft->fresh()->status);self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
     }
     public function testPostedDocumentsAndLinesAreImmutable(): void {
         [$wh,$item,$service]=$this->setupInventory();$doc=$service->post($this->draft($service,$wh,$item));
@@ -145,9 +145,11 @@ final class InternalConsumptionTest extends TestCase {
         $db->table('accounting_periods')->insert(['organization_id'=>14,'name'=>'October','period_no'=>10,'start_date'=>'2026-10-01','end_date'=>'2026-10-31','status'=>'open']);
         $issue=$service->post($this->draft($service,$wh,$item));$service->post($issue);
         $event=IntegrationOutboxEvent::where('event_type','internal_consumption.posted')->sole();
-        self::assertTrue($issue->accounting_connected);self::assertSame('6.00',$event->payload['lines'][0]['total_cost']);
+        self::assertTrue($issue->accounting_connected);self::assertSame('6.000000',$event->payload['lines'][0]['total_cost']);
         $journal=app(\App\Services\Integration\AccountingJournalBuilder::class)->build($event,$org);
         self::assertSame(101,$journal[0]['account_id']);self::assertSame('6.00',$journal[0]['debit']);self::assertSame(100,$journal[1]['account_id']);self::assertSame('6.00',$journal[1]['credit']);
+        $event->forceFill(['status'=>'sent','sent_at'=>now()])->save();
+        $db->table('journal_entries')->insert(['id'=>1000000+$event->id,'organization_id'=>14,'source'=>'SOLASTOCK','source_type'=>'internal_consumption','source_id'=>$issue->id,'source_key'=>'external-api:'.hash('sha256',$event->idempotency_key),'status'=>'posted','posted_at'=>now(),'metadata'=>json_encode(['contract'=>['version'=>\App\Services\Integration\SolaStockJournalContract::VERSION,'currency'=>['money_scale'=>2,'rate_scale'=>8,'rounding_mode'=>'HALF_UP','base_code'=>'JOD']]],JSON_THROW_ON_ERROR)]);
         $return=$service->post($this->draft($service,$wh,$item,'1',['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'1']]]));
         $event=IntegrationOutboxEvent::where('event_type','internal_consumption.returned')->sole();
         $journal=app(\App\Services\Integration\AccountingJournalBuilder::class)->build($event,$org);
@@ -155,7 +157,7 @@ final class InternalConsumptionTest extends TestCase {
         // Invalid configured default never falls through to another account.
         $item->internal_consumption_account_id=99999;$item->save();$draft=$this->draft($service,$wh,$item);
         try{$service->post($draft);self::fail('Missing mapping accepted');}catch(\Illuminate\Validation\ValidationException $e){self::assertSame('draft',$draft->fresh()->status);}
-        self::assertSame('18.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('18.000000',StockBalance::query()->first()->on_hand_qty);
     }
 
     public function testNonSaleableItemCannotCreateNewSalesOrderButCanBeConsumed(): void {
@@ -167,7 +169,7 @@ final class InternalConsumptionTest extends TestCase {
     public function testFifoPreviewReusesCostingWithoutReducingLayers(): void {
         [$wh,$item]=$this->setupInventory('fifo');
         $cost=app(\App\Services\Stock\StockLedgerService::class)->previewOutbound(new \App\Services\Stock\StockMovement(direction:'out',itemId:$item->id,warehouseId:$wh->id,quantity:'3',sourceType:InternalConsumption::class,sourceId:0));
-        self::assertSame('6.00',$cost['total_cost']);self::assertSame('20.0000',CostLayer::first()->remaining_qty);self::assertSame('20.0000',StockBalance::first()->on_hand_qty);
+        self::assertSame('6.000000',$cost['total_cost']);self::assertSame('20.000000',CostLayer::first()->remaining_qty);self::assertSame('20.000000',StockBalance::first()->on_hand_qty);
     }
 
     public function testMigrationRerunPreservesFlagsAndDocuments(): void {

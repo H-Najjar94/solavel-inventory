@@ -71,9 +71,9 @@ class StockCountSurplusCostTest extends TestCase
         $this->assertSame('5.0000', (string) $adjustment->lines->sole()->unit_cost);
         $this->assertSame('10.00', (string) $adjustment->total_increase_value);
         $ledger = StockLedger::query()->where('source_type', StockAdjustment::class)->where('source_id', $adjustment->id)->sole();
-        $this->assertSame('10.00', (string) $ledger->total_cost);
+        $this->assertSame('10.000000', (string) $ledger->total_cost);
         $balance = StockBalance::query()->where('item_id', $item->id)->sole();
-        $this->assertSame('12.0000', (string) $balance->on_hand_qty);
+        $this->assertSame('12.000000', (string) $balance->on_hand_qty);
         $this->assertSame('5.0000', (string) $balance->average_cost);
         $this->assertSame('60.00', (string) $balance->total_value);
 
@@ -113,9 +113,9 @@ class StockCountSurplusCostTest extends TestCase
 
         $adjustment = StockAdjustment::query()->with('lines')->findOrFail($count->adjustment_id);
         $this->assertSame('5.5000', (string) $adjustment->lines->sole()->unit_cost);
-        $this->assertSame('5.50', (string) StockLedger::query()->where('source_type', StockAdjustment::class)
+        $this->assertSame('5.500000', (string) StockLedger::query()->where('source_type', StockAdjustment::class)
             ->where('source_id', $adjustment->id)->value('total_cost'));
-        $this->assertSame('5.5000', (string) CostLayer::query()->where('item_id', $item->id)
+        $this->assertSame('5.500000', (string) CostLayer::query()->where('item_id', $item->id)
             ->orderByDesc('id')->value('unit_cost'));
         $this->assertSame(0, CostLayer::query()->where('item_id', $item->id)->where('unit_cost', 0)->count());
     }

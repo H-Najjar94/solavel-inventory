@@ -257,7 +257,7 @@ class ItemCreateTest extends TestCase
 
         $onHand = \App\Models\Tenant\StockBalance::query()
             ->where('item_id', $itemId)->where('warehouse_id', $wh->id)->value('on_hand_qty');
-        $this->assertSame('6.0000', $onHand, 'opening stock entered on create must reflect on hand');
+        $this->assertSame('6.000000', $onHand, 'opening stock entered on create must reflect on hand');
     }
 
     #[Test]
