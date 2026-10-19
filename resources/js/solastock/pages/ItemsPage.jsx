@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -18,14 +18,24 @@ export default function ItemsPage() {
     const [search, setSearch] = useState('');
     const [type, setType] = useState('');
     const [status, setStatus] = useState('');
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(25);
     const [selected, setSelected] = useState([]);
     const [bulk, setBulk] = useState({ field: 'is_active', value: '1' });
     const { data, isMock } = useApiQuery(
-        ['items', search, type, status],
-        () => api.items({ search, item_type: type || undefined, stock_status: status || undefined, per_page: 25 }),
-        { fallback: mockItems }
+        ['items', search, type, status, page, perPage],
+        () => api.items({ search, item_type: type || undefined, stock_status: status || undefined, page, per_page: perPage }),
+        { fallback: mockItems, select: (response) => ({ rows: response?.data ?? [], meta: response?.meta ?? {} }) }
     );
-    const items = Array.isArray(data) ? data : (data?.data ?? mockItems);
+    const items = Array.isArray(data) ? data : (data?.rows ?? []);
+    const pagination = Array.isArray(data) ? {} : (data?.meta ?? {});
+    const total = Number(pagination.total ?? items.length);
+    const lastPage = Math.max(1, Number(pagination.last_page ?? 1));
+    const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+    const to = Math.min(total, from + items.length - 1);
+    useEffect(() => { setPage(1); }, [search, type, status, perPage]);
+    useEffect(() => { if (page > lastPage) setPage(lastPage); }, [page, lastPage]);
+    const visibleSku = (sku) => /^(?:FIN-\d+-\d+|AUTO-[A-Z0-9]+)$/i.test(String(sku || '')) ? '' : String(sku || '');
     const allSelected = items.length > 0 && selected.length === items.length;
 
     function toggle(id) {
@@ -94,7 +104,7 @@ export default function ItemsPage() {
                                     ? <img className="item-thumb" src={it.primary_image_url} alt="" loading="lazy" />
                                     : <span className="item-thumb item-thumb--ph">📦</span>}
                             </td>
-                            <td><Link to={`/items/${it.id}`}><bdi>{it.sku}</bdi></Link></td>
+                            <td><Link to={`/items/${it.id}`}><bdi>{visibleSku(it.sku) || t('items.noSku', 'No SKU')}</bdi></Link></td>
                             <td>{it.name}</td>
                             <td>{t(`items.type.${it.item_type}`, it.item_type)}</td>
                             <td>{it.category?.name ?? '—'}</td>
@@ -104,6 +114,13 @@ export default function ItemsPage() {
                     ))}
                 </tbody>
             </table></div>
+            <div className="index-pagination" role="navigation" aria-label={t('pagination.label', 'List pagination')}>
+                <span><bdi>{t('pagination.showing', 'Showing :from–:to of :total', { from, to, total })}</bdi></span>
+                <label>{t('pagination.rows', 'Rows')} <select className="input" value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+                <button type="button" className="btn" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{t('pagination.previous', 'Previous')}</button>
+                <strong><bdi>{page} / {lastPage}</bdi></strong>
+                <button type="button" className="btn" disabled={page >= lastPage} onClick={() => setPage((value) => value + 1)}>{t('pagination.next', 'Next')}</button>
+            </div>
         </section>
     );
 }
