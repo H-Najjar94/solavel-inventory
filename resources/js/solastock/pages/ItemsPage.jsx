@@ -93,9 +93,9 @@ export default function ItemsPage() {
                 <div style={{ alignSelf: 'end' }}><button className="btn btn--primary" disabled={selected.length === 0}>{t('items.apply')}</button></div>
             </form>}
             <div className="index-table-scroll"><table className="data-table">
-                <thead><tr><th><input type="checkbox" aria-label={t('items.selectAll')} checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><th>SKU</th><th>{t('name')}</th><th>{t('type')}</th><th>{t('category')}</th><th>{t('items.salesPrice')}</th><th>{t('document.status', 'Status')}</th></tr></thead>
+                <thead><tr><th><input type="checkbox" aria-label={t('items.selectAll')} checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><th>SKU</th><th>{t('name')}</th><th>{t('type')}</th><th>{t('category')}</th><th>{t('items.cost', 'Cost')}</th><th>{t('items.salesPrice')}</th><th>{t('document.status', 'Status')}</th></tr></thead>
                 <tbody>
-                    {items.length === 0 && <tr><td colSpan="8"><EmptyState title={t('items.noItems')} /></td></tr>}
+                    {items.length === 0 && <tr><td colSpan="9"><EmptyState title={t('items.noItems')} /></td></tr>}
                     {items.map((it) => (
                         <tr key={it.id}>
                             <td><input type="checkbox" aria-label={t('items.selectItem', 'Select :name', { name: it.name })} checked={selected.includes(it.id)} onChange={() => toggle(it.id)} disabled={!gate.allowed} /></td>
@@ -108,6 +108,7 @@ export default function ItemsPage() {
                             <td>{it.name}</td>
                             <td>{t(`items.type.${it.item_type}`, it.item_type)}</td>
                             <td>{it.category?.name ?? '—'}</td>
+                            <td><bdi>{it.purchase_price ?? '—'}</bdi></td>
                             <td>{it.sales_price ?? '—'}</td>
                             <td>{it.is_active ? t('active') : t('inactive', 'Inactive')}</td>
                         </tr>
