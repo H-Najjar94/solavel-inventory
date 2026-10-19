@@ -27,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 final class FinanceWorkspaceController
 {
@@ -320,6 +321,43 @@ final class FinanceWorkspaceController
                 $context['connection_summary'] = app(ConnectionSummary::class)->forOrganization((int) $org->id);
 
                 return response()->json(['success' => true, 'data' => $context]);
+            }
+            if ($input['action'] === 'catalog.quick-create') {
+                abort_unless($mapping && $mapping->status === 'verified' && $mapping->activation_state === 'active'
+                    && $setting && $setting->mode === 'active', 409, 'workspace_connection_not_ready');
+                abort_unless(app(InventoryPermissionService::class)->can($actor, 'inventory.manage_settings'), 403, 'workspace_permission_required');
+                $data = validator((array) ($input['data'] ?? []), [
+                    'kind' => 'required|in:unit,category', 'name' => 'required|string|max:100',
+                    'symbol' => 'nullable|string|max:20',
+                ])->validate();
+                if ($data['kind'] === 'unit') {
+                    $base = Str::upper(Str::slug((string) ($data['symbol'] ?: $data['name']), '_')) ?: 'UNIT';
+                    $code = substr($base, 0, 42); $suffix = 1;
+                    while (\App\Models\Tenant\Unit::query()->where('code', $code)->exists()) {
+                        $code = substr($base, 0, 42).'-'.(++$suffix);
+                    }
+                    $record = \App\Models\Tenant\Unit::query()->create(['organization_id' => (int) $org->id,
+                        'code' => $code, 'name' => trim($data['name']), 'symbol' => trim((string) ($data['symbol'] ?? '')) ?: null,
+                        'kind' => 'count', 'is_active' => true]);
+                } else {
+                    $record = \App\Models\Tenant\ItemCategory::query()->create(['organization_id' => (int) $org->id,
+                        'name' => trim($data['name']), 'parent_id' => null, 'level' => 0, 'is_active' => true]);
+                }
+                $type = (string) $data['kind'];
+                $sync = app(\App\Services\Catalog\DurableCatalogSync::class);
+                for ($attempt = 0; $attempt < 20; $attempt++) {
+                    $state = DB::connection('tenant')->table(\App\Services\Catalog\DurableCatalogSync::TABLE)
+                        ->where('organization_mapping_uuid', $mapping->mapping_uuid)->where('entity_type', $type)
+                        ->where('source_id', $record->id)->first();
+                    if ($state?->state === 'delivered' && (int) $state->target_id > 0) {
+                        return response()->json(['success' => true, 'data' => ['id' => (int) $state->target_id,
+                            'stock_id' => (int) $record->id, 'name' => (string) $record->name,
+                            'symbol' => $type === 'unit' ? (string) ($record->symbol ?? '') : null]]);
+                    }
+                    if ($state?->state === 'intervention_required') abort(409, 'catalog_projection_requires_review');
+                    if ($sync->process($mapping, 20) === 0) break;
+                }
+                abort(503, 'catalog_projection_pending');
             }
             if ($input['action'] === 'workspace.connection') {
                 abort_unless(app(InventoryPermissionService::class)->can($actor, 'inventory.integration.view'), 403, 'workspace_permission_required');
