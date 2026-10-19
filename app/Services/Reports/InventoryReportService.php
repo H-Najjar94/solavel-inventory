@@ -150,9 +150,9 @@ class InventoryReportService
             'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
             'rows' => $rows,
             'summary' => [
-                'total_value' => (string) $rows->sum(fn ($r) => (float) $r->total_value),
+                'total_value' => Decimal::money($this->sumDecimal($rows, 'total_value')),
                 'value_currency' => $currency['currency'],
-                'converted_total_value' => Decimal::money((string) $rows->sum(fn ($r) => (float) ($r->converted_total_value ?? $r->total_value))),
+                'converted_total_value' => Decimal::money($this->sumDecimal($rows, 'converted_total_value', 'total_value')),
                 'as_at' => null,
                 'total_lines' => $rows->count(),
                 'low' => $rows->where('stock_status', 'low')->count(),
@@ -212,9 +212,9 @@ class InventoryReportService
             'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
             'rows' => $rows,
             'summary' => [
-                'total_value' => Decimal::money((string) $rows->sum(fn ($r) => (float) $r->total_value)),
+                'total_value' => Decimal::money($this->sumDecimal($rows, 'total_value')),
                 'value_currency' => $currency['currency'],
-                'converted_total_value' => Decimal::money((string) $rows->sum(fn ($r) => (float) ($r->converted_total_value ?? $r->total_value))),
+                'converted_total_value' => Decimal::money($this->sumDecimal($rows, 'converted_total_value', 'total_value')),
                 'as_at' => $f->asAt,
                 'total_lines' => $rows->count(),
             ],
@@ -225,24 +225,35 @@ class InventoryReportService
     {
         $base = $this->baseCurrency();
         $currency = $f->currency ?: $base;
-        $rate = 1.0;
+        $rate = '1';
         if ($currency !== $base) {
-            $rate = (float) ($this->scoped('inventory_currency_rates')
+            $rate = (string) ($this->scoped('inventory_currency_rates')
                 ->where('currency_code', $currency)
                 ->when($f->asAt, fn ($q) => $q->whereDate('effective_date', '<=', $f->asAt))
                 ->orderByDesc('effective_date')
                 ->value('rate_to_base') ?: 0);
         }
 
-        return ['base' => $base, 'currency' => $currency, 'rate_to_base' => $rate > 0 ? $rate : 1.0];
+        return ['base' => $base, 'currency' => $currency, 'rate_to_base' => Decimal::gt($rate, '0') ? $rate : '1'];
     }
 
     private function withConvertedValue(object $row, array $currency): object
     {
         $row->value_currency = $currency['currency'];
-        $row->converted_total_value = Decimal::money((string) ((float) ($row->total_value ?? 0) / (float) $currency['rate_to_base']));
+        $row->converted_total_value = Decimal::money(Decimal::div((string) ($row->total_value ?? '0'), (string) $currency['rate_to_base']));
 
         return $row;
+    }
+
+    private function sumDecimal(iterable $rows, string $field, ?string $fallback = null): string
+    {
+        $total = '0';
+        foreach ($rows as $row) {
+            $value = $row->{$field} ?? ($fallback !== null ? ($row->{$fallback} ?? '0') : '0');
+            $total = Decimal::add($total, (string) $value);
+        }
+
+        return $total;
     }
 
     /** Connected valuation uses the verified tenant/organization currency contract. */
@@ -292,7 +303,7 @@ class InventoryReportService
         return [
             'columns' => ['moved_at', 'sku', 'item', 'warehouse', 'lot_code', 'serial', 'expiry_date', 'source_document', 'qty_in', 'qty_out', 'unit_cost', 'total_cost', 'balance_qty_after'],
             'rows' => $rows,
-            'summary' => ['rows' => $rows->count(), 'qty_in' => (string) $rows->sum(fn ($r) => (float) $r->qty_in), 'qty_out' => (string) $rows->sum(fn ($r) => (float) $r->qty_out)],
+            'summary' => ['rows' => $rows->count(), 'qty_in' => Decimal::qty($this->sumDecimal($rows, 'qty_in')), 'qty_out' => Decimal::qty($this->sumDecimal($rows, 'qty_out'))],
         ];
     }
 
@@ -334,7 +345,7 @@ class InventoryReportService
         return [
             'columns' => ['warehouse', 'bin', 'sku', 'item', 'on_hand_qty', 'reserved_qty', 'available_qty', 'total_value', 'capacity'],
             'rows' => $rows,
-            'summary' => ['lines' => $rows->count(), 'total_value' => (string) $rows->sum(fn ($r) => (float) $r->total_value)],
+            'summary' => ['lines' => $rows->count(), 'total_value' => Decimal::money($this->sumDecimal($rows, 'total_value'))],
         ];
     }
 
@@ -397,7 +408,7 @@ class InventoryReportService
             ->where('b.on_hand_qty', '>', 0)->whereNotIn('b.item_id', $moved)
             ->selectRaw('i.sku, i.name item, w.name warehouse, b.on_hand_qty, b.total_value')->get();
 
-        return ['columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'total_value'], 'rows' => $rows, 'summary' => ['items' => $rows->count(), 'window_days' => $f->days, 'value' => (string) $rows->sum(fn ($r) => (float) $r->total_value)]];
+        return ['columns' => ['sku', 'item', 'warehouse', 'on_hand_qty', 'total_value'], 'rows' => $rows, 'summary' => ['items' => $rows->count(), 'window_days' => $f->days, 'value' => Decimal::money($this->sumDecimal($rows, 'total_value'))]];
     }
 
     // ── 8. Fast Moving ──
@@ -616,7 +627,7 @@ class InventoryReportService
         return [
             'columns' => ['sku', 'item', 'warehouse', 'reserved_qty', 'priority', 'expires_at', 'source_document', 'status'],
             'rows' => $rows,
-            'summary' => ['active_reservations' => $rows->count(), 'reserved_qty' => (string) $rows->sum(fn ($r) => (float) $r->reserved_qty)],
+            'summary' => ['active_reservations' => $rows->count(), 'reserved_qty' => Decimal::qty($this->sumDecimal($rows, 'reserved_qty'))],
         ];
     }
 
@@ -651,7 +662,7 @@ class InventoryReportService
         return [
             'columns' => ['lot_code', 'sku', 'item', 'status', 'expiry_date', 'supplier', 'on_hand_qty', 'reserved_qty', 'shipped_qty', 'source_document'],
             'rows' => $rows,
-            'summary' => ['lots' => $rows->count(), 'on_hand' => (string) $rows->sum(fn ($r) => (float) $r->on_hand_qty)],
+            'summary' => ['lots' => $rows->count(), 'on_hand' => Decimal::qty($this->sumDecimal($rows, 'on_hand_qty'))],
             'drilldown' => ['key' => 'lot_id', 'path' => '/traceability/lots'],
         ];
     }
@@ -704,7 +715,7 @@ class InventoryReportService
             'columns' => ['lot_code', 'sku', 'item', 'expiry_date', 'days_to_expiry', 'status', 'on_hand_qty'],
             'rows' => $rows,
             'summary' => ['within_days' => $f->days, 'at_risk' => $rows->count(), 'expired' => $expired,
-                'on_hand' => (string) $rows->sum(fn ($r) => (float) $r->on_hand_qty)],
+                'on_hand' => Decimal::qty($this->sumDecimal($rows, 'on_hand_qty'))],
             'drilldown' => ['key' => 'lot_id', 'path' => '/traceability/lots'],
         ];
     }
@@ -728,8 +739,8 @@ class InventoryReportService
             'rows' => $rows,
             'summary' => [
                 'recall_lines' => $rows->count(),
-                'on_hand' => (string) $rows->sum(fn ($r) => (float) $r->on_hand_qty),
-                'shipped' => (string) $rows->sum(fn ($r) => (float) $r->shipped_qty),
+                'on_hand' => Decimal::qty($this->sumDecimal($rows, 'on_hand_qty')),
+                'shipped' => Decimal::qty($this->sumDecimal($rows, 'shipped_qty')),
             ],
             'drilldown' => ['key' => 'recall_id', 'path' => '/recalls'],
         ];

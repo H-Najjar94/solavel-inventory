@@ -10,6 +10,7 @@ use App\Models\Tenant\OpeningStockEntry;
 use App\Models\Tenant\StockLedger;
 use App\Models\Tenant\Warehouse;
 use App\Services\Documents\OpeningStockService;
+use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class OpeningStockController extends ApiController
             'cutover_date'=>'required|date_format:Y-m-d','requirements_version'=>'required|string|regex:/^[a-f0-9]{64}$/D',
             'lines'=>'required|array|min:1|max:2000','lines.*'=>'required|array:finance_item_id,quantity,unit_cost,total_value',
             'lines.*.finance_item_id'=>'required|integer|min:1|distinct',
-            'lines.*.quantity'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
+            'lines.*.quantity'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,6})?$/D','numeric','gt:0'],
             'lines.*.unit_cost'=>['required','string','regex:/^[0-9]{1,12}(\.[0-9]{1,4})?$/D','numeric','gt:0'],
             'lines.*.total_value'=>['required','string','regex:/^[0-9]{1,14}(\.[0-9]{1,2})?$/D','numeric','gt:0']]);
         return $this->success(app(\App\Services\InventoryWorkspace\MigrationOpening::class)->post($data));
@@ -172,7 +173,7 @@ class OpeningStockController extends ApiController
                 return $this->error('invalid_import_row', 'Each import row needs sku and name. Row '.($index + 2).'.', 422);
             }
             $qty = (string) ($row['quantity'] ?? $row['qty'] ?? '');
-            if ($qty === '' || (float) $qty <= 0) {
+            if ($qty === '' || ! preg_match('/^\d+(?:\.\d{1,6})?$/D', $qty) || Decimal::cmp($qty, '0') <= 0) {
                 return $this->error('invalid_import_row', 'Each import row needs a positive quantity. Row '.($index + 2).'.', 422);
             }
 

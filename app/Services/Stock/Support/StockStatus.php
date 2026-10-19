@@ -22,18 +22,18 @@ final class StockStatus
         foreach ($rows as $row) {
             $item = (int) $row->item_id;
             $key = $item.':'.(int) ($row->warehouse_id ?? 0);
-            $available = (float) $row->available;
-            $totals[$item] = ($totals[$item] ?? 0) + $available;
-            $perWarehouse[$key] ??= ['item' => $item, 'available' => 0.0, 'reorder' => $row->reorder_point];
-            $perWarehouse[$key]['available'] += $available;
+            $available = (string) $row->available;
+            $totals[$item] = Decimal::add($totals[$item] ?? '0', $available);
+            $perWarehouse[$key] ??= ['item' => $item, 'available' => '0', 'reorder' => $row->reorder_point];
+            $perWarehouse[$key]['available'] = Decimal::add($perWarehouse[$key]['available'], $available);
         }
 
         $status = [];
         foreach ($totals as $item => $total) {
-            $status[$item] = $total <= 0 ? 'out' : 'ok';
+            $status[$item] = Decimal::cmp($total, '0') <= 0 ? 'out' : 'ok';
         }
         foreach ($perWarehouse as $wh) {
-            if ($status[$wh['item']] === 'ok' && $wh['reorder'] !== null && $wh['available'] <= (float) $wh['reorder']) {
+            if ($status[$wh['item']] === 'ok' && $wh['reorder'] !== null && Decimal::cmp($wh['available'], (string) $wh['reorder']) <= 0) {
                 $status[$wh['item']] = 'low';
             }
         }

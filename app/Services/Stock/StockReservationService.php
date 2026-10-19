@@ -518,7 +518,10 @@ class StockReservationService
                 $line->bin_id ?: '',
                 '',
             ]);
-            $reserved = Decimal::qty((string) (($activeReservations[$key] ?? collect())->sum(fn ($r) => (float) $r->qty)));
+            $reserved = Decimal::qty(($activeReservations[$key] ?? collect())->reduce(
+                fn (string $sum, $reservation): string => Decimal::add($sum, (string) $reservation->qty),
+                '0'
+            ));
             $line->reserved_qty = $reserved;
             $line->save();
             $anyReserved = $anyReserved || Decimal::gt($reserved, '0');

@@ -88,8 +88,8 @@ class PurchaseOrderController extends ApiController
             return array_merge($l->toArray(), [
                 'item_name' => $l->item?->name,
                 'item_sku' => $l->item?->sku,
-                'remaining_qty' => Decimal::lt($remaining, '0') ? '0.0000' : $remaining,
-                'backorder_qty' => $backorder && $backorder->status === 'open' ? (string) $backorder->backorder_qty : '0.0000',
+                'remaining_qty' => Decimal::lt($remaining, '0') ? '0.000000' : $remaining,
+                'backorder_qty' => $backorder && $backorder->status === 'open' ? (string) $backorder->backorder_qty : '0.000000',
                 'backorder_status' => $backorder?->status,
             ]);
         });
@@ -103,7 +103,10 @@ class PurchaseOrderController extends ApiController
             'lines' => $lines,
             'linked_grns' => $grns,
             'backorders' => $purchase_order->backorders->values(),
-            'open_backorder_qty' => Decimal::qty((string) $purchase_order->backorders->where('status', 'open')->sum(fn ($b) => (float) $b->backorder_qty)),
+            'open_backorder_qty' => Decimal::qty($purchase_order->backorders->where('status', 'open')->reduce(
+                fn (string $sum, $backorder) => Decimal::add($sum, (string) $backorder->backorder_qty, 12),
+                '0'
+            )),
             'has_remaining' => $lines->contains(fn ($l) => Decimal::gt((string) $l['remaining_qty'], '0')),
         ]);
     }

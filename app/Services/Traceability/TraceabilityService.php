@@ -36,8 +36,8 @@ class TraceabilityService
     {
         $movements = StockLedger::query()->where('lot_id', $lot->id)->orderBy('moved_at')->orderBy('id')->get();
 
-        $receivedQty = (string) $movements->where('direction', 'in')->sum(fn ($m) => (float) $m->quantity);
-        $issuedQty = (string) $movements->where('direction', 'out')->sum(fn ($m) => (float) $m->quantity);
+        $receivedQty = $movements->where('direction', 'in')->reduce(fn (string $sum, $movement) => Decimal::add($sum, (string) $movement->quantity, 12), '0');
+        $issuedQty = $movements->where('direction', 'out')->reduce(fn (string $sum, $movement) => Decimal::add($sum, (string) $movement->quantity, 12), '0');
         $onHand = Decimal::qty(Decimal::sub($receivedQty, $issuedQty));
 
         $balances = $this->db()->table('stock_balances as b')
@@ -49,7 +49,7 @@ class TraceabilityService
             ->selectRaw('w.name warehouse, bin.code bin, b.warehouse_id, b.bin_id, b.on_hand_qty, b.reserved_qty')
             ->get();
 
-        $reserved = (string) $balances->sum(fn ($b) => (float) $b->reserved_qty);
+        $reserved = $balances->reduce(fn (string $sum, $balance) => Decimal::add($sum, (string) $balance->reserved_qty, 12), '0');
 
         $sources = $this->groupBySource($movements->where('direction', 'in'));
         $shipments = $this->groupBySource($movements->where('direction', 'out')->where('source_type', 'like', '%Shipment'));

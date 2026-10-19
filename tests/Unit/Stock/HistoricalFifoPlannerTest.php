@@ -45,7 +45,7 @@ final class HistoricalFifoPlannerTest extends TestCase
         $this->assertSame('2.00', $byId['bonus']['reconstructed_cost']);
         $this->assertSame('10.00', $byId['free']['reconstructed_cost']);
         $this->assertSame('4.00', $byId['free']['cogs_delta']);
-        $this->assertSame('3.0000', $plan['layers']['1:1'][1]['remaining']);
+        $this->assertSame('3.000000', $plan['layers']['1:1'][1]['remaining']);
         $this->assertSame($plan, $planner->plan(array_reverse($events), $this->opening()));
     }
 
@@ -72,7 +72,7 @@ final class HistoricalFifoPlannerTest extends TestCase
             $this->event('sale', '2024-01-02', 'out', '4'),
             $this->event('return', '2024-01-03', 'return', '3', ['original_sale_source_id' => 'sale', 'return_disposition' => 'restock', 'return_disposition_evidence' => 'inspection']),
         ], $this->opening([['quantity' => '2', 'unit_cost' => '3'], ['quantity' => '2', 'unit_cost' => '5']]));
-        $this->assertSame(['2.0000', '1.0000'], array_column($plan['events'][1]['allocations'], 'quantity'));
+        $this->assertSame(['2.000000', '1.000000'], array_column($plan['events'][1]['allocations'], 'quantity'));
         $this->assertSame('11.00', $plan['events'][1]['reconstructed_cost']);
     }
 

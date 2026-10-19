@@ -2,6 +2,7 @@
 
 namespace App\Services\Stock;
 
+use App\Services\Stock\Support\Decimal;
 use Illuminate\Support\Facades\DB;
 
 class IntegrityRepairService
@@ -25,10 +26,10 @@ class IntegrityRepairService
                     'lot_id' => $row['lot_id'],
                     'bin_id' => $row['bin_id'],
                     'on_hand_qty' => $row['ledger_qty'],
-                    'reserved_qty' => '0.0000',
-                    'average_cost' => abs((float) $row['ledger_qty']) > 0.0001
-                        ? round(((float) $row['ledger_value']) / ((float) $row['ledger_qty']), 4)
-                        : 0,
+                    'reserved_qty' => '0.000000',
+                    'average_cost' => Decimal::isZero((string) $row['ledger_qty'])
+                        ? '0.000000'
+                        : Decimal::cost(Decimal::div((string) $row['ledger_value'], (string) $row['ledger_qty'])),
                     'total_value' => $row['ledger_value'],
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -48,9 +49,9 @@ class IntegrityRepairService
                     ->update([
                         'on_hand_qty' => $row['ledger_qty'],
                         'total_value' => $row['ledger_value'],
-                        'average_cost' => abs((float) $row['ledger_qty']) > 0.0001
-                            ? round(((float) $row['ledger_value']) / ((float) $row['ledger_qty']), 4)
-                            : 0,
+                        'average_cost' => Decimal::isZero((string) $row['ledger_qty'])
+                            ? '0.000000'
+                            : Decimal::cost(Decimal::div((string) $row['ledger_value'], (string) $row['ledger_qty'])),
                         'updated_at' => now(),
                     ]);
                 $applied['updated_balance_rows']++;

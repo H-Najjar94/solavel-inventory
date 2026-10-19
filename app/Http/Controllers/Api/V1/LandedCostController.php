@@ -13,6 +13,7 @@ use App\Services\Documents\LandedCostAvailability;
 use App\Services\Documents\LandedCostService;
 use App\Services\Documents\LandedCostSetupRequired;
 use App\Services\Integration\LandedCostWorkflow;
+use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -133,7 +134,7 @@ class LandedCostController extends ApiController
         return $this->success(['receipts' => $receipts->map(fn (GoodsReceipt $r) => [
             'id' => $r->id, 'grn_number' => $r->grn_number, 'receipt_date' => $r->receipt_date?->toDateString(),
             'warehouse_id' => $r->warehouse_id, 'warehouse_name' => $r->warehouse?->name, 'supplier_name' => $r->supplier?->name,
-            'lines' => $r->lines->filter(fn ($l) => (float) $l->accepted_qty > 0)->values()->map(fn ($l) => [
+            'lines' => $r->lines->filter(fn ($l) => Decimal::gt((string) $l->accepted_qty, '0'))->values()->map(fn ($l) => [
                 'id' => $l->id, 'item_id' => $l->item_id, 'item_name' => $l->item?->name, 'item_sku' => $l->item?->sku,
                 'accepted_qty' => (string) $l->accepted_qty, 'unit_cost' => (string) $l->unit_cost,
                 'weight' => $l->item?->weight !== null ? (string) $l->item->weight : null,

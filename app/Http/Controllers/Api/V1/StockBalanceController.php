@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\InventoryUserWarehouse;
 use App\Models\Tenant\StockBalance;
 use App\Services\Access\InventoryPermissionService;
+use App\Services\Stock\Support\Decimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -50,7 +51,8 @@ class StockBalanceController extends ApiController
             $traceStatus = $b->lot?->effectiveStatus() ?? $b->serial?->lifecycleStatus();
             $isQuarantined = in_array($binType, ['quarantine', 'damaged'], true)
                 || in_array($traceStatus, ['quarantined', 'recalled', 'damaged', 'retired'], true);
-            $available = (float) $b->on_hand_qty - (float) $b->reserved_qty;
+            $available = Decimal::sub((string) $b->on_hand_qty, (string) $b->reserved_qty);
+            $sellable = Decimal::lt($available, '0') ? '0.000000' : Decimal::qty($available);
 
             return [
                 'id' => $b->id,
@@ -68,8 +70,8 @@ class StockBalanceController extends ApiController
                 'on_hand_qty' => $b->on_hand_qty,
                 'reserved_qty' => $b->reserved_qty,
                 'available_qty' => $b->available_qty,
-                'quarantine_qty' => $isQuarantined ? $b->on_hand_qty : '0.0000',
-                'sellable_available_qty' => $isQuarantined ? '0.0000' : number_format(max(0, $available), 4, '.', ''),
+                'quarantine_qty' => $isQuarantined ? $b->on_hand_qty : '0.000000',
+                'sellable_available_qty' => $isQuarantined ? '0.000000' : $sellable,
                 'availability_status' => $isQuarantined ? 'quarantined' : 'available',
                 'average_cost' => $b->average_cost,
                 'total_value' => $b->total_value,

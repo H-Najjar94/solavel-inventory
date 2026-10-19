@@ -18,7 +18,7 @@ class DecimalTest extends TestCase
         // (10*5 + 10*7) / 20 = 6
         $num = Decimal::add(Decimal::mul('10', '5'), Decimal::mul('10', '7'));
         $avg = Decimal::div($num, '20');
-        $this->assertSame('6.0000', Decimal::cost($avg));
+        $this->assertSame('6.000000', Decimal::cost($avg));
     }
 
     #[Test]
@@ -38,10 +38,10 @@ class DecimalTest extends TestCase
     }
 
     #[Test]
-    public function fractional_quantity_scale_is_four(): void
+    public function fractional_quantity_scale_is_six(): void
     {
-        $this->assertSame('2.5000', Decimal::qty('2.5'));
-        $this->assertSame('0.3333', Decimal::qty(Decimal::div('1', '3')));
+        $this->assertSame('2.500000', Decimal::qty('2.5'));
+        $this->assertSame('0.333333', Decimal::qty(Decimal::div('1', '3')));
     }
 
     #[Test]

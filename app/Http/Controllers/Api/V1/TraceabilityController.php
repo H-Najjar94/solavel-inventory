@@ -11,6 +11,7 @@ use App\Services\Access\WarehouseAccessService;
 use App\Services\Traceability\LotService;
 use App\Services\Traceability\SerialService;
 use App\Services\Traceability\TraceabilityService;
+use App\Services\Stock\Support\Decimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -172,16 +173,16 @@ class TraceabilityController extends ApiController
             'item_id' => ['required', 'integer'],
             'lot_id' => ['required', 'integer'],
             'warehouse_id' => ['nullable', 'integer'],
-            'qty' => ['required', 'numeric', 'gt:0'],
+            'qty' => ['required', new \App\Rules\ExactDecimalString(6), 'numeric', 'gt:0'],
         ]);
         $lots = collect($this->trace->lotAvailability((int) $data['item_id'], $data['warehouse_id'] ?? null));
         $row = $lots->firstWhere('lot_id', (int) $data['lot_id']);
-        $available = $row ? (float) $row->on_hand_qty - (float) $row->reserved_qty : 0.0;
+        $available = $row ? Decimal::sub((string) $row->on_hand_qty, (string) $row->reserved_qty) : '0';
         $lot = Lot::query()->find($data['lot_id']);
 
         return $this->success([
-            'available' => number_format($available, 4, '.', ''),
-            'sufficient' => $available >= (float) $data['qty'],
+            'available' => Decimal::qty($available),
+            'sufficient' => Decimal::cmp($available, (string) $data['qty']) >= 0,
             'lot_status' => $lot?->effectiveStatus(),
             'shippable' => $lot?->isShippable() ?? false,
         ]);
@@ -192,7 +193,7 @@ class TraceabilityController extends ApiController
         $data = $request->validate([
             'item_id' => ['required', 'integer'],
             'warehouse_id' => ['nullable', 'integer'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
+            'quantity' => ['required', new \App\Rules\ExactDecimalString(6), 'numeric', 'gt:0'],
         ]);
 
         return $this->success($this->trace->suggestOutboundLots(
@@ -237,8 +238,8 @@ class TraceabilityController extends ApiController
             if (! empty($data['quantity'])) {
                 $avail = collect($this->trace->lotAvailability((int) $data['item_id'], $data['warehouse_id'] ?? null))
                     ->firstWhere('lot_id', (int) $data['lot_id']);
-                $a = $avail ? (float) $avail->on_hand_qty - (float) ($avail->reserved_qty ?? 0) : 0.0;
-                if ($a < (float) $data['quantity']) {
+                $a = $avail ? Decimal::sub((string) $avail->on_hand_qty, (string) ($avail->reserved_qty ?? 0)) : '0';
+                if (Decimal::lt($a, (string) $data['quantity'])) {
                     $errors[] = "Insufficient lot availability: have {$a}, need {$data['quantity']}.";
                 }
             }
