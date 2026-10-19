@@ -48,6 +48,7 @@ final class FinancialOriginSchemaFixture
         }
         foreach (['source_key'=>'string','posted_at'=>'timestamp','voided_at'=>'timestamp','deleted_at'=>'timestamp','voided_by'=>'unsignedBigInteger','reverses_entry_id'=>'unsignedBigInteger'] as $name=>$type)
             if (!$s->hasColumn('journal_entries',$name)) $s->table('journal_entries',fn(Blueprint $t)=>$t->$type($name)->nullable());
+        if (!$s->hasColumn('journal_entries','metadata')) $s->table('journal_entries',fn(Blueprint $t)=>$t->json('metadata')->nullable());
         if (!$s->hasTable('users')) $s->create('users',function(Blueprint $t){$t->id();$t->unsignedBigInteger('central_user_id');});
         if (!$s->hasColumn('users','central_user_id')) $s->table('users',fn(Blueprint $t)=>$t->unsignedBigInteger('central_user_id')->nullable());
         if (!$s->hasTable('action_logs')) $s->create('action_logs',function(Blueprint $t){$t->id();$t->string('controller');$t->string('method');$t->unsignedBigInteger('user_id');$t->json('data');});

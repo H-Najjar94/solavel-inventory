@@ -115,6 +115,25 @@ final class PurchasingHandoffTest extends TestCase
         IntegrationMasterDataMapping::create(['mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $this->mapping->mapping_uuid, 'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A, 'entity_type' => $type, 'solastock_record_id' => (string) $stock, 'solabooks_record_id' => (string) $finance, 'status' => 'verified']);
     }
 
+    private function acknowledgePostedFinanceJournal(IntegrationOutboxEvent $event): void
+    {
+        $event->forceFill(['status' => 'sent', 'sent_at' => now()])->save();
+        DB::connection('tenant')->table('journal_entries')->insert([
+            'id' => 1000000 + $event->id,
+            'organization_id' => 14,
+            'source' => 'SOLASTOCK',
+            'source_type' => 'goods_receipt',
+            'source_id' => $event->aggregate_id,
+            'source_key' => 'external-api:'.hash('sha256', $event->idempotency_key),
+            'status' => 'posted',
+            'posted_at' => now(),
+            'metadata' => json_encode(['contract' => [
+                'version' => SolaStockJournalContract::VERSION,
+                'currency' => ['money_scale' => 2, 'rate_scale' => 8, 'rounding_mode' => 'HALF_UP', 'base_code' => 'JOD'],
+            ]], JSON_THROW_ON_ERROR),
+        ]);
+    }
+
     private function data(): array
     {
         return ['request_uuid' => (string) Str::uuid(), 'source_bill_id' => 800, 'source_bill_number' => 'DRAFT-800', 'source_revision' => str_repeat('a', 64), 'supplier_external_id' => 703, 'currency_code' => 'JOD', 'lines' => [['source_line_id' => '801', 'item_external_id' => 701, 'unit_external_id' => 702, 'quantity' => '4.0000', 'unit_cost' => '2.5000']]];
@@ -207,7 +226,7 @@ final class PurchasingHandoffTest extends TestCase
         $two = $s->upsert($d);
         $this->assertSame($one['id'], $two['id']);
         $this->assertSame('pending', $one['status']);
-        $this->assertSame('0.0000', $one['lines'][0]['received_qty']);
+        $this->assertSame('0.000000', $one['lines'][0]['received_qty']);
         $this->assertSame(1, ReceivingRequest::count());
         $this->assertSame(0, GoodsReceipt::count());
         $this->assertSame(0, StockLedger::count());
@@ -225,24 +244,24 @@ final class PurchasingHandoffTest extends TestCase
         $grns->post($first);
         $grns->post($first);
         $this->assertSame('partial', $r->fresh()->status);
-        $this->assertSame('1.0000', $r->lines()->sole()->received_qty);
+        $this->assertSame('1.000000', $r->lines()->sole()->received_qty);
         $this->assertSame(1, StockLedger::count());
         $this->assertSame(1, PurchasingDocumentOutbox::count());
         $second = $this->draft($r, '3');
         $grns->post($second);
         $grns->post($second);
         $this->assertSame('complete', $r->fresh()->status);
-        $this->assertSame('4.0000', $r->lines()->sole()->received_qty);
+        $this->assertSame('4.000000', $r->lines()->sole()->received_qty);
         $this->assertSame(2, StockLedger::count());
         $this->assertSame(2, PurchasingDocumentOutbox::count());
-        $this->assertSame('4.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('4.000000', StockBalance::sole()->on_hand_qty);
         $e = PurchasingDocumentOutbox::query()->first();
         $this->assertSame('purchasing.v1', $e->payload['schema_version']);
         $this->assertSame(800, $e->payload['receipt']['source_bill_id']);
         $this->assertSame(703, $e->payload['receipt']['supplier_external_id']);
         $this->assertSame(701, $e->payload['receipt']['lines'][0]['item_external_id']);
-        $this->assertSame('1.0000', $e->payload['receipt']['lines'][0]['quantity']);
-        $this->assertSame('2.5000', $e->payload['receipt']['lines'][0]['unit_cost']);
+        $this->assertSame('1.000000', $e->payload['receipt']['lines'][0]['quantity']);
+        $this->assertSame('2.500000', $e->payload['receipt']['lines'][0]['unit_cost']);
         $this->assertSame(2, IntegrationOutboxEvent::where('event_type', 'grn.posted')->count());
     }
 
@@ -257,7 +276,7 @@ final class PurchasingHandoffTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('lines', $e->errors());
         }$this->assertSame('draft', $g->fresh()->status);
-        $this->assertSame('0.0000', $r->lines()->sole()->received_qty);
+        $this->assertSame('0.000000', $r->lines()->sole()->received_qty);
         $this->assertSame(0, StockLedger::count());
         $this->assertSame(0, PurchasingDocumentOutbox::count());
     }
@@ -292,7 +311,7 @@ final class PurchasingHandoffTest extends TestCase
         app(GoodsReceiptService::class)->post($g);
         $s->cancel($r, $r->source_revision);
         $this->assertSame('cancelled', $r->fresh()->status);
-        $this->assertSame('1.0000', $r->lines()->sole()->received_qty);
+        $this->assertSame('1.000000', $r->lines()->sole()->received_qty);
         $this->assertSame(1, StockLedger::count());
         $this->expectException(ValidationException::class);
         $this->draft($r, '1');
@@ -336,7 +355,7 @@ final class PurchasingHandoffTest extends TestCase
         app(ReceivingRequestService::class)->approve($r, $this->warehouse->id);
         $this->assertTrue(app(ReceivingRequestService::class)->status($r->fresh())['approved']);
         $prepared = $receiving->prepare($data);
-        $this->assertSame('2.5000', (string) $prepared['lines'][0]['unit_cost']);
+        $this->assertSame('2.500000', (string) $prepared['lines'][0]['unit_cost']);
         $g = $this->draft($r, '1');
         $receiving->posting($g);
         app(GoodsReceiptService::class)->post($g);
@@ -367,20 +386,21 @@ final class PurchasingHandoffTest extends TestCase
         $r = ReceivingRequest::sole();
         $g = $this->draft($r, '1');
         app(GoodsReceiptService::class)->post($g);
+        $this->acknowledgePostedFinanceJournal(IntegrationOutboxEvent::where('event_type', 'grn.posted')->where('aggregate_id', $g->id)->sole());
         $service = app(InventoryReversalService::class);
         $reverse = $service->reverseGoodsReceipt($g, 'Supplier delivery corrected');
         $same = $service->reverseGoodsReceipt($g, 'Repeated click');
         $this->assertSame($reverse->id, $same->id);
         $this->assertSame('pending', $r->fresh()->status);
-        $this->assertSame('0.0000', $r->lines()->sole()->received_qty);
+        $this->assertSame('0.000000', $r->lines()->sole()->received_qty);
         $this->assertSame(2, StockLedger::count());
-        $this->assertSame('0.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('0.000000', StockBalance::sole()->on_hand_qty);
         $this->assertSame(2, PurchasingDocumentOutbox::count());
         $event = PurchasingDocumentOutbox::where('event_type', 'purchasing.receipt.reversed')->sole();
         $this->assertSame(800, $event->payload['receipt']['source_bill_id']);
-        $this->assertSame('2.5000', $event->payload['receipt']['lines'][0]['unit_cost']);
+        $this->assertSame('2.500000', $event->payload['receipt']['lines'][0]['unit_cost']);
         $this->assertSame('1.00000000', $event->payload['receipt']['lines'][0]['unit_conversion_factor']);
-        $this->assertSame('1.0000', $event->payload['receipt']['lines'][0]['base_quantity']);
+        $this->assertSame('1.000000', $event->payload['receipt']['lines'][0]['base_quantity']);
     }
 
     public function test_standalone_receipt_without_supplier_is_durable_missing_information_not_invented_bill(): void
@@ -507,14 +527,14 @@ final class PurchasingHandoffTest extends TestCase
         $g = app(GoodsReceiptService::class)->createDraft(['receiving_request_id' => $r->id, 'supplier_id' => $r->supplier_id, 'warehouse_id' => $this->warehouse->id, 'receipt_date' => '2026-10-06'], [['receiving_request_line_id' => $r->lines()->sole()->id, 'item_id' => $this->item->id, 'entered_unit_id' => $box->id, 'entered_qty' => '1', 'received_qty' => '1', 'accepted_qty' => '1', 'unit_cost' => '25']]);
         app(GoodsReceiptService::class)->post($g);
         $status = app(ReceivingRequestService::class)->status($r->fresh());
-        $this->assertSame('1.0000', $status['lines'][0]['received_qty']);
-        $this->assertSame('1.0000', $status['receipts'][0]['lines'][0]['received_qty']);
-        $this->assertSame('10.0000', $status['receipts'][0]['lines'][0]['received_base_qty']);
-        $this->assertSame('10.0000', StockBalance::sole()->on_hand_qty);
-        $this->assertSame('2.5000', StockLedger::sole()->unit_cost);
+        $this->assertSame('1.000000', $status['lines'][0]['received_qty']);
+        $this->assertSame('1.000000', $status['receipts'][0]['lines'][0]['received_qty']);
+        $this->assertSame('10.000000', $status['receipts'][0]['lines'][0]['received_base_qty']);
+        $this->assertSame('10.000000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('2.500000', StockLedger::sole()->unit_cost);
         $line = PurchasingDocumentOutbox::sole()->payload['receipt']['lines'][0];
-        $this->assertSame('1.0000', $line['quantity']);
-        $this->assertSame('25.0000', $line['unit_cost']);
+        $this->assertSame('1.000000', $line['quantity']);
+        $this->assertSame('25.000000', $line['unit_cost']);
         $this->assertSame(704, $line['unit_external_id']);
     }
 
@@ -532,8 +552,8 @@ final class PurchasingHandoffTest extends TestCase
         app(GoodsReceiptService::class)->post($receipt);
         $event=PurchasingDocumentOutbox::sole();$line=$event->payload['receipt']['lines'][0];$native=$receipt->fresh()->lines()->sole();
         $this->assertSame('12.00000000',$line['unit_conversion_factor']);
-        $this->assertSame('12.0000',$line['base_quantity']);$this->assertSame('1.0000',$line['quantity']);
-        $this->assertSame('24.0000',$line['unit_cost']);$this->assertSame('12.0000',StockBalance::sole()->on_hand_qty);
+        $this->assertSame('12.000000',$line['base_quantity']);$this->assertSame('1.000000',$line['quantity']);
+        $this->assertSame('24.000000',$line['unit_cost']);$this->assertSame('12.000000',StockBalance::sole()->on_hand_qty);
         foreach (['base_unit_id','unit_conversion_id','unit_conversion_factor','unit_conversion_version','unit_conversion_hash','unit_conversion_precision','unit_conversion_rounding_mode'] as $field) {
             $this->assertSame($native->$field,$line[$field]);
         }
@@ -583,8 +603,8 @@ final class PurchasingHandoffTest extends TestCase
         $e = PurchasingDocumentOutbox::sole();
         $this->assertSame('USD', $e->payload['receipt']['currency_code']);
         $this->assertSame('1.25000000', $e->payload['receipt']['exchange_rate']);
-        $this->assertSame('2.5000', $e->payload['receipt']['lines'][0]['unit_cost']);
-        $this->assertSame('2.0000', StockLedger::sole()->unit_cost);
+        $this->assertSame('2.500000', $e->payload['receipt']['lines'][0]['unit_cost']);
+        $this->assertSame('2.000000', StockLedger::sole()->unit_cost);
     }
 
     public function test_disconnected_foreign_receipt_preserves_existing_finance_base_cost_pool(): void
@@ -598,7 +618,7 @@ final class PurchasingHandoffTest extends TestCase
         $request = ReceivingRequest::sole();
         app(GoodsReceiptService::class)->post($this->draft($request, '1'));
         $before = StockBalance::sole()->getAttributes();
-        $this->assertSame('2.0000', StockLedger::sole()->unit_cost);
+        $this->assertSame('2.000000', StockLedger::sole()->unit_cost);
         IntegrationSetting::sole()->update(['mode' => 'disconnected']);
         $receipt = $this->draft($request->fresh(), '1');
         try {
@@ -620,8 +640,8 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame($contract, IntegrationSetting::sole()->meta['finance_currency_contract']);
         $this->assertSame('posted', $receipt->fresh()->status);
         $this->assertSame(2, StockLedger::count());
-        $this->assertSame(['2.0000', '2.0000'], StockLedger::orderBy('id')->pluck('unit_cost')->all());
-        $this->assertSame('2.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame(['2.000000', '2.000000'], StockLedger::orderBy('id')->pluck('unit_cost')->all());
+        $this->assertSame('2.000000', StockBalance::sole()->on_hand_qty);
         $this->assertSame(2, PurchasingDocumentOutbox::count());
         $this->assertSame(2, IntegrationOutboxEvent::count());
         app(GoodsReceiptService::class)->post($receipt->fresh());
@@ -740,7 +760,7 @@ final class PurchasingHandoffTest extends TestCase
             $this->fail('Combined over receipt permitted');
         } catch (\RuntimeException) {
             $this->assertSame(0, StockLedger::count());
-            $this->assertSame('0.0000', $source->fresh()->received_qty);
+            $this->assertSame('0.000000', $source->fresh()->received_qty);
             $this->assertSame('draft', $g->fresh()->status);
         }
     }
@@ -887,7 +907,7 @@ final class PurchasingHandoffTest extends TestCase
         $service->upsert($data);
         $this->assertSame('partial', $source->fresh()->status);
         $this->assertSame($lineId, $source->lines()->sole()->id);
-        $this->assertSame('1.0000', $source->lines()->sole()->received_qty);
+        $this->assertSame('1.000000', $source->lines()->sole()->received_qty);
         $this->assertSame(str_repeat('b', 64), $source->fresh()->approved_revision);
         $this->assertSame(1, GoodsReceipt::count());
         $data['source_revision'] = str_repeat('c', 64);
@@ -913,7 +933,7 @@ final class PurchasingHandoffTest extends TestCase
         $this->assertSame('partial', $source->fresh()->status);
         $this->assertNull($source->fresh()->approved_at);
         $this->assertSame($line->id, $source->lines()->sole()->id);
-        $this->assertSame('1.0000', $source->lines()->sole()->received_qty);
+        $this->assertSame('1.000000', $source->lines()->sole()->received_qty);
         $service->cancel($source->fresh(), $data['source_revision']);
         $data['source_revision'] = str_repeat('e', 64);
         $this->expectException(HttpException::class);
@@ -934,8 +954,8 @@ final class PurchasingHandoffTest extends TestCase
         $this->mock(InventoryPermissionService::class)->shouldReceive('can')->andReturn(false);
         app(OperationalReceiving::class)->posting($receipt->load('lines'));
         app(GoodsReceiptService::class)->post($receipt);
-        $this->assertSame('6.0000', StockBalance::sole()->on_hand_qty);
-        $this->assertSame('2.0167', $receipt->lines()->sole()->unit_cost);
+        $this->assertSame('6.000000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('2.016667', $receipt->lines()->sole()->unit_cost);
     }
 
     public function test_native_standalone_stock_has_no_finance_outbox_without_connection_identity(): void
