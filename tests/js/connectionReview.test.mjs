@@ -32,6 +32,9 @@ test('blank date and connected runs cannot silently advance or write',async()=>{
  await assert.rejects(prepareConnectionReview({},draft('decisions_complete'),'','Choose date'),/Choose date/);
  await assert.rejects(prepareConnectionReview({},draft('connected'),date,'Review locked'),/Review locked/);
 });
+test('unfinished decisions are reported as prerequisites rather than a false date error',async()=>{
+ await assert.rejects(prepareConnectionReview({},draft('draft_decisions'),date,'Choose date','Finish remaining review'),/Finish remaining review/);
+});
 test('server date retains organization wall time and only changed selections are dirty',()=>{
  assert.equal(cutoffInputValue('2026-10-06 13:08:00'),date);assert.equal(accountSelectionDirty({id:2},{id:'2'}),false);assert.equal(accountSelectionDirty({id:3},{id:2}),true);assert.equal(accountSelectionDirty(undefined,{id:2}),false);
 });

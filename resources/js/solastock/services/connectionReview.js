@@ -16,7 +16,7 @@ export function accountSelectionDirty(proposal, saved) {
     return Boolean(proposal && String(proposal.id) !== String(saved?.id));
 }
 /** Prepare only review metadata; approvals and activation remain explicit actions. */
-export async function prepareConnectionReview(api, initial, cutoffAt, errorMessage) {
+export async function prepareConnectionReview(api, initial, cutoffAt, errorMessage, prerequisiteMessage = errorMessage) {
     if (!validCutoffValue(cutoffAt)) throw new Error(errorMessage);
     let draft = initial;
     const accept = response => {
@@ -28,7 +28,7 @@ export async function prepareConnectionReview(api, initial, cutoffAt, errorMessa
     if (draft.state === 'decisions_complete') accept(await api.requestIntegrationWizardSnapshot(draft.run_uuid, { expected_lock_version: draft.lock_version }));
     if (draft.state === 'snapshot_required') accept(await api.freezeIntegrationWizardSnapshot(draft.run_uuid, { expected_lock_version: draft.lock_version }));
     const reviewStates = ['cutoff_review', 'preview_ready', 'owner_approved', 'accountant_approved', 'activation_ready'];
-    if (!reviewStates.includes(draft.state)) throw new Error(errorMessage);
+    if (!reviewStates.includes(draft.state)) throw new Error(prerequisiteMessage);
     if (draft.state === 'cutoff_review' || cutoffInputValue(draft.cutoff_at) !== cutoffAt) {
         accept(await api.reviewIntegrationWizardCutoff(draft.run_uuid, { cutoff_at: cutoffAt, physical_counts: [], unexplained_variance: '0.00', expected_lock_version: draft.lock_version }));
     }

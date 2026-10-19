@@ -77,6 +77,7 @@ export default function GuidedConnectionAssistant({
     const taxReviewRows = rowsFor('accounting').filter((row) => row.entity_type !== 'account_role');
     const requiredAccountingRows = accountingRows.filter((row) => row.safe_details?.required !== false);
     const accountingPending = requiredAccountingRows.filter((row) => !savedAccount(row, confirmedDecisions));
+    const taxPendingCount = taxReviewRows.filter((row) => !confirmedDecisions.has(row.fingerprint)).length;
     const physicalRows = rowsFor('inventory_quantities').filter((row) => {
         const action = confirmedDecisions.get(row.fingerprint)?.action;
         return !['classify_service_non_inventory', 'exclude_initial_connection'].includes(action);
@@ -166,6 +167,15 @@ export default function GuidedConnectionAssistant({
         else if (!view.cutoff_at) setTask(5);
         else setTask(6);
     }, [runUuid, confirmedDecisions.size]);
+
+    // Never let a stale/local step selection move ahead of the canonical
+    // decisions saved by the server. If a save failed or discovery exposed a
+    // remaining prerequisite, take the user directly to the step that can fix it.
+    useEffect(() => {
+        if (task > 2 && ownerPending.length > 0) { setTask(2); return; }
+        if (task > 3 && physicalPending.length > 0) { setTask(3); return; }
+        if (task > 4 && (accountingPending.length > 0 || taxPendingCount > 0)) setTask(4);
+    }, [task, ownerPending.length, physicalPending.length, accountingPending.length, taxPendingCount]);
 
     useEffect(() => {
         setAssistantStep(task);
@@ -859,15 +869,21 @@ export default function GuidedConnectionAssistant({
         if (task === 5) return <section className="focus-card">
             <h2 ref={headingRef} tabIndex="-1">{tr('integration.focus.startDateTitle')}</h2>
             <p>{tr('integration.focus.startDateExplanation')}</p>
+            {(ownerPending.length > 0 || physicalPending.length > 0 || accountingPending.length > 0 || cutoffPending.length > 0) && <div className="focus-attention" role="alert">
+                <strong>{sourceText("Finish the remaining review first", "أكمل المراجعة المتبقية أولاً")}</strong>
+                <p>{sourceText("We will take you to the exact unfinished step. Your saved work will not be lost.", "سننقلك إلى الخطوة غير المكتملة مباشرةً. لن تفقد أي عمل محفوظ.")}</p>
+            </div>}
             {[...cutoffRows, ...historyRows].map(row => <div className="wizard-account-row" key={row.fingerprint}><div><strong>{recordText(row.solabooks?.name || row.solastock?.name || row.solabooks?.code || row.solastock?.code, locale)}</strong><small>{row.safe_details?.document_type || row.safe_details?.event_type} · {row.safe_details?.status}</small></div><p>{row.entity_type === 'historical_event' ? tr("integration.review.this_event_stays_excluded_it_will_not") : tr("integration.review.review_this_existing_document_against_the_connection")}</p><button type="button" className="btn" disabled={!gate.allowed || saving || !editableState || confirmedDecisions.has(row.fingerprint)} onClick={() => choose(row, row.entity_type === 'historical_event' ? 'retain_historical_exclusion' : 'review_cutoff_document')}>{confirmedDecisions.has(row.fingerprint) ? tr("integration.review.reviewed") : tr("integration.review.confirm_review")}</button></div>)}
             {cutoffRows.length > 0 && <div className="focus-attention"><strong>{tr('integration.focus.openDocuments', { count: cutoffRows.length })}</strong><p>{tr('integration.focus.openDocumentsText')}</p></div>}
             <label className="field"><span className="field-label">{tr('integration.focus.startDateLabel')}</span><input className="input" type="datetime-local" value={cutoffAt} onChange={(event) => setCutoffAt(event.target.value)} /></label>
             {!view.cutoff_at && <p className="focus-draft-note">{tr('integration.focus.proposedStartDate')}</p>}
             {run.data?.state !== 'cutoff_review' && <p className="focus-draft-note">{tr('integration.focus.startDatePrerequisites')}</p>}
             {footer(tr('integration.focus.continue'), async () => {
-                const prepared = await runAction(() => prepareConnectionReview(api, run.data, cutoffAt, tr('integration.focus.validStartDateFirst')), 'integration.focus.reviewPrepared');
+                const prepared = await runAction(() => prepareConnectionReview(api, run.data, cutoffAt,
+                    tr('integration.focus.validStartDateFirst'),
+                    sourceText("Finish the remaining review before choosing the connection start time.", "أكمل المراجعة المتبقية قبل اختيار وقت بدء الاتصال.")), 'integration.focus.reviewPrepared');
                 if (prepared) go(6);
-            }, { reason: tr(cutoffPending.length ? 'integration.focus.reviewDocumentsFirst' : 'integration.focus.validStartDateFirst'), disabled: saving || cutoffPending.length > 0 || !validCutoffValue(cutoffAt) })}
+            }, { reason: tr(cutoffPending.length ? 'integration.focus.reviewDocumentsFirst' : 'integration.focus.validStartDateFirst'), disabled: saving || ownerPending.length > 0 || physicalPending.length > 0 || accountingPending.length > 0 || cutoffPending.length > 0 || !validCutoffValue(cutoffAt) })}
         </section>;
 
         const blockers = [
