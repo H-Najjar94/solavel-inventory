@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "آمدنی",
   "integration.accountType.expense": "اخراجات",
   "integration.accountType.income": "آمدنی",
-  "integration.accountType.cogs": "فروخت کردہ سامان کی لاگت"
+  "integration.accountType.cogs": "فروخت کردہ سامان کی لاگت",
+  "pagination.label": "فہرست کے صفحات",
+  "pagination.showing": ":total میں سے :from–:to دکھائے جا رہے ہیں",
+  "pagination.rows": "قطاریں"
 }

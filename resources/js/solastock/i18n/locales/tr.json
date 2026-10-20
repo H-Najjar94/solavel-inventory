@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Gelir",
   "integration.accountType.expense": "Gider",
   "integration.accountType.income": "Gelir",
-  "integration.accountType.cogs": "Satılan Malın Maliyeti"
+  "integration.accountType.cogs": "Satılan Malın Maliyeti",
+  "pagination.label": "Liste sayfalandırması",
+  "pagination.showing": ":total kayıttan :from–:to gösteriliyor",
+  "pagination.rows": "Satırlar"
 }

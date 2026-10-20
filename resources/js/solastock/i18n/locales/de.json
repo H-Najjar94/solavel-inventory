@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Ertrag",
   "integration.accountType.expense": "Aufwand",
   "integration.accountType.income": "Ertrag",
-  "integration.accountType.cogs": "Umsatzkosten"
+  "integration.accountType.cogs": "Umsatzkosten",
+  "pagination.label": "Listennavigation",
+  "pagination.showing": ":from–:to von :total werden angezeigt",
+  "pagination.rows": "Zeilen"
 }

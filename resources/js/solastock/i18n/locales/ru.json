@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Доход",
   "integration.accountType.expense": "Расход",
   "integration.accountType.income": "Доходы",
-  "integration.accountType.cogs": "Себестоимость продаж"
+  "integration.accountType.cogs": "Себестоимость продаж",
+  "pagination.label": "Навигация по страницам списка",
+  "pagination.showing": "Показано :from–:to из :total",
+  "pagination.rows": "Строки"
 }

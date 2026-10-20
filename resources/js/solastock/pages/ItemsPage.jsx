@@ -104,7 +104,7 @@ export default function ItemsPage() {
                                     ? <img className="item-thumb" src={it.primary_image_url} alt="" loading="lazy" />
                                     : <span className="item-thumb item-thumb--ph">📦</span>}
                             </td>
-                            <td><Link to={`/items/${it.id}`}><bdi>{visibleSku(it.sku) || t('items.noSku', 'No SKU')}</bdi></Link></td>
+                            <td><Link to={`/items/${it.id}`}><bdi>{visibleSku(it.sku) || t('items.noSkuYet')}</bdi></Link></td>
                             <td>{it.name}</td>
                             <td>{t(`items.type.${it.item_type}`, it.item_type)}</td>
                             <td>{it.category?.name ?? '—'}</td>
@@ -118,9 +118,9 @@ export default function ItemsPage() {
             <div className="index-pagination" role="navigation" aria-label={t('pagination.label', 'List pagination')}>
                 <span><bdi>{t('pagination.showing', 'Showing :from–:to of :total', { from, to, total })}</bdi></span>
                 <label>{t('pagination.rows', 'Rows')} <select className="input" value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-                <button type="button" className="btn" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{t('pagination.previous', 'Previous')}</button>
+                <button type="button" className="btn" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{t('previous')}</button>
                 <strong><bdi>{page} / {lastPage}</bdi></strong>
-                <button type="button" className="btn" disabled={page >= lastPage} onClick={() => setPage((value) => value + 1)}>{t('pagination.next', 'Next')}</button>
+                <button type="button" className="btn" disabled={page >= lastPage} onClick={() => setPage((value) => value + 1)}>{t('next')}</button>
             </div>
         </section>
     );

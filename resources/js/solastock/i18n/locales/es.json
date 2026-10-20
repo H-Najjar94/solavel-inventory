@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Ingresos",
   "integration.accountType.expense": "Gasto",
   "integration.accountType.income": "Ingreso",
-  "integration.accountType.cogs": "Costo de los bienes vendidos"
+  "integration.accountType.cogs": "Costo de los bienes vendidos",
+  "pagination.label": "Paginación de la lista",
+  "pagination.showing": "Mostrando :from–:to de :total",
+  "pagination.rows": "Filas"
 }

@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Receita",
   "integration.accountType.expense": "Despesa",
   "integration.accountType.income": "Receita",
-  "integration.accountType.cogs": "Custo das Mercadorias Vendidas"
+  "integration.accountType.cogs": "Custo das Mercadorias Vendidas",
+  "pagination.label": "Paginação da lista",
+  "pagination.showing": "A mostrar :from–:to de :total",
+  "pagination.rows": "Linhas"
 }

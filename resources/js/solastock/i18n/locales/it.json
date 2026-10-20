@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Ricavo",
   "integration.accountType.expense": "Costo",
   "integration.accountType.income": "Provento",
-  "integration.accountType.cogs": "Costo del venduto"
+  "integration.accountType.cogs": "Costo del venduto",
+  "pagination.label": "Paginazione dell’elenco",
+  "pagination.showing": "Visualizzazione di :from–:to su :total",
+  "pagination.rows": "Righe"
 }

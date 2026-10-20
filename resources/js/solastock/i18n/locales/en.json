@@ -4099,5 +4099,8 @@
   "integration.accountType.revenue": "Revenue",
   "integration.accountType.expense": "Expense",
   "integration.accountType.income": "Income",
-  "integration.accountType.cogs": "Cost of Goods Sold"
+  "integration.accountType.cogs": "Cost of Goods Sold",
+  "pagination.label": "List pagination",
+  "pagination.showing": "Showing :from–:to of :total",
+  "pagination.rows": "Rows"
 }
