@@ -44,7 +44,7 @@ final class AuthoritativeUnitConversionContractTest extends TestCase
             'item_id' => $item->id, 'entered_qty' => '0.12345', 'entered_unit_id' => $box->id, 'quantity' => '0.12345',
         ], 'quantity');
         $this->assertSame('0.123450', $fractional['entered_qty']);
-        $this->assertSame('1.2350', $fractional['quantity']);
+        $this->assertSame('1.234500', $fractional['quantity']);
     }
 
     public function test_invalid_inactive_cross_item_and_cross_organization_conversions_fail_closed(): void

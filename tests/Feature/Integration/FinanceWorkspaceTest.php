@@ -30,6 +30,7 @@ use App\Services\Integration\FinanceBaseValuation;
 use App\Services\Integration\IntegrationStatusService;
 use App\Services\Integration\SolaBooksOutboxDeliveryService;
 use App\Services\Integration\SolaStockJournalContractBuilder;
+use App\Services\Integration\SolaStockJournalContract;
 use App\Services\InventoryWorkspace\MigrationCatalogScope;
 use App\Services\InventoryWorkspace\WorkspaceSignature;
 use App\Services\Purchasing\PostedPurchaseSettlementService;
@@ -428,7 +429,7 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(0, OpeningStockEntry::query()->count());
         $draft = $this->send(['action' => 'opening.store', 'idempotency_key' => 'migration-owner-opening-001',
             'data' => ['warehouse_id' => $warehouse->id, 'opening_date' => '2026-09-01',
-                'lines' => [['item_id' => $item->id, 'quantity' => '4.0000', 'unit_cost' => '10.0000']]]])->assertCreated();
+                'lines' => [['item_id' => $item->id, 'quantity' => '4.000000', 'unit_cost' => '10.0000']]]])->assertCreated();
         $id = $draft->json('data.id');
         $show = $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk();
         $post = ['action' => 'opening.post', 'parameters' => ['entry' => $id], 'revision' => $show->json('workspace_revision'),
@@ -449,7 +450,7 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(802, $contract['lines'][1]['account_id']);
         $this->assertSame('40.00', $contract['lines'][1]['base_credit']);
         $this->assertSame(901, $contract['inventory_quantities'][0]['finance_item_id']);
-        $this->assertSame('4.0000', $contract['inventory_quantities'][0]['base_quantity']);
+        $this->assertSame('4.000000', $contract['inventory_quantities'][0]['base_quantity']);
         $after = $this->send($requirements)->assertOk()->assertJsonPath('data.items.0.quantity', '4.0000')->assertJsonPath('data.items.0.value', '40.00');
         $this->assertNotSame($before->json('data.version'), $after->json('data.version'));
         $this->send(['action' => 'opening.show', 'parameters' => ['entry' => $id]])->assertOk()
@@ -457,7 +458,7 @@ final class FinanceWorkspaceTest extends TestCase
         $migration = ['action' => 'opening.migrate', 'idempotency_key' => 'migration-atomic-opening-001',
             'data' => ['session_id' => (string) Str::uuid(), 'warehouse_id' => $warehouse->id,
                 'cutover_date' => '2026-09-01', 'requirements_version' => $before->json('data.version'),
-                'lines' => [['finance_item_id' => 901, 'quantity' => '4.0000', 'unit_cost' => '10.0000', 'total_value' => '40.00']]]];
+                'lines' => [['finance_item_id' => 901, 'quantity' => '4.000000', 'unit_cost' => '10.0000', 'total_value' => '40.00']]]];
         $this->send($migration)->assertUnprocessable();
         $this->assertSame(1, OpeningStockEntry::query()->count());
         $migration['data']['requirements_version'] = $after->json('data.version');
@@ -470,7 +471,7 @@ final class FinanceWorkspaceTest extends TestCase
         $this->send($migration)->assertOk()->assertHeader('X-Workspace-Replayed', 'true');
         $this->assertSame(2, OpeningStockEntry::query()->count());
         $this->assertSame(2, IntegrationOutboxEvent::query()->where('event_type', 'opening_stock.posted')->count());
-        $this->assertSame('8.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('8.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
     }
 
@@ -958,12 +959,12 @@ final class FinanceWorkspaceTest extends TestCase
         $call('apply', $apply);
         $call('apply', $apply);
         $this->assertSame('10.000000', StockBalance::sole()->on_hand_qty);
-        $this->assertSame('66.00', StockBalance::sole()->total_value);
+        $this->assertSame('66.000000', StockBalance::sole()->total_value);
         $this->assertSame(1, StockLedger::count());
         $projection->table('finance_purchase_positions')->update(['state' => 'reversal_pending']);
         $reverse = $call('prepare', $facts + ['direction' => 'reverse']);
         $call('reverse', $facts + ['plan_fingerprint' => $reverse['plan_fingerprint']]);
-        $this->assertSame('50.00', StockBalance::sole()->total_value);
+        $this->assertSame('50.000000', StockBalance::sole()->total_value);
         $this->assertSame(1, StockLedger::count());
     }
 
@@ -1093,7 +1094,7 @@ final class FinanceWorkspaceTest extends TestCase
         $service->post($doc->fresh());
         $balance = StockBalance::query()->where('item_id', $item->id)->sole();
         $this->assertSame('42.000000', (string) $balance->total_value);
-        $this->assertSame('7.0000', (string) $balance->average_cost);
+        $this->assertSame('7.000000', (string) $balance->average_cost);
         $posted = IntegrationOutboxEvent::query()->where('event_type', 'landed_cost.posted')->sole();
         $this->assertSame('LandedCost', $posted->aggregate_type);
         $this->assertSame('solabooks:landed_cost.posted:LandedCost:'.$doc->id, $posted->idempotency_key);
@@ -1110,13 +1111,29 @@ final class FinanceWorkspaceTest extends TestCase
         $this->assertSame(['12.00', '8.00', '0.00'], array_column($original['lines'], 'base_debit'));
         $this->assertSame(['0.00', '0.00', '20.00'], array_column($original['lines'], 'base_credit'));
         $this->assertSame(['JOD', '1', 'identity'], [$original['currency']['transaction_code'], $original['currency']['exchange_rate'], $original['currency']['rate_source']]);
-        $this->assertSame('10.0000', $original['inventory_quantities'][0]['base_quantity']);
+        $this->assertSame('10.000000', $original['inventory_quantities'][0]['base_quantity']);
         $this->assertNull($original['source']['reversal']);
+
+        $posted->forceFill(['status' => 'sent', 'sent_at' => now()])->save();
+        DB::connection('tenant')->table('journal_entries')->insert([
+            'id' => 1000000 + $posted->id,
+            'organization_id' => 14,
+            'source' => 'SOLASTOCK',
+            'source_type' => 'landed_cost',
+            'source_id' => $doc->id,
+            'source_key' => 'external-api:'.hash('sha256', $posted->idempotency_key),
+            'status' => 'posted',
+            'posted_at' => now(),
+            'metadata' => json_encode(['contract' => [
+                'version' => SolaStockJournalContract::VERSION,
+                'currency' => ['money_scale' => 2, 'rate_scale' => 8, 'rounding_mode' => 'HALF_UP', 'base_code' => 'JOD'],
+            ]], JSON_THROW_ON_ERROR),
+        ]);
 
         $reversal = $service->reverse($doc->fresh(), 'Freight belonged to another shipment');
         $service->reverse($doc->fresh(), 'Duplicate');
-        $this->assertSame('30.00', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
-        $this->assertSame('5.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('average_cost'));
+        $this->assertSame('30.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('total_value'));
+        $this->assertSame('5.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('average_cost'));
         $reversed = IntegrationOutboxEvent::query()->where('event_type', 'landed_cost.reversed')->sole();
         $this->assertSame(['InventoryReversal', $reversal->id], [$reversed->aggregate_type, (int) $reversed->aggregate_id]);
         $this->assertSame($posted->event_uuid, $reversed->payload['original_source']['event_uuid']);

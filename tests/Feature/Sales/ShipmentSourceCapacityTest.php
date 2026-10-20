@@ -75,7 +75,7 @@ class ShipmentSourceCapacityTest extends TestCase
         $this->assertSame('3.0000',(string)\App\Models\Tenant\Reservation::query()->where('source_id',$order->id)->where('status','active')->sole()->qty);
         $shipments->post($create('3'));$this->assertSame(0,\App\Models\Tenant\Reservation::query()->where('source_id',$order->id)->where('status','active')->count());
         $this->assertSame('0.000000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->reserved_qty);
-        $this->assertSame('15.0000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->on_hand_qty);
+        $this->assertSame('15.000000',(string)StockBalance::query()->where('item_id',$item->id)->sole()->on_hand_qty);
     }
     public function test_partial_serial_shipment_preserves_remaining_serial_hold_and_final_dispatch(): void
     {

@@ -229,7 +229,7 @@ class ItemCreateTest extends TestCase
         ]));
 
         $item = Item::query()->where('sku', 'W-NUM')->firstOrFail();
-        $this->assertSame('5.0000', (string) $item->reorder_point);
+        $this->assertSame('5.000000', (string) $item->reorder_point);
         $this->assertSame('2.5000', (string) $item->purchase_price);
     }
 

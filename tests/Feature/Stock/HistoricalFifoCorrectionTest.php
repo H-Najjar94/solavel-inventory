@@ -145,7 +145,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $return = \App\Models\Tenant\HistoricalFifoCorrection::query()->where('source_id', 'return:1')->firstOrFail();
         $this->assertSame('2.00', $return->causal_payload['reconstructed_cost']);
         $this->assertSame('-2.00', $return->causal_payload['cogs_delta']);
-        $this->assertSame('2.0000', \App\Models\Tenant\CostLayer::query()->whereIn('source_ledger_id', $return->ledger_ids)->firstOrFail()->unit_cost);
+        $this->assertSame('2.000000', \App\Models\Tenant\CostLayer::query()->whereIn('source_ledger_id', $return->ledger_ids)->firstOrFail()->unit_cost);
         // Retained superseded layers are audit evidence, never active valuation.
         \App\Models\Tenant\CostLayer::query()->create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'warehouse_id' => $wh->id,
             'received_at' => '2024-01-06 00:00:00', 'unit_cost' => '99', 'original_qty' => '1', 'remaining_qty' => '1',
@@ -228,7 +228,7 @@ final class HistoricalFifoCorrectionTest extends TestCase
         foreach (\App\Models\Tenant\HistoricalFifoCorrection::query()->get() as $doc) {
             foreach (StockLedger::query()->whereIn('id', $doc->ledger_ids)->get() as $row) {
                 foreach ($events as &$event) if ($event['finance_source_id'] === $doc->source_id) {
-                    if ((string) $row->quantity === '0.0000') $event['existing_cost_revision_segments'][] = ['ledger_id' => $row->id, 'cost' => (string) $row->total_cost];
+                    if ((string) $row->quantity === '0.000000') $event['existing_cost_revision_segments'][] = ['ledger_id' => $row->id, 'cost' => (string) $row->total_cost];
                     else $event['existing_stock_segments'][] = ['ledger_id' => $row->id, 'quantity' => (string) $row->quantity, 'cost' => (string) $row->total_cost];
                     $event['previous_posted_cost'] = $doc->causal_payload['reconstructed_cost'];
                 }
@@ -244,8 +244,8 @@ final class HistoricalFifoCorrectionTest extends TestCase
         $result = app(StockLedgerService::class)->applyHistoricalFifo($second);
         $this->assertSame([], $result['correction_ids']);
         $this->assertSame($before, StockLedger::query()->get()->map->getAttributes()->all());
-        $this->assertSame('5.0000', StockBalance::query()->where('item_id', $item->id)->first()->on_hand_qty);
-        $this->assertSame('24.00', StockBalance::query()->where('item_id', $item->id)->first()->total_value);
+        $this->assertSame('5.000000', StockBalance::query()->where('item_id', $item->id)->first()->on_hand_qty);
+        $this->assertSame('24.000000', StockBalance::query()->where('item_id', $item->id)->first()->total_value);
     }
 
     public function test_prior_correction_remains_bound_to_immutable_original_finance_parent(): void

@@ -528,7 +528,7 @@ final class Phase3WorkflowContractTest extends TestCase
         $movement = \App\Models\Tenant\StockLedger::query()->where('source_type', get_class($receipt))->where('source_id', $receipt->id)->sole();
         $this->assertSame('10.000000', $movement->unit_cost);
         $this->assertSame('50.000000', $movement->total_cost);
-        $this->assertSame('5.0000', $poLine->fresh()->received_qty);
+        $this->assertSame('5.000000', $poLine->fresh()->received_qty);
         $event = IntegrationOutboxEvent::query()->where('event_type', 'grn.posted')->where('aggregate_id', $receipt->id)->sole();
         $journal = app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($event);
         $this->assertSame('70.50', $journal['lines'][0]['debit']);
@@ -536,7 +536,7 @@ final class Phase3WorkflowContractTest extends TestCase
         $this->assertSame(['inventory_asset', 'grni'], array_column($journal['lines'], 'account_role'));
         $order = \App\Models\Tenant\SalesOrder::create(['order_number' => 'FX-SALE', 'order_date' => '2026-07-30',
             'warehouse_id' => $po->warehouse_id, 'currency_code' => 'GBP', 'integration_currency_code' => 'GBP', 'status' => 'confirmed']);
-        $order->lines()->create(['item_id' => $item->id, 'ordered_qty' => '3', 'unit_price' => '11']);
+        $orderLine = $order->lines()->create(['item_id' => $item->id, 'ordered_qty' => '3', 'unit_price' => '11']);
         $physicalBefore = \App\Models\Tenant\StockLedger::query()->count();
         app(\App\Services\Integration\WorkflowValidationService::class)
             ->assertOperationalDocumentReady($order, 'sales_order.confirmed');
@@ -544,17 +544,32 @@ final class Phase3WorkflowContractTest extends TestCase
             'Validating a base-unit fulfillment order must not post inventory.');
         $shipments = app(\App\Services\Documents\ShipmentService::class);
         $shipment = $shipments->createDraft(['shipment_number' => 'FX-SHIPMENT', 'sales_order_id' => $order->id, 'warehouse_id' => $po->warehouse_id,
-            'ship_date' => '2026-07-30'], [['item_id' => $item->id, 'quantity' => '2']]);
+            'ship_date' => '2026-07-30'], [['sales_order_line_id' => $orderLine->id, 'item_id' => $item->id, 'quantity' => '2']]);
         $shipments->post($shipment);
         $shipments->post($shipment->fresh());
         $out = \App\Models\Tenant\StockLedger::query()->where('source_type', get_class($shipment))->where('source_id', $shipment->id)->sole();
-        $this->assertSame('20.00', $out->total_cost);
+        $this->assertSame('20.000000', $out->total_cost);
         $outEvent = IntegrationOutboxEvent::query()->where('event_type', 'shipment.posted')->where('aggregate_id', $shipment->id)->sole();
         $outJournal = app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($outEvent);
         $this->assertSame('22.00', $outJournal['lines'][0]['debit']);
         $this->assertSame('20.00', $outJournal['lines'][0]['base_debit']);
         $this->assertSame(['cogs', 'inventory_asset'], array_column($outJournal['lines'], 'account_role'));
-        $this->assertSame('3.0000', \App\Models\Tenant\StockBalance::query()->where('item_id', $item->id)->sum('on_hand_qty'));
+        $this->assertSame('3.000000', \App\Models\Tenant\StockBalance::query()->where('item_id', $item->id)->sum('on_hand_qty'));
+        $outEvent->forceFill(['status' => 'sent', 'sent_at' => now()])->save();
+        DB::connection('tenant')->table('journal_entries')->insert([
+            'id' => 1000000 + $outEvent->id,
+            'organization_id' => 14,
+            'source' => 'SOLASTOCK',
+            'source_type' => 'shipment',
+            'source_id' => $shipment->id,
+            'source_key' => 'external-api:'.hash('sha256', $outEvent->idempotency_key),
+            'status' => 'posted',
+            'posted_at' => now(),
+            'metadata' => json_encode(['contract' => [
+                'version' => \App\Services\Integration\SolaStockJournalContract::VERSION,
+                'currency' => ['money_scale' => 2, 'rate_scale' => 8, 'rounding_mode' => 'HALF_UP', 'base_code' => 'JOD'],
+            ]], JSON_THROW_ON_ERROR),
+        ]);
         // A later full source return must reverse the original GBP snapshot;
         // no rate exists on the return date, and re-pricing would be incorrect.
         $returns = app(\App\Services\Documents\SalesReturnService::class);
@@ -572,14 +587,14 @@ final class Phase3WorkflowContractTest extends TestCase
         $returns->post($return);
         $returns->post($return->fresh());
         $returnMovement = \App\Models\Tenant\StockLedger::query()->where('source_type', get_class($return))->where('source_id', $return->id)->sole();
-        $this->assertSame('20.00', $returnMovement->total_cost);
+        $this->assertSame('20.000000', $returnMovement->total_cost);
         $returnEvent = IntegrationOutboxEvent::query()->where('event_type', 'sales_return.posted')->where('aggregate_id', $return->id)->sole();
         $returnJournal = app(\App\Services\Integration\SolaStockJournalContractBuilder::class)->build($returnEvent);
         $this->assertSame($outJournal['currency'], $returnJournal['currency']);
         $this->assertSame('2026-07-31', $returnJournal['source']['transaction_date']);
         $this->assertSame('20.00', $returnJournal['lines'][0]['base_credit']);
         $this->assertSame(['cogs', 'inventory_asset'], array_column($returnJournal['lines'], 'account_role'));
-        $this->assertSame('5.0000', \App\Models\Tenant\StockBalance::query()->where('item_id', $item->id)->sum('on_hand_qty'));
+        $this->assertSame('5.000000', \App\Models\Tenant\StockBalance::query()->where('item_id', $item->id)->sum('on_hand_qty'));
 
     }
 

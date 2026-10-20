@@ -157,7 +157,7 @@ final class InactiveItemCorrectiveReturnsTest extends TestCase
         // More than originally shipped (2) in total is refused by the inactive-item guard itself.
         $this->refused(fn () => (new SalesReturnLine(['item_id' => $item->id, 'sales_return_id' => $return->id, 'source_shipment_line_id' => $line->id,
             'warehouse_id' => $this->warehouse->id, 'returned_qty' => '1.5']))->save(), $item->id, 'inventory.catalog.inactive_return_exceeds_shipped');
-        $this->assertSame('9.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('9.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
     }
 
     public function test_b_a_sales_return_without_a_posted_shipment_source_is_refused(): void

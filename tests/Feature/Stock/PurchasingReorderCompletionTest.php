@@ -104,7 +104,7 @@ class PurchasingReorderCompletionTest extends TestCase
         $line = PurchaseOrderLine::query()->create([
             'purchase_order_id' => $po->id,
             'item_id' => $item->id,
-            'ordered_qty' => '10.0000',
+            'ordered_qty' => '10.000000',
             'received_qty' => '0.0000',
             'unit_price' => '7.0000',
         ]);
@@ -118,7 +118,7 @@ class PurchasingReorderCompletionTest extends TestCase
 
         $detail = app(PurchaseOrderController::class)->show($po->fresh())->getData(true)['data'];
         $this->assertSame('10.000000', $detail['open_backorder_qty']);
-        $this->assertSame('10.0000', $detail['lines'][0]['backorder_qty']);
+        $this->assertSame('10.000000', $detail['lines'][0]['backorder_qty']);
     }
 
     #[Test]
@@ -138,7 +138,7 @@ class PurchasingReorderCompletionTest extends TestCase
             'purchase_order_id' => $po->id,
             'item_id' => $item->id,
             'ordered_qty' => '10.0000',
-            'received_qty' => '0.0000',
+            'received_qty' => '0.000000',
             'unit_price' => '4.0000',
         ]);
         app(PurchaseOrderBackorderService::class)->refresh($po);
@@ -180,7 +180,7 @@ class PurchasingReorderCompletionTest extends TestCase
 
         $this->assertSame('received', $po->fresh()->status);
         $this->assertSame('closed', $backorder->fresh()->status);
-        $this->assertSame('0.0000', (string) $backorder->fresh()->backorder_qty);
+        $this->assertSame('0.000000', (string) $backorder->fresh()->backorder_qty);
         $this->assertSame(2, StockLedger::query()->where('source_type', GoodsReceipt::class)->whereIn('source_id', [$partial->id, $final->id])->count());
     }
 

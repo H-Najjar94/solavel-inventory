@@ -70,10 +70,10 @@ class ItemValuationTest extends TestCase
 
         // Layers surfaced in FIFO order with their true per-layer costs.
         $this->assertCount(2, $w['layers']);
-        $this->assertSame(['5.0000', '8.0000'], array_column($w['layers'], 'unit_cost'));
-        $this->assertSame(['10.0000', '10.0000'], array_column($w['layers'], 'remaining_qty'));
+        $this->assertSame(['5.000000', '8.000000'], array_column($w['layers'], 'unit_cost'));
+        $this->assertSame(['10.000000', '10.000000'], array_column($w['layers'], 'remaining_qty'));
         $this->assertSame(['50.00', '80.00'], array_column($w['layers'], 'layer_value'));
-        $this->assertSame(['0.0000', '0.0000'], array_column($w['layers'], 'consumed_qty'));
+        $this->assertSame(['0.000000', '0.000000'], array_column($w['layers'], 'consumed_qty'));
         $this->assertSame($wh->name, $w['layers'][0]['warehouse_name']);
         $this->assertSame('Opening stock V-L1', $w['layers'][0]['source_display']);
         $this->assertSame('Opening stock', $w['layers'][0]['source_label']);
@@ -88,7 +88,7 @@ class ItemValuationTest extends TestCase
         $item = F::fifoItem();
         $os = app(OpeningStockService::class);
         $os->post($os->createDraft(['entry_number' => 'V-C1', 'warehouse_id' => $wh->id],
-            [['item_id' => $item->id, 'quantity' => '10.0000', 'unit_cost' => '5.0000']]));
+            [['item_id' => $item->id, 'quantity' => '10.0000', 'unit_cost' => '5.000000']]));
         $os->post($os->createDraft(['entry_number' => 'V-C2', 'warehouse_id' => $wh->id],
             [['item_id' => $item->id, 'quantity' => '10.0000', 'unit_cost' => '8.0000']]));
 
@@ -116,8 +116,8 @@ class ItemValuationTest extends TestCase
         // Only the partially-consumed second layer remains (5 @ $8).
         $this->assertCount(1, $w['layers']);
         $this->assertSame('8.000000', $w['layers'][0]['unit_cost']);
-        $this->assertSame('5.0000', $w['layers'][0]['remaining_qty']);
-        $this->assertSame('5.0000', $w['layers'][0]['consumed_qty']);
+        $this->assertSame('5.000000', $w['layers'][0]['remaining_qty']);
+        $this->assertSame('5.000000', $w['layers'][0]['consumed_qty']);
         $this->assertSame('Opening stock V-C2', $w['layers'][0]['source_display']);
     }
 

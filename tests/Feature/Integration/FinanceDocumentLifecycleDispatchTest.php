@@ -256,9 +256,9 @@ final class FinanceDocumentLifecycleDispatchTest extends TestCase
         $this->assertSame([200, true], [$status, $replayed]);
         // Even a fresh key cannot apply the same plan twice: the adjustment state machine is idempotent.
         $this->assertSame(200, $this->send('finance-allocations.cost-adjustment.apply', $plan, str_repeat('b', 32))[0]);
-        $this->assertSame('44.00', $value());
+        $this->assertSame('44.000000', $value());
         $this->assertSame(200, $this->send('finance-allocations.cost-adjustment.reverse', $plan, str_repeat('e', 32))[0]);
-        $this->assertSame('40.00', $value());
+        $this->assertSame('40.000000', $value());
         \Illuminate\Support\Facades\Auth::forgetUser();
         $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant', TenantTestManager::ORG_A)['ok']);
     }

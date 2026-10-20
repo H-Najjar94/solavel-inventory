@@ -162,7 +162,7 @@ final class FinancialLineAllocationServiceTest extends TestCase
         $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant',TenantTestManager::ORG_A)['ok']);
         $reversed=$service->reverse($input); $service->reverse($input);
         $this->assertSame('reversed',$reversed['state']);
-        $this->assertSame('40.00',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
+        $this->assertSame('40.000000',(string)\App\Models\Tenant\StockBalance::query()->value('total_value'));
         $this->assertTrue(app(\App\Services\Stock\IntegrityChecker::class)->check('tenant',TenantTestManager::ORG_A)['ok']);
         $this->assertSame(1,\App\Models\Tenant\IntegrationPurchaseCostAdjustment::query()->count());
     }

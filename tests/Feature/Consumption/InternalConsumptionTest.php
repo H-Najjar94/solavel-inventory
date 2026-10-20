@@ -35,7 +35,7 @@ final class InternalConsumptionTest extends TestCase {
         self::assertSame('20.000000',StockBalance::query()->first()->on_hand_qty);
         $posted=$service->post($draft);$service->post($draft);
         self::assertSame('17.000000',StockBalance::query()->first()->on_hand_qty);
-        self::assertSame('34.00',StockBalance::query()->first()->total_value);
+        self::assertSame('34.000000',StockBalance::query()->first()->total_value);
         self::assertSame('6.00',$posted->lines->first()->total_cost);
         self::assertSame('/internal-consumptions/'.$posted->id,\App\Services\Documents\SourceDocumentPresenter::describe(InternalConsumption::class,$posted->id)['source_route']);
         self::assertSame(1,StockLedger::query()->where('source_type',InternalConsumption::class)->count());
@@ -54,7 +54,7 @@ final class InternalConsumptionTest extends TestCase {
         self::assertSame('59.999995',StockBalance::query()->first()->total_value);
         $extra=$this->draft($service,$wh,$item,'1',['original_issue_id'=>$issue->id,'lines'=>[['original_line_id'=>$issue->lines->first()->id,'quantity'=>'1']]]);
         try {$service->post($extra);self::fail('Over-return accepted');} catch (\RuntimeException $e) {self::assertSame('draft',$extra->fresh()->status);}
-        self::assertSame('22.0000',StockBalance::query()->first()->on_hand_qty);
+        self::assertSame('22.000000',StockBalance::query()->first()->on_hand_qty);
     }
     public function testReturnUsesOriginalUomAfterCatalogConversionAndActivityChange(): void {
         [$wh,$item,$service]=$this->setupInventory();

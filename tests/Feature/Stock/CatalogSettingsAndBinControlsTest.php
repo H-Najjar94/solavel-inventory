@@ -146,9 +146,9 @@ class CatalogSettingsAndBinControlsTest extends TestCase
 
         $this->assertSame('2.5000', (string) $item->weight);
         $this->assertSame('10.0000', (string) $item->length);
-        $this->assertSame('5.0000', (string) $item->min_stock);
-        $this->assertSame('20.0000', (string) $item->max_stock);
-        $this->assertSame('2.0000', (string) $item->safety_stock);
+        $this->assertSame('5.000000', (string) $item->min_stock);
+        $this->assertSame('20.000000', (string) $item->max_stock);
+        $this->assertSame('2.000000', (string) $item->safety_stock);
 
         $shown = app(ItemController::class)->show($item)->getData(true)['data'];
         $this->assertSame('Small carton', $shown['package_recommendation']['label']);
@@ -293,11 +293,11 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $rule = WarehouseReorderRule::query()->findOrFail($response['id']);
         $this->assertSame($item->id, $rule->item_id);
         $this->assertSame($warehouse->id, $rule->warehouse_id);
-        $this->assertSame('6.0000', (string) $rule->reorder_point);
-        $this->assertSame('12.0000', (string) $rule->reorder_qty);
-        $this->assertSame('5.0000', (string) $rule->min_stock);
-        $this->assertSame('20.0000', (string) $rule->max_stock);
-        $this->assertSame('3.0000', (string) $rule->safety_stock);
+        $this->assertSame('6.000000', (string) $rule->reorder_point);
+        $this->assertSame('12.000000', (string) $rule->reorder_qty);
+        $this->assertSame('5.000000', (string) $rule->min_stock);
+        $this->assertSame('20.000000', (string) $rule->max_stock);
+        $this->assertSame('3.000000', (string) $rule->safety_stock);
     }
 
     #[Test]
@@ -327,8 +327,8 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $row = collect($report['rows'])->firstWhere('sku', 'REORDER-RPT');
 
         $this->assertNotNull($row);
-        $this->assertSame('10.0000', (string) $row->reorder_point);
-        $this->assertSame('25.0000', (string) $row->reorder_qty);
+        $this->assertSame('10.000000', (string) $row->reorder_point);
+        $this->assertSame('25.000000', (string) $row->reorder_qty);
         $this->assertSame('4.000000', (string) $row->shortage_qty);
     }
 
@@ -427,7 +427,7 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         $poLine = \App\Models\Tenant\PurchaseOrderLine::query()->where('purchase_order_id', $po['id'])->firstOrFail();
         $this->assertSame('24.000000', (string) $poLine->ordered_qty);
         $this->assertSame('2.000000', (string) $poLine->entered_qty);
-        $this->assertSame('10.0000', (string) $poLine->unit_price);
+        $this->assertSame('10.000000', (string) $poLine->unit_price);
 
         app(PurchaseOrderController::class)->approve(\App\Models\Tenant\PurchaseOrder::query()->findOrFail($po['id']));
         // A downstream receipt must retain the approved PO's immutable factor,
@@ -452,14 +452,14 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         ]);
         $grn = app(GoodsReceiptController::class)->store($grnRequest)->getData(true)['data'];
         $grnLine = \App\Models\Tenant\GoodsReceiptLine::query()->where('goods_receipt_id', $grn['id'])->sole();
-        $this->assertSame('2.0000', (string) $grnLine->entered_qty);
+        $this->assertSame('2.000000', (string) $grnLine->entered_qty);
         $this->assertSame('12.00000000', (string) $grnLine->unit_conversion_factor);
         app(GoodsReceiptController::class)->post(\App\Models\Tenant\GoodsReceipt::query()->findOrFail($grn['id']));
 
         $balance = StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->firstOrFail();
         $ledger = StockLedger::query()->where('item_id', $item->id)->where('warehouse_id', $warehouse->id)->latest('id')->firstOrFail();
-        $this->assertSame('24.0000', (string) $balance->on_hand_qty);
-        $this->assertSame('10.0000', (string) $ledger->unit_cost);
+        $this->assertSame('24.000000', (string) $balance->on_hand_qty);
+        $this->assertSame('10.000000', (string) $ledger->unit_cost);
         UnitConversion::query()->where('from_unit_id', $case->id)->where('to_unit_id', $each->id)
             ->update(['factor' => '12']);
 
@@ -479,7 +479,7 @@ class CatalogSettingsAndBinControlsTest extends TestCase
         app(OpeningStockController::class)->post(\App\Models\Tenant\OpeningStockEntry::query()->findOrFail($entry['id']));
 
         $balance->refresh();
-        $this->assertSame('36.0000', (string) $balance->on_hand_qty);
+        $this->assertSame('36.000000', (string) $balance->on_hand_qty);
         $this->assertTrue(StockLedger::query()->where('source_type', \App\Models\Tenant\OpeningStockEntry::class)->where('source_id', $entry['id'])->where('quantity', '12.0000')->exists());
     }
 

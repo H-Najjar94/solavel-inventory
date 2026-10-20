@@ -50,13 +50,13 @@ class ReorderLevelBoundsTest extends TestCase
         $errors = $this->errorsOf(fn () => app(FinanceWorkspaceSupportController::class)->updateRule(
             Request::create('/x', 'PUT', ['min_stock' => 10, 'max_stock' => 5, 'reorder_point' => 20]), $rule));
         $this->assertArrayHasKey('max_stock', $errors);
-        $this->assertSame('50.0000', (string) $rule->fresh()->max_stock);
+        $this->assertSame('50.000000', (string) $rule->fresh()->max_stock);
 
         // Partial update merges the stored max (50): rp 60 > 50 is rejected, rp 40 saves.
         $this->assertArrayHasKey('reorder_point', $this->errorsOf(fn () => app(FinanceWorkspaceSupportController::class)
             ->updateRule(Request::create('/x', 'PUT', ['reorder_point' => 60]), $rule)));
         app(FinanceWorkspaceSupportController::class)->updateRule(Request::create('/x', 'PUT', ['reorder_point' => 40]), $rule);
-        $this->assertSame('40.0000', (string) $rule->fresh()->reorder_point);
+        $this->assertSame('40.000000', (string) $rule->fresh()->reorder_point);
     }
 
     #[Test]
@@ -74,7 +74,7 @@ class ReorderLevelBoundsTest extends TestCase
 
         app(SettingsController::class)->storeWarehouseReorderRule(
             Request::create('/x', 'POST', $payload + ['min_stock' => 5, 'max_stock' => 20, 'reorder_point' => 20]));
-        $this->assertSame('20.0000', (string) WarehouseReorderRule::query()->where('item_id', $item->id)->value('max_stock'));
+        $this->assertSame('20.000000', (string) WarehouseReorderRule::query()->where('item_id', $item->id)->value('max_stock'));
     }
 
     private function storeRequest(array $over): StoreItemRequest
@@ -141,12 +141,12 @@ class ReorderLevelBoundsTest extends TestCase
         $this->assertSame('bulk_update_reorder_levels', $body['error']['code']);
         $this->assertSame([$bad->id], array_column($body['error']['items'], 'id'));
         foreach ($ids as $id) {
-            $this->assertSame('1.0000', (string) Item::query()->find($id)->reorder_point, 'nothing may be written');
+            $this->assertSame('1.000000', (string) Item::query()->find($id)->reorder_point, 'nothing may be written');
         }
 
         $response = app(ItemController::class)->bulkUpdate(Request::create('/x', 'POST', ['item_ids' => $ids, 'reorder_point' => 8]));
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertSame('8.0000', (string) $bad->fresh()->reorder_point);
-        $this->assertSame('8.0000', (string) $unbounded->fresh()->reorder_point);
+        $this->assertSame('8.000000', (string) $bad->fresh()->reorder_point);
+        $this->assertSame('8.000000', (string) $unbounded->fresh()->reorder_point);
     }
 }

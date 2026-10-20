@@ -109,7 +109,7 @@ class WarehouseOperationsCompletionTest extends TestCase
 
         $this->assertSame('quarantined', $rows[0]['availability_status']);
         $this->assertSame('0.000000', $rows[0]['sellable_available_qty']);
-        $this->assertSame('8.0000', $rows[0]['quarantine_qty']);
+        $this->assertSame('8.000000', $rows[0]['quarantine_qty']);
     }
 
     #[Test]
@@ -147,7 +147,7 @@ class WarehouseOperationsCompletionTest extends TestCase
         app(StockTransferService::class)->receive($transfer->fresh());
         $this->assertSame('received', $transfer->fresh()->status);
         $this->assertSame('5.000000', StockBalance::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->firstOrFail()->on_hand_qty);
-        $this->assertSame('5.0000', CostLayer::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->firstOrFail()->remaining_qty);
+        $this->assertSame('5.000000', CostLayer::query()->where('item_id', $item->id)->where('warehouse_id', $dest->id)->firstOrFail()->remaining_qty);
         $this->assertSame(2, StockLedger::query()->where('source_id', $transfer->id)->where('source_type', \App\Models\Tenant\StockTransfer::class)->count());
     }
 }

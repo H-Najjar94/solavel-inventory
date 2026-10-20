@@ -37,11 +37,11 @@ final class FinanceDispatchTest extends TestCase
     public function test_prepare_dispatch_partial_final_and_unknown_outcome_replay_use_one_native_shipment_per_command(): void {
         [,,$operation]=$this->fixture();$service=app(FinanceDispatchService::class);$before=StockLedger::count();$one=$service->prepare($operation);
         $this->assertSame('prepared',$one['status']);$this->assertSame(0,Shipment::count());$this->assertSame($before,StockLedger::count());
-        $partial=$service->execute($operation);$again=$service->execute($operation);$this->assertSame($partial,$again);$this->assertSame('partial',$partial['fulfillment_request']['status']);$this->assertSame('2.0000000000',$partial['fulfillment_request']['fulfilled_quantity']);
+        $partial=$service->execute($operation);$again=$service->execute($operation);$this->assertSame($partial,$again);$this->assertSame('partial',$partial['fulfillment_request']['status']);$this->assertSame('2.000000000000000000',$partial['fulfillment_request']['fulfilled_quantity']);
         $this->assertSame(1,Shipment::count());$this->assertSame($before+1,StockLedger::count());$this->assertSame(1,SalesDocumentOutbox::count());
         $event=SalesDocumentOutbox::sole()->payload;$this->assertSame(800,$event['shipment']['source_invoice_id']);$this->assertSame('801',$event['shipment']['lines'][0]['source_invoice_line_id']);$this->assertSame('partial',$event['shipment']['fulfillment_request']['status']);$this->assertNotEmpty($event['shipment']['journal_idempotency_key']);
         $final=array_replace($operation,['operation_uuid'=>(string)Str::uuid()]);$complete=$service->execute($final);$this->assertSame('complete',$complete['fulfillment_request']['status']);$this->assertCount(2,$complete['fulfillment_request']['shipment_ids']);
-        $this->assertSame('16.0000',(string)StockBalance::where('item_id',$this->item->id)->sole()->on_hand_qty);$this->assertSame(2,Shipment::count());$this->assertSame(2,SalesDocumentOutbox::count());
+        $this->assertSame('16.000000',(string)StockBalance::where('item_id',$this->item->id)->sole()->on_hand_qty);$this->assertSame(2,Shipment::count());$this->assertSame(2,SalesDocumentOutbox::count());
         $tooMuch=array_replace($final,['operation_uuid'=>(string)Str::uuid()]);try{$service->execute($tooMuch);$this->fail('Completed request dispatched again');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}$this->assertSame($before+2,StockLedger::count());
     }
     public function test_corrected_command_requires_safe_abandonment_and_the_original_uuid_cannot_execute(): void {
@@ -78,7 +78,7 @@ final class FinanceDispatchTest extends TestCase
         [$data,,$operation]=$this->fixture();$service=app(FinanceDispatchService::class);$partial=$service->execute($operation);$before=StockLedger::count();$cancel=$data+['expected_revision'=>$data['source_revision'],'command'=>'cancel'];
         DB::connection('tenant')->table('finance_sales_requests')->where('request_uuid',$data['request_uuid'])->update(['command'=>'cancel']);
         $client=$this->mock(SolaBooksOutboxDeliveryService::class);$client->shouldReceive('authorizeSales')->with(323,800,'edit_draft',['command'=>'cancel','request_uuid'=>$data['request_uuid'],'source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision']])->andReturn(['command'=>'cancel','request_uuid'=>$data['request_uuid'],'command_source_revision'=>$data['source_revision'],'expected_revision'=>$data['source_revision']]);
-        $cancelled=app(FulfillmentRequestService::class)->cancel($cancel,323);$this->assertSame('cancelled',$cancelled['status']);$this->assertSame('2.0000000000',$cancelled['fulfilled_quantity']);$this->assertSame([$partial['shipment_id']],$cancelled['shipment_ids']);
+        $cancelled=app(FulfillmentRequestService::class)->cancel($cancel,323);$this->assertSame('cancelled',$cancelled['status']);$this->assertSame('2.000000000000000000',$cancelled['fulfilled_quantity']);$this->assertSame([$partial['shipment_id']],$cancelled['shipment_ids']);
         $this->viewAuthority($data);$next=$operation;$next['operation_uuid']=(string)Str::uuid();try{$service->execute($next);$this->fail('Late dispatch after cancellation accepted');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}$this->assertSame($before,StockLedger::count());$this->assertSame(1,Shipment::count());
     }
 }

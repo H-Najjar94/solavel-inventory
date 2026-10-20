@@ -263,7 +263,7 @@ class InactiveItemPolicyTest extends TestCase
         $audit = InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_item_write_off')->sole();
         $this->assertSame($writeOff->id, (int) $audit->entity_id);
         $this->assertSame('5.000000', $audit->before['on_hand_qty']);
-        $this->assertSame('2.0000', $audit->after['on_hand_qty']);
+        $this->assertSame('2.000000', $audit->after['on_hand_qty']);
 
         // Never more than the positive stock on hand: refused at draft ...
         $this->assertRefused(fn () => $adjustments->createDraft(['warehouse_id' => $warehouse->id, 'reason_code' => 'DAMAGE'],
@@ -273,7 +273,7 @@ class InactiveItemPolicyTest extends TestCase
             [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1.5'], ['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1.5']]);
         $this->secondPersonApproves($split);
         $this->assertRefused(fn () => $adjustments->post($split), $item->id, 'inventory.catalog.inactive_write_off_exceeds_stock');
-        $this->assertSame('2.0000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('2.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
         $this->assertSame('draft', $split->fresh()->status);
 
         // A negative balance is not disguised by a write-off.

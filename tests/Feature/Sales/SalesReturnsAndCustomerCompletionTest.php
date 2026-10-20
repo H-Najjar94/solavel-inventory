@@ -45,7 +45,7 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
 
         app(OpeningStockService::class)->post(app(OpeningStockService::class)->createDraft(
             ['entry_number' => 'B5-OS', 'warehouse_id' => $warehouse->id],
-            [['item_id' => $item->id, 'quantity' => '10.0000', 'unit_cost' => '5.0000']]
+            [['item_id' => $item->id, 'quantity' => '10.000000', 'unit_cost' => '5.0000']]
         ));
 
         $sales = app(SalesOrderService::class);
@@ -55,9 +55,9 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
             'customer_id' => $customer->id,
         ], [[
             'item_id' => $item->id,
-            'ordered_qty' => '2.0000',
+            'ordered_qty' => '2.000000',
             'unit_price' => '20.0000',
-            'discount_rate' => '10.0000',
+            'discount_rate' => '10.000000',
             'tax_rate' => '15.0000',
             'tax_code' => 'VAT15',
         ]]);
@@ -109,7 +109,7 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
         $this->assertSame('inspected', $return->status);
         $this->assertSame('restock', $return->lines->first()->disposition);
         app(SalesReturnService::class)->post($return);
-        $this->assertSame('10.0000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
+        $this->assertSame('10.000000', StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
 
         $recall = app(RecallService::class)->createDraft([
             'recall_number' => 'B5-REC-1',
@@ -119,7 +119,7 @@ class SalesReturnsAndCustomerCompletionTest extends TestCase
         ], [['item_id' => $item->id, 'disposition' => 'quarantine']]);
         $impact = app(RecallService::class)->impact(Recall::query()->findOrFail($recall->id));
 
-        $this->assertSame('2.0000', $impact['totals']['shipped']);
+        $this->assertSame('2.000000', $impact['totals']['shipped']);
         $this->assertSame('Batch Five Customer', $impact['lines'][0]['shipped_documents'][0]['customer']);
         $this->assertSame('B5-SO-1', $impact['lines'][0]['shipped_documents'][0]['sales_order_number']);
     }

@@ -64,7 +64,7 @@ final class PurchaseValuationHoldTest extends TestCase
         app(StockLedgerService::class)->post([new StockMovement(direction: 'out', itemId: $item->id,
             warehouseId: $warehouse->id, quantity: '1', sourceType: Shipment::class,
             sourceId: 920, sourceLineId: 921, movedAt: '2026-10-06')], 'after-released-hold');
-        $this->assertSame('9.0000', StockBalance::sole()->on_hand_qty);
+        $this->assertSame('9.000000', StockBalance::sole()->on_hand_qty);
         $this->assertSame(2, StockLedger::count());
     }
 
