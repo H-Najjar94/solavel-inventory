@@ -18,6 +18,7 @@ use App\Models\Tenant\SalesOrder;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockCount;
 use App\Models\Tenant\StockTransfer;
+use App\Services\Access\InventoryPermissionService;
 use App\Tenancy\OrganizationContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\StockTestFactory as F;
@@ -35,6 +36,12 @@ use Tests\Traits\TenantAware;
 class DocumentNumberingCreateTest extends TestCase
 {
     use TenantAware;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->mock(InventoryPermissionService::class, fn ($mock) => $mock->shouldReceive('can')->andReturnTrue());
+    }
 
     private function suffix(string $number): int
     {

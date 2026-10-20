@@ -25,6 +25,7 @@ use App\Models\Tenant\Supplier;
 use App\Models\Tenant\StockTransfer;
 use App\Models\Tenant\WarehouseBin;
 use App\Models\Tenant\WarehouseZone;
+use App\Services\Access\InventoryPermissionService;
 use App\Services\Documents\OpeningStockService;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
@@ -41,6 +42,12 @@ use Tests\Traits\TenantAware;
 class NameResolutionTest extends TestCase
 {
     use TenantAware;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->mock(InventoryPermissionService::class, fn ($mock) => $mock->shouldReceive('can')->andReturnTrue());
+    }
 
     private function resolve(string $requestClass, array $payload)
     {
