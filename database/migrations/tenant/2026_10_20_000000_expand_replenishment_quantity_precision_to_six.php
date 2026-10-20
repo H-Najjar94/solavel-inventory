@@ -25,11 +25,24 @@ return new class extends Migration {
     {
         $connection = DB::connection('tenant');
         $metadata = $connection->selectOne(
-            'SELECT IS_NULLABLE AS is_nullable, COLUMN_DEFAULT AS column_default FROM information_schema.COLUMNS
+            'SELECT IS_NULLABLE AS is_nullable, COLUMN_DEFAULT AS column_default,
+                    DATA_TYPE AS data_type, NUMERIC_PRECISION AS numeric_precision,
+                    NUMERIC_SCALE AS numeric_scale, COLUMN_TYPE AS column_type FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
             [$connection->getDatabaseName(), $table, $column]
         );
         if (! $metadata) return;
+        if (strtolower((string) $metadata->data_type) !== 'decimal') {
+            throw new RuntimeException("Refusing an implicit non-decimal conversion on {$table}.{$column}.");
+        }
+        // Match the preceding purchase migration: never narrow historical
+        // fractional precision, integer range, or the unsigned constraint.
+        $scale = max(6, (int) $metadata->numeric_scale);
+        $precision = max(18, (int) $metadata->numeric_precision - (int) $metadata->numeric_scale) + $scale;
+        if ($precision > 65 || $scale > 30) {
+            throw new RuntimeException("Cannot widen {$table}.{$column} losslessly within database decimal limits.");
+        }
+        $unsigned = str_contains(strtolower((string) $metadata->column_type), 'unsigned') ? ' UNSIGNED' : '';
 
         $nullable = $metadata->is_nullable === 'YES' ? ' NULL' : ' NOT NULL';
         $default = '';
@@ -46,7 +59,7 @@ return new class extends Migration {
             $default = ' DEFAULT NULL';
         }
 
-        $connection->statement("ALTER TABLE `{$table}` MODIFY `{$column}` DECIMAL(24,6){$nullable}{$default}");
+        $connection->statement("ALTER TABLE `{$table}` MODIFY `{$column}` DECIMAL({$precision},{$scale}){$unsigned}{$nullable}{$default}");
     }
 
     /** Precision widening is forward-only; narrowing could truncate valid replenishment quantities. */
