@@ -77,10 +77,10 @@ class FifoLayerFidelityTest extends TestCase
         $dstLayers = CostLayer::query()->where('warehouse_id', $dst->id)->where('remaining_qty', '>', 0)
             ->orderBy('id')->get();
         $this->assertCount(2, $dstLayers, 'destination must preserve per-layer FIFO structure');
-        $this->assertSame(['5.0000', '8.0000'], $dstLayers->pluck('unit_cost')->map(fn ($c) => (string) $c)->all());
-        $this->assertSame(['10.0000', '5.0000'], $dstLayers->pluck('remaining_qty')->map(fn ($c) => (string) $c)->all());
+        $this->assertSame(['5.000000', '8.000000'], $dstLayers->pluck('unit_cost')->map(fn ($c) => (string) $c)->all());
+        $this->assertSame(['10.000000', '5.000000'], $dstLayers->pluck('remaining_qty')->map(fn ($c) => (string) $c)->all());
         // No blended-cost collapse.
-        $this->assertNotContains('6.0000', $dstLayers->pluck('unit_cost')->map(fn ($c) => (string) $c)->all());
+        $this->assertNotContains('6.000000', $dstLayers->pluck('unit_cost')->map(fn ($c) => (string) $c)->all());
         // Total value preserved across the move: src $50 left + dst $90 = $140? No —
         // src had $130, moved $90 out, so src $40 + dst $90 = $130.
         $this->assertSame('40.00', $this->layerValue($src->id));
@@ -111,8 +111,8 @@ class FifoLayerFidelityTest extends TestCase
 
         $layers = CostLayer::query()->where('warehouse_id', $wh->id)->orderBy('id')->get();
         $this->assertCount(2, $layers, 'no new blended layer created on reversal');
-        $this->assertSame(['10.0000', '10.0000'], $layers->pluck('remaining_qty')->map(fn ($c) => (string) $c)->all());
-        $this->assertSame(['5.0000', '8.0000'], $layers->pluck('unit_cost')->map(fn ($c) => (string) $c)->all());
+        $this->assertSame(['10.000000', '10.000000'], $layers->pluck('remaining_qty')->map(fn ($c) => (string) $c)->all());
+        $this->assertSame(['5.000000', '8.000000'], $layers->pluck('unit_cost')->map(fn ($c) => (string) $c)->all());
     }
 
     #[Test]

@@ -178,7 +178,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $this->assertTrue($preview['requires_approval']);
         $this->assertNotEmpty($preview['warnings']);
         $this->assertNull($preview['approval']);
-        $this->assertSame(['5.0000', '2.0000'], [$preview['lines'][0]['on_hand_before'], $preview['lines'][0]['on_hand_after']]);
+        $this->assertSame(['5.000000', '2.000000'], [$preview['lines'][0]['on_hand_before'], $preview['lines'][0]['on_hand_after']]);
 
         $this->as(self::SECOND_OWNER);
         $approved = $this->approval()->approve($adj, 'Damaged in storage');
@@ -190,7 +190,7 @@ class InactiveWriteOffApprovalTest extends TestCase
 
         $this->as(self::OWNER);
         app(StockAdjustmentService::class)->post($adj);
-        $this->assertSame('2.0000', $this->onHand($item));
+        $this->assertSame('2.000000', $this->onHand($item));
         $this->assertSame('posted', $adj->fresh()->status);
         $audit = InventoryAuditLog::query()->where('action', 'stock_adjustment.inactive_item_write_off')->sole();
         $this->assertSame(self::OWNER, (int) $audit->actor_user_id);
@@ -199,7 +199,7 @@ class InactiveWriteOffApprovalTest extends TestCase
         $this->assertSame('stock_adjustment:'.$adj->id.':post', $audit->after['operation_id']);
         $this->assertSame($approvalRow->after['operation_id'], $audit->after['approval_operation_id']);
         $this->assertSame(self::SECOND_OWNER, $audit->after['approved_by']);
-        $this->assertSame(['5.0000', '2.0000'], [$audit->before['on_hand_qty'], $audit->after['on_hand_qty']]);
+        $this->assertSame(['5.000000', '2.000000'], [$audit->before['on_hand_qty'], $audit->after['on_hand_qty']]);
     }
 
     #[Test]

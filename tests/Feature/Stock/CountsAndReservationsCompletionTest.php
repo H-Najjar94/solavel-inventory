@@ -136,7 +136,7 @@ class CountsAndReservationsCompletionTest extends TestCase
         $reservation->forceFill(['expires_at' => now()->subMinute()])->save();
         $this->assertSame(1, app(StockReservationService::class)->expireOverdue('sales_order', (int) $order->id));
 
-        $this->assertSame('0.0000', StockBalance::query()->where('item_id', $item->id)->value('reserved_qty'));
+        $this->assertSame('0.000000', StockBalance::query()->where('item_id', $item->id)->value('reserved_qty'));
         $this->assertNotNull($reservation->fresh()->expired_at);
         $this->assertSame('released', $reservation->fresh()->status);
         $this->assertSame('confirmed', $order->fresh()->status);

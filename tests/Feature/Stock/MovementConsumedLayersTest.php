@@ -74,9 +74,9 @@ class MovementConsumedLayersTest extends TestCase
         $this->assertSame('90.00', $data['consumed_total_value']); // 50 + 40
 
         $layers = $data['layers'];
-        $this->assertSame(['10.0000', '5.0000'], [$layers[0]['qty'], $layers[0]['unit_cost']]);
+        $this->assertSame(['10.000000', '5.000000'], [$layers[0]['qty'], $layers[0]['unit_cost']]);
         $this->assertSame('50.00', $layers[0]['total_value']);
-        $this->assertSame(['5.0000', '8.0000'], [$layers[1]['qty'], $layers[1]['unit_cost']]);
+        $this->assertSame(['5.000000', '8.000000'], [$layers[1]['qty'], $layers[1]['unit_cost']]);
         $this->assertSame('40.00', $layers[1]['total_value']);
 
         // Source-layer reference + dates are present.

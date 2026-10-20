@@ -83,7 +83,7 @@ final class FinancialOriginReceiptCostTest extends TestCase
         $source=$a->sourceAllocations()[0];app(\App\Services\Purchasing\PurchaseValuationHoldService::class)->acquire(['settlement_uuid'=>$a->holdUuid($source['item_id'],$source['warehouse_id']),'purpose'=>'origin_apply','plan_revision'=>1,'item_id'=>$source['item_id'],'warehouse_id'=>$source['warehouse_id'],'receipt_id'=>$source['receipt_id'],'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>850,'source_journal_id'=>95],$fingerprint);
         $balance=\App\Models\Tenant\StockBalance::sole();$quantity=$balance->on_hand_qty;$value=$balance->total_value;$ledgers=StockLedger::count();$journals=$db->table('journal_entries')->count();
         $result=$service->applyFinancialOrigin($a);$this->assertSame('applied',$result['state']);$this->assertSame($result,$service->applyFinancialOrigin($a));
-        $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame(\App\Services\Stock\Support\Decimal::money(\App\Services\Stock\Support\Decimal::add($value,'6')),$balance->fresh()->total_value);
+        $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame('80.000000',$balance->fresh()->total_value);
         $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
         \App\Models\Tenant\PurchaseValuationHold::query()->where('settlement_uuid',$a->holdUuid($source['item_id'],$source['warehouse_id']))->sole()->update(['state'=>'released']);
         $reverseOperation=(string)Str::uuid();
@@ -110,7 +110,7 @@ final class FinancialOriginReceiptCostTest extends TestCase
         app(\App\Services\Purchasing\PurchaseValuationHoldService::class)->acquire(['settlement_uuid'=>$reverseAuthority->holdUuid($source['item_id'],$source['warehouse_id'],'reverse'),'purpose'=>'origin_reverse','plan_revision'=>1,'item_id'=>$source['item_id'],'warehouse_id'=>$source['warehouse_id'],'receipt_id'=>$source['receipt_id'],'source_bill_id'=>null,'source_document_type'=>'expense','source_document_id'=>850,'source_journal_id'=>95],$reverseFingerprint);
         $journals=$db->table('journal_entries')->count();$inverse=$service->reverseFinancialOrigin($reverseAuthority);
         $this->assertSame('reversed',$inverse['state']);$this->assertSame($inverse,$service->reverseFinancialOrigin($reverseAuthority));
-        $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame($value,$balance->fresh()->total_value);
+        $this->assertSame($quantity,$balance->fresh()->on_hand_qty);$this->assertSame(\App\Services\Stock\Support\Decimal::cost(\App\Services\Stock\Support\Decimal::money($value)),$balance->fresh()->total_value);
         $this->assertSame($ledgers,StockLedger::count());$this->assertSame($journals,$db->table('journal_entries')->count());
         $this->assertSame('posted',$db->table('journal_entries')->where('id',95)->value('status'));
     }

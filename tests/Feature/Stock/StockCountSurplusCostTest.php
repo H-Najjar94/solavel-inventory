@@ -74,8 +74,8 @@ class StockCountSurplusCostTest extends TestCase
         $this->assertSame('10.000000', (string) $ledger->total_cost);
         $balance = StockBalance::query()->where('item_id', $item->id)->sole();
         $this->assertSame('12.000000', (string) $balance->on_hand_qty);
-        $this->assertSame('5.0000', (string) $balance->average_cost);
-        $this->assertSame('60.00', (string) $balance->total_value);
+        $this->assertSame('5.000000', (string) $balance->average_cost);
+        $this->assertSame('60.000000', (string) $balance->total_value);
 
         // The gain journal goes through the adjustment's own event type.
         foreach (['inventory_asset' => 100, 'adjustment_gain' => 600, 'adjustment_loss' => 601] as $type => $id) {

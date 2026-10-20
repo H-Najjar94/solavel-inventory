@@ -94,7 +94,7 @@ class ItemDeactivationGuardTest extends TestCase
         $this->balance($item, F::warehouse()->id, '0');
         $this->balance($item, F::warehouse()->id, '0.0001');
         $this->assertRefused($item, 'stock_on_hand');
-        $this->assertSame(['0.0000', '0.0001'], StockBalance::query()->where('item_id', $item->id)->orderBy('id')->pluck('on_hand_qty')->map(fn ($q) => (string) $q)->all());
+        $this->assertSame(['0.000000', '0.000100'], StockBalance::query()->where('item_id', $item->id)->orderBy('id')->pluck('on_hand_qty')->map(fn ($q) => (string) $q)->all());
     }
 
     #[Test]
