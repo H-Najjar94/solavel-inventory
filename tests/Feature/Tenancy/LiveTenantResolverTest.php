@@ -12,6 +12,7 @@ use App\Tenancy\OrganizationContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -52,6 +53,23 @@ class LiveTenantResolverTest extends TestCase
             ['id' => 123],
             ['central_organization_id' => 123, 'client_id' => 123, 'name' => 'Resolver fixture', 'database_name' => 'tenant_000123', 'is_active' => 1],
         );
+        if (Schema::connection('mysql')->hasTable('projects')) {
+            $inventoryProjectId = DB::connection('mysql')->table('projects')->where('slug', 'inventory')->value('id');
+            if ($inventoryProjectId === null) {
+                $project = ['slug' => 'inventory'];
+                if (Schema::connection('mysql')->hasColumn('projects', 'name')) {
+                    $project['name'] = 'SolaStock';
+                }
+                if (Schema::connection('mysql')->hasColumn('projects', 'is_active')) {
+                    $project['is_active'] = 1;
+                }
+                $inventoryProjectId = DB::connection('mysql')->table('projects')->insertGetId($project);
+            }
+            DB::connection('mysql')->table('organization_projects')->updateOrInsert(
+                ['organization_id' => 123, 'project_id' => $inventoryProjectId],
+                ['is_active' => 1],
+            );
+        }
         $s = app(LiveTenantResolver::class)->state($this->request(['client_id' => 123, 'selected_central_org_id' => 123]));
         $this->assertSame('tenant_000123', $s['database']);
         $this->assertSame('live', $s['mode']);
