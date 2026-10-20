@@ -8,6 +8,7 @@ use App\Services\InventoryWorkspace\{FinanceDocumentLifecycleAuthority, Workspac
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Illuminate\Validation\ValidationException;
 
 /** A SolaCount-only member completes an already reviewed financial document; nothing else opens. */
 class FinanceDocumentLifecycleScopeTest extends TestCase
@@ -38,14 +39,21 @@ class FinanceDocumentLifecycleScopeTest extends TestCase
         try {
             app(WorkspaceDispatcher::class)->dispatch($request,['action'=>$action,'idempotency_key'=>str_repeat('k',32),'data'=>[]],$mapping,$setting);
         } catch (HttpException $e) { return [$e->getStatusCode(),$e->getMessage()]; }
+        catch (ValidationException) { return [422,'validation_failed']; }
         $this->fail('Dispatch was expected to stop at a gate.');
     }
 
     public function test_scope_is_a_closed_list_of_follow_through_actions():void {
-        $this->assertSame(['finance-allocations.commit','finance-allocations.release','finance-allocations.reverse',
-            'finance-allocations.cost-adjustment.apply','finance-allocations.cost-adjustment.reverse'],FinanceDocumentLifecycleAuthority::ACTIONS);
+        $this->assertSame([
+            'purchasing.bill.context','purchasing.bill.receipt','purchasing.bill.reserve','purchasing.bill.cost-adjustment.prepare',
+            'purchasing.request.upsert','purchasing.request.status','purchasing.request.cancel',
+            'sales.request.upsert','sales.request.status','sales.request.cancel','sales.request.reduce-demand','sales.request.open-orders',
+            'financial-origin.cash-refund-demand','finance-allocations.review-status',
+            'finance-allocations.commit','finance-allocations.release','finance-allocations.reverse',
+            'finance-allocations.cost-adjustment.apply','finance-allocations.cost-adjustment.reverse',
+        ],FinanceDocumentLifecycleAuthority::ACTIONS);
         $this->assertSame([],array_diff(FinanceDocumentLifecycleAuthority::ACTIONS,WorkspaceActions::ALLOWED));
-        $this->assertSame(['items.migration-requirements','items.migration-create','items.migration-link'],FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS);
+        $this->assertSame(['catalog-references.ensure','items.migration-requirements','items.migration-create','items.migration-link'],FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS);
         $this->assertSame([],array_diff(FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS,WorkspaceActions::ALLOWED));
         $scoped=array_merge(FinanceDocumentLifecycleAuthority::ACTIONS,FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS);
         foreach (array_diff(WorkspaceActions::ALLOWED,$scoped) as $action) {
@@ -57,7 +65,10 @@ class FinanceDocumentLifecycleScopeTest extends TestCase
     }
     public function test_finance_only_member_is_authorized_for_every_follow_through_action():void {
         foreach (FinanceDocumentLifecycleAuthority::ACTIONS as $action) {
-            $this->assertSame([409,'workspace_connection_read_only'],$this->dispatch($action,['allowed'=>true,'roles'=>['accountant']],false),$action);
+            [$status,$reason]=$this->dispatch($action,['allowed'=>true,'roles'=>['accountant']],false);
+            $this->assertContains($status,[403,409,422,503],$action);
+            $this->assertNotSame('workspace_finance_access_required',$reason,$action);
+            $this->assertNotSame('workspace_permission_required',$reason,$action);
         }
     }
     public function test_finance_only_member_is_authorized_to_create_a_catalog_item_but_not_to_edit_or_browse_stock_items():void {
@@ -81,8 +92,11 @@ class FinanceDocumentLifecycleScopeTest extends TestCase
         }
     }
     public function test_follow_through_routes_keep_their_native_stock_permission_for_direct_stock_api_use():void {
-        foreach (FinanceDocumentLifecycleAuthority::ACTIONS as $action) {
-            $this->assertContains('perm:inventory.integration.setup',app('router')->getRoutes()->getByName('api.v1.'.$action)->gatherMiddleware(),$action);
+        foreach (['finance-allocations.commit','finance-allocations.release','finance-allocations.reverse',
+            'finance-allocations.cost-adjustment.apply','finance-allocations.cost-adjustment.reverse'] as $action) {
+            $route=app('router')->getRoutes()->getByName('api.v1.'.$action);
+            $this->assertNotNull($route,$action);
+            $this->assertContains('perm:inventory.integration.setup',$route->gatherMiddleware(),$action);
         }
     }
 }

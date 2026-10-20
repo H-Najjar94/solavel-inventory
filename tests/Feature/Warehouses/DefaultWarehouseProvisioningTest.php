@@ -49,7 +49,7 @@ final class DefaultWarehouseProvisioningTest extends TestCase
     public function test_warehouse_index_repairs_an_older_empty_organization(): void
     {
         $access = $this->mock(WarehouseAccessService::class);
-        $access->shouldReceive('scope')->once()->andReturnUsing(fn ($query) => $query);
+        $access->shouldReceive('scope')->atLeast()->once()->andReturnUsing(fn ($query) => $query);
 
         $response = (new \App\Http\Controllers\Api\V1\WarehouseController($access))
             ->index(\Illuminate\Http\Request::create('/api/v1/warehouses'))

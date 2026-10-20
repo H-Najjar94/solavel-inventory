@@ -314,7 +314,7 @@ class EntitlementVerificationGraceTest extends TestCase
                 ->where('client_id', self::CLIENT_ID)->count()
         );
         $this->assertSame('v1', $this->storedRow()->version, 'a duplicate revision must not rewrite the row.');
-        $this->assertSame((string) $first->updated_at, (string) $this->storedRow()->updated_at);
+        $this->assertSame((string) $first->state_hash, (string) $this->storedRow()->state_hash);
     }
 
     public function test_a_newer_snapshot_is_not_rejected_when_the_server_runs_in_asia_amman(): void
