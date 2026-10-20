@@ -63,7 +63,7 @@ class DisplayPreferenceSaveTest extends TestCase
 
         $response->assertRedirect();
         $this->assertStringNotContainsString('remember', $response->headers->get('Location'));
-        $this->assertStringContainsString('locale=ar', $response->headers->get('Location'));
+        $this->assertSame('http://localhost/dashboard', $response->headers->get('Location'));
         $this->assertSame('ar', session('solastock_locale'));
         Http::assertSent(fn (ClientRequest $r) => $r->url() === 'https://central.test/api/sso/display-preferences'
             && $r->data() === ['central_user_id' => 7, 'preferred_locale' => 'ar']);
@@ -84,7 +84,7 @@ class DisplayPreferenceSaveTest extends TestCase
         // A probe route behind the web group keeps this DB-free (no app-access check).
         \Illuminate\Support\Facades\Route::middleware('web')->get('/__locale-probe', fn () => app()->getLocale());
 
-        $this->actingAs($this->user())->get('/__locale-probe?locale=ar')->assertOk()->assertSee('ar');
+        $this->actingAs($this->user())->followingRedirects()->get('/__locale-probe?locale=ar')->assertOk()->assertSee('ar');
         $this->assertSame('ar', session('solastock_locale'));
         // Only the (read-only) account preference check may reach Central; nothing is saved.
         Http::assertNotSent(fn (ClientRequest $r) => $r->method() !== 'GET');

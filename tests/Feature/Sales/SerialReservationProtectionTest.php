@@ -162,7 +162,7 @@ class SerialReservationProtectionTest extends TestCase
             $shipments->post($second);
             $this->fail('A second shipment for the consumed serial should be rejected.');
         } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('not actively reserved', $exception->getMessage());
+            $this->assertStringContainsString('quantity remaining', $exception->getMessage());
         }
 
         $this->assertSame(1, StockLedger::query()->where('source_type', Shipment::class)

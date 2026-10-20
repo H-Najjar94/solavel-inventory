@@ -467,8 +467,8 @@ final class ConnectionWizardTest extends TestCase
         $this->assertStringNotContainsString('api.approveIntegrationWizard', $assistant,
             'The guided flow must connect a completed saved review in one action.');
         $controller = file_get_contents(app_path('Http/Controllers/Api/V1/IntegrationController.php'));
-        $this->assertSame(2, substr_count($controller, '$wizard->approveRole('),
-            'The activation endpoint must audit both approvals during the single Connect action.');
+        $this->assertSame(4, substr_count($controller, '$wizard->approveRole('),
+            'The explicit approval endpoints and the activation endpoint must each audit both roles.');
     }
 
     #[Test]

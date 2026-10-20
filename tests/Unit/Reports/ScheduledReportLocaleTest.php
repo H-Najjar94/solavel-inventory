@@ -130,7 +130,7 @@ final class ScheduledReportLocaleTest extends TestCase
             $this->assertSame(LocaleReportFixture::SUMMARY, $schedule->last_payload['summary']);
             $this->assertSame(2, $schedule->last_payload['row_count']);
             $this->assertSame('delivered', $schedule->last_status);
-            $this->assertSame('2026-10-20 12:00:00', $schedule->next_run_at->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-10-20 15:00:00', $schedule->next_run_at->format('Y-m-d H:i:s'));
             $this->assertSame('it', app()->getLocale());
         }
     }

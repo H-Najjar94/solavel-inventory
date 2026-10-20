@@ -84,7 +84,7 @@ class FefoAndCaptureTest extends TestCase
         // The post routes must still require the manage permission; the override is
         // an extra request flag resolved server-side, never a route gate.
         foreach (['api.v1.shipments.post' => 'perm:inventory.manage_shipments',
-            'api.v1.transfers.post' => 'perm:inventory.manage_adjustments',
+            'api.v1.transfers.post' => 'perm:inventory.transfer_stock',
             'api.v1.adjustments.post' => 'perm:inventory.manage_adjustments'] as $name => $perm) {
             $mw = Route::getRoutes()->getByName($name)->gatherMiddleware();
             $this->assertContains($perm, $mw, "Route {$name} must require {$perm}");

@@ -30,7 +30,7 @@ class InventoryPageAccessTest extends TestCase
     public function test_stale_authenticated_session_cannot_render_any_protected_html_or_read_tenant_bootstrap(): void {
         $this->member();$this->authority(false);
         foreach(['/dashboard','/items','/warehouses','/settings','/solastock'] as $url) {
-            $this->get($url)->assertForbidden()->assertDontSee('id="solastock-root"',false)->assertSee('has not been granted');
+            $this->get($url)->assertForbidden()->assertDontSee('id="solastock-root"',false)->assertSee("isn't part of your role");
         }
         foreach(['/api/v1/tenant/status','/api/v1/meta','/api/v1/dashboard','/api/v1/items'] as $url) $this->getJson($url)->assertForbidden()->assertJsonPath('code','user_not_assigned_to_project')->assertJsonMissingPath('data');
         $this->postJson('/api/v1/items',['name'=>'Forbidden'])->assertForbidden()->assertJsonMissingPath('data');
@@ -44,8 +44,8 @@ class InventoryPageAccessTest extends TestCase
     public function test_org_selection_is_checked_and_authority_failure_is_not_setup_incomplete():void {
         $this->member();$this->withSession(['selected_central_org_id'=>25]);
         Http::fake(['authority.test/*'=>Http::response([],503)]);
-        $this->get('/dashboard')->assertStatus(503)->assertDontSee('solastock-root')->assertSee('could not be checked');
-        Http::assertSent(fn($r)=>$r['organization_id']===25);
+        $this->get('/dashboard')->assertStatus(503)->assertDontSee('solastock-root')->assertSee("couldn't check your access");
+        Http::assertSent(fn($r)=>($r['organization_id'] ?? null)===25);
     }
     public function test_incoming_handoff_cannot_be_ignored_in_favor_of_an_old_authorized_login(): void {
         $this->member();

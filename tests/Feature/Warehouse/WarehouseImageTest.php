@@ -134,7 +134,12 @@ class WarehouseImageTest extends TestCase
     public function viewer_can_view_but_cannot_mutate_warehouse_images(): void
     {
         app(OrganizationContext::class)->set(660066);
-        $perms = new class(app(OrganizationContext::class), 'some_unknown_role') extends InventoryPermissionService {
+        $this->mock(\App\Services\Access\CentralAppAccess::class)
+            ->shouldReceive('decision')->andReturn([
+                'allowed' => true,
+                'roles' => ['client_viewer'],
+            ]);
+        $perms = new class(app(OrganizationContext::class), 'inventory_viewer') extends InventoryPermissionService {
             public function __construct(OrganizationContext $ctx, private ?string $forced)
             {
                 parent::__construct($ctx);

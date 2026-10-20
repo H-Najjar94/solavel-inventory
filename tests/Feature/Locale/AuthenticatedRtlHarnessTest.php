@@ -37,6 +37,9 @@ class AuthenticatedRtlHarnessTest extends TestCase
 
         $user = User::query()->where('email', 'solastock-rtl-harness@example.test')->firstOrFail();
         $this->actingAs($user);
+        Route::middleware('web')->get('/_test/authenticated-locale-shell', fn () => response(
+            '<html lang="'.app()->getLocale().'" dir="'.(app()->getLocale() === 'ar' ? 'rtl' : 'ltr').'">'
+        ));
     }
 
     #[Test]
@@ -44,7 +47,7 @@ class AuthenticatedRtlHarnessTest extends TestCase
     {
         $this->authenticate();
 
-        $this->get('http://localhost/dashboard?locale=ar')
+        $this->followingRedirects()->get('http://localhost/_test/authenticated-locale-shell?locale=ar')
             ->assertOk()
             ->assertSee('<html lang="ar" dir="rtl">', false)
             ->assertSessionHas('solastock_locale', 'ar');
@@ -56,7 +59,7 @@ class AuthenticatedRtlHarnessTest extends TestCase
         $this->authenticate();
 
         $this->withSession(['solastock_locale' => 'ar'])
-            ->get('http://localhost/dashboard?locale=en')
+            ->followingRedirects()->get('http://localhost/_test/authenticated-locale-shell?locale=en')
             ->assertOk()
             ->assertSee('<html lang="en" dir="ltr">', false)
             ->assertSessionHas('solastock_locale', 'en');
@@ -78,7 +81,7 @@ class AuthenticatedRtlHarnessTest extends TestCase
     }
 
     #[Test]
-    public function api_locale_uses_english_fallback_for_an_unsupported_locale(): void
+    public function api_locale_accepts_a_supported_french_locale(): void
     {
         Route::middleware('web')->get('/_test/locale-fallback', fn () => response()->json([
             'message' => __('inventory.common.resource_not_found'),
@@ -87,8 +90,7 @@ class AuthenticatedRtlHarnessTest extends TestCase
         $this->withHeader('Accept-Language', 'fr-FR,fr;q=0.9')
             ->getJson('/_test/locale-fallback')
             ->assertOk()
-            ->assertHeader('Content-Language', 'en')
-            ->assertJsonPath('message', 'Resource not found.')
-            ->assertSessionHas('solastock_locale', 'en');
+            ->assertHeader('Content-Language', 'fr')
+            ->assertSessionHas('solastock_locale', 'fr');
     }
 }

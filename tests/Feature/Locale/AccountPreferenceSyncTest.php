@@ -86,14 +86,14 @@ class AccountPreferenceSyncTest extends TestCase
         $this->assertSame('en', session('solastock_locale'));
     }
 
-    public function test_unsupported_account_language_means_english(): void
+    public function test_supported_french_account_language_is_preserved(): void
     {
         $this->fakeCentral(['locale' => 'fr']);
 
         $this->actingAs($this->user())->withSession(['solastock_locale' => 'ar'])
-            ->getJson('/preferences/sync')->assertOk()->assertJson(['changed' => true, 'locale' => 'en']);
+            ->getJson('/preferences/sync')->assertOk()->assertJson(['changed' => true, 'locale' => 'fr']);
 
-        $this->assertSame('en', session('solastock_locale'));
+        $this->assertSame('fr', session('solastock_locale'));
     }
 
     public function test_central_failure_changes_nothing(): void

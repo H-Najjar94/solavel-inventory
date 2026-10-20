@@ -37,9 +37,12 @@ class ReportingAdministrationCompletionTest extends TestCase
 {
     use TenantAware;
 
-    private function user(int $id = 7001): object
+    private function user(int $id = 7001): \App\Models\User
     {
-        return (object) ['id' => $id];
+        $user = new \App\Models\User();
+        $user->forceFill(['id' => $id, 'name' => 'Reporting fixture']);
+
+        return $user;
     }
 
     private function request(string $uri, string $method = 'GET', array $payload = [], int $userId = 7001): Request
@@ -63,6 +66,7 @@ class ReportingAdministrationCompletionTest extends TestCase
     public function dashboard_layout_and_exception_alerts_are_persisted_and_acknowledged(): void
     {
         $this->useTenantA();
+        $this->mock(InventoryPermissionService::class)->shouldReceive('can')->andReturnTrue();
         $warehouse = F::warehouse(['code' => 'ALRT']);
         $item = F::averageItem(['sku' => 'ALERT-ITEM', 'reorder_point' => '5']);
         WarehouseReorderRule::query()->create([
@@ -109,11 +113,11 @@ class ReportingAdministrationCompletionTest extends TestCase
 
         $bulk = app(ItemController::class)->bulkUpdate($this->request('/items/bulk-update', 'POST', [
             'item_ids' => [$itemA->id, $itemB->id],
-            'is_active' => false,
+            'reorder_point' => '2',
         ]))->getData(true)['data'];
 
         $this->assertSame(2, $bulk['updated']);
-        $this->assertFalse((bool) $itemA->fresh()->is_active);
+        $this->assertSame('2.000000', (string) $itemA->fresh()->reorder_point);
         $this->assertSame(2, InventoryAuditLog::query()->where('action', 'item.bulk_updated')->count());
 
         $ledger = app(\App\Http\Controllers\Api\V1\StockLedgerController::class)
@@ -192,10 +196,19 @@ class ReportingAdministrationCompletionTest extends TestCase
             'permissions' => ['inventory.view_dashboard', 'inventory.view_ledger'],
         ]))->getData(true)['data'];
 
+        $target = new \App\Models\User();
+        $target->forceFill(['id' => 9009, 'name' => 'Custom role fixture']);
+        $management = $this->mock(\App\Services\Access\MemberManagement::class);
+        $management->shouldReceive('member')->andReturn($target);
+        $management->shouldReceive('authorize')->once()->andReturnNull();
+        $this->mock(InventoryPermissionService::class)
+            ->shouldReceive('permissionsFor')->andReturn(array_keys(config('inventory_permissions.permissions')));
+
         $controller->assign($this->request('/settings/custom-role-assignments', 'POST', [
             'user_id' => 9009,
             'role_id' => $role['id'],
         ], 7001));
+        $this->app->forgetInstance(InventoryPermissionService::class);
 
         $permissions = new class(app(OrganizationContext::class)) extends InventoryPermissionService {
             protected function fetchCentralRole(int $userId, int $orgId): ?string

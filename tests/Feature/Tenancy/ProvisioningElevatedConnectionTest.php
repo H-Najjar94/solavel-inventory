@@ -42,7 +42,7 @@ class ProvisioningElevatedConnectionTest extends TestCase
         DB::purge('tenant');
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('external canonical orchestrator');
+        $this->expectExceptionMessage('verify the active tenant database');
         app(SecureTenantProvisioner::class)->provisionInventory(970001, 'tenant_prov_it');
     }
 }
