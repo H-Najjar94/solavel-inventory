@@ -4,6 +4,15 @@ umask 077
 [[ -f /qualification/host-net-namespace && "$(readlink /proc/self/ns/net)" != "$(cat /qualification/host-net-namespace)" ]] || exit 2
 [[ ! -e /run/mysqld && ! -e /root/.env && ! -e /var/www ]] || exit 2
 [[ -z "$(ip route show)" ]] || exit 2
+# Dedicated real-HTTP proof remains inside this namespace and private SQL server.
+# Never call run-phase4-paired-http.sh: its legacy host cleanup/cache path is not
+# appropriate for shared-host qualification.
+if [[ "${1:-}" == --real-http-durability ]]; then
+  shift
+  [[ $# == 0 ]] || { echo 'REFUSING: real HTTP proof has a fixed test selection.' >&2; exit 2; }
+  export STOCK_PRIVATE_REAL_HTTP=1
+  set -- tests/Feature/Integration/SolaBooksDeliveryTest.php --filter durable_transport_uses_real_http_and_recovers_remote_commit
+fi
 # Each cohort owns a fresh SQL datadir. Append-only ledger guards remain enabled.
 if [[ "${1:-}" != --private-lifecycle ]]; then
   for task_arg in "$@"; do
@@ -58,11 +67,15 @@ cd "$RUN/source"
 mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache "$RUN/data"
 SOCKET="$RUN/mariadb.sock"
 SERVER_PID=''
+HTTP_PEER_PID=''
 cleanup() {
   status=$?
   set +e
   if [[ -S "$SOCKET" ]]; then mariadb-admin --no-defaults --protocol=SOCKET --socket="$SOCKET" -uroot shutdown >/dev/null 2>&1; fi
   if [[ -n "$SERVER_PID" ]]; then kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; fi
+  if [[ -n "$HTTP_PEER_PID" ]]; then kill "$HTTP_PEER_PID" 2>/dev/null; wait "$HTTP_PEER_PID" 2>/dev/null; fi
+  [[ ! -f "$RUN/http-peer.log" ]] || cp "$RUN/http-peer.log" /evidence/http-peer.log
+  [[ ! -f "$RUN/http-peer-state.json" ]] || cp "$RUN/http-peer-state.json" /evidence/http-peer-state.json
   # Keep proof, release this disposable lifecycle before the next singleton. No
   # host paths exist in this namespace; current source inventory stays read-only.
   proof_suffix="${STOCK_PRIVATE_CASE_INDEX:+-${STOCK_PRIVATE_CASE_INDEX}}"
@@ -95,6 +108,19 @@ export TEST_DATABASE_ENVIRONMENT=isolated_staging TEST_DATABASE_PREFIX=solastock
 export TEST_DB_SOCKET="$SOCKET" TEST_SCHEMA_DB_USER=stock_qualification TEST_SCHEMA_DB_PASSWORD="$PASSWORD"
 export APP_ENV=testing CACHE_STORE=array SESSION_DRIVER=array QUEUE_CONNECTION=sync MAIL_MAILER=array
 export SOLABOOKS_DELIVERY_ENABLED=false
+if [[ "${STOCK_PRIVATE_REAL_HTTP:-0}" == 1 ]]; then
+  export PHASE4_RECEIVER_STATE="$RUN/http-peer-state.json"
+  export PHASE4_REAL_HTTP_URL=http://127.0.0.1:18947/api/v1/journal-entries
+  php -S 127.0.0.1:18947 tests/Support/phase4_http_receiver.php >"$RUN/http-peer.log" 2>&1 & HTTP_PEER_PID=$!
+  peer_ready=0
+  for attempt in {1..40}; do
+    if curl --silent --output /dev/null --connect-timeout 1 http://127.0.0.1:18947/; then peer_ready=1; break; fi
+    kill -0 "$HTTP_PEER_PID" || break
+    sleep .1
+  done
+  [[ "$peer_ready" == 1 ]] || { echo 'ISOLATED_HTTP_PEER=FAILED' >&2; exit 2; }
+  echo ISOLATED_HTTP_PEER=READY
+fi
 export STOCK_PRIVATE_CONFIG_CACHE="$RUN/phpunit-config.php"
 export STOCK_PRIVATE_REBUILD_CONFIG_CACHE="$RUN/rebuild-config.php"
 if [[ "$TASK_COHORT" == committed ]]; then
