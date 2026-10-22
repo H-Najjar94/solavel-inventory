@@ -6,6 +6,7 @@ use App\Models\Tenant\GoodsReceipt;
 use App\Services\Reports\InventoryReportService;
 use App\Services\Stock\Support\Decimal;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -32,16 +33,19 @@ final class SupplierPurchaseHistory
         return [
             'receipts' => $receipts,
             'bills' => $bills,
-            'summary' => $this->summary($bills !== [] ? $bills : $receipts, $bills !== [] ? 'bills' : 'receipts'),
+            // Stats cover every matching posted line, not only the capped lists above.
+            'summary' => $this->summary($this->receiptSummary($filters), $this->billSummary($filters)),
             'finance' => ['state' => $this->link->state()['state']],
             'base_currency_code' => app(InventoryReportService::class)->baseCurrency(),
         ];
     }
 
-    private function receipts(array $filters, int $limit): array
+    /** Posted, non-reversed GRN lines matching the filters (no ordering, no limit). */
+    private function receiptQuery(array $filters): Builder
     {
         $org = app(OrganizationContext::class)->idOrFail();
-        $rows = DB::connection('tenant')->table('goods_receipt_lines as l')
+
+        return DB::connection('tenant')->table('goods_receipt_lines as l')
             ->join('goods_receipts as g', 'g.id', '=', 'l.goods_receipt_id')
             ->leftJoin('inventory_purchase_orders as p', 'p.id', '=', 'g.purchase_order_id')
             ->leftJoin('inventory_suppliers as s', 's.id', '=', 'g.supplier_id')
@@ -58,7 +62,12 @@ final class SupplierPurchaseHistory
             ->when($filters['item_id'] ?? null, fn ($q, $id) => $q->where('l.item_id', $id))
             ->when($filters['supplier_id'] ?? null, fn ($q, $id) => $q->where('g.supplier_id', $id))
             ->when($filters['from'] ?? null, fn ($q, $d) => $q->whereDate('g.receipt_date', '>=', $d))
-            ->when($filters['to'] ?? null, fn ($q, $d) => $q->whereDate('g.receipt_date', '<=', $d))
+            ->when($filters['to'] ?? null, fn ($q, $d) => $q->whereDate('g.receipt_date', '<=', $d));
+    }
+
+    private function receipts(array $filters, int $limit): array
+    {
+        $rows = $this->receiptQuery($filters)
             ->orderByDesc('g.receipt_date')->orderByDesc('l.id')->limit($limit)
             ->get([
                 'l.id', 'l.item_id', 'i.sku as item_sku', 'i.name as item_name', 'g.id as document_id', 'g.grn_number as document_number',
@@ -95,38 +104,12 @@ final class SupplierPurchaseHistory
 
     private function bills(array $filters, int $limit): array
     {
-        $state = $this->link->state();
-        if (! $this->link->readable() || ! Schema::connection('tenant')->hasTable('bill_lines')) {
+        $query = $this->billQuery($filters);
+        if (! $query) {
             return [];
         }
-        $financeOrg = (int) $state['finance_organization_id'];
-        $itemMap = [];
-        if ($filters['item_id'] ?? null) {
-            $itemMap = $this->link->financeIds('item', [(int) $filters['item_id']]);
-            if ($itemMap === []) {
-                return [];
-            }
-        }
-        $supplierMap = [];
-        if ($filters['supplier_id'] ?? null) {
-            $supplierMap = $this->link->financeIds('supplier', [(int) $filters['supplier_id']]);
-            if ($supplierMap === []) {
-                return [];
-            }
-        }
-        $rows = DB::connection('tenant')->table('bill_lines as l')
-            ->join('bills as b', 'b.id', '=', 'l.bill_id')
-            ->join('journal_entries as je', 'je.id', '=', 'b.journal_entry_id')
-            ->where('b.organization_id', $financeOrg)
-            ->whereNotIn('b.status', ['draft', 'void'])
-            ->whereNotNull('je.posted_at')->whereNull('je.deleted_at')
-            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('journal_entries as rev')
-                ->whereColumn('rev.reverses_entry_id', 'je.id')->whereNull('rev.deleted_at'))
-            ->whereNotNull('l.inventory_item_id')->where('l.qty', '>', 0)
-            ->when($itemMap, fn ($q) => $q->whereIn('l.inventory_item_id', array_values($itemMap)))
-            ->when($supplierMap, fn ($q) => $q->whereIn('b.supplier_id', array_values($supplierMap)))
-            ->when($filters['from'] ?? null, fn ($q, $d) => $q->whereDate('b.date', '>=', $d))
-            ->when($filters['to'] ?? null, fn ($q, $d) => $q->whereDate('b.date', '<=', $d))
+        $state = $this->link->state();
+        $rows = $query
             ->orderByDesc('b.date')->orderByDesc('l.id')->limit($limit)
             ->get(['l.id', 'l.inventory_item_id', 'l.item_name', 'b.id as bill_id', 'b.number', 'b.reference', 'b.date',
                 'b.supplier_id', 'b.supplier_name', 'b.currency_code', 'b.exchange_rate', 'l.qty', 'l.unit_price',
@@ -170,6 +153,129 @@ final class SupplierPurchaseHistory
         })->all();
     }
 
+    /** Posted, non-reversed SolaCount bill lines matching the filters, or null when not readable / unmapped. */
+    private function billQuery(array $filters): ?Builder
+    {
+        $state = $this->link->state();
+        if (! $this->link->readable() || ! Schema::connection('tenant')->hasTable('bill_lines')) {
+            return null;
+        }
+        $itemMap = [];
+        if ($filters['item_id'] ?? null) {
+            $itemMap = $this->link->financeIds('item', [(int) $filters['item_id']]);
+            if ($itemMap === []) {
+                return null;
+            }
+        }
+        $supplierMap = [];
+        if ($filters['supplier_id'] ?? null) {
+            $supplierMap = $this->link->financeIds('supplier', [(int) $filters['supplier_id']]);
+            if ($supplierMap === []) {
+                return null;
+            }
+        }
+
+        return DB::connection('tenant')->table('bill_lines as l')
+            ->join('bills as b', 'b.id', '=', 'l.bill_id')
+            ->join('journal_entries as je', 'je.id', '=', 'b.journal_entry_id')
+            ->where('b.organization_id', (int) $state['finance_organization_id'])
+            ->whereNotIn('b.status', ['draft', 'void'])
+            ->whereNotNull('je.posted_at')->whereNull('je.deleted_at')
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('journal_entries as rev')
+                ->whereColumn('rev.reverses_entry_id', 'je.id')->whereNull('rev.deleted_at'))
+            ->whereNotNull('l.inventory_item_id')->where('l.qty', '>', 0)
+            ->when($itemMap, fn ($q) => $q->whereIn('l.inventory_item_id', array_values($itemMap)))
+            ->when($supplierMap, fn ($q) => $q->whereIn('b.supplier_id', array_values($supplierMap)))
+            ->when($filters['from'] ?? null, fn ($q, $d) => $q->whereDate('b.date', '>=', $d))
+            ->when($filters['to'] ?? null, fn ($q, $d) => $q->whereDate('b.date', '<=', $d));
+    }
+
+    /** SQL aggregates per supplier over every matching receipt line, keyed like summary(). */
+    private function receiptSummary(array $filters): array
+    {
+        $cost = 'sl.unit_cost';
+        $stats = $this->receiptQuery($filters)->groupBy('g.supplier_id')->selectRaw("g.supplier_id, MAX(s.name) supplier_name,
+            COUNT(DISTINCT g.id) documents, MIN($cost) lowest, MAX($cost) highest,
+            SUM(CASE WHEN $cost IS NOT NULL THEN l.accepted_qty ELSE 0 END) quantity,
+            SUM(CASE WHEN $cost IS NOT NULL THEN l.accepted_qty * $cost ELSE 0 END) base_value")->get();
+        $ranked = $this->receiptQuery($filters)->selectRaw("g.supplier_id, g.receipt_date date, l.unit_cost, p.currency_code,
+            $cost base_unit_cost, ROW_NUMBER() OVER (PARTITION BY g.supplier_id ORDER BY g.receipt_date DESC, l.id DESC) rn");
+        $last = DB::connection('tenant')->query()->fromSub($ranked, 'r')->where('r.rn', 1)->get()->keyBy(fn ($r) => (string) $r->supplier_id);
+        $base = app(InventoryReportService::class)->baseCurrency();
+
+        $out = [];
+        foreach ($stats as $row) {
+            $supplierId = $row->supplier_id ? (int) $row->supplier_id : null;
+            $l = $last->get((string) $row->supplier_id);
+            $out[$supplierId ?? 'name:'.$row->supplier_name] = $this->entry($supplierId, $row->supplier_name, 'receipts', $row, $l ? [
+                'date' => (string) $l->date,
+                'unit_cost' => Decimal::cost((string) $l->unit_cost),
+                'currency_code' => $l->currency_code ?: $base,
+                'base_unit_cost' => $l->base_unit_cost !== null ? Decimal::cost((string) $l->base_unit_cost) : null,
+            ] : null);
+        }
+
+        return $out;
+    }
+
+    /** SQL aggregates per SolaCount supplier over every matching bill line, translated to Stock suppliers. */
+    private function billSummary(array $filters): array
+    {
+        $query = $this->billQuery($filters);
+        if (! $query) {
+            return [];
+        }
+        // Same rule as the row list: no rate means 1; a non-positive rate leaves the line un-normalized.
+        $rate = 'COALESCE(b.exchange_rate, 1)';
+        $baseCost = "CASE WHEN $rate > 0 THEN l.line_subtotal / l.qty / $rate END";
+        $stats = (clone $query)->groupBy('b.supplier_id')->selectRaw("b.supplier_id, MAX(b.supplier_name) supplier_name,
+            COUNT(DISTINCT b.id) documents, MIN($baseCost) lowest, MAX($baseCost) highest,
+            SUM(CASE WHEN $rate > 0 THEN l.qty ELSE 0 END) quantity,
+            SUM(CASE WHEN $rate > 0 THEN l.line_subtotal / $rate ELSE 0 END) base_value")->get();
+        $ranked = (clone $query)->selectRaw("b.supplier_id, b.supplier_name, b.date, l.line_subtotal / l.qty unit_cost, b.currency_code,
+            $baseCost base_unit_cost, ROW_NUMBER() OVER (PARTITION BY b.supplier_id ORDER BY b.date DESC, l.id DESC) rn");
+        $last = DB::connection('tenant')->query()->fromSub($ranked, 'r')->where('r.rn', 1)->get()->keyBy(fn ($r) => (string) $r->supplier_id);
+        $stockSuppliers = $this->reverse('supplier', $this->link->state(), $stats->pluck('supplier_id')->filter()->unique()->all());
+
+        $out = [];
+        foreach ($stats as $row) {
+            $supplierId = $row->supplier_id ? ($stockSuppliers[(int) $row->supplier_id] ?? null) : null;
+            $l = $last->get((string) $row->supplier_id);
+            $key = $supplierId ?? 'name:'.$row->supplier_name;
+            $entry = $this->entry($supplierId, $l->supplier_name ?? $row->supplier_name, 'bills', $row, $l ? [
+                'date' => (string) $l->date,
+                'unit_cost' => Decimal::cost((string) $l->unit_cost),
+                'currency_code' => $l->currency_code,
+                'base_unit_cost' => $l->base_unit_cost !== null ? Decimal::cost((string) $l->base_unit_cost) : null,
+            ] : null);
+            // Two unmapped SolaCount suppliers with one name stay one row, as the list groups them.
+            $out[$key] = isset($out[$key]) && strcmp((string) $out[$key]['last_date'], (string) $entry['last_date']) > 0 ? $out[$key] : $entry;
+        }
+
+        return $out;
+    }
+
+    private function entry(?int $supplierId, ?string $name, string $basis, object $stats, ?array $last): array
+    {
+        $qty = (string) ($stats->quantity ?? '0');
+
+        return [
+            'supplier_id' => $supplierId,
+            'supplier_name' => $name,
+            'basis' => $basis,
+            'documents' => (int) $stats->documents,
+            'last_date' => $last['date'] ?? null,
+            'last_unit_cost' => $last['unit_cost'] ?? null,
+            'last_currency_code' => $last['currency_code'] ?? null,
+            'last_base_unit_cost' => $last['base_unit_cost'] ?? null,
+            'lowest_base_unit_cost' => $stats->lowest !== null ? Decimal::cost((string) $stats->lowest) : null,
+            'highest_base_unit_cost' => $stats->highest !== null ? Decimal::cost((string) $stats->highest) : null,
+            'weighted_average_base_unit_cost' => Decimal::gt($qty, '0') ? Decimal::cost(Decimal::div((string) $stats->base_value, $qty)) : null,
+            'total_quantity' => Decimal::qty($qty),
+            'total_base_value' => Decimal::value((string) ($stats->base_value ?? '0')),
+        ];
+    }
+
     /** @return array<int, int> finance id => stock id */
     private function reverse(string $type, array $state, array $financeIds): array
     {
@@ -185,42 +291,13 @@ final class SupplierPurchaseHistory
             ->mapWithKeys(fn ($stock, $finance) => [(int) $finance => (int) $stock])->all();
     }
 
-    /** Per supplier: last, lowest, highest, quantity-weighted average (base currency), totals. */
-    public function summary(array $rows, string $basis): array
+    /**
+     * One row per supplier: the bills-based figures (what was actually paid) when the
+     * supplier has posted bills, else its receipt figures; receipt-only suppliers stay listed.
+     */
+    private function summary(array $receipts, array $bills): array
     {
-        $groups = [];
-        foreach ($rows as $row) {
-            $key = $row['supplier_id'] ?? ('name:'.$row['supplier_name']);
-            $groups[$key][] = $row;
-        }
-        $out = [];
-        foreach ($groups as $group) {
-            usort($group, fn ($a, $b) => strcmp($b['date'], $a['date']) ?: $b['line_id'] <=> $a['line_id']);
-            $priced = array_values(array_filter($group, fn ($r) => $r['base_unit_cost'] !== null));
-            $qty = '0';
-            $value = '0';
-            foreach ($priced as $r) {
-                $qty = Decimal::add($qty, $r['quantity']);
-                $value = Decimal::add($value, Decimal::mul($r['quantity'], $r['base_unit_cost']));
-            }
-            $costs = array_column($priced, 'base_unit_cost');
-            usort($costs, fn ($a, $b) => Decimal::cmp($a, $b));
-            $out[] = [
-                'supplier_id' => $group[0]['supplier_id'],
-                'supplier_name' => $group[0]['supplier_name'],
-                'basis' => $basis,
-                'documents' => count(array_unique(array_column($group, 'document_id'))),
-                'last_date' => $group[0]['date'],
-                'last_unit_cost' => $group[0]['unit_cost'],
-                'last_currency_code' => $group[0]['currency_code'],
-                'last_base_unit_cost' => $group[0]['base_unit_cost'],
-                'lowest_base_unit_cost' => $costs[0] ?? null,
-                'highest_base_unit_cost' => $costs !== [] ? end($costs) : null,
-                'weighted_average_base_unit_cost' => Decimal::gt($qty, '0') ? Decimal::cost(Decimal::div($value, $qty)) : null,
-                'total_quantity' => Decimal::qty($qty),
-                'total_base_value' => Decimal::value($value),
-            ];
-        }
+        $out = array_values(array_replace($receipts, $bills));
         usort($out, fn ($a, $b) => strcmp((string) $b['last_date'], (string) $a['last_date']));
 
         return $out;

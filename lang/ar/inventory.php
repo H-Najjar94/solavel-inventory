@@ -528,5 +528,6 @@ return array (
     'import_too_many_rows' => 'استورد :max صفًا كحد أقصى في المرة الواحدة.',
     'import_keys_required' => 'العمودان item_sku و supplier_code مطلوبان.',
     'import_date_invalid' => 'يجب أن تكون التواريخ بالتنسيق YYYY-MM-DD.',
+    'import_number_invalid' => 'يجب أن تكون الكمية الدنيا وسعر الوحدة أرقاماً عادية، مثل 12.5 أو 1,250.00.',
   ),
 );

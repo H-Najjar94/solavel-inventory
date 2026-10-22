@@ -30,7 +30,7 @@ final class SupplierPriceResolver
     public function suggest(Item $item, ?int $supplierId, string $quantity, ?int $unitId, ?string $currency, ?string $date): array
     {
         $date = $date ? CarbonImmutable::parse($date)->toDateString() : now()->toDateString();
-        $baseCurrency = app(InventoryReportService::class)->baseCurrency();
+        $baseCurrency = $this->baseCurrency();
         $currency = $currency ? strtoupper($currency) : null;
         $enteredFactor = $this->enteredFactor($item, $unitId);
         $baseQty = Decimal::mul($this->positive($quantity), $enteredFactor);
@@ -141,6 +141,21 @@ final class SupplierPriceResolver
             'quantity_adjusted' => Decimal::cmp($suggestedPurchaseQty, Decimal::qty($purchaseQty)) !== 0,
             'priced_at_suggested_quantity' => $pricedAtSuggested,
         ];
+    }
+
+    /**
+     * The currency a rate of 1 means. A connected org normalizes with SolaCount rates, which
+     * are quoted against the mapping's base currency, so the identity check must use that
+     * same code; a standalone org keeps its own inventory base currency.
+     */
+    private function baseCurrency(): string
+    {
+        $state = $this->link->state();
+        if ($state['base_currency'] && $state['finance_organization_id']) {
+            return (string) $state['base_currency'];
+        }
+
+        return app(InventoryReportService::class)->baseCurrency();
     }
 
     /** At least the minimum order quantity, rounded up to the order multiple. */

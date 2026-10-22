@@ -528,5 +528,6 @@ return array (
     'import_too_many_rows' => 'Import at most :max rows at a time.',
     'import_keys_required' => 'item_sku and supplier_code are required.',
     'import_date_invalid' => 'Dates must use the YYYY-MM-DD format.',
+    'import_number_invalid' => 'Minimum quantity and unit price must be plain numbers, such as 12.5 or 1,250.00.',
   ),
 );

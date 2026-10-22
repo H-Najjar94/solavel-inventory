@@ -122,6 +122,12 @@ final class SupplierTermsCsv
                 $rows[$line]['status'] = $existing ? 'unchanged' : 'created';
                 continue;
             }
+            // bcmath throws on malformed numbers: reject them as row errors before any Decimal call.
+            $price = $this->number($v['unit_price']);
+            if (! $this->decimal($price) || ($v['min_qty'] !== '' && ! $this->decimal($this->number($v['min_qty'])))) {
+                $this->fail($rows, $line, __('inventory.supplier_terms.import_number_invalid'));
+                continue;
+            }
             $tierKey = implode('|', [$v['min_qty'] === '' ? '1' : Decimal::qty($this->number($v['min_qty'])), $v['valid_from'], $v['valid_to']]);
             if (isset($seen[$tierKey])) {
                 $this->fail($rows, $line, __('inventory.supplier_terms.import_duplicate_row', ['row' => $rows[$seen[$tierKey]]['row']]));
@@ -134,9 +140,8 @@ final class SupplierTermsCsv
                     $match = $index;
                 }
             }
-            $price = $this->number($v['unit_price']);
             if ($match !== null) {
-                $same = Decimal::cmp((string) $tiers[$match]['unit_cost'], $price === '' ? '-1' : $price) === 0;
+                $same = Decimal::cmp((string) $tiers[$match]['unit_cost'], $price) === 0;
                 $tiers[$match]['unit_cost'] = $price;
                 $tiers[$match]['is_active'] = true;
                 $rows[$line]['status'] = $same ? 'unchanged' : 'updated';
@@ -245,6 +250,11 @@ final class SupplierTermsCsv
     private function number(string $value): string
     {
         return str_replace([',', ' '], '', trim($value));
+    }
+
+    private function decimal(string $value): bool
+    {
+        return preg_match('/^\d+(?:\.\d+)?$/D', $value) === 1;
     }
 
     /** Neutralize spreadsheet formula injection in exported text cells. */

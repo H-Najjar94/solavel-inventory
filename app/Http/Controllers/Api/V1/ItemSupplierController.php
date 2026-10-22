@@ -152,8 +152,11 @@ class ItemSupplierController extends ApiController
     public function comparison(Request $request, Item $item): JsonResponse
     {
         $this->enabled();
-        $quantity = (string) ($request->query('quantity') ?: '1');
-        $suggestion = app(SupplierPriceResolver::class)->suggest($item, null, Decimal::gt($quantity, '0') ? $quantity : '1', null, null, $request->query('date'));
+        $data = $request->validate([
+            'quantity' => ['nullable', 'numeric', 'gt:0'],
+            'date' => ['nullable', 'date'],
+        ]);
+        $suggestion = app(SupplierPriceResolver::class)->suggest($item, null, (string) ($data['quantity'] ?? '1'), null, null, $data['date'] ?? null);
         $history = app(SupplierPurchaseHistory::class)->history(['item_id' => $item->id]);
         $last = collect($history['summary'])->keyBy('supplier_id');
         $relationships = ItemSupplier::query()->where('item_id', $item->id)->with('supplier:id,code,name')->get();
