@@ -25,6 +25,7 @@ import AdjustmentDetailPage from '../pages/AdjustmentDetailPage.jsx';
 import LedgerPage from '../pages/LedgerPage.jsx';
 import PurchaseOrdersPage from '../pages/PurchaseOrdersPage.jsx';
 import PurchaseOrderFormPage from '../pages/PurchaseOrderFormPage.jsx';
+import ReorderSuggestionsPage from '../pages/ReorderSuggestionsPage.jsx';
 import PurchaseOrderDetailPage from '../pages/PurchaseOrderDetailPage.jsx';
 import ReceivingRequestsPage from '../pages/ReceivingRequestsPage.jsx';
 import GoodsReceiptsPage from '../pages/GoodsReceiptsPage.jsx';
@@ -153,6 +154,8 @@ export const router = createBrowserRouter(
                 { path: 'scanner', element: <ScannerPage /> },
                 { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
                 { path: 'purchase-orders/new', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
+                // Served under the existing /purchase-orders web route; the static segment wins over :id.
+                { path: 'purchase-orders/reorder-suggestions', element: protectedElement(<ReorderSuggestionsPage />, 'inventory.manage_purchase_orders') },
                 { path: 'purchase-orders/:id', element: <PurchaseOrderDetailPage /> },
                 { path: 'purchase-orders/:id/edit', element: protectedElement(<PurchaseOrderFormPage />, 'inventory.manage_purchase_orders') },
                 { path: 'receiving-requests', element: protectedElement(<ReceivingRequestsPage />, 'inventory.receive_goods') },

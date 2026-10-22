@@ -77,7 +77,7 @@ class ItemSupplierController extends ApiController
     {
         $this->enabled();
         $perPage = max(1, min((int) $request->query('per_page', 25), 100));
-        $search = trim((string) $request->query('search', ''));
+        $search = addcslashes(trim((string) $request->query('search', '')), '%_\\');
         $page = ItemSupplier::query()->where('supplier_id', $supplier->id)
             ->with(['item:id,sku,name,item_type,base_unit_id,preferred_supplier_id,is_active', 'supplier:id,code,name,is_active', 'purchaseUnit:id,code,name,symbol', 'prices'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', (string) $request->query('status')))
@@ -120,7 +120,7 @@ class ItemSupplierController extends ApiController
         ]);
         $rows = ItemSupplier::query()->where('status', 'approved')
             ->when($data['supplier_id'] ?? null, fn ($q, $id) => $q->where('supplier_id', $id))
-            ->where(fn ($q) => $q->where('supplier_sku', 'like', $data['search'].'%')->orWhere('supplier_item_name', 'like', '%'.$data['search'].'%'))
+            ->where(fn ($q) => $q->where('supplier_sku', 'like', addcslashes($data['search'], '%_\\').'%')->orWhere('supplier_item_name', 'like', '%'.addcslashes($data['search'], '%_\\').'%'))
             ->with(['item:id,sku,name,base_unit_id,is_active', 'supplier:id,code,name'])
             ->limit(20)->get()->filter(fn ($r) => $r->item && $r->item->is_active);
 

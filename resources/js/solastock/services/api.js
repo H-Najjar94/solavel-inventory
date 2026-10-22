@@ -171,6 +171,47 @@ export const api = {
     deleteSupplierPrice: (itemId, priceId) => request(`/items/${itemId}/supplier-prices/${priceId}`, { method: 'DELETE' }),
     itemLabelSheet: (itemId) => request(`/items/${itemId}/labels`),
 
+    // Supplier-item terms (one relationship per item + supplier, with price tiers).
+    itemSuppliers: (itemId) => request(`/items/${itemId}/suppliers`),
+    itemSupplier: (itemId, relationshipId) => request(`/items/${itemId}/suppliers/${relationshipId}`),
+    createItemSupplier: (itemId, body) => request(`/items/${itemId}/suppliers`, { method: 'POST', body }),
+    updateItemSupplier: (itemId, relationshipId, body) => request(`/items/${itemId}/suppliers/${relationshipId}`, { method: 'PUT', body }),
+    deleteItemSupplier: (itemId, relationshipId) => request(`/items/${itemId}/suppliers/${relationshipId}`, { method: 'DELETE' }),
+    itemPurchaseHistory: (itemId, params) => request(`/items/${itemId}/purchase-history`, { params }),
+    itemVendorComparison: (itemId, params) => request(`/items/${itemId}/vendor-comparison`, { params }),
+    supplierItems: (supplierId, params) => request(`/suppliers/${supplierId}/items`, { params }),
+    supplierPurchaseHistory: (supplierId, params) => request(`/suppliers/${supplierId}/purchase-history`, { params }),
+    supplierTermsSuggest: (params) => request('/supplier-terms/suggest', { params }),
+    supplierTermsLookup: (params) => request('/supplier-terms/lookup', { params }),
+    supplierTermsReorder: (params) => request('/supplier-terms/reorder', { params }),
+    importSupplierTerms: (content, apply = false) => request('/supplier-terms/import', { method: 'POST', body: { content, apply: Boolean(apply) } }),
+    // CSV export is not JSON: fetch with the session, then save the file in the browser.
+    downloadSupplierTerms: async (params = {}) => {
+        const url = new URL(`${BASE}/supplier-terms/export`, window.location.origin);
+        Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v); });
+        let res;
+        try {
+            res = await fetch(url.toString(), { credentials: 'same-origin', headers: { Accept: 'application/json, text/csv;q=0.9',
+                'X-Requested-With': 'XMLHttpRequest', 'Accept-Language': locale(), 'X-Locale': locale() } });
+        } catch (error) {
+            throw Object.assign(new Error(feedbackText('failed')), { cause: error, mutation: false });
+        }
+        if (!res.ok) {
+            let json = null;
+            try { json = await res.json(); } catch { json = null; }
+            if ([402, 403].includes(res.status)) window.dispatchEvent(new CustomEvent('solastock-access-refresh'));
+            throw Object.assign(new Error(feedbackText(res.status === 403 ? 'forbidden' : [401, 419].includes(res.status) ? 'expired' : 'failed')),
+                { status: res.status, code: json?.error?.reason_code || json?.error?.code || json?.code, mutation: false });
+        }
+        const blob = await res.blob();
+        const name = /filename="?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'vendor-pricelist.csv';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        return name;
+    },
+
     warehouses: (params) => request('/warehouses', { params }),
     warehouse: (id) => request(`/warehouses/${id}`),
     createWarehouse: (body) => request('/warehouses', { method: 'POST', body }),

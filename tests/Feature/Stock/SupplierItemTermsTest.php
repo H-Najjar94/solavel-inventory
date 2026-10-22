@@ -216,6 +216,24 @@ class SupplierItemTermsTest extends TestCase
     }
 
     #[Test]
+    public function an_order_below_the_minimum_is_priced_at_the_quantity_the_terms_require(): void
+    {
+        $this->boot();
+        $item = $this->itemWithUnit();
+        $supplier = $this->supplier('MOQ-A');
+        $this->service()->save($item, ['supplier_id' => $supplier->id, 'currency_code' => 'JOD', 'minimum_order_qty' => '10',
+            'tiers' => [['minimum_qty' => '10', 'unit_cost' => '5']]], null, null);
+
+        $r = app(SupplierPriceResolver::class)->suggest($item->fresh(), $supplier->id, '4', null, 'JOD', null);
+
+        $this->assertNotNull($r['suggestion']);
+        $this->assertTrue($r['suggestion']['priced_at_suggested_quantity']);
+        $this->assertTrue($r['suggestion']['quantity_adjusted']);
+        $this->assertSame('10.000000', $r['suggestion']['suggested_entered_quantity']);
+        $this->assertSame('5.000000', $r['suggestion']['net_unit_price']);
+    }
+
+    #[Test]
     public function legacy_single_price_endpoints_write_tiers_of_one_relationship(): void
     {
         $this->boot();

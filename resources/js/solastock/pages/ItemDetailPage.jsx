@@ -2,7 +2,7 @@ import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
@@ -10,7 +10,9 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
-import { MoneyInput, SupplierPicker } from '../components/pickers.jsx';
+import ItemSuppliersPanel from '../components/ItemSuppliersPanel.jsx';
+import PurchaseHistoryPanel from '../components/PurchaseHistoryPanel.jsx';
+import { PreferredSupplierName, useSupplierTermsAccess } from '../components/SupplierTermsShared.jsx';
 import { t, getLocale } from '../i18n/index.js';
 
 // ── helpers ──
@@ -238,14 +240,20 @@ export default function ItemDetailPage() {
     const gate = useCanCreate('inventory.manage_items');
     const qc = useQueryClient();
     const toast = useToast();
-    const [tab, setTab] = useState('overview');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const termsAccess = useSupplierTermsAccess();
+    const [tab, setTabState] = useState(() => searchParams.get('tab') || 'overview');
+    // Keep the tab in the URL so links such as ?tab=suppliers open the right section.
+    const setTab = (key) => {
+        setTabState(key);
+        setSearchParams((current) => { const next = new URLSearchParams(current); if (key === 'overview') next.delete('tab'); else next.set('tab', key); return next; }, { replace: true });
+    };
     const [valuationOpen, setValuationOpen] = useState(false);
     const [activeMovement, setActiveMovement] = useState(null);
     const [newBarcode, setNewBarcode] = useState({ barcode: '', type: 'internal' });
     const [scanCode, setScanCode] = useState('');
     const [scanResult, setScanResult] = useState(null);
     const [variantForm, setVariantForm] = useState({ sku: '', option: '', value: '', barcode_primary: '', purchase_price: '', sales_price: '' });
-    const [priceForm, setPriceForm] = useState({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: '' });
     const [labels, setLabels] = useState(null);
 
     const { data, isLoading } = useApiQuery(['item', id], () => api.item(id), { fallback: null });
@@ -285,7 +293,10 @@ export default function ItemDetailPage() {
         { key: 'barcodes', label: t('itemDetail.barcodes') },
         { key: 'media', label: t('itemDetail.media') },
         { key: 'details', label: t('itemDetail.details') },
+        { key: 'suppliers', label: t('supplierTerms.tabs.suppliers') },
+        ...(termsAccess.history ? [{ key: 'purchase-history', label: t('supplierTerms.tabs.purchaseHistory') }] : []),
     ];
+    const activeTab = tabs.some((x) => x.key === tab) ? tab : 'overview';
 
     async function addBarcode(e) {
         e.preventDefault();
@@ -349,25 +360,6 @@ export default function ItemDetailPage() {
         } catch (err) { toast.failure(err, err.message); }
     }
 
-    async function addSupplierPrice(e) {
-        e.preventDefault();
-        if (!priceForm.supplier_id || !priceForm.unit_cost) return;
-        try {
-            await api.createSupplierPrice(item.id, { ...priceForm, currency_code: priceForm.currency_code || undefined });
-            setPriceForm({ supplier_id: null, supplier_sku: '', unit_cost: '', minimum_qty: '1', currency_code: '' });
-            await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push(t('itemDetail.supplierPriceSaved'), 'success');
-        } catch (err) { toast.failure(err, err.message); }
-    }
-
-    async function deleteSupplierPrice(priceId) {
-        try {
-            await api.deleteSupplierPrice(item.id, priceId);
-            await qc.invalidateQueries({ queryKey: ['item', id] });
-            toast.push(t('itemDetail.supplierPriceRemoved'), 'success');
-        } catch (err) { toast.failure(err, err.message); }
-    }
-
     async function loadLabels() {
         try {
             const res = await api.itemLabelSheet(item.id);
@@ -413,10 +405,10 @@ export default function ItemDetailPage() {
                 </div>
             </div>
 
-            <Tabs tabs={tabs} active={tab} onChange={setTab} />
+            <Tabs tabs={tabs} active={activeTab} onChange={setTab} />
 
             {/* ── Overview ── */}
-            {tab === 'overview' && (
+            {activeTab === 'overview' && (
                 <>
                     {lowStock && <div className="banner banner--warn">{t('itemDetail.lowStockMessage', undefined, { available: qty(totals.available), reorder: qty(reorder) })}</div>}
                     <div className="metric-cards">
@@ -440,7 +432,7 @@ export default function ItemDetailPage() {
             )}
 
             {/* ── Inventory ── */}
-            {tab === 'inventory' && (
+            {activeTab === 'inventory' && (
                 <div className="card"><div className="card-head"><h3>{t('itemDetail.stockAndValuation')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>{t('itemDetail.fifoLayersValuation')}</button></div>
                     <div className="card-body">{valuation.isLoading ? <Skeleton rows={3} /> : valuation.isError
                         ? <div className="drawer-error">{t('itemDetail.loadStockFailed')}<div><button className="btn btn--sm" onClick={() => valuation.refetch()}>{t('itemDetail.tryAgain')}</button></div></div>
@@ -448,11 +440,11 @@ export default function ItemDetailPage() {
             )}
 
             {/* ── Movements ── */}
-            {tab === 'movements' && (
+            {activeTab === 'movements' && (
                 <div className="panel">{movements.isLoading ? <Skeleton rows={4} /> : <MovementsTable rows={movementRows} onRow={setActiveMovement} />}</div>
             )}
 
-            {tab === 'barcodes' && (
+            {activeTab === 'barcodes' && (
                 <div className="overview-grid">
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.itemBarcodes')}</h3></div><div className="card-body">
                         {(data.barcodes ?? []).length === 0 ? <EmptyState title={t('itemDetail.noBarcodes')} hint={t('itemDetail.noBarcodesHint')} />
@@ -483,13 +475,19 @@ export default function ItemDetailPage() {
             )}
 
             {/* ── Media ── */}
-            {tab === 'media' && <div className="overview-grid media-grid">
+            {activeTab === 'media' && <div className="overview-grid media-grid">
                 <div className="card"><div className="card-head"><h3>{t('itemDetail.images')}</h3></div><div className="card-body"><ItemImages itemId={item.id} canManage={gate.allowed} /></div></div>
                 <div className="card"><div className="card-body"><ItemAttachments itemId={item.id} canManage={gate.allowed} /></div></div>
             </div>}
 
+            {/* ── Suppliers (purchasing terms, price tiers, vendor comparison) ── */}
+            {activeTab === 'suppliers' && <ItemSuppliersPanel item={item} />}
+
+            {/* ── Purchase history (posted receipts and SolaCount bills) ── */}
+            {activeTab === 'purchase-history' && <PurchaseHistoryPanel mode="item" id={item.id} />}
+
             {/* ── Details ── */}
-            {tab === 'details' && (
+            {activeTab === 'details' && (
                 <div className="item-details-columns">
                     <div className="item-details-column">
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.specifications')}</h3></div><div className="card-body"><dl className="kv">
@@ -521,26 +519,16 @@ export default function ItemDetailPage() {
                     </div>
                     <div className="item-details-column">
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.commercial')}</h3></div><div className="card-body"><dl className="kv">
-                        <dt>{t('itemDetail.preferredSupplier')}</dt><dd><bdi>{item.preferred_supplier_id ? `#${item.preferred_supplier_id}` : '—'}</bdi></dd>
+                        <dt>{t('itemDetail.preferredSupplier')}</dt><dd><PreferredSupplierName itemId={item.id} supplierId={item.preferred_supplier_id} /></dd>
                         <dt>{t('itemDetail.primaryBarcode')}</dt><dd><bdi>{data.primary_barcode ?? '—'}</bdi></dd>
                         <dt>{t('itemDetail.reorderQuantity')}</dt><dd>{item.reorder_qty ? qty(item.reorder_qty) : '—'}</dd>
                         <dt>{t('itemDetail.minMax')}</dt><dd>{item.min_stock || item.max_stock ? `${item.min_stock ? qty(item.min_stock) : '—'} / ${item.max_stock ? qty(item.max_stock) : '—'}` : '—'}</dd>
                         <dt>{t('itemDetail.safetyStock')}</dt><dd>{item.safety_stock ? qty(item.safety_stock) : '—'}</dd>
                         <dt>{t('itemDetail.taxCode')}</dt><dd><bdi>{item.tax_code ?? '—'}</bdi></dd>
                     </dl>
-                        {(data.supplier_price_lists ?? []).length === 0 ? <EmptyState title={t('itemDetail.noSupplierPrices')} hint={t('itemDetail.noSupplierPricesHint')} />
-                            : <table className="data-table"><thead><tr><th>{t('itemDetail.supplier')}</th><th>{t('sku')}</th><th>{t('itemDetail.cost')}</th><th>{t('itemDetail.minimumQuantity')}</th><th></th></tr></thead><tbody>
-                                {data.supplier_price_lists.map((p) => <tr key={p.id}><td>{p.supplier?.name ?? `#${p.supplier_id}`}</td><td><bdi>{p.supplier_sku ?? '—'}</bdi></td><td>{p.unit_cost} <bdi>{p.currency_code ?? ''}</bdi></td><td>{p.minimum_qty}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteSupplierPrice(p.id)} title={feedbackText('deleteSupplierPrice')} message={feedbackText('deleteSupplierPriceBody')} action={feedbackText('deleteSupplierPrice')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
-                            </tbody></table>}
-                        {gate.allowed && <form className="fg2" onSubmit={addSupplierPrice} style={{ marginTop: 12 }}>
-                            <Field label={t('itemDetail.supplier')} required><SupplierPicker value={priceForm.supplier_id} onChange={(v) => setPriceForm({ ...priceForm, supplier_id: v })} /></Field>
-                            <Field label={t('itemDetail.supplierSku')}><input className="input" placeholder={t('itemDetail.supplierSkuPlaceholder')} value={priceForm.supplier_sku} onChange={(e) => setPriceForm({ ...priceForm, supplier_sku: e.target.value })} dir="ltr" /></Field>
-                            <Field label={t('itemDetail.priceUnitCost')} required><MoneyInput value={priceForm.unit_cost} onChange={(v) => setPriceForm({ ...priceForm, unit_cost: v })} /></Field>
-                            <Field label={t('itemDetail.minimumQuantity')}><input className="input" type="number" step="0.0001" min="0" value={priceForm.minimum_qty} onChange={(e) => setPriceForm({ ...priceForm, minimum_qty: e.target.value })} /></Field>
-                            <Field label={t('itemDetail.priceCurrency')}><input className="input" placeholder={t('itemDetail.priceCurrencyDefault')} value={priceForm.currency_code} maxLength={3} dir="ltr"
-                                onChange={(e) => setPriceForm({ ...priceForm, currency_code: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })} /></Field>
-                            <button className="btn btn--primary">{t('itemDetail.addSupplierPrice')}</button>
-                        </form>}
+                        <div className="st-actions" style={{ marginTop: 12 }}>
+                            <button type="button" className="btn btn--sm" onClick={() => setTab('suppliers')}>{t('supplierTerms.detail.manageSuppliers')}</button>
+                        </div>
                     </div></div>
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.labels')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={loadLabels}>{t('itemDetail.printLabels')}</button></div><div className="card-body">
                         {!labels ? <EmptyState title={t('itemDetail.noLabelPreview')} hint={t('itemDetail.noLabelPreviewHint')} /> : <div className="label-sheet">

@@ -3,6 +3,7 @@ export function pageRequest(path) {
     const method=path.endsWith('/new')?'POST':path.endsWith('/edit')?'PUT':'GET';
     path=path.replace(/\/(new|edit)$/,'');
     if(path==='/traceability')path='/traceability/expiry-risk';
+    if(path==='/purchase-orders/reorder-suggestions')path='/supplier-terms/reorder';
     path=path.replace(/^\/traceability\/(lots|serials)/,'/$1').replace(/^\/integrations\/solacount/,'/integration/solabooks');
     return {method,path};
 }

@@ -17,6 +17,7 @@ export const NAV = [
     { key: 'internal-consumptions', label: 'Internal Consumption', path: '/internal-consumptions', icon: 'fa-solid fa-people-carry-box', perm: 'inventory.consumption.view', group: 'Operations' },
     { key: 'suppliers', label: 'Suppliers', path: '/suppliers', icon: 'fa-solid fa-handshake', perm: 'inventory.view_items', group: 'Purchasing' },
     { key: 'purchase-orders', label: 'Purchase Orders', path: '/purchase-orders', icon: 'fa-solid fa-file-invoice', perm: 'inventory.view_stock', group: 'Purchasing' },
+    { key: 'reorder-suggestions', label: 'Reorder Suggestions', path: '/purchase-orders/reorder-suggestions', icon: 'fa-solid fa-cart-arrow-down', perm: 'inventory.manage_purchase_orders', group: 'Purchasing' },
     { key: 'receiving-requests', label: 'Receiving Requests', path: '/receiving-requests', icon: 'fa-solid fa-clipboard-list', perm: 'inventory.receive_goods', group: 'Purchasing' },
     { key: 'goods-receipts', label: 'Goods Receipts', path: '/goods-receipts', icon: 'fa-solid fa-dolly', perm: 'inventory.view_stock', group: 'Purchasing' },
     { key: 'landed-costs', label: 'Landed Costs', path: '/landed-costs', icon: 'fa-solid fa-ship', perm: 'inventory.view_stock', group: 'Purchasing', availability: 'landed_costs' },

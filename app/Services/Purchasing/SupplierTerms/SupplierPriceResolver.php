@@ -86,13 +86,21 @@ final class SupplierPriceResolver
             return null;
         }
         $purchaseQty = Decimal::div($baseQty, $factor);
-        $tier = $relationship->prices
+        $suggestedPurchaseQty = $this->roundToTerms($purchaseQty, $relationship);
+        $tierFor = fn (string $qty) => $relationship->prices
             ->filter(fn (SupplierPriceList $t) => (bool) $t->is_active
                 && (! $t->effective_from || $t->effective_from->toDateString() <= $date)
                 && (! $t->effective_to || $t->effective_to->toDateString() >= $date)
-                && Decimal::gte($purchaseQty, (string) $t->minimum_qty))
+                && Decimal::gte($qty, (string) $t->minimum_qty))
             ->sort(fn ($a, $b) => Decimal::cmp((string) $b->minimum_qty, (string) $a->minimum_qty))
             ->first();
+        // Below every tier (e.g. under the minimum order): price the quantity the terms require.
+        $tier = $tierFor($purchaseQty);
+        $pricedAtSuggested = false;
+        if (! $tier) {
+            $tier = $tierFor($suggestedPurchaseQty);
+            $pricedAtSuggested = (bool) $tier;
+        }
         if (! $tier) {
             return null;
         }
@@ -101,7 +109,6 @@ final class SupplierPriceResolver
         $perBase = Decimal::div($net, $factor);
         $code = (string) ($relationship->currency_code ?: $baseCurrency);
         $rate = $code === $baseCurrency ? '1' : $this->link->rate($code, $date);
-        $suggestedPurchaseQty = $this->roundToTerms($purchaseQty, $relationship);
         $scale = $relationship->price_scale ?: 6;
 
         return [
@@ -132,6 +139,7 @@ final class SupplierPriceResolver
             'suggested_purchase_quantity' => $suggestedPurchaseQty,
             'suggested_entered_quantity' => Decimal::qty(Decimal::div(Decimal::mul($suggestedPurchaseQty, $factor), $enteredFactor)),
             'quantity_adjusted' => Decimal::cmp($suggestedPurchaseQty, Decimal::qty($purchaseQty)) !== 0,
+            'priced_at_suggested_quantity' => $pricedAtSuggested,
         ];
     }
 

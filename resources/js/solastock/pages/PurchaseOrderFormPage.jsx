@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { localDocumentDate } from '../services/documentDate.js';
@@ -11,9 +11,30 @@ import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { DocumentCurrencyPicker } from '../components/DocumentCurrencyPicker.jsx';
+import { PurchaseLineSuggestion, SupplierSkuLookup } from '../components/PurchaseLineSuggestion.jsx';
+import { useSupplierTermsAccess } from '../components/SupplierTermsShared.jsx';
 
 const emptyLine = () => ({ item_id: null, ordered_qty: '', entered_unit_id: null, unit_price: '', tax_code: '', notes: '' });
 const enteredCost = (unitCost, factor) => factor ? String((Number(unitCost || 0) * Number(factor || 1)).toFixed(4)) : unitCost;
+// A new PO may be opened prefilled (e.g. from reorder suggestions) through router state; edits never read it.
+function prefillFrom(state) {
+    const prefill = state?.prefill;
+    if (!prefill || typeof prefill !== 'object') return null;
+    const lines = (Array.isArray(prefill.lines) ? prefill.lines : []).filter((l) => l?.item_id).map((l) => ({
+        ...emptyLine(), item_id: Number(l.item_id), ordered_qty: l.ordered_qty != null ? String(l.ordered_qty) : '',
+        entered_unit_id: l.entered_unit_id ?? null, unit_price: l.unit_price != null ? String(l.unit_price) : '', notes: l.notes ?? '',
+    }));
+    return {
+        header: {
+            supplier_id: prefill.supplier_id ? Number(prefill.supplier_id) : null,
+            warehouse_id: prefill.warehouse_id ? Number(prefill.warehouse_id) : null,
+            ...(prefill.currency_code ? { currency_code: String(prefill.currency_code) } : {}),
+            expected_date: prefill.expected_date ?? '',
+        },
+        lines: lines.length ? lines : [emptyLine()],
+        source: prefill.source ?? null,
+    };
+}
 
 export default function PurchaseOrderFormPage() {
     const { t } = useI18n();
@@ -21,9 +42,12 @@ export default function PurchaseOrderFormPage() {
     const isEdit = !!id;
     const nav = useNavigate(); const toast = useToast(); const qc = useQueryClient();
     const gate = useCanCreate('inventory.manage_purchase_orders');
+    const location = useLocation();
+    const termsAccess = useSupplierTermsAccess();
+    const [prefill] = useState(() => (isEdit ? null : prefillFrom(location.state)));
 
-    const [header, setHeader] = useState({ po_number: '', supplier_id: null, warehouse_id: null, order_date: localDocumentDate(), expected_date: '', notes: '' });
-    const [lines, setLines] = useState([emptyLine()]);
+    const [header, setHeader] = useState(() => ({ po_number: '', supplier_id: null, warehouse_id: null, order_date: localDocumentDate(), expected_date: '', notes: '', ...(prefill?.header ?? {}) }));
+    const [lines, setLines] = useState(() => prefill?.lines ?? [emptyLine()]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -51,6 +75,14 @@ export default function PurchaseOrderFormPage() {
     }, [isEdit, existing.data]);
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
+    // Supplier SKU lookup: fill the first empty line, else add one. Prices are left to the line suggestion.
+    const addLookedUpItem = (row) => setLines((ls) => {
+        const patch = { item_id: Number(row.item_id), ...(row.purchase_unit_id ? { entered_unit_id: Number(row.purchase_unit_id) } : {}) };
+        const empty = ls.findIndex((l) => !l.item_id);
+        if (empty >= 0) return ls.map((l, idx) => idx === empty ? { ...l, ...patch } : l);
+        return [...ls, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '', ...patch }];
+    });
+    const showVendorTerms = termsAccess.purchasing && gate.allowed;
     const totals = lines.reduce((sum, line) => {
         const net = Number(line.ordered_qty || 0) * Number(line.unit_price || 0);
         const tax = taxOptions.find((option) => option.code === line.tax_code);
@@ -83,7 +115,11 @@ export default function PurchaseOrderFormPage() {
     if (isEdit && existing.isLoading) return <section className="page"><Skeleton /></section>;
 
     const columns = [
-        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <ItemPicker stockOnly purpose="purchase" value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} /> },
+        { key: 'item', label: t('receiving.common.item', 'Item'), render: (l, i) => <div className="picker-stack">
+            <ItemPicker stockOnly purpose="purchase" value={l.item_id} onChange={(v) => setLine(i, { item_id: v })} />
+            {showVendorTerms && <PurchaseLineSuggestion line={l} supplierId={header.supplier_id} currencyCode={header.currency_code} date={header.order_date}
+                onApplyPrice={(price) => setLine(i, { unit_price: price })} onApplyQuantity={(quantity) => setLine(i, { ordered_qty: quantity })} />}
+        </div> },
         { key: 'qty', label: t('receiving.common.quantity', 'Quantity'), width: 120, render: (l, i) => <QuantityInput value={l.ordered_qty} onChange={(v) => setLine(i, { ordered_qty: v })} /> },
         { key: 'unit', label: t('receiving.common.unit', 'Unit'), width: 150, render: (l, i) => <UnitPicker value={l.entered_unit_id} onChange={(v) => setLine(i, { entered_unit_id: v })} /> },
         { key: 'price', label: t('receiving.common.unitCost', 'Unit cost'), width: 120, render: (l, i) => <MoneyInput value={l.unit_price} onChange={(v) => setLine(i, { unit_price: v })} /> },
@@ -96,6 +132,7 @@ export default function PurchaseOrderFormPage() {
             <Breadcrumbs items={[{ label: t('receiving.po.list.title', 'Purchase Orders'), to: '/purchase-orders' }, { label: isEdit ? t('receiving.common.editDraft', 'Edit draft') : t('receiving.common.new', 'New') }]} />
             <header className="page-head"><h1>{isEdit ? t('receiving.po.form.editTitle', 'Edit purchase order') : t('receiving.po.form.newTitle', 'New purchase order')}</h1></header>
             {!gate.allowed && <div className="banner banner--warn">{gate.reason}</div>}
+            {prefill && <div className="banner">{t(prefill.source === 'reorder' ? 'supplierTerms.reorder.prefilledBanner' : 'supplierTerms.po.prefilledBanner')}</div>}
 
             <div className="form-grid">
                 <DocumentCurrencyPicker value={header.currency_code} onChange={currency_code => setHeader(current => ({...current, currency_code}))} error={errors.currency_code} />
@@ -109,6 +146,7 @@ export default function PurchaseOrderFormPage() {
 
             <div className="panel">
                 <h2>{t('receiving.common.lines', 'Lines')}</h2>
+                {showVendorTerms && <SupplierSkuLookup supplierId={header.supplier_id} onPick={addLookedUpItem} />}
                 <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[{ label: t('receiving.common.net', 'Net'), value: totals.net.toFixed(2) }, { label: t('receiving.common.tax', 'Tax'), value: totals.tax.toFixed(2) }, { label: t('receiving.common.total', 'Total'), value: (totals.net + totals.tax).toFixed(2) }]} />
             </div>

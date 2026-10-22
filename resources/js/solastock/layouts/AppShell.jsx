@@ -36,7 +36,7 @@ const COLLAPSED_KEY = 'solastock.sidebar.collapsed';
 const NAV_LABELS = {
     dashboard: 'dashboard', items: 'items', warehouses: 'warehouses', balances: 'currentStock',
     ledger: 'stockLedger', opening: 'openingStock', adjustments: 'adjustments', transfers: 'transfers',
-    counts: 'counts', scanner: 'scanner', suppliers: 'suppliers', 'purchase-orders': 'purchaseOrders',
+    counts: 'counts', scanner: 'scanner', suppliers: 'suppliers', 'purchase-orders': 'purchaseOrders', 'reorder-suggestions': 'supplierTerms.reorder.nav',
     'internal-consumptions':'consumption.title', 'goods-receipts': 'goodsReceipts', 'landed-costs': 'nav.landedCosts', 'receiving-requests':'receiving.requests.nav', customers: 'customers', 'sales-orders': 'salesOrders', 'fulfillment-requests': 'fulfillmentRequests', 'cash-fulfillment-requests':'cashFulfillment',
     'pick-lists': 'picking', packs: 'packing', shipments: 'shipments', 'sales-returns': 'salesReturns',
     traceability: 'traceability', lots: 'lots', serials: 'serials', recalls: 'recalls', reports: 'reports',

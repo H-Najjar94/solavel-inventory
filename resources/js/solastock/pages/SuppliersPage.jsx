@@ -5,6 +5,7 @@ import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
 import { useI18n } from '../i18n/context.jsx';
+import VendorPricelistTransfer from '../components/VendorPricelistTransfer.jsx';
 
 export default function SuppliersPage() {
     const { t } = useI18n();
@@ -19,7 +20,10 @@ export default function SuppliersPage() {
             <header className="page-head suppliers-heading">
                 <div><h1>{t('partners.suppliers.list.title')}</h1><p>{t('partners.suppliers.list.designIntro')}</p></div>
                 {isMock && <span className="badge badge--warn">{t('partners.common.sampleData')}</span>}
-                {gate.allowed ? <Link to="/suppliers/new" className="btn btn--primary suppliers-new"><span aria-hidden="true">+</span> {t('partners.suppliers.list.new')}</Link> : null}
+                <div className="st-actions">
+                    <VendorPricelistTransfer />
+                    {gate.allowed ? <Link to="/suppliers/new" className="btn btn--primary suppliers-new"><span aria-hidden="true">+</span> {t('partners.suppliers.list.new')}</Link> : null}
+                </div>
             </header>
             <section className="card suppliers-directory">
                 <div className="suppliers-toolbar">
