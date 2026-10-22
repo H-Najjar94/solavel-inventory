@@ -48,7 +48,7 @@ return new class extends Migration {
         if ($schema->hasTable('supplier_price_lists')) {
             if (! $schema->hasColumn('supplier_price_lists', 'item_supplier_id')) {
                 $schema->table('supplier_price_lists', function (Blueprint $table) {
-                    $table->unsignedBigInteger('item_supplier_id')->nullable()->after('supplier_id');
+                    $table->unsignedBigInteger('item_supplier_id')->nullable();
                     $table->index(['item_supplier_id', 'minimum_qty'], 'supplier_price_lists_relationship_tier_index');
                 });
             }
