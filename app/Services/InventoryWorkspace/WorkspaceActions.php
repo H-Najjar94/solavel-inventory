@@ -44,6 +44,10 @@ final class WorkspaceActions
         'finance-allocations.review-status',
         'items.migration-requirements', 'items.migration-create', 'items.migration-link',
         'items.update',
+        // SolaCount edits supplier terms of Stock-owned items through the native,
+        // permission- and plan-gated routes; writes carry idempotency + revision.
+        'item-suppliers.index', 'item-suppliers.show', 'item-suppliers.store',
+        'item-suppliers.update', 'item-suppliers.destroy',
         'items.movements',
         'items.movements.export',
         'items.valuation',

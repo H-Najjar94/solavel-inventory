@@ -15,8 +15,8 @@ class SupplierPriceList extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'unit_cost' => 'decimal:4',
-        'minimum_qty' => 'decimal:4',
+        'unit_cost' => 'decimal:6',
+        'minimum_qty' => 'decimal:6',
         'effective_from' => 'date',
         'effective_to' => 'date',
         'is_active' => 'boolean',
@@ -30,5 +30,10 @@ class SupplierPriceList extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
+    }
+
+    public function itemSupplier(): BelongsTo
+    {
+        return $this->belongsTo(ItemSupplier::class, 'item_supplier_id');
     }
 }

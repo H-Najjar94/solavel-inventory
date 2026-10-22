@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\InventoryAuditController;
 use App\Http\Controllers\Api\V1\ItemAttachmentController;
 use App\Http\Controllers\Api\V1\ItemController;
+use App\Http\Controllers\Api\V1\ItemSupplierController;
 use App\Http\Controllers\Api\V1\ItemImageController;
 use App\Http\Controllers\Api\V1\MetaController;
 use App\Http\Controllers\Api\V1\MigrationCatalogController;
@@ -170,6 +171,36 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.update');
     Route::delete('/items/{item}/supplier-prices/{price}', [ItemController::class, 'destroySupplierPrice'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.destroy');
+
+    // Supplier-item terms (relationship + price tiers), history, suggestions.
+    Route::get('/items/{item}/suppliers', [ItemSupplierController::class, 'index'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.item-suppliers.index');
+    Route::get('/items/{item}/suppliers/{itemSupplier}', [ItemSupplierController::class, 'show'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.item-suppliers.show');
+    Route::post('/items/{item}/suppliers', [ItemSupplierController::class, 'store'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-suppliers.store');
+    Route::put('/items/{item}/suppliers/{itemSupplier}', [ItemSupplierController::class, 'update'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-suppliers.update');
+    Route::delete('/items/{item}/suppliers/{itemSupplier}', [ItemSupplierController::class, 'destroy'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-suppliers.destroy');
+    Route::get('/items/{item}/purchase-history', [ItemSupplierController::class, 'itemHistory'])
+        ->middleware('perm:inventory.view_reports')->name('api.v1.items.purchase-history');
+    Route::get('/items/{item}/vendor-comparison', [ItemSupplierController::class, 'comparison'])
+        ->middleware('perm:inventory.view_reports')->name('api.v1.items.vendor-comparison');
+    Route::get('/suppliers/{supplier}/items', [ItemSupplierController::class, 'supplierItems'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.supplier-items.index');
+    Route::get('/suppliers/{supplier}/purchase-history', [ItemSupplierController::class, 'supplierHistory'])
+        ->middleware('perm:inventory.view_reports')->name('api.v1.suppliers.purchase-history');
+    Route::get('/supplier-terms/suggest', [ItemSupplierController::class, 'suggest'])
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.supplier-terms.suggest');
+    Route::get('/supplier-terms/lookup', [ItemSupplierController::class, 'lookup'])
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.supplier-terms.lookup');
+    Route::get('/supplier-terms/reorder', [ItemSupplierController::class, 'reorder'])
+        ->middleware('perm:inventory.manage_purchase_orders')->name('api.v1.supplier-terms.reorder');
+    Route::get('/supplier-terms/export', [ItemSupplierController::class, 'export'])
+        ->middleware(['perm:inventory.view_items', 'perm:inventory.export_reports'])->name('api.v1.supplier-terms.export');
+    Route::post('/supplier-terms/import', [ItemSupplierController::class, 'import'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.supplier-terms.import');
 
     // Item images — PRIVATE storage, served only via authenticated org-scoped
     // routes. View/serve = view_items (viewers included); mutate = manage_items.

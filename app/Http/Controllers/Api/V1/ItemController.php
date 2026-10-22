@@ -366,16 +366,18 @@ class ItemController extends ApiController
             'is_active' => ['boolean'],
         ]);
         Supplier::query()->whereKey($data['supplier_id'])->firstOrFail();
-
-        $price = SupplierPriceList::query()->create([
-            'organization_id' => $item->organization_id,
-            'item_id' => $item->id,
-            'supplier_id' => $data['supplier_id'],
+        $terms = app(\App\Services\Purchasing\SupplierTerms\ItemSupplierService::class);
+        // A legacy single price is one tier of the supplier's item relationship.
+        $relationship = $terms->ensure($item, (int) $data['supplier_id'], array_filter([
             'supplier_sku' => $data['supplier_sku'] ?? null,
-            'unit_cost' => $data['unit_cost'],
+            'currency_code' => $data['currency_code'] ?? null,
+        ], fn ($v) => $v !== null && $v !== ''), $request->user()?->id);
+        if (! empty($data['currency_code']) && strtoupper($data['currency_code']) !== (string) $relationship->currency_code) {
+            return $this->error('supplier_price_currency_mismatch', __('inventory.supplier_terms.tier_currency_mismatch', ['currency' => $relationship->currency_code]), 422);
+        }
+        $price = $terms->writeTier($relationship, [
             'minimum_qty' => $data['minimum_qty'] ?? 1,
-            // Default to the organization's base currency, never a fixed SAR.
-            'currency_code' => strtoupper($data['currency_code'] ?? app(\App\Services\Reports\InventoryReportService::class)->baseCurrency()),
+            'unit_cost' => $data['unit_cost'],
             'effective_from' => $data['effective_from'] ?? null,
             'effective_to' => $data['effective_to'] ?? null,
             'is_active' => $data['is_active'] ?? true,
@@ -399,13 +401,29 @@ class ItemController extends ApiController
             'effective_to' => ['nullable', 'date'],
             'is_active' => ['boolean'],
         ]);
-        Supplier::query()->whereKey($data['supplier_id'])->firstOrFail();
-        if (empty($data['currency_code'])) {
-            unset($data['currency_code']);
-        } else {
-            $data['currency_code'] = strtoupper($data['currency_code']);
+        if ((int) $data['supplier_id'] !== (int) $price->supplier_id) {
+            return $this->error('supplier_price_supplier_locked', __('inventory.supplier_terms.tier_supplier_locked'), 422);
         }
-        $price->fill($data + ['minimum_qty' => 1, 'is_active' => true])->save();
+        $terms = app(\App\Services\Purchasing\SupplierTerms\ItemSupplierService::class);
+        $relationship = $price->item_supplier_id
+            ? \App\Models\Tenant\ItemSupplier::query()->findOrFail($price->item_supplier_id)
+            : $terms->ensure($item, (int) $price->supplier_id, [], $request->user()?->id);
+        if (! $price->item_supplier_id) {
+            $price->forceFill(['item_supplier_id' => $relationship->id])->save();
+        }
+        if (array_key_exists('supplier_sku', $data) || ! empty($data['currency_code'])) {
+            $terms->save($item, array_filter([
+                'supplier_sku' => $data['supplier_sku'] ?? null,
+                'currency_code' => $data['currency_code'] ?? null,
+            ], fn ($v) => $v !== null && $v !== ''), $relationship, $request->user()?->id);
+        }
+        $price = $terms->writeTier($relationship->fresh(), [
+            'minimum_qty' => $data['minimum_qty'] ?? $price->minimum_qty,
+            'unit_cost' => $data['unit_cost'],
+            'effective_from' => $data['effective_from'] ?? null,
+            'effective_to' => $data['effective_to'] ?? null,
+            'is_active' => $data['is_active'] ?? $price->is_active,
+        ], $price);
 
         return $this->success($price->fresh('supplier:id,code,name'));
     }

@@ -170,6 +170,22 @@ return [
         // Suppliers directory & price lists (ride the item perms = core).
         'api.v1.suppliers.store' => 'stock.suppliers',
         'api.v1.suppliers.update' => 'stock.suppliers',
+        // Supplier-item terms, vendor pricelist import/export, history and comparison.
+        'api.v1.item-suppliers.store' => 'stock.suppliers',
+        'api.v1.item-suppliers.update' => 'stock.suppliers',
+        'api.v1.item-suppliers.destroy' => 'stock.suppliers',
+        'api.v1.items.supplier-prices.store' => 'stock.suppliers',
+        'api.v1.items.supplier-prices.update' => 'stock.suppliers',
+        'api.v1.items.supplier-prices.destroy' => 'stock.suppliers',
+        'api.v1.supplier-terms.import' => 'stock.suppliers',
+        'api.v1.supplier-terms.export' => 'stock.suppliers',
+        'api.v1.items.purchase-history' => 'stock.suppliers',
+        'api.v1.items.vendor-comparison' => 'stock.suppliers',
+        'api.v1.suppliers.purchase-history' => 'stock.suppliers',
+        // Price suggestions, supplier SKU lookup and reorder suggestions feed purchase orders.
+        'api.v1.supplier-terms.suggest' => 'stock.purchase_orders',
+        'api.v1.supplier-terms.lookup' => 'stock.purchase_orders',
+        'api.v1.supplier-terms.reorder' => 'stock.purchase_orders',
 
         // Locations & bins (ride manage_warehouses = core).
         'api.v1.zones.store' => 'stock.locations_bins',

@@ -115,6 +115,7 @@ class PurchaseOrderController extends ApiController
     {
         $data = $request->validated();
         $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
+        app(\App\Services\Purchasing\SupplierTerms\BlockedSupplierGuard::class)->assertAllowed(isset($data['supplier_id']) ? (int) $data['supplier_id'] : null, $data['lines'] ?? []);
         unset($data['po_number']);
         $orgId = $this->context->idOrFail();
         try {
@@ -159,6 +160,8 @@ class PurchaseOrderController extends ApiController
             unset($data['currency_code']);
         }
         $this->warehouseAccess->assertAllowed((int) $data['warehouse_id']);
+        app(\App\Services\Purchasing\SupplierTerms\BlockedSupplierGuard::class)->assertAllowed(
+            (int) ($data['supplier_id'] ?? $purchase_order->supplier_id) ?: null, $data['lines'] ?? []);
         try {
             $po = DB::connection($this->conn())->transaction(function () use ($data, $purchase_order) {
                 $purchase_order->update(collect($data)->except('lines')->toArray());

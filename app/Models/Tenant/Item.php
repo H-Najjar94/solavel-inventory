@@ -108,6 +108,11 @@ class Item extends Model
         return $this->hasMany(SupplierPriceList::class, 'item_id');
     }
 
+    public function itemSuppliers(): HasMany
+    {
+        return $this->hasMany(ItemSupplier::class, 'item_id');
+    }
+
     /** The primary image, if any (for list/detail thumbnails). */
     public function primaryImage(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
