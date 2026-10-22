@@ -146,7 +146,8 @@ final class WorkspaceDispatcher
                 }
                 $body = $response->getData(true);
                 if ($models !== []) {
-                    $body['workspace_revision'] = $this->revision(array_map(fn ($m) => $m->fresh(), $models));
+                    // A delete removes one bound model; publish the revision of what remains.
+                    $body['workspace_revision'] = $this->revision(array_values(array_filter(array_map(fn ($m) => $m->fresh(), $models))));
                 }
                 if ($action === 'warehouses.show') {
                     // Native location updates use integer bindings. Publish their
