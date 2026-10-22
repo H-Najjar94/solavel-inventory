@@ -651,7 +651,7 @@ export default function AppShell() {
                                         to={n.path}
                                         end={n.path === '/dashboard'}
                                         className={() => `side-link ${n.key === activeKey ? 'is-active' : ''}`}
-                                        aria-current={n.key === activeKey ? 'page' : undefined}
+                                        aria-current={n.key === activeKey ? 'page' : false}
                                         title={t(NAV_LABELS[n.key], n.label)}
                                     >
                                         <i className={`side-link-icon ${n.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
@@ -685,7 +685,7 @@ export default function AppShell() {
                                 to={n.path}
                                 role="menuitem"
                                 className={() => `side-link ${n.key === activeKey ? 'is-active' : ''}`}
-                                aria-current={n.key === activeKey ? 'page' : undefined}
+                                aria-current={n.key === activeKey ? 'page' : false}
                             >
                                 <i className={`side-link-icon ${n.icon || 'fa-solid fa-circle'}`} aria-hidden="true" />
                                 <span className="side-link-label">{t(NAV_LABELS[n.key], n.label)}</span>

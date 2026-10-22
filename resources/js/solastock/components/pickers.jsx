@@ -97,7 +97,8 @@ export function QuantityInput({ value, onChange, disabled }) {
 }
 
 export function MoneyInput({ value, onChange, disabled }) {
-    return <input className="input input--num" type="number" step="0.0001" min="0" disabled={disabled}
+    // Purchase prices and costs are stored with 6 decimals; the server enforces each document's precision.
+    return <input className="input input--num" type="number" step="0.000001" min="0" disabled={disabled}
         value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
 }
 
