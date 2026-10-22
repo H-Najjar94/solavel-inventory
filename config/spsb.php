@@ -68,6 +68,7 @@ return [
             'inventory_scheduled_reports',
             'inventory_settings',
             'inventory_suppliers',
+            'item_suppliers',
             'inventory_user_role_assignments',
             'inventory_user_warehouses',
             'item_attachments',

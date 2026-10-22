@@ -13,8 +13,9 @@ final class BlockedSupplierGuard
 
     public function assertAllowed(?int $supplierId, array $lines): void
     {
-        if (! $supplierId || ! (bool) config('supplier_terms.enabled', true)) {
-            return;
+        if (! $supplierId || ! (bool) config('supplier_terms.enabled', true)
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('item_suppliers')) {
+            return; // Never block purchase orders on a tenant whose additive migration is still pending.
         }
         $itemIds = array_values(array_unique(array_filter(array_map(fn ($l) => (int) ($l['item_id'] ?? 0), $lines))));
         if ($itemIds === []) {

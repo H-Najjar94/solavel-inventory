@@ -276,5 +276,7 @@ class ItemSupplierController extends ApiController
     private function enabled(): void
     {
         abort_unless((bool) config('supplier_terms.enabled', true), 404);
+        // Code can be live a moment before a tenant's additive migration; answer clearly, never 500.
+        abort_unless(\Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('item_suppliers'), 503, 'supplier_terms_schema_pending');
     }
 }
