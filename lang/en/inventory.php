@@ -515,7 +515,7 @@ return array (
     'purchase_unit_unconvertible' => 'This purchase unit has no conversion to the item\'s base unit. Add a unit conversion first.',
     'decimal_invalid' => 'Enter a positive number using a dot for decimals.',
     'too_many_decimals' => 'Use at most :scale decimal places for this supplier.',
-    'supplier_blocked_for_item' => 'This supplier is blocked for this item. Choose another supplier or ask a purchase order approver.',
+    'supplier_blocked_for_item' => 'This supplier is blocked for this item. Choose another supplier or ask an inventory manager, who may override the block.',
     'price_rule' => 'Vendor price: approved suppliers only; the active tier valid on the document date with the highest minimum quantity not above the ordered quantity (in the supplier\'s purchase unit), less the supplier discount. Suggestions never change the document price until you apply them.',
     'comparison_rule' => 'Prices are compared per base unit in the base currency, using the latest SolaCount exchange rate on or before the date (base = foreign amount ÷ rate). Suppliers without a rate are listed but not ranked. Inventory valuation is not used.',
     'tier_supplier_locked' => 'A price tier cannot move to another supplier. Delete it and add it under the other supplier.',
