@@ -153,17 +153,15 @@ class CustomerItemIdentityTest extends TestCase
     #[Test]
     public function a_missing_finance_table_returns_empty(): void
     {
-        $this->useTenantA();
-        if (Schema::connection('tenant')->hasTable('finance_customer_items')) {
-            $this->markTestSkipped('The test tenant already has finance_customer_items.');
-        }
+        $this->useTenantB(); // the sealed fixture installs finance_customer_items only in tenant A
+        $this->assertFalse(Schema::connection('tenant')->hasTable('finance_customer_items'));
         $mapping = $this->connectFinance(true);
         $customer = $this->customer('CI-F');
         $item = F::averageItem();
         $this->financeMaster($mapping, 'customer', $customer->id, 8108);
         $this->financeMaster($mapping, 'item', $item->id, 8208);
 
-        $this->assertSame([], $this->reader()->forCustomerItems(TenantTestManager::ORG_A, $customer->id, [$item->id]));
+        $this->assertSame([], $this->reader()->forCustomerItems(TenantTestManager::ORG_B, $customer->id, [$item->id]));
     }
 
     private function connectFinance(bool $entitled): IntegrationOrganizationMapping

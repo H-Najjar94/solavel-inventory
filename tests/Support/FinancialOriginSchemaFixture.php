@@ -29,6 +29,10 @@ final class FinancialOriginSchemaFixture
                 $path = $finance.'/database/migrations/finance/'.$name;
                 if (!is_file($path)) throw new \RuntimeException('Pinned Finance companion migration missing: '.$name); (require $path)->up();
             }
+            // SolaCount-owned customer-item agreements (read-only for SolaStock). Installed only in
+            // tenant A from the exact pinned companion, so tenant B proves the missing-table path.
+            $customerItems = $finance.'/database/migrations/finance/2026_10_24_100000_create_finance_customer_items.php';
+            if ($db->getDatabaseName() === 'solastock_test_a' && is_file($customerItems)) (require $customerItems)->up();
             (require base_path('database/migrations/tenant/2026_10_07_081000_create_purchase_valuation_holds.php'))->up();
             (require base_path('database/migrations/tenant/2026_10_07_188000_add_financial_origin_valuation_hold_identity.php'))->up();
             (require base_path('database/migrations/tenant/2026_10_08_219000_create_cash_refund_demand_holds.php'))->up();
