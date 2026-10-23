@@ -640,6 +640,15 @@ class SolaBooksDeliveryTest extends TestCase
         $this->assertSame('ready', $retried->status);
         $this->assertSame('unit_conversion_finance_scope_invalid', $retried->failure_code);
 
+        $contract = $this->enableDurableTransport($this->event());
+        $contract->update([
+            'status' => 'failed',
+            'mapping_status' => 'complete',
+            'failure_category' => 'business_permanent',
+            'failure_code' => 'unit_conversion_contract_invalid',
+        ]);
+        $this->assertSame('ready', $transport->queueReviewedRetry($contract->fresh(), 42)->status);
+
         $currency = $this->enableDurableTransport($this->event());
         $currency->update([
             'status' => 'failed',
