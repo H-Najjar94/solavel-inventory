@@ -161,7 +161,7 @@ class LandedCostTest extends TestCase
         $this->out($warehouse, $item, '4', Shipment::class, 91001);
 
         $doc = $this->draft([$receipt->lines->sole()->id], [['charge_type' => 'freight', 'amount' => '15'], ['charge_type' => 'insurance', 'amount' => '5']]);
-        $this->assertSame('20.00', (string) $doc->total_base_amount);
+        $this->assertSame('20.000000', (string) $doc->total_base_amount);
         $preview = app(LandedCostService::class)->preview($doc);
         $this->assertTrue($preview['ready']);
         $this->assertSame(['inventory_asset' => '12.00', 'cogs' => '8.00', 'adjustment_loss' => '0.00'], $preview['totals']);
@@ -170,8 +170,8 @@ class LandedCostTest extends TestCase
         app(LandedCostService::class)->post($doc->fresh()); // idempotent
 
         $this->assertSame('posted', $posted->status);
-        $this->assertSame('12.00', (string) $posted->inventory_base_amount);
-        $this->assertSame('8.00', (string) $posted->consumed_base_amount);
+        $this->assertSame('12.000000', (string) $posted->inventory_base_amount);
+        $this->assertSame('8.000000', (string) $posted->consumed_base_amount);
         $components = LandedCostComponent::query()->where('landed_cost_id', $doc->id)->orderBy('id')->get();
         $this->assertSame(['inventory_asset', 'cogs'], $components->pluck('destination_role')->all());
         $this->assertSame(['12.00', '8.00'], $components->pluck('posted_base_amount')->map(fn ($v) => (string) $v)->all());
@@ -221,7 +221,7 @@ class LandedCostTest extends TestCase
 
         $byValue = $this->draft($lines, [['charge_type' => 'freight', 'amount' => '70']], 'value', ['currency_code' => 'USD', 'exchange_rate' => '0.7']);
         $this->assertSame('USD', $byValue->currency_code);
-        $this->assertSame('100.00', (string) $byValue->total_base_amount);
+        $this->assertSame('100.000000', (string) $byValue->total_base_amount);
         $this->assertSame(['40.000000', '60.000000'], $byValue->lines->pluck('allocated_base_amount')->map(fn ($v) => (string) $v)->all());
 
         // Weight basis: 10 × 1 = 10 vs 5 × 6 = 30.
