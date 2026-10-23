@@ -62,6 +62,7 @@ return [
         'inventory.manage_recalls' => 'Create / activate / close recall cases',
         'inventory.override_quarantine' => 'Ship quarantined / recalled lots (override)',
         'inventory.override_expired_lot' => 'Ship expired lots (override)',
+        'inventory.override_supplier_terms' => 'Order from a supplier blocked for an item (override)',
     ],
 
     // Default role → permission bundles (seeded per org).
@@ -81,6 +82,7 @@ return [
             'inventory.manage_shipments', 'inventory.manage_returns',
             'inventory.view_traceability', 'inventory.manage_lots', 'inventory.manage_serials',
             'inventory.manage_recalls', 'inventory.override_quarantine', 'inventory.override_expired_lot',
+            'inventory.override_supplier_terms',
         ],
         'inventory_viewer' => [
             'inventory.view_dashboard', 'inventory.view_items', 'inventory.view_warehouses',

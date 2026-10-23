@@ -270,6 +270,23 @@ class SupplierItemTermsTest extends TestCase
     }
 
     #[Test]
+    public function the_blocked_supplier_override_is_a_dedicated_permission_held_by_those_who_set_blocks(): void
+    {
+        $this->assertSame('inventory.override_supplier_terms', BlockedSupplierGuard::OVERRIDE_PERMISSION);
+        $this->assertArrayHasKey(BlockedSupplierGuard::OVERRIDE_PERMISSION, config('inventory_permissions.permissions'));
+        $this->assertContains(BlockedSupplierGuard::OVERRIDE_PERMISSION, config('inventory_permissions.roles.inventory_manager'));
+        $this->assertNotContains(BlockedSupplierGuard::OVERRIDE_PERMISSION, config('inventory_permissions.roles.inventory_viewer'));
+        $this->assertNotContains(BlockedSupplierGuard::OVERRIDE_PERMISSION, config('inventory_permissions.roles.inventory_accountant'));
+
+        $aliases = new \ReflectionMethod(InventoryPermissionService::class, 'legacyOperationalAliases');
+        $service = app(InventoryPermissionService::class);
+        // Approving purchase orders alone no longer bypasses a block ...
+        $this->assertNotContains(BlockedSupplierGuard::OVERRIDE_PERMISSION, $aliases->invoke($service, ['inventory.manage_purchase_orders', 'inventory.approve_purchase_orders']));
+        // ... but a custom role that can set or lift the block keeps the override.
+        $this->assertContains(BlockedSupplierGuard::OVERRIDE_PERMISSION, $aliases->invoke($service, ['inventory.manage_items', 'inventory.manage_purchase_orders']));
+    }
+
+    #[Test]
     public function ordering_from_a_blocked_supplier_needs_the_po_approval_permission(): void
     {
         $this->boot();

@@ -359,6 +359,10 @@ class InventoryPermissionService
         if (in_array('inventory.manage_warehouses', $permissions, true)) {
             $permissions[] = 'inventory.manage_warehouse_structure';
         }
+        // Whoever can set or lift a supplier-item block may also override it.
+        if (in_array('inventory.manage_items', $permissions, true)) {
+            $permissions[] = 'inventory.override_supplier_terms';
+        }
 
         return array_values(array_unique($permissions));
     }

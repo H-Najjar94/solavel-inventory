@@ -6,10 +6,14 @@ use App\Models\Tenant\ItemSupplier;
 use App\Services\Access\InventoryPermissionService;
 use Illuminate\Validation\ValidationException;
 
-/** A supplier blocked for an item cannot be ordered from unless the user may approve purchase orders. */
+/**
+ * A supplier blocked for an item cannot be ordered from unless the user holds the
+ * dedicated override (custom roles inherit it from inventory.manage_items, the
+ * authority that sets or lifts the block).
+ */
 final class BlockedSupplierGuard
 {
-    public const OVERRIDE_PERMISSION = 'inventory.approve_purchase_orders';
+    public const OVERRIDE_PERMISSION = 'inventory.override_supplier_terms';
 
     public function assertAllowed(?int $supplierId, array $lines): void
     {
