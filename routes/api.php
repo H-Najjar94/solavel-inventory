@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\SpaPageViewController;
 use App\Http\Controllers\Api\Tenancy\SyncEventsController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\CustomerItemIdentityController;
 use App\Http\Controllers\Api\V1\CustomRoleController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FinanceDocumentSourceController;
@@ -326,6 +327,9 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.view_sales')->name('api.v1.customers.index');
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])
         ->middleware('perm:inventory.view_sales')->name('api.v1.customers.show');
+    // Read-only SolaCount customer-item identity (customer SKU/name) for mapped records.
+    Route::get('/customers/{customer}/item-identities', [CustomerItemIdentityController::class, 'index'])
+        ->middleware('perm:inventory.view_sales')->name('api.v1.customers.item-identities');
     Route::post('/customers', [CustomerController::class, 'store'])
         ->middleware('perm:inventory.manage_sales_orders')->name('api.v1.customers.store');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])
