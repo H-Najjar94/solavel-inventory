@@ -261,7 +261,7 @@ function UserMenu({ tenant, canManageSettings, theme, onTheme, locale, onClose }
     return (
         <div className="ss-menu ss-menu--end ss-user-menu" role="menu" aria-label={t('shell.accountMenu')}>
             <div className="ss-user-menu__head">
-                <span className="ss-avatar ss-avatar--lg" aria-hidden="true">{initials(name)}</span>
+                <span className="ss-avatar ss-avatar--lg" aria-hidden="true">{tenant.user?.avatar_url ? <img src={tenant.user.avatar_url} alt="" /> : initials(name)}</span>
                 <div style={{ minWidth: 0 }}>
                     <div className="ss-user-menu__name">{name}</div>
                     {tenant.user?.email && <div className="ss-user-menu__meta">{tenant.user.email}</div>}
@@ -794,7 +794,7 @@ export default function AppShell() {
                                 <button type="button" className="ss-user-pill" aria-label={t('shell.accountMenu')}
                                     title={tenant.user?.email || t('shell.account')}
                                     aria-haspopup="menu" aria-expanded={menu === 'user'} onClick={() => toggleMenu('user')}>
-                                    <span className="ss-avatar" aria-hidden="true">{initials(tenant.user?.name || tenant.user?.email || t('shell.account'))}</span>
+                                    <span className="ss-avatar" aria-hidden="true">{tenant.user?.avatar_url ? <img src={tenant.user.avatar_url} alt="" /> : initials(tenant.user?.name || tenant.user?.email || t('shell.account'))}</span>
                                     <i className="fa-solid fa-chevron-down ss-user-pill__chevron" aria-hidden="true" />
                                 </button>
                                 {menu === 'user' && (

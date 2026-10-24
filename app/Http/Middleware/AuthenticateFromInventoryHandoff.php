@@ -110,7 +110,7 @@ $this->tenants->useTenant($orgId, $this->tenants->resolveDatabaseName($clientId)
                 if ($local) {
                     Auth::login($local, remember: false);
                     if ($request->hasSession()) {
-                        $request->session()->put('principal', ['id' => $local->id, 'name' => $local->name ?? null, 'email' => $local->email ?? null]);
+                        $request->session()->put('principal', ['id' => $local->id, 'name' => $local->name ?? null, 'email' => $local->email ?? null, 'avatar_url' => $payload['avatar_url'] ?? null]);
                         $request->session()->regenerate();
                     }
                 }

@@ -81,7 +81,7 @@ class TenantController extends ApiController
         [$badge, $dataState] = $this->badgeFor($s['state']);
 
         // Principal (the SSO-seeded user) for the top-bar account menu.
-        $principal = $request->user()?->only(['id', 'name', 'email']);
+        $principal = $request->user()?->only(['id', 'name', 'email']) ?: (array) $request->session()->get('principal', []);
 
         return $this->success([
             'state' => $s['state'],           // canonical state machine value
@@ -94,7 +94,7 @@ class TenantController extends ApiController
                 ? config('inventory.demo_tenant.label', __('inventory.tenancy.badge_demo'))
                 : $this->live->organizationName($s['organization_id']),
             'logo_url' => $s['mode'] === 'live' ? CentralOrgLogo::url($s['organization_id']) : null,
-            'user' => $principal ? ['name' => $principal['name'] ?? null, 'email' => $principal['email'] ?? null] : null,
+            'user' => $principal ? ['name' => $principal['name'] ?? null, 'email' => $principal['email'] ?? null, 'avatar_url' => $request->user()?->centralAvatarUrl() ?: data_get($request->session()->get('principal'), 'avatar_url')] : null,
             // Solavel portal (account menu card); the other apps load lazily from /tenant/launcher.
             'portal_url' => OtherAppsMenu::portalUrl(),
             'database' => $s['database'],
