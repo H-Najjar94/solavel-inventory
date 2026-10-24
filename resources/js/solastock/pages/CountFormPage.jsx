@@ -143,8 +143,8 @@ export default function CountFormPage() {
             </div>
 
             <div className="panel">
-                <label className="check-row" title={t('counts.form.blindHelp')}><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> <span className="check-row__text"><strong>{t('counts.form.blindCount')}</strong><small>{t('counts.form.blindHelp')}</small></span></label>
-                <label className="check-row" title={t('counts.form.freezeHelp')}><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> <span className="check-row__text"><strong>{t('counts.form.freezeSnapshot')}</strong><small>{t('counts.form.freezeHelp')}</small></span></label>
+                <label className={`check-row count-option${header.blind_count ? ' is-selected' : ''}`} title={t('counts.form.blindHelp')}><input type="checkbox" checked={header.blind_count} onChange={(e) => setHeader({ ...header, blind_count: e.target.checked })} /> <span className="check-row__text"><strong>{t('counts.form.blindCount')}</strong><small>{t('counts.form.blindHelp')}</small></span><span className="count-option__state">{t(header.blind_count ? 'counts.form.selected' : 'counts.form.notSelected')}</span></label>
+                <label className={`check-row count-option${header.freeze_snapshot ? ' is-selected' : ''}`} title={t('counts.form.freezeHelp')}><input type="checkbox" checked={header.freeze_snapshot} onChange={(e) => setHeader({ ...header, freeze_snapshot: e.target.checked })} /> <span className="check-row__text"><strong>{t('counts.form.freezeSnapshot')}</strong><small>{t('counts.form.freezeHelp')}</small></span><span className="count-option__state">{t(header.freeze_snapshot ? 'counts.form.selected' : 'counts.form.notSelected')}</span></label>
             </div>
 
             <div className="panel">

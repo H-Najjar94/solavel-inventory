@@ -2753,6 +2753,15 @@ form.fg2 > .btn--primary { grid-column:1/-1; justify-self:start; min-width:180px
 .count-form-page .check-row { display:flex; align-items:flex-start; gap:12px; padding:12px 0; }
 .count-form-page .check-row + .check-row { border-top:1px solid var(--line-soft,#f1eee9); }
 .count-form-page .check-row input { margin-top:3px; width:18px; height:18px; flex:none; }
+.count-form-page .count-option { padding:16px; border:1px solid var(--line-soft); border-radius:12px; cursor:pointer; flex-wrap:nowrap; }
+.count-form-page .count-option + .count-option { margin-top:12px; }
+.count-form-page .count-option.is-selected { background:var(--amber-glow); border-color:var(--amber); }
+.count-form-page .count-option .check-row__text { flex:1; min-width:0; }
+.count-form-page .count-option input[type=checkbox] { width:22px; height:22px; border:2px solid var(--text-2); }
+.count-form-page .count-option input[type=checkbox]:checked { border-color:var(--amber); background:var(--amber) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111827' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 16px no-repeat; }
+.count-option__state { flex:none; align-self:center; color:var(--text-2); font-size:12px; font-weight:700; padding:3px 8px; border-radius:7px; background:var(--layer-2); }
+.count-option.is-selected .count-option__state { background:var(--amber); color:#111827; }
+@media(max-width:480px) { .count-form-page .count-option { flex-wrap:wrap; gap:10px; } .count-option__state { margin-inline-start:32px; } }
 .check-row__text { display:flex; flex-direction:column; gap:2px; }
 .check-row__text small { color:var(--text-2); font-size:12.5px; line-height:1.5; }
 .count-form-page .doc-lines .data-table th, .count-form-page .doc-lines .data-table td { padding:14px 12px; vertical-align:middle; }
