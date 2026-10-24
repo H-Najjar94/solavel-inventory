@@ -222,10 +222,11 @@ html[dir="rtl"] :where(.content, .drawer, .modal, .modal-overlay) .field select 
 /* Dates: tidy native picker icon, theme-aware */
 :where(.content, .drawer, .modal, .modal-overlay) input:is([type=date], [type=datetime-local], [type=month], [type=time]) { font-variant-numeric: tabular-nums; }
 :where(.content, .drawer, .modal, .modal-overlay) input:is([type=date], [type=datetime-local], [type=month], [type=time])::-webkit-calendar-picker-indicator {
-  opacity: 0.55; cursor: pointer; border-radius: 6px; padding: 2px;
+  width: 18px; height: 18px; opacity: 0.8; cursor: pointer; border-radius: 6px; padding: 3px;
+  transition: background-color .15s, opacity .15s;
 }
-:where(.content, .drawer, .modal, .modal-overlay) input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; background: var(--layer-3); }
-[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) input::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+:where(.content, .drawer, .modal, .modal-overlay) input::-webkit-calendar-picker-indicator:hover { opacity: 1; background-color: var(--layer-3); }
+[data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) input::-webkit-calendar-picker-indicator { filter: none; }
 [data-theme="dark"] :where(.content, .drawer, .modal, .modal-overlay) :is(input, select, textarea) { color-scheme: dark; }
 
 /* Numbers */
