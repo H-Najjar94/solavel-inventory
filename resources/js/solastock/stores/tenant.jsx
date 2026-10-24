@@ -30,6 +30,9 @@ export function TenantProvider({ children }) {
         queryFn: async () => (await api.tenantStatus()).data,
         retry: false,
         staleTime: 30_000,
+        refetchOnWindowFocus: 'always',
+        refetchInterval: 60_000,
+        refetchIntervalInBackground: false,
     });
 
     // The user's accessible organizations (for the org switcher). Loaded once
