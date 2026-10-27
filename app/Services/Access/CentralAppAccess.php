@@ -35,6 +35,11 @@ class CentralAppAccess
         $status=$reason==='temporarily_unavailable'?503:403;
         $appName=['finance'=>'SolaCount','inventory'=>'SolaStock','projects'=>'SolaProjects','hr'=>'SolaHR'][$appKey]??'Solavel';
         $ar=app()->getLocale()==='ar';
+        if ($status === 403 && ! $request->expectsJson() && ! $request->is('api/*')
+            && ! isset($decision['permission']) && ! isset($decision['feature']) && $reason !== 'action_forbidden') {
+            return response()->view('errors.app-organization-access', compact('appKey', 'appName'), 403)
+                ->header('Cache-Control', 'private, no-store');
+        }
         $message=match($reason){
             'temporarily_unavailable'=>(trans('access')['Application access could not be checked. Please try again shortly.']),
             'email_verification_required'=>(trans('access')['Verify your email before opening applications.']),

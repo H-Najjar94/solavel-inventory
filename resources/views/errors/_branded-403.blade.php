@@ -115,4 +115,8 @@
         'report' => false,
     ];
 @endphp
-@include('errors._branded', ['b' => $branded])
+@if(in_array($resolved, ['noapp', 'org', 'membership', 'setup'], true) || in_array(strtolower((string) ($reason ?? $denial_code ?? '')), ['user_not_assigned_to_project', 'project_not_assigned_to_user', 'access_required'], true))
+    @include('errors.app-organization-access', ['appKey' => $appKey ?? 'inventory'])
+@else
+    @include('errors._branded', ['b' => $branded])
+@endif
