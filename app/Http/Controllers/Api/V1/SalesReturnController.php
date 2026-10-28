@@ -101,16 +101,62 @@ class SalesReturnController extends ApiController
             return null;
         }
         $creditId = (int) data_get($confirmed->response, 'credit_note_id', 0);
-        // Stock only knows the creation response (SolaCount never calls back, and exposes no read
-        // endpoint for Stock), so a later credit state (posted/voided) cannot be shown truthfully.
-        // Report only what Stock itself knows: created, or the return was reversed here.
+        // Fallback when the authoritative SolaCount status cannot be read: report only what Stock
+        // itself knows (created, or the return was reversed here).
         $state = $rows->contains('event_type', 'sales.return.reversed') ? 'reversed' : 'created';
         if ($creditId < 1) {
             return ['state' => $confirmed->status === 'sent' ? 'unknown' : 'pending', 'url' => null];
         }
         $base = rtrim((string) config('supplier_terms.finance_url'), '/');
 
+        $state = $this->liveCreditState((int) $return->organization_id, $creditId) ?? $state;
+
         return ['state' => $state, 'url' => $base !== '' ? $base.'/ar/credit-notes/'.$creditId : null];
+    }
+
+    /**
+     * Authoritative SolaCount credit status, read-only from the shared tenant database, scoped to the
+     * verified mapped finance organization AND the credit id. Null on any gap (no table, no mapping,
+     * no row, unknown status, read failure) so the caller degrades to "created".
+     */
+    private function liveCreditState(int $organizationId, int $creditId): ?string
+    {
+        try {
+            $schema = \Illuminate\Support\Facades\Schema::connection('tenant');
+            if (! $schema->hasTable('credit_notes') || ! $schema->hasTable('integration_organization_mappings')) {
+                return null;
+            }
+            $db = \Illuminate\Support\Facades\DB::connection('tenant');
+            $financeOrg = $db->table('integration_organization_mappings')
+                ->where('solastock_organization_id', $organizationId)
+                ->where('tenant_database_identity', $db->getDatabaseName())
+                ->whereIn('status', ['verified', 'verified_hold'])->value('finance_organization_id');
+            if (! $financeOrg) {
+                return null;
+            }
+            $row = $db->table('credit_notes')->where('organization_id', (int) $financeOrg)->where('id', $creditId)->first(['status', 'posting_status']);
+            if (! $row) {
+                return null;
+            }
+            $status = (string) $row->status;
+            $posting = (string) ($row->posting_status ?? '');
+            if ($status === 'void' || $posting === 'void') {
+                return 'credit_voided';
+            }
+            if ($posting === 'draft' || $status === 'draft') {
+                return 'draft_review';
+            }
+
+            return match ($status) {
+                'unapplied' => 'credit_posted',
+                'partially_applied' => 'credit_partially_applied',
+                'fully_applied' => 'credit_applied',
+                'refunded' => 'credit_refunded',
+                default => null,
+            };
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function store(StoreSalesReturnRequest $request): JsonResponse

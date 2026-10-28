@@ -5,6 +5,10 @@ namespace Tests\Feature\Sales;
 use App\Http\Controllers\Api\V1\SalesReturnController;
 use App\Models\Tenant\SalesDocumentOutbox;
 use App\Models\Tenant\SalesReturn;
+use App\Models\Tenant\IntegrationOrganizationMapping;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
@@ -77,6 +81,95 @@ class SalesReturnFinanceCreditLinkTest extends TestCase
         $this->outbox(TenantTestManager::ORG_B, 504, 'sales.return.confirmed', ['credit_note_id' => 9, 'state' => 'credit_posted']);
         $this->useTenantA();
         $this->assertNull($this->credit($this->ret(TenantTestManager::ORG_A, 504)));
+    }
+
+    private const FIN_ORG = 9101;
+
+    private function creditTable(): void
+    {
+        $schema = Schema::connection('tenant');
+        $schema->dropIfExists('credit_notes');
+        $schema->create('credit_notes', function ($t) {
+            $t->id();
+            $t->unsignedBigInteger('organization_id');
+            $t->unsignedBigInteger('invoice_id')->nullable();
+            $t->string('status', 30)->default('draft');
+            $t->string('posting_status', 30)->default('draft');
+        });
+    }
+
+    private function mapOrg(int $org, string $status = 'verified'): void
+    {
+        DB::connection('tenant')->table('integration_organization_mappings')->delete();
+        IntegrationOrganizationMapping::query()->create(['mapping_uuid' => (string) Str::uuid(), 'central_client_id' => 7,
+            'central_organization_id' => $org, 'tenant_database_identity' => DB::connection('tenant')->getDatabaseName(),
+            'finance_organization_id' => self::FIN_ORG, 'solastock_organization_id' => $org, 'contract_version' => 'solastock-journal.v2',
+            'status' => $status, 'activation_state' => 'active', 'base_currency_code' => 'JOD', 'verified_at' => now()]);
+    }
+
+    private function live(int $id, string $status, string $posting, int $finOrg = self::FIN_ORG, int $returnId = 600): ?array
+    {
+        DB::connection('tenant')->table('credit_notes')->insert(['id' => $id, 'organization_id' => $finOrg, 'status' => $status, 'posting_status' => $posting]);
+        $this->outbox(TenantTestManager::ORG_A, $returnId, 'sales.return.confirmed', ['credit_note_id' => $id, 'state' => 'draft_review']);
+
+        return $this->credit($this->ret(TenantTestManager::ORG_A, $returnId));
+    }
+
+    #[Test]
+    public function live_solacount_status_is_shown_for_draft_posted_applied_refunded_and_void(): void
+    {
+        $this->useTenantA();
+        $this->creditTable();
+        $this->mapOrg(TenantTestManager::ORG_A);
+        try {
+            $this->assertSame('draft_review', $this->live(11, 'draft', 'draft', self::FIN_ORG, 611)['state']);
+            $this->assertSame('credit_posted', $this->live(12, 'unapplied', 'posted', self::FIN_ORG, 612)['state']);
+            $this->assertSame('credit_partially_applied', $this->live(13, 'partially_applied', 'posted', self::FIN_ORG, 613)['state']);
+            $this->assertSame('credit_applied', $this->live(14, 'fully_applied', 'posted', self::FIN_ORG, 614)['state']);
+            $this->assertSame('credit_refunded', $this->live(15, 'refunded', 'posted', self::FIN_ORG, 615)['state']);
+            $this->assertSame('credit_voided', $this->live(16, 'void', 'void', self::FIN_ORG, 616)['state']);
+            $before = DB::connection('tenant')->table('credit_notes')->count();
+            $this->assertSame(6, $before);
+        } finally {
+            Schema::connection('tenant')->dropIfExists('credit_notes');
+            DB::connection('tenant')->table('integration_organization_mappings')->delete();
+        }
+    }
+
+    #[Test]
+    public function missing_row_missing_table_no_mapping_and_unverified_mapping_degrade_to_created(): void
+    {
+        $this->useTenantA();
+        $this->outbox(TenantTestManager::ORG_A, 620, 'sales.return.confirmed', ['credit_note_id' => 21]);
+        Schema::connection('tenant')->dropIfExists('credit_notes');
+        $this->mapOrg(TenantTestManager::ORG_A);
+        $this->assertSame('created', $this->credit($this->ret(TenantTestManager::ORG_A, 620))['state'], 'missing table');
+        $this->creditTable();
+        try {
+            $this->assertSame('created', $this->credit($this->ret(TenantTestManager::ORG_A, 620))['state'], 'missing row');
+            DB::connection('tenant')->table('integration_organization_mappings')->delete();
+            $this->assertSame('created', $this->live(22, 'unapplied', 'posted', self::FIN_ORG, 621)['state'], 'no mapping');
+            $this->mapOrg(TenantTestManager::ORG_A, 'pending');
+            $this->assertSame('created', $this->live(23, 'unapplied', 'posted', self::FIN_ORG, 622)['state'], 'unverified mapping');
+        } finally {
+            Schema::connection('tenant')->dropIfExists('credit_notes');
+            DB::connection('tenant')->table('integration_organization_mappings')->delete();
+        }
+    }
+
+    #[Test]
+    public function another_organizations_credit_with_the_same_id_is_never_exposed(): void
+    {
+        $this->useTenantA();
+        $this->creditTable();
+        $this->mapOrg(TenantTestManager::ORG_A);
+        try {
+            $r = $this->live(31, 'void', 'void', self::FIN_ORG + 1, 630);
+            $this->assertSame('created', $r['state'], 'a credit owned by a different finance org must not be read');
+        } finally {
+            Schema::connection('tenant')->dropIfExists('credit_notes');
+            DB::connection('tenant')->table('integration_organization_mappings')->delete();
+        }
     }
 
     #[Test]
