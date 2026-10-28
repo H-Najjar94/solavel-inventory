@@ -688,7 +688,7 @@ class SolaBooksDeliveryTest extends TestCase
         $key = $event->idempotency_key;
         $hash = $event->payload_hash;
         $payload = $event->payload;
-        $closed = ['message' => 'Posting date is in a closed period', 'code' => 'accounting_period_invalid'];
+        $closed = ['success' => false, 'error' => ['code' => 'accounting_period_invalid', 'message' => 'Posting date is in a closed period']];
         Http::fake(['books.test/*' => Http::sequence()
             ->push($closed, 422)->push($closed, 422)->push(['data' => ['id' => 7001]], 201)]);
         $transport = app(DurableOutboxTransportService::class);
