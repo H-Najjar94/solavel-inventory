@@ -78,7 +78,24 @@ class LegacyUnitConversionReturnTest extends TestCase
     {
         $m = new \ReflectionMethod(\App\Services\Integration\WorkflowValidationService::class, 'assertConversionSnapshot');
         $m->setAccessible(true);
-        $m->invoke(app(\App\Services\Integration\WorkflowValidationService::class), (object) $returnLine->getAttributes(), (int) $returnLine->organization_id, 'sales_return.posted');
+        $m->invoke(app(\App\Services\Integration\WorkflowValidationService::class), (object) $returnLine->getAttributes(), (int) $returnLine->organization_id, 'sales_return.posted', true);
+    }
+
+    /** The sales_return.posted payload snapshot must equal the shipment line's (Finance compares to the original journal). */
+    private function assertPayloadSnapshotEqualsShipment($returnLine, $shipLine): void
+    {
+        $ledger = \App\Models\Tenant\StockLedger::query()->where('source_type', \App\Models\Tenant\SalesReturn::class)
+            ->where('source_id', $returnLine->sales_return_id)->where('source_line_id', $returnLine->id)->first();
+        $this->assertNotNull($ledger);
+        $m = new \ReflectionMethod(\App\Services\Integration\EventPayloadBuilder::class, 'conversionForLedger');
+        $m->setAccessible(true);
+        $snap = $m->invoke(app(\App\Services\Integration\EventPayloadBuilder::class), $ledger);
+        $this->assertNotNull($snap, json_encode([$ledger->only(["source_type","source_line_id","id","source_id"]), $returnLine->only(["id","sales_return_id"])]).json_encode(DB::connection("tenant")->table("sales_return_lines")->where("id",$ledger->source_line_id)->first()));
+        $ship = $shipLine->fresh();
+        $this->assertSame((string) $ship->unit_conversion_version, $snap['version']);
+        $this->assertSame((string) $ship->unit_conversion_hash, $snap['hash']);
+        $this->assertSame((int) $ship->unit_conversion_precision, $snap['precision']);
+        $this->assertEquals((float) $ship->unit_conversion_factor, (float) $snap['factor']);
     }
 
     private function ret(string $n, $shipment, $customer, $warehouse, $item, $line, string $qty, bool $post = true, ?string $unit = null, ?string $entered = null)
@@ -98,7 +115,11 @@ class LegacyUnitConversionReturnTest extends TestCase
     public function current_v2_shipment_full_return_still_posts(): void
     {
         [$s, $c, $w, $i, $l] = $this->shipped('4.000000');
-        $this->assertSame('posted', $this->ret('LG-V2', $s, $c, $w, $i, $l, '4.000000')->status);
+        $r = $this->ret('LG-V2', $s, $c, $w, $i, $l, '4.000000');
+        $this->assertSame('posted', $r->status);
+        $rl = $r->fresh('lines')->lines->first();
+        $this->assertSame(UnitConversionResolver::CONTRACT_VERSION, $rl->unit_conversion_version);
+        $this->assertValidator($rl);
     }
 
     #[Test]
@@ -110,8 +131,12 @@ class LegacyUnitConversionReturnTest extends TestCase
         $r = $this->ret('LG-V1F', $s, $c, $w, $i, $l, '4.000000');
         $this->assertSame('posted', $r->status);
         $rl = $r->fresh('lines')->lines->first();
-        $this->assertSame(UnitConversionResolver::CONTRACT_VERSION, $rl->unit_conversion_version);
+        // Not upgraded: identical to the shipment's frozen v1 snapshot.
+        $this->assertSame('solastock-unit-conversion.v1', $rl->unit_conversion_version);
+        $this->assertSame((string) $l->fresh()->unit_conversion_hash, (string) $rl->unit_conversion_hash);
+        $this->assertSame(4, (int) $rl->unit_conversion_precision);
         $this->assertValidator($rl);
+
         $this->assertEquals($before, DB::connection('tenant')->table('shipment_lines')->where('id', $l->id)->first());
     }
 
@@ -123,6 +148,7 @@ class LegacyUnitConversionReturnTest extends TestCase
         $first = $this->ret('LG-P1', $s, $c, $w, $i, $l, '2.000000');
         $this->assertSame('posted', $first->status);
         $this->assertValidator($first->fresh('lines')->lines->first());
+        $this->assertPayloadSnapshotEqualsShipment($first->fresh('lines')->lines->first(), $l);
         $this->assertSame('posted', $this->ret('LG-P2', $s, $c, $w, $i, $l, '3.000000')->status);
         $this->expectException(ValidationException::class);
         $this->ret('LG-P3', $s, $c, $w, $i, $l, '0.000001', false);
@@ -161,6 +187,41 @@ class LegacyUnitConversionReturnTest extends TestCase
         $this->assertSame('solastock-unit-conversion.v1', $rl->unit_conversion_version);
         $this->expectException(ValidationException::class);
         $this->assertValidator($rl);
+    }
+
+    #[Test]
+    public function v1_is_not_accepted_outside_customer_returns_and_not_cross_accepted(): void
+    {
+        [$s, $c, $w, $i, $l] = $this->shipped('4.000000');
+        $this->makeV1($l);
+        $r = $this->ret('LG-OUT', $s, $c, $w, $i, $l, '4.000000', false);
+        $rl = $r->fresh('lines')->lines->first();
+        $m = new \ReflectionMethod(\App\Services\Integration\WorkflowValidationService::class, 'assertConversionSnapshot');
+        $m->setAccessible(true);
+        $svc = app(\App\Services\Integration\WorkflowValidationService::class);
+        foreach (['shipment.posted', 'grn.posted'] as $event) {
+            try {
+                $m->invoke($svc, (object) $rl->getAttributes(), (int) $rl->organization_id, $event);
+                $this->fail("v1 must stay rejected for $event");
+            } catch (ValidationException) {
+                $this->assertTrue(true);
+            }
+        }
+        // v1 label with a v2-computed hash is not cross-accepted even for returns.
+        DB::connection('tenant')->table('sales_return_lines')->where('id', $rl->id)
+            ->update(['unit_conversion_hash' => hash('sha256', 'x')]);
+        $this->expectException(ValidationException::class);
+        $this->assertValidator($rl->fresh());
+    }
+
+    #[Test]
+    public function so_to_shipment_and_po_to_grn_snapshot_normalisation_is_unchanged_for_v1_sources(): void
+    {
+        [, , , $i, $l] = $this->shipped('4.000000');
+        $this->makeV1($l);
+        $this->expectException(\RuntimeException::class); // same as base: v1 source is not re-frozen
+        app(UnitConversionResolver::class)->normalizeLineFromSnapshot(
+            ['item_id' => $i->id, 'entered_qty' => '1'], 'quantity', $l->fresh());
     }
 
     #[Test]
