@@ -17,6 +17,10 @@ class UnitConversionResolver
         self::CONTRACT_VERSION => Decimal::QTY_SCALE,
     ];
 
+    public const LEGACY_V1_VERSION = 'solastock-unit-conversion.v1';
+
+    public const LEGACY_V1_PRECISION = 4;
+
     public const PRECISION = Decimal::QTY_SCALE;
 
     public const ROUNDING_MODE = 'HALF_UP';
@@ -118,6 +122,78 @@ class UnitConversionResolver
     }
 
     /**
+     * Pure check of a historical (v1, four-decimal) frozen snapshot under its OWN
+     * contract: version/precision/rounding, the v1 hash, and base = entered x factor
+     * rounded at four decimals. Tampered or inconsistent data returns false.
+     * Does not touch the database and never rewrites the source.
+     */
+    public function legacyV1Verifies(object $source, string $baseQty): bool
+    {
+        $factor = (string) $source->unit_conversion_factor;
+        $entered = (string) $source->entered_qty;
+        if ((string) $source->unit_conversion_version !== self::LEGACY_V1_VERSION
+            || (int) $source->unit_conversion_precision !== self::LEGACY_V1_PRECISION
+            || (string) $source->unit_conversion_rounding_mode !== self::ROUNDING_MODE
+            || ! preg_match('/^\d+(?:\.\d+)?$/', $factor) || Decimal::cmp($factor, '0') <= 0
+            || ! preg_match('/^\d+(?:\.\d+)?$/', $entered) || Decimal::cmp($entered, '0') <= 0
+            || ! preg_match('/^\d+(?:\.\d+)?$/', $baseQty)) {
+            return false;
+        }
+        $snapshot = $this->snapshotFor($source, self::LEGACY_V1_VERSION, self::LEGACY_V1_PRECISION);
+        if (! hash_equals((string) $source->unit_conversion_hash, $this->hashOf($snapshot))) {
+            return false;
+        }
+        // v1 arithmetic at its own precision; the six-decimal product must be the same
+        // number, otherwise the v2-equivalent values would not be reliable.
+        $product = Decimal::mul($entered, $factor);
+
+        return Decimal::cmp(Decimal::round($product, 4), $baseQty, 4) === 0
+            && Decimal::cmp(Decimal::round($product, self::PRECISION), $baseQty, self::PRECISION) === 0;
+    }
+
+    /**
+     * Deterministic v2-equivalent snapshot fields for a verified v1 source line
+     * (same entered unit, factor and conversion row; v2 version/precision/hash).
+     *
+     * @return array<string,mixed>
+     */
+    public function upgradeLegacyV1(object $source, string $baseQty): array
+    {
+        if (! $this->legacyV1Verifies($source, $baseQty)) {
+            throw new RuntimeException('The source unit-conversion snapshot is invalid.');
+        }
+        $snapshot = $this->snapshotFor($source, self::CONTRACT_VERSION, self::PRECISION);
+
+        return [
+            'unit_conversion_factor' => $snapshot['factor'],
+            'unit_conversion_version' => self::CONTRACT_VERSION,
+            'unit_conversion_hash' => $this->hashOf($snapshot),
+            'unit_conversion_precision' => self::PRECISION,
+            'unit_conversion_rounding_mode' => self::ROUNDING_MODE,
+        ];
+    }
+
+    private function snapshotFor(object $source, string $version, int $precision): array
+    {
+        return [
+            'organization_id' => (int) $source->organization_id,
+            'item_id' => (int) $source->item_id,
+            'source_unit_id' => (int) $source->entered_unit_id,
+            'base_unit_id' => (int) $source->base_unit_id,
+            'conversion_id' => $source->unit_conversion_id === null ? null : (int) $source->unit_conversion_id,
+            'factor' => Decimal::round((string) $source->unit_conversion_factor, 8),
+            'version' => $version,
+            'precision' => $precision,
+            'rounding_mode' => self::ROUNDING_MODE,
+        ];
+    }
+
+    private function hashOf(array $snapshot): string
+    {
+        return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    /**
      * Normalize a downstream line with a conversion snapshot already frozen on
      * its source document. A later edit to the reusable conversion rule must
      * never reinterpret an approved PO's quantities or prices.
@@ -144,6 +220,13 @@ class UnitConversionResolver
         if ((int) $item->organization_id !== (int) $source->organization_id
             || (int) $item->base_unit_id !== (int) $source->base_unit_id) {
             throw new RuntimeException('The source conversion snapshot is outside the item organization or base unit.');
+        }
+        if ((string) $source->unit_conversion_version === self::LEGACY_V1_VERSION) {
+            // Historical v1 evidence: accepted only when it verifies under v1 rules. The
+            // downstream line gets deterministic v2 values; the source row is not touched.
+            $baseAttr = (string) ($source->quantity ?? $source->ordered_qty ?? $source->received_qty ?? $source->returned_qty ?? $source->accepted_qty ?? '');
+            $attrs = method_exists($source, 'getAttributes') ? $source->getAttributes() : get_object_vars($source);
+            $source = (object) array_merge($attrs, $this->upgradeLegacyV1($source, $baseAttr));
         }
         $factor = Decimal::round((string) $source->unit_conversion_factor, 8);
         $snapshot = [

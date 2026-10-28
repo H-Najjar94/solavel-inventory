@@ -530,6 +530,7 @@ class SalesReturnService
                 'damaged' => in_array($disposition, ['damage', 'no_restock'], true), 'retired' => in_array($disposition, ['retire', 'no_restock'], true), default => false,
             };
             if (! $validDisposition) throw \Illuminate\Validation\ValidationException::withMessages(['lines' => __('inventory.validation.extra_0230da161a33')]);
+            $snap = $this->returnSnapshotFor($sourceLine);
             $return->lines()->create([
                 'organization_id' => $orgId, 'source_shipment_line_id' => $sourceLine->id,
                 'source_stock_ledger_id' => $ledger->id, 'item_id' => $sourceLine->item_id,
@@ -537,16 +538,33 @@ class SalesReturnService
                 'bin_id' => $sourceLine->bin_id, 'returned_qty' => $baseQty,
                 'entered_qty' => $input['entered_qty'], 'entered_unit_id' => $sourceLine->entered_unit_id,
                 'base_unit_id' => $sourceLine->base_unit_id, 'unit_conversion_id' => $sourceLine->unit_conversion_id,
-                'unit_conversion_factor' => $sourceLine->unit_conversion_factor,
-                'unit_conversion_version' => $sourceLine->unit_conversion_version,
-                'unit_conversion_hash' => $sourceLine->unit_conversion_hash,
-                'unit_conversion_precision' => $sourceLine->unit_conversion_precision,
-                'unit_conversion_rounding_mode' => $sourceLine->unit_conversion_rounding_mode,
+                'unit_conversion_factor' => $snap['unit_conversion_factor'],
+                'unit_conversion_version' => $snap['unit_conversion_version'],
+                'unit_conversion_hash' => $snap['unit_conversion_hash'],
+                'unit_conversion_precision' => $snap['unit_conversion_precision'],
+                'unit_conversion_rounding_mode' => $snap['unit_conversion_rounding_mode'],
                 'unit_cost' => $ledger->unit_cost, 'condition' => $condition,
                 'inspection_status' => 'pending', 'disposition' => $disposition,
                 'lot_id' => $sourceLine->lot_id, 'serial_id' => $sourceLine->serial_id,
             ]);
         }
+    }
+
+    /**
+     * Snapshot fields a return line carries from its shipment line. Older shipments froze a
+     * v1 (four-decimal) snapshot; it is copied as deterministic v2 values ONLY when it verifies
+     * under the v1 rules (own hash + arithmetic). Otherwise the stored values are kept so the
+     * posting validator still rejects them. The shipment evidence is never rewritten.
+     */
+    private function returnSnapshotFor(ShipmentLine $source, ?string $ledgerQty = null): array
+    {
+        if ((string) $source->unit_conversion_version === UnitConversionResolver::LEGACY_V1_VERSION
+            && $this->conversions->legacyV1Verifies($source, (string) $source->quantity)
+            && ($ledgerQty === null || Decimal::cmp((string) $source->quantity, $ledgerQty, UnitConversionResolver::PRECISION) === 0)) {
+            return $this->conversions->upgradeLegacyV1($source, (string) $source->quantity);
+        }
+
+        return $source->only(['unit_conversion_factor', 'unit_conversion_version', 'unit_conversion_hash', 'unit_conversion_precision', 'unit_conversion_rounding_mode']);
     }
 
     private function syncSourceLines(SalesReturn $return, Shipment $shipment, int $orgId): void
@@ -563,6 +581,7 @@ class SalesReturnService
 
         foreach ($ledger as $row) {
             $shipmentLine = ShipmentLine::query()->find($row->source_line_id);
+            $snap = $shipmentLine ? $this->returnSnapshotFor($shipmentLine, (string) $row->quantity) : [];
             $return->lines()->create([
                 'organization_id' => $orgId,
                 'source_shipment_line_id' => $shipmentLine?->id,
@@ -576,11 +595,11 @@ class SalesReturnService
                 'entered_unit_id' => $shipmentLine?->entered_unit_id,
                 'base_unit_id' => $shipmentLine?->base_unit_id,
                 'unit_conversion_id' => $shipmentLine?->unit_conversion_id,
-                'unit_conversion_factor' => $shipmentLine?->unit_conversion_factor,
-                'unit_conversion_version' => $shipmentLine?->unit_conversion_version,
-                'unit_conversion_hash' => $shipmentLine?->unit_conversion_hash,
-                'unit_conversion_precision' => $shipmentLine?->unit_conversion_precision,
-                'unit_conversion_rounding_mode' => $shipmentLine?->unit_conversion_rounding_mode,
+                'unit_conversion_factor' => $snap['unit_conversion_factor'] ?? null,
+                'unit_conversion_version' => $snap['unit_conversion_version'] ?? null,
+                'unit_conversion_hash' => $snap['unit_conversion_hash'] ?? null,
+                'unit_conversion_precision' => $snap['unit_conversion_precision'] ?? null,
+                'unit_conversion_rounding_mode' => $snap['unit_conversion_rounding_mode'] ?? null,
                 'unit_cost' => $row->unit_cost,
                 'condition' => 'resellable',
                 'inspection_status' => 'pending',
