@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Sostituito",
   "integration.status.reversed": "Stornato",
   "integration.events.failureCategory": "Categoria di guasto",
+  "integration.events.hint.accounting_period_invalid": "SolaCount ha rifiutato la data perché il periodo contabile è chiuso. Riapri il periodo in SolaCount, poi riprova.",
   "integration.events.leaseExpiry": "Scadenza del blocco di elaborazione",
   "integration.events.search": "Cerca evento, documento o guasto",
   "integration.events.reviewNote": "Nota di revisione",

@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Yerine geçti",
   "integration.status.reversed": "Ters kayıt oluşturuldu",
   "integration.events.failureCategory": "Başarısızlık kategorisi",
+  "integration.events.hint.accounting_period_invalid": "SolaCount, muhasebe dönemi kapalı olduğu için tarihi reddetti. Dönemi SolaCount'ta yeniden açın, ardından tekrar deneyin.",
   "integration.events.leaseExpiry": "İşlem kilidinin sona erme zamanı",
   "integration.events.search": "Olay, belge veya başarısızlık ara",
   "integration.events.reviewNote": "İnceleme notu",

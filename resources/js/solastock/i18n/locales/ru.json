@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Заменено",
   "integration.status.reversed": "Сторнировано",
   "integration.events.failureCategory": "Категория отказа",
+  "integration.events.hint.accounting_period_invalid": "SolaCount отклонил дату, так как учётный период закрыт. Откройте период в SolaCount заново и повторите попытку.",
   "integration.events.leaseExpiry": "Истечение срока блокировки обработки",
   "integration.events.search": "Поиск события, документа или сбоя",
   "integration.events.reviewNote": "Обзор примечания",

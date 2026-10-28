@@ -93,6 +93,7 @@ export default function IntegrationEventsPage() {
                             <dt>{tr('integration.events.mapping')}</dt><dd>{selected.mapping_status === 'incomplete' ? tr('integration.events.incomplete') : tr('integration.events.complete')}</dd>
                             <dt>{tr('integration.events.attempts')}</dt><dd>{selected.attempts}</dd>
                             <dt>{tr('integration.events.failureCategory')}</dt><dd>{selected.failure_category ?? '—'}</dd>
+                            {selected.failure_code === 'accounting_period_invalid' && <><dt></dt><dd>{tr('integration.events.hint.accounting_period_invalid')}</dd></>}
                             <dt>{tr('integration.events.lastError')}</dt><dd>{selected.safe_error ?? '—'}</dd>
                             <dt>{tr('integration.events.leaseExpiry')}</dt><dd>{selected.lease_expires_at ?? '—'}</dd>
                         </dl>

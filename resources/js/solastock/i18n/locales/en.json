@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Superseded",
   "integration.status.reversed": "Reversed",
   "integration.events.failureCategory": "Failure category",
+  "integration.events.hint.accounting_period_invalid": "SolaCount refused the date because the accounting period is closed. Reopen the period in SolaCount, then retry.",
   "integration.events.leaseExpiry": "Lease expiry",
   "integration.events.search": "Search event, document, or failure",
   "integration.events.reviewNote": "Review note",
