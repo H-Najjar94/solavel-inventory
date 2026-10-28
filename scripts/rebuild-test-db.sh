@@ -235,6 +235,12 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source VARCHAR(20) NULL;
 ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_type VARCHAR(255) NULL;
 ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_id BIGINT UNSIGNED NULL;
+-- Finance projection columns that the native-Finance test fixtures and IntegrationReconciliationService read.
+-- Declared here so no test depends on which fixture happened to run (and DDL-commit) first.
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_key VARCHAR(255) NULL;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voided_by BIGINT UNSIGNED NULL;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS reverses_entry_id BIGINT UNSIGNED NULL;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS metadata LONGTEXT NULL;
 CREATE TABLE IF NOT EXISTS finance_purchase_receipts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   organization_id BIGINT UNSIGNED NOT NULL,
