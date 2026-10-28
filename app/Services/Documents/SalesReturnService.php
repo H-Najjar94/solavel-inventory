@@ -158,9 +158,9 @@ class SalesReturnService
             $this->workflowValidation->assertOperationalDocumentReady($r, 'sales_return.posted');
             $movements = [];
             foreach ($r->lines as $line) {
-                if (! in_array($line->condition, self::STOCKABLE, true)) {
-                    continue; // damaged: recorded, not returned to stock
-                }
+                // Every returned unit is received at its original cost so the return
+                // journal reverses COGS in full; damaged/retired units are written
+                // off in the same transaction (see writeOffNonStockable).
                 if (! Decimal::gt((string) $line->returned_qty, '0')) {
                     continue;
                 }
@@ -207,6 +207,7 @@ class SalesReturnService
                     'action' => 'sales_return.post', 'entity_type' => 'sales_return',
                     'entity_id' => $r->id, 'document_ref' => $r->return_number,
                 ]);
+                $this->writeOffNonStockable($r);
             }
 
             // Serial disposition: stockable serials are already set to in_stock by
@@ -240,6 +241,55 @@ class SalesReturnService
 
             return $r->fresh('lines');
         });
+    }
+
+    /** Deterministic number of the write-off adjustment(s) for a return (also used to find them on reversal). */
+    public static function writeOffNumber(SalesReturn $r, ?int $warehouseId = null, bool $suffix = false): string
+    {
+        return 'DMG-'.$r->return_number.($suffix && $warehouseId ? '-W'.$warehouseId : '');
+    }
+
+    /**
+     * Damaged / retired units must never become sellable stock. They are received
+     * (so COGS is reversed at the original cost) and immediately written off
+     * through a posted decrease adjustment (Dr adjustment_loss / Cr inventory_asset
+     * via the existing adjustment.posted event), all inside the return's transaction.
+     * Idempotent: a re-post returns early before reaching here.
+     */
+    private function writeOffNonStockable(SalesReturn $r): void
+    {
+        $byWarehouse = [];
+        foreach ($r->lines as $line) {
+            if (in_array($line->condition, self::STOCKABLE, true) || ! Decimal::gt((string) $line->returned_qty, '0')) {
+                continue;
+            }
+            $byWarehouse[(int) ($line->warehouse_id ?? $r->warehouse_id)][] = $line;
+        }
+        if ($byWarehouse === []) {
+            return;
+        }
+        $adjustments = app(StockAdjustmentService::class);
+        $suffix = count($byWarehouse) > 1;
+        foreach ($byWarehouse as $warehouseId => $lines) {
+            $payload = array_map(fn ($line) => [
+                'direction' => 'decrease', 'item_id' => (int) $line->item_id,
+                'variant_id' => $line->variant_id ? (int) $line->variant_id : null,
+                'quantity' => (string) $line->returned_qty,
+                'unit_cost' => Decimal::cost((string) ($line->unit_cost ?? '0')),
+                'lot_id' => $line->lot_id ? (int) $line->lot_id : null,
+                'serial_id' => $line->serial_id ? (int) $line->serial_id : null,
+                'bin_id' => $line->bin_id ? (int) $line->bin_id : null,
+                'notes' => 'Customer return '.$r->return_number.' ('.$line->condition.')',
+            ], $lines);
+            $adj = $adjustments->createDraft([
+                'adjustment_number' => self::writeOffNumber($r, $warehouseId, $suffix),
+                'adjustment_date' => $r->return_date?->toDateString() ?? now()->toDateString(),
+                'warehouse_id' => $warehouseId,
+                'reason_code' => 'customer_return_damage',
+                'notes' => 'Auto write-off of damaged/retired units from customer return '.$r->return_number,
+            ], $payload);
+            $adjustments->post($adj);
+        }
     }
 
     public function authorizeReturn(SalesReturn $r): SalesReturn

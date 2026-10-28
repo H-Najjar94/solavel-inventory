@@ -219,6 +219,16 @@ class InventoryReversalService
             $namespace = 'sales_return:'.$return->id.':post';
             $hasLedger = StockLedger::query()->where('idempotency_key', 'like', $namespace.'#%')->exists();
             $reversal = $this->createReversal('sales_return', $return->id, $return->return_number, 'sales_return.posted', 'REV-RMA', $reason);
+            // Damaged/retired units were received then written off by posted decrease
+            // adjustments; undo those first so the return's inbound can be reversed.
+            $base = \App\Services\Documents\SalesReturnService::writeOffNumber($return);
+            foreach (StockAdjustment::query()->where('organization_id', $return->organization_id)
+                ->where(fn ($q) => $q->where('adjustment_number', $base)->orWhere('adjustment_number', 'like', $base.'-W%'))
+                ->lockForUpdate()->get() as $writeOff) {
+                if ($writeOff->isPosted()) {
+                    $this->reverseNegativeAdjustment($writeOff, 'Reversal of customer return '.$return->return_number);
+                }
+            }
             if ($hasLedger) {
                 $this->assertInboundSourceStillReversible($namespace);
                 $this->ledger->reverse($namespace, 'inventory_reversal:'.$reversal->id.':post', [
