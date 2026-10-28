@@ -14,16 +14,20 @@ use Illuminate\Support\Facades\DB;
  * valid current (v2) snapshot, and whether a customer return can still be posted:
  *   v1_verified  - historical v1 evidence that verifies under v1 rules; returnable via the
  *                  narrow compatibility path (v2-equivalent values derived at return time)
+ *   v1_verified_cash_path_unsupported - verified v1, but the shipment belongs to a cash sale
+ *                  (sales_receipt origin): the cash-admission return path still uses
+ *                  normalizeLineFromSnapshot and rejects v1, so NOT returnable
  *   v1_invalid   - v1 label but hash/arithmetic does not verify: still blocked
  *   v2_invalid   - v2 label but hash/arithmetic invalid: blocked
  *   missing      - no/partial snapshot: blocked
- * No bulk mode, no writes.
+ * Out of scope (still unsupported, tracked separately): supplier returns against older goods
+ * receipts and cash-sale returns. No bulk mode, no writes.
  */
 final class ReportLegacyUnitConversion extends Command
 {
     protected $signature = 'returns:report-legacy-unit-conversion {--organization= : Exact SolaStock organization id}';
 
-    protected $description = 'Read-only: shipment lines with a v1/invalid unit-conversion snapshot and whether they are returnable';
+    protected $description = 'Read-only: shipment lines with a v1/invalid unit-conversion snapshot and whether a CUSTOMER return can post. Supplier returns against older receipts and cash-sale returns remain unsupported.';
 
     public function handle(TenantManager $tenants, UnitConversionResolver $resolver): int
     {
@@ -43,10 +47,14 @@ final class ReportLegacyUnitConversion extends Command
                 ->pluck('qty', 'id');
             $numbers = DB::connection('tenant')->table('shipments')->where('organization_id', $organization)
                 ->where('status', 'posted')->pluck('shipment_number', 'id');
+            $cashOrders = DB::connection('tenant')->table('stock_financial_origin_requests')
+                ->where('organization_id', $organization)->where('source_document_type', 'sales_receipt')
+                ->whereNotNull('sales_order_id')->pluck('sales_order_id')->flip();
+            $orderOf = DB::connection('tenant')->table('shipments')->where('organization_id', $organization)->pluck('sales_order_id', 'id');
             ShipmentLine::query()->where('organization_id', $organization)
                 ->whereIn('shipment_id', $numbers->keys()->all())
-                ->orderBy('id')->each(function (ShipmentLine $l) use (&$out, $resolver, $returned, $numbers): void {
-                    $status = $this->classify($l, $resolver);
+                ->orderBy('id')->each(function (ShipmentLine $l) use (&$out, $resolver, $returned, $numbers, $cashOrders, $orderOf): void {
+                    $status = $this->finalStatus($l, $resolver, $cashOrders->all(), $orderOf->all());
                     if ($status === 'v2_ok') {
                         return;
                     }
@@ -61,6 +69,18 @@ final class ReportLegacyUnitConversion extends Command
         $this->info(count($rows).' shipment line(s) with a non-current snapshot. Nothing was changed.');
 
         return self::SUCCESS;
+    }
+
+    /** @param array<int|string,mixed> $cashOrders sales_order_id => index; $orderOf shipment_id => sales_order_id */
+    public function finalStatus(ShipmentLine $l, UnitConversionResolver $resolver, array $cashOrders, array $orderOf): string
+    {
+        $status = $this->classify($l, $resolver);
+        $order = $orderOf[$l->shipment_id] ?? null;
+        if ($status === 'v1_verified' && $order !== null && array_key_exists($order, $cashOrders)) {
+            return 'v1_verified_cash_path_unsupported';
+        }
+
+        return $status;
     }
 
     private function classify(ShipmentLine $l, UnitConversionResolver $resolver): string

@@ -239,4 +239,17 @@ class LegacyUnitConversionReturnTest extends TestCase
         $this->assertSame('v1_invalid', $cmd->invoke($c, $l->fresh(), $resolver));
         $this->assertSame(1, Artisan::call('returns:report-legacy-unit-conversion'));
     }
+
+    #[Test]
+    public function report_marks_cash_sale_v1_lines_as_not_returnable(): void
+    {
+        [$s, , , , $l] = $this->shipped('4.000000');
+        $this->makeV1($l);
+        $c = new \App\Console\Commands\ReportLegacyUnitConversion();
+        $resolver = app(UnitConversionResolver::class);
+        $l = $l->fresh();
+        $this->assertSame('v1_verified', $c->finalStatus($l, $resolver, [], [$s->id => $s->sales_order_id]));
+        $this->assertSame('v1_verified_cash_path_unsupported',
+            $c->finalStatus($l, $resolver, [$s->sales_order_id => 0], [$s->id => $s->sales_order_id]));
+    }
 }
