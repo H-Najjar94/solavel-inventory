@@ -410,7 +410,10 @@ class SourceDrivenReversalTest extends TestCase
             'item_id' => $item->id, 'returned_qty' => '1', 'condition' => 'damaged', 'disposition' => 'damage']]);
         app(SalesReturnService::class)->post($damaged);
         $this->assertSame('3.000000', (string) StockBalance::query()->where('item_id', $item->id)->value('on_hand_qty'));
-        $this->assertSame(0, StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $damaged->id)->count());
+        // Damaged units are received at their shipment cost (so COGS reverses) and immediately written off
+        // by a DMG- adjustment, so they never become sellable stock.
+        $this->assertSame(1, StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $damaged->id)->count());
+        $this->assertSame(1, \App\Models\Tenant\StockAdjustment::query()->where('adjustment_number', 'like', 'DMG-'.$damaged->return_number.'%')->count());
 
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         app(SalesReturnService::class)->createDraft([
