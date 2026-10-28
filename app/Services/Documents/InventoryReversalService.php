@@ -2,6 +2,7 @@
 
 namespace App\Services\Documents;
 
+use App\Models\Tenant\CostLayerConsumption;
 use App\Models\Tenant\GoodsReceipt;
 use App\Models\Tenant\IntegrationDocumentLifecycleMapping;
 use App\Models\Tenant\IntegrationFinancialLineAllocation;
@@ -234,7 +235,7 @@ class InventoryReversalService
                 }
             }
             if ($hasLedger) {
-                $this->assertInboundSourceStillReversible($namespace, 'receipt', $reversedOut);
+                $this->assertInboundSourceStillReversible($namespace, 'receipt', $reversedOut, true);
                 $this->ledger->reverse($namespace, 'inventory_reversal:'.$reversal->id.':post', [
                     'action' => 'sales_return.reverse', 'entity_type' => 'inventory_reversal',
                     'entity_id' => $reversal->id, 'document_ref' => $reversal->reversal_number,
@@ -307,7 +308,7 @@ class InventoryReversalService
      * coordinates, whatever the costing method. $document picks the wording
      * (receipt, adjustment, opening).
      */
-    public function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt', array $reversedOutNamespaces = []): void
+    public function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt', array $reversedOutNamespaces = [], bool $ignoreOtherReturnWriteOffsOnOtherLayers = false): void
     {
         $messagePrefix = match ($document) {
             'adjustment' => 'inventory.documents.adjustment_',
@@ -319,11 +320,14 @@ class InventoryReversalService
             throw new RuntimeException(__('inventory.documents.reversal_no_ledger'));
         }
 
+        // Cost layers this source created: a later write-off of ANOTHER customer return that drew only from other layers never consumed them.
+        $ownLayerIds = $rows->where('direction', 'in')->pluck('cost_layer_id')->filter()->map(fn ($id) => (int) $id)->all();
+
         foreach ($rows as $row) {
             if ($row->direction !== 'in') {
                 continue;
             }
-            $downstreamOut = StockLedger::query()
+            $downstreamOuts = StockLedger::query()
                 ->where('id', '>', $row->id)
                 ->where('item_id', $row->item_id)
                 ->where('warehouse_id', $row->warehouse_id)
@@ -339,8 +343,11 @@ class InventoryReversalService
                 ->when($row->variant_id, fn ($q) => $q->where('variant_id', $row->variant_id), fn ($q) => $q->whereNull('variant_id'))
                 ->when($row->lot_id, fn ($q) => $q->where('lot_id', $row->lot_id), fn ($q) => $q->whereNull('lot_id'))
                 ->when($row->bin_id, fn ($q) => $q->where('bin_id', $row->bin_id), fn ($q) => $q->whereNull('bin_id'))
-                ->exists();
-            if ($downstreamOut) {
+                ->get();
+            foreach ($downstreamOuts as $out) {
+                if ($ignoreOtherReturnWriteOffsOnOtherLayers && $row->cost_layer_id && $this->isOtherReturnsWriteOffOnOtherLayers($out, $ownLayerIds)) {
+                    continue;
+                }
                 throw new RuntimeException(__($messagePrefix.'reversal_downstream'));
             }
 
@@ -356,6 +363,31 @@ class InventoryReversalService
                 throw new RuntimeException(__($messagePrefix.'reversal_unavailable'));
             }
         }
+    }
+
+    /**
+     * A later OUT row is NOT downstream consumption of this source only when ALL hold: it belongs to a posted
+     * customer-return write-off adjustment, posted or since reversed (reason customer_return_damage, number DMG-*, written by
+     * SalesReturnService::writeOffNonStockable with the exact received layer), the ledger row is FIFO, and every
+     * cost-layer draw-down recorded for it (cost_layer_consumptions) is on a layer this source did not create.
+     * Anything else (sales, transfers, manual adjustments, average-cost rows, a write-off that touched one of
+     * this source's layers, a row without recorded draw-downs) keeps blocking, as before.
+     *
+     * @param  int[]  $ownLayerIds
+     */
+    private function isOtherReturnsWriteOffOnOtherLayers(StockLedger $out, array $ownLayerIds): bool
+    {
+        if ($ownLayerIds === [] || $out->source_type !== StockAdjustment::class || (string) $out->costing_method !== 'fifo') {
+            return false;
+        }
+        $adjustment = StockAdjustment::query()->find((int) $out->source_id);
+        if (! $adjustment || ! in_array($adjustment->status, ['posted', 'reversed'], true) || $adjustment->reason_code !== 'customer_return_damage'
+            || ! str_starts_with((string) $adjustment->adjustment_number, 'DMG-')) {
+            return false;
+        }
+        $layers = CostLayerConsumption::query()->where('ledger_id', $out->id)->pluck('cost_layer_id')->map(fn ($id) => (int) $id)->all();
+
+        return $layers !== [] && array_intersect($layers, $ownLayerIds) === [];
     }
 
     private function rollBackPurchaseOrder(GoodsReceipt $receipt): void

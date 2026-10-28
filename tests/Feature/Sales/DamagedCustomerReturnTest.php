@@ -239,6 +239,70 @@ class DamagedCustomerReturnTest extends TestCase
     }
 
     #[Test]
+    public function reversing_an_earlier_damaged_return_ignores_a_later_write_off_of_another_return_on_other_layers(): void
+    {
+        [$w, $item] = $this->stocked('fifo', [['6.000000', '8.0000']]);
+        $r1 = $this->standaloneReturn('WO-X1', $w, $item, 'damaged', '1.000000', '2.0000');
+        $r2 = $this->standaloneReturn('WO-X2', $w, $item, 'damaged', '1.000000', '3.0000');
+        $this->assertEquals(6, $this->onHand($item));
+
+        app(InventoryReversalService::class)->reverseSalesReturn($r1, 'customer withdrew return');
+
+        $this->assertSame('reversed', $r1->fresh()->status);
+        $this->assertSame('reversed', StockAdjustment::query()->where('adjustment_number', 'DMG-WO-X1')->value('status'));
+        // The other return and its own write-off are untouched.
+        $this->assertSame('posted', $r2->fresh()->status);
+        $this->assertSame('posted', StockAdjustment::query()->where('adjustment_number', 'DMG-WO-X2')->value('status'));
+        $this->assertEquals(6, $this->onHand($item));
+    }
+
+    #[Test]
+    public function an_unrelated_later_decrease_of_the_same_item_and_warehouse_still_blocks_the_reversal(): void
+    {
+        [$w, $item] = $this->stocked('fifo', [['6.000000', '8.0000']]);
+        $r1 = $this->standaloneReturn('WO-Y1', $w, $item, 'damaged', '1.000000', '2.0000');
+        $adjs = app(\App\Services\Documents\StockAdjustmentService::class);
+        $adjs->post($adjs->createDraft(['adjustment_number' => 'MANUAL-Y', 'warehouse_id' => $w->id, 'reason_code' => 'LOSS'],
+            [['item_id' => $item->id, 'direction' => 'decrease', 'quantity' => '1', 'unit_cost' => '8']]));
+
+        try {
+            app(InventoryReversalService::class)->reverseSalesReturn($r1, 'customer withdrew return');
+            $this->fail('A later manual decrease must still block the reversal.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString(__('inventory.documents.reversal_downstream'), $e->getMessage());
+        }
+        $this->assertSame('posted', $r1->fresh()->status);
+        $this->assertSame('posted', StockAdjustment::query()->where('adjustment_number', 'DMG-WO-Y1')->value('status'));
+    }
+
+    #[Test]
+    public function another_returns_write_off_that_drew_the_returned_layer_still_blocks(): void
+    {
+        [$w, $item] = $this->stocked('fifo', [['6.000000', '8.0000']]);
+        $r1 = $this->standaloneReturn('WO-Z1', $w, $item, 'damaged', '1.000000', '2.0000');
+        $r2 = $this->standaloneReturn('WO-Z2', $w, $item, 'damaged', '1.000000', '3.0000');
+        $layer1 = StockLedger::query()->where('source_type', SalesReturn::class)->where('source_id', $r1->id)->where('direction', 'in')->value('cost_layer_id');
+        $adj2 = StockAdjustment::query()->where('adjustment_number', 'DMG-WO-Z2')->firstOrFail();
+        $out2 = StockLedger::query()->where('source_type', StockAdjustment::class)->where('source_id', $adj2->id)->where('direction', 'out')->firstOrFail();
+        // Make the later write-off's recorded draw-down hit the first return's layer.
+        \App\Models\Tenant\CostLayerConsumption::query()->where('ledger_id', $out2->id)->update(['cost_layer_id' => $layer1]);
+
+        $this->expectException(\RuntimeException::class);
+        app(InventoryReversalService::class)->reverseSalesReturn($r1, 'customer withdrew return');
+    }
+
+    #[Test]
+    public function average_costed_later_write_off_of_another_return_still_blocks(): void
+    {
+        [$w, $item] = $this->stocked('average', [['6.000000', '8.0000']]);
+        $r1 = $this->standaloneReturn('WO-V1', $w, $item, 'damaged', '1.000000', '2.0000');
+        $this->standaloneReturn('WO-V2', $w, $item, 'damaged', '1.000000', '3.0000');
+
+        $this->expectException(\RuntimeException::class);
+        app(InventoryReversalService::class)->reverseSalesReturn($r1, 'customer withdrew return');
+    }
+
+    #[Test]
     public function connected_org_without_adjustment_mappings_gets_a_clear_error_and_nothing_is_written(): void
     {
         [$w, $item] = $this->stocked('average', [['6.000000', '5.0000']]);
