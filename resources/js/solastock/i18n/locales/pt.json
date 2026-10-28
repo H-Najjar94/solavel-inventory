@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Substituído",
   "integration.status.reversed": "Estornado",
   "integration.events.failureCategory": "Categoria de falha",
+  "integration.events.hint.accounting_period_invalid": "O SolaCount recusou a data porque o período contábil está fechado. Reabra o período no SolaCount e tente novamente.",
   "integration.events.leaseExpiry": "Expiração do bloqueio de processamento",
   "integration.events.search": "Pesquisar evento, documento ou falha",
   "integration.events.reviewNote": "Nota de revisão",

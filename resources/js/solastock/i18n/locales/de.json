@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Abgelöst",
   "integration.status.reversed": "Storniert",
   "integration.events.failureCategory": "Fehlerkategorie",
+  "integration.events.hint.accounting_period_invalid": "SolaCount hat das Datum abgelehnt, weil die Buchungsperiode geschlossen ist. Öffnen Sie die Periode in SolaCount erneut und wiederholen Sie den Vorgang.",
   "integration.events.leaseExpiry": "Ablauf der Verarbeitungssperre",
   "integration.events.search": "Suchereignis, Dokument oder Fehler",
   "integration.events.reviewNote": "Rezensionsnotiz",

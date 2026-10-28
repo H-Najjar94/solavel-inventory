@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "Remplacé",
   "integration.status.reversed": "Contrepassé",
   "integration.events.failureCategory": "Catégorie d'échec",
+  "integration.events.hint.accounting_period_invalid": "SolaCount a refusé la date car la période comptable est clôturée. Rouvrez la période dans SolaCount, puis réessayez.",
   "integration.events.leaseExpiry": "Expiration du verrou de traitement",
   "integration.events.search": "Rechercher un événement, un document ou un échec",
   "integration.events.reviewNote": "Note de révision",

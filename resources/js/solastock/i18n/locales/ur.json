@@ -3051,6 +3051,7 @@
   "integration.status.superseded": "سپرسیڈ",
   "integration.status.reversed": "اندراج معکوس",
   "integration.events.failureCategory": "ناکامی کا زمرہ",
+  "integration.events.hint.accounting_period_invalid": "SolaCount نے تاریخ مسترد کر دی کیونکہ اکاؤنٹنگ مدت بند ہے۔ SolaCount میں مدت دوبارہ کھولیں، پھر دوبارہ کوشش کریں۔",
   "integration.events.leaseExpiry": "پروسیسنگ لاک ختم ہونے کا وقت",
   "integration.events.search": "واقعہ، دستاویز، یا ناکامی تلاش کریں۔",
   "integration.events.reviewNote": "جائزہ نوٹ",
