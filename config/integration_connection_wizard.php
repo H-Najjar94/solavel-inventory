@@ -17,7 +17,7 @@ return [
         'opening_stock.posted', 'opening_stock.reversed',
         'adjustment.posted', 'adjustment.reversed',
         'grn.posted', 'grn.reversed',
-        'shipment.posted', 'sales_return.posted',
+        'shipment.posted', 'sales_return.posted', 'sales_return.reversed',
         'stock_count.posted',
     ],
 ];
