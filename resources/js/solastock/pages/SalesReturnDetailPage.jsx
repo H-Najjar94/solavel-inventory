@@ -43,6 +43,7 @@ export default function SalesReturnDetailPage() {
                 <dt>{t('returns.detail.returnDate', 'Return date')}</dt><dd>{r.return_date}</dd>
                 <dt>{t('returns.common.warehouse', 'Warehouse')}</dt><dd>{r.warehouse_name ?? <bdi>#{r.warehouse_id}</bdi>}</dd>
                 <dt>{t('returns.detail.sourceShipment', 'Source shipment')}</dt><dd>{r.shipment_id ? <Link to={`/shipments/${r.shipment_id}`}>#{r.shipment_id}</Link> : '—'}</dd>
+                {data?.finance_credit && <><dt>{t('returns.detail.financeCredit', 'SolaCount credit')}</dt><dd>{t('returns.detail.financeCreditCreated', 'Credit created in SolaCount')} · {t(`returns.detail.financeCreditState.${data.finance_credit.state}`, t('returns.detail.financeCreditState.unknown', 'Status pending'))}{data.finance_credit.url && <> · <a href={data.finance_credit.url} target="_blank" rel="noopener noreferrer">{t('returns.detail.financeCreditOpen', 'Open in SolaCount')}</a></>}</dd></>}
                 <dt>{t('returns.detail.authorized', 'Authorized')}</dt><dd>{r.authorized_at ?? '—'}</dd>
                 <dt>{t('returns.detail.inspected', 'Inspected')}</dt><dd>{r.inspected_at ?? '—'}</dd>
                 <dt>{t('returns.common.reason', 'Reason')}</dt><dd>{r.reason ?? '—'}</dd>
