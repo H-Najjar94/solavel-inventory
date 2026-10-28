@@ -27,5 +27,7 @@ final class StockMovement
         public readonly ?string $expiryDate = null, // carried onto the ledger row for IN of an expiry-tracked lot
         public readonly bool $allowExpiredLot = false,   // policy override: ship an expired lot
         public readonly bool $allowQuarantinedLot = false, // policy override: ship a quarantined/recalled lot
+        public readonly ?string $exactUnitCost = null,    // OUT only: remove at this exact cost (average costing), e.g. a write-off of just-received units
+        public readonly ?int $fromCostLayerId = null,     // OUT only: consume this FIFO layer first (the layer a return created)
     ) {}
 }

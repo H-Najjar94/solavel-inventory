@@ -32,9 +32,9 @@ final class ReportUnwrittenDamagedReturns extends Command
                 ->whereHas('lines', fn ($q) => $q->whereIn('condition', ['damaged', 'retired'])->where('returned_qty', '>', 0))
                 ->with(['lines' => fn ($q) => $q->whereIn('condition', ['damaged', 'retired'])->where('returned_qty', '>', 0)])
                 ->orderBy('id')->each(function (SalesReturn $r) use (&$out, $organization): void {
-                    $base = 'DMG-'.$r->return_number;
+                    $r->loadMissing('lines');
                     $written = StockAdjustment::query()->where('organization_id', $organization)
-                        ->where(fn ($q) => $q->where('adjustment_number', $base)->orWhere('adjustment_number', 'like', $base.'-W%'))->exists();
+                        ->whereIn('adjustment_number', \App\Services\Documents\SalesReturnService::writeOffNumbers($r))->exists();
                     if ($written) {
                         return;
                     }

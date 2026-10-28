@@ -605,7 +605,7 @@ class StockLedgerService
             // when negative stock is disabled — pass allowNegative=true in that case.
             $costed = $this->costing->costOutbound(
                 $method, $orgId, $m->itemId, $m->variantId, $m->warehouseId, $m->lotId,
-                $qty, $balance, $allowNegative || $isReversal
+                $qty, $balance, $allowNegative || $isReversal, false, $m->exactUnitCost, $m->fromCostLayerId
             );
             $unitCost = $costed['unit_cost'];
             $totalCost = $costed['total_cost'];
@@ -629,7 +629,7 @@ class StockLedgerService
         }
 
         // ── update balance (same transaction) ──
-        [$newOnHand, $newAvg, $newValue] = $this->projectBalance($balance, $m->direction, $qty, $unitCost, $totalCost, $method);
+        [$newOnHand, $newAvg, $newValue] = $this->projectBalance($balance, $m->direction, $qty, $unitCost, $totalCost, $method, $m->exactUnitCost !== null);
         $this->enforceBinCapacity($orgId, $m, $balance, $newOnHand);
         $balance->on_hand_qty = $newOnHand;
         $balance->average_cost = $newAvg;
@@ -923,7 +923,7 @@ class StockLedgerService
     }
 
     /** Compute new on-hand, average cost, and total value after the movement. */
-    private function projectBalance(StockBalance $balance, string $direction, string $qty, string $unitCost, string $totalCost, string $method): array
+    private function projectBalance(StockBalance $balance, string $direction, string $qty, string $unitCost, string $totalCost, string $method, bool $exactOut = false): array
     {
         $prevQty = (string) $balance->on_hand_qty;
         $prevAvg = (string) $balance->average_cost;
@@ -958,6 +958,15 @@ class StockLedgerService
         if ($direction === 'in') {
             $newAvg = $this->costing->newWeightedAverage($prevQty, $prevAvg, $qty, $unitCost);
             $newValue = Decimal::value(Decimal::mul($newQty, $newAvg));
+
+            return [$newQty, $newAvg, $newValue];
+        }
+
+        if ($exactOut) {
+            // Removal at an exact cost (write-off of just-received units): value falls by that cost
+            // and the average is re-derived, so the pre-receipt average is restored.
+            $newValue = Decimal::value(Decimal::sub((string) $balance->total_value, $totalCost));
+            $newAvg = Decimal::isZero($newQty) ? $prevAvg : Decimal::cost(Decimal::div($newValue, $newQty));
 
             return [$newQty, $newAvg, $newValue];
         }

@@ -221,13 +221,15 @@ class InventoryReversalService
             $reversal = $this->createReversal('sales_return', $return->id, $return->return_number, 'sales_return.posted', 'REV-RMA', $reason);
             // Damaged/retired units were received then written off by posted decrease
             // adjustments; undo those first so the return's inbound can be reversed.
-            $base = \App\Services\Documents\SalesReturnService::writeOffNumber($return);
             $reversedOut = [];
             foreach (StockAdjustment::query()->where('organization_id', $return->organization_id)
-                ->where(fn ($q) => $q->where('adjustment_number', $base)->orWhere('adjustment_number', 'like', $base.'-W%'))
+                ->whereIn('adjustment_number', \App\Services\Documents\SalesReturnService::writeOffNumbers($return))
                 ->lockForUpdate()->get() as $writeOff) {
                 if ($writeOff->isPosted()) {
                     $this->reverseNegativeAdjustment($writeOff, 'Reversal of customer return '.$return->return_number);
+                }
+                // Posted-then-reversed here, or reversed by hand earlier: its OUT rows are not consumption.
+                if (in_array($writeOff->fresh()->status, ['reversed'], true)) {
                     $reversedOut[] = 'stock_adjustment:'.$writeOff->id.':post';
                 }
             }

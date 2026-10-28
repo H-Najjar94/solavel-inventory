@@ -156,6 +156,7 @@ class SalesReturnService
             }
 
             $this->workflowValidation->assertOperationalDocumentReady($r, 'sales_return.posted');
+            $this->assertWriteOffReady($r);
             $movements = [];
             foreach ($r->lines as $line) {
                 // Every returned unit is received at its original cost so the return
@@ -256,6 +257,37 @@ class SalesReturnService
      * via the existing adjustment.posted event), all inside the return's transaction.
      * Idempotent: a re-post returns early before reaching here.
      */
+    /**
+     * Damaged/retired lines are written off through adjustment.posted, so a connected organization
+     * must have that operation in its reviewed scope and its roles mapped. Fail before any stock
+     * moves, with an actionable message (standalone/disconnected organizations always pass).
+     */
+    private function assertWriteOffReady(SalesReturn $r): void
+    {
+        $hasNonStockable = $r->lines->contains(fn ($l) => ! in_array($l->condition, self::STOCKABLE, true)
+            && Decimal::gt((string) $l->returned_qty, '0'));
+        if (! $hasNonStockable || $r->is_source_reversal) {
+            return;
+        }
+        try {
+            app(\App\Services\Integration\OrganizationAccountRequirements::class)
+                ->assertOperationReady((int) $r->organization_id, 'adjustment.posted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $detail = collect($e->errors())->flatten()->implode('; ');
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'lines' => __('inventory.documents.damaged_return_adjustment_required', ['detail' => $detail]),
+            ]);
+        }
+    }
+
+    /** The write-off adjustment names a return can own: exact strings, never a LIKE pattern. */
+    public static function writeOffNumbers(SalesReturn $r): array
+    {
+        $warehouses = $r->lines->map(fn ($l) => (int) ($l->warehouse_id ?? $r->warehouse_id))->push((int) $r->warehouse_id)->unique()->filter()->values();
+
+        return $warehouses->map(fn ($w) => self::writeOffNumber($r, $w, true))->push(self::writeOffNumber($r))->unique()->values()->all();
+    }
+
     private function writeOffNonStockable(SalesReturn $r): void
     {
         $byWarehouse = [];
@@ -271,6 +303,10 @@ class SalesReturnService
         $adjustments = app(StockAdjustmentService::class);
         $suffix = count($byWarehouse) > 1;
         foreach ($byWarehouse as $warehouseId => $lines) {
+            // The IN row each line created: remove exactly that cost / that FIFO layer.
+            $received = StockLedger::query()->withoutGlobalScope('warehouse_access')
+                ->where('source_type', SalesReturn::class)->where('source_id', $r->id)->where('direction', 'in')
+                ->whereIn('source_line_id', array_map(fn ($l) => (int) $l->id, $lines))->get()->keyBy('source_line_id');
             $payload = array_map(fn ($line) => [
                 'direction' => 'decrease', 'item_id' => (int) $line->item_id,
                 'variant_id' => $line->variant_id ? (int) $line->variant_id : null,
@@ -288,7 +324,16 @@ class SalesReturnService
                 'reason_code' => 'customer_return_damage',
                 'notes' => 'Auto write-off of damaged/retired units from customer return '.$r->return_number,
             ], $payload);
-            $adjustments->post($adj);
+            $exact = [];
+            foreach ($adj->lines()->orderBy('id')->get()->values() as $i => $adjLine) {
+                $in = $received->get((int) $lines[$i]->id);
+                if ($in) {
+                    $exact[(int) $adjLine->id] = ['unit_cost' => (string) $in->unit_cost, 'layer_id' => $in->cost_layer_id ? (int) $in->cost_layer_id : null];
+                }
+            }
+            // A system write-off of units that are physically back: the lot overrides the return IN
+            // used (expired / quarantined / recalled lots) apply to the write-off too.
+            $adjustments->post($adj, ['allow_expired_lot' => true, 'allow_quarantined_lot' => true, 'exact_by_line' => $exact]);
         }
     }
 
