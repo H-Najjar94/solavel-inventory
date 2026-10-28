@@ -41,14 +41,24 @@ class SalesReturnFinanceCreditLinkTest extends TestCase
     }
 
     #[Test]
-    public function linked_return_exposes_state_and_link(): void
+    public function linked_return_exposes_created_not_a_stale_finance_state_and_link(): void
     {
         $this->useTenantA();
         config(['supplier_terms.finance_url' => 'https://finance.test']);
         $this->outbox(TenantTestManager::ORG_A, 501, 'sales.return.confirmed', ['credit_note_id' => 77, 'state' => 'draft_review']);
         $r = $this->credit($this->ret(TenantTestManager::ORG_A, 501));
-        $this->assertSame('draft_review', $r['state']);
+        $this->assertSame('created', $r['state'], 'the stored draft_review response must not be shown as the live credit state');
         $this->assertSame('https://finance.test/ar/credit-notes/77', $r['url']);
+    }
+
+    #[Test]
+    public function a_reversed_return_still_reports_reversed_and_a_posted_response_reports_created(): void
+    {
+        $this->useTenantA();
+        $this->outbox(TenantTestManager::ORG_A, 505, 'sales.return.confirmed', ['credit_note_id' => 5, 'state' => 'credit_posted']);
+        $this->assertSame('created', $this->credit($this->ret(TenantTestManager::ORG_A, 505))['state']);
+        $this->outbox(TenantTestManager::ORG_A, 505, 'sales.return.reversed', []);
+        $this->assertSame('reversed', $this->credit($this->ret(TenantTestManager::ORG_A, 505))['state']);
     }
 
     #[Test]

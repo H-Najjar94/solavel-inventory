@@ -101,13 +101,16 @@ class SalesReturnController extends ApiController
             return null;
         }
         $creditId = (int) data_get($confirmed->response, 'credit_note_id', 0);
-        $state = $rows->contains('event_type', 'sales.return.reversed') ? 'reversed' : (string) data_get($confirmed->response, 'state', '');
+        // Stock only knows the creation response (SolaCount never calls back, and exposes no read
+        // endpoint for Stock), so a later credit state (posted/voided) cannot be shown truthfully.
+        // Report only what Stock itself knows: created, or the return was reversed here.
+        $state = $rows->contains('event_type', 'sales.return.reversed') ? 'reversed' : 'created';
         if ($creditId < 1) {
             return ['state' => $confirmed->status === 'sent' ? 'unknown' : 'pending', 'url' => null];
         }
         $base = rtrim((string) config('supplier_terms.finance_url'), '/');
 
-        return ['state' => $state ?: 'unknown', 'url' => $base !== '' ? $base.'/ar/credit-notes/'.$creditId : null];
+        return ['state' => $state, 'url' => $base !== '' ? $base.'/ar/credit-notes/'.$creditId : null];
     }
 
     public function store(StoreSalesReturnRequest $request): JsonResponse
