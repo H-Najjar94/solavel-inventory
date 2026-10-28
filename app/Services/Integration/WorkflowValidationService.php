@@ -115,7 +115,7 @@ final class WorkflowValidationService
             if ($line->item_id) {
                 $required->push(['item', (string) $line->item_id]);
             }
-            $this->assertConversionSnapshot($line, $orgId, $eventType);
+            $this->assertConversionSnapshot($line, $orgId, $eventType, in_array($eventType, ['sales_return.posted', 'sales_return.reversed'], true));
             $required->push(['unit', (string) $line->entered_unit_id]);
             $required->push(['unit', (string) $line->base_unit_id]);
         }
@@ -192,7 +192,12 @@ final class WorkflowValidationService
         }
     }
 
-    private function assertConversionSnapshot(object $line, int $organizationId, string $eventType): void
+    /**
+     * @param bool $allowLegacyV1 customer-return lines (and their reversal) may carry the
+     *        historical v1 snapshot copied unchanged from the original shipment line; it is
+     *        then verified with the v1 rules only. v1 and v2 are never cross-accepted.
+     */
+    private function assertConversionSnapshot(object $line, int $organizationId, string $eventType, bool $allowLegacyV1 = false): void
     {
         foreach (['item_id', 'entered_qty', 'entered_unit_id', 'base_unit_id', 'unit_conversion_factor',
             'unit_conversion_version', 'unit_conversion_hash', 'unit_conversion_precision', 'unit_conversion_rounding_mode'] as $field) {
@@ -244,6 +249,13 @@ final class WorkflowValidationService
             'factor' => Decimal::round($factor, 8), 'version' => UnitConversionResolver::CONTRACT_VERSION,
             'precision' => UnitConversionResolver::PRECISION, 'rounding_mode' => UnitConversionResolver::ROUNDING_MODE,
         ];
+        if ($allowLegacyV1 && $snapshotVersion === UnitConversionResolver::LEGACY_V1_VERSION) {
+            if (! app(UnitConversionResolver::class)->legacyV1Verifies($line, $baseQty)) {
+                $this->conversionFailure($eventType, 'unit_conversion_arithmetic_or_hash_invalid');
+            }
+
+            return;
+        }
         if (Decimal::cmp($expectedQty, $baseQty, UnitConversionResolver::PRECISION) !== 0
             || ! hash_equals((string) $line->unit_conversion_hash, hash('sha256', json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION)))) {
             $this->conversionFailure($eventType, 'unit_conversion_arithmetic_or_hash_invalid');

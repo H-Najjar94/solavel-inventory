@@ -17,6 +17,10 @@ class UnitConversionResolver
         self::CONTRACT_VERSION => Decimal::QTY_SCALE,
     ];
 
+    public const LEGACY_V1_VERSION = 'solastock-unit-conversion.v1';
+
+    public const LEGACY_V1_PRECISION = 4;
+
     public const PRECISION = Decimal::QTY_SCALE;
 
     public const ROUNDING_MODE = 'HALF_UP';
@@ -115,6 +119,56 @@ class UnitConversionResolver
             'unit_conversion_rounding_mode' => self::ROUNDING_MODE,
             $quantityKey => $baseQty,
         ]);
+    }
+
+    /**
+     * Pure check of a historical (v1, four-decimal) frozen snapshot under its OWN
+     * contract: version/precision/rounding, the v1 hash, and base = entered x factor
+     * rounded at four decimals. Tampered or inconsistent data returns false.
+     * Does not touch the database and never rewrites the source.
+     */
+    public function legacyV1Verifies(object $source, string $baseQty): bool
+    {
+        $factor = (string) $source->unit_conversion_factor;
+        $entered = (string) $source->entered_qty;
+        if ((string) $source->unit_conversion_version !== self::LEGACY_V1_VERSION
+            || (int) $source->unit_conversion_precision !== self::LEGACY_V1_PRECISION
+            || (string) $source->unit_conversion_rounding_mode !== self::ROUNDING_MODE
+            || ! preg_match('/^\d+(?:\.\d+)?$/', $factor) || Decimal::cmp($factor, '0') <= 0
+            || ! preg_match('/^\d+(?:\.\d+)?$/', $entered) || Decimal::cmp($entered, '0') <= 0
+            || ! preg_match('/^\d+(?:\.\d+)?$/', $baseQty)) {
+            return false;
+        }
+        $snapshot = $this->snapshotFor($source, self::LEGACY_V1_VERSION, self::LEGACY_V1_PRECISION);
+        if (! hash_equals((string) $source->unit_conversion_hash, $this->hashOf($snapshot))) {
+            return false;
+        }
+        // v1 arithmetic at its own precision; the six-decimal product must be the same
+        // number, otherwise the v2-equivalent values would not be reliable.
+        $product = Decimal::mul($entered, $factor);
+
+        return Decimal::cmp(Decimal::round($product, 4), $baseQty, 4) === 0
+            && Decimal::cmp(Decimal::round($product, self::PRECISION), $baseQty, self::PRECISION) === 0;
+    }
+
+    private function snapshotFor(object $source, string $version, int $precision): array
+    {
+        return [
+            'organization_id' => (int) $source->organization_id,
+            'item_id' => (int) $source->item_id,
+            'source_unit_id' => (int) $source->entered_unit_id,
+            'base_unit_id' => (int) $source->base_unit_id,
+            'conversion_id' => $source->unit_conversion_id === null ? null : (int) $source->unit_conversion_id,
+            'factor' => Decimal::round((string) $source->unit_conversion_factor, 8),
+            'version' => $version,
+            'precision' => $precision,
+            'rounding_mode' => self::ROUNDING_MODE,
+        ];
+    }
+
+    private function hashOf(array $snapshot): string
+    {
+        return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
     }
 
     /**
