@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => '开盘股票反转。',
     'return_source_invalid' => '只有未冲销的过帐装运才能创建来源冲销。',
     'return_source_immutable' => '针对原发运单的冲销不可修改。请在过账前取消并重新开始。',
+    'damaged_return_adjustment_required' => '此退货包含损坏或报废行，需通过库存调整核销，但 SolaCount 尚未准备好处理库存调整：:detail。请映射调整科目（库存和调整损失），将调整纳入已连接的工作流，然后重新过账。',
     'shipment_already_reversed' => '这批货物已被另一次退货冲销。',
     'shipment_no_ledger' => '已过帐的装运没有可冲销的规范分类帐行。',
     'po_edit_draft' => '只能编辑采购订单草稿。',

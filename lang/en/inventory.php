@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'Opening stock reversed.',
     'return_source_invalid' => 'Only an unreversed posted shipment can create a source reversal.',
     'return_source_immutable' => 'A shipment source reversal is immutable. Cancel it and start again before posting.',
+    'damaged_return_adjustment_required' => 'This return has damaged or retired lines, which are written off through a stock adjustment, but SolaCount is not ready for stock adjustments: :detail. Map the adjustment accounts (inventory and adjustment loss) and include adjustments in the connected workflows, then post again.',
     'shipment_already_reversed' => 'This shipment was already reversed by another return.',
     'shipment_no_ledger' => 'The posted shipment has no canonical ledger rows to reverse.',
     'po_edit_draft' => 'Only a draft PO can be edited.',

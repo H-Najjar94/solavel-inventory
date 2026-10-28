@@ -88,12 +88,14 @@ class CostingEngine
         string $quantity,
         ?StockBalance $balance,
         bool $allowNegative,
-        bool $readOnly = false
+        bool $readOnly = false,
+        ?string $exactUnitCost = null,
+        ?int $fromCostLayerId = null
     ): array {
         $this->assertSupported($method);
 
         if ($method === 'average') {
-            $avg = $balance ? (string) $balance->average_cost : '0';
+            $avg = $exactUnitCost ?? ($balance ? (string) $balance->average_cost : '0');
             $unitCost = Decimal::cost($avg);
             $totalCost = Decimal::value(Decimal::mul($quantity, $unitCost));
 
@@ -117,6 +119,10 @@ class CostingEngine
             ->orderBy('id')
             ->when(!$readOnly, fn($q) => $q->lockForUpdate())
             ->get();
+        if ($fromCostLayerId !== null) {
+            // Exact-layer removal: the named layer is consumed first, the rest keep FIFO order.
+            $layers = $layers->sortBy(fn ($l) => (int) $l->id === $fromCostLayerId ? 0 : 1)->values();
+        }
 
         foreach ($layers as $layer) {
             if (Decimal::isZero($remainingToConsume)) {
