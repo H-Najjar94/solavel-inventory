@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'Açılış stoku tersine çevrildi.',
     'return_source_invalid' => 'Sadece tersine çevrilmemiş gönderilmiş bir gönderim, kaynak tersine çevirimi oluşturabilir.',
     'return_source_immutable' => 'Gönderim kaynak tersine çevirimi değiştirilemez. Göndermeden önce iptal edip yeniden başlayın.',
+    'damaged_return_adjustment_required' => 'Bu iade, stok düzeltmesiyle düşülen hasarlı veya hurdaya çıkarılmış satırlar içeriyor, ancak SolaCount stok düzeltmeleri için hazır değil: :detail. Düzeltme hesaplarını (stok ve düzeltme zararı) eşleyin, düzeltmeleri bağlı iş akışlarına ekleyin ve tekrar kaydedin.',
     'shipment_already_reversed' => 'Bu gönderim başka bir iade tarafından zaten tersine çevrildi.',
     'shipment_no_ledger' => 'Gönderilmiş gönderim, tersine çevrilecek kanonik defter satırına sahip değil.',
     'po_edit_draft' => 'Sadece taslak PO düzenlenebilir.',

@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'Anfangsbestand storniert.',
     'return_source_invalid' => 'Nur eine nicht stornierte gebuchte Sendung kann zu einer Quellenstornierung führen.',
     'return_source_immutable' => 'Eine Sendungsquellenstornierung ist unveränderlich. Brechen Sie es ab und beginnen Sie erneut, bevor Sie posten.',
+    'damaged_return_adjustment_required' => 'Diese Retoure enthält beschädigte oder ausgemusterte Positionen, die über eine Bestandskorrektur abgeschrieben werden, aber SolaCount ist für Bestandskorrekturen nicht bereit: :detail. Ordnen Sie die Korrekturkonten (Bestand und Korrekturverlust) zu, nehmen Sie Korrekturen in die verbundenen Workflows auf und buchen Sie erneut.',
     'shipment_already_reversed' => 'Diese Sendung wurde bereits durch eine andere Rücksendung storniert.',
     'shipment_no_ledger' => 'Die gebuchte Sendung verfügt über keine kanonischen Hauptbuchzeilen, die storniert werden könnten.',
     'po_edit_draft' => 'Nur ein Bestellentwurf kann bearbeitet werden.',

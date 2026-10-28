@@ -26,7 +26,8 @@ final class DeadLetterReviewService
         if ($event->status !== 'dead_letter') {
             throw new RuntimeException('Only dead-letter events may enter reviewed recovery.');
         }
-        if ($retry && ($event->mapping_status !== 'complete' || $event->failure_category === 'business_permanent')) {
+        if ($retry && ($event->mapping_status !== 'complete' || ($event->failure_category === 'business_permanent'
+                && ! DurableOutboxTransportService::isReviewableReceiverCode($event->failure_code)))) {
             throw new RuntimeException('The permanent blocker must be resolved before retry.');
         }
 

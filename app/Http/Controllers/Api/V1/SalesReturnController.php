@@ -79,7 +79,35 @@ class SalesReturnController extends ApiController
 
         $this->nameDocuments([$sales_return]);
 
-        return $this->success(['sales_return' => $sales_return, 'ledger' => $ledger]);
+        return $this->success(['sales_return' => $sales_return, 'ledger' => $ledger, 'finance_credit' => $this->financeCredit($sales_return)]);
+    }
+
+    /**
+     * The SolaCount credit created from this return, as acknowledged by SolaCount in the
+     * handoff response. Organization scoped; null when no handoff (legacy/standalone/cash).
+     * Only the credit id and state come back (never a number), so no guessing by amount.
+     */
+    private function financeCredit(SalesReturn $return): ?array
+    {
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('sales_document_outbox')) {
+            return null;
+        }
+        $rows = \App\Models\Tenant\SalesDocumentOutbox::query()
+            ->where('organization_id', $return->organization_id)
+            ->where('payload->return->id', (int) $return->id)
+            ->whereIn('event_type', ['sales.return.confirmed', 'sales.return.reversed'])->orderBy('id')->get();
+        $confirmed = $rows->firstWhere('event_type', 'sales.return.confirmed');
+        if (! $confirmed) {
+            return null;
+        }
+        $creditId = (int) data_get($confirmed->response, 'credit_note_id', 0);
+        $state = $rows->contains('event_type', 'sales.return.reversed') ? 'reversed' : (string) data_get($confirmed->response, 'state', '');
+        if ($creditId < 1) {
+            return ['state' => $confirmed->status === 'sent' ? 'unknown' : 'pending', 'url' => null];
+        }
+        $base = rtrim((string) config('supplier_terms.finance_url'), '/');
+
+        return ['state' => $state ?: 'unknown', 'url' => $base !== '' ? $base.'/ar/credit-notes/'.$creditId : null];
     }
 
     public function store(StoreSalesReturnRequest $request): JsonResponse

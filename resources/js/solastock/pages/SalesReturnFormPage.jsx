@@ -127,7 +127,7 @@ export default function SalesReturnFormPage() {
                 <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
                     onAdd={sourceDriven ? undefined : () => setLines([...lines, emptyLine()])}
                     onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
-                <p className="muted">{sourceDriven ? t('returns.form.sourceLockedHint', 'Choose any remaining quantity and its disposition. Warehouse, lot/serial identity, conversion and cost stay locked to the posted shipment ledger.') : t('returns.form.manualHint', 'Resellable and quarantined units re-enter stock at their shipment unit cost. Damaged and retired units are recorded without being returned to stock.')}</p>
+                <p className="muted">{sourceDriven ? t('returns.form.sourceLockedHint', 'Choose any remaining quantity and its disposition. Warehouse, lot/serial identity, conversion and cost stay locked to the posted shipment ledger.') : t('returns.form.manualHint', 'Resellable and quarantined units re-enter stock at their shipment unit cost. Damaged and retired units are received at that cost and immediately written off by a DMG- adjustment, so they are never available to sell.')}</p>
             </div>
 
             <div className="doc-actions">

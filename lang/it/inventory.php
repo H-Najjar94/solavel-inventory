@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'Scorte iniziali annullate.',
     'return_source_invalid' => 'Solo una spedizione registrata e non annullata può creare una fonte di inversione.',
     'return_source_immutable' => 'Una fonte di inversione di spedizione è immutabile. Annullarla e ricominciare prima di registrare.',
+    'damaged_return_adjustment_required' => 'Questo reso contiene righe danneggiate o dismesse che vengono eliminate con una rettifica di magazzino, ma SolaCount non è pronto per le rettifiche: :detail. Associare i conti di rettifica (magazzino e perdita da rettifica), includere le rettifiche nei flussi collegati e registrare di nuovo.',
     'shipment_already_reversed' => 'Questa spedizione è già stata annullata da un altro reso.',
     'shipment_no_ledger' => 'La spedizione registrata non ha righe contabili canoniche da annullare.',
     'po_edit_draft' => 'Solo un PO in bozza può essere modificato.',

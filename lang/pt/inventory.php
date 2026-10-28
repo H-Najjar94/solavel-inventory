@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'Estoque inicial revertido.',
     'return_source_invalid' => 'Somente uma remessa lançada não estornada pode criar um estorno de origem.',
     'return_source_immutable' => 'A reversão da origem da remessa é imutável. Cancele e comece novamente antes de postar.',
+    'damaged_return_adjustment_required' => 'Esta devolução tem linhas danificadas ou retiradas que são baixadas por um ajuste de estoque, mas o SolaCount não está pronto para ajustes de estoque: :detail. Mapeie as contas de ajuste (estoque e perda por ajuste), inclua os ajustes nos fluxos conectados e lance novamente.',
     'shipment_already_reversed' => 'Este envio já foi revertido por outra devolução.',
     'shipment_no_ledger' => 'A remessa lançada não possui linhas do razão canônico para reverter.',
     'po_edit_draft' => 'Somente um rascunho do pedido de compra pode ser editado.',

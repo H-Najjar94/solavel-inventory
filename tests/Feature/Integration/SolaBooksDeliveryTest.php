@@ -22,10 +22,12 @@ use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
+use Tests\Traits\RollsBackCentral;
 use Tests\Traits\TenantAware;
 
 class SolaBooksDeliveryTest extends TestCase
 {
+    use RollsBackCentral;
     use TenantAware;
 
     private array $quantityMappings = [];
@@ -677,6 +679,63 @@ class SolaBooksDeliveryTest extends TestCase
         ]);
         $this->expectException(\RuntimeException::class);
         $transport->queueReviewedRetry($blocked->fresh(), 42);
+    }
+
+    #[Test]
+    public function closed_period_rejection_waits_for_a_human_then_retries_the_same_row_once_reopened(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $event = $this->enableDurableTransport($this->event());
+        $key = $event->idempotency_key;
+        $hash = $event->payload_hash;
+        $payload = $event->payload;
+        $closed = ['success' => false, 'error' => ['code' => 'accounting_period_invalid', 'message' => 'Posting date is in a closed period']];
+        Http::fake(['books.test/*' => Http::sequence()
+            ->push($closed, 422)->push($closed, 422)->push(['data' => ['id' => 7001]], 201)]);
+        $transport = app(DurableOutboxTransportService::class);
+        $run = fn () => $transport->processClaim($transport->claim(TenantTestManager::ORG_A, 'worker-period'));
+
+        $run();
+        $failed = $event->fresh();
+        $this->assertSame('failed', $failed->status);
+        $this->assertSame('business_permanent', $failed->failure_category);
+        $this->assertSame('accounting_period_invalid', $failed->failure_code);
+        // No automatic retry on the backoff schedule.
+        $this->assertNull($transport->claim(TenantTestManager::ORG_A, 'worker-auto'));
+
+        // Retry while still closed: same row, fails again, still reviewable.
+        $transport->queueReviewedRetry($failed, 42);
+        $run();
+        $again = $event->fresh();
+        $this->assertSame('failed', $again->status);
+        $this->assertSame('accounting_period_invalid', $again->failure_code);
+
+        // Period reopened: retry succeeds, same key/payload, one row.
+        $transport->queueReviewedRetry($again, 42);
+        $run();
+        $done = $event->fresh();
+        $this->assertSame($key, $done->idempotency_key);
+        $this->assertSame($hash, $done->payload_hash);
+        $this->assertEquals($payload, $done->payload);
+        $this->assertNotSame('failed', $done->status);
+        $this->assertSame(1, \App\Models\Tenant\IntegrationOutboxEvent::query()->where('idempotency_key', $key)->count());
+    }
+
+    #[Test]
+    public function dead_lettered_closed_period_event_can_be_reviewed_and_retried_but_other_permanent_cannot(): void
+    {
+        $this->bootActiveIntegration();
+        $this->configureHttp();
+        $period = $this->enableDurableTransport($this->event());
+        $period->update(['status' => 'dead_letter', 'mapping_status' => 'complete', 'failure_category' => 'business_permanent', 'failure_code' => 'accounting_period_invalid', 'dead_lettered_at' => now()]);
+        $reviewed = app(DeadLetterReviewService::class)->review($period->fresh(), 42, 'Period reopened', true);
+        $this->assertSame('ready', $reviewed->status);
+
+        $other = $this->enableDurableTransport($this->event());
+        $other->update(['status' => 'dead_letter', 'mapping_status' => 'complete', 'failure_category' => 'business_permanent', 'failure_code' => 'currency_invalid', 'dead_lettered_at' => now()]);
+        $this->expectException(\RuntimeException::class);
+        app(DeadLetterReviewService::class)->review($other->fresh(), 42, 'x', true);
     }
 
     #[Test]

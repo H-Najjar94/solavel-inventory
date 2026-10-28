@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Tests\Traits\RollsBackCentral;
 
 /**
  * Checks for the Solavel-style live tenant resolution. Customer launch follows
@@ -22,6 +23,8 @@ use Tests\TestCase;
  */
 class LiveTenantResolverTest extends TestCase
 {
+    use RollsBackCentral;
+
     private function request(array $session = []): Request
     {
         $req = Request::create('/inventory/api/v1/items', 'GET');

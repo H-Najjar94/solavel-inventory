@@ -149,6 +149,16 @@ CREATE TABLE IF NOT EXISTS currencies (
   name VARCHAR(191) NULL,
   is_active TINYINT NOT NULL DEFAULT 1
 );
+ALTER TABLE currencies ADD COLUMN IF NOT EXISTS symbol VARCHAR(255) NULL;
+-- Finance's per-organization currency enablement; ConnectionWizardService selects default_exchange_rate whenever the table exists,
+-- so a weaker table created ad hoc by another test must never be the one that is present.
+CREATE TABLE IF NOT EXISTS organization_currencies (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  organization_id BIGINT UNSIGNED NOT NULL,
+  currency_id BIGINT UNSIGNED NOT NULL,
+  is_enabled TINYINT(1) NOT NULL DEFAULT 0,
+  default_exchange_rate DECIMAL(24,8) NOT NULL DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS org_account_defaults (
   organization_id BIGINT UNSIGNED PRIMARY KEY,
   inventory_asset_account_id BIGINT UNSIGNED NULL,
@@ -235,6 +245,12 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source VARCHAR(20) NULL;
 ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_type VARCHAR(255) NULL;
 ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_id BIGINT UNSIGNED NULL;
+-- Finance projection columns that the native-Finance test fixtures and IntegrationReconciliationService read.
+-- Declared here so no test depends on which fixture happened to run (and DDL-commit) first.
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source_key VARCHAR(255) NULL;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS voided_by BIGINT UNSIGNED NULL;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS reverses_entry_id BIGINT UNSIGNED NULL;
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS metadata LONGTEXT NULL;
 CREATE TABLE IF NOT EXISTS finance_purchase_receipts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   organization_id BIGINT UNSIGNED NOT NULL,

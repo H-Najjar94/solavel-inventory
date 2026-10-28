@@ -234,8 +234,9 @@ class StockAdjustmentService
     {
         $allowExpired = (bool) ($overrides['allow_expired_lot'] ?? false);
         $allowQuarantined = (bool) ($overrides['allow_quarantined_lot'] ?? false);
+        $exactByLine = (array) ($overrides['exact_by_line'] ?? []);
 
-        return DB::connection($this->connection())->transaction(function () use ($adj, $allowExpired, $allowQuarantined) {
+        return DB::connection($this->connection())->transaction(function () use ($adj, $allowExpired, $allowQuarantined, $exactByLine) {
             $adj = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->id);
 
             if ($adj->isPosted()) {
@@ -269,6 +270,8 @@ class StockAdjustmentService
                     // overrides only meaningful for outbound (decrease) lot moves
                     allowExpiredLot: $isOut && $allowExpired,
                     allowQuarantinedLot: $isOut && $allowQuarantined,
+                    exactUnitCost: $isOut ? ($exactByLine[(int) $line->id]['unit_cost'] ?? null) : null,
+                    fromCostLayerId: $isOut ? ($exactByLine[(int) $line->id]['layer_id'] ?? null) : null,
                 );
             }
 

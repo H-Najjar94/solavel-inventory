@@ -10,9 +10,12 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Tests\Traits\RollsBackCentral;
 
 class AuthenticatedRtlHarnessTest extends TestCase
 {
+    use RollsBackCentral;
+
     private function authenticate(): void
     {
         config(['app.url' => 'http://localhost']);

@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'La acción inicial se invirtió.',
     'return_source_invalid' => 'Solo una expedición contabilizada y sin revertir puede generar una reversión de origen.',
     'return_source_immutable' => 'La reversión de una expedición de origen es inmutable. Cancélela y vuelva a empezar antes de contabilizar.',
+    'damaged_return_adjustment_required' => 'Esta devolución tiene líneas dañadas o retiradas que se dan de baja mediante un ajuste de stock, pero SolaCount no está listo para ajustes de stock: :detail. Asigne las cuentas de ajuste (inventario y pérdida por ajuste), incluya los ajustes en los flujos conectados y contabilice de nuevo.',
     'shipment_already_reversed' => 'Este envío ya fue revertido por otra devolución.',
     'shipment_no_ledger' => 'La expedición contabilizada no tiene líneas en el libro de existencias canónico que puedan revertirse.',
     'po_edit_draft' => 'Solo se puede editar un borrador de PO.',

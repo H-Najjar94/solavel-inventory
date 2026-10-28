@@ -15,10 +15,12 @@ use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
+use Tests\Traits\RollsBackCentral;
 use Tests\Traits\TenantAware;
 
 final class ConnectionWizardTest extends TestCase
 {
+    use RollsBackCentral;
     use TenantAware;
 
     protected function setUp(): void

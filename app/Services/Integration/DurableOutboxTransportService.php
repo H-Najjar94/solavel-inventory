@@ -25,7 +25,17 @@ final class DurableOutboxTransportService
         // A reviewed receiver entitlement correction can make the unchanged
         // event eligible. Delivery still enforces current receiver access.
         'feature_disabled',
+        // The receiver's accounting period is closed. Never auto-retried (permanent
+        // category); a person reopens the period in SolaCount and retries the SAME
+        // row, same idempotency key and unchanged payload/date. SolaCount replays an
+        // already-booked event idempotently, so repeated retries cannot duplicate.
+        'accounting_period_invalid',
     ];
+
+    public static function isReviewableReceiverCode(?string $code): bool
+    {
+        return in_array((string) $code, self::REVIEWABLE_RECEIVER_CODES, true);
+    }
 
     public function __construct(
         private readonly IntegrationSafetyHold $safety,
@@ -317,7 +327,7 @@ final class DurableOutboxTransportService
         $this->assertExecutionEnabled((int) $event->organization_id);
         if ($event->mapping_status !== 'complete'
             || ($event->failure_category === 'business_permanent'
-                && ! in_array((string) $event->failure_code, self::REVIEWABLE_RECEIVER_CODES, true))
+                && ! self::isReviewableReceiverCode($event->failure_code))
             || ! in_array($event->status, ['failed', 'retry_scheduled', 'review_required'], true)) {
             throw new RuntimeException('This event is not eligible for reviewed retry.');
         }

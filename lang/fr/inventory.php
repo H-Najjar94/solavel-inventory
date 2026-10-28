@@ -179,6 +179,7 @@ return array (
     'opening_reversal_default_reason' => 'Stock d’ouverture inversé.',
     'return_source_invalid' => 'Seule une expédition validée non annulée peut créer une annulation d\'origine.',
     'return_source_immutable' => 'Une inversion de la source d’expédition est immuable. Annulez-le et recommencez avant de poster.',
+    'damaged_return_adjustment_required' => 'Ce retour contient des lignes endommagées ou retirées qui sont sorties du stock par un ajustement, mais SolaCount n\'est pas prêt pour les ajustements de stock : :detail. Associez les comptes d\'ajustement (stock et perte d\'ajustement), incluez les ajustements dans les flux connectés, puis comptabilisez à nouveau.',
     'shipment_already_reversed' => 'Cet envoi a déjà été annulé par un autre retour.',
     'shipment_no_ledger' => 'L’expédition validée ne comporte aucune ligne canonique du grand livre à annuler.',
     'po_edit_draft' => 'Seul un brouillon de bon de commande peut être modifié.',
