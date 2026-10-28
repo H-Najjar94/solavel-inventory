@@ -16,9 +16,12 @@ use Illuminate\Support\Facades\Schema;
 use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Tests\Traits\RollsBackCentral;
 
 class InventoryCommercialEntitlementTest extends TestCase
 {
+    use RollsBackCentral;
+
     #[Test]
     public function missing_snapshot_allows_free_tier_but_blocks_paid_feature_without_expiry_reason(): void
     {

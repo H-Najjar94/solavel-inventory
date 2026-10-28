@@ -22,10 +22,12 @@ use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\TenantTestManager;
 use Tests\TestCase;
+use Tests\Traits\RollsBackCentral;
 use Tests\Traits\TenantAware;
 
 class SolaBooksDeliveryTest extends TestCase
 {
+    use RollsBackCentral;
     use TenantAware;
 
     private array $quantityMappings = [];
