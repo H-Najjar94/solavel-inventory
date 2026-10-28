@@ -63,8 +63,9 @@ class SalesReturnFinanceCreditLinkTest extends TestCase
     #[Test]
     public function another_organizations_handoff_is_never_exposed(): void
     {
-        $this->useTenantA();
+        $this->useTenantB();
         $this->outbox(TenantTestManager::ORG_B, 504, 'sales.return.confirmed', ['credit_note_id' => 9, 'state' => 'credit_posted']);
+        $this->useTenantA();
         $this->assertNull($this->credit($this->ret(TenantTestManager::ORG_A, 504)));
     }
 

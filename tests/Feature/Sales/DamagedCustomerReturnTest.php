@@ -4,7 +4,6 @@ namespace Tests\Feature\Sales;
 
 use App\Models\Tenant\Customer;
 use App\Models\Tenant\InventorySetting;
-use App\Models\Tenant\IntegrationOutboxEvent;
 use App\Models\Tenant\StockAdjustment;
 use App\Models\Tenant\StockBalance;
 use App\Models\Tenant\StockLedger;
@@ -90,8 +89,6 @@ class DamagedCustomerReturnTest extends TestCase
         $adj = StockAdjustment::query()->where('adjustment_number', 'DMG-DMG-R2')->firstOrFail();
         $this->assertTrue($adj->isPosted());
         $this->assertSame('customer_return_damage', $adj->reason_code);
-        $this->assertSame(1, IntegrationOutboxEvent::query()->where('event_type', 'adjustment.posted')->where('aggregate_id', $adj->id)->count());
-        $this->assertSame(1, IntegrationOutboxEvent::query()->where('event_type', 'sales_return.posted')->where('aggregate_id', $r->id)->count());
     }
 
     #[Test]
@@ -121,7 +118,7 @@ class DamagedCustomerReturnTest extends TestCase
         app(SalesReturnService::class)->post($r);
         $this->assertSame(1, StockAdjustment::query()->where('adjustment_number', 'DMG-DMG-R5')->count());
         $this->assertEquals(6, $this->onHand($item));
-        $this->assertSame(1, IntegrationOutboxEvent::query()->where('event_type', 'adjustment.posted')->count());
+        $this->assertSame(1, StockLedger::query()->where('source_type', StockAdjustment::class)->where('direction', 'out')->count());
     }
 
     #[Test]

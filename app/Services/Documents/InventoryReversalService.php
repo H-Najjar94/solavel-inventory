@@ -222,15 +222,17 @@ class InventoryReversalService
             // Damaged/retired units were received then written off by posted decrease
             // adjustments; undo those first so the return's inbound can be reversed.
             $base = \App\Services\Documents\SalesReturnService::writeOffNumber($return);
+            $reversedOut = [];
             foreach (StockAdjustment::query()->where('organization_id', $return->organization_id)
                 ->where(fn ($q) => $q->where('adjustment_number', $base)->orWhere('adjustment_number', 'like', $base.'-W%'))
                 ->lockForUpdate()->get() as $writeOff) {
                 if ($writeOff->isPosted()) {
                     $this->reverseNegativeAdjustment($writeOff, 'Reversal of customer return '.$return->return_number);
+                    $reversedOut[] = 'stock_adjustment:'.$writeOff->id.':post';
                 }
             }
             if ($hasLedger) {
-                $this->assertInboundSourceStillReversible($namespace);
+                $this->assertInboundSourceStillReversible($namespace, 'receipt', $reversedOut);
                 $this->ledger->reverse($namespace, 'inventory_reversal:'.$reversal->id.':post', [
                     'action' => 'sales_return.reverse', 'entity_type' => 'inventory_reversal',
                     'entity_id' => $reversal->id, 'document_ref' => $reversal->reversal_number,
@@ -303,7 +305,7 @@ class InventoryReversalService
      * coordinates, whatever the costing method. $document picks the wording
      * (receipt, adjustment, opening).
      */
-    public function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt'): void
+    public function assertInboundSourceStillReversible(string $namespace, string $document = 'receipt', array $reversedOutNamespaces = []): void
     {
         $messagePrefix = match ($document) {
             'adjustment' => 'inventory.documents.adjustment_',
@@ -324,6 +326,14 @@ class InventoryReversalService
                 ->where('item_id', $row->item_id)
                 ->where('warehouse_id', $row->warehouse_id)
                 ->where('direction', 'out')
+                // OUT rows of write-off adjustments already reversed by this operation are not downstream consumption.
+                ->when($reversedOutNamespaces !== [], fn ($q) => $q->where(function ($w) use ($reversedOutNamespaces) {
+                    $w->whereNull('idempotency_key')->orWhere(function ($k) use ($reversedOutNamespaces) {
+                        foreach ($reversedOutNamespaces as $ns) {
+                            $k->where('idempotency_key', 'not like', $ns.'#%');
+                        }
+                    });
+                }))
                 ->when($row->variant_id, fn ($q) => $q->where('variant_id', $row->variant_id), fn ($q) => $q->whereNull('variant_id'))
                 ->when($row->lot_id, fn ($q) => $q->where('lot_id', $row->lot_id), fn ($q) => $q->whereNull('lot_id'))
                 ->when($row->bin_id, fn ($q) => $q->where('bin_id', $row->bin_id), fn ($q) => $q->whereNull('bin_id'))
