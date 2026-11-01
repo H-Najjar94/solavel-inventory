@@ -31,6 +31,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         $original['source_status']='posted';$original['posted_invoice_journal_id']=71;
         FulfillmentRequest::sole()->update(['source_status'=>'posted','posted_invoice_journal_id'=>71,'source_payload'=>$original]);
         DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['invoice_journal_id'=>71]);
+        DB::connection('tenant')->table('journal_entries')->insert(['id'=>71,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
         if(bccomp($fulfilled,'0',4)>0){
             $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'view',['request_uuid'=>$original['request_uuid']])
                 ->andReturn(['allowed'=>true,'request_revision'=>$original['source_revision'],'source_revision'=>str_repeat('b',64)]);
