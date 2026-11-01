@@ -90,7 +90,7 @@ final class InvoiceCommercialAmendmentService
                 $commercial=collect($target['lines'])->first(fn($row)=>(string)$row['source_line_id']===(string)$line->source_line_id);
                 $line->update(['unit_price'=>Decimal::cost((string)$commercial['unit_price'])]);
             }
-            $payload=$command->payload;$payload['receipt']=['request_revision'=>$target['source_revision'],'replacement_journal_id'=>$journal->id,'physical_effects'=>0];
+            $payload=$command->payload;$payload['receipt']=['request_revision'=>$target['source_revision'],'replacement_journal_id'=>$journal->id,'physical_effects'=>0,'fulfillment'=>app(FulfillmentRequestService::class)->status($request->fresh('lines'))];
             $command->update(['payload'=>$payload,'status'=>'committed']);
             $this->audit($request,$command,'sales.invoice_amendment_committed',$before,$target);
             return $this->result($command);
