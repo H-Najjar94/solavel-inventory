@@ -19,7 +19,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
 {
     use TenantAware,SalesHandoffFixture;
 
-    private function fixture(string $fulfilled = '0',bool $returnPending=false): array
+    private function fixture(string $fulfilled = '0',bool $returnPending=false,bool $accepted=true,int $version=1,string $quantity='4'): array
     {
         $this->initializeSalesFixture(true);$original=$this->data();$this->authority($original);
         app(FulfillmentRequestService::class)->upsert($original,323);
@@ -27,7 +27,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         config(['inventory.demo_tenant.enabled'=>false]);
         $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed'=>true,'owner'=>true,'roles'=>[]]);
         $this->app->forgetInstance(InventoryPermissionService::class);
-        app(FulfillmentRequestService::class)->approve(FulfillmentRequest::sole(),$this->warehouse->id);
+        if($accepted)app(FulfillmentRequestService::class)->approve(FulfillmentRequest::sole(),$this->warehouse->id);
         $original['source_status']='posted';$original['posted_invoice_journal_id']=71;
         FulfillmentRequest::sole()->update(['source_status'=>'posted','posted_invoice_journal_id'=>71,'source_payload'=>$original]);
         DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['invoice_journal_id'=>71]);
@@ -44,21 +44,21 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             app(\App\Services\Documents\SalesReturnService::class)->createDraft(['return_number'=>'SYNTHETIC-RMA','shipment_id'=>$shipment->id,
                 'customer_id'=>$shipment->customer_id,'warehouse_id'=>$shipment->warehouse_id,'return_date'=>'2026-10-07','reason'=>'Review confirmed source return'],[]);
         }
-        $proposal=$original;$proposal['lines'][0]['unit_price']='9';
-        $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];
+        $proposal=$original;$proposal['lines'][0]['unit_price']='9';if($version===2)$proposal['lines'][0]['quantity']=$quantity;
+        $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];if($version===2)$approved['review']=['inventory'=>['stock'=>['version'=>2,'amendment_mode'=>'pending_demand']]];
         $row=['version'=>1,'invoice_id'=>800,'operation_uuid'=>$uuid,'state'=>'queued','approved'=>$approved,'execution'=>[]];
         $id=DB::connection('tenant')->table('finance_sales_events')->insertGetId(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,
             'source_key'=>'invoice-amendment:'.$uuid,'source_hash'=>hash('sha256',json_encode($approved,JSON_THROW_ON_ERROR)),
             'event_type'=>'sales.invoice_amendment.v1','result'=>json_encode($row),'created_at'=>now(),'updated_at'=>now()]);
         $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->withArgs(fn($actor,$invoice,$permission,$facts)=>$actor===323&&$invoice===800&&$permission==='post'&&$facts['command']==='invoice-amendment'&&$facts['operation_uuid']===$uuid)
-            ->andReturnUsing(function($actor,$invoice,$permission,$facts)use($id,$uuid){
+            ->andReturnUsing(function($actor,$invoice,$permission,$facts)use($id,$uuid,$version){
                 $saved=DB::connection('tenant')->table('finance_sales_events')->where('id',$id)->first();$value=json_decode($saved->result,true);
                 $replacement=$value['approved']['proposed_request'];$replacement['source_revision']=str_repeat('b',64);$replacement['posted_invoice_journal_id']=993;
-                return ['amendment'=>['version'=>1,'invoice_id'=>800,'operation_uuid'=>$uuid,'phase'=>$facts['purpose'],'approved_hash'=>$saved->source_hash,'state'=>$value['state'],
+                return ['amendment'=>['version'=>$version,'amendment_mode'=>$version===2?'pending_demand':'commercial','invoice_id'=>800,'operation_uuid'=>$uuid,'phase'=>$facts['purpose'],'approved_hash'=>$saved->source_hash,'state'=>$value['state'],
                     'original_request'=>$value['approved']['original_request'],'proposed_request'=>$value['approved']['proposed_request'],'replacement_request'=>$replacement]];
             });
         $fixture=new CommittedTenantFixture($this->tenantTestManager);$fixture->commit();
-        return [['version'=>1,'source_invoice_id'=>800,'operation_uuid'=>$uuid],$id,$fixture];
+        return [['version'=>$version,'source_invoice_id'=>800,'operation_uuid'=>$uuid],$id,$fixture];
     }
 
     private function state(int $id,string $state,array $execution=[]): void
@@ -66,6 +66,55 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         $db=DB::connection('tenant');$row=$db->table('finance_sales_events')->where('id',$id)->first();$value=json_decode($row->result,true);
         $value['state']=$state;$value['execution']=array_merge($value['execution'],$execution);$value['version']++;
         $db->table('finance_sales_events')->where('id',$id)->update(['result'=>json_encode($value)]);
+    }
+
+    public static function pendingDemandQuantities(): array { return ['increase'=>['6'],'decrease'=>['2']]; }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('pendingDemandQuantities')]
+    public function test_pending_demand_quantity_amendment_preserves_stock_and_waits_for_real_warehouse_acceptance(string $quantity): void
+    {
+        [$input,$id,$fixture]=$this->fixture('0',false,false,2,$quantity);
+        try{
+            $before=StockLedger::orderBy('id')->get()->toArray();$service=app(InvoiceCommercialAmendmentService::class);
+            $prepared=$service->dispatch($input,323,'prepare');self::assertSame(2,$prepared['version']);self::assertSame('prepared',$prepared['status']);
+            self::assertEquals(4,FulfillmentRequest::sole()->lines()->sole()->requested_qty);
+            $this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\Models\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $done=$service->dispatch($input,323,'commit');self::assertSame('committed',$done['status']);self::assertSame(2,$done['version']);self::assertSame($done,$service->dispatch($input,323,'commit'));
+            self::assertSame(0,$done['physical_effects']);self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());self::assertSame(0,SalesOrder::count());self::assertSame(0,\App\Models\Tenant\Shipment::count());
+            self::assertSame(0,bccomp($quantity,(string)FulfillmentRequest::sole()->lines()->sole()->requested_qty,4));self::assertSame('pending',$done['receipt']['fulfillment']['status']);
+            self::assertSame(0,bccomp($quantity,$done['receipt']['fulfillment']['lines'][0]['requested_quantity'],4));
+            $this->state($id,'completed');$request=FulfillmentRequest::sole();
+            DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['source_revision'=>$request->source_revision,'invoice_journal_id'=>993]);
+            $accepted=app(FulfillmentRequestService::class)->approve($request,$this->warehouse->id);
+            self::assertSame(1,SalesOrder::count());self::assertSame(0,bccomp($quantity,(string)SalesOrder::sole()->lines()->sole()->ordered_qty,4));
+            self::assertSame(0,\App\Models\Tenant\Shipment::count());self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());
+            self::assertSame($done,$service->dispatch($input,323,'commit'),'Original pending-demand receipt remains immutable after later warehouse acceptance.');
+        }finally{$fixture->restore();}
+    }
+
+    public static function acceptedDemandCases(): array { return ['accepted'=>['0'],'partial'=>['2'],'completed'=>['4']]; }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('acceptedDemandCases')]
+    public function test_quantity_protocol_rejects_any_accepted_or_dispatched_warehouse_order(string $fulfilled): void
+    {
+        [$input,$id,$fixture]=$this->fixture($fulfilled,false,true,2,'6');
+        try{
+            $before=StockLedger::orderBy('id')->get()->toArray();$orders=SalesOrder::with('lines')->get()->toArray();$commands=FulfillmentCommand::count();
+            try{app(InvoiceCommercialAmendmentService::class)->dispatch($input,323,'prepare');self::fail('Accepted physical demand was amended without a warehouse workflow.');}
+            catch(HttpExceptionInterface $failure){self::assertSame(409,$failure->getStatusCode());}
+            self::assertSame($commands,FulfillmentCommand::count());self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());self::assertSame($orders,SalesOrder::with('lines')->get()->toArray());
+        }finally{$fixture->restore();}
+    }
+
+    public function test_cancelled_pending_demand_never_changes_quantities_or_warehouse_evidence(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('0',false,false,2,'6');
+        try{
+            $service=app(InvoiceCommercialAmendmentService::class);$service->dispatch($input,323,'prepare');$this->state($id,'cancel_requested');
+            $done=$service->dispatch($input,323,'cancel');self::assertSame('abandoned',$done['status']);self::assertSame(2,$done['version']);self::assertSame($done,$service->dispatch($input,323,'cancel'));
+            self::assertEquals(4,FulfillmentRequest::sole()->lines()->sole()->requested_qty);self::assertSame(0,SalesOrder::count());
+        }finally{$fixture->restore();}
     }
 
     public function test_prepare_commit_and_unknown_outcome_replay_preserve_stock_and_original_order_prices(): void
