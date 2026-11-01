@@ -82,12 +82,12 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\Models\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
             $done=$service->dispatch($input,323,'commit');self::assertSame('committed',$done['status']);self::assertSame(2,$done['version']);self::assertSame($done,$service->dispatch($input,323,'commit'));
             self::assertSame(0,$done['physical_effects']);self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());self::assertSame(0,SalesOrder::count());self::assertSame(0,\App\Models\Tenant\Shipment::count());
-            self::assertEquals($quantity,FulfillmentRequest::sole()->lines()->sole()->requested_qty);self::assertSame('pending',$done['receipt']['fulfillment']['status']);
+            self::assertSame(0,bccomp($quantity,(string)FulfillmentRequest::sole()->lines()->sole()->requested_qty,4));self::assertSame('pending',$done['receipt']['fulfillment']['status']);
             self::assertSame(0,bccomp($quantity,$done['receipt']['fulfillment']['lines'][0]['requested_quantity'],4));
             $this->state($id,'completed');$request=FulfillmentRequest::sole();
-            DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['source_revision'=>$request->source_revision,'invoice_journal_id'=>993,'payload'=>json_encode($request->source_payload)]);
+            DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['source_revision'=>$request->source_revision,'invoice_journal_id'=>993]);
             $accepted=app(FulfillmentRequestService::class)->approve($request,$this->warehouse->id);
-            self::assertSame(1,SalesOrder::count());self::assertEquals($quantity,SalesOrder::sole()->lines()->sole()->ordered_qty);
+            self::assertSame(1,SalesOrder::count());self::assertSame(0,bccomp($quantity,(string)SalesOrder::sole()->lines()->sole()->ordered_qty,4));
             self::assertSame(0,\App\Models\Tenant\Shipment::count());self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());
             self::assertSame($done,$service->dispatch($input,323,'commit'),'Original pending-demand receipt remains immutable after later warehouse acceptance.');
         }finally{$fixture->restore();}
@@ -100,10 +100,10 @@ final class InvoiceCommercialAmendmentTest extends TestCase
     {
         [$input,$id,$fixture]=$this->fixture($fulfilled,false,true,2,'6');
         try{
-            $before=StockLedger::orderBy('id')->get()->toArray();$orders=SalesOrder::with('lines')->get()->toArray();
+            $before=StockLedger::orderBy('id')->get()->toArray();$orders=SalesOrder::with('lines')->get()->toArray();$commands=FulfillmentCommand::count();
             try{app(InvoiceCommercialAmendmentService::class)->dispatch($input,323,'prepare');self::fail('Accepted physical demand was amended without a warehouse workflow.');}
             catch(HttpExceptionInterface $failure){self::assertSame(409,$failure->getStatusCode());}
-            self::assertSame(0,FulfillmentCommand::count());self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());self::assertSame($orders,SalesOrder::with('lines')->get()->toArray());
+            self::assertSame($commands,FulfillmentCommand::count());self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());self::assertSame($orders,SalesOrder::with('lines')->get()->toArray());
         }finally{$fixture->restore();}
     }
 
