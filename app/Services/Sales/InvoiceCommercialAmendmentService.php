@@ -125,7 +125,23 @@ final class InvoiceCommercialAmendmentService
 
     private function physical(FulfillmentRequest $request): array
     {
-        return ['request_id'=>(int)$request->id,'status'=>$request->status,'warehouse_id'=>$request->warehouse_id,'sales_order_id'=>$request->sales_order_id,
+        $orderEvidence=null;
+        if($request->sales_order_id){
+            // The source invoice is already locked. Native order mutations acquire
+            // that same barrier before order locks; read the warehouse evidence here.
+            $order=\App\Models\Tenant\SalesOrder::query()->where('organization_id',$request->organization_id)->whereKey($request->sales_order_id)->first();
+            abort_unless($order && $order->status!=='cancelled' && (int)$order->warehouse_id===(int)$request->warehouse_id
+                && (int)$order->customer_id===(int)$request->customer_id,409,__('inventory.sales_handoff.invoice_amendment_physical'));
+            $orderLines=$order->lines()->orderBy('id')->get()->keyBy('id');
+            foreach($request->lines()->get()as$line){
+                $source=$orderLines->get($line->sales_order_line_id);
+                abort_unless($source && (int)$source->item_id===(int)$line->item_id
+                    && (int)$source->entered_unit_id===(int)$line->entered_unit_id,409,__('inventory.sales_handoff.invoice_amendment_physical'));
+            }
+            $orderEvidence=['id'=>(int)$order->id,'customer_id'=>(int)$order->customer_id,'warehouse_id'=>(int)$order->warehouse_id,
+                'lines'=>$orderLines->values()->map(fn($line)=>$line->only(['id','item_id','entered_unit_id','ordered_qty','shipped_qty','cancelled_qty']))->all()];
+        }else abort_unless(!$request->approved_at,409,__('inventory.sales_handoff.invoice_amendment_physical'));
+        return ['order_evidence'=>$orderEvidence,'request_id'=>(int)$request->id,'status'=>$request->status,'warehouse_id'=>$request->warehouse_id,'sales_order_id'=>$request->sales_order_id,
             'approved_at'=>$request->approved_at?->toIso8601String(),'lines'=>$request->lines()->orderBy('id')->get()->map(fn($line)=>$line->only(['id','source_line_id','item_id','entered_unit_id','requested_qty','fulfilled_qty','cancelled_qty','sales_order_line_id']))->all()];
     }
 
