@@ -200,6 +200,11 @@ final class FinanceWorkspaceController
                 }
                 return response()->json(['success'=>true,'data'=>$result]);
             }
+            if(in_array($input['action'],['sales.invoice-amendment.prepare','sales.invoice-amendment.commit','sales.invoice-amendment.cancel','sales.invoice-amendment.status'],true)){
+                abort_unless($mapping && $mapping->status==='verified' && $mapping->activation_state==='active' && $setting && $setting->mode==='active',409,'workspace_connection_not_ready');
+                $phase=substr($input['action'],strlen('sales.invoice-amendment.'));
+                return response()->json(['success'=>true,'data'=>app(\App\Services\Sales\InvoiceCommercialAmendmentService::class)->dispatch((array)($input['data']??[]),(int)$actor->id,$phase)]);
+            }
             // Financial demand creation is a closed Finance capability. Physical
             // dispatch separately requires current Stock access and native permissions.
             if (in_array($input['action'], ['sales.request.upsert','sales.request.cancel','sales.request.status','sales.request.reduce-demand','sales.request.open-orders',
