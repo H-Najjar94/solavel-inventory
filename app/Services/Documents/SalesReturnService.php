@@ -69,6 +69,7 @@ class SalesReturnService
                 ? Shipment::query()->with('lines')->lockForUpdate()->findOrFail((int) $attributes['shipment_id'])
                 : null;
             if ($sourceShipment) {
+                app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int)$sourceShipment->sales_order_id);
                 if ($sourceShipment->status !== 'posted' || $sourceShipment->reversed_at) {
                     throw new RuntimeException(__('inventory.documents.return_source_invalid'));
                 }

@@ -19,7 +19,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
 {
     use TenantAware,SalesHandoffFixture;
 
-    private function fixture(string $fulfilled = '0'): array
+    private function fixture(string $fulfilled = '0',bool $returnPending=false): array
     {
         $this->initializeSalesFixture(true);$original=$this->data();$this->authority($original);
         app(FulfillmentRequestService::class)->upsert($original,323);
@@ -38,6 +38,11 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             app(\App\Services\Sales\FinanceDispatchService::class)->execute(['source_invoice_id'=>800,'request_uuid'=>$original['request_uuid'],'invoice_revision'=>str_repeat('b',64),
                 'operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07',
                 'lines'=>[['source_invoice_line_id'=>'801','request_line_id'=>FulfillmentRequest::sole()->lines()->sole()->id,'quantity'=>$fulfilled,'unit_id'=>$this->unit->id]]]);
+        }
+        if($returnPending){
+            $shipment=\App\Models\Tenant\Shipment::sole();
+            app(\App\Services\Documents\SalesReturnService::class)->createDraft(['return_number'=>'SYNTHETIC-RMA','shipment_id'=>$shipment->id,
+                'customer_id'=>$shipment->customer_id,'warehouse_id'=>$shipment->warehouse_id,'return_date'=>'2026-10-07','reason'=>'Review confirmed source return'],[]);
         }
         $proposal=$original;$proposal['lines'][0]['unit_price']='9';
         $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];
@@ -99,6 +104,17 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             self::assertSame(0,bccomp($fulfilled,$receipt['receipt']['fulfillment']['fulfilled_quantity'],6));
             self::assertSame($receipt,$service->dispatch($input,323,'commit'));
         } finally {$fixture->restore();}
+    }
+
+    public function test_unreconciled_native_return_blocks_amendment_before_a_hold_or_financial_posting(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('2',true);
+        try {
+            $count=FulfillmentCommand::count();$ledger=StockLedger::orderBy('id')->get()->toArray();
+            try{app(InvoiceCommercialAmendmentService::class)->dispatch($input,323,'prepare');self::fail('Unreconciled return was ignored.');}
+            catch(HttpExceptionInterface $failure){self::assertSame(409,$failure->getStatusCode());}
+            self::assertSame($count,FulfillmentCommand::count());self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+        }finally{$fixture->restore();}
     }
 
     public function test_cancel_is_idempotent_before_financial_posting_and_does_not_invent_a_return(): void
