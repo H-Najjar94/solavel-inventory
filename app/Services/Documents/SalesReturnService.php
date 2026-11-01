@@ -144,6 +144,7 @@ class SalesReturnService
         $originContext = !$cashAdmission && $originSource ? app(\App\Services\FinancialOrigins\OriginPhysicalService::class)->beforeReverse($originSource) : null;
         abort_unless(!$originContext || $r->is_source_reversal,409,'cash_origin_partial_return_policy_unavailable');
         return DB::connection($this->conn())->transaction(function () use ($r,$originSource,$originContext,$cashAdmission) {
+            if($originSource?->sales_order_id)app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int)$originSource->sales_order_id);
             $originContext?->lockAndValidate();
             $cashAdmission?->lockAndValidate($r);
             if($originContext)Shipment::query()->where('organization_id',$r->organization_id)->whereKey($originSource->id)->lockForUpdate()->firstOrFail();

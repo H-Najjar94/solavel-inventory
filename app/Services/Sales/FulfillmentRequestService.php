@@ -54,6 +54,7 @@ final class FulfillmentRequestService
  /** Canonical shared tenant records close the callback-to-publication race; no remote call under locks. */
  private function lockFinanceCommand($mapping,array $data,string $command):void {
   $invoice=DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$data['source_invoice_id'])->lockForUpdate()->first();abort_unless($invoice,404);
+  app(PendingInvoiceAmendment::class)->assertAvailable((int)$mapping->finance_organization_id,(int)$invoice->id);
   $intent=DB::connection('tenant')->table('finance_sales_requests')->where('organization_id',$mapping->finance_organization_id)->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('invoice_id',$data['source_invoice_id'])->where('request_uuid',$data['request_uuid'])->lockForUpdate()->first();
   abort_unless($intent&&$intent->command===$command&&$intent->source_revision===$data['source_revision'],409,__('inventory.purchasing.source_changed'));
   if($command==='upsert'&&($data['source_status']??null)==='posted')abort_unless((int)($intent->invoice_journal_id??0)>0,409);
@@ -84,6 +85,7 @@ final class FulfillmentRequestService
   $known=FulfillmentRequest::query()->where('sales_order_id',$orderId)->first();if(!$known)return;
   $mapping=\App\Models\Tenant\IntegrationOrganizationMapping::query()->where('solastock_organization_id',$known->organization_id)->where('mapping_uuid',$known->organization_mapping_uuid)->firstOrFail();
   DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$known->source_invoice_id)->lockForUpdate()->sole();
+  app(PendingInvoiceAmendment::class)->assertAvailable((int)$mapping->finance_organization_id,(int)$known->source_invoice_id);
   $request=FulfillmentRequest::query()->whereKey($known->id)->lockForUpdate()->firstOrFail();
   if(DB::connection('tenant')->getSchemaBuilder()->hasTable('sales_fulfillment_demand_commands'))foreach(DB::connection('tenant')->table('sales_fulfillment_demand_commands')->where('organization_id',$request->organization_id)->where('fulfillment_request_id',$request->id)->whereIn('state',['prepared','reverse_prepared'])->get()as$hold)abort_unless(!collect(json_decode($hold->payload,true)['lines']??[])->contains(fn($line)=>Decimal::gt((string)$line['unfulfilled_quantity'],'0')),409,__('inventory.sales_handoff.credit_demand_pending'));
  }

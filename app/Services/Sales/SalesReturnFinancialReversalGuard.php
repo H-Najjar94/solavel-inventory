@@ -11,6 +11,9 @@ final class SalesReturnFinancialReversalGuard
     public function lockAndAssert(SalesReturn $return): void
     {
         $db=DB::connection('tenant');
+        $shipmentId=$return->source_reversal_shipment_id ?: $return->shipment_id;
+        $shipment=$shipmentId ? \App\Models\Tenant\Shipment::query()->where('organization_id',$return->organization_id)->find($shipmentId) : null;
+        if($shipment?->sales_order_id)app(FulfillmentRequestService::class)->guardOrderDemand((int)$shipment->sales_order_id);
         if(!$db->getSchemaBuilder()->hasTable('finance_sales_returns'))return;
         $sources=$db->table('finance_sales_returns as r')->join('integration_organization_mappings as m',function($join){
             $join->on('m.mapping_uuid','=','r.organization_mapping_uuid')->on('m.finance_organization_id','=','r.organization_id');
