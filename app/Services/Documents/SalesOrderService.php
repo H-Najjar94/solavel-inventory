@@ -72,6 +72,7 @@ class SalesOrderService
         $orgId = $this->context->idOrFail();
 
         return DB::connection($this->conn())->transaction(function () use ($so, $attributes, $lines, $orgId) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if ($so->status !== 'draft') {
                 throw new RuntimeException("Only a draft sales order can be edited (status '{$so->status}').");
@@ -94,6 +95,7 @@ class SalesOrderService
         app(\App\Services\Integration\OperationalPartyReadiness::class)->ensure($so);
 
         return DB::connection($this->conn())->transaction(function () use ($so) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if ($so->status !== 'draft') {
                 throw new RuntimeException("Only a draft sales order can be confirmed (status '{$so->status}').");
@@ -195,6 +197,7 @@ class SalesOrderService
     public function releaseReservation(SalesOrder $so): SalesOrder
     {
         return DB::connection($this->conn())->transaction(function () use ($so) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->with('lines')->findOrFail($so->id);
             $this->workflowValidation->assertOperationalDocumentReady($so, 'stock_reservation_released');
             $this->reservations->release('sales_order', (int) $so->id);
@@ -213,6 +216,7 @@ class SalesOrderService
     public function cancel(SalesOrder $so): SalesOrder
     {
         return DB::connection($this->conn())->transaction(function () use ($so) {
+            app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if (in_array($so->status, ['shipped', 'cancelled'], true)) {
                 throw new RuntimeException("A {$so->status} sales order cannot be cancelled.");

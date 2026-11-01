@@ -8,6 +8,7 @@ final class WorkspaceActions
     public const ALLOWED = [
         'purchasing.bill.context', 'purchasing.bill.receipt', 'purchasing.bill.reserve', 'purchasing.bill.cost-adjustment.prepare',
         'purchasing.request.upsert', 'purchasing.request.status', 'purchasing.request.cancel',
+        'sales.invoice-amendment.prepare', 'sales.invoice-amendment.commit', 'sales.invoice-amendment.cancel', 'sales.invoice-amendment.status',
         'sales.request.upsert', 'sales.request.status', 'sales.request.cancel',
         'sales.request.reduce-demand', 'sales.request.open-orders',
         'financial-origin.cash-refund-demand',

@@ -8,7 +8,18 @@ if mode=='enumerate':
   assert len(ids)==len(set(ids)), 'Duplicate native selected IDs'
   assert all('\n' not in x and '\r' not in x for x in ids)
   (base/('selection-'+cohort+'.ids')).write_text(''.join(x+'\n' for x in ids))
-  (base/('selection-'+cohort+'.filters')).write_text(''.join('/^'+re.escape(x).replace('/','\/')+'$/\n' for x in ids))
+  filters=[]
+  for selected in ids:
+   method,separator,dataset=selected.partition('#')
+   if separator:
+    # PHPUnit's XML ID uses method#name; its runtime filter uses
+    # `method with data set "name"` (or #index for numeric providers).
+    suffix=re.escape(' with data set "'+dataset+'"')
+    if dataset.isdecimal(): suffix='(?:'+suffix+'|'+re.escape(' with data set #'+dataset)+')'
+    expression=re.escape(method)+suffix
+   else: expression=re.escape(selected)
+   filters.append('/^'+expression.replace('/','\\/')+'$/\n')
+  (base/('selection-'+cohort+'.filters')).write_text(''.join(filters))
 elif mode=='aggregate':
  expected=int(sys.argv[3]); root=ET.Element('testsuites'); count=0
  for index in range(1,expected+1):

@@ -81,4 +81,29 @@ final class FinanceDispatchTest extends TestCase
         $cancelled=app(FulfillmentRequestService::class)->cancel($cancel,323);$this->assertSame('cancelled',$cancelled['status']);$this->assertSame('2.000000000000000000',$cancelled['fulfilled_quantity']);$this->assertSame([$partial['shipment_id']],$cancelled['shipment_ids']);
         $this->viewAuthority($data);$next=$operation;$next['operation_uuid']=(string)Str::uuid();try{$service->execute($next);$this->fail('Late dispatch after cancellation accepted');}catch(HttpException $e){$this->assertSame(409,$e->getStatusCode());}$this->assertSame($before,StockLedger::count());$this->assertSame(1,Shipment::count());
     }
+    public function test_pending_invoice_amendment_blocks_dispatch_without_stock_changes_and_completed_amendment_releases_it(): void
+    {
+        [,, $operation]=$this->fixture();$uuid=(string)Str::uuid();$db=DB::connection('tenant');
+        $row=['invoice_id'=>800,'operation_uuid'=>$uuid,'state'=>'queued'];
+        $id=$db->table('finance_sales_events')->insertGetId(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'source_key'=>'invoice-amendment:'.$uuid,'source_hash'=>str_repeat('b',64),'event_type'=>'sales.invoice_amendment.v1','result'=>json_encode($row),'created_at'=>now(),'updated_at'=>now()]);
+        $before=StockLedger::count();
+        try{app(FinanceDispatchService::class)->execute($operation);self::fail('A queued financial amendment allowed warehouse dispatch.');}
+        catch(ValidationException $e){self::assertNotEmpty($e->errors());}
+        self::assertSame($before,StockLedger::count());self::assertSame(0,Shipment::count());self::assertSame(0,FulfillmentCommand::count());
+        foreach(['stock_prepared','finance_posted','stock_committed','cancel_requested'] as $state){
+            $row['state']=$state;$db->table('finance_sales_events')->where('id',$id)->update(['result'=>json_encode($row)]);
+            try{app(FinanceDispatchService::class)->execute($operation);self::fail('Intermediate amendment stage allowed dispatch: '.$state);}
+            catch(ValidationException $e){self::assertNotEmpty($e->errors());}
+        }
+        $row['state']='completed';$db->table('finance_sales_events')->where('id',$id)->update(['result'=>json_encode($row)]);
+        self::assertSame('posted',app(FinanceDispatchService::class)->execute($operation)['status']);self::assertSame($before+1,StockLedger::count());
+    }
+
+    public function test_other_invoice_amendment_does_not_block_an_unrelated_dispatch(): void
+    {
+        [,, $operation]=$this->fixture();$uuid=(string)Str::uuid();
+        DB::connection('tenant')->table('finance_sales_events')->insert(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'source_key'=>'invoice-amendment:'.$uuid,'source_hash'=>str_repeat('c',64),'event_type'=>'sales.invoice_amendment.v1','result'=>json_encode(['invoice_id'=>801,'operation_uuid'=>$uuid,'state'=>'stock_prepared']),'created_at'=>now(),'updated_at'=>now()]);
+        self::assertSame('posted',app(FinanceDispatchService::class)->execute($operation)['status']);
+    }
+
 }

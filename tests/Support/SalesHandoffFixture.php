@@ -18,6 +18,7 @@ trait SalesHandoffFixture
         $schema=DB::connection('tenant')->getSchemaBuilder();
         if(!$schema->hasTable('finance_sales_requests'))$schema->create('finance_sales_requests',function(\Illuminate\Database\Schema\Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->uuid('request_uuid');$t->unsignedBigInteger('invoice_id');$t->unsignedBigInteger('invoice_journal_id')->nullable();$t->string('source_revision');$t->string('command');});
         if(!$schema->hasColumn('journal_entries','source_type'))$schema->table('journal_entries',function(\Illuminate\Database\Schema\Blueprint$t){$t->string('source_type')->nullable();$t->unsignedBigInteger('source_id')->nullable();});
+        if(!$schema->hasTable('finance_sales_events'))$schema->create('finance_sales_events',function(\Illuminate\Database\Schema\Blueprint$t){$t->id();$t->unsignedBigInteger('organization_id');$t->uuid('organization_mapping_uuid');$t->string('source_key',191);$t->string('source_hash',64);$t->string('event_type',64);$t->longText('result');$t->timestamps();$t->unique(['organization_id','source_key'],'finance_sales_event_identity');});
         // Test-only DDL is complete before any fixture facts; re-enter a genuine rollback transaction.
         $this->tenantTestManager->cleanup();$this->useTenantA();
         $this->unit=Unit::create(['code'=>'SALE-EACH','name'=>'Each','kind'=>'count','is_active'=>true]);
