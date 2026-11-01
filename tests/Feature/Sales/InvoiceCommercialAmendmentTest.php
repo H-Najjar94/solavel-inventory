@@ -93,6 +93,24 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         }finally{$fixture->restore();}
     }
 
+    public function test_pending_amendment_blocks_order_mutations_before_order_state_changes(): void
+    {
+        [$input,$id,$fixture]=$this->fixture();
+        try {
+            $order=SalesOrder::sole();$before=$order->fresh('lines')->toArray();
+            $service=app(\App\Services\Documents\SalesOrderService::class);
+            foreach (['updateDraft','confirm','releaseReservation','cancel'] as $method) {
+                try {
+                    $method==='updateDraft' ? $service->updateDraft($order,[],[]) : $service->{$method}($order);
+                    self::fail('Pending correction allowed '.$method);
+                } catch (\Illuminate\Validation\ValidationException $failure) {
+                    self::assertNotEmpty($failure->errors(),$method);
+                }
+                self::assertSame($before,$order->fresh('lines')->toArray(),$method);
+            }
+        } finally {$fixture->restore();}
+    }
+
     public function test_commit_cannot_run_before_the_confirmed_local_financial_stage(): void
     {
         [$input,$id,$fixture]=$this->fixture();
