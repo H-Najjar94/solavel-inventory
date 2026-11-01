@@ -38,6 +38,7 @@ final class InvoiceCommercialAmendmentService
                 && $workflow['state']===($proof['state']??null),409);
             app(PendingInvoiceAmendment::class)->assertAvailable((int)$mapping->finance_organization_id,(int)$invoice->id,$input['operation_uuid']);
             $request=FulfillmentRequest::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_invoice_id',$invoice->id)->lockForUpdate()->firstOrFail();
+            $scope=InvoiceCommercialAmendmentScope::fromLockedApproval($request,$intent,$proof);
             $command=FulfillmentCommand::query()->where('operation_uuid',$input['operation_uuid'])->lockForUpdate()->first();
             if($command)abort_unless((int)$command->fulfillment_request_id===(int)$request->id && (int)$command->actor_id===$actor
                 && ($command->payload['kind']??null)===self::KIND && hash_equals($command->payload_hash,$intent->source_hash),409);
@@ -51,7 +52,7 @@ final class InvoiceCommercialAmendmentService
                 abort_unless($original!==[] && $request->source_status==='posted' && $request->source_revision===($original['source_revision']??null)
                     && SolaStockJournalContract::canonicalJson($original)===SolaStockJournalContract::canonicalJson($stored),409);
                 $this->samePhysical($stored,(array)($proof['proposed_request']??[]));
-                $snapshot=$this->physical($request);
+                $snapshot=$this->physical($request,$scope);
                 $command=FulfillmentCommand::create(['organization_id'=>$request->organization_id,'operation_uuid'=>$input['operation_uuid'],
                     'fulfillment_request_id'=>$request->id,'source_invoice_id'=>$invoice->id,'actor_id'=>$actor,'payload_hash'=>$intent->source_hash,
                     'payload'=>['kind'=>self::KIND,'original_request'=>$stored,'proposed_request'=>$proof['proposed_request'],'physical'=>$snapshot,
@@ -73,7 +74,7 @@ final class InvoiceCommercialAmendmentService
             abort_unless($command && in_array($workflow['state'],['finance_posted','stock_committed','completed'],true),409);
             if($command->status==='committed')return $this->result($command);
             abort_unless($command->status==='prepared' && (int)($workflow['execution']['replacement_journal_id']??0)>0
-                && hash_equals((string)$command->payload['hold_fingerprint'],hash('sha256',SolaStockJournalContract::canonicalJson($this->physical($request)))),409);
+                && hash_equals((string)$command->payload['hold_fingerprint'],hash('sha256',SolaStockJournalContract::canonicalJson($this->physical($request,$scope)))),409);
             $target=(array)($proof['replacement_request']??[]);
             $this->samePhysical($command->payload['original_request'],$target);
             $this->sameCommercial($command->payload['proposed_request'],$target);
@@ -90,7 +91,7 @@ final class InvoiceCommercialAmendmentService
                 $commercial=collect($target['lines'])->first(fn($row)=>(string)$row['source_line_id']===(string)$line->source_line_id);
                 $line->update(['unit_price'=>Decimal::cost((string)$commercial['unit_price'])]);
             }
-            $payload=$command->payload;$payload['receipt']=['request_revision'=>$target['source_revision'],'replacement_journal_id'=>$journal->id,'physical_effects'=>0,'fulfillment'=>app(FulfillmentRequestService::class)->status($request->fresh('lines'))];
+            $payload=$command->payload;$payload['receipt']=['request_revision'=>$target['source_revision'],'replacement_journal_id'=>$journal->id,'physical_effects'=>0,'fulfillment'=>app(FulfillmentRequestService::class)->status($request->fresh('lines'),$scope)];
             $command->update(['payload'=>$payload,'status'=>'committed']);
             $this->audit($request,$command,'sales.invoice_amendment_committed',$before,$target);
             return $this->result($command);
@@ -123,16 +124,17 @@ final class InvoiceCommercialAmendmentService
         abort_unless($lines!==[],409);ksort($lines);return $lines;
     }
 
-    private function physical(FulfillmentRequest $request): array
+    private function physical(FulfillmentRequest $request,InvoiceCommercialAmendmentScope $scope): array
     {
         $orderEvidence=null;
         if($request->sales_order_id){
             // The source invoice is already locked. Native order mutations acquire
             // that same barrier before order locks; read the warehouse evidence here.
-            $order=\App\Models\Tenant\SalesOrder::query()->where('organization_id',$request->organization_id)->whereKey($request->sales_order_id)->first();
+            $scope->assertOrder((int)$request->organization_id,(int)$request->sales_order_id);
+            $order=\App\Models\Tenant\SalesOrder::withoutGlobalScope('warehouse_access')->where('organization_id',$request->organization_id)->whereKey($request->sales_order_id)->first();
             abort_unless($order && $order->status!=='cancelled' && (int)$order->warehouse_id===(int)$request->warehouse_id
                 && (int)$order->customer_id===(int)$request->customer_id,409,__('inventory.sales_handoff.invoice_amendment_physical'));
-            $shipmentIds=\App\Models\Tenant\Shipment::query()->where('organization_id',$request->organization_id)->where('sales_order_id',$order->id)->select('id');
+            $shipmentIds=\App\Models\Tenant\Shipment::withoutGlobalScope('warehouse_access')->where('organization_id',$request->organization_id)->where('sales_order_id',$order->id)->select('id');
             abort_if(\App\Models\Tenant\SalesReturn::query()->where('organization_id',$request->organization_id)->whereIn('shipment_id',$shipmentIds)->whereNotIn('status',['cancelled','reversed'])->exists(),409,__('inventory.sales_handoff.invoice_amendment_return'));
             $orderLines=$order->lines()->orderBy('id')->get()->keyBy('id');
             foreach($request->lines()->get()as$line){

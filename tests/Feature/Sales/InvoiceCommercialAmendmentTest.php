@@ -141,6 +141,20 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         } finally {if($other?->inTransaction())$other->rollBack();$db->statement('SET SESSION innodb_lock_wait_timeout = 30');$fixture->restore();}
     }
 
+    public function test_finance_only_actor_can_acknowledge_exact_commercial_evidence_without_warehouse_permission(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('2');
+        try {
+            $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed'=>false,'owner'=>false,'roles'=>[]]);
+            $this->app->forgetInstance(InventoryPermissionService::class);
+            self::assertSame(0,SalesOrder::count(),'Ordinary warehouse browsing must remain denied.');
+            $service=app(InvoiceCommercialAmendmentService::class);$service->dispatch($input,323,'prepare');$this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $receipt=$service->dispatch($input,323,'commit');self::assertSame('committed',$receipt['status']);self::assertCount(1,$receipt['receipt']['fulfillment']['shipment_ids']);
+            self::assertSame(0,SalesOrder::count());self::assertFalse(app(InventoryPermissionService::class)->can(Auth::user(),'inventory.manage_shipments'));
+        }finally{$fixture->restore();}
+    }
+
     public function test_cancel_is_idempotent_before_financial_posting_and_does_not_invent_a_return(): void
     {
         [$input,$id,$fixture]=$this->fixture();
