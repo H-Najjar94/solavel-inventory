@@ -80,6 +80,10 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             self::assertSame(0,$done['physical_effects']);self::assertSame($ledger,StockLedger::count());self::assertSame($order,SalesOrder::sole()->fresh('lines')->toArray());
             self::assertSame(str_repeat('b',64),FulfillmentRequest::sole()->source_revision);self::assertEquals(9,FulfillmentRequest::sole()->lines()->sole()->unit_price);
             self::assertSame(1,FulfillmentCommand::count());self::assertSame('committed',$service->dispatch($input,323,'status')['status']);
+            $this->state($id,'completed');$db=DB::connection('tenant');$later=$db->table('finance_sales_events')->where('id',$id)->first();$next=json_decode($later->result,true);$nextUuid=(string)Str::uuid();$next['operation_uuid']=$nextUuid;$next['state']='queued';
+            $db->table('finance_sales_events')->insert(['organization_id'=>14,'organization_mapping_uuid'=>$later->organization_mapping_uuid,'source_key'=>'invoice-amendment:'.$nextUuid,'source_hash'=>$later->source_hash,'event_type'=>$later->event_type,'result'=>json_encode($next),'created_at'=>now(),'updated_at'=>now()]);
+            self::assertSame($done,$service->dispatch($input,323,'commit'),'A later amendment must not invalidate an immutable completed receipt.');
+
         }finally{$fixture->restore();}
     }
 

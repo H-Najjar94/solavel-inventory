@@ -36,13 +36,15 @@ final class InvoiceCommercialAmendmentService
             abort_unless((int)($workflow['invoice_id']??0)===(int)$invoice->id
                 && hash_equals($intent->source_hash,hash('sha256',json_encode($workflow['approved']??[],JSON_THROW_ON_ERROR)))
                 && $workflow['state']===($proof['state']??null),409);
-            app(PendingInvoiceAmendment::class)->assertAvailable((int)$mapping->finance_organization_id,(int)$invoice->id,$input['operation_uuid']);
             $request=FulfillmentRequest::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_invoice_id',$invoice->id)->lockForUpdate()->firstOrFail();
             $scope=InvoiceCommercialAmendmentScope::fromLockedApproval($request,$intent,$proof);
             $command=FulfillmentCommand::query()->where('operation_uuid',$input['operation_uuid'])->lockForUpdate()->first();
             if($command)abort_unless((int)$command->fulfillment_request_id===(int)$request->id && (int)$command->actor_id===$actor
                 && ($command->payload['kind']??null)===self::KIND && hash_equals($command->payload_hash,$intent->source_hash),409);
             if($phase==='status')return $command?$this->result($command):['version'=>1,'operation_uuid'=>$input['operation_uuid'],'status'=>'not_prepared'];
+            // Exact immutable receipts remain readable while a later amendment is pending.
+            if($command && ($phase==='prepare' || ($phase==='commit' && $command->status==='committed')) && in_array($command->status,['committed','abandoned'],true))return $this->result($command);
+            app(PendingInvoiceAmendment::class)->assertAvailable((int)$mapping->finance_organization_id,(int)$invoice->id,$input['operation_uuid']);
             if($phase==='prepare'){
                 if($command)return $this->result($command);
                 abort_unless(in_array($workflow['state'],['queued','stock_prepared'],true),409);
