@@ -117,6 +117,30 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         }finally{$fixture->restore();}
     }
 
+    public function test_concurrent_amendment_publication_serializes_native_warehouse_dispatch(): void
+    {
+        [$input,$id,$fixture]=$this->fixture();$db=DB::connection('tenant');$other=null;
+        try {
+            $saved=$db->table('finance_sales_events')->where('id',$id)->first();$value=json_decode($saved->result,true);$value['state']='completed';
+            $db->table('finance_sales_events')->where('id',$id)->update(['result'=>json_encode($value)]);
+            $request=FulfillmentRequest::sole();
+            $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'view',['request_uuid'=>$request->request_uuid])->andReturn(['allowed'=>true,'request_revision'=>$request->source_revision,'source_revision'=>str_repeat('b',64)]);
+            $operation=['source_invoice_id'=>800,'request_uuid'=>$request->request_uuid,'invoice_revision'=>str_repeat('b',64),'operation_uuid'=>(string)Str::uuid(),
+                'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07','lines'=>[['source_invoice_line_id'=>'801','request_line_id'=>$request->lines()->sole()->id,'quantity'=>'2','unit_id'=>$this->unit->id]]];
+            $config=config('database.connections.tenant');self::assertNotEmpty($config['unix_socket']);
+            $other=new \PDO('mysql:unix_socket='.$config['unix_socket'].';dbname='.$config['database'],$config['username'],$config['password'],[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION]);
+            $before=StockLedger::count();$db->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            $other->beginTransaction();$other->query('SELECT id FROM organizations WHERE id=14 FOR UPDATE')->fetch();$other->query('SELECT id FROM invoices WHERE id=800 FOR UPDATE')->fetch();
+            $value['state']='queued';$update=$other->prepare('UPDATE finance_sales_events SET result=? WHERE id=?');$update->execute([json_encode($value),$id]);
+            try{app(\App\Services\Sales\FinanceDispatchService::class)->execute($operation);self::fail('Dispatch skipped the concurrent invoice barrier.');}
+            catch(\Throwable $failure){self::assertStringContainsString('Lock wait timeout',$failure->getMessage());}
+            $other->commit();
+            try{app(\App\Services\Sales\FinanceDispatchService::class)->execute($operation);self::fail('Dispatch ignored the newly committed amendment.');}
+            catch(\Illuminate\Validation\ValidationException $failure){self::assertNotEmpty($failure->errors());}
+            self::assertSame($before,StockLedger::count());self::assertSame(0,\App\Models\Tenant\Shipment::count());self::assertSame(0,FulfillmentCommand::count());
+        } finally {if($other?->inTransaction())$other->rollBack();$db->statement('SET SESSION innodb_lock_wait_timeout = 30');$fixture->restore();}
+    }
+
     public function test_cancel_is_idempotent_before_financial_posting_and_does_not_invent_a_return(): void
     {
         [$input,$id,$fixture]=$this->fixture();
