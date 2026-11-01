@@ -43,6 +43,7 @@ return array (
   ),
   'sales_handoff' =>
   array (
+    'invoice_amendment_pending' => 'A SolaCount invoice amendment is pending. Resume or cancel that amendment before dispatching, returning or changing its fulfillment.',
     'order_claim_unavailable' => 'This sales order can no longer be used for the invoice: it was shipped, cancelled, or belongs to another customer. Post the invoice as new demand or choose another order.',
     'order_claim_changed' => 'The sales order changed after it was chosen. Refresh the invoice and choose the order again.',
     'order_claim_taken' => 'Invoice :invoice already uses this sales order. Choose another order or post the invoice as new demand.',
