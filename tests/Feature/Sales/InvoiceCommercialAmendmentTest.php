@@ -19,7 +19,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
 {
     use TenantAware,SalesHandoffFixture;
 
-    private function fixture(): array
+    private function fixture(string $fulfilled = '0'): array
     {
         $this->initializeSalesFixture(true);$original=$this->data();$this->authority($original);
         app(FulfillmentRequestService::class)->upsert($original,323);
@@ -31,6 +31,13 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         $original['source_status']='posted';$original['posted_invoice_journal_id']=71;
         FulfillmentRequest::sole()->update(['source_status'=>'posted','posted_invoice_journal_id'=>71,'source_payload'=>$original]);
         DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['invoice_journal_id'=>71]);
+        if(bccomp($fulfilled,'0',4)>0){
+            $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'view',['request_uuid'=>$original['request_uuid']])
+                ->andReturn(['allowed'=>true,'request_revision'=>$original['source_revision'],'source_revision'=>str_repeat('b',64)]);
+            app(\App\Services\Sales\FinanceDispatchService::class)->execute(['source_invoice_id'=>800,'request_uuid'=>$original['request_uuid'],'invoice_revision'=>str_repeat('b',64),
+                'operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-07',
+                'lines'=>[['source_invoice_line_id'=>'801','request_line_id'=>FulfillmentRequest::sole()->lines()->sole()->id,'quantity'=>$fulfilled,'unit_id'=>$this->unit->id]]]);
+        }
         $proposal=$original;$proposal['lines'][0]['unit_price']='9';
         $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];
         $row=['version'=>1,'invoice_id'=>800,'operation_uuid'=>$uuid,'state'=>'queued','approved'=>$approved,'execution'=>[]];
@@ -68,6 +75,29 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             self::assertSame(str_repeat('b',64),FulfillmentRequest::sole()->source_revision);self::assertEquals(9,FulfillmentRequest::sole()->lines()->sole()->unit_price);
             self::assertSame(1,FulfillmentCommand::count());self::assertSame('committed',$service->dispatch($input,323,'status')['status']);
         }finally{$fixture->restore();}
+    }
+
+    public static function shipmentCases(): array {return ['partial'=>['2'],'completed'=>['4']];}
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('shipmentCases')]
+    public function test_commercial_amendment_preserves_real_shipments_and_cogs(string $fulfilled): void
+    {
+        [$input,$id,$fixture]=$this->fixture($fulfilled);
+        try {
+            $ledger=StockLedger::orderBy('id')->get()->toArray();
+            $shipments=\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray();
+            $order=SalesOrder::sole()->fresh('lines')->toArray();
+            self::assertCount(1,$shipments);
+            $service=app(InvoiceCommercialAmendmentService::class);$service->dispatch($input,323,'prepare');
+            $this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $receipt=$service->dispatch($input,323,'commit');self::assertSame('committed',$receipt['status']);
+            self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+            self::assertSame($shipments,\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray());
+            self::assertSame($order,SalesOrder::sole()->fresh('lines')->toArray());
+            self::assertSame(0,bccomp($fulfilled,$receipt['receipt']['fulfillment']['fulfilled_quantity'],6));
+            self::assertSame($receipt,$service->dispatch($input,323,'commit'));
+        } finally {$fixture->restore();}
     }
 
     public function test_cancel_is_idempotent_before_financial_posting_and_does_not_invent_a_return(): void
