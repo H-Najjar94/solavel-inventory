@@ -132,6 +132,8 @@ final class InvoiceCommercialAmendmentService
             $order=\App\Models\Tenant\SalesOrder::query()->where('organization_id',$request->organization_id)->whereKey($request->sales_order_id)->first();
             abort_unless($order && $order->status!=='cancelled' && (int)$order->warehouse_id===(int)$request->warehouse_id
                 && (int)$order->customer_id===(int)$request->customer_id,409,__('inventory.sales_handoff.invoice_amendment_physical'));
+            $shipmentIds=\App\Models\Tenant\Shipment::query()->where('organization_id',$request->organization_id)->where('sales_order_id',$order->id)->select('id');
+            abort_if(\App\Models\Tenant\SalesReturn::query()->where('organization_id',$request->organization_id)->whereIn('shipment_id',$shipmentIds)->whereNotIn('status',['cancelled','reversed'])->exists(),409,__('inventory.sales_handoff.invoice_amendment_return'));
             $orderLines=$order->lines()->orderBy('id')->get()->keyBy('id');
             foreach($request->lines()->get()as$line){
                 $source=$orderLines->get($line->sales_order_line_id);
