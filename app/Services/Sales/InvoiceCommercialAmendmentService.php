@@ -13,10 +13,11 @@ final class InvoiceCommercialAmendmentService
 {
     public const KIND='invoice_commercial_amendment.v1';
     public const DEMAND_KIND='invoice_pending_demand_amendment.v2';
+    public const ACCEPTED_KIND='invoice_accepted_demand_amendment.v3';
 
     public function dispatch(array $input,int $actor,string $phase): array
     {
-        Validator::make($input,['version'=>'required|integer|in:1,2','operation_uuid'=>'required|uuid','source_invoice_id'=>'required|integer|min:1'])->validate();
+        Validator::make($input,['version'=>'required|integer|in:1,2,3','operation_uuid'=>'required|uuid','source_invoice_id'=>'required|integer|min:1'])->validate();
         $input['version']=(int)$input['version'];
         abort_unless($actor>0 && in_array($phase,['prepare','commit','cancel','status'],true),403);
         if(DB::connection('tenant')->transactionLevel())throw new \LogicException('Commercial amendment authority must be requested outside a Stock transaction.');
@@ -26,8 +27,10 @@ final class InvoiceCommercialAmendmentService
         $proof=$authority['amendment']??[];
         abort_unless(($proof['version']??null)===$input['version'] && ($proof['operation_uuid']??null)===$input['operation_uuid']
             && (int)($proof['invoice_id']??0)===(int)$input['source_invoice_id'] && ($proof['phase']??null)===$phase,403);
-        $demand=$input['version']===2;abort_unless(($proof['amendment_mode']??'commercial')===($demand?'pending_demand':'commercial'),403);
-        return DB::connection('tenant')->transaction(function()use($input,$actor,$phase,$proof,$demand){
+        $demand=$input['version']===2;$accepted=$input['version']===3;$quantity=$demand||$accepted;
+        $mode=$accepted?'accepted_demand':($demand?'pending_demand':'commercial');
+        abort_unless(($proof['amendment_mode']??'commercial')===$mode,403);
+        return DB::connection('tenant')->transaction(function()use($input,$actor,$phase,$proof,$demand,$accepted,$quantity,$mode){
             $mapping=app(ReceivingRequestService::class)->mapping();
             $db=DB::connection('tenant');
             $db->table('organizations')->where('id',$mapping->finance_organization_id)->lockForUpdate()->sole();
@@ -41,8 +44,8 @@ final class InvoiceCommercialAmendmentService
                 && $workflow['state']===($proof['state']??null),409);
             $request=FulfillmentRequest::query()->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_invoice_id',$invoice->id)->lockForUpdate()->firstOrFail();
             $scope=InvoiceCommercialAmendmentScope::fromLockedApproval($request,$intent,$proof);
-            if($demand)abort_unless(($workflow['approved']['review']['inventory']['stock']['version']??null)===2 && ($workflow['approved']['review']['inventory']['stock']['amendment_mode']??null)==='pending_demand',403);
-            $kind=$demand?self::DEMAND_KIND:self::KIND;
+            if($quantity)abort_unless(($workflow['approved']['review']['inventory']['stock']['version']??null)===$input['version'] && ($workflow['approved']['review']['inventory']['stock']['amendment_mode']??null)===$mode,403);
+            $kind=$accepted?self::ACCEPTED_KIND:($demand?self::DEMAND_KIND:self::KIND);
             $command=FulfillmentCommand::query()->where('operation_uuid',$input['operation_uuid'])->lockForUpdate()->first();
             if($command)abort_unless((int)$command->fulfillment_request_id===(int)$request->id && (int)$command->actor_id===$actor
                 && ($command->payload['kind']??null)===$kind && hash_equals($command->payload_hash,$intent->source_hash),409);
@@ -59,12 +62,13 @@ final class InvoiceCommercialAmendmentService
                 abort_unless($original!==[] && $request->source_status==='posted' && $request->source_revision===($original['source_revision']??null)
                     && SolaStockJournalContract::canonicalJson($original)===SolaStockJournalContract::canonicalJson($stored),409);
                 if($demand)$this->assertUnacceptedDemand($request,$stored);
-                $this->samePhysical($stored,(array)($proof['proposed_request']??[]),$demand);
+                $this->samePhysical($stored,(array)($proof['proposed_request']??[]),$quantity);
                 $snapshot=$this->physical($request,$scope);
+                $acceptedPlan=$accepted?app(AcceptedInvoiceDemandAmendment::class)->plan($request,(array)$proof['proposed_request'],$scope,$actor):null;
                 $command=FulfillmentCommand::create(['organization_id'=>$request->organization_id,'operation_uuid'=>$input['operation_uuid'],
                     'fulfillment_request_id'=>$request->id,'source_invoice_id'=>$invoice->id,'actor_id'=>$actor,'payload_hash'=>$intent->source_hash,
-                    'payload'=>['kind'=>$kind,'protocol_version'=>$input['version'],'amendment_mode'=>$demand?'pending_demand':'commercial','original_request'=>$stored,'proposed_request'=>$proof['proposed_request'],'physical'=>$snapshot,
-                        'hold_fingerprint'=>hash('sha256',SolaStockJournalContract::canonicalJson($snapshot))],'status'=>'prepared']);
+                    'payload'=>['kind'=>$kind,'protocol_version'=>$input['version'],'amendment_mode'=>$mode,'original_request'=>$stored,'proposed_request'=>$proof['proposed_request'],'physical'=>$snapshot,
+                        'hold_fingerprint'=>hash('sha256',SolaStockJournalContract::canonicalJson($snapshot)),...($accepted?['accepted_plan'=>$acceptedPlan]:[])],'status'=>'prepared']);
                 $this->audit($request,$command,'sales.invoice_amendment_prepared',null,$command->payload);
                 return $this->result($command);
             }
@@ -85,11 +89,12 @@ final class InvoiceCommercialAmendmentService
                 && hash_equals((string)$command->payload['hold_fingerprint'],hash('sha256',SolaStockJournalContract::canonicalJson($this->physical($request,$scope)))),409);
             $target=(array)($proof['replacement_request']??[]);
             if($demand)$this->assertUnacceptedDemand($request,$command->payload['original_request']);
-            $this->samePhysical($command->payload['original_request'],$target,$demand);
-            $this->sameCommercial($command->payload['proposed_request'],$target,$demand);
+            $this->samePhysical($command->payload['original_request'],$target,$quantity);
+            $this->sameCommercial($command->payload['proposed_request'],$target,$quantity);
             abort_unless(($target['source_status']??null)==='posted' && (int)($target['posted_invoice_journal_id']??0)===(int)$workflow['execution']['replacement_journal_id']
                 && ($target['request_uuid']??null)===$request->request_uuid && strlen((string)($target['source_revision']??''))===64,409);
             $journal=$db->table('journal_entries')->where('organization_id',$mapping->finance_organization_id)->where('id',$target['posted_invoice_journal_id'])->where('source_type','App\\Models\\Invoice')->where('source_id',$invoice->id)->where('status','posted')->whereNotNull('posted_at')->whereNull('voided_at')->whereNull('deleted_at')->lockForUpdate()->first();abort_unless($journal,409);
+            $acceptedReceipt=$accepted?app(AcceptedInvoiceDemandAmendment::class)->apply($request,$target,$scope,$actor,(array)$command->payload['accepted_plan']):null;
             $before=$request->source_payload;
             // The native order is an original commercial/warehouse document. Its
             // quantities, quoted prices and shipments remain historical evidence.
@@ -98,10 +103,16 @@ final class InvoiceCommercialAmendmentService
                 'approved_revision'=>$request->approved_at?$target['source_revision']:null]);
             foreach($request->lines()->orderBy('id')->lockForUpdate()->get() as $line){
                 $commercial=collect($target['lines'])->first(fn($row)=>(string)$row['source_line_id']===(string)$line->source_line_id);
-                $values=['unit_price'=>Decimal::cost((string)$commercial['unit_price'])];if($demand)$values['requested_qty']=Decimal::qty((string)$commercial['quantity']);
+                $values=['unit_price'=>Decimal::cost((string)$commercial['unit_price'])];if($quantity)$values['requested_qty']=Decimal::qty((string)$commercial['quantity']);
                 $line->update($values);
             }
-            $payload=$command->payload;$payload['receipt']=['request_revision'=>$target['source_revision'],'replacement_journal_id'=>$journal->id,'physical_effects'=>0,'fulfillment'=>app(FulfillmentRequestService::class)->status($request->fresh('lines'),$scope)];
+            if($accepted){
+                $lines=$request->lines()->get();
+                $all=$lines->every(fn($line)=>Decimal::gte((string)$line->fulfilled_qty,(string)$line->requested_qty));
+                $some=$lines->contains(fn($line)=>Decimal::gt((string)$line->fulfilled_qty,'0'));
+                $request->update(['status'=>$all?'complete':($some?'partial':'pending')]);
+            }
+            $payload=$command->payload;$payload['receipt']=['request_revision'=>$target['source_revision'],'replacement_journal_id'=>$journal->id,'physical_effects'=>0,'fulfillment'=>app(FulfillmentRequestService::class)->status($request->fresh('lines'),$scope),...($accepted?['demand_amendment'=>$acceptedReceipt]:[])];
             $command->update(['payload'=>$payload,'status'=>'committed']);
             $this->audit($request,$command,'sales.invoice_amendment_committed',$before,$target);
             return $this->result($command);
