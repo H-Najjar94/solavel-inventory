@@ -281,6 +281,14 @@ class SalesOrderService
         }
     }
 
+    /** Reuse native quotation rounding under the locked invoice amendment authority. */
+    public function refreshInvoiceAmendmentTotals(SalesOrder $so, \App\Services\Sales\InvoiceCommercialAmendmentScope $scope): void
+    {
+        if (!DB::connection($this->conn())->transactionLevel()) throw new \LogicException('Invoice demand totals require the amendment transaction.');
+        $scope->assertOrder((int)$so->organization_id,(int)$so->id);
+        $this->refreshTotals($so->fresh('lines'));
+    }
+
     private function refreshTotals(SalesOrder $so): void
     {
         $so->loadMissing('lines');

@@ -61,9 +61,9 @@ final class AcceptedInvoiceDemandAmendment
                 'line_total'=>Decimal::money(Decimal::mul($base,(string)$source->unit_price)),
                 'fulfilled_qty'=>(string)$line->fulfilled_qty,'remaining_qty'=>Decimal::qty(Decimal::sub($quantity,(string)$line->fulfilled_qty))];
         }
-        $oldTotal='0';foreach($orderLines as $source)$oldTotal=Decimal::add($oldTotal,(string)$source->line_total);
+        $oldTotal='0';$oldGross='0';foreach($orderLines as $source){$oldTotal=Decimal::add($oldTotal,(string)$source->line_total);$oldGross=Decimal::add($oldGross,Decimal::mul((string)$source->ordered_qty,(string)$source->unit_price));}
         abort_unless(is_numeric($order->total) && is_numeric($order->subtotal) && is_numeric($order->discount_total) && is_numeric($order->tax_total)
-            && bccomp((string)$order->total,Decimal::money($oldTotal),6)===0 && bccomp((string)$order->subtotal,Decimal::money($oldTotal),6)===0
+            && bccomp((string)$order->total,Decimal::money($oldTotal),6)===0 && bccomp((string)$order->subtotal,Decimal::money($oldGross),6)===0
             && bccomp((string)$order->discount_total,'0',6)===0 && bccomp((string)$order->tax_total,'0',6)===0,409,$unsupported);
         abort_unless($changed,409,$unsupported);
         return ['order'=>$order->getRawOriginal(),'lines'=>$changes];
@@ -82,12 +82,11 @@ final class AcceptedInvoiceDemandAmendment
         }
         // Native Finance-created orders have zero Stock tax/discount. Preserve
         // their original quotation prices and snapshots; amend operational demand.
-        $lines=$order->lines()->get();$total='0';
-        foreach($lines as $line)$total=Decimal::add($total,(string)$line->line_total);
+        $lines=$order->lines()->get();
         $all=$lines->every(fn($line)=>Decimal::gte((string)$line->shipped_qty,(string)$line->ordered_qty));
         $some=$lines->contains(fn($line)=>Decimal::gt((string)$line->shipped_qty,'0'));
-        $order->update(['subtotal'=>Decimal::money($total),'total'=>Decimal::money($total),
-            'status'=>$all?'shipped':($some?'partially_shipped':'confirmed')]);
+        $order->update(['status'=>$all?'shipped':($some?'partially_shipped':'confirmed')]);
+        app(\App\Services\Documents\SalesOrderService::class)->refreshInvoiceAmendmentTotals($order,$scope);
         return ['order_id'=>(int)$order->id,'state'=>$all?'fulfilled':'pending_fulfillment','physical_effects'=>0,
             'lines'=>array_map(fn($line)=>array_intersect_key($line,array_flip(['source_line_id','requested_before','requested_after','fulfilled_qty','remaining_qty'])),$current['lines'])];
     }
