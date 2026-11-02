@@ -188,6 +188,36 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         }finally{FulfillmentRequest::setEventDispatcher($dispatcher);$fixture->restore();}
     }
 
+    public function test_v3_distinct_repeated_amendments_preserve_the_first_receipt_and_original_shipments(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('2',false,true,3,'6');
+        try{
+            $service=app(InvoiceCommercialAmendmentService::class);$service->dispatch($input,323,'prepare');$this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $first=$service->dispatch($input,323,'commit');$this->state($id,'completed');
+            $before=FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole()->getRawOriginal();
+            $ledger=StockLedger::orderBy('id')->get()->toArray();$shipments=\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray();
+            $request=FulfillmentRequest::sole();$original=$request->source_payload;$proposal=$original;$proposal['lines'][0]['quantity']='5';
+            DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['source_revision'=>$request->source_revision,'invoice_journal_id'=>993]);
+            $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal,'review'=>['inventory'=>['stock'=>['version'=>3,'amendment_mode'=>'accepted_demand']]]];
+            $workflow=['version'=>1,'invoice_id'=>800,'operation_uuid'=>$uuid,'state'=>'queued','approved'=>$approved,'execution'=>[]];
+            $next=DB::connection('tenant')->table('finance_sales_events')->insertGetId(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,'source_key'=>'invoice-amendment:'.$uuid,
+                'source_hash'=>hash('sha256',json_encode($approved,JSON_THROW_ON_ERROR)),'event_type'=>'sales.invoice_amendment.v1','result'=>json_encode($workflow),'created_at'=>now(),'updated_at'=>now()]);
+            $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->andReturnUsing(function($actor,$invoice,$permission,$facts)use($next,$uuid){
+                self::assertSame(323,$actor);self::assertSame(800,$invoice);self::assertSame('post',$permission);self::assertSame($uuid,$facts['operation_uuid']);
+                $row=DB::connection('tenant')->table('finance_sales_events')->where('id',$next)->sole();$value=json_decode($row->result,true);$replacement=$value['approved']['proposed_request'];$replacement['source_revision']=str_repeat('d',64);$replacement['posted_invoice_journal_id']=994;
+                return ['amendment'=>['version'=>3,'amendment_mode'=>'accepted_demand','invoice_id'=>800,'operation_uuid'=>$uuid,'phase'=>$facts['purpose'],'approved_hash'=>$row->source_hash,'state'=>$value['state'],'original_request'=>$value['approved']['original_request'],'proposed_request'=>$value['approved']['proposed_request'],'replacement_request'=>$replacement]];
+            });
+            $second=['version'=>3,'source_invoice_id'=>800,'operation_uuid'=>$uuid];$service->dispatch($second,323,'prepare');$this->state($next,'finance_posted',['replacement_journal_id'=>994]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>994,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $done=$service->dispatch($second,323,'commit');self::assertSame('committed',$done['status']);self::assertSame($done,$service->dispatch($second,323,'commit'));
+            self::assertSame(0,bccomp('5',(string)SalesOrder::sole()->lines()->sole()->ordered_qty,4));self::assertSame(0,bccomp('2',(string)FulfillmentRequest::sole()->lines()->sole()->fulfilled_qty,4));
+            self::assertSame($before,FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole()->getRawOriginal());
+            self::assertSame($first['receipt'],FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole()->payload['receipt']);
+            self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());self::assertSame($shipments,\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray());
+        }finally{$fixture->restore();}
+    }
+
     public function test_v3_requires_warehouse_authority_before_creating_a_hold(): void
     {
         [$input,$id,$fixture]=$this->fixture('0',false,true,3,'6');
