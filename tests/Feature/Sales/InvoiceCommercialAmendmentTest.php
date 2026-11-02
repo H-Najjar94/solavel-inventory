@@ -19,9 +19,11 @@ final class InvoiceCommercialAmendmentTest extends TestCase
 {
     use TenantAware,SalesHandoffFixture;
 
-    private function fixture(string $fulfilled = '0',bool $returnPending=false,bool $accepted=true,int $version=1,string $quantity='4'): array
+    private function fixture(string $fulfilled = '0',bool $returnPending=false,bool $accepted=true,int $version=1,string $quantity='4',bool $rounding=false): array
     {
-        $this->initializeSalesFixture(true);$original=$this->data();$this->authority($original);
+        $this->initializeSalesFixture(true);$original=$this->data();
+        if($rounding){$original['lines'][0]['quantity']='2';$original['lines'][0]['unit_price']='1.005';$extra=$original['lines'][0];$extra['source_line_id']='802';$original['lines'][]=$extra;}
+        $this->authority($original);
         app(FulfillmentRequestService::class)->upsert($original,323);
         $actor=new User;$actor->id=323;Auth::setUser($actor);request()->setUserResolver(fn()=>$actor);
         config(['inventory.demo_tenant.enabled'=>false]);
@@ -44,7 +46,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             app(\App\Services\Documents\SalesReturnService::class)->createDraft(['return_number'=>'SYNTHETIC-RMA','shipment_id'=>$shipment->id,
                 'customer_id'=>$shipment->customer_id,'warehouse_id'=>$shipment->warehouse_id,'return_date'=>'2026-10-07','reason'=>'Review confirmed source return'],[]);
         }
-        $proposal=$original;$proposal['lines'][0]['unit_price']='9';if($version>=2)$proposal['lines'][0]['quantity']=$quantity;
+        $proposal=$original;$proposal['lines'][0]['unit_price']='9';if($version>=2)$proposal['lines'][0]['quantity']=$quantity;if($rounding)foreach($proposal['lines'] as &$line)$line['quantity']=$quantity;unset($line);
         $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];if($version>=2)$approved['review']=['inventory'=>['stock'=>['version'=>$version,'amendment_mode'=>$version===3?'accepted_demand':'pending_demand']]];
         $row=['version'=>1,'invoice_id'=>800,'operation_uuid'=>$uuid,'state'=>'queued','approved'=>$approved,'execution'=>[]];
         $id=DB::connection('tenant')->table('finance_sales_events')->insertGetId(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,
@@ -215,6 +217,22 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             self::assertSame($before,FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole()->getRawOriginal());
             self::assertSame($first['receipt'],FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole()->payload['receipt']);
             self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());self::assertSame($shipments,\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray());
+        }finally{$fixture->restore();}
+    }
+
+    public function test_v3_reuses_native_multiline_quotation_rounding_without_changing_warehouse_value(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('0',false,true,3,'1',true);
+        try{
+            $service=app(InvoiceCommercialAmendmentService::class);$ledger=StockLedger::orderBy('id')->get()->toArray();
+            self::assertSame(0,bccomp('4.02',(string)SalesOrder::sole()->subtotal,2));self::assertSame(0,bccomp('4.02',(string)SalesOrder::sole()->total,2));
+            $service->dispatch($input,323,'prepare');$this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $receipt=$service->dispatch($input,323,'commit');self::assertSame('committed',$receipt['status']);
+            // Native subtotal rounds gross once; total sums individually rounded lines.
+            self::assertSame(0,bccomp('2.01',(string)SalesOrder::sole()->subtotal,2));self::assertSame(0,bccomp('2.02',(string)SalesOrder::sole()->total,2));
+            self::assertSame(0,bccomp('2.02',(string)SalesOrder::sole()->lines()->sum('line_total'),2));
+            self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());self::assertSame(0,\App\Models\Tenant\Shipment::count());
         }finally{$fixture->restore();}
     }
 
