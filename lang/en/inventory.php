@@ -44,6 +44,10 @@ return array (
   'sales_handoff' =>
   array (
         'invoice_amendment_return' => 'This fulfillment has a return awaiting financial reconciliation. Complete that return before amending invoice commercial amounts.',
+    'invoice_amendment_accepted_evidence' => 'The accepted order, quantity, conversion or quotation evidence does not support this amendment. Original warehouse history remains unchanged.',
+    'invoice_amendment_reserved' => 'An active warehouse reservation protects this order. Amend or release it through the warehouse before changing accepted demand.',
+    'invoice_amendment_dispatch_draft' => 'A shipment is in progress for this order. Complete or cancel that warehouse operation before amending demand.',
+    'invoice_amendment_return_required' => 'The new quantity is below the confirmed shipped quantity. Use a confirmed return and credit workflow; editing demand does not create a return.',
     'invoice_amendment_physical' => 'This commercial amendment changes physical invoice facts. Use a verified shipment, return or physical amendment workflow for quantity, item or unit changes.',
     'invoice_amendment_pending' => 'A SolaCount invoice amendment is pending. Resume or cancel that amendment before dispatching, returning or changing its fulfillment.',
     'order_claim_unavailable' => 'This sales order can no longer be used for the invoice: it was shipped, cancelled, or belongs to another customer. Post the invoice as new demand or choose another order.',

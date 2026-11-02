@@ -44,8 +44,8 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             app(\App\Services\Documents\SalesReturnService::class)->createDraft(['return_number'=>'SYNTHETIC-RMA','shipment_id'=>$shipment->id,
                 'customer_id'=>$shipment->customer_id,'warehouse_id'=>$shipment->warehouse_id,'return_date'=>'2026-10-07','reason'=>'Review confirmed source return'],[]);
         }
-        $proposal=$original;$proposal['lines'][0]['unit_price']='9';if($version===2)$proposal['lines'][0]['quantity']=$quantity;
-        $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];if($version===2)$approved['review']=['inventory'=>['stock'=>['version'=>2,'amendment_mode'=>'pending_demand']]];
+        $proposal=$original;$proposal['lines'][0]['unit_price']='9';if($version>=2)$proposal['lines'][0]['quantity']=$quantity;
+        $uuid=(string)Str::uuid();$approved=['actor_id'=>323,'original_request'=>$original,'proposed_request'=>$proposal];if($version>=2)$approved['review']=['inventory'=>['stock'=>['version'=>$version,'amendment_mode'=>$version===3?'accepted_demand':'pending_demand']]];
         $row=['version'=>1,'invoice_id'=>800,'operation_uuid'=>$uuid,'state'=>'queued','approved'=>$approved,'execution'=>[]];
         $id=DB::connection('tenant')->table('finance_sales_events')->insertGetId(['organization_id'=>14,'organization_mapping_uuid'=>$this->mapping->mapping_uuid,
             'source_key'=>'invoice-amendment:'.$uuid,'source_hash'=>hash('sha256',json_encode($approved,JSON_THROW_ON_ERROR)),
@@ -54,7 +54,7 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             ->andReturnUsing(function($actor,$invoice,$permission,$facts)use($id,$uuid,$version){
                 $saved=DB::connection('tenant')->table('finance_sales_events')->where('id',$id)->first();$value=json_decode($saved->result,true);
                 $replacement=$value['approved']['proposed_request'];$replacement['source_revision']=str_repeat('b',64);$replacement['posted_invoice_journal_id']=993;
-                return ['amendment'=>['version'=>$version,'amendment_mode'=>$version===2?'pending_demand':'commercial','invoice_id'=>800,'operation_uuid'=>$uuid,'phase'=>$facts['purpose'],'approved_hash'=>$saved->source_hash,'state'=>$value['state'],
+                return ['amendment'=>['version'=>$version,'amendment_mode'=>$version===3?'accepted_demand':($version===2?'pending_demand':'commercial'),'invoice_id'=>800,'operation_uuid'=>$uuid,'phase'=>$facts['purpose'],'approved_hash'=>$saved->source_hash,'state'=>$value['state'],
                     'original_request'=>$value['approved']['original_request'],'proposed_request'=>$value['approved']['proposed_request'],'replacement_request'=>$replacement]];
             });
         $fixture=new CommittedTenantFixture($this->tenantTestManager);$fixture->commit();
@@ -90,6 +90,113 @@ final class InvoiceCommercialAmendmentTest extends TestCase
             self::assertSame(1,SalesOrder::count());self::assertSame(0,bccomp($quantity,(string)SalesOrder::sole()->lines()->sole()->ordered_qty,4));
             self::assertSame(0,\App\Models\Tenant\Shipment::count());self::assertSame($before,StockLedger::orderBy('id')->get()->toArray());
             self::assertSame($done,$service->dispatch($input,323,'commit'),'Original pending-demand receipt remains immutable after later warehouse acceptance.');
+        }finally{$fixture->restore();}
+    }
+
+    public static function acceptedAmendments(): array
+    {
+        return ['accepted increase'=>['0','6','pending'],'accepted decrease'=>['0','2','pending'],
+            'partial increase'=>['2','6','partial'],'partial decrease to shipped'=>['2','2','complete'],
+            'shipped additional demand'=>['4','6','partial']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('acceptedAmendments')]
+    public function test_v3_amends_only_outstanding_accepted_demand_and_keeps_physical_evidence(string $fulfilled,string $quantity,string $status): void
+    {
+        [$input,$id,$fixture]=$this->fixture($fulfilled,false,true,3,$quantity);
+        try{
+            $service=app(InvoiceCommercialAmendmentService::class);
+            $ledger=StockLedger::orderBy('id')->get()->toArray();
+            $shipments=\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray();
+            $old=SalesOrder::sole()->lines()->sole()->getRawOriginal();
+            $prepared=$service->dispatch($input,323,'prepare');self::assertSame(3,$prepared['version']);self::assertSame('prepared',$prepared['status']);
+            self::assertEquals(4,SalesOrder::sole()->lines()->sole()->ordered_qty);
+            self::assertEquals(4,FulfillmentRequest::sole()->lines()->sole()->requested_qty);
+            $this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $done=$service->dispatch($input,323,'commit');self::assertSame('committed',$done['status']);self::assertSame(3,$done['version']);
+            self::assertSame($done,$service->dispatch($input,323,'commit'));self::assertSame($done,$service->dispatch($input,323,'prepare'));
+            self::assertSame(0,$done['physical_effects']);self::assertSame($status,$done['receipt']['fulfillment']['status']);
+            self::assertSame(0,bccomp($quantity,(string)SalesOrder::sole()->lines()->sole()->ordered_qty,4));
+            self::assertSame(0,bccomp($quantity,(string)FulfillmentRequest::sole()->lines()->sole()->requested_qty,4));
+            self::assertSame(0,bccomp($fulfilled,(string)FulfillmentRequest::sole()->lines()->sole()->fulfilled_qty,4));
+            self::assertSame($old['unit_price'],SalesOrder::sole()->lines()->sole()->getRawOriginal('unit_price'));
+            self::assertSame($old['shipped_qty'],SalesOrder::sole()->lines()->sole()->getRawOriginal('shipped_qty'));
+            self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+            self::assertSame($shipments,\App\Models\Tenant\Shipment::with('lines')->orderBy('id')->get()->toArray());
+            $command=FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole();
+            self::assertSame($old,$command->payload['accepted_plan']['lines'][0]['before']);
+            self::assertSame($status==='complete'?'fulfilled':'pending_fulfillment',$done['receipt']['demand_amendment']['state']);
+            if($fulfilled==='4'){
+                $this->state($id,'completed');$request=FulfillmentRequest::sole();
+                DB::connection('tenant')->table('finance_sales_requests')->where('invoice_id',800)->update(['source_revision'=>$request->source_revision,'invoice_journal_id'=>993]);
+                $this->mock(SolaBooksOutboxDeliveryService::class)->shouldReceive('authorizeSales')->with(323,800,'view',['request_uuid'=>$request->request_uuid])
+                    ->andReturn(['allowed'=>true,'request_revision'=>$request->source_revision,'source_revision'=>str_repeat('c',64)]);
+                $dispatch=app(\App\Services\Sales\FinanceDispatchService::class)->execute(['source_invoice_id'=>800,'request_uuid'=>$request->request_uuid,'invoice_revision'=>str_repeat('c',64),
+                    'operation_uuid'=>(string)Str::uuid(),'warehouse_id'=>$this->warehouse->id,'ship_date'=>'2026-10-08',
+                    'lines'=>[['source_invoice_line_id'=>'801','request_line_id'=>$request->lines()->sole()->id,'quantity'=>'2','unit_id'=>$this->unit->id]]]);
+                self::assertSame('posted',$dispatch['status']);self::assertSame(count($shipments)+1,\App\Models\Tenant\Shipment::count());
+                self::assertSame('complete',FulfillmentRequest::sole()->status);self::assertSame(0,bccomp('6',(string)FulfillmentRequest::sole()->lines()->sole()->fulfilled_qty,4));
+                foreach($ledger as $row)self::assertSame($row,StockLedger::findOrFail($row['id'])->toArray());
+            }
+
+        }finally{$fixture->restore();}
+    }
+
+    public function test_v3_rejects_reduction_below_shipped_quantity_without_inventing_a_return(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('2',false,true,3,'1');
+        try{
+            $before=SalesOrder::with('lines')->get()->toArray();$ledger=StockLedger::orderBy('id')->get()->toArray();$commands=FulfillmentCommand::count();
+            try{app(InvoiceCommercialAmendmentService::class)->dispatch($input,323,'prepare');self::fail('A real return is required.');}
+            catch(HttpExceptionInterface $failure){self::assertSame(409,$failure->getStatusCode());}
+            self::assertSame($before,SalesOrder::with('lines')->get()->toArray());self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+            self::assertSame($commands,FulfillmentCommand::count());self::assertSame(0,\App\Models\Tenant\SalesReturn::count());
+        }finally{$fixture->restore();}
+    }
+
+    public function test_v3_prefinancial_cancellation_preserves_accepted_order(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('2',false,true,3,'6');
+        try{
+            $before=SalesOrder::with('lines')->get()->toArray();$ledger=StockLedger::orderBy('id')->get()->toArray();
+            $service=app(InvoiceCommercialAmendmentService::class);$service->dispatch($input,323,'prepare');$this->state($id,'cancel_requested');
+            $done=$service->dispatch($input,323,'cancel');self::assertSame('abandoned',$done['status']);self::assertSame($done,$service->dispatch($input,323,'cancel'));
+            self::assertSame($before,SalesOrder::with('lines')->get()->toArray());self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+        }finally{$fixture->restore();}
+    }
+
+    public function test_v3_stock_failure_rolls_back_order_and_request_and_retry_commits_once(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('2',false,true,3,'6');
+        $dispatcher=FulfillmentRequest::getEventDispatcher();
+        try{
+            $service=app(InvoiceCommercialAmendmentService::class);$service->dispatch($input,323,'prepare');
+            $this->state($id,'finance_posted',['replacement_journal_id'=>993]);
+            DB::connection('tenant')->table('journal_entries')->insert(['id'=>993,'organization_id'=>14,'source'=>'AR','source_type'=>'App\\Models\\Invoice','source_id'=>800,'status'=>'posted','posted_at'=>now()]);
+            $orders=SalesOrder::with('lines')->get()->toArray();$request=FulfillmentRequest::sole()->getRawOriginal();$ledger=StockLedger::orderBy('id')->get()->toArray();
+            $injected=clone $dispatcher;$injected->listen('eloquent.updating: '.FulfillmentRequest::class,function($request){if($request->isDirty('source_revision'))throw new \RuntimeException('Injected Stock acknowledgement failure');});
+            FulfillmentRequest::setEventDispatcher($injected);
+            try{$service->dispatch($input,323,'commit');self::fail('The injected failure was lost.');}
+            catch(\RuntimeException $error){self::assertSame('Injected Stock acknowledgement failure',$error->getMessage());}
+            finally{FulfillmentRequest::setEventDispatcher($dispatcher);}
+            self::assertSame($orders,SalesOrder::with('lines')->get()->toArray());self::assertSame($request,FulfillmentRequest::sole()->getRawOriginal());
+            self::assertSame('prepared',FulfillmentCommand::where('operation_uuid',$input['operation_uuid'])->sole()->status);
+            self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+            $done=$service->dispatch($input,323,'commit');self::assertSame('committed',$done['status']);self::assertSame($done,$service->dispatch($input,323,'commit'));
+            self::assertSame(0,bccomp('6',(string)SalesOrder::sole()->lines()->sole()->ordered_qty,4));self::assertSame($ledger,StockLedger::orderBy('id')->get()->toArray());
+        }finally{FulfillmentRequest::setEventDispatcher($dispatcher);$fixture->restore();}
+    }
+
+    public function test_v3_requires_warehouse_authority_before_creating_a_hold(): void
+    {
+        [$input,$id,$fixture]=$this->fixture('0',false,true,3,'6');
+        try{
+            $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed'=>false,'owner'=>false,'roles'=>[]]);
+            $this->app->forgetInstance(InventoryPermissionService::class);$commands=FulfillmentCommand::count();
+            try{app(InvoiceCommercialAmendmentService::class)->dispatch($input,323,'prepare');self::fail('Warehouse authority is required for accepted demand.');}
+            catch(HttpExceptionInterface $failure){self::assertSame(403,$failure->getStatusCode());}
+            self::assertSame($commands,FulfillmentCommand::count());self::assertSame(0,bccomp('4',(string)FulfillmentRequest::sole()->lines()->sole()->requested_qty,4));
         }finally{$fixture->restore();}
     }
 
@@ -170,9 +277,12 @@ final class InvoiceCommercialAmendmentTest extends TestCase
         }finally{$fixture->restore();}
     }
 
-    public function test_concurrent_amendment_publication_serializes_native_warehouse_dispatch(): void
+    public static function concurrentAmendmentVersions(): array { return ['commercial'=>[1],'accepted demand'=>[3]]; }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('concurrentAmendmentVersions')]
+    public function test_concurrent_amendment_publication_serializes_native_warehouse_dispatch(int $version): void
     {
-        [$input,$id,$fixture]=$this->fixture();$db=DB::connection('tenant');$other=null;
+        [$input,$id,$fixture]=$this->fixture('0',false,true,$version,'6');$db=DB::connection('tenant');$other=null;
         try {
             $saved=$db->table('finance_sales_events')->where('id',$id)->first();$value=json_decode($saved->result,true);$value['state']='completed';
             $db->table('finance_sales_events')->where('id',$id)->update(['result'=>json_encode($value)]);
