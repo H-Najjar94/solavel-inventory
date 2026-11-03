@@ -64,6 +64,7 @@ function CompactIntegrationStatus({ status, tr, organizationName, onContinue }) 
                 <div><span>{tr('integration.businessStatus.accountingAuthority')}</span><strong><bdi>{tr('integration.businessStatus.solabooks')}</bdi></strong></div>
                 <div><span>{tr('integration.phase.activation')}</span><strong>{tr(activated ? 'integration.connection.active' : 'integration.phase.safely_paused')}</strong></div>
                 <div><span>{tr('integration.phase.delivery')}</span><strong>{tr(status.delivery_enabled ? 'integration.phase.enabled' : 'integration.phase.disabled')}</strong></div>
+                {status.return_reversal && <div data-return-reversal={status.return_reversal.state}><span>{tr('integration.returnReversal.label')}</span><strong>{tr(`integration.returnReversal.${status.return_reversal.state}`)}</strong></div>}
                 {status.configured_automatically && <div><span>{tr('integration.businessStatus.accountMappings')}</span><strong>{tr('integration.businessStatus.automatic')}</strong></div>}
             </div>
             <div className="doc-actions">
