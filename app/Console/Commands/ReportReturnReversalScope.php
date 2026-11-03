@@ -29,22 +29,16 @@ final class ReportReturnReversalScope extends Command
         $rows = [];
         foreach ($ids as $organization) {
             $rows[] = $tenants->runForTenant($organization, function () use ($organization): array {
-                $setting = IntegrationSetting::query()->where('organization_id', $organization)
-                    ->where('integration', IntegrationEvents::INTEGRATION)->first();
-                if (! $setting) {
-                    return [$organization, 'disconnected', '-', 'n/a', 'not connected'];
-                }
-                $stored = data_get($setting->meta, 'transport_enabled_workflows');
-                $enabled = data_get($setting->meta, 'transport_enabled') === true;
-                $has = is_array($stored) && in_array('sales_return.reversed', $stored, true);
-                $action = match (true) {
-                    $setting->mode !== 'active' => 'none (connection not active)',
-                    ! is_array($stored) => 'none (no stored list; default scope applies)',
-                    $has => 'none',
-                    default => 'ADD sales_return.reversed (via the connection wizard run, not by hand)',
+                $r = app(\App\Services\Integration\ReturnReversalReadiness::class)->forOrganization($organization);
+                $action = match ($r['state']) {
+                    'not_connected' => 'not connected',
+                    'connection_inactive' => 'none (connection not active)',
+                    'needs_wizard' => 'ADD sales_return.reversed (via the connection wizard run, not by hand)',
+                    default => $r['scope'] === 'default' ? 'none (no stored list; default scope applies)' : 'none',
                 };
 
-                return [$organization, $setting->mode, $enabled ? 'yes' : 'no', is_array($stored) ? ($has ? 'present' : 'MISSING') : 'default', $action];
+                return [$organization, $r['mode'] ?? 'disconnected', $r['mode'] ? ($r['transport_enabled'] ? 'yes' : 'no') : '-',
+                    ['present' => 'present', 'missing' => 'MISSING', 'default' => 'default', 'n/a' => 'n/a'][$r['scope']], $action];
             });
         }
         $this->table(['org', 'mode', 'transport', 'sales_return.reversed', 'rollout action'], $rows);

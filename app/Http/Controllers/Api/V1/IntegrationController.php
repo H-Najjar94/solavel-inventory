@@ -49,6 +49,8 @@ class IntegrationController extends ApiController
         $orgId = $this->context->idOrFail();
         $status = $this->statusService->status($orgId);
         $status['summary'] = app(\App\Services\Integration\ConnectionSummary::class)->forOrganization($orgId, $status);
+        // Read-only readiness for reversing posted customer returns; the wizard, never this endpoint, changes scope.
+        $status['return_reversal'] = app(\App\Services\Integration\ReturnReversalReadiness::class)->forOrganization($orgId);
 
         return $this->success($status);
     }
