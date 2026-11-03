@@ -211,9 +211,8 @@ class InventoryReversalService
             $sourceMappingUuid = IntegrationDocumentLifecycleMapping::query()
                 ->where('source_application', 'solastock')->where('source_document_type', 'sales_return')
                 ->where('source_document_id', (string) $return->id)->value('mapping_uuid');
-            if ($sourceMappingUuid && IntegrationFinancialLineAllocation::query()
-                ->where('source_document_mapping_uuid', $sourceMappingUuid)->where('state', 'posted')->exists()) {
-                throw new RuntimeException('Void the linked Finance customer credit before reversing this physical return.');
+            if ($sourceMappingUuid) {
+                $this->assertNoEffectiveFinanceCredit($sourceMappingUuid);
             }
             $this->workflowValidation->assertOperationalDocumentReady($return, 'sales_return.reversed');
             $this->assertReason($reason);
@@ -251,6 +250,32 @@ class InventoryReversalService
 
             return $reversal->fresh();
         });
+    }
+
+    /**
+     * A posted Finance allocation against this return means the customer credit is still effective.
+     * Finance voids the credit FIRST (SolaCount never needs the return reversed to do so); only then does
+     * Stock reverse the physical return. When Finance already voided the credit but the Stock allocation
+     * mirror has not yet been acknowledged, say so: the fix is to retry the void synchronization, not to void again.
+     */
+    private function assertNoEffectiveFinanceCredit(string $sourceMappingUuid): void
+    {
+        $posted = IntegrationFinancialLineAllocation::query()
+            ->where('source_document_mapping_uuid', $sourceMappingUuid)->where('state', 'posted')->get();
+        if ($posted->isEmpty()) {
+            return;
+        }
+        $db = DB::connection($this->connection());
+        try {
+            // Shared-tenant truth only; a Stock-only tenant has no credit_notes table and keeps the strict message.
+            $voidedInFinance = $posted->every(fn ($row) => $row->destination_document_type === 'customer_credit_note'
+                && $db->table('credit_notes')->where('id', $row->destination_document_id)->where('status', 'void')->exists());
+        } catch (\Illuminate\Database\QueryException) {
+            $voidedInFinance = false;
+        }
+        throw new RuntimeException($voidedInFinance
+            ? __('return_reversal.credit_void_acknowledgement_pending')
+            : __('return_reversal.credit_before_return'));
     }
 
     private function createReversal(string $sourceType, int $sourceId, string $sourceNumber, string $originalEventType, string $prefix, string $reason): InventoryReversal
