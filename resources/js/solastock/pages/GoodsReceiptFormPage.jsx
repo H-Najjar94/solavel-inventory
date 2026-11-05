@@ -14,6 +14,7 @@ import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx'
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker, SupplierPicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, TraceabilityRequiredBadge } from '../components/traceability.jsx';
+import { normalizeQty } from '../utils/quantity.mjs';
 import { useI18n } from '../i18n/context.jsx';
 
 const emptyLine = () => ({ item_id: null, received_qty: '', accepted_qty: '', entered_unit_id: null, unit_cost: '', bin_id: null, purchase_order_line_id: null, ordered_qty: null, remaining_qty: null, lot_code: '', expiry_date: '', serials: [] });
@@ -41,7 +42,7 @@ export default function GoodsReceiptFormPage() {
     // Prefill from PO
     const poDraft = useApiQuery(['grn-from-po', poId, blindReceiving], () => api.grnDraftFromPo(poId, { blind: blindReceiving ? 1 : 0 }), { fallback: null, enabled: fromPo });
     const requestDraft = useApiQuery(['grn-from-request',requestId],()=>api.receivingRequest(requestId),{fallback:null,enabled:fromRequest});
-    useEffect(()=>{if(fromRequest&&requestDraft.data){const r=requestDraft.data;setHeader(h=>({...h,receiving_request_id:r.id,supplier_id:r.supplier_id,warehouse_id:r.warehouse_id??null}));setLines(r.lines.filter(l=>Number(l.remaining_qty)>0).map(l=>({...emptyLine(),item_id:l.item_id,receiving_request_line_id:l.id,entered_unit_id:l.entered_unit_id,received_qty:l.remaining_qty,accepted_qty:l.remaining_qty,unit_cost:l.unit_cost})));}},[fromRequest,requestDraft.data]);
+    useEffect(()=>{if(fromRequest&&requestDraft.data){const r=requestDraft.data;setHeader(h=>({...h,receiving_request_id:r.id,supplier_id:r.supplier_id,warehouse_id:r.warehouse_id??null}));setLines(r.lines.filter(l=>Number(l.remaining_qty)>0).map(l=>({...emptyLine(),item_id:l.item_id,receiving_request_line_id:l.id,entered_unit_id:l.entered_unit_id,received_qty:normalizeQty(l.remaining_qty),accepted_qty:normalizeQty(l.remaining_qty),unit_cost:l.unit_cost})));}},[fromRequest,requestDraft.data]);
     const sourcePo = useApiQuery(['po', poId], () => api.purchaseOrder(poId), { fallback: null, enabled: fromPo });
     useEffect(() => {
         if (fromPo && poDraft.data) {
@@ -49,9 +50,9 @@ export default function GoodsReceiptFormPage() {
             setHeader((h) => ({ ...h, purchase_order_id: po.id, supplier_id: po.supplier_id, warehouse_id: po.warehouse_id }));
             setLines((poDraft.data.lines ?? []).map((l) => ({
                 item_id: l.item_id, receiving_request_line_id: l.receiving_request_line_id, purchase_order_line_id: l.purchase_order_line_id,
-                ordered_qty: l.ordered_qty ?? null, remaining_qty: l.remaining_qty ?? null,
-                received_qty: l.entered_qty ?? l.received_qty,
-                accepted_qty: l.entered_qty ?? l.received_qty,
+                ordered_qty: l.ordered_qty ?? null, remaining_qty: l.remaining_qty == null ? null : normalizeQty(l.remaining_qty),
+                received_qty: normalizeQty(l.entered_qty ?? l.received_qty),
+                accepted_qty: normalizeQty(l.entered_qty ?? l.received_qty),
                 entered_unit_id: l.entered_unit_id ?? null,
                 unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor), bin_id: null,
             })));
@@ -68,8 +69,8 @@ export default function GoodsReceiptFormPage() {
             setBlindReceiving(!!g.blind_receiving);
             setLines((g.lines ?? []).map((l) => ({
                 item_id: l.item_id, receiving_request_line_id: l.receiving_request_line_id, purchase_order_line_id: l.purchase_order_line_id,
-                received_qty: l.entered_qty ?? l.received_qty, accepted_qty: l.entered_qty ?? l.accepted_qty,
-                rejected_qty: l.rejected_qty ?? '', disposition: l.disposition ?? 'restock',
+                received_qty: normalizeQty(l.entered_qty ?? l.received_qty), accepted_qty: normalizeQty(l.entered_qty ?? l.accepted_qty),
+                rejected_qty: normalizeQty(l.rejected_qty ?? ''), disposition: l.disposition ?? 'restock',
                 entered_unit_id: l.entered_unit_id ?? null, unit_cost: enteredCost(l.unit_cost, l.unit_conversion_factor),
                 bin_id: l.bin_id, ordered_qty: null, remaining_qty: null,
                 // Draft lots/serials already exist: keep them and resend by id.
