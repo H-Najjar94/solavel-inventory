@@ -511,7 +511,7 @@ return array (
     'inventory_viewer' => 'مشاهد المخزون',
     'inventory_accountant' => 'محاسب المخزون',
   ),
-  'supplier_terms' => 
+  'supplier_terms' =>
   array (
     'supplier_missing' => 'اختر موردًا من هذه المؤسسة.',
     'supplier_inactive' => 'هذا المورد غير نشط. أعد تفعيله أو سجّله كمورد سابق.',

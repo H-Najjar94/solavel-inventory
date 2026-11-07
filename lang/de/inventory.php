@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => 'Bestätigen Sie den Kundenauftrag, bevor Sie die restlichen Mengen versenden.',
     'source_line_invalid' => 'Eine Sendungsposition gehört nicht zu diesem Kundenauftrag und Produkt. Öffnen Sie die Sendung erneut aus ihrem Kundenauftrag.',
     'exceeds_remaining' => 'Die Versandmenge übersteigt die verbleibende Menge in diesem Kundenauftrag. Aktualisieren Sie die Bestellung und geben Sie die tatsächliche Restmenge ein.',
+    'invoice_amendment_accepted_evidence' => 'Die akzeptierte Bestellung, Menge, Umrechnung oder der Angebotsnachweis stützt diese Änderung nicht. Der ursprüngliche Lagerverlauf bleibt unverändert.',
+    'invoice_amendment_reserved' => 'Eine aktive Lagerreservierung schützt diese Bestellung. Ändern oder lösen Sie sie über das Lager, bevor Sie die akzeptierte Nachfrage ändern.',
+    'invoice_amendment_dispatch_draft' => 'Für diese Bestellung läuft ein Versand. Schließen oder stornieren Sie diesen Lagervorgang, bevor Sie die Nachfrage ändern.',
+    'invoice_amendment_return_required' => 'Die neue Menge liegt unter der bestätigten gelieferten Menge. Verwenden Sie einen bestätigten Retouren- und Gutschriftsablauf; das Ändern der Nachfrage erzeugt keine Retoure.',
+    'invoice_amendment_pending' => 'Eine Rechnungsänderung in SolaCount steht aus. Setzen Sie diese Änderung fort oder brechen Sie sie ab, bevor Sie die Lieferung versenden, zurücknehmen oder ändern.',
+    'invoice_amendment_physical' => 'Diese kaufmännische Änderung betrifft physische Rechnungsdaten. Verwenden Sie für Menge, Artikel oder Einheit einen verifizierten Versand-, Retouren- oder physischen Änderungsablauf.',
+    'invoice_amendment_return' => 'Für diese Lieferung wartet eine Retoure auf die finanzielle Abstimmung. Schließen Sie diese Retoure ab, bevor Sie die kaufmännischen Rechnungsbeträge ändern.',
   ),
   'purchasing' =>
   array (

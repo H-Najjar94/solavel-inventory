@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => 'Confirme el pedido de venta antes de enviar las cantidades restantes.',
     'source_line_invalid' => 'Una línea de envío no pertenece a este pedido de venta ni a este producto. Vuelva a abrir el envío desde su orden de venta.',
     'exceeds_remaining' => 'La cantidad del envío excede la cantidad restante en este pedido de ventas. Actualice el pedido e ingrese la cantidad restante real.',
+    'invoice_amendment_accepted_evidence' => 'El pedido aceptado, la cantidad, la conversión o la evidencia de la cotización no respaldan esta modificación. El historial de almacén original permanece sin cambios.',
+    'invoice_amendment_reserved' => 'Una reserva de almacén activa protege este pedido. Modifíquela o libérela a través del almacén antes de cambiar la demanda aceptada.',
+    'invoice_amendment_dispatch_draft' => 'Hay un envío en curso para este pedido. Complete o cancele esa operación de almacén antes de modificar la demanda.',
+    'invoice_amendment_return_required' => 'La nueva cantidad es inferior a la cantidad enviada confirmada. Use un flujo de devolución y crédito confirmado; editar la demanda no crea una devolución.',
+    'invoice_amendment_pending' => 'Hay una modificación de factura de SolaCount pendiente. Reanude o cancele esa modificación antes de despachar, devolver o cambiar su cumplimiento.',
+    'invoice_amendment_physical' => 'Esta modificación comercial cambia datos físicos de la factura. Use un flujo verificado de envío, devolución o modificación física para cambios de cantidad, artículo o unidad.',
+    'invoice_amendment_return' => 'Esta entrega tiene una devolución pendiente de conciliación financiera. Complete esa devolución antes de modificar los importes comerciales de la factura.',
   ),
   'purchasing' =>
   array (

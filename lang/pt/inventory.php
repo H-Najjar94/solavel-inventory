@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => 'Confirme o pedido de venda antes de despachar as quantidades restantes.',
     'source_line_invalid' => 'Uma linha de expedição não pertence a esta ordem de venda e produto. Reabra a remessa de seu pedido de venda.',
     'exceeds_remaining' => 'A quantidade de remessa excede a quantidade restante nesta ordem de venda. Atualize o pedido e insira a quantidade restante real.',
+    'invoice_amendment_accepted_evidence' => 'O pedido aceito, a quantidade, a conversão ou a evidência da cotação não sustentam esta alteração. O histórico original do armazém permanece inalterado.',
+    'invoice_amendment_reserved' => 'Uma reserva ativa no armazém protege este pedido. Altere-a ou libere-a pelo armazém antes de mudar a demanda aceita.',
+    'invoice_amendment_dispatch_draft' => 'Há uma remessa em andamento para este pedido. Conclua ou cancele essa operação de armazém antes de alterar a demanda.',
+    'invoice_amendment_return_required' => 'A nova quantidade é inferior à quantidade enviada confirmada. Use um fluxo confirmado de devolução e crédito; editar a demanda não cria uma devolução.',
+    'invoice_amendment_pending' => 'Há uma alteração de fatura do SolaCount pendente. Retome ou cancele essa alteração antes de expedir, devolver ou mudar o atendimento.',
+    'invoice_amendment_physical' => 'Esta alteração comercial modifica fatos físicos da fatura. Use um fluxo verificado de remessa, devolução ou alteração física para mudanças de quantidade, item ou unidade.',
+    'invoice_amendment_return' => 'Esta expedição tem uma devolução aguardando conciliação financeira. Conclua essa devolução antes de alterar os valores comerciais da fatura.',
   ),
   'purchasing' =>
   array (

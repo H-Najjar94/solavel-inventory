@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => 'Satış siparişini, kalan miktarlarını göndermeden önce onaylayın.',
     'source_line_invalid' => 'Bir gönderim satırı bu satış siparişi ve ürüne ait değil. Gönderimi satış siparişinden yeniden açın.',
     'exceeds_remaining' => 'Gönderim miktarı, bu satış siparişinde kalan miktarı aşiyor. Siparişi yenileyip gerçek kalan miktarı girin.',
+    'invoice_amendment_accepted_evidence' => 'Kabul edilen sipariş, miktar, dönüştürme veya teklif kanıtı bu değişikliği desteklemiyor. Orijinal depo geçmişi değişmeden kalır.',
+    'invoice_amendment_reserved' => 'Bu siparişi aktif bir depo rezervasyonu koruyor. Kabul edilen talebi değiştirmeden önce rezervasyonu depo üzerinden değiştirin veya serbest bırakın.',
+    'invoice_amendment_dispatch_draft' => 'Bu sipariş için bir sevkiyat devam ediyor. Talebi değiştirmeden önce bu depo işlemini tamamlayın veya iptal edin.',
+    'invoice_amendment_return_required' => 'Yeni miktar, onaylanmış sevk edilen miktarın altında. Onaylı iade ve alacak akışını kullanın; talebi düzenlemek iade oluşturmaz.',
+    'invoice_amendment_pending' => 'Bekleyen bir SolaCount fatura değişikliği var. Sevk etmeden, iade etmeden veya karşılamayı değiştirmeden önce bu değişikliği sürdürün veya iptal edin.',
+    'invoice_amendment_physical' => 'Bu ticari değişiklik faturanın fiziksel unsurlarını değiştiriyor. Miktar, kalem veya birim değişiklikleri için doğrulanmış bir sevkiyat, iade veya fiziksel değişiklik akışı kullanın.',
+    'invoice_amendment_return' => 'Bu karşılamada mali mutabakat bekleyen bir iade var. Fatura ticari tutarlarını değiştirmeden önce bu iadeyi tamamlayın.',
   ),
   'purchasing' =>
   array (

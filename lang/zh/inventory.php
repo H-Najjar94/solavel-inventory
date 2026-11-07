@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => '在发货剩余数量之前确认销售订单。',
     'source_line_invalid' => '装运行不属于此销售订单和产品。从销售订单中重新打开装运。',
     'exceeds_remaining' => '装运数量超过此销售订单上的剩余数量。刷新订单并输入实际剩余数量。',
+    'invoice_amendment_accepted_evidence' => '已接受的订单、数量、转换或报价依据不支持此修订。原有仓库历史记录保持不变。',
+    'invoice_amendment_reserved' => '此订单受有效的仓库预留保护。更改已接受的需求之前，请通过仓库修改或释放该预留。',
+    'invoice_amendment_dispatch_draft' => '此订单有发货正在进行中。修订需求之前，请先完成或取消该仓库操作。',
+    'invoice_amendment_return_required' => '新数量低于已确认的发货数量。请使用经确认的退货和贷项流程；编辑需求不会生成退货。',
+    'invoice_amendment_pending' => '有一项 SolaCount 发票修订待处理。发货、退货或更改履约之前，请先继续或取消该修订。',
+    'invoice_amendment_physical' => '此商务修订会更改发票的实物事实。数量、物料或单位变更，请使用经核实的发货、退货或实物修订流程。',
+    'invoice_amendment_return' => '此履约有一笔退货正等待财务对账。修订发票商务金额之前，请先完成该退货。',
   ),
   'purchasing' =>
   array (

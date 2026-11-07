@@ -511,7 +511,7 @@ return array (
     'inventory_viewer' => 'Inventory Viewer',
     'inventory_accountant' => 'Inventory Accountant',
   ),
-  'supplier_terms' => 
+  'supplier_terms' =>
   array (
     'supplier_missing' => 'Select a supplier from this organization.',
     'supplier_inactive' => 'This supplier is inactive. Reactivate it or record it as historical.',

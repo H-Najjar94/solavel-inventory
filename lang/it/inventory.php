@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => 'Conferma l\'ordine di vendita prima di spedire le sue quantità rimanenti.',
     'source_line_invalid' => 'Una linea di spedizione non appartiene a questo ordine di vendita e prodotto. Riapri la spedizione dal suo ordine di vendita.',
     'exceeds_remaining' => 'La quantità di spedizione supera la quantità rimanente su questo ordine di vendita. Aggiorna l\'ordine e inserisci la quantità rimanente effettiva.',
+    'invoice_amendment_accepted_evidence' => 'L\'ordine accettato, la quantità, la conversione o l\'evidenza del preventivo non supportano questa modifica. Lo storico di magazzino originale resta invariato.',
+    'invoice_amendment_reserved' => 'Una prenotazione di magazzino attiva protegge questo ordine. Modificala o rilasciala tramite il magazzino prima di cambiare la domanda accettata.',
+    'invoice_amendment_dispatch_draft' => 'Una spedizione è in corso per questo ordine. Completa o annulla quell\'operazione di magazzino prima di modificare la domanda.',
+    'invoice_amendment_return_required' => 'La nuova quantità è inferiore alla quantità spedita confermata. Usa un flusso di reso e nota di credito confermato; modificare la domanda non crea un reso.',
+    'invoice_amendment_pending' => 'È in sospeso una modifica della fattura in SolaCount. Riprendi o annulla tale modifica prima di spedire, restituire o cambiare la sua evasione.',
+    'invoice_amendment_physical' => 'Questa modifica commerciale cambia dati fisici della fattura. Usa un flusso verificato di spedizione, reso o modifica fisica per cambi di quantità, articolo o unità.',
+    'invoice_amendment_return' => 'Questa evasione ha un reso in attesa di riconciliazione finanziaria. Completa quel reso prima di modificare gli importi commerciali della fattura.',
   ),
   'purchasing' =>
   array (

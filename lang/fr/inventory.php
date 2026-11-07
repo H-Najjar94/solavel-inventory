@@ -57,6 +57,13 @@ return array (
     'order_not_dispatchable' => 'Confirmez la commande client avant d\'expédier ses quantités restantes.',
     'source_line_invalid' => 'Une ligne d\'expédition n\'appartient pas à cette commande client et à ce produit. Rouvrez l\'expédition à partir de sa commande client.',
     'exceeds_remaining' => 'La quantité expédiée dépasse la quantité restante sur cette commande client. Actualisez la commande et saisissez la quantité restante réelle.',
+    'invoice_amendment_accepted_evidence' => 'La commande acceptée, la quantité, la conversion ou la preuve du devis ne justifient pas cette modification. L\'historique d\'entrepôt d\'origine reste inchangé.',
+    'invoice_amendment_reserved' => 'Une réservation d\'entrepôt active protège cette commande. Modifiez-la ou libérez-la via l\'entrepôt avant de changer la demande acceptée.',
+    'invoice_amendment_dispatch_draft' => 'Une expédition est en cours pour cette commande. Terminez ou annulez cette opération d\'entrepôt avant de modifier la demande.',
+    'invoice_amendment_return_required' => 'La nouvelle quantité est inférieure à la quantité expédiée confirmée. Utilisez un flux de retour et d\'avoir confirmé ; modifier la demande ne crée pas de retour.',
+    'invoice_amendment_pending' => 'Une modification de facture SolaCount est en attente. Reprenez ou annulez cette modification avant d\'expédier, de retourner ou de modifier son exécution.',
+    'invoice_amendment_physical' => 'Cette modification commerciale change des données physiques de la facture. Utilisez un flux vérifié d\'expédition, de retour ou de modification physique pour les changements de quantité, d\'article ou d\'unité.',
+    'invoice_amendment_return' => 'Cette exécution a un retour en attente de rapprochement financier. Terminez ce retour avant de modifier les montants commerciaux de la facture.',
   ),
   'purchasing' =>
   array (
