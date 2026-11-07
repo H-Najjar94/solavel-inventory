@@ -47,7 +47,7 @@ class StockBalanceController extends ApiController
             'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
             'onhand' => 'on_hand_qty',
             'reserved' => 'reserved_qty',
-            'available' => $this->sortByExpression('stock_balances.on_hand_qty - stock_balances.reserved_qty'),
+            'available' => $this->sortByExpression('stock_balances.on_hand_qty - stock_balances.reserved_qty', ['on_hand_qty', 'reserved_qty']),
             'cost' => 'average_cost',
             'value' => 'total_value',
         ]);

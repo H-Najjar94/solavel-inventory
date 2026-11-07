@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
-import { Badge } from './ui.jsx';
+import { Badge, SortTh } from './ui.jsx';
 import { TermsModal, Num, useSupplierTermsAccess } from './SupplierTermsShared.jsx';
 import { t } from '../i18n/index.js';
 
@@ -43,6 +44,7 @@ export default function VendorPricelistTransfer({ itemId, supplierId, compact = 
 }
 
 function PricelistImportModal({ onClose }) {
+    const previewSort = useTableSort();
     const toast = useToast();
     const qc = useQueryClient();
     const [file, setFile] = useState(null);
@@ -139,11 +141,11 @@ function PricelistImportModal({ onClose }) {
             {preview && rows.length === 0 && <div className="banner banner--warn">{t('supplierTerms.transfer.noRows')}</div>}
             {rows.length > 0 && <div className="tbl-wrap st-import-table"><table className="data-table">
                 <thead><tr>
-                    <th>{t('supplierTerms.transfer.row')}</th><th>{t('supplierTerms.transfer.itemSku')}</th><th>{t('supplierTerms.transfer.supplierCode')}</th>
+                    <SortTh sort={previewSort} col="row">{t('supplierTerms.transfer.row')}</SortTh><SortTh sort={previewSort} col="itemSku">{t('supplierTerms.transfer.itemSku')}</SortTh><SortTh sort={previewSort} col="supplierCode">{t('supplierTerms.transfer.supplierCode')}</SortTh>
                     <th className="num">{t('supplierTerms.tiers.minimumQty')}</th><th className="num">{t('supplierTerms.tiers.unitCost')}</th>
-                    <th>{t('supplierTerms.common.currency')}</th><th>{t('supplierTerms.common.status')}</th><th>{t('supplierTerms.transfer.message')}</th>
+                    <th>{t('supplierTerms.common.currency')}</th><SortTh sort={previewSort} col="status">{t('supplierTerms.common.status')}</SortTh><th>{t('supplierTerms.transfer.message')}</th>
                 </tr></thead>
-                <tbody>{rows.map((row) => <tr key={row.row} className={row.status === 'error' ? 'row--error' : ''}>
+                <tbody>{previewSort.apply(rows, { row: (r) => r.row, itemSku: (r) => r.values?.item_sku, supplierCode: (r) => r.values?.supplier_code, status: (r) => r.status }).map((row) => <tr key={row.row} className={row.status === 'error' ? 'row--error' : ''}>
                     <td><Num>{row.row}</Num></td>
                     <td><Num>{row.values?.item_sku || '—'}</Num></td>
                     <td><Num>{row.values?.supplier_code || '—'}</Num></td>

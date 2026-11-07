@@ -1,16 +1,18 @@
 import {ConfirmedActionButton} from './ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useRef, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useToast } from '../stores/toast.jsx';
-import { EmptyState, Skeleton } from './ui.jsx';
+import { EmptyState, Skeleton, SortTh } from './ui.jsx';
 import { t } from '../i18n/index.js';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export default function ItemAttachments({ itemId, canManage }) {
+    const attachSort = useTableSort();
     const qc = useQueryClient();
     const toast = useToast();
     const fileRef = useRef(null);
@@ -85,8 +87,8 @@ export default function ItemAttachments({ itemId, canManage }) {
         <div>
             <div className="card-head"><h3>{t('attachments.documents', 'Documents')}</h3><span className="spacer" />{action}</div>
             <table className="data-table">
-                <thead><tr><th>{t('attachments.name', 'Name')}</th><th>{t('type')}</th><th>{t('attachments.size', 'Size')}</th><th></th></tr></thead>
-                <tbody>{rows.map((a) => (
+                <thead><tr><SortTh sort={attachSort} col="name">{t('attachments.name', 'Name')}</SortTh><SortTh sort={attachSort} col="type">{t('type')}</SortTh><SortTh sort={attachSort} col="size">{t('attachments.size', 'Size')}</SortTh><th></th></tr></thead>
+                <tbody>{attachSort.apply(rows, { name: (a) => a.name, type: (a) => a.mime_type, size: (a) => a.size_bytes }).map((a) => (
                     <tr key={a.id}>
                         <td><a href={a.download_url} target="_blank" rel="noreferrer">{a.name}</a></td>
                         <td>{a.mime_type ?? 'file'}</td>

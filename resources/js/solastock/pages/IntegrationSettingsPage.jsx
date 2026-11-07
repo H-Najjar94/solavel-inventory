@@ -5,13 +5,14 @@ import {text as feedbackText} from '../../shared/feedback/messages';
 import { diagnosticReason } from '../services/connectionDiagnostics.js';
 import ConnectionSummaryCard, { failureGroup } from '../components/ConnectionSummaryCard.jsx';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
+import { Breadcrumbs, Skeleton, Tabs, EmptyState, SortTh } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import { sourceText } from '../i18n/locales.js';
 import { useTenant } from '../stores/tenant.jsx';
@@ -841,6 +842,7 @@ function AccountMappings({ gate, toast, qc, tr }) {
 }
 
 function ItemMappings({ tr }) {
+    const itemMapSort = useTableSort();
     const { data, isLoading, isError, error } = useApiQuery(['integration-items'], () => api.integrationItemMappings({ per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     if (isLoading) return <Skeleton />;
@@ -850,8 +852,8 @@ function ItemMappings({ tr }) {
             <p className="muted">{tr('integration.item.description')}</p>
             {rows.length === 0 ? <EmptyState title={tr('integration.item.noItems')} /> : (
                 <table className="data-table">
-                    <thead><tr><th>{tr('integration.item.sku')}</th><th>{tr('integration.item.item')}</th><th>{tr('integration.item.solabooksItem')}</th><th>{tr('integration.item.syncStatus')}</th><th></th></tr></thead>
-                    <tbody>{rows.map((r) => (
+                    <thead><tr><SortTh sort={itemMapSort} col="sku">{tr('integration.item.sku')}</SortTh><SortTh sort={itemMapSort} col="item">{tr('integration.item.item')}</SortTh><SortTh sort={itemMapSort} col="solabooksItem">{tr('integration.item.solabooksItem')}</SortTh><SortTh sort={itemMapSort} col="status">{tr('integration.item.syncStatus')}</SortTh><th></th></tr></thead>
+                    <tbody>{itemMapSort.apply(rows, { sku: (r) => r.sku, item: (r) => r.name, solabooksItem: (r) => r.solabooks_item_id, status: (r) => r.sync_status }).map((r) => (
                         <tr key={r.id}><td>{r.sku}</td><td>{r.name}</td><td>{r.solabooks_item_id ?? '—'}</td><td>{r.sync_status ? tr(`integration.status.${r.sync_status}`, {}, r.sync_status) : tr('integration.item.notSynced')}</td>
                             <td><Link className="btn btn--sm" to={`/items/${r.id}`}>{tr('integration.item.open')}</Link></td></tr>
                     ))}</tbody>

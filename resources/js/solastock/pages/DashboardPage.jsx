@@ -2,11 +2,12 @@ import {useTenant} from '../stores/tenant.jsx';
 import {PlanSummary} from '../components/PlanAccess.jsx';
 import FinanceReadiness, {FinanceReadinessSkeleton} from '../components/FinanceReadiness.jsx';
 import React, { useEffect, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { useCan } from '../stores/meta.jsx';
 import { useToast } from '../stores/toast.jsx';
 import { t, getLocale } from '../i18n/index.js';
@@ -89,6 +90,7 @@ function OpsGroup({ title, icon, children }) {
 }
 
 export default function DashboardPage() {
+    const topMovingSort = useTableSort();
     const tenant = useTenant();
     const qc = useQueryClient();
     const toast = useToast();
@@ -226,8 +228,8 @@ export default function DashboardPage() {
                 <div className="panel">
                     <h2 style={{ fontSize: 14 }}><i className="fa-solid fa-arrow-trend-up" style={{ color: '#e09921', marginInlineEnd: 6 }} /> {t('dashboard.topMoving')} <span className="muted">{t('dashboard.last30Days')}</span></h2>
                     {(d.top_moving ?? []).length === 0 ? <EmptyState title={t('dashboard.noMovement')} /> : (
-                        <table className="data-table"><thead><tr><th>{t('sku')}</th><th>{t('dashboard.item')}</th><th>{t('dashboard.quantityOut')}</th></tr></thead>
-                            <tbody>{d.top_moving.map((t, i) => <tr key={i}><td>{t.sku}</td><td>{t.name}</td><td>{t.qty}</td></tr>)}</tbody></table>
+                        <table className="data-table"><thead><tr><SortTh sort={topMovingSort} col="sku">{t('sku')}</SortTh><SortTh sort={topMovingSort} col="item">{t('dashboard.item')}</SortTh><SortTh sort={topMovingSort} col="qty">{t('dashboard.quantityOut')}</SortTh></tr></thead>
+                            <tbody>{topMovingSort.apply(d.top_moving, { sku: (r) => r.sku, item: (r) => r.name, qty: (r) => r.qty }).map((t, i) => <tr key={i}><td>{t.sku}</td><td>{t.name}</td><td>{t.qty}</td></tr>)}</tbody></table>
                     )}
                 </div>
                 <div className="panel">

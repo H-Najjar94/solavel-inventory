@@ -1,18 +1,28 @@
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
 import { useCan } from '../stores/meta.jsx';
-import { EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import { EmptyState, Field, Skeleton, fieldErrors, SortTh } from '../components/ui.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 import {t} from '../i18n/index.js';
 import LandedCostSettingsCard from '../components/LandedCostSettingsCard.jsx';
 import { ConsumptionAccountPicker } from '../components/pickers.jsx';
 
 export default function SettingsPage() {
+    const roleAssignSort = useTableSort();
+    const roleSort = useTableSort();
+    const rateSort = useTableSort();
+    const reasonSort = useTableSort();
+    const ruleSort = useTableSort();
+    const unitSort = useTableSort();
+    const brandSort = useTableSort();
+    const categorySort = useTableSort();
+    const assignSort = useTableSort();
     const tr = useSettingsTranslation();
     const memberContext = React.useMemo(() => {
         const element = document.getElementById('member-management-context');
@@ -385,7 +395,7 @@ export default function SettingsPage() {
                     <div><span className="field-label">{tr('settings.warehouseScope.allowed')}</span>{(s.warehouses ?? []).map((warehouse) => <label className="check-inline" key={warehouse.id}><input type="checkbox" checked={warehouseAssignment.warehouse_ids.includes(Number(warehouse.id))} onChange={(e) => setWarehouseAssignment({ ...warehouseAssignment, warehouse_ids: e.target.checked ? [...warehouseAssignment.warehouse_ids, Number(warehouse.id)] : warehouseAssignment.warehouse_ids.filter((id) => id !== Number(warehouse.id)) })} /> {warehouse.code} · {warehouse.name}</label>)}</div>
                     <div className="settings-actions"><button className="btn btn--primary">{tr('settings.warehouseScope.save')}</button></div>
                 </form>
-                {(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.user')}</th><th>{tr('settings.common.warehouse')}</th></tr></thead><tbody>{(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).filter(row => !memberContext || Number(row.user_id) === Number(memberContext.id)).map((row) => <tr key={row.id}><td>{row.user_id}</td><td>{row.warehouse_id}</td></tr>)}</tbody></table>}
+                {(warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={assignSort} col="user">{tr('settings.common.user')}</SortTh><SortTh sort={assignSort} col="warehouse">{tr('settings.common.warehouse')}</SortTh></tr></thead><tbody>{assignSort.apply((warehouseAssignmentsQuery.data?.data ?? warehouseAssignmentsQuery.data ?? []).filter(row => !memberContext || Number(row.user_id) === Number(memberContext.id)), { user: (r) => r.user_id, warehouse: (r) => r.warehouse_id }).map((row) => <tr key={row.id}><td>{row.user_id}</td><td>{row.warehouse_id}</td></tr>)}</tbody></table>}
             </div>
 
             <div className="panel">
@@ -424,8 +434,8 @@ export default function SettingsPage() {
                         <button className="btn btn--primary">{tr('settings.master.saveConversion')}</button>
                     </div></form>
                 </div>
-                {(s.categories ?? []).length > 0 && <form onSubmit={saveCategoryEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.master.category')}</th><th>{tr('settings.master.parent')}</th><th>{tr('settings.master.level')}</th><th>{tr('settings.common.status')}</th><th></th></tr></thead><tbody>
-                    {(s.categories ?? []).map((c) => {
+                {(s.categories ?? []).length > 0 && <form onSubmit={saveCategoryEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={categorySort} col="category">{tr('settings.master.category')}</SortTh><th>{tr('settings.master.parent')}</th><th>{tr('settings.master.level')}</th><SortTh sort={categorySort} col="status">{tr('settings.common.status')}</SortTh><th></th></tr></thead><tbody>
+                    {categorySort.apply((s.categories ?? []), { category: (c) => c.name, status: (c) => (c.is_active ? 1 : 0) }).map((c) => {
                         const editing = editingCategory?.id === c.id;
                         return <tr key={c.id}>
                             <td>{editing ? <input className="input" value={editingCategory.name} onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })} /> : c.name}</td>
@@ -439,8 +449,8 @@ export default function SettingsPage() {
                         </tr>;
                     })}
                 </tbody></table></form>}
-                {(s.brands ?? []).length > 0 && <form onSubmit={saveBrandEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.master.brand')}</th><th>{tr('settings.common.status')}</th><th></th></tr></thead><tbody>
-                    {(s.brands ?? []).map((b) => {
+                {(s.brands ?? []).length > 0 && <form onSubmit={saveBrandEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={brandSort} col="brand">{tr('settings.master.brand')}</SortTh><SortTh sort={brandSort} col="status">{tr('settings.common.status')}</SortTh><th></th></tr></thead><tbody>
+                    {brandSort.apply((s.brands ?? []), { brand: (b) => b.name, status: (b) => (b.is_active ? 1 : 0) }).map((b) => {
                         const editing = editingBrand?.id === b.id;
                         return <tr key={b.id}>
                             <td>{editing ? <input className="input" value={editingBrand.name} onChange={(e) => setEditingBrand({ ...editingBrand, name: e.target.value })} /> : b.name}</td>
@@ -449,8 +459,8 @@ export default function SettingsPage() {
                         </tr>;
                     })}
                 </tbody></table></form>}
-                {(s.unit_conversions ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.master.from')}</th><th>{tr('settings.master.to')}</th><th>{tr('settings.master.factor')}</th><th>{tr('settings.common.item')}</th></tr></thead><tbody>
-                    {s.unit_conversions.map((c) => <tr key={c.id}><td>{c.from_unit?.code ?? c.from_unit_id}</td><td>{c.to_unit?.code ?? c.to_unit_id}</td><td>{c.factor}</td><td>{c.item?.sku ?? tr('settings.common.global')}</td></tr>)}
+                {(s.unit_conversions ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={unitSort} col="from">{tr('settings.master.from')}</SortTh><SortTh sort={unitSort} col="to">{tr('settings.master.to')}</SortTh><SortTh sort={unitSort} col="factor">{tr('settings.master.factor')}</SortTh><SortTh sort={unitSort} col="item">{tr('settings.common.item')}</SortTh></tr></thead><tbody>
+                    {unitSort.apply(s.unit_conversions, { from: (c) => c.from_unit?.code, to: (c) => c.to_unit?.code, factor: (c) => c.factor, item: (c) => c.item?.sku }).map((c) => <tr key={c.id}><td>{c.from_unit?.code ?? c.from_unit_id}</td><td>{c.to_unit?.code ?? c.to_unit_id}</td><td>{c.factor}</td><td>{c.item?.sku ?? tr('settings.common.global')}</td></tr>)}
                 </tbody></table>}
             </div>
 
@@ -487,8 +497,8 @@ export default function SettingsPage() {
                 {safetyResult && <div className="banner banner--info" style={{ marginTop: 12 }}>
                     {tr('settings.reorder.result', { demand: safetyResult.total_demand, days: safetyResult.lookback_days, average: safetyResult.average_daily_demand, lead: safetyResult.lead_time_demand, available: safetyResult.available_qty })}
                 </div>}
-                {(s.warehouse_reorder_rules ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.item')}</th><th>{tr('settings.common.warehouse')}</th><th>{tr('settings.reorder.pointShort')}</th><th>{tr('settings.reorder.qtyShort')}</th><th>{tr('settings.reorder.minMax')}</th><th>{tr('settings.reorder.safetyShort')}</th></tr></thead><tbody>
-                    {s.warehouse_reorder_rules.map((rule) => <tr key={rule.id}><td>{rule.item ? `${rule.item.sku} · ${rule.item.name}` : `#${rule.item_id}`}</td><td>{rule.warehouse ? `${rule.warehouse.code} · ${rule.warehouse.name}` : `#${rule.warehouse_id}`}</td><td>{rule.reorder_point ?? '—'}</td><td>{rule.reorder_qty ?? '—'}</td><td>{rule.min_stock ?? '—'} / {rule.max_stock ?? '—'}</td><td>{rule.safety_stock ?? '—'}</td></tr>)}
+                {(s.warehouse_reorder_rules ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={ruleSort} col="item">{tr('settings.common.item')}</SortTh><SortTh sort={ruleSort} col="warehouse">{tr('settings.common.warehouse')}</SortTh><th>{tr('settings.reorder.pointShort')}</th><th>{tr('settings.reorder.qtyShort')}</th><th>{tr('settings.reorder.minMax')}</th><th>{tr('settings.reorder.safetyShort')}</th></tr></thead><tbody>
+                    {ruleSort.apply(s.warehouse_reorder_rules, { item: (r) => r.item?.sku, warehouse: (r) => r.warehouse?.code }).map((rule) => <tr key={rule.id}><td>{rule.item ? `${rule.item.sku} · ${rule.item.name}` : `#${rule.item_id}`}</td><td>{rule.warehouse ? `${rule.warehouse.code} · ${rule.warehouse.name}` : `#${rule.warehouse_id}`}</td><td>{rule.reorder_point ?? '—'}</td><td>{rule.reorder_qty ?? '—'}</td><td>{rule.min_stock ?? '—'} / {rule.max_stock ?? '—'}</td><td>{rule.safety_stock ?? '—'}</td></tr>)}
                 </tbody></table>}
             </div>
 
@@ -499,8 +509,8 @@ export default function SettingsPage() {
                     <Field label={tr('settings.reasons.label')}><input className="input" value={reasonCode.label} onChange={(e) => setReasonCode({ ...reasonCode, label: e.target.value })} placeholder={tr('settings.reasons.labelPlaceholder')} /></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{tr('settings.reasons.save')}</button></div>
                 </form>
-                {(s.settings?.adjustment_reason_codes ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.common.code')}</th><th>{tr('settings.reasons.label')}</th><th>{tr('settings.common.status')}</th></tr></thead><tbody>
-                    {(s.settings.adjustment_reason_codes ?? []).map((code) => <tr key={code.code}><td>{code.code}</td><td>{code.label ?? code.code}</td><td>{tr(code.active === false ? 'settings.common.inactive' : 'settings.common.active')}</td></tr>)}
+                {(s.settings?.adjustment_reason_codes ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={reasonSort} col="code">{tr('settings.common.code')}</SortTh><SortTh sort={reasonSort} col="label">{tr('settings.reasons.label')}</SortTh><SortTh sort={reasonSort} col="status">{tr('settings.common.status')}</SortTh></tr></thead><tbody>
+                    {reasonSort.apply((s.settings.adjustment_reason_codes ?? []), { code: (c) => c.code, label: (c) => c.label, status: (c) => (c.active === false ? 0 : 1) }).map((code) => <tr key={code.code}><td>{code.code}</td><td>{code.label ?? code.code}</td><td>{tr(code.active === false ? 'settings.common.inactive' : 'settings.common.active')}</td></tr>)}
                 </tbody></table>}
             </div>
 
@@ -512,8 +522,8 @@ export default function SettingsPage() {
                     <Field label={tr('settings.currency.effectiveDate')}><input className="input" type="date" value={currencyRate.effective_date} onChange={(e) => setCurrencyRate({ ...currencyRate, effective_date: e.target.value })} required /></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{tr('settings.currency.save')}</button></div>
                 </form>
-                {(s.currency_rates ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.currency.currency')}</th><th>{tr('settings.currency.rateToBase')}</th><th>{tr('settings.currency.effective')}</th></tr></thead><tbody>
-                    {(s.currency_rates ?? []).map((r) => <tr key={r.id}><td>{r.currency_code}</td><td>{r.rate_to_base}</td><td>{r.effective_date}</td></tr>)}
+                {(s.currency_rates ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={rateSort} col="currency">{tr('settings.currency.currency')}</SortTh><SortTh sort={rateSort} col="rate">{tr('settings.currency.rateToBase')}</SortTh><SortTh sort={rateSort} col="effective">{tr('settings.currency.effective')}</SortTh></tr></thead><tbody>
+                    {rateSort.apply((s.currency_rates ?? []), { currency: (r) => r.currency_code, rate: (r) => r.rate_to_base, effective: (r) => r.effective_date }).map((r) => <tr key={r.id}><td>{r.currency_code}</td><td>{r.rate_to_base}</td><td>{r.effective_date}</td></tr>)}
                 </tbody></table>}
             </div>
 
@@ -532,16 +542,16 @@ export default function SettingsPage() {
                     </div>
                     <button className="btn btn--primary" disabled={customRole.permissions.length === 0}>{tr('settings.roles.save')}</button>
                 </form>
-                {(rolesQuery.data?.roles ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.roles.role')}</th><th>{tr('settings.roles.key')}</th><th>{tr('settings.roles.permissions')}</th><th>{tr('settings.roles.assignments')}</th><th>{tr('settings.common.status')}</th></tr></thead><tbody>
-                    {(rolesQuery.data?.roles ?? []).map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.key}</td><td>{(r.permissions ?? []).length}</td><td>{r.assignments_count ?? 0}</td><td>{tr(r.is_active ? 'settings.common.active' : 'settings.common.inactive')}</td></tr>)}
+                {(rolesQuery.data?.roles ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={roleSort} col="role">{tr('settings.roles.role')}</SortTh><SortTh sort={roleSort} col="key">{tr('settings.roles.key')}</SortTh><SortTh sort={roleSort} col="permissions">{tr('settings.roles.permissions')}</SortTh><SortTh sort={roleSort} col="assignments">{tr('settings.roles.assignments')}</SortTh><SortTh sort={roleSort} col="status">{tr('settings.common.status')}</SortTh></tr></thead><tbody>
+                    {roleSort.apply((rolesQuery.data?.roles ?? []), { role: (r) => r.name, key: (r) => r.key, permissions: (r) => (r.permissions ?? []).length, assignments: (r) => r.assignments_count ?? 0, status: (r) => (r.is_active ? 1 : 0) }).map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.key}</td><td>{(r.permissions ?? []).length}</td><td>{r.assignments_count ?? 0}</td><td>{tr(r.is_active ? 'settings.common.active' : 'settings.common.inactive')}</td></tr>)}
                 </tbody></table>}
                 <form className="fg2" onSubmit={assignRole} style={{ marginTop: 12 }}>
                     <Field label={memberContext?.name || tr('settings.warehouseScope.userId')}><input className="input" type="number" min="1" readOnly={!!memberContext} title={memberContext?.name} value={roleAssignment.user_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, user_id: e.target.value })} required /></Field>
                     <Field label={tr('settings.roles.role')}><select className="input" value={roleAssignment.role_id} onChange={(e) => setRoleAssignment({ ...roleAssignment, role_id: e.target.value })} required><option value="">{tr('settings.roles.select')}</option>{(rolesQuery.data?.roles ?? []).filter((r) => r.is_active).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{tr('settings.roles.assign')}</button></div>
                 </form>
-                {(rolesQuery.data?.assignments ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.roles.userId')}</th><th>{tr('settings.roles.role')}</th><th></th></tr></thead><tbody>
-                    {(rolesQuery.data?.assignments ?? []).filter(a => !memberContext || Number(a.user_id) === Number(memberContext.id)).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => unassignRole(a.user_id)} title={feedbackText('removeRole')} message={feedbackText('removeRoleBody')} action={feedbackText('removeRole')}>{tr('settings.common.remove')}</ConfirmedActionButton></td></tr>)}
+                {(rolesQuery.data?.assignments ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={roleAssignSort} col="user">{tr('settings.roles.userId')}</SortTh><SortTh sort={roleAssignSort} col="role">{tr('settings.roles.role')}</SortTh><th></th></tr></thead><tbody>
+                    {roleAssignSort.apply((rolesQuery.data?.assignments ?? []).filter(a => !memberContext || Number(a.user_id) === Number(memberContext.id)), { user: (a) => a.user_id, role: (a) => a.role?.name }).map((a) => <tr key={a.id}><td>{a.user_id}</td><td>{a.role?.name ?? `#${a.role_id}`}</td><td><ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => unassignRole(a.user_id)} title={feedbackText('removeRole')} message={feedbackText('removeRoleBody')} action={feedbackText('removeRole')}>{tr('settings.common.remove')}</ConfirmedActionButton></td></tr>)}
                 </tbody></table>}
             </div>
 

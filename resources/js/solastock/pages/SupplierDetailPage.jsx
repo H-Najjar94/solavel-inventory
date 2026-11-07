@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, Skeleton, StatusBadge, EmptyState, MetricCard, Tabs } from '../components/ui.jsx';
+import { Breadcrumbs, Skeleton, StatusBadge, EmptyState, MetricCard, Tabs, SortTh } from '../components/ui.jsx';
 import { AccessNotice } from '../components/PlanAccess.jsx';
 import PurchaseHistoryPanel from '../components/PurchaseHistoryPanel.jsx';
 import VendorPricelistTransfer from '../components/VendorPricelistTransfer.jsx';
@@ -73,6 +74,7 @@ export default function SupplierDetailPage() {
 
 /** Items this supplier sells, with the supplier's own SKU, status and current price. */
 function SupplierItemsTab({ supplierId, access }) {
+    const supItemSort = useTableSort();
     const { t } = useI18n();
     const [searchInput, setSearchInput] = useState('');
     const [search, setSearch] = useState('');
@@ -113,15 +115,15 @@ function SupplierItemsTab({ supplierId, access }) {
                     <>
                         <div className="tbl-wrap"><table className="data-table st-table">
                             <thead><tr>
-                                <th>{t('supplierTerms.common.item')}</th>
-                                <th>{t('supplierTerms.common.status')}</th>
-                                <th>{t('supplierTerms.list.supplierProduct')}</th>
+                                <SortTh sort={supItemSort} col="item">{t('supplierTerms.common.item')}</SortTh>
+                                <SortTh sort={supItemSort} col="status">{t('supplierTerms.common.status')}</SortTh>
+                                <SortTh sort={supItemSort} col="product">{t('supplierTerms.list.supplierProduct')}</SortTh>
                                 <th className="num">{t('supplierTerms.list.currentPrice')}</th>
                                 <th>{t('supplierTerms.list.moqMultiple')}</th>
-                                <th className="num">{t('supplierTerms.list.leadTime')}</th>
+                                <SortTh sort={supItemSort} col="leadTime" className="num">{t('supplierTerms.list.leadTime')}</SortTh>
                                 <th />
                             </tr></thead>
-                            <tbody>{rows.map((r) => {
+                            <tbody>{supItemSort.apply(rows, { item: (r) => r.item?.name, status: (r) => r.status, product: (r) => r.supplier_sku, leadTime: (r) => r.lead_time_days }).map((r) => {
                                 const tier = currentTier(r);
                                 const unit = unitLabel(r.purchase_unit);
                                 return (

@@ -7,7 +7,8 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, Field, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
+import { Breadcrumbs, Field, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge, SortTh } from '../components/ui.jsx';
+import { useTableSort } from '../hooks/useTableSort.js';
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import ItemSuppliersPanel from '../components/ItemSuppliersPanel.jsx';
@@ -193,11 +194,12 @@ function MovementDrawer({ movement, open, onClose }) {
 
 // Compact movements table → opens the movement drawer.
 function MovementsTable({ rows, onRow }) {
+    const movementSort = useTableSort();
     if (!rows.length) return <EmptyState title={t('itemDetail.noMovements')} hint={t('itemDetail.noMovementsHint')} />;
     return (
         <table className="data-table">
-            <thead><tr><th>{t('itemDetail.date')}</th><th>{t('itemDetail.direction')}</th><th>{t('itemDetail.quantity')}</th><th>{t('itemDetail.unitCost')}</th><th>{t('itemDetail.runningQuantity')}</th><th>{t('itemDetail.warehouse')}</th><th>{t('itemDetail.source')}</th><th></th></tr></thead>
-            <tbody>{rows.map((m) => (
+            <thead><tr><SortTh sort={movementSort} col="date">{t('itemDetail.date')}</SortTh><SortTh sort={movementSort} col="direction">{t('itemDetail.direction')}</SortTh><SortTh sort={movementSort} col="quantity">{t('itemDetail.quantity')}</SortTh><SortTh sort={movementSort} col="unitCost">{t('itemDetail.unitCost')}</SortTh><SortTh sort={movementSort} col="running">{t('itemDetail.runningQuantity')}</SortTh><SortTh sort={movementSort} col="warehouse">{t('itemDetail.warehouse')}</SortTh><th>{t('itemDetail.source')}</th><th></th></tr></thead>
+            <tbody>{movementSort.apply(rows, { date: (m) => m.moved_at, direction: (m) => m.direction, quantity: (m) => m.quantity, unitCost: (m) => m.unit_cost, running: (m) => m.balance_qty_after, warehouse: (m) => m.warehouse_name }).map((m) => (
                 <tr key={m.id} className="clickable-row" onClick={() => onRow(m)} title={t('itemDetail.viewMovement')}>
                     <td>{m.moved_at}</td><td><Badge tone={m.direction === 'out' ? 'warn' : 'ok'}>{t(`document.direction.${m.direction}`, m.direction)}</Badge></td>
                     <td>{qty(m.quantity)}</td><td>{m.unit_cost ? money(m.unit_cost) : '—'}</td>
@@ -236,6 +238,8 @@ function WarehouseCards({ cards, onValuation }) {
 }
 
 export default function ItemDetailPage() {
+    const variantSort = useTableSort();
+    const barcodeSort = useTableSort();
     const { id } = useParams();
     const gate = useCanCreate('inventory.manage_items');
     const qc = useQueryClient();
@@ -448,8 +452,8 @@ export default function ItemDetailPage() {
                 <div className="overview-grid">
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.itemBarcodes')}</h3></div><div className="card-body">
                         {(data.barcodes ?? []).length === 0 ? <EmptyState title={t('itemDetail.noBarcodes')} hint={t('itemDetail.noBarcodesHint')} />
-                            : <table className="data-table"><thead><tr><th>{t('itemDetail.code')}</th><th>{t('itemDetail.type')}</th><th></th></tr></thead><tbody>
-                                {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
+                            : <table className="data-table"><thead><tr><SortTh sort={barcodeSort} col="code">{t('itemDetail.code')}</SortTh><SortTh sort={barcodeSort} col="type">{t('itemDetail.type')}</SortTh><th></th></tr></thead><tbody>
+                                {barcodeSort.apply((data.barcodes ?? []), { code: (b) => b.barcode, type: (b) => b.type }).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
                                     {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>{t('itemDetail.makePrimary')}</button>}
                                     {gate.allowed && <ConfirmedActionButton className="btn btn--sm" onConfirm={() => removeBarcode(b.id)} title={feedbackText('deleteBarcode')} message={feedbackText('deleteBarcodeBody')} action={feedbackText('deleteBarcode')}>{t('itemDetail.delete')}</ConfirmedActionButton>}
                                 </td></tr>)}
@@ -501,8 +505,8 @@ export default function ItemDetailPage() {
                     </dl></div></div>
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.variants')}</h3></div><div className="card-body">
                         {(item.variants?.length ?? 0) === 0 ? <EmptyState title={t('itemDetail.noVariants')} hint={t('itemDetail.noVariantsHint')} />
-                            : <table className="data-table"><thead><tr><th>{t('sku')}</th><th>{t('itemDetail.attributes')}</th><th>{t('itemDetail.barcode')}</th><th>{t('itemDetail.status')}</th><th></th></tr></thead><tbody>
-                                {item.variants.map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteVariant(v.id)} title={feedbackText('deleteVariant')} message={feedbackText('deleteVariantBody')} action={feedbackText('deleteVariant')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
+                            : <table className="data-table"><thead><tr><SortTh sort={variantSort} col="sku">{t('sku')}</SortTh><th>{t('itemDetail.attributes')}</th><SortTh sort={variantSort} col="barcode">{t('itemDetail.barcode')}</SortTh><SortTh sort={variantSort} col="status">{t('itemDetail.status')}</SortTh><th></th></tr></thead><tbody>
+                                {variantSort.apply(item.variants, { sku: (v) => v.sku, barcode: (v) => v.barcode_primary, status: (v) => (v.is_active ? 1 : 0) }).map((v) => <tr key={v.id}><td><bdi>{v.sku}</bdi></td><td>{Object.entries(v.variant_attributes ?? {}).map(([k, val]) => `${k}: ${val}`).join(', ') || '—'}</td><td><bdi>{v.barcode_primary ?? '—'}</bdi></td><td>{t(v.is_active ? 'itemDetail.active' : 'itemDetail.inactive')}</td><td>{gate.allowed && <ConfirmedActionButton className="btn btn--sm btn--danger" onConfirm={() => deleteVariant(v.id)} title={feedbackText('deleteVariant')} message={feedbackText('deleteVariantBody')} action={feedbackText('deleteVariant')}>{t('itemDetail.delete')}</ConfirmedActionButton>}</td></tr>)}
                             </tbody></table>}
                         {gate.allowed && <form className="fg2" onSubmit={addVariant} style={{ marginTop: 12 }}>
                             <Field label={t('itemDetail.variantSku')} required><input className="input" placeholder={t('itemDetail.variantSku')} value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} required dir="ltr" /></Field>

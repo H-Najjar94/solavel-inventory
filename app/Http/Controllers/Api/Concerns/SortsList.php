@@ -2,19 +2,24 @@
 
 namespace App\Http\Controllers\Api\Concerns;
 
-use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 /**
  * Whitelisted column sorting for paged list endpoints (`?sort=<key>&dir=asc|desc`).
  *
- * The map is public column key => SQL column (e.g. 'items.name') or a Closure
- * receiving ($query, $direction) for ordering that needs a subquery. Unknown
- * keys are ignored so the endpoint keeps its default order. Raw input is never
- * interpolated: only the whitelisted value reaches the query.
+ * The map is public key => SQL column, or a spec from sortByRelated() /
+ * sortByExpression(). Unknown keys are ignored, and a mapping whose columns
+ * cannot be verified in the schema falls back to the endpoint's default order
+ * (a sort request must never cause a 500). Raw input never reaches SQL.
  */
 trait SortsList
 {
+    /** @var array<string, bool> */
+    private static array $sortColumnCache = [];
+
     /** Resolve a validated [key, direction] pair, or null for the default order. */
     protected function resolveListSort(Request $request, array $map): ?array
     {
@@ -27,9 +32,23 @@ trait SortsList
         return [$key, $dir];
     }
 
+    protected function sortColumnExists(string $connection, string $table, string $column): bool
+    {
+        $cacheKey = "{$connection}.{$table}.{$column}";
+        if (! array_key_exists($cacheKey, self::$sortColumnCache)) {
+            try {
+                self::$sortColumnCache[$cacheKey] = Schema::connection($connection)->hasColumn($table, $column);
+            } catch (Throwable) {
+                self::$sortColumnCache[$cacheKey] = false;
+            }
+        }
+
+        return self::$sortColumnCache[$cacheKey];
+    }
+
     /**
-     * Replace the default order with the requested one. NULLs sort last and the
-     * tiebreaker keeps paging deterministic.
+     * Replace the default order with the requested one (NULLs last, stable
+     * tiebreaker). The query is left untouched unless a valid, verifiable sort applies.
      */
     protected function applyListSort($query, Request $request, array $map, string $tiebreaker = 'id')
     {
@@ -40,33 +59,69 @@ trait SortsList
         [$key, $dir] = $resolved;
         $target = $map[$key];
 
-        $query->reorder();
-        if ($target instanceof Closure) {
-            $target($query, $dir);
-        } else {
-            $wrapped = $query->getQuery()->getGrammar()->wrap($target);
-            $query->orderByRaw("({$wrapped} is null) asc")->orderBy($target, $dir);
+        try {
+            $connection = $query->getQuery()->getConnection()->getName();
+            $table = $query->getModel()->getTable();
+            $grammar = $query->getQuery()->getGrammar();
+            if (! $this->sortColumnExists($connection, $table, $tiebreaker)) {
+                return $query;
+            }
+
+            if (is_string($target)) {
+                if (! $this->sortColumnExists($connection, $table, $target)) {
+                    return $query;
+                }
+                $orders = [[$grammar->wrap($table.'.'.$target).' is null', []], [$table.'.'.$target, $dir]];
+            } elseif (isset($target['related'])) {
+                [$relTable, $relColumn, $fk] = $target['related'];
+                foreach ([[$table, $fk], [$relTable, 'id'], [$relTable, $relColumn]] as [$t, $c]) {
+                    if (! $this->sortColumnExists($connection, $t, $c)) {
+                        return $query;
+                    }
+                }
+                $sub = DB::connection($connection)->table($relTable)->select($relColumn)
+                    ->whereColumn("{$relTable}.id", "{$table}.{$fk}")->limit(1);
+                $orders = [['('.$sub->toSql().') is null', $sub->getBindings()], [$sub, $dir]];
+            } elseif (isset($target['expr'])) {
+                foreach ($target['columns'] as $column) {
+                    if (! $this->sortColumnExists($connection, $table, $column)) {
+                        return $query;
+                    }
+                }
+                $orders = [["({$target['expr']}) is null", []], [DB::raw("({$target['expr']})"), $dir]];
+            } else {
+                return $query;
+            }
+        } catch (Throwable) {
+            return $query;
         }
-        $query->orderBy($tiebreaker, $dir);
+
+        $query->reorder();
+        foreach ($orders as [$by, $arg]) {
+            if (is_string($by) && is_array($arg)) {
+                if (str_ends_with($by, ' is null')) {
+                    $query->orderByRaw($by.' asc', $arg);
+                    continue;
+                }
+                $query->orderBy($by, $arg);
+                continue;
+            }
+            $query->orderBy($by, $arg);
+        }
+        $query->orderBy($table.'.'.$tiebreaker, $dir);
 
         return $query;
     }
 
     /** Whitelist entry ordering by a column of a related table (e.g. warehouse name via warehouse_id). */
-    protected function sortByRelated(string $table, string $column, string $foreignKey): Closure
+    protected function sortByRelated(string $table, string $column, string $foreignKey): array
     {
-        return function ($query, string $dir) use ($table, $column, $foreignKey): void {
-            $sub = \Illuminate\Support\Facades\DB::table($table)->select($column)
-                ->whereColumn("{$table}.id", $query->getModel()->getTable().'.'.$foreignKey)->limit(1);
-            $query->orderByRaw('('.$sub->toSql().') is null', $sub->getBindings())->orderBy($sub, $dir);
-        };
+        return ['related' => [$table, $column, $foreignKey]];
     }
 
-    /** Whitelist entry ordering by a raw, developer-written SQL expression (never request input). */
-    protected function sortByExpression(string $sql): Closure
+    /** Whitelist entry ordering by a developer-written SQL expression over listed base-table columns. */
+    protected function sortByExpression(string $sql, array $columns): array
     {
-        return function ($query, string $dir) use ($sql): void {
-            $query->orderByRaw("({$sql}) is null asc")->orderByRaw("({$sql}) ".($dir === 'desc' ? 'desc' : 'asc'));
-        };
+        return ['expr' => $sql, 'columns' => $columns];
     }
 }

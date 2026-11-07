@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTableSort } from '../hooks/useTableSort.js';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -29,6 +29,11 @@ export default function ReportsPage() {
     const [applied, setApplied] = useState(0);
     const [schedule, setSchedule] = useState({ name: '', recipients: '', frequency: 'weekly', format: 'csv' });
 
+    const dataSort = useTableSort();
+    const scheduleSort = useTableSort();
+    const resetDataSort = dataSort.reset;
+    useEffect(() => { resetDataSort(); }, [active, resetDataSort]);
+
     function selectReport(k) { setActive(k); localStorage.setItem(LAST_KEY, k); setApplied((n) => n + 1); }
 
     const params = {
@@ -54,8 +59,6 @@ export default function ReportsPage() {
     });
     const schedules = scheduleSort.apply(schedulesQuery.data?.data?.schedules ?? [], { lastStatus: (x) => x.last_status, nextRun: (x) => x.next_run_at, recipients: (x) => (x.recipients ?? []).join(', ') });
     const cols = report?.columns ?? [];
-    const dataSort = useTableSort();
-    const scheduleSort = useTableSort();
     const rows = dataSort.apply(report?.rows ?? []);
     const summary = report?.summary ?? {};
     const columnLabels = report?.column_labels ?? {};

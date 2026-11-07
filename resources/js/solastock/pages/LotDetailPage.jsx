@@ -1,18 +1,20 @@
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, Skeleton, Tabs, EmptyState } from '../components/ui.jsx';
+import { Breadcrumbs, Skeleton, Tabs, EmptyState, SortTh } from '../components/ui.jsx';
 import { LedgerPreview, SourceDocumentLink } from '../components/document.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { traceabilityPageText, traceabilityStatusText } from '../i18n/traceabilityPages.js';
 
 export default function LotDetailPage() {
+    const locSort = useTableSort();
     const { locale } = useI18n();
     const text = (key, params) => traceabilityPageText(locale, key, params);
     const { id } = useParams();
@@ -70,8 +72,8 @@ export default function LotDetailPage() {
             ]} active={tab} onChange={setTab} />
 
             {tab === 'summary' && <div className="panel"><table className="data-table">
-                <thead><tr><th>{text('traceabilityPages.lotDetail.warehouse')}</th><th>{text('traceabilityPages.lotDetail.bin')}</th><th>{text('traceabilityPages.lotDetail.onHand')}</th><th>{text('traceabilityPages.lotDetail.reserved')}</th></tr></thead>
-                <tbody>{locations.map((b, i) => <tr key={i}><td><bdi>{b.warehouse ?? `#${b.warehouse_id}`}</bdi></td><td><bdi>{b.bin ?? (b.bin_id ? `#${b.bin_id}` : '—')}</bdi></td><td><bdi>{b.on_hand_qty}</bdi></td><td><bdi>{b.reserved_qty}</bdi></td></tr>)}
+                <thead><tr><SortTh sort={locSort} col="warehouse">{text('traceabilityPages.lotDetail.warehouse')}</SortTh><SortTh sort={locSort} col="bin">{text('traceabilityPages.lotDetail.bin')}</SortTh><SortTh sort={locSort} col="onhand">{text('traceabilityPages.lotDetail.onHand')}</SortTh><SortTh sort={locSort} col="reserved">{text('traceabilityPages.lotDetail.reserved')}</SortTh></tr></thead>
+                <tbody>{locSort.apply(locations, { warehouse: (b) => b.warehouse, bin: (b) => b.bin, onhand: (b) => b.on_hand_qty, reserved: (b) => b.reserved_qty }).map((b, i) => <tr key={i}><td><bdi>{b.warehouse ?? `#${b.warehouse_id}`}</bdi></td><td><bdi>{b.bin ?? (b.bin_id ? `#${b.bin_id}` : '—')}</bdi></td><td><bdi>{b.on_hand_qty}</bdi></td><td><bdi>{b.reserved_qty}</bdi></td></tr>)}
                 {locations.length === 0 && <tr><td colSpan={4} className="muted">{text('traceabilityPages.lotDetail.noLocations')}</td></tr>}</tbody>
             </table></div>}
             {tab === 'sources' && <div className="panel">
