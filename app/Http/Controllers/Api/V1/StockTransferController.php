@@ -36,6 +36,14 @@ class StockTransferController extends ApiController
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where(fn ($q) => $q->where('from_warehouse_id', $request->integer('warehouse_id'))->orWhere('to_warehouse_id', $request->integer('warehouse_id'))))
             ->orderByDesc('id');
 
+        $this->applyListSort($query, $request, [
+            'number' => 'transfer_number',
+            'from' => $this->sortByRelated('warehouses', 'name', 'from_warehouse_id'),
+            'to' => $this->sortByRelated('warehouses', 'name', 'to_warehouse_id'),
+            'date' => 'transfer_date',
+            'status' => 'status',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockTransfer $transfer) {
             $transfer->setAttribute('from_warehouse_name', $transfer->fromWarehouse?->name);
             $transfer->setAttribute('from_warehouse_code', $transfer->fromWarehouse?->code);

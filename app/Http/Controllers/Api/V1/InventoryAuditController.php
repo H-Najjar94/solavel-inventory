@@ -21,6 +21,8 @@ class InventoryAuditController extends ApiController
             ->orderByDesc('created_at')
             ->orderByDesc('id');
 
+        $this->applyListSort($query, $request, ['time' => 'created_at', 'action' => 'action', 'entity' => 'entity_type']);
+
         return $this->paginated($query->paginate($perPage)->through(fn (InventoryAuditLog $row) => [
             'id' => $row->id,
             'created_at' => optional($row->created_at)->toDateTimeString(),

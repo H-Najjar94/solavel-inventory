@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { mockItems } from '../services/mockData.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Field } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Field, SortTh } from '../components/ui.jsx';
 import { useMeta } from '../stores/meta.jsx';
 import { useToast } from '../stores/toast.jsx';
 import { t } from '../i18n/index.js';
@@ -22,9 +23,10 @@ export default function ItemsPage() {
     const [perPage, setPerPage] = useState(25);
     const [selected, setSelected] = useState([]);
     const [bulk, setBulk] = useState({ field: 'is_active', value: '1' });
+    const sort = useTableSort();
     const { data, isMock } = useApiQuery(
-        ['items', search, type, status, page, perPage],
-        () => api.items({ search, item_type: type || undefined, stock_status: status || undefined, page, per_page: perPage }),
+        ['items', search, type, status, page, perPage, sort.key, sort.dir],
+        () => api.items({ ...sort.params, search, item_type: type || undefined, stock_status: status || undefined, page, per_page: perPage }),
         { fallback: mockItems, select: (response) => ({ rows: response?.data ?? [], meta: response?.meta ?? {} }) }
     );
     const items = Array.isArray(data) ? data : (data?.rows ?? []);
@@ -33,7 +35,7 @@ export default function ItemsPage() {
     const lastPage = Math.max(1, Number(pagination.last_page ?? 1));
     const from = total === 0 ? 0 : (page - 1) * perPage + 1;
     const to = Math.min(total, from + items.length - 1);
-    useEffect(() => { setPage(1); }, [search, type, status, perPage]);
+    useEffect(() => { setPage(1); }, [search, type, status, perPage, sort.key, sort.dir]);
     useEffect(() => { if (page > lastPage) setPage(lastPage); }, [page, lastPage]);
     const visibleSku = (sku) => /^(?:FIN-\d+-\d+|AUTO-[A-Z0-9]+)$/i.test(String(sku || '')) ? '' : String(sku || '');
     const allSelected = items.length > 0 && selected.length === items.length;
@@ -93,7 +95,7 @@ export default function ItemsPage() {
                 <div style={{ alignSelf: 'end' }}><button className="btn btn--primary" disabled={selected.length === 0}>{t('items.apply')}</button></div>
             </form>}
             <div className="index-table-scroll"><table className="data-table">
-                <thead><tr><th><input type="checkbox" aria-label={t('items.selectAll')} checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><th>SKU</th><th>{t('name')}</th><th>{t('type')}</th><th>{t('category')}</th><th>{t('items.cost', 'Cost')}</th><th>{t('items.salesPrice')}</th><th>{t('document.status', 'Status')}</th></tr></thead>
+                <thead><tr><th><input type="checkbox" aria-label={t('items.selectAll')} checked={allSelected} onChange={(e) => setSelected(e.target.checked ? items.map((it) => it.id) : [])} /></th><th></th><SortTh sort={sort} col="sku">SKU</SortTh><SortTh sort={sort} col="name">{t('name')}</SortTh><SortTh sort={sort} col="type">{t('type')}</SortTh><SortTh sort={sort} col="category">{t('category')}</SortTh><SortTh sort={sort} col="cost">{t('items.cost', 'Cost')}</SortTh><SortTh sort={sort} col="price">{t('items.salesPrice')}</SortTh><th>{t('document.status', 'Status')}</th></tr></thead>
                 <tbody>
                     {items.length === 0 && <tr><td colSpan="9"><EmptyState title={t('items.noItems')} /></td></tr>}
                     {items.map((it) => (

@@ -37,6 +37,13 @@ class WarehouseController extends ApiController
             ->orderBy('name');
         $this->warehouseAccess->scope($query, 'id');
 
+        $this->applyListSort($query, $request, [
+            'code' => 'code',
+            'name' => 'name',
+            'type' => 'type',
+            'status' => 'is_active',
+        ]);
+
         return $this->paginated(
             $query->paginate($perPage)->withQueryString()->through(function ($w) use ($default) {
                 $w->setAttribute('is_default', (int) $w->id === (int) $default);

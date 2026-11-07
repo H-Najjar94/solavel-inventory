@@ -4103,5 +4103,7 @@
   "integration.accountType.cogs": "Cost of Goods Sold",
   "pagination.label": "List pagination",
   "pagination.showing": "Showing :from–:to of :total",
-  "pagination.rows": "Rows"
+  "pagination.rows": "Rows",
+  "table.sortBy": "Sort by :column",
+  "table.sort": "Sort"
 }

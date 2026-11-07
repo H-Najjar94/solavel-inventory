@@ -21,6 +21,12 @@ class SupplierController extends ApiController
             ->when($request->has('is_active'), fn ($q) => $q->where('is_active', $request->boolean('is_active')))
             ->orderBy('name');
 
+        $this->applyListSort($query, $request, [
+            'code' => 'code',
+            'name' => 'name',
+            'status' => 'is_active',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 

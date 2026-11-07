@@ -44,6 +44,14 @@ class GoodsReceiptController extends ApiController
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
 
+        $this->applyListSort($query, $request, [
+            'number' => 'grn_number',
+            'po' => $this->sortByRelated('purchase_orders', 'po_number', 'purchase_order_id'),
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'date' => 'receipt_date',
+            'status' => 'status',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (GoodsReceipt $grn) {
             $grn->setAttribute('warehouse_name', $grn->warehouse?->name);
             $grn->setAttribute('warehouse_code', $grn->warehouse?->code);

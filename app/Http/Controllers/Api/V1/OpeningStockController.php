@@ -61,6 +61,14 @@ class OpeningStockController extends ApiController
             ->when($request->filled('warehouse_id'), fn ($q) => $q->where('warehouse_id', (int) $request->query('warehouse_id')))
             ->orderByDesc('id');
 
+        $this->applyListSort($query, $request, [
+            'number' => 'entry_number',
+            'date' => 'opening_date',
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'status' => 'status',
+            'value' => 'total_value',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (OpeningStockEntry $entry) {
             $entry->setAttribute('warehouse_name', $entry->warehouse?->name);
             $entry->setAttribute('warehouse_code', $entry->warehouse?->code);

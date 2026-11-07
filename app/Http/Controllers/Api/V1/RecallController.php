@@ -26,6 +26,13 @@ class RecallController extends ApiController
             ->when($request->filled('item_id'), fn ($q) => $q->where('item_id', (int) $request->query('item_id')))
             ->orderByDesc('id');
 
+        $this->applyListSort($query, $request, [
+            'number' => 'recall_number',
+            'item' => $this->sortByRelated('items', 'name', 'item_id'),
+            'scope' => 'scope',
+            'status' => 'status',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 

@@ -1,15 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
 export default function RecallsPage() {
     const { t } = useI18n();
     const gate = useCanCreate('inventory.manage_recalls');
-    const { data, isError, isLoading, isFetching, error, isMock, refetch } = useApiQuery(['recalls'], () => api.recalls({ per_page: 50 }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isError, isLoading, isFetching, error, isMock, refetch } = useApiQuery(['recalls', sort.key, sort.dir], () => api.recalls({ ...sort.params, per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     return (
         <section className="page index-page">
@@ -20,7 +22,7 @@ export default function RecallsPage() {
                     title={gate.allowed ? '' : gate.reason}>{t('recalls.list.new', 'New recall')}</Link>}</header>
             <p className="muted">{t('recalls.list.description', 'A recall flags affected lots or serial numbers and calculates the impact from the canonical stock ledger. It does not notify customers or create accounting entries.')}</p>
             {!data && (isLoading || isFetching) ? <div className="card"><div className="card-body"><Skeleton rows={4}/></div></div> : isError ? <EmptyState title={t([402,403].includes(error?.status)?'uiAccess.title':'recalls.list.loadErrorTitle')} hint={t(error?.status===403?'uiAccess.roleHint':error?.status===402?'uiAccess.planHint':'recalls.list.loadErrorHint')} action={![402,403].includes(error?.status)&&<button type="button" className="btn" onClick={()=>refetch()}>{t('recalls.list.retry')}</button>} /> : rows.length === 0 ? <EmptyState title={t('recalls.list.emptyTitle', 'No recalls')} hint={t('recalls.list.emptyHint', 'Open a recall case to trace and quarantine affected stock.')} /> : (
-                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('recalls.list.number', 'Recall #')}</th><th>{t('recalls.common.item', 'Item')}</th><th>{t('recalls.common.scope', 'Scope')}</th><th>{t('recalls.common.reason', 'Reason')}</th><th>{t('recalls.common.status', 'Status')}</th></tr></thead>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="number">{t('recalls.list.number', 'Recall #')}</SortTh><SortTh sort={sort} col="item">{t('recalls.common.item', 'Item')}</SortTh><SortTh sort={sort} col="scope">{t('recalls.common.scope', 'Scope')}</SortTh><th>{t('recalls.common.reason', 'Reason')}</th><SortTh sort={sort} col="status">{t('recalls.common.status', 'Status')}</SortTh></tr></thead>
                 <tbody>{rows.map((r) => (<tr key={r.id}><td><Link to={`/recalls/${r.id}`}><bdi>{r.recall_number}</bdi></Link></td><td><bdi>{r.item ? `${r.item.sku} · ${r.item.name}` : `#${r.item_id}`}</bdi></td><td>{t(`recalls.scope.${r.scope}`, r.scope)}</td><td>{r.reason ?? '—'}</td><td><span className="badge badge--muted">{t(`recalls.status.${r.status}`, r.status)}</span></td></tr>))}</tbody></table></div>
             )}
         </section>

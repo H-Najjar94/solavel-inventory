@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
 export default function CustomersPage() {
     const { t } = useI18n();
     const gate = useCanCreate('inventory.manage_sales_orders');
     const [search, setSearch] = useState('');
-    const { data, isMock, isLoading, isError, refetch } = useApiQuery(['customers', search], () => api.customers({ search, per_page: 50 }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isMock, isLoading, isError, refetch } = useApiQuery(['customers', search, sort.key, sort.dir], () => api.customers({ ...sort.params, search, per_page: 50 }), { fallback: [] });
     const list = Array.isArray(data) ? data : (data?.data ?? []);
     const gateReason = gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied');
     return (
@@ -32,7 +34,7 @@ export default function CustomersPage() {
                     action={<button type="button" className="btn" onClick={() => refetch()}>{t('partners.common.retry')}</button>} />
             ) : list.length === 0 ? <div className="customers-empty"><div className="customers-empty-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h2m4 0h2M8 11h2m4 0h2"/></svg></div><EmptyState title={t(search?'partners.customers.list.noMatches':'partners.customers.list.emptyTitle')} hint={t(search?'partners.customers.list.noMatchesHint':'partners.customers.list.emptyHint')}
                 action={search ? <button className="btn" type="button" onClick={() => setSearch('')}>{t('partners.customers.list.clearSearch')}</button> : gate.allowed ? <Link className="btn btn--primary" to="/customers/new">+ {t('partners.customers.list.new')}</Link> : undefined} /></div> : (
-                <div className="tbl-wrap customers-table"><table className="data-table"><thead><tr><th>{t('partners.common.code')}</th><th>{t('partners.common.name')}</th><th>{t('partners.common.email')}</th><th>{t('partners.common.status')}</th></tr></thead>
+                <div className="tbl-wrap customers-table"><table className="data-table"><thead><tr><SortTh sort={sort} col="code">{t('partners.common.code')}</SortTh><SortTh sort={sort} col="name">{t('partners.common.name')}</SortTh><th>{t('partners.common.email')}</th><SortTh sort={sort} col="status">{t('partners.common.status')}</SortTh></tr></thead>
                 <tbody>{list.map((s) => <tr key={s.id}><td><Link to={`/customers/${s.id}`}><bdi>{s.code}</bdi></Link></td><td><Link className="customers-name" to={`/customers/${s.id}`}>{s.name}</Link></td><td><bdi>{s.contact?.email ?? '—'}</bdi></td><td><span className={`customers-status ${s.is_active?'is-active':''}`}><span aria-hidden="true" />{s.is_active ? t('partners.common.active') : t('partners.common.inactive')}</span></td></tr>)}</tbody></table></div>
             )}
             </section>

@@ -4115,5 +4115,7 @@
   "integration.accountType.cogs": "Custo das Mercadorias Vendidas",
   "pagination.label": "Paginação da lista",
   "pagination.showing": "A mostrar :from–:to de :total",
-  "pagination.rows": "Linhas"
+  "pagination.rows": "Linhas",
+  "table.sortBy": "Ordenar por :column",
+  "table.sort": "Ordenar"
 }

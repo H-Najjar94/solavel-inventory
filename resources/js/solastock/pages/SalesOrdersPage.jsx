@@ -1,16 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, SortTh } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
 export default function SalesOrdersPage() {
     const { t } = useI18n();
     const gate = useCanCreate('inventory.manage_sales_orders');
-    const { data, isMock } = useApiQuery(['sales-orders'], () => api.salesOrders({ per_page: 50 }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isMock } = useApiQuery(['sales-orders', sort.key, sort.dir], () => api.salesOrders({ ...sort.params, per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     return (
         <section className="page index-page">
@@ -21,7 +23,7 @@ export default function SalesOrdersPage() {
                     title={gate.allowed ? '' : gate.reason}>{t('salesOrders.list.new', 'New sales order')}</Link>}</header>
             <p className="muted">{t('salesOrders.list.description', 'Fulfillment documents only — SolaStock reserves and ships stock. Invoices and accounting remain in SolaCount.')}</p>
             {rows.length === 0 ? <EmptyState title={t('salesOrders.list.emptyTitle', 'No sales orders')} hint={t('salesOrders.list.emptyHint', 'Create a sales order to reserve, pick, pack, and ship stock.')} /> : (
-                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('salesOrders.list.orderNumberShort', 'Order #')}</th><th>{t('salesOrders.common.customer', 'Customer')}</th><th>{t('salesOrders.list.date', 'Date')}</th><th>{t('salesOrders.common.warehouse', 'Warehouse')}</th><th>{t('salesOrders.common.status', 'Status')}</th><th>{t('salesOrders.list.total', 'Total')}</th></tr></thead>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="number">{t('salesOrders.list.orderNumberShort', 'Order #')}</SortTh><SortTh sort={sort} col="customer">{t('salesOrders.common.customer', 'Customer')}</SortTh><SortTh sort={sort} col="date">{t('salesOrders.list.date', 'Date')}</SortTh><SortTh sort={sort} col="warehouse">{t('salesOrders.common.warehouse', 'Warehouse')}</SortTh><SortTh sort={sort} col="status">{t('salesOrders.common.status', 'Status')}</SortTh><SortTh sort={sort} col="total">{t('salesOrders.list.total', 'Total')}</SortTh></tr></thead>
                 <tbody>{rows.map((s) => (<tr key={s.id}><td><Link to={`/sales-orders/${s.id}`}>{s.order_number}</Link></td><td>{s.customer_name ?? '—'}</td><td>{s.order_date}</td><td>{s.warehouse_name ?? `#${s.warehouse_id}`}</td><td><DocumentStatusBadge status={s.status} /></td><td>{s.total ?? '0.00'}</td></tr>))}</tbody></table></div>
             )}
         </section>

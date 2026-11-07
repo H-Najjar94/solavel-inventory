@@ -4115,5 +4115,7 @@
   "integration.accountType.cogs": "Costo de los bienes vendidos",
   "pagination.label": "Paginación de la lista",
   "pagination.showing": "Mostrando :from–:to de :total",
-  "pagination.rows": "Filas"
+  "pagination.rows": "Filas",
+  "table.sortBy": "Ordenar por :column",
+  "table.sort": "Ordenar"
 }

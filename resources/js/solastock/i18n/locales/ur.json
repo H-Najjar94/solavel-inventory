@@ -4115,5 +4115,7 @@
   "integration.accountType.cogs": "فروخت کردہ سامان کی لاگت",
   "pagination.label": "فہرست کے صفحات",
   "pagination.showing": ":total میں سے :from–:to دکھائے جا رہے ہیں",
-  "pagination.rows": "قطاریں"
+  "pagination.rows": "قطاریں",
+  "table.sortBy": ":column کے مطابق ترتیب دیں",
+  "table.sort": "ترتیب دیں"
 }

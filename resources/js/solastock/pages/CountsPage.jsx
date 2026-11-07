@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { translateCounts } from '../i18n/counts.js';
@@ -12,7 +13,8 @@ export default function CountsPage() {
     const { locale } = useI18n();
     const t = (key, fallback, params) => translateCounts(locale, key, fallback, params);
     const gate = useCanCreate('inventory.manage_adjustments');
-    const { data, isLoading, isError, isMock, refetch } = useApiQuery(['counts'], () => api.counts({ per_page: 50 }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isLoading, isError, isMock, refetch } = useApiQuery(['counts', sort.key, sort.dir], () => api.counts({ ...sort.params, per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     if (isLoading) return <section className="page index-page"><Skeleton /></section>;
     if (isError) return (
@@ -31,7 +33,7 @@ export default function CountsPage() {
                     title={gate.allowed ? '' : gate.reason}>{t('counts.new')}</Link>}</header>
             <p className="muted">{t('counts.description')}</p>
             {rows.length === 0 ? <EmptyState title={t('counts.empty.title')} hint={t('counts.empty.hint')} /> : (
-                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('counts.table.number')}</th><th>{t('counts.table.type')}</th><th>{t('counts.table.plan')}</th><th>{t('counts.table.warehouse')}</th><th>{t('counts.table.status')}</th><th>{t('counts.table.adjustment')}</th></tr></thead>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="number">{t('counts.table.number')}</SortTh><SortTh sort={sort} col="type">{t('counts.table.type')}</SortTh><th>{t('counts.table.plan')}</th><SortTh sort={sort} col="warehouse">{t('counts.table.warehouse')}</SortTh><SortTh sort={sort} col="status">{t('counts.table.status')}</SortTh><th>{t('counts.table.adjustment')}</th></tr></thead>
                 <tbody>{rows.map((c) => (<tr key={c.id}><td><Link to={`/counts/${c.id}`}><bdi>{c.count_number}</bdi></Link></td><td>{t(`counts.type.${c.count_type}`, c.count_type)}{c.blind_count ? ` · ${t('counts.blindSuffix')}` : ''}</td><td><bdi>{c.scheduled_for ?? '—'}</bdi>{c.abc_class ? ` · ${t('counts.abcPlan', undefined, { class: c.abc_class })}` : ''}</td><td>{c.warehouse_name ?? <bdi>#{c.warehouse_id}</bdi>}</td><td><DocumentStatusBadge status={c.status} /></td><td><bdi>{c.adjustment_number ?? (c.adjustment_id ? `#${c.adjustment_id}` : '—')}</bdi></td></tr>))}</tbody></table></div>
             )}
         </section>

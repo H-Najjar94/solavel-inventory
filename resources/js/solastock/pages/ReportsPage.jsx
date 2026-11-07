@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useCan, useMeta } from '../stores/meta.jsx';
 import { useTenant } from '../stores/tenant.jsx';
-import { Breadcrumbs, Skeleton, EmptyState, Field } from '../components/ui.jsx';
+import { Breadcrumbs, Skeleton, EmptyState, Field, SortTh } from '../components/ui.jsx';
 import { WarehousePicker, ItemPicker } from '../components/pickers.jsx';
 import { t } from '../i18n/index.js';
 
@@ -51,9 +52,11 @@ export default function ReportsPage() {
         enabled: canSchedule,
         retry: false,
     });
-    const schedules = schedulesQuery.data?.data?.schedules ?? [];
+    const schedules = scheduleSort.apply(schedulesQuery.data?.data?.schedules ?? [], { lastStatus: (x) => x.last_status, nextRun: (x) => x.next_run_at, recipients: (x) => (x.recipients ?? []).join(', ') });
     const cols = report?.columns ?? [];
-    const rows = report?.rows ?? [];
+    const dataSort = useTableSort();
+    const scheduleSort = useTableSort();
+    const rows = dataSort.apply(report?.rows ?? []);
     const summary = report?.summary ?? {};
     const columnLabels = report?.column_labels ?? {};
     const summaryLabels = report?.summary_labels ?? {};
@@ -135,7 +138,7 @@ export default function ReportsPage() {
                     <Field label={t('reports.format')}><select className="input" value={schedule.format} onChange={(e) => setSchedule({ ...schedule, format: e.target.value })}><option value="csv">{t('reports.formatCsv')}</option><option value="xlsx">{t('reports.formatXlsx')}</option><option value="pdf">{t('reports.formatPdf')}</option></select></Field>
                     <div style={{ alignSelf: 'end' }}><button className="btn btn--primary">{t('reports.saveSchedule')}</button></div>
                 </form>
-                {schedules.length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{t('reports.name')}</th><th>{t('reports.report')}</th><th>{t('reports.frequency')}</th><th>{t('reports.recipients')}</th><th>{t('reports.lastStatus')}</th><th>{t('reports.nextRun')}</th><th></th></tr></thead><tbody>
+                {schedules.length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><SortTh sort={scheduleSort} col="name">{t('reports.name')}</SortTh><SortTh sort={scheduleSort} col="report_key">{t('reports.report')}</SortTh><SortTh sort={scheduleSort} col="frequency">{t('reports.frequency')}</SortTh><th>{t('reports.recipients')}</th><SortTh sort={scheduleSort} col="lastStatus">{t('reports.lastStatus')}</SortTh><SortTh sort={scheduleSort} col="nextRun">{t('reports.nextRun')}</SortTh><th></th></tr></thead><tbody>
                     {schedules.map((s) => <tr key={s.id}><td>{s.name}</td><td>{t(`reports.${s.report_key}.title`, s.report_key)}</td><td>{t(`reports.${s.frequency}`, s.frequency)}</td><td>{(s.recipients ?? []).join(', ') || '—'}</td><td>{s.last_status ? t(`reports.status.${s.last_status}`, s.last_status) : t('reports.notRun')}</td><td>{s.next_run_at ?? '—'}</td><td><button className="btn btn--sm" onClick={() => runSchedule(s.id)}>{t('reports.runNow')}</button></td></tr>)}
                 </tbody></table>}
             </div>}
@@ -155,7 +158,7 @@ export default function ReportsPage() {
                     ? <EmptyState title={t('reports.noRows')} hint={t('reports.noRowsHint')} />
                     : <div style={{ overflowX: 'auto' }}>
                         <table className="data-table">
-                            <thead><tr>{cols.map((c) => <th key={c}>{columnLabels[c] ?? displayKey(c)}</th>)}</tr></thead>
+                            <thead><tr>{cols.map((c) => <SortTh key={c} sort={dataSort} col={c}>{columnLabels[c] ?? displayKey(c)}</SortTh>)}</tr></thead>
                             <tbody>{rows.slice(0, 500).map((r, i) => <tr key={i}>{cols.map((c) => <td key={c}>{cell(r, c)}</td>)}</tr>)}</tbody>
                         </table>
                         {rows.length > 500 && <p className="muted">{t('reports.first500')}</p>}

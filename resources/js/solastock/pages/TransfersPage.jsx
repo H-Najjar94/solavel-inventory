@@ -1,16 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
 import { useI18n } from '../i18n/context.jsx';
 
 export default function TransfersPage() {
     const { t } = useI18n();
     const gate = useCanCreate('inventory.transfer_stock');
-    const { data, isLoading, isError, isMock, refetch } = useApiQuery(['transfers'], () => api.transfers({ per_page: 50 }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isLoading, isError, isMock, refetch } = useApiQuery(['transfers', sort.key, sort.dir], () => api.transfers({ ...sort.params, per_page: 50 }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     if (isLoading) return <section className="page index-page"><Skeleton /></section>;
     if (isError) return (
@@ -30,7 +32,7 @@ export default function TransfersPage() {
                     title={gate.allowed ? '' : gate.reason}>{t('transfers.new', 'New transfer')}</Link>}</header>
             <p className="muted">{t('transfers.description', 'Move stock between warehouses through the inventory ledger.')}</p>
             {rows.length === 0 ? <EmptyState title={t('transfers.empty.title', 'No transfers')} hint={t('transfers.empty.hint', 'Create a transfer to move stock between warehouses.')} /> : (
-                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('transfers.table.number', 'Transfer #')}</th><th>{t('transfers.table.from', 'From')}</th><th>{t('transfers.table.to', 'To')}</th><th>{t('transfers.table.date', 'Date')}</th><th>{t('transfers.table.status', 'Status')}</th></tr></thead>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="number">{t('transfers.table.number', 'Transfer #')}</SortTh><SortTh sort={sort} col="from">{t('transfers.table.from', 'From')}</SortTh><SortTh sort={sort} col="to">{t('transfers.table.to', 'To')}</SortTh><SortTh sort={sort} col="date">{t('transfers.table.date', 'Date')}</SortTh><SortTh sort={sort} col="status">{t('transfers.table.status', 'Status')}</SortTh></tr></thead>
                 <tbody>{rows.map((t) => (<tr key={t.id}><td><Link to={`/transfers/${t.id}`}>{t.transfer_number}</Link></td><td>{t.from_warehouse_name ?? `#${t.from_warehouse_id}`}</td><td>{t.to_warehouse_name ?? `#${t.to_warehouse_id}`}</td><td>{t.transfer_date}</td><td><DocumentStatusBadge status={t.status} /></td></tr>))}</tbody></table></div>
             )}
         </section>

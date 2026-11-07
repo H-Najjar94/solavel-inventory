@@ -48,6 +48,14 @@ class ShipmentController extends ApiController
             });
         }
 
+        $this->applyListSort($query, $request, [
+            'number' => 'shipment_number',
+            'order' => $this->sortByRelated('sales_orders', 'order_number', 'sales_order_id'),
+            'date' => 'ship_date',
+            'carrier' => 'carrier',
+            'status' => 'status',
+        ]);
+
         $page = $query->paginate($perPage)->withQueryString();
         $this->nameDocuments($page);
 

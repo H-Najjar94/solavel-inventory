@@ -165,3 +165,19 @@ export function fieldErrors(err) {
     if (errs) Object.entries(errs).forEach(([k, v]) => { out[k] = Array.isArray(v) ? v[0] : v; });
     return out;
 }
+
+// ── Sortable column header (see hooks/useTableSort.js) ──
+export function SortTh({ sort, col, children, ...rest }) {
+    const active = sort.key === col;
+    const label = typeof children === 'string' ? children : '';
+    return (
+        <th {...rest} aria-sort={active ? (sort.dir === 'desc' ? 'descending' : 'ascending') : 'none'}>
+            <button type="button" className="sort-btn" onClick={() => sort.toggle(col)}
+                aria-label={label ? t('table.sortBy', 'Sort by :column', { column: label }) : t('table.sort', 'Sort')}
+                title={label ? t('table.sortBy', 'Sort by :column', { column: label }) : t('table.sort', 'Sort')}>
+                <span className="sort-btn-label">{children}</span>
+                <span className="sort-ind" aria-hidden="true">{active ? (sort.dir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+            </button>
+        </th>
+    );
+}

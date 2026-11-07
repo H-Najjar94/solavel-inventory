@@ -59,6 +59,14 @@ class SalesReturnController extends ApiController
             $query->whereDoesntHave('lines', fn ($lines) => $lines->whereNotNull('warehouse_id')->whereNotIn('warehouse_id', $allowed));
         }
 
+        $this->applyListSort($query, $request, [
+            'number' => 'return_number',
+            'customer' => 'customer_name',
+            'date' => 'return_date',
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'status' => 'status',
+        ]);
+
         $page = $query->paginate($perPage)->withQueryString()->through(function (SalesReturn $return) {
             $return->setAttribute('customer_name', $return->customer?->name ?? $return->customer_name);
 

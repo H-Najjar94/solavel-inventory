@@ -34,6 +34,13 @@ class StockCountController extends ApiController
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
 
+        $this->applyListSort($query, $request, [
+            'number' => 'count_number',
+            'type' => 'count_type',
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'status' => 'status',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockCount $count) {
             $count->setAttribute('warehouse_name', $count->warehouse?->name);
             $count->setAttribute('warehouse_code', $count->warehouse?->code);

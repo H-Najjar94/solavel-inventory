@@ -4115,5 +4115,7 @@
   "integration.accountType.cogs": "Costo del venduto",
   "pagination.label": "Paginazione dell’elenco",
   "pagination.showing": "Visualizzazione di :from–:to su :total",
-  "pagination.rows": "Righe"
+  "pagination.rows": "Righe",
+  "table.sortBy": "Ordina per :column",
+  "table.sort": "Ordina"
 }

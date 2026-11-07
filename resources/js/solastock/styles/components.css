@@ -781,3 +781,13 @@ html[dir="rtl"] .drawer { animation-name: c-drawer-rtl; }
 :where(.content) :is(a, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: none; box-shadow: var(--c-focus); border-radius: 6px;
 }
+
+/* Sortable column headers: the arrow slot is always reserved so nothing shifts. */
+.data-table th .sort-btn {
+    all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    max-width: 100%; color: inherit; font: inherit; text-align: inherit; letter-spacing: inherit; text-transform: inherit;
+}
+.data-table th .sort-btn:focus-visible { outline: 2px solid var(--c-focus, currentColor); outline-offset: 2px; border-radius: 3px; }
+.data-table th .sort-ind { inline-size: 1em; font-size: 0.75em; opacity: 0; transition: opacity var(--c-dur, .15s); }
+.data-table th .sort-btn:is(:hover, :focus-visible) .sort-ind { opacity: 0.4; }
+.data-table th[aria-sort="ascending"] .sort-ind, .data-table th[aria-sort="descending"] .sort-ind { opacity: 1; }

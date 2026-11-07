@@ -50,6 +50,17 @@ class LandedCostController extends ApiController
             ->orderByDesc('id');
         $this->scopeToWarehouses($query);
 
+        $this->applyListSort($query, $request, [
+            'number' => 'landed_cost_number',
+            'date' => 'landed_cost_date',
+            'status' => 'status',
+            'reference' => 'supplier_reference',
+            'method' => 'allocation_method',
+            'total' => 'total_base_amount',
+            'onhand' => 'inventory_base_amount',
+            'consumed' => 'consumed_base_amount',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 

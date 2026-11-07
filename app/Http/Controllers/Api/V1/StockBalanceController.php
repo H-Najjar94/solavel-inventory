@@ -42,6 +42,16 @@ class StockBalanceController extends ApiController
             $query->whereIn('stock_balances.warehouse_id', $allowed);
         }
 
+        $this->applyListSort($query, $request, [
+            'item' => $this->sortByRelated('items', 'name', 'item_id'),
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'onhand' => 'on_hand_qty',
+            'reserved' => 'reserved_qty',
+            'available' => $this->sortByExpression('stock_balances.on_hand_qty - stock_balances.reserved_qty'),
+            'cost' => 'average_cost',
+            'value' => 'total_value',
+        ]);
+
         $paginator = $query->paginate($perPage)->withQueryString();
 
         // available_qty is the canonical projection. sellable_available_qty excludes

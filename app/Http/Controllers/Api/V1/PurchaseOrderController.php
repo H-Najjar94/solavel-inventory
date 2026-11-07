@@ -56,6 +56,16 @@ class PurchaseOrderController extends ApiController
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
 
+        $this->applyListSort($query, $request, [
+            'number' => 'po_number',
+            'supplier' => $this->sortByRelated('suppliers', 'name', 'supplier_id'),
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'date' => 'order_date',
+            'expected' => 'expected_date',
+            'status' => 'status',
+            'total' => 'total',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (PurchaseOrder $po) {
             $po->setAttribute('warehouse_name', $po->warehouse?->name);
             $po->setAttribute('warehouse_code', $po->warehouse?->code);

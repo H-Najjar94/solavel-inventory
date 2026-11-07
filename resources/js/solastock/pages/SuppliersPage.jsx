@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import VendorPricelistTransfer from '../components/VendorPricelistTransfer.jsx';
 
@@ -11,7 +12,8 @@ export default function SuppliersPage() {
     const { t } = useI18n();
     const gate = useCanCreate('inventory.manage_items');
     const [search, setSearch] = useState('');
-    const { data, isMock, isLoading, isError, refetch } = useApiQuery(['suppliers', search], () => api.suppliers({ search, per_page: 50 }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isMock, isLoading, isError, refetch } = useApiQuery(['suppliers', search, sort.key, sort.dir], () => api.suppliers({ ...sort.params, search, per_page: 50 }), { fallback: [] });
     const list = Array.isArray(data) ? data : (data?.data ?? []);
     const gateReason = gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied');
     return (
@@ -36,7 +38,7 @@ export default function SuppliersPage() {
                     action={<button type="button" className="btn" onClick={() => refetch()}>{t('partners.common.retry')}</button>} />
             ) : list.length === 0 ? <div className="suppliers-empty"><div className="suppliers-empty-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h2m4 0h2M8 11h2m4 0h2"/></svg></div><EmptyState title={t(search?'partners.suppliers.list.noMatches':'partners.suppliers.list.emptyTitle')} hint={t(search?'partners.suppliers.list.noMatchesHint':'partners.suppliers.list.emptyHint')}
                 action={search ? <button className="btn" type="button" onClick={() => setSearch('')}>{t('partners.suppliers.list.clearSearch')}</button> : gate.allowed ? <Link className="btn btn--primary" to="/suppliers/new">+ {t('partners.suppliers.list.new')}</Link> : undefined} /></div> : (
-                <div className="tbl-wrap suppliers-table"><table className="data-table"><thead><tr><th>{t('partners.common.code')}</th><th>{t('partners.common.name')}</th><th>{t('partners.common.status')}</th></tr></thead>
+                <div className="tbl-wrap suppliers-table"><table className="data-table"><thead><tr><SortTh sort={sort} col="code">{t('partners.common.code')}</SortTh><SortTh sort={sort} col="name">{t('partners.common.name')}</SortTh><SortTh sort={sort} col="status">{t('partners.common.status')}</SortTh></tr></thead>
                 <tbody>{list.map((s) => <tr key={s.id}><td><Link to={`/suppliers/${s.id}`}><bdi>{s.code}</bdi></Link></td><td><Link className="suppliers-name" to={`/suppliers/${s.id}`}>{s.name}</Link></td><td><span className={`suppliers-status ${s.is_active?'is-active':''}`}><span aria-hidden="true" />{s.is_active ? t('partners.common.active') : t('partners.common.inactive')}</span></td></tr>)}</tbody></table></div>
             )}
             </section>

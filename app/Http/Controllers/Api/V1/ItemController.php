@@ -103,6 +103,15 @@ class ItemController extends ApiController
             $query->whereIn('id', $match);
         }
 
+        $this->applyListSort($query, $request, [
+            'sku' => 'sku',
+            'name' => 'name',
+            'type' => 'item_type',
+            'category' => $this->sortByRelated('item_categories', 'name', 'category_id'),
+            'cost' => 'purchase_price',
+            'price' => 'sales_price',
+        ]);
+
         return $this->paginated(
             $query->paginate($perPage)->withQueryString()->through(function ($it) {
                 $it->setAttribute('primary_image_url',

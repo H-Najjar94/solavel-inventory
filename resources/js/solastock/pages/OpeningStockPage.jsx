@@ -2,10 +2,11 @@ import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { mockOpening } from '../services/mockData.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Field } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Field, SortTh } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
 import { WarehousePicker } from '../components/pickers.jsx';
 import { useToast } from '../stores/toast.jsx';
@@ -42,7 +43,8 @@ export default function OpeningStockPage() {
     const fileRef = useRef(null);
     const [importState, setImportState] = useState({ warehouse_id: null, post: false });
     const [busy, setBusy] = useState(false);
-    const { data, isMock } = useApiQuery(['opening'], () => api.openingStock({ per_page: 50 }), { fallback: mockOpening });
+    const sort = useTableSort();
+    const { data, isMock } = useApiQuery(['opening', sort.key, sort.dir], () => api.openingStock({ ...sort.params, per_page: 50 }), { fallback: mockOpening });
     const rows = Array.isArray(data) ? data : (data?.data ?? mockOpening);
 
     async function importCsv(e) {
@@ -84,7 +86,7 @@ export default function OpeningStockPage() {
                 <CsvColumnsHelp t={t} />
             </div>}
             {rows.length === 0 ? <EmptyState title={t('openingStock.emptyTitle')} hint={t('openingStock.emptyHint')} /> : (
-                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('openingStock.number')}</th><th>{t('openingStock.date')}</th><th>{t('openingStock.warehouseShort')}</th><th>{t('openingStock.status')}</th><th>{t('openingStock.value')}</th></tr></thead>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="number">{t('openingStock.number')}</SortTh><SortTh sort={sort} col="date">{t('openingStock.date')}</SortTh><SortTh sort={sort} col="warehouse">{t('openingStock.warehouseShort')}</SortTh><SortTh sort={sort} col="status">{t('openingStock.status')}</SortTh><SortTh sort={sort} col="value">{t('openingStock.value')}</SortTh></tr></thead>
                 <tbody>{rows.map((e) => (<tr key={e.id}><td><Link to={`/opening-stock/${e.id}`}><bdi>{e.entry_number}</bdi></Link></td><td>{e.opening_date}</td><td>{e.warehouse_name ?? <bdi>#{e.warehouse_id}</bdi>}</td><td><DocumentStatusBadge status={e.status} /></td><td>{e.total_value}</td></tr>))}</tbody></table></div>
             )}
         </section>

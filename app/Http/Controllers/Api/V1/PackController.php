@@ -35,6 +35,13 @@ class PackController extends ApiController
             });
         }
 
+        $this->applyListSort($query, $request, [
+            'number' => 'pack_number',
+            'order' => $this->sortByRelated('sales_orders', 'order_number', 'sales_order_id'),
+            'carrier' => 'carrier',
+            'status' => 'status',
+        ]);
+
         $page = $query->paginate($perPage)->withQueryString();
         $this->nameDocuments($page);
 
