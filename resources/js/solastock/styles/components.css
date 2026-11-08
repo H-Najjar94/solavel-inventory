@@ -788,6 +788,6 @@ html[dir="rtl"] .drawer { animation-name: c-drawer-rtl; }
     max-width: 100%; color: inherit; font: inherit; text-align: inherit; letter-spacing: inherit; text-transform: inherit;
 }
 .data-table th .sort-btn:focus-visible { outline: 2px solid var(--c-focus, currentColor); outline-offset: 2px; border-radius: 3px; }
-.data-table th .sort-ind { inline-size: 1em; font-size: 0.75em; opacity: 0; transition: opacity var(--c-dur, .15s); }
-.data-table th .sort-btn:is(:hover, :focus-visible) .sort-ind { opacity: 0.4; }
+.data-table th .sort-ind { inline-size: 1em; font-size: 0.75em; opacity: 0.35; transition: opacity var(--c-dur, .15s); }
+.data-table th .sort-btn:is(:hover, :focus-visible) .sort-ind { opacity: 0.7; }
 .data-table th[aria-sort="ascending"] .sort-ind, .data-table th[aria-sort="descending"] .sort-ind { opacity: 1; }
