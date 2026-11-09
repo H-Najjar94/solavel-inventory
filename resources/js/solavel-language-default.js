@@ -39,7 +39,7 @@
                 return;
             }
             // Migrate an existing checked switch without changing the saved language.
-            else if (localStorage.getItem(key) === '1') await save(true, null, true);
+            else if (typeof data.remember_language !== 'boolean' && localStorage.getItem(key) === '1') await save(true, null, true);
         } catch (_) {}
     }
     document.addEventListener('click', function (event) {
