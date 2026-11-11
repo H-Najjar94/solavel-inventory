@@ -87,7 +87,7 @@ export default function TransferDetailPage() {
             <header className="page-head">
                 <h1>{t.transfer_number}</h1><DocumentStatusBadge status={t.status} />
                 {isMock && <span className="badge badge--warn">{tr('transfers.sampleData', 'Sample data')}</span>}
-                {t.status === 'draft' && <Link to={`/transfers/${id}/edit`} className="btn" style={{ marginLeft: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{tr('transfers.detail.edit', 'Edit')}</Link>}
+                {t.status === 'draft' && <Link to={`/transfers/${id}/edit`} className="btn" style={{ marginInlineStart: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{tr('transfers.detail.edit', 'Edit')}</Link>}
             </header>
 
             <div className="panel"><dl className="kv">

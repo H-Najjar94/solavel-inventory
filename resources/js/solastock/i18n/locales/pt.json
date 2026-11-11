@@ -4115,5 +4115,8 @@
   "integration.accountType.cogs": "Custo das Mercadorias Vendidas",
   "pagination.label": "Paginação da lista",
   "pagination.showing": "A mostrar :from–:to de :total",
-  "pagination.rows": "Linhas"
+  "pagination.rows": "Linhas",
+  "openingStock.csvNewItemColumns": "Para artigos novos, também",
+  "openingStock.csvColumn.category": "Categoria",
+  "openingStock.csvColumn.unit": "Unidade"
 }

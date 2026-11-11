@@ -14,6 +14,7 @@ import { openingStockT } from '../i18n/openingStock.js';
 
 const requiredCsvColumns = ['sku', 'name', 'quantity', 'unit_cost'];
 const optionalCsvColumns = ['lot_code', 'expiry_date', 'bin_id'];
+const newItemCsvColumns = ['category', 'unit'];
 
 function CsvColumnList({ columns, t }) {
     return columns.map((column, index) => (
@@ -28,6 +29,7 @@ function CsvColumnsHelp({ t }) {
     return (
         <div className="muted">
             <p><strong>{t('openingStock.csvRequiredColumns')}:</strong>{' '}<CsvColumnList columns={requiredCsvColumns} t={t} />.</p>
+            <p><strong>{t('openingStock.csvNewItemColumns')}:</strong>{' '}<CsvColumnList columns={newItemCsvColumns} t={t} />.</p>
             <p><strong>{t('openingStock.csvOptionalColumns')}:</strong>{' '}<CsvColumnList columns={optionalCsvColumns} t={t} />.</p>
         </div>
     );
@@ -70,7 +72,7 @@ export default function OpeningStockPage() {
             <Breadcrumbs items={[{ label: t('openingStock.title') }]} />
             <header className="page-head"><h1>{t('openingStock.title')}</h1>{isMock && <span className="badge badge--warn">{t('openingStock.sampleData')}</span>}
                 {gate.allowed && <Link to="/opening-stock/new" className="btn btn--primary"
-                    style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
+                    style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
                     title={gate.allowed ? '' : gate.reason}>{t('openingStock.newEntry')}</Link>}</header>
             <p className="muted">{t('openingStock.description')}</p>
             {gate.allowed && <div className="panel opening-stock-import">
@@ -80,7 +82,8 @@ export default function OpeningStockPage() {
                     <Field label={t('openingStock.posting')}><label className="check-inline"><input type="checkbox" checked={importState.post} onChange={(e) => setImportState({ ...importState, post: e.target.checked })} /> {t('openingStock.postAfterImport')}</label></Field>
                 </div>
                 <input ref={fileRef} type="file" accept=".csv,text/csv" aria-label={t('openingStock.csvInput')} hidden onChange={importCsv} />
-                <button className="btn btn--primary" disabled={busy || !importState.warehouse_id} onClick={() => fileRef.current?.click()}>{busy ? t('openingStock.importing') : t('openingStock.importCsv')}</button>
+                <button className="btn btn--primary" disabled={busy} aria-describedby="opening-import-hint" onClick={() => importState.warehouse_id ? fileRef.current?.click() : toast.push(t('openingStock.chooseWarehouse'), 'error')}>{busy ? t('openingStock.importing') : t('openingStock.importCsv')}</button>
+                {!importState.warehouse_id && <p id="opening-import-hint" className="sub">{t('openingStock.chooseWarehouse')}</p>}
                 <CsvColumnsHelp t={t} />
             </div>}
             {rows.length === 0 ? <EmptyState title={t('openingStock.emptyTitle')} hint={t('openingStock.emptyHint')} /> : (

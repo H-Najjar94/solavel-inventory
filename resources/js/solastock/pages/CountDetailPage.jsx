@@ -45,7 +45,7 @@ export default function CountDetailPage() {
             <header className="page-head">
                 <h1><bdi>{c.count_number}</bdi></h1><DocumentStatusBadge status={c.status} />
                 {isMock && <span className="badge badge--warn">{t('counts.sampleData')}</span>}
-                {c.status === 'draft' && <Link to={`/counts/${id}/edit`} className="btn" style={{ marginLeft: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }} title={gate.allowed ? '' : gate.reason}>{t('counts.detail.edit')}</Link>}
+                {c.status === 'draft' && <Link to={`/counts/${id}/edit`} className="btn" style={{ marginInlineStart: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }} title={gate.allowed ? '' : gate.reason}>{t('counts.detail.edit')}</Link>}
             </header>
 
             <div className="panel"><dl className="kv">

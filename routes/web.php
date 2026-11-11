@@ -58,6 +58,7 @@ Route::view('/items/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/warehouses/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/suppliers/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/balances', 'solastock-app');
+Route::view('/plan-access', 'solastock-app');
 Route::view('/opening-stock/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/adjustments/{any?}', 'solastock-app')->where('any', '.*');
 Route::view('/transfers/{any?}', 'solastock-app')->where('any', '.*');

@@ -98,7 +98,7 @@ export default function WarehouseFormPage() {
             <header className="page-head">
                 <h1>{t(isEdit ? 'warehouses.edit' : 'warehouses.new')}</h1>
                 <StatusBadge active={form.is_active} />
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
                     <button type="button" className="btn" onClick={() => nav('/warehouses')} disabled={saving}>{t('warehouses.cancel')}</button>
                     <button type="submit" form="wh-form" className="btn btn--primary" disabled={!gate.allowed || saving}>
                         {saving ? t('warehouses.saving') : t(isEdit ? 'warehouses.saveChanges' : 'warehouses.create')}

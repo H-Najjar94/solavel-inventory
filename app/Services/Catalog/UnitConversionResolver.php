@@ -55,7 +55,7 @@ class UnitConversionResolver
         if ($item->base_unit_id && ! (bool) $item->is_active && $item->deleted_at === null) {
             \App\Support\InactiveItemPolicy::assertConversionAllowed($item, $line);
         } elseif (! $item->base_unit_id || ! (bool) $item->is_active || $item->deleted_at !== null) {
-            throw new RuntimeException("Item {$item->sku} has no base unit for conversion.");
+            throw new RuntimeException(__('inventory.unit_conv.no_base_unit', ['item' => self::itemLabel($item)]));
         }
         $enteredUnitId = (int) ($line['entered_unit_id'] ?? $item->base_unit_id);
         $units = Unit::query()->withTrashed()
@@ -64,7 +64,7 @@ class UnitConversionResolver
             $unit = $units->get($unitId);
             if (! $unit || (int) $unit->organization_id !== (int) $item->organization_id
                 || ! (bool) $unit->is_active || $unit->deleted_at !== null) {
-                throw new RuntimeException('Unit conversion references an inactive or cross-organization unit.');
+                throw new RuntimeException(__('inventory.unit_conv.inactive_unit', ['item' => self::itemLabel($item), 'unit' => (string) ($unit?->name ?? '')]));
             }
         }
 
@@ -81,7 +81,7 @@ class UnitConversionResolver
                 ->first();
 
             if (! $conversion) {
-                throw new RuntimeException("No conversion from selected unit to {$item->sku}'s base unit.");
+                throw new RuntimeException(__('inventory.unit_conv.missing', ['item' => self::itemLabel($item), 'unit' => (string) ($units->get($enteredUnitId)?->name ?? ''), 'base' => (string) ($units->get((int) $item->base_unit_id)?->name ?? '')]));
             }
             $factor = (string) $conversion->factor;
             $conversionId = (int) $conversion->id;
@@ -93,7 +93,7 @@ class UnitConversionResolver
         $normalizedSourceQty = Decimal::qty($enteredQty);
         $baseQty = Decimal::qty(Decimal::mul($normalizedSourceQty, $factor));
         if ($item->tracksSerials() && Decimal::cmp($baseQty, Decimal::round($baseQty, 0)) !== 0) {
-            throw new RuntimeException('A serial-tracked item must convert to a whole number of base units.');
+            throw new RuntimeException(__('inventory.unit_conv.serial_whole', ['item' => self::itemLabel($item)]));
         }
         $snapshot = [
             'organization_id' => (int) $item->organization_id,
@@ -230,5 +230,12 @@ class UnitConversionResolver
             'unit_conversion_rounding_mode' => self::ROUNDING_MODE,
             $quantityKey => Decimal::qty(Decimal::mul($enteredQty, $factor)),
         ]);
+    }
+
+    /** Item name (and SKU) as users know it, for error messages. */
+    private static function itemLabel($item): string
+    {
+        $name = trim((string) ($item->name ?? ''));
+        return $name !== '' ? ($item->sku ? "{$name} ({$item->sku})" : $name) : (string) $item->sku;
     }
 }

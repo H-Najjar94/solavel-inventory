@@ -500,4 +500,16 @@ return array (
     'inventory_viewer' => 'Inventarbetrachter',
     'inventory_accountant' => 'Lagerbuchhalter',
   ),
+  'unit_conv' => [
+    'no_base_unit' => '„:item“ hat keine Basiseinheit. Öffnen Sie den Artikel, legen Sie die Einheit fest und versuchen Sie es erneut.',
+    'inactive_unit' => 'Die Einheit „:unit“ bei „:item“ ist inaktiv oder gehört zu einer anderen Organisation. Wählen Sie eine aktive Einheit.',
+    'missing' => '„:item“ wird in „:base“ geführt, und es gibt keine Umrechnung von „:unit“ in „:base“. Wählen Sie „:base“ in dieser Zeile oder legen Sie eine Umrechnung an (Einheiten → Umrechnungen), z. B. 1 :unit = N :base.',
+    'serial_whole' => '„:item“ wird mit Seriennummern geführt; die Menge muss eine ganze Zahl von Einheiten ergeben. Geben Sie eine ganze Menge ein.',
+  ],
+  'opening_import' => [
+    'sku_name' => 'Zeile :row: Jede Zeile braucht eine Artikel-SKU (sku) und einen Namen (name).',
+    'quantity' => 'Zeile :row (:sku): Die Menge muss eine Zahl größer als 0 sein, z. B. 5 oder 2.5.',
+    'category' => 'Zeile :row (:sku): Neuer Artikel braucht eine Kategorie. „:value“ wurde nicht gefunden – fügen Sie eine Spalte category mit einem Namen aus Ihrer Kategorienliste hinzu.',
+    'unit' => 'Zeile :row (:sku): Neuer Artikel braucht eine Einheit. „:value“ wurde nicht gefunden – fügen Sie eine Spalte unit mit Name oder Code einer Einheit hinzu, z. B. Stück.',
+  ],
 );

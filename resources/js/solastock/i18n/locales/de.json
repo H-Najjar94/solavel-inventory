@@ -4115,5 +4115,8 @@
   "integration.accountType.cogs": "Umsatzkosten",
   "pagination.label": "Listennavigation",
   "pagination.showing": ":from–:to von :total werden angezeigt",
-  "pagination.rows": "Zeilen"
+  "pagination.rows": "Zeilen",
+  "openingStock.csvNewItemColumns": "Für neue Artikel zusätzlich",
+  "openingStock.csvColumn.category": "Kategorie",
+  "openingStock.csvColumn.unit": "Einheit"
 }

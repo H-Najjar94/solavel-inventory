@@ -4115,5 +4115,8 @@
   "integration.accountType.cogs": "Satılan Malın Maliyeti",
   "pagination.label": "Liste sayfalandırması",
   "pagination.showing": ":total kayıttan :from–:to gösteriliyor",
-  "pagination.rows": "Satırlar"
+  "pagination.rows": "Satırlar",
+  "openingStock.csvNewItemColumns": "Yeni kalemler için ayrıca",
+  "openingStock.csvColumn.category": "Kategori",
+  "openingStock.csvColumn.unit": "Birim"
 }

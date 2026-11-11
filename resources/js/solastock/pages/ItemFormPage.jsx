@@ -166,7 +166,7 @@ export default function ItemFormPage() {
             <header className="page-head">
                 <h1>{t(isEdit ? 'items.edit' : 'items.new')}</h1>
                 <StatusBadge active={form.is_active} />
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
                     <button type="button" className="btn" onClick={() => nav('/items')} disabled={saving}>{t('items.cancel')}</button>
                     <button type="submit" form="item-form" className="btn btn--primary" disabled={!gate.allowed || saving}>
                         {saving ? t('items.saving') : t(isEdit ? 'items.saveChanges' : 'items.create')}

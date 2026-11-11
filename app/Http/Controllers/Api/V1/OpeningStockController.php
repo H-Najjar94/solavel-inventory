@@ -170,24 +170,31 @@ class OpeningStockController extends ApiController
             $sku = trim((string) ($row['sku'] ?? ''));
             $name = trim((string) ($row['name'] ?? $sku));
             if ($sku === '' || $name === '') {
-                return $this->error('invalid_import_row', 'Each import row needs sku and name. Row '.($index + 2).'.', 422);
+                return $this->error('invalid_import_row', __('inventory.opening_import.sku_name', ['row' => $index + 2]), 422);
             }
             $qty = (string) ($row['quantity'] ?? $row['qty'] ?? '');
             if ($qty === '' || ! preg_match('/^\d+(?:\.\d{1,6})?$/D', $qty) || Decimal::cmp($qty, '0') <= 0) {
-                return $this->error('invalid_import_row', 'Each import row needs a positive quantity. Row '.($index + 2).'.', 422);
+                return $this->error('invalid_import_row', __('inventory.opening_import.quantity', ['row' => $index + 2, 'sku' => $sku]), 422);
             }
 
             $item = Item::query()->where('sku', $sku)->first();
             if (! $item) {
+                // New items need a category and a unit: accept their IDs or, as users know them, their names/codes.
                 $categoryId = filter_var($row['category_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
                 $unitId = filter_var($row['base_unit_id'] ?? $row['unit_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+                $byName = fn (string $model, ?string $label, array $cols) => $label === null || trim($label) === '' ? null : $model::query()
+                    ->where('is_active', true)->whereNull('deleted_at')
+                    ->where(fn ($q) => collect($cols)->each(fn ($c) => $q->orWhereRaw("LOWER(TRIM($c)) = ?", [mb_strtolower(trim($label))])))->value('id');
+                $categoryId ??= $byName(\App\Models\Tenant\ItemCategory::class, $row['category'] ?? $row['category_name'] ?? null, ['name']);
+                $unitId ??= $byName(\App\Models\Tenant\Unit::class, $row['unit'] ?? $row['unit_name'] ?? $row['base_unit'] ?? null, ['name', 'code']);
                 $validCategory = $categoryId && \App\Models\Tenant\ItemCategory::query()
                     ->whereKey($categoryId)->where('is_active', true)->whereNull('deleted_at')->exists();
                 $validUnit = $unitId && \App\Models\Tenant\Unit::query()
                     ->whereKey($unitId)->where('is_active', true)->whereNull('deleted_at')->exists();
                 if (! $validCategory || ! $validUnit) {
                     return $this->error('invalid_import_master_data',
-                        'Each new inventory item needs a valid category_id and base_unit_id. Row '.($index + 2).'.', 422);
+                        __(! $validCategory ? 'inventory.opening_import.category' : 'inventory.opening_import.unit', ['row' => $index + 2, 'sku' => $sku,
+                            'value' => (string) (! $validCategory ? ($row['category'] ?? $row['category_name'] ?? $row['category_id'] ?? '') : ($row['unit'] ?? $row['unit_name'] ?? $row['base_unit_id'] ?? $row['unit_id'] ?? ''))]), 422);
                 }
                 // Grandfathered ceiling: block the import at the plan limit (existing
                 // + created so far), exactly like a single create. Existing items are

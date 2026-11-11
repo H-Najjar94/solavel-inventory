@@ -27,7 +27,7 @@ export default function CountsPage() {
             <Breadcrumbs items={[{ label: t('counts.breadcrumb') }]} />
             <header className="page-head"><h1>{t('counts.title')}</h1>{isMock && <span className="badge badge--warn">{t('counts.sampleData')}</span>}
                 {gate.allowed && <Link to="/counts/new" className="btn btn--primary"
-                    style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
+                    style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
                     title={gate.allowed ? '' : gate.reason}>{t('counts.new')}</Link>}</header>
             <p className="muted">{t('counts.description')}</p>
             {rows.length === 0 ? <EmptyState title={t('counts.empty.title')} hint={t('counts.empty.hint')} /> : (

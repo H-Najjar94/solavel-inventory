@@ -36,7 +36,7 @@ export default function AdjustmentDetailPage() {
             <header className="page-head">
                 <h1>{adj.adjustment_number}</h1><DocumentStatusBadge status={adj.status} />
                 {isMock && <span className="badge badge--warn">{t('adjustment.sampleData')}</span>}
-                {adj.status === 'draft' && <Link to={`/adjustments/${id}/edit`} className="btn" style={{ marginLeft: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{t('adjustment.edit')}</Link>}
+                {adj.status === 'draft' && <Link to={`/adjustments/${id}/edit`} className="btn" style={{ marginInlineStart: 'auto', opacity: gate.allowed ? 1 : 0.5, pointerEvents: gate.allowed ? 'auto' : 'none' }}>{t('adjustment.edit')}</Link>}
             </header>
 
             <div className="panel"><dl className="kv">
