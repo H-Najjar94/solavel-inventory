@@ -150,7 +150,7 @@ export default function CountFormPage() {
             <div className="panel">
                 <div className="page-head" style={{ marginBottom: 12 }}>
                     <h2 style={{ margin: 0 }}>{t('counts.form.lines')}</h2>
-                    <button type="button" className="btn btn--sm" style={{ marginLeft: 'auto' }} disabled={prefilling || !header.warehouse_id} onClick={prefill}>
+                    <button type="button" className="btn btn--sm" style={{ marginInlineStart: 'auto' }} disabled={prefilling || !header.warehouse_id} onClick={prefill}>
                         {prefilling ? t('counts.form.prefilling') : t('counts.form.prefill')}
                     </button>
                 </div>

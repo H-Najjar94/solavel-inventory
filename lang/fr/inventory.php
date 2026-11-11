@@ -500,4 +500,16 @@ return array (
     'inventory_viewer' => 'Visionneuse d\'inventaire',
     'inventory_accountant' => 'Comptable des stocks',
   ),
+  'unit_conv' => [
+    'no_base_unit' => '« :item » n’a pas d’unité de base. Ouvrez l’article, définissez son unité et réessayez.',
+    'inactive_unit' => 'L’unité « :unit » de « :item » est inactive ou appartient à une autre organisation. Choisissez une unité active.',
+    'missing' => '« :item » est stocké en « :base » et aucune conversion de « :unit » vers « :base » n’existe. Choisissez « :base » sur cette ligne ou ajoutez une conversion (Unités → Conversions), par ex. 1 :unit = N :base.',
+    'serial_whole' => '« :item » est suivi par numéro de série ; la quantité doit être un nombre entier d’unités. Saisissez une quantité entière.',
+  ],
+  'opening_import' => [
+    'sku_name' => 'Ligne :row : chaque ligne doit avoir un SKU (sku) et un nom (name).',
+    'quantity' => 'Ligne :row (:sku) : la quantité doit être un nombre supérieur à 0, par ex. 5 ou 2.5.',
+    'category' => 'Ligne :row (:sku) : nouvel article sans catégorie. « :value » est introuvable — ajoutez une colonne category avec un nom de votre liste de catégories.',
+    'unit' => 'Ligne :row (:sku) : nouvel article sans unité. « :value » est introuvable — ajoutez une colonne unit avec le nom ou le code d’une unité, par ex. Pièce.',
+  ],
 );

@@ -4115,5 +4115,8 @@
   "integration.accountType.cogs": "Costo de los bienes vendidos",
   "pagination.label": "Paginación de la lista",
   "pagination.showing": "Mostrando :from–:to de :total",
-  "pagination.rows": "Filas"
+  "pagination.rows": "Filas",
+  "openingStock.csvNewItemColumns": "Para artículos nuevos, además",
+  "openingStock.csvColumn.category": "Categoría",
+  "openingStock.csvColumn.unit": "Unidad"
 }

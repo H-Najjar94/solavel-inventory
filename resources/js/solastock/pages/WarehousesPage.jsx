@@ -17,7 +17,7 @@ export default function WarehousesPage() {
             <header className="page-head">
                 <h1>{t('warehouses')}</h1>{isMock && <span className="badge badge--warn">{t('warehouses.sampleData')}</span>}
                 {gate.allowed && <Link to="/warehouses/new" className="btn btn--primary"
-                    style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
+                    style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
                     title={gate.allowed ? '' : gate.reason}>{t('warehouses.new')}</Link>}
             </header>
             {list.length === 0 ? <EmptyState title={t('warehouses.empty')} hint={t('warehouses.emptyHint')} /> : (

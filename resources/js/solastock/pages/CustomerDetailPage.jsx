@@ -18,7 +18,7 @@ export default function CustomerDetailPage() {
         <section className="page">
             <Breadcrumbs items={[{ label: t('partners.common.customers'), to: '/customers' }, { label: data.name }]} />
             <header className="page-head"><h1>{data.name}</h1><StatusBadge active={data.is_active} labels={[t('partners.common.active'), t('partners.common.inactive')]} />
-                <Link to={`/customers/${data.id}/edit`} className="btn btn--primary" style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }} title={gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied')}>{t('partners.common.edit')}</Link></header>
+                <Link to={`/customers/${data.id}/edit`} className="btn btn--primary" style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }} title={gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied')}>{t('partners.common.edit')}</Link></header>
             <div className="panel"><dl className="kv">
                 <dt>{t('partners.common.code')}</dt><dd><bdi>{data.code}</bdi></dd><dt>{t('partners.common.email')}</dt><dd><bdi>{c.email ?? '—'}</bdi></dd>
                 <dt>{t('partners.common.phone')}</dt><dd><bdi>{c.phone ?? '—'}</bdi></dd><dt>{t('partners.common.address')}</dt><dd>{c.address ?? '—'}</dd>

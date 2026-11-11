@@ -66,7 +66,7 @@ export default function ItemsPage() {
                 <h1>{t('items')}</h1>
                 {isMock && <span className="badge badge--warn">{t('items.sampleData')}</span>}
                 {gate.allowed && <Link to="/items/new" className="btn btn--primary"
-                    style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
+                    style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}
                     title={gate.allowed ? '' : gate.reason}>{t('items.new')}</Link>}
             </header>
             <div className="toolbar" style={{ display: 'flex', gap: 8 }}>

@@ -500,4 +500,16 @@ return array (
     'inventory_viewer' => '库存查看者',
     'inventory_accountant' => '库存会计',
   ),
+  'unit_conv' => [
+    'no_base_unit' => '“:item”没有基本单位。请打开该物品设置单位后重试。',
+    'inactive_unit' => '“:item”上的单位“:unit”已停用或属于其他组织。请选择有效单位。',
+    'missing' => '“:item”以“:base”计库存，且不存在从“:unit”到“:base”的换算。请在此行选择“:base”，或添加换算（单位 → 换算），例如 1 :unit = N :base。',
+    'serial_whole' => '“:item”按序列号跟踪，数量必须是整数个单位。请输入整数数量。',
+  ],
+  'opening_import' => [
+    'sku_name' => '第 :row 行：每行都需要物品 SKU（sku）和名称（name）。',
+    'quantity' => '第 :row 行（:sku）：数量必须是大于 0 的数字，例如 5 或 2.5。',
+    'category' => '第 :row 行（:sku）：新物品需要类别。未找到“:value”——请添加 category 列，填写类别列表中的名称。',
+    'unit' => '第 :row 行（:sku）：新物品需要单位。未找到“:value”——请添加 unit 列，填写单位名称或代码，例如 件。',
+  ],
 );

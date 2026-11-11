@@ -538,4 +538,16 @@ return array (
     'import_date_invalid' => 'Dates must use the YYYY-MM-DD format.',
     'import_number_invalid' => 'Minimum quantity and unit price must be plain numbers, such as 12.5 or 1,250.00.',
   ),
+  'unit_conv' => [
+    'no_base_unit' => '“:item” has no base unit. Open the item and set its unit, then try again.',
+    'inactive_unit' => 'The unit “:unit” on “:item” is inactive or belongs to another organization. Choose an active unit.',
+    'missing' => '“:item” is stocked in “:base”, and there is no conversion from “:unit” to “:base”. Choose “:base” on this line, or add a conversion (Units → Conversions) such as 1 :unit = N :base.',
+    'serial_whole' => '“:item” is serial-tracked, so the quantity must be a whole number of units. Enter a whole quantity.',
+  ],
+  'opening_import' => [
+    'sku_name' => 'Row :row: each row needs an item SKU (sku) and name (name).',
+    'quantity' => 'Row :row (:sku): the quantity must be a number greater than 0, such as 5 or 2.5.',
+    'category' => 'Row :row (:sku): this is a new item and needs a category. “:value” was not found — add a category column with a name from your Categories list.',
+    'unit' => 'Row :row (:sku): this is a new item and needs a unit. “:value” was not found — add a unit column with a unit name or code from your Units list, such as Piece.',
+  ],
 );

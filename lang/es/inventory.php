@@ -500,4 +500,16 @@ return array (
     'inventory_viewer' => 'Visualizador de inventario',
     'inventory_accountant' => 'Contable de inventario',
   ),
+  'unit_conv' => [
+    'no_base_unit' => '«:item» no tiene unidad base. Abra el artículo, asigne su unidad e inténtelo de nuevo.',
+    'inactive_unit' => 'La unidad «:unit» de «:item» está inactiva o pertenece a otra organización. Elija una unidad activa.',
+    'missing' => '«:item» se almacena en «:base» y no hay conversión de «:unit» a «:base». Elija «:base» en esta línea o añada una conversión (Unidades → Conversiones), p. ej. 1 :unit = N :base.',
+    'serial_whole' => '«:item» se controla por número de serie; la cantidad debe ser un número entero de unidades. Introduzca una cantidad entera.',
+  ],
+  'opening_import' => [
+    'sku_name' => 'Fila :row: cada fila necesita el SKU (sku) y el nombre (name) del artículo.',
+    'quantity' => 'Fila :row (:sku): la cantidad debe ser un número mayor que 0, como 5 o 2.5.',
+    'category' => 'Fila :row (:sku): es un artículo nuevo y necesita una categoría. No se encontró «:value»: añada una columna category con un nombre de su lista de categorías.',
+    'unit' => 'Fila :row (:sku): es un artículo nuevo y necesita una unidad. No se encontró «:value»: añada una columna unit con el nombre o código de una unidad, como Pieza.',
+  ],
 );

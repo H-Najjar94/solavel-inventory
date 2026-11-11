@@ -4115,5 +4115,8 @@
   "integration.accountType.cogs": "Coût des ventes",
   "pagination.label": "Pagination de la liste",
   "pagination.showing": "Affichage de :from–:to sur :total",
-  "pagination.rows": "Lignes"
+  "pagination.rows": "Lignes",
+  "openingStock.csvNewItemColumns": "Pour les nouveaux articles, ajoutez aussi",
+  "openingStock.csvColumn.category": "Catégorie",
+  "openingStock.csvColumn.unit": "Unité"
 }

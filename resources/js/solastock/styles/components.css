@@ -283,14 +283,14 @@ html[dir="rtl"] :where(.content, .drawer, .modal, .modal-overlay) .field select 
 :where(.content, .drawer, .modal, .modal-overlay) input[type=radio]:not([role=switch]) { border-radius: 50%; }
 :where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):not([role=switch]):hover:not(:disabled) { border-color: var(--amber); }
 :where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):not([role=switch]):focus-visible { outline: none; box-shadow: var(--c-focus); }
-:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox]:not([role=switch]):checked {
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox]:not(.switch input):not([role=switch]):checked {
   background: var(--amber) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat;
   border-color: var(--amber);
 }
-:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox]:not([role=switch]):indeterminate {
+:where(.content, .drawer, .modal, .modal-overlay) input[type=checkbox]:not(.switch input):not([role=switch]):indeterminate {
   background: var(--amber) linear-gradient(#fff, #fff) center / 9px 2px no-repeat; border-color: var(--amber);
 }
-:where(.content, .drawer, .modal, .modal-overlay) input[type=radio]:not([role=switch]):checked {
+:where(.content, .drawer, .modal, .modal-overlay) input[type=radio]:not(.switch input):not([role=switch]):checked {
   border-color: var(--amber); background: radial-gradient(circle, var(--amber) 0 4.5px, var(--layer-1) 5px);
 }
 :where(.content, .drawer, .modal, .modal-overlay) input:is([type=checkbox], [type=radio]):disabled { opacity: 0.45; cursor: not-allowed; }

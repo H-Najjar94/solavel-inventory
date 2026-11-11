@@ -182,7 +182,7 @@ function MovementDrawer({ movement, open, onClose }) {
                                 {consumed.layers.map((l, i) => <ConsumedLayerCard layer={l} index={i} key={`${l.cost_layer_id}-${i}`} />)}
                             </div>
                             <div className="wh-card-foot fifo-total-line"><span className="wh-stat-label">{t('itemDetail.totalStockUsed')}</span>
-                                <strong style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>{money(consumed.consumed_total_value)}</strong></div>
+                                <strong style={{ marginInlineStart: 'auto', fontVariantNumeric: 'tabular-nums' }}>{money(consumed.consumed_total_value)}</strong></div>
                         </>
                     )}
                 </div>

@@ -4115,5 +4115,8 @@
   "integration.accountType.cogs": "Себестоимость продаж",
   "pagination.label": "Навигация по страницам списка",
   "pagination.showing": "Показано :from–:to из :total",
-  "pagination.rows": "Строки"
+  "pagination.rows": "Строки",
+  "openingStock.csvNewItemColumns": "Для новых товаров также",
+  "openingStock.csvColumn.category": "Категория",
+  "openingStock.csvColumn.unit": "Единица"
 }

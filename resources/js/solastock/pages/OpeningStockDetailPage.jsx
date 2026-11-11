@@ -40,7 +40,7 @@ export default function OpeningStockDetailPage() {
                 {isMock && <span className="badge badge--warn">{t('openingStock.sampleData')}</span>}
                 {entry.status === 'draft' && (
                     <Link to={`/opening-stock/${id}/edit`} className="btn"
-                        style={{ marginLeft: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}>{t('openingStock.edit')}</Link>
+                        style={{ marginInlineStart: 'auto', pointerEvents: gate.allowed ? 'auto' : 'none', opacity: gate.allowed ? 1 : 0.5 }}>{t('openingStock.edit')}</Link>
                 )}
             </header>
 

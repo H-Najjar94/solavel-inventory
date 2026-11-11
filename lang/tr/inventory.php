@@ -500,4 +500,16 @@ return array (
     'inventory_viewer' => 'Envanter Görüntüleyici',
     'inventory_accountant' => 'Stok muhasebecisi',
   ),
+  'unit_conv' => [
+    'no_base_unit' => '“:item” için temel birim yok. Kalemi açıp birimini ayarlayın ve tekrar deneyin.',
+    'inactive_unit' => '“:item” kalemindeki “:unit” birimi pasif veya başka bir kuruluşa ait. Aktif bir birim seçin.',
+    'missing' => '“:item” “:base” biriminde tutuluyor ve “:unit” biriminden “:base” birimine dönüşüm yok. Bu satırda “:base” seçin veya bir dönüşüm ekleyin (Birimler → Dönüşümler), ör. 1 :unit = N :base.',
+    'serial_whole' => '“:item” seri numarasıyla izleniyor; miktar tam sayı birim olmalı. Tam bir miktar girin.',
+  ],
+  'opening_import' => [
+    'sku_name' => 'Satır :row: her satırda ürün SKU (sku) ve adı (name) olmalı.',
+    'quantity' => 'Satır :row (:sku): miktar 0’dan büyük bir sayı olmalı, ör. 5 veya 2.5.',
+    'category' => 'Satır :row (:sku): yeni kalem için kategori gerekli. “:value” bulunamadı — kategori listenizden bir adla category sütunu ekleyin.',
+    'unit' => 'Satır :row (:sku): yeni kalem için birim gerekli. “:value” bulunamadı — birim adı veya koduyla unit sütunu ekleyin, ör. Adet.',
+  ],
 );
