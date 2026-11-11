@@ -114,7 +114,7 @@ class ShipmentService
         return DB::connection($this->conn())->transaction(function () use ($s, $attributes, $lines, $orgId) {
             $s = Shipment::query()->lockForUpdate()->findOrFail($s->id);
             if ($s->status !== 'draft') {
-                throw new RuntimeException("Only a draft shipment can be edited (status '{$s->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('shipment'), 'ref' => (string) $s->shipment_number, 'status' => \App\Support\Msg::status($s->status)]));
             }
 
             $s->fill(collect($attributes)->only([
@@ -145,7 +145,7 @@ class ShipmentService
                 ->lockForUpdate()
                 ->exists();
             if (! $reserved) {
-                throw new RuntimeException("Serial {$line->serial_id} is not actively reserved by this sales order.");
+                throw new RuntimeException(__('inventory.errors.serial_not_reserved_for_order', ['serial' => (string) (\App\Models\Tenant\SerialNumber::query()->whereKey($line->serial_id)->value('serial') ?: '#'.$line->serial_id)]));
             }
         }
     }
@@ -168,7 +168,7 @@ class ShipmentService
                 return $s; // idempotent
             }
             if ($s->status !== 'draft') {
-                throw new RuntimeException("Shipment {$s->id} cannot be posted from status '{$s->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('shipment'), 'ref' => (string) $s->shipment_number, 'status' => \App\Support\Msg::status($s->status)]));
             }
 
             app(\App\Services\Sales\FulfillmentRequestService::class)->validateShipment($s);
@@ -339,7 +339,7 @@ class ShipmentService
                 $line['sales_order_line_id'] = $sourceLine->id;
             }
             if (! empty($line['sales_order_line_id']) && ! $sourceLine) {
-                throw new RuntimeException('The sales-order source line is unavailable in this organization.');
+                throw new RuntimeException(__('inventory.errors.so_source_line_unavailable'));
             }
             $line = $sourceLine && $sourceLine->unit_conversion_version
                 ? $this->conversions->normalizeLineFromSnapshot($line, 'quantity', $sourceLine)

@@ -735,7 +735,7 @@ class ItemController extends ApiController
                 return false;
             });
             if ($invalid->isNotEmpty()) {
-                return $this->error('bulk_update_reorder_levels', __('The reorder point cannot exceed the maximum stock.'), 422, [
+                return $this->error('bulk_update_reorder_levels', __('inventory.validation.reorder_exceeds_max'), 422, [
                     'items' => $invalid->map(fn (Item $item) => ['id' => $item->id, 'sku' => $item->sku, 'max_stock' => $item->max_stock])->values()->all(),
                 ]);
             }

@@ -530,7 +530,8 @@ export default function SettingsPage() {
                             <input type="checkbox" checked={customRole.permissions.includes(p.key)} onChange={() => togglePermission(p.key)} /> <strong>{p.key}</strong><br /><span className="muted">{tr(`settings.permission.${p.key}`, {}, p.label)}</span>
                         </label>)}
                     </div>
-                    <button className="btn btn--primary" disabled={customRole.permissions.length === 0}>{tr('settings.roles.save')}</button>
+                    <button className="btn btn--primary" disabled={customRole.permissions.length === 0} title={customRole.permissions.length === 0 ? tr('settings.roles.saveHint') : ''}>{tr('settings.roles.save')}</button>
+                    {customRole.permissions.length === 0 && <p className="muted" style={{ marginTop: 6 }}>{tr('settings.roles.saveHint')}</p>}
                 </form>
                 {(rolesQuery.data?.roles ?? []).length > 0 && <table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.roles.role')}</th><th>{tr('settings.roles.key')}</th><th>{tr('settings.roles.permissions')}</th><th>{tr('settings.roles.assignments')}</th><th>{tr('settings.common.status')}</th></tr></thead><tbody>
                     {(rolesQuery.data?.roles ?? []).map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.key}</td><td>{(r.permissions ?? []).length}</td><td>{r.assignments_count ?? 0}</td><td>{tr(r.is_active ? 'settings.common.active' : 'settings.common.inactive')}</td></tr>)}

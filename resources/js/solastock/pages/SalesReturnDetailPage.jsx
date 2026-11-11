@@ -70,13 +70,13 @@ export default function SalesReturnDetailPage() {
             {tab === 'audit' && <div className="panel"><EmptyState title={t('returns.common.auditTimeline', 'Audit timeline')} hint={t('returns.detail.auditHint', 'Return creation, authorization, inspection, and posting events are recorded in the audit log.')} /></div>}
 
             <div className="doc-actions">
-                {r.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.authorizeSalesReturn(id), t('returns.messages.authorized', 'RMA authorized.'))}>{t('returns.actions.authorize', 'Authorize RMA')}</button>}
-                {r.status === 'authorized' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => action(() => api.inspectSalesReturn(id), t('returns.messages.inspected', 'Return inspected.'))}>{t('returns.actions.inspect', 'Mark inspected')}</button>}
-                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmPost(true)}>{t('returns.actions.post', 'Post return')}</button>}
-                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn" disabled={!gate.allowed} onClick={async () => {
+                {r.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => action(() => api.authorizeSalesReturn(id), t('returns.messages.authorized', 'RMA authorized.'))}>{t('returns.actions.authorize', 'Authorize RMA')}</button>}
+                {r.status === 'authorized' && <button className="btn btn--primary" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => action(() => api.inspectSalesReturn(id), t('returns.messages.inspected', 'Return inspected.'))}>{t('returns.actions.inspect', 'Mark inspected')}</button>}
+                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn btn--primary" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setConfirmPost(true)}>{t('returns.actions.post', 'Post return')}</button>}
+                {['inspected', 'authorized', 'draft'].includes(r.status) && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={async () => {
                     if (await feedback.confirm({title:t('returns.actions.cancelReturn','Cancel return'),action:t('returns.actions.cancelReturn','Cancel return'),message:t('returns.messages.confirmCancel', 'Cancel this unposted return and release its quantities?'),reference:r.return_number})) action(() => api.cancelSalesReturn(id), t('returns.messages.cancelled', 'Return cancelled. Reserved quantities were released.'));
                 }}>{t('returns.actions.cancelReturn', 'Cancel return')}</button>}
-                {r.status === 'posted' && <button className="btn" disabled={!gate.allowed} onClick={async () => {
+                {r.status === 'posted' && <button className="btn" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={async () => {
                     const reason = await feedback.input({title:t('returns.actions.reverse','Reverse return'),action:t('returns.actions.reverse','Reverse return'),message:t('returns.messages.reverseReason', 'Reason for reversing this posted return'),label:t('returns.common.reason','Reason'),minLength:1,reference:r.return_number});
                     if (reason) action(() => api.reverseSalesReturn(id, reason), t('returns.messages.reversed', 'Return reversed.'));
                 }}>{t('returns.actions.reverse', 'Reverse return')}</button>}

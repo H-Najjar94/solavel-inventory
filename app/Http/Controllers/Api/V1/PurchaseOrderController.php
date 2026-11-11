@@ -205,7 +205,7 @@ class PurchaseOrderController extends ApiController
     {
         $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if (in_array($purchase_order->status, ['received', 'cancelled'], true)) {
-            return $this->error('po_not_cancellable', "A {$purchase_order->status} PO cannot be cancelled.", 422);
+            return $this->error('po_not_cancellable', __('inventory.errors.cancel_not_allowed', ['doc' => \App\Support\Msg::doc('purchase_order'), 'ref' => (string) $purchase_order->po_number, 'status' => \App\Support\Msg::status($purchase_order->status)]), 422);
         }
         $purchase_order->update(['status' => 'cancelled']);
         $this->backorders->refresh($purchase_order->fresh('lines'));

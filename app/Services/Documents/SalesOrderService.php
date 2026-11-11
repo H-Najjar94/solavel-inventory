@@ -75,7 +75,7 @@ class SalesOrderService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if ($so->status !== 'draft') {
-                throw new RuntimeException("Only a draft sales order can be edited (status '{$so->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('sales_order'), 'ref' => (string) $so->order_number, 'status' => \App\Support\Msg::status($so->status)]));
             }
             $attributes = $this->applyCustomerName($attributes);
             $attributes['integration_currency_code'] = $attributes['currency_code'] ?? null;
@@ -98,7 +98,7 @@ class SalesOrderService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if ($so->status !== 'draft') {
-                throw new RuntimeException("Only a draft sales order can be confirmed (status '{$so->status}').");
+                throw new RuntimeException(__('inventory.errors.confirm_draft_only', ['doc' => \App\Support\Msg::doc('sales_order'), 'ref' => (string) $so->order_number, 'status' => \App\Support\Msg::status($so->status)]));
             }
             $so->loadMissing('lines');
             foreach ($so->lines as $line) if (Item::query()->findOrFail($line->item_id)->available_for_sale === false) throw \Illuminate\Validation\ValidationException::withMessages(['lines'=>__('inventory.consumption.sale_disabled')]);
@@ -118,7 +118,7 @@ class SalesOrderService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->with('lines.item')->findOrFail($so->id);
             if (! in_array($so->status, ['confirmed', 'partially_reserved', 'reserved'], true)) {
-                throw new RuntimeException("Sales order must be confirmed before reserving (status '{$so->status}').");
+                throw new RuntimeException(__('inventory.errors.reserve_needs_confirmed', ['doc' => \App\Support\Msg::doc('sales_order'), 'ref' => (string) $so->order_number, 'status' => \App\Support\Msg::status($so->status)]));
             }
             $this->workflowValidation->assertOperationalDocumentReady($so, 'stock_reserved');
 
@@ -142,7 +142,7 @@ class SalesOrderService
                 $selectedSerials = array_values(array_unique(array_map('intval', $options['serial_ids'][$line->id] ?? [])));
                 if ($line->item?->tracksSerials()) {
                     if ((float) $needed !== (float) count($selectedSerials)) {
-                        throw new RuntimeException("Select exactly {$needed} serial(s) for {$line->item->sku}.");
+                        throw new RuntimeException(__('inventory.errors.serial_count', ['count' => $needed, 'sku' => (string) $line->item->sku]));
                     }
                     $res = [];
                     foreach ($selectedSerials as $serialId) {
@@ -219,7 +219,7 @@ class SalesOrderService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $so->id);
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             if (in_array($so->status, ['shipped', 'cancelled'], true)) {
-                throw new RuntimeException("A {$so->status} sales order cannot be cancelled.");
+                throw new RuntimeException(__('inventory.errors.cancel_not_allowed', ['doc' => \App\Support\Msg::doc('sales_order'), 'ref' => (string) $so->order_number, 'status' => \App\Support\Msg::status($so->status)]));
             }
             $so->loadMissing('lines');
             $this->workflowValidation->assertOperationalDocumentReady($so, 'stock_reservation_released');

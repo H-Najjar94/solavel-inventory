@@ -55,7 +55,7 @@ class RecallService
             $orgId = $this->context->idOrFail();
             $recall = Recall::query()->lockForUpdate()->findOrFail($recall->id);
             if ($recall->status !== 'draft') {
-                throw new RuntimeException("Only a draft recall can be edited (status '{$recall->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('recall'), 'ref' => (string) $recall->recall_number, 'status' => \App\Support\Msg::status($recall->status)]));
             }
             $recall->fill(collect($attributes)->only(['recall_number', 'item_id', 'scope', 'reason', 'notes'])->toArray());
             $recall->save();
@@ -75,7 +75,7 @@ class RecallService
                 return $recall;
             }
             if ($recall->status !== 'draft') {
-                throw new RuntimeException("Recall {$recall->id} cannot be activated from '{$recall->status}'.");
+                throw new RuntimeException(__('inventory.errors.recall_activate', ['doc' => \App\Support\Msg::doc('recall'), 'ref' => (string) $recall->recall_number, 'status' => \App\Support\Msg::status($recall->status)]));
             }
 
             foreach ($recall->lines as $line) {

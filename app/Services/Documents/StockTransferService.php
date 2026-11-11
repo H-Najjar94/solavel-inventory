@@ -115,7 +115,7 @@ class StockTransferService
         return DB::connection($this->connection())->transaction(function () use ($t, $attributes, $lines, $orgId) {
             $t = StockTransfer::query()->lockForUpdate()->findOrFail($t->id);
             if ($t->status !== 'draft') {
-                throw new RuntimeException("Only a draft transfer can be edited (status '{$t->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('transfer'), 'ref' => (string) $t->transfer_number, 'status' => \App\Support\Msg::status($t->status)]));
             }
             if ((int) ($attributes['from_warehouse_id'] ?? $t->from_warehouse_id) === (int) ($attributes['to_warehouse_id'] ?? $t->to_warehouse_id)) {
                 throw new RuntimeException(__('inventory.stock.transfer_warehouses_distinct'));
@@ -166,7 +166,7 @@ class StockTransferService
                 return $t; // idempotent
             }
             if ($t->status !== 'draft') {
-                throw new RuntimeException("Transfer {$t->id} cannot be posted from status '{$t->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('transfer'), 'ref' => (string) $t->transfer_number, 'status' => \App\Support\Msg::status($t->status)]));
             }
 
             $t->loadMissing('lines');
@@ -265,7 +265,7 @@ class StockTransferService
                 return $t;
             }
             if ($t->status !== 'draft') {
-                throw new RuntimeException("Transfer {$t->id} cannot be shipped from status '{$t->status}'.");
+                throw new RuntimeException(__('inventory.errors.ship_not_allowed', ['doc' => \App\Support\Msg::doc('transfer'), 'ref' => (string) $t->transfer_number, 'status' => \App\Support\Msg::status($t->status)]));
             }
 
             $t->loadMissing('lines');
@@ -312,7 +312,7 @@ class StockTransferService
                 return $t;
             }
             if ($t->status !== 'in_transit') {
-                throw new RuntimeException("Transfer {$t->id} cannot be received from status '{$t->status}'.");
+                throw new RuntimeException(__('inventory.errors.receive_not_allowed', ['doc' => \App\Support\Msg::doc('transfer'), 'ref' => (string) $t->transfer_number, 'status' => \App\Support\Msg::status($t->status)]));
             }
 
             $t->loadMissing('lines');
@@ -326,7 +326,7 @@ class StockTransferService
                     ->orderBy('id')
                     ->get();
                 if ($outRows->isEmpty()) {
-                    throw new RuntimeException("Transfer line {$line->id} has no shipped stock to receive.");
+                    throw new RuntimeException(__('inventory.errors.transfer_line_no_shipped', ['ref' => (string) $t->transfer_number, 'sku' => \App\Support\Msg::sku($line->item_id ?? null)]));
                 }
 
                 foreach ($outRows as $outIndex => $outRow) {

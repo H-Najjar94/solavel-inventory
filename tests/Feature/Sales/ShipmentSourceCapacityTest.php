@@ -30,7 +30,7 @@ class ShipmentSourceCapacityTest extends TestCase
         $other=$sales->createDraft(['warehouse_id'=>$warehouse->id],[['item_id'=>$item->id,'ordered_qty'=>'5','unit_price'=>'7']]);
         $before=StockLedger::query()->count();
         try{app(ShipmentService::class)->createDraft(['shipment_number'=>'QA-SHIP-'.\Illuminate\Support\Str::uuid(),'sales_order_id'=>$order->id,'warehouse_id'=>$warehouse->id],[['sales_order_line_id'=>$other->lines->first()->id,'item_id'=>$item->id,'quantity'=>'1']]);$this->fail('Foreign source accepted');}
-        catch(\RuntimeException $e){$this->assertStringContainsString('source line',$e->getMessage());}
+        catch(\RuntimeException $e){$this->assertSame(__('inventory.errors.so_source_line_unavailable'),$e->getMessage());}
         $this->assertSame($before,StockLedger::query()->count());
     }
     public function test_partial_shipments_and_replay_preserve_exact_order_capacity(): void

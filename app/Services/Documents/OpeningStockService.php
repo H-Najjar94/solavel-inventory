@@ -98,7 +98,7 @@ class OpeningStockService
         return DB::connection($this->connection())->transaction(function () use ($entry, $attributes, $lines, $orgId) {
             $entry = OpeningStockEntry::query()->lockForUpdate()->findOrFail($entry->id);
             if ($entry->status !== 'draft') {
-                throw new RuntimeException("Only a draft opening stock entry can be edited (status '{$entry->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('opening'), 'ref' => (string) $entry->entry_number, 'status' => \App\Support\Msg::status($entry->status)]));
             }
 
             // The shared request normalizes an omitted number/date to null.
@@ -131,7 +131,7 @@ class OpeningStockService
                 $line = $this->conversions->normalizeLine($line, 'quantity');
             } else {
                 if (! empty($line['entered_unit_id'])) {
-                    throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+                    throw new RuntimeException(__('inventory.errors.alt_unit_serial'));
                 }
                 $line = $this->conversions->normalizeLine(array_merge($line, [
                     'quantity' => '1', 'entered_qty' => '1',
@@ -171,7 +171,7 @@ class OpeningStockService
 
             $qty = Decimal::qty((string) $line['quantity']);
             if (! Decimal::gt($qty, '0')) {
-                throw new RuntimeException('Opening stock line quantity must be > 0.');
+                throw new RuntimeException(__('inventory.errors.line_qty_positive', ['doc' => \App\Support\Msg::doc('opening')]));
             }
             $lineTotal = Decimal::money(Decimal::mul($qty, $unitCost));
             $totalValue = Decimal::add($totalValue, $lineTotal);
@@ -225,7 +225,7 @@ class OpeningStockService
                 return $entry; // idempotent
             }
             if ($entry->status !== 'draft') {
-                throw new RuntimeException("Opening stock {$entry->id} cannot be posted from status '{$entry->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('opening'), 'ref' => (string) $entry->entry_number, 'status' => \App\Support\Msg::status($entry->status)]));
             }
 
             app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady((int) $entry->organization_id, 'opening_stock.posted');
@@ -279,7 +279,7 @@ class OpeningStockService
                 return $entry; // idempotent
             }
             if (! $entry->isPosted()) {
-                throw new RuntimeException("Only a posted opening stock entry can be reversed (status '{$entry->status}').");
+                throw new RuntimeException(__('inventory.errors.reverse_posted_only', ['doc' => \App\Support\Msg::doc('opening'), 'ref' => (string) $entry->entry_number, 'status' => \App\Support\Msg::status($entry->status)]));
             }
 
             app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady((int) $entry->organization_id, 'opening_stock.reversed');

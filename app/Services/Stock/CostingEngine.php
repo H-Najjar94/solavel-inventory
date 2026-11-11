@@ -151,8 +151,7 @@ class CostingEngine
         if (Decimal::gt($remainingToConsume, '0')) {
             if (! $allowNegative) {
                 throw new RuntimeException(
-                    'FIFO: insufficient cost layers to satisfy outbound quantity '
-                    ."(short by {$remainingToConsume}). Negative stock is disabled."
+                    __('inventory.errors.fifo_short', ['sku' => \App\Support\Msg::sku($itemId), 'warehouse' => \App\Support\Msg::warehouse($warehouseId), 'short' => (string) $remainingToConsume, 'requested' => (string) $quantity])
                 );
             }
             // Negative allowed: cost the shortfall at last known layer cost or 0.

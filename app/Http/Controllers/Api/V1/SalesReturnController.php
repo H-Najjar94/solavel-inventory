@@ -178,7 +178,7 @@ class SalesReturnController extends ApiController
     public function update(StoreSalesReturnRequest $request, SalesReturn $sales_return): JsonResponse
     {
         $this->assertReturnScope($sales_return);
-        abort_if($this->isTypedCashReturn($sales_return),422,'Cancel this saved Cash return draft and create a new operation to change its quantities.');
+        abort_if($this->isTypedCashReturn($sales_return),422,__('inventory.errors.cash_return_locked'));
         try {
             $data = $request->validated();
             $this->assertPayloadScope($data);

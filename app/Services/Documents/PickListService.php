@@ -72,7 +72,7 @@ class PickListService
                         if (PickListLine::query()->where('serial_id', $reservation->serial_id)
                             ->whereHas('pickList', fn ($query) => $query->whereNotIn('status', ['cancelled']))
                             ->lockForUpdate()->exists()) {
-                            throw new RuntimeException("Serial {$reservation->serial_id} already belongs to an active pick list.");
+                            throw new RuntimeException(__('inventory.errors.serial_in_active_pick', ['serial' => (string) (\App\Models\Tenant\SerialNumber::query()->whereKey($reservation->serial_id)->value('serial') ?: '#'.$reservation->serial_id)]));
                         }
                         $pl->lines()->create($base + [
                             'reserved_qty' => '1.0000',
@@ -96,13 +96,13 @@ class PickListService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pl->sales_order_id);
             $pl = PickList::query()->lockForUpdate()->with('lines')->findOrFail($pl->id);
             if (in_array($pl->status, ['picked', 'cancelled'], true)) {
-                throw new RuntimeException("Pick list {$pl->id} is {$pl->status} and cannot be edited.");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('pick_list'), 'ref' => (string) $pl->pick_number, 'status' => \App\Support\Msg::status($pl->status)]));
             }
             foreach ($pl->lines as $line) {
                 if (array_key_exists($line->id, $picks)) {
                     $qty = Decimal::qty((string) $picks[$line->id]);
                     if (Decimal::gt($qty, (string) $line->reserved_qty)) {
-                        throw new RuntimeException("Cannot pick {$qty} for line {$line->id}: only {$line->reserved_qty} reserved.");
+                        throw new RuntimeException(__('inventory.errors.pick_exceeds_reserved', ['qty' => $qty, 'sku' => \App\Support\Msg::sku($line->item_id ?? null), 'available' => (string) $line->reserved_qty, 'ref' => (string) $pl->pick_number]));
                     }
                     $line->picked_qty = $qty;
                     $line->status = Decimal::gte($qty, (string) $line->reserved_qty) ? 'picked' : 'partial';
@@ -128,7 +128,7 @@ class PickListService
                 return $pl;
             }
             if ($pl->status === 'cancelled') {
-                throw new RuntimeException("Cancelled pick list {$pl->id} cannot be marked picked.");
+                throw new RuntimeException(__('inventory.errors.cancelled_cannot_complete', ['doc' => \App\Support\Msg::doc('pick_list'), 'ref' => (string) $pl->pick_number]));
             }
             $this->workflowValidation->assertOperationalDocumentReady($pl, 'pick_list.picked');
             $pl->status = 'picked';

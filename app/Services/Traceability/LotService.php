@@ -38,10 +38,10 @@ class LotService
         return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $lotCode, $attributes) {
             $item = Item::query()->where('organization_id', $orgId)->findOrFail($itemId);
             if (! $item->tracksLots()) {
-                throw new RuntimeException("Item {$item->sku} is not lot-tracked.");
+                throw new RuntimeException(__('inventory.errors.not_lot_tracked', ['sku' => (string) $item->sku]));
             }
             if ($item->tracksExpiry() && empty($attributes['expiry_date'])) {
-                throw new RuntimeException("Item {$item->sku} requires an expiry date on lot capture.");
+                throw new RuntimeException(__('inventory.errors.lot_expiry_required', ['sku' => (string) $item->sku]));
             }
 
             $lot = Lot::query()->where('organization_id', $orgId)
@@ -84,7 +84,7 @@ class LotService
     public function setStatus(Lot $lot, string $status, ?string $notes = null): Lot
     {
         if (! in_array($status, Lot::STATUSES, true)) {
-            throw new RuntimeException("Invalid lot status '{$status}'.");
+            throw new RuntimeException(__('inventory.errors.invalid_status', ['status' => \App\Support\Msg::status($status)]));
         }
 
         return DB::connection($this->conn())->transaction(function () use ($lot, $status, $notes) {

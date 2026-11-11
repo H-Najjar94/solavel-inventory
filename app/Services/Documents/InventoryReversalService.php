@@ -55,7 +55,7 @@ class InventoryReversalService
                 return InventoryReversal::query()->findOrFail($receipt->reversal_id);
             }
             if ($receipt->status !== 'posted') {
-                throw new RuntimeException("Only a posted goods receipt can be reversed (status '{$receipt->status}').");
+                throw new RuntimeException(__('inventory.errors.reverse_posted_only', ['doc' => \App\Support\Msg::doc('grn'), 'ref' => (string) $receipt->grn_number, 'status' => \App\Support\Msg::status($receipt->status)]));
             }
 
             app(PostedPurchaseReversalGuard::class)->assertReceiptReversible($receipt);
@@ -102,7 +102,7 @@ class InventoryReversalService
                 return InventoryReversal::query()->findOrFail($adjustment->reversal_id);
             }
             if (! $adjustment->isPosted()) {
-                throw new RuntimeException("Only a posted adjustment can be reversed (status '{$adjustment->status}').");
+                throw new RuntimeException(__('inventory.errors.reverse_posted_only', ['doc' => \App\Support\Msg::doc('adjustment'), 'ref' => (string) $adjustment->adjustment_number, 'status' => \App\Support\Msg::status($adjustment->status)]));
             }
             if ($adjustment->lines->contains(fn ($line) => $line->direction === 'increase')) {
                 $this->assertInboundSourceStillReversible('stock_adjustment:'.$adjustment->id.':post', 'adjustment');
@@ -206,7 +206,7 @@ class InventoryReversalService
                 return InventoryReversal::query()->findOrFail($return->reversal_id);
             }
             if ($return->status !== 'posted') {
-                throw new RuntimeException("Only a posted sales return can be reversed (status '{$return->status}').");
+                throw new RuntimeException(__('inventory.errors.reverse_posted_only', ['doc' => \App\Support\Msg::doc('sales_return'), 'ref' => (string) $return->return_number, 'status' => \App\Support\Msg::status($return->status)]));
             }
             $sourceMappingUuid = IntegrationDocumentLifecycleMapping::query()
                 ->where('source_application', 'solastock')->where('source_document_type', 'sales_return')
@@ -442,7 +442,7 @@ class InventoryReversalService
     private function assertReason(string $reason): void
     {
         if (mb_strlen(trim($reason)) < 3) {
-            throw new RuntimeException('A reversal reason of at least 3 characters is required.');
+            throw new RuntimeException(__('inventory.errors.reason_min'));
         }
     }
 }

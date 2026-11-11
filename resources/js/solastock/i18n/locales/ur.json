@@ -4118,5 +4118,7 @@
   "pagination.rows": "قطاریں",
   "openingStock.csvNewItemColumns": "نئے آئٹمز کے لیے یہ بھی",
   "openingStock.csvColumn.category": "زمرہ",
-  "openingStock.csvColumn.unit": "اکائی"
+  "openingStock.csvColumn.unit": "اکائی",
+  "planAccess.manageAppsAndPlans": "ایپس اور پلانز کا نظم",
+  "settings.roles.saveHint": "اس کردار کو محفوظ کرنے کے لیے کم از کم ایک اجازت منتخب کریں۔"
 }

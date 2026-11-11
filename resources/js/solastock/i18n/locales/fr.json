@@ -4118,5 +4118,7 @@
   "pagination.rows": "Lignes",
   "openingStock.csvNewItemColumns": "Pour les nouveaux articles, ajoutez aussi",
   "openingStock.csvColumn.category": "Catégorie",
-  "openingStock.csvColumn.unit": "Unité"
+  "openingStock.csvColumn.unit": "Unité",
+  "planAccess.manageAppsAndPlans": "Gérer les applications et les offres",
+  "settings.roles.saveHint": "Sélectionnez au moins une autorisation pour enregistrer ce rôle."
 }

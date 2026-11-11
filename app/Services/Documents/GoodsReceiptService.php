@@ -105,7 +105,7 @@ class GoodsReceiptService
         return DB::connection($this->connection())->transaction(function () use ($grn, $attributes, $lines, $orgId) {
             $grn = GoodsReceipt::query()->lockForUpdate()->findOrFail($grn->id);
             if ($grn->status !== 'draft') {
-                throw new RuntimeException("Only a draft GRN can be edited (status '{$grn->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('grn'), 'ref' => (string) $grn->grn_number, 'status' => \App\Support\Msg::status($grn->status)]));
             }
 
             $this->assertSource(array_key_exists('purchase_order_id', $attributes) ? $attributes['purchase_order_id'] : $grn->purchase_order_id, $lines);
@@ -163,7 +163,7 @@ class GoodsReceiptService
                     ? PurchaseOrderLine::query()->where('organization_id', $orgId)->find((int) $line['purchase_order_line_id'])
                     : null;
                 if (! empty($line['purchase_order_line_id']) && ! $sourceLine) {
-                    throw new RuntimeException('The purchase-order source line is unavailable in this organization.');
+                    throw new RuntimeException(__('inventory.errors.po_source_line_unavailable'));
                 }
                 $line = $sourceLine && $sourceLine->unit_conversion_version
                     ? $this->conversions->normalizeLineFromSnapshot($line, 'received_qty', $sourceLine)
@@ -176,7 +176,7 @@ class GoodsReceiptService
                 }
             } else {
                 if (! empty($line['entered_unit_id'])) {
-                    throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+                    throw new RuntimeException(__('inventory.errors.alt_unit_serial'));
                 }
                 $line = $this->conversions->normalizeLine(array_merge($line, [
                     'received_qty' => '1', 'accepted_qty' => '1', 'entered_qty' => '1',
@@ -249,7 +249,7 @@ class GoodsReceiptService
                 return $grn; // idempotent
             }
             if ($grn->status !== 'draft') {
-                throw new RuntimeException("GRN {$grn->id} cannot be posted from status '{$grn->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('grn'), 'ref' => (string) $grn->grn_number, 'status' => \App\Support\Msg::status($grn->status)]));
             }
 
             $grn->loadMissing('lines');

@@ -135,10 +135,10 @@ trait ValidatesItem
             }
             if (is_numeric($levels['max_stock'] ?? null)) {
                 if (is_numeric($levels['min_stock'] ?? null) && (float) $levels['min_stock'] > (float) $levels['max_stock']) {
-                    $v->errors()->add('max_stock', __('Maximum stock must be at least the minimum stock.'));
+                    $v->errors()->add('max_stock', __('inventory.validation.max_stock_min'));
                 }
                 if (is_numeric($levels['reorder_point'] ?? null) && (float) $levels['reorder_point'] > (float) $levels['max_stock']) {
-                    $v->errors()->add('reorder_point', __('The reorder point cannot exceed the maximum stock.'));
+                    $v->errors()->add('reorder_point', __('inventory.validation.reorder_exceeds_max'));
                 }
             }
 

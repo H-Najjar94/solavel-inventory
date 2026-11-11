@@ -15,11 +15,11 @@ final class ReorderLevels
         }
         $min = $levels['min_stock'] ?? null;
         if ($min !== null && $min !== '' && (float) $min > (float) $max) {
-            throw ValidationException::withMessages(['max_stock' => __('Maximum stock must be at least the minimum stock.')]);
+            throw ValidationException::withMessages(['max_stock' => __('inventory.validation.max_stock_min')]);
         }
         $point = $levels['reorder_point'] ?? null;
         if ($point !== null && $point !== '' && (float) $point > (float) $max) {
-            throw ValidationException::withMessages(['reorder_point' => __('The reorder point cannot exceed the maximum stock.')]);
+            throw ValidationException::withMessages(['reorder_point' => __('inventory.validation.reorder_exceeds_max')]);
         }
     }
 }

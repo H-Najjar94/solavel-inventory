@@ -110,7 +110,7 @@ class StockAdjustmentService
         return DB::connection($this->connection())->transaction(function () use ($adj, $attributes, $lines, $orgId) {
             $adj = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->id);
             if ($adj->status !== 'draft') {
-                throw new RuntimeException("Only a draft adjustment can be edited (status '{$adj->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('adjustment'), 'ref' => (string) $adj->adjustment_number, 'status' => \App\Support\Msg::status($adj->status)]));
             }
 
             $adj->fill(collect($attributes)->only(['adjustment_number', 'adjustment_date', 'warehouse_id', 'reason_code', 'notes'])->toArray());
@@ -143,7 +143,7 @@ class StockAdjustmentService
                 throw new RuntimeException(__('inventory.stock.adjustment_direction'));
             }
             if (! empty($line['serials']) && ! empty($line['entered_unit_id'])) {
-                throw new RuntimeException('Alternate-unit quantities cannot be combined with explicit serial capture.');
+                throw new RuntimeException(__('inventory.errors.alt_unit_serial'));
             }
             // A gain without an entered cost is valued at the item's current
             // costing basis (shared with stock-count surpluses), never at 0.
@@ -193,7 +193,7 @@ class StockAdjustmentService
     {
         $qty = Decimal::qty((string) $line['quantity']);
         if (! Decimal::gt($qty, '0')) {
-            throw new RuntimeException('Adjustment line quantity must be > 0.');
+            throw new RuntimeException(__('inventory.errors.line_qty_positive', ['doc' => \App\Support\Msg::doc('adjustment')]));
         }
 
         return $qty;
@@ -243,7 +243,7 @@ class StockAdjustmentService
                 return $adj; // idempotent
             }
             if ($adj->status !== 'draft') {
-                throw new RuntimeException("Adjustment {$adj->id} cannot be posted from status '{$adj->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('adjustment'), 'ref' => (string) $adj->adjustment_number, 'status' => \App\Support\Msg::status($adj->status)]));
             }
 
             app(\App\Services\Integration\OrganizationAccountRequirements::class)->assertOperationReady((int) $adj->organization_id, 'adjustment.posted');
