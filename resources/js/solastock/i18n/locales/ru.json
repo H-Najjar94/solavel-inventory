@@ -4118,5 +4118,7 @@
   "pagination.rows": "Строки",
   "openingStock.csvNewItemColumns": "Для новых товаров также",
   "openingStock.csvColumn.category": "Категория",
-  "openingStock.csvColumn.unit": "Единица"
+  "openingStock.csvColumn.unit": "Единица",
+  "planAccess.manageAppsAndPlans": "Управление приложениями и тарифами",
+  "settings.roles.saveHint": "Выберите хотя бы одно разрешение, чтобы сохранить эту роль."
 }

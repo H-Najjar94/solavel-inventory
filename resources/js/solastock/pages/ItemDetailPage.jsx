@@ -449,7 +449,7 @@ export default function ItemDetailPage() {
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.itemBarcodes')}</h3></div><div className="card-body">
                         {(data.barcodes ?? []).length === 0 ? <EmptyState title={t('itemDetail.noBarcodes')} hint={t('itemDetail.noBarcodesHint')} />
                             : <table className="data-table"><thead><tr><th>{t('itemDetail.code')}</th><th>{t('itemDetail.type')}</th><th></th></tr></thead><tbody>
-                                {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'right' }}>
+                                {(data.barcodes ?? []).map((b) => <tr key={b.id}><td>{b.barcode}</td><td>{b.type}</td><td style={{ textAlign: 'end' }}>
                                     {gate.allowed && b.type !== 'primary' && <button className="btn btn--sm" onClick={() => makePrimary(b.id)}>{t('itemDetail.makePrimary')}</button>}
                                     {gate.allowed && <ConfirmedActionButton className="btn btn--sm" onConfirm={() => removeBarcode(b.id)} title={feedbackText('deleteBarcode')} message={feedbackText('deleteBarcodeBody')} action={feedbackText('deleteBarcode')}>{t('itemDetail.delete')}</ConfirmedActionButton>}
                                 </td></tr>)}

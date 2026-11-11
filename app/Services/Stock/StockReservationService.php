@@ -89,7 +89,7 @@ class StockReservationService
                 throw new RuntimeException(__('inventory.stock.serial_unavailable'));
             }
             if (! in_array($serial->status, ['available', 'in_stock', 'returned'], true)) {
-                throw new RuntimeException("Serial {$serial->serial} is not available (status: {$serial->status}).");
+                throw new RuntimeException(__('inventory.errors.serial_not_available', ['serial' => (string) $serial->serial, 'status' => \App\Support\Msg::status($serial->status)]));
             }
 
             $active = Reservation::query()->where('serial_id', $serialId)->where('status', 'active')->lockForUpdate()->first();
@@ -98,7 +98,7 @@ class StockReservationService
                     return $active;
                 }
 
-                throw new RuntimeException("Serial {$serial->serial} is already reserved.");
+                throw new RuntimeException(__('inventory.errors.serial_already_reserved', ['serial' => (string) $serial->serial]));
             }
 
             return $this->reserveInternal(
@@ -177,7 +177,7 @@ class StockReservationService
 
             $allowNegative = (bool) (InventorySetting::query()->first()->allow_negative_stock ?? false);
             if (Decimal::gt($remaining, '0') && ! $allowNegative) {
-                throw new RuntimeException("Cannot reserve {$requested}: only ".Decimal::sub($requested, $remaining).' available for item #'.$itemId.' at warehouse #'.$warehouseId.'.');
+                throw new RuntimeException(__('inventory.errors.cannot_reserve', ['requested' => (string) $requested, 'available' => (string) Decimal::sub($requested, $remaining), 'sku' => \App\Support\Msg::sku($itemId), 'warehouse' => \App\Support\Msg::warehouse($warehouseId)]));
             }
 
             $result = [];
@@ -280,7 +280,7 @@ class StockReservationService
             $allowNegative = (bool) (InventorySetting::query()->first()->allow_negative_stock ?? false);
             if (! $allowNegative && Decimal::gt($qty, $effectiveAvailable)) {
                 if (! $partial || ! Decimal::gt($effectiveAvailable, '0')) {
-                    throw new RuntimeException("Cannot reserve {$qty}: only {$effectiveAvailable} available for item #{$itemId} at warehouse #{$warehouseId}.");
+                    throw new RuntimeException(__('inventory.errors.cannot_reserve', ['requested' => (string) $qty, 'available' => (string) $effectiveAvailable, 'sku' => \App\Support\Msg::sku($itemId), 'warehouse' => \App\Support\Msg::warehouse($warehouseId)]));
                 }
                 $qty = Decimal::qty($effectiveAvailable);
             }

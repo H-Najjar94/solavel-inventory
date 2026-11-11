@@ -4118,5 +4118,7 @@
   "pagination.rows": "行数",
   "openingStock.csvNewItemColumns": "新物品还需要",
   "openingStock.csvColumn.category": "类别",
-  "openingStock.csvColumn.unit": "单位"
+  "openingStock.csvColumn.unit": "单位",
+  "planAccess.manageAppsAndPlans": "管理应用和套餐",
+  "settings.roles.saveHint": "请至少选择一项权限后再保存此角色。"
 }

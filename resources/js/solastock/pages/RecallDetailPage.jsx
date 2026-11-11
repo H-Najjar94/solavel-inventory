@@ -113,7 +113,7 @@ export default function RecallDetailPage() {
             </div>}
 
             <div className="doc-actions">
-                {recall.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} onClick={() => setConfirmActivate(true)}>{t('recalls.detail.activate', 'Activate recall')}</button>}
+                {recall.status === 'draft' && <button className="btn btn--primary" disabled={!gate.allowed} title={gate.allowed ? '' : gate.reason} onClick={() => setConfirmActivate(true)}>{t('recalls.detail.activate', 'Activate recall')}</button>}
                 {recall.status === 'active' && <ConfirmedActionButton className="btn btn--danger" disabled={!gate.allowed} onConfirm={() => act(() => api.closeRecall(id), t('recalls.messages.closed', 'Recall closed.'))} title={t('recalls.detail.close', 'Close recall')} message={feedbackText('closeRecallBody')} action={t('recalls.detail.close', 'Close recall')}>{t('recalls.detail.close', 'Close recall')}</ConfirmedActionButton>}
             </div>
             <ConfirmModal open={confirmActivate} danger title={t('recalls.detail.activateTitle', 'Activate recall?')}

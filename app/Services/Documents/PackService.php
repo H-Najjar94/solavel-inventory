@@ -40,10 +40,10 @@ class PackService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pl->sales_order_id);
             $pl = PickList::query()->lockForUpdate()->with('lines')->findOrFail($pl->id);
             if ($pl->status !== 'picked') {
-                throw new RuntimeException("Pick list {$pl->id} must be picked before packing (status '{$pl->status}').");
+                throw new RuntimeException(__('inventory.errors.pack_needs_picked', ['doc' => \App\Support\Msg::doc('pick_list'), 'ref' => (string) $pl->pick_number, 'status' => \App\Support\Msg::status($pl->status)]));
             }
             if (Pack::query()->where('pick_list_id', $pl->id)->whereNotIn('status', ['cancelled'])->exists()) {
-                throw new RuntimeException("Pick list {$pl->id} already belongs to an active pack.");
+                throw new RuntimeException(__('inventory.errors.pick_already_packed', ['ref' => (string) $pl->pick_number]));
             }
 
             $pack = new Pack(array_merge([
@@ -86,7 +86,7 @@ class PackService
             app(\App\Services\Sales\FulfillmentRequestService::class)->guardOrderDemand((int) $pack->sales_order_id);
             $pack = Pack::query()->lockForUpdate()->with('lines')->findOrFail($pack->id);
             if (in_array($pack->status, ['packed', 'cancelled'], true)) {
-                throw new RuntimeException("Pack {$pack->id} is {$pack->status} and cannot be edited.");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('pack'), 'ref' => (string) $pack->pack_number, 'status' => \App\Support\Msg::status($pack->status)]));
             }
             if ($attributes) {
                 $pack->fill(collect($attributes)->only(['package_count', 'package_weight', 'carrier', 'tracking_number', 'notes'])->toArray());
@@ -96,7 +96,7 @@ class PackService
                 if (array_key_exists($line->id, $packs)) {
                     $qty = Decimal::qty((string) $packs[$line->id]);
                     if (Decimal::gt($qty, (string) $line->picked_qty)) {
-                        throw new RuntimeException("Cannot pack {$qty} for line {$line->id}: only {$line->picked_qty} picked.");
+                        throw new RuntimeException(__('inventory.errors.pack_exceeds_picked', ['qty' => $qty, 'sku' => \App\Support\Msg::sku($line->item_id ?? null), 'available' => (string) $line->picked_qty, 'ref' => (string) $pack->pack_number]));
                     }
                     $line->packed_qty = $qty;
                     $line->save();
@@ -117,7 +117,7 @@ class PackService
                 return $pack;
             }
             if ($pack->status === 'cancelled') {
-                throw new RuntimeException("Cancelled pack {$pack->id} cannot be marked packed.");
+                throw new RuntimeException(__('inventory.errors.cancelled_cannot_complete', ['doc' => \App\Support\Msg::doc('pack'), 'ref' => (string) $pack->pack_number]));
             }
             $this->workflowValidation->assertOperationalDocumentReady($pack, 'pack.packed');
             $pack->status = 'packed';

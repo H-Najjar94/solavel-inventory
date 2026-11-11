@@ -4118,5 +4118,7 @@
   "pagination.rows": "Satırlar",
   "openingStock.csvNewItemColumns": "Yeni kalemler için ayrıca",
   "openingStock.csvColumn.category": "Kategori",
-  "openingStock.csvColumn.unit": "Birim"
+  "openingStock.csvColumn.unit": "Birim",
+  "planAccess.manageAppsAndPlans": "Uygulamaları ve planları yönet",
+  "settings.roles.saveHint": "Bu rolü kaydetmek için en az bir izin seçin."
 }

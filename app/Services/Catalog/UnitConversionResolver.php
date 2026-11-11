@@ -37,7 +37,7 @@ class UnitConversionResolver
     {
         $enteredQty = (string) ($line['entered_qty'] ?? $line[$quantityKey] ?? '0');
         if (! preg_match('/^\d+(?:\.\d+)?$/', $enteredQty) || Decimal::cmp($enteredQty, '0') <= 0) {
-            throw new RuntimeException('Entered quantity must be a positive decimal.');
+            throw new RuntimeException(__('inventory.unit_conv.quantity_positive'));
         }
 
         $item = Item::query()->findOrFail((int) $line['item_id']);
@@ -87,7 +87,7 @@ class UnitConversionResolver
             $conversionId = (int) $conversion->id;
         }
         if (! preg_match('/^\d+(?:\.\d+)?$/', $factor) || Decimal::cmp($factor, '0') <= 0) {
-            throw new RuntimeException('Unit conversion factor must be a positive decimal.');
+            throw new RuntimeException(__('inventory.unit_conv.factor_positive'));
         }
 
         $normalizedSourceQty = Decimal::qty($enteredQty);
@@ -180,7 +180,7 @@ class UnitConversionResolver
     {
         $enteredQty = (string) ($line['entered_qty'] ?? $line[$quantityKey] ?? '0');
         if (! preg_match('/^\d+(?:\.\d+)?$/', $enteredQty) || Decimal::cmp($enteredQty, '0') <= 0) {
-            throw new RuntimeException('Entered quantity must be a positive decimal.');
+            throw new RuntimeException(__('inventory.unit_conv.quantity_positive'));
         }
         if ((int) ($line['item_id'] ?? 0) !== (int) $source->item_id) {
             throw new RuntimeException('The downstream item does not match its source line.');

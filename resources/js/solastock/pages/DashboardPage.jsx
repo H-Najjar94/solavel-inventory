@@ -69,7 +69,7 @@ function OpStat({ label, value, to, alert }) {
         }}>
             <span style={{ fontSize: 13, color: 'var(--ink-soft,#6b6357)' }}>{label}</span>
             <span style={{
-                fontSize: 15, fontWeight: 700, minWidth: 28, textAlign: 'right',
+                fontSize: 15, fontWeight: 700, minWidth: 28, textAlign: 'end',
                 color: v > 0 && alert ? TONE.danger : 'var(--ink,#222)',
             }}>{typeof value === 'number' ? num(value) : value}</span>
         </Link>

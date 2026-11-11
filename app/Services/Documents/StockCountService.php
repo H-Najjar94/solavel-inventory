@@ -79,7 +79,7 @@ class StockCountService
         return DB::connection($this->connection())->transaction(function () use ($count, $attributes, $lines, $orgId) {
             $count = StockCount::query()->lockForUpdate()->findOrFail($count->id);
             if ($count->status !== 'draft') {
-                throw new RuntimeException("Only a draft count can be edited (status '{$count->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('count'), 'ref' => (string) $count->count_number, 'status' => \App\Support\Msg::status($count->status)]));
             }
 
             $freezeSnapshot = (bool) ($attributes['freeze_snapshot'] ?? false);
@@ -128,7 +128,7 @@ class StockCountService
                 return $count; // idempotent
             }
             if (! in_array($count->status, ['review', 'counting', 'draft'], true)) {
-                throw new RuntimeException("Count {$count->id} cannot be posted from status '{$count->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('count'), 'ref' => (string) $count->count_number, 'status' => \App\Support\Msg::status($count->status)]));
             }
 
             $count->loadMissing('lines');

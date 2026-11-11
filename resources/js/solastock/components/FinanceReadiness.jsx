@@ -1,5 +1,6 @@
 import { localizedPair } from '../i18n/locales.js';
 import { sourceText } from '../i18n/locales.js';
+import { useI18n } from '../i18n/context.jsx';
 import React, {useEffect, useRef, useState} from 'react';
 import {Link} from 'react-router-dom';
 import './FinanceReadiness.css';
@@ -29,6 +30,7 @@ const descriptions={
 };
 export function FinanceReadinessSkeleton(){return <section className="finance-readiness-shell" aria-busy="true" aria-label={sourceText("Checking connection status", "جارٍ التحقق من حالة الربط")}><div className="finance-readiness__skeleton" aria-hidden="true"><span className="finance-readiness__skeleton-icon"/><div className="finance-readiness__skeleton-lines"><span/><span/><span/></div><span className="finance-readiness__skeleton-action"/></div></section>;}
 export default function FinanceReadiness({status,details=false,onContinue,onRetry}) {
+ const {t}=useI18n();
  const ar=document.documentElement.lang.startsWith('ar'),i=ar?1:0,s=status?.readiness;
  const busy=useRef(false),[pending,setPending]=useState(false),[error,setError]=useState('');
  useEffect(()=>{const restore=()=>{busy.current=false;setPending(false);onRetry?.();};window.addEventListener('pageshow',restore);return()=>window.removeEventListener('pageshow',restore);},[onRetry]);
@@ -54,7 +56,7 @@ export default function FinanceReadiness({status,details=false,onContinue,onRetr
   {(s?.blockers??[]).filter(k=>blockers[k]).map(k=><p className="finance-readiness__blocker" role="status" key={k}>{blockers[k][i]}</p>)}
   {!s?.can_manage&&s?.state!=='CONNECTED_READY'&&<p>{sourceText("Ask an authorized organization administrator to complete Finance setup.", "اطلب من مسؤول المؤسسة المخوّل إكمال الإعداد المالي.")}</p>}
   </div></div><div className="finance-readiness__actions">
-   {(s?.state==='ACCESS_REQUIRED'||plan)&&s?.can_manage&&s?.manage_access_url&&<a className="btn btn--primary" href={s.manage_access_url} target="_blank" rel="noopener noreferrer">{sourceText("Manage apps and plans", "إدارة التطبيقات والخطط")}</a>}
+   {(s?.state==='ACCESS_REQUIRED'||plan)&&s?.can_manage&&s?.manage_access_url&&<a className="btn btn--primary" href={s.manage_access_url} target="_blank" rel="noopener noreferrer">{t('planAccess.manageAppsAndPlans', 'Manage apps and plans')}</a>}
    {incomplete&&s?.setup_url&&<button className="btn btn--primary" disabled={pending} aria-busy={pending} onClick={setup}>{pending&&<i className="fa-solid fa-spinner fa-spin" aria-hidden="true"/>} {pending?(sourceText("Opening Finance setup…", "جارٍ فتح الإعداد المالي…")):(sourceText("Complete Finance setup", "إكمال الإعداد المالي"))}</button>}
    {details&&!plan&&s?.finance_setup_complete&&s?.can_manage&&s?.state!=='CONNECTED_READY'&&<button className="btn btn--primary" onClick={onContinue}>{sourceText("Continue connection setup", "متابعة إعداد الربط")}</button>}
    {(!s||s.state==='READINESS_UNAVAILABLE')&&<button className="btn" onClick={onRetry}>{sourceText("Retry", "إعادة المحاولة")}</button>}

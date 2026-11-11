@@ -520,7 +520,7 @@ class StockLedgerService
     ): StockLedger {
         // ── validate direction & quantity ──
         if (! in_array($m->direction, ['in', 'out'], true)) {
-            throw new RuntimeException("Invalid movement direction '{$m->direction}'.");
+            throw new RuntimeException(__('inventory.errors.invalid_direction', ['direction' => (string) $m->direction]));
         }
         $qty = Decimal::qty($m->quantity);
         if (! Decimal::gt($qty, '0')) {
@@ -533,7 +533,7 @@ class StockLedgerService
         // ── validate item & warehouse belong to this org (defense in depth) ──
         $item = Item::query()->find($m->itemId);
         if (! $item) {
-            throw new RuntimeException("Item {$m->itemId} not found in this organization.");
+            throw new RuntimeException(__('inventory.errors.movement_item_missing'));
         }
         if ((int) $item->organization_id !== $orgId) {
             throw new RuntimeException(__('inventory.stock.cross_item'));
@@ -558,14 +558,14 @@ class StockLedgerService
         // ── tracking compatibility (relaxed for reversals: original coords carried) ──
         if (! $isReversal) {
             if ($item->tracksSerials() && $m->serialId === null) {
-                throw new RuntimeException("Item {$item->sku} is serial-tracked; a serial is required.");
+                throw new RuntimeException(__('inventory.errors.serial_required', ['sku' => (string) $item->sku]));
             }
             if ($item->tracksLots() && $m->lotId === null) {
-                throw new RuntimeException("Item {$item->sku} is lot-tracked; a lot is required.");
+                throw new RuntimeException(__('inventory.errors.lot_required', ['sku' => (string) $item->sku]));
             }
         }
         if ($item->tracksSerials() && Decimal::cmp($qty, '1') !== 0) {
-            throw new RuntimeException('Serial-tracked movements must have quantity exactly 1.');
+            throw new RuntimeException(__('inventory.errors.serial_qty_one', ['sku' => (string) $item->sku]));
         }
 
         // ── lot trace policy: block OUT of expired / quarantined / recalled lots
@@ -617,8 +617,7 @@ class StockLedgerService
             $newQty = Decimal::sub((string) $balance->on_hand_qty, $qty);
             if (! $allowNegative && Decimal::lt($newQty, '0')) {
                 throw new RuntimeException(
-                    "Insufficient stock for item {$item->sku} at warehouse {$m->warehouseId}: "
-                    ."have {$balance->on_hand_qty}, need {$qty}. Negative stock disabled."
+                    __('inventory.errors.insufficient_stock', ['sku' => (string) $item->sku, 'warehouse' => \App\Support\Msg::warehouse($m->warehouseId), 'have' => (string) $balance->on_hand_qty, 'need' => (string) $qty])
                 );
             }
         }
@@ -718,7 +717,7 @@ class StockLedgerService
 
         $projectedBinQty = Decimal::qty(Decimal::add((string) $otherOnHand, $newCoordinateOnHand));
         if (Decimal::gt($projectedBinQty, (string) $bin->capacity)) {
-            throw new RuntimeException("Bin {$bin->code} capacity exceeded: capacity {$bin->capacity}, projected {$projectedBinQty}.");
+            throw new RuntimeException(__('inventory.errors.bin_capacity', ['bin' => (string) $bin->code, 'capacity' => (string) $bin->capacity, 'projected' => (string) $projectedBinQty]));
         }
     }
 
@@ -1019,7 +1018,7 @@ class StockLedgerService
     {
         $serial = SerialNumber::query()->where('organization_id', $orgId)->find($m->serialId);
         if (! $serial) {
-            throw new RuntimeException("Serial {$m->serialId} not found.");
+            throw new RuntimeException(__('inventory.errors.serial_missing'));
         }
         if ((int) $serial->item_id !== $m->itemId) {
             throw new RuntimeException(__('inventory.stock.serial_wrong_item'));
@@ -1027,14 +1026,14 @@ class StockLedgerService
 
         if ($m->direction === 'in') {
             if ($serial->status === 'in_stock') {
-                throw new RuntimeException("Serial {$serial->serial} is already in stock.");
+                throw new RuntimeException(__('inventory.errors.serial_in_stock', ['serial' => (string) $serial->serial]));
             }
             $serial->status = 'in_stock';
             $serial->warehouse_id = $m->warehouseId;
             $serial->bin_id = $m->binId;
         } else {
             if (! $serial->isAvailable()) {
-                throw new RuntimeException("Serial {$serial->serial} is not in stock (status: {$serial->status}).");
+                throw new RuntimeException(__('inventory.errors.serial_not_in_stock', ['serial' => (string) $serial->serial, 'status' => \App\Support\Msg::status($serial->status)]));
             }
             $serial->status = 'sold';
         }
@@ -1051,7 +1050,7 @@ class StockLedgerService
     {
         $serial = SerialNumber::query()->where('organization_id', $orgId)->find($movement->serialId);
         if (! $serial) {
-            throw new RuntimeException("Serial {$movement->serialId} not found.");
+            throw new RuntimeException(__('inventory.errors.serial_missing'));
         }
         if ((int) $serial->item_id !== $movement->itemId) {
             throw new RuntimeException(__('inventory.stock.serial_wrong_item'));
@@ -1059,12 +1058,12 @@ class StockLedgerService
 
         if ($originalDirection === 'in') {
             if (! in_array($serial->status, ['available', 'in_stock'], true)) {
-                throw new RuntimeException("Serial {$serial->serial} is not available for receipt reversal (status: {$serial->status}).");
+                throw new RuntimeException(__('inventory.errors.serial_no_receipt_reversal', ['serial' => (string) $serial->serial, 'status' => \App\Support\Msg::status($serial->status)]));
             }
             $serial->status = 'returned';
         } else {
             if (! in_array($serial->status, ['sold', 'shipped'], true)) {
-                throw new RuntimeException("Serial {$serial->serial} is not shipped for source reversal (status: {$serial->status}).");
+                throw new RuntimeException(__('inventory.errors.serial_not_shipped', ['serial' => (string) $serial->serial, 'status' => \App\Support\Msg::status($serial->status)]));
             }
             $serial->status = 'in_stock';
             $serial->warehouse_id = $movement->warehouseId;

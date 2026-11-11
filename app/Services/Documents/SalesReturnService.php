@@ -74,7 +74,7 @@ class SalesReturnService
                     throw new RuntimeException(__('inventory.documents.return_source_invalid'));
                 }
                 if (mb_strlen(trim((string) ($attributes['reason'] ?? ''))) < 3) {
-                    throw new RuntimeException('A source reversal reason of at least 3 characters is required.');
+                    throw new RuntimeException(__('inventory.errors.reason_min'));
                 }
                 $attributes['warehouse_id'] = $sourceShipment->warehouse_id;
                 if ($cashAdmission) $cashAdmission->assertSource($sourceShipment);
@@ -117,7 +117,7 @@ class SalesReturnService
         return DB::connection($this->conn())->transaction(function () use ($r, $attributes, $lines, $orgId) {
             $r = SalesReturn::query()->lockForUpdate()->findOrFail($r->id);
             if ($r->status !== 'draft') {
-                throw new RuntimeException("Only a draft sales return can be edited (status '{$r->status}').");
+                throw new RuntimeException(__('inventory.errors.edit_draft_only', ['doc' => \App\Support\Msg::doc('sales_return'), 'ref' => (string) $r->return_number, 'status' => \App\Support\Msg::status($r->status)]));
             }
             if ($r->is_source_reversal) {
                 throw new RuntimeException(__('inventory.documents.return_source_immutable'));
@@ -154,7 +154,7 @@ class SalesReturnService
                 return $r; // idempotent
             }
             if (! in_array($r->status, ['draft', 'authorized', 'inspected'], true)) {
-                throw new RuntimeException("Sales return {$r->id} cannot be posted from status '{$r->status}'.");
+                throw new RuntimeException(__('inventory.errors.post_not_allowed', ['doc' => \App\Support\Msg::doc('sales_return'), 'ref' => (string) $r->return_number, 'status' => \App\Support\Msg::status($r->status)]));
             }
 
             $this->workflowValidation->assertOperationalDocumentReady($r, 'sales_return.posted');
@@ -347,7 +347,7 @@ class SalesReturnService
                 return $r;
             }
             if ($r->status !== 'draft') {
-                throw new RuntimeException("Only a draft return can be authorized (status '{$r->status}').");
+                throw new RuntimeException(__('inventory.errors.authorize_draft_only', ['doc' => \App\Support\Msg::doc('sales_return'), 'ref' => (string) $r->return_number, 'status' => \App\Support\Msg::status($r->status)]));
             }
             $r->status = 'authorized';
             $r->authorized_at = now();
@@ -364,7 +364,7 @@ class SalesReturnService
             $return = SalesReturn::query()->lockForUpdate()->findOrFail($return->id);
             if ($return->status === 'cancelled') return $return;
             if (! in_array($return->status, ['draft', 'authorized', 'inspected'], true)) {
-                throw new RuntimeException('Only an unposted sales return can be cancelled.');
+                throw new RuntimeException(__('inventory.errors.return_cancel_unposted', ['ref' => (string) $return->return_number, 'status' => \App\Support\Msg::status($return->status)]));
             }
             $return->status = 'cancelled';
             $return->save();
@@ -377,7 +377,7 @@ class SalesReturnService
         return DB::connection($this->conn())->transaction(function () use ($r, $notes) {
             $r = SalesReturn::query()->lockForUpdate()->with('lines')->findOrFail($r->id);
             if (! in_array($r->status, ['authorized', 'inspected'], true)) {
-                throw new RuntimeException("Return must be authorized before inspection (status '{$r->status}').");
+                throw new RuntimeException(__('inventory.errors.inspect_needs_authorized', ['doc' => \App\Support\Msg::doc('sales_return'), 'ref' => (string) $r->return_number, 'status' => \App\Support\Msg::status($r->status)]));
             }
             foreach ($r->lines as $line) {
                 $line->inspection_status = match ($line->condition) {

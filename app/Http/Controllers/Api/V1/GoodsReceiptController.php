@@ -84,7 +84,7 @@ class GoodsReceiptController extends ApiController
     {
         $this->warehouseAccess->assertAllowed((int) $purchase_order->warehouse_id);
         if (! in_array($purchase_order->status, ['approved', 'partially_received'], true)) {
-            return $this->error('po_not_receivable', 'Only an approved/partially-received PO can be received.', 422);
+            return $this->error('po_not_receivable', __('inventory.errors.po_not_receivable', ['doc' => \App\Support\Msg::doc('purchase_order'), 'ref' => (string) $purchase_order->po_number, 'status' => \App\Support\Msg::status($purchase_order->status)]), 422);
         }
         $purchase_order->load('lines');
 

@@ -71,7 +71,7 @@ class SerialService
         return DB::connection($this->conn())->transaction(function () use ($orgId, $itemId, $serials, $attributes) {
             $item = Item::query()->where('organization_id', $orgId)->findOrFail($itemId);
             if (! $item->tracksSerials()) {
-                throw new RuntimeException("Item {$item->sku} is not serial-tracked.");
+                throw new RuntimeException(__('inventory.errors.not_serial_tracked', ['sku' => (string) $item->sku]));
             }
 
             $ids = [];
@@ -83,7 +83,7 @@ class SerialService
                 if ($existing) {
                     // A serial already in stock/in flight cannot be received again.
                     if (in_array($existing->status, ['available', 'in_stock', 'reserved', 'picked', 'packed', 'shipped'], true)) {
-                        throw new RuntimeException("Serial {$serial} is already live (status: {$existing->status}).");
+                        throw new RuntimeException(__('inventory.errors.serial_already_live', ['serial' => (string) $serial, 'status' => \App\Support\Msg::status($existing->status)]));
                     }
                     $existing->status = 'available';
                     $existing->lot_id = $attributes['lot_id'] ?? $existing->lot_id;
@@ -117,7 +117,7 @@ class SerialService
     public function setStatus(SerialNumber $serial, string $status, array $attributes = []): SerialNumber
     {
         if (! in_array($status, SerialNumber::STATUSES, true)) {
-            throw new RuntimeException("Invalid serial status '{$status}'.");
+            throw new RuntimeException(__('inventory.errors.invalid_status', ['status' => \App\Support\Msg::status($status)]));
         }
 
         return DB::connection($this->conn())->transaction(function () use ($serial, $status, $attributes) {
