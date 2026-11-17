@@ -65,6 +65,9 @@ final class FinanceWorkspaceController
             if (in_array($input['action'], ['purchasing.party.ensure', 'purchasing.party.status', 'purchasing.party.choices', 'purchasing.party.resolve', 'sales.party.ensure', 'sales.party.status', 'sales.party.choices', 'sales.party.resolve'], true)) {
                 return response()->json(['success'=>true,'data'=>app(\App\Services\Integration\ContinuousPartySync::class)->dispatch($input,$org)]);
             }
+            if (in_array($input['action'], ['purchasing.party.merge', 'sales.party.merge'], true)) {
+                return response()->json(['success' => true, 'data' => app(\App\Services\Integration\ContinuousPartySync::class)->dispatchMerge($input, $org)]);
+            }
             abort_unless(str_starts_with($input['action'], 'purchasing.settlement.'), 403);
             $result = app(PostedPurchaseSettlementService::class)->dispatch($input, $org);
 

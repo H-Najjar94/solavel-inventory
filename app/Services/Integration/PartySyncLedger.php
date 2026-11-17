@@ -36,7 +36,9 @@ final class PartySyncLedger {
  public function revision(array $fields):string {return hash('sha256',json_encode($fields,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));}
  public function record(object $mapping,string $app,string $type,int $id):?object {
   $fields=$this->fields($mapping,$app,$type,$id);if(!$fields)return null;
-  $db=DB::connection('tenant');$identity=['organization_mapping_uuid'=>$mapping->mapping_uuid,'entity_type'=>$type,'source_app'=>$app,'source_id'=>$id];$hash=$this->revision($fields);
+  $db=DB::connection('tenant');
+  // A party merged away (its link retired by the linked party merge) must never be re-queued.
+  if($this->mergedAway($mapping,$app,$type,$id))return null;$identity=['organization_mapping_uuid'=>$mapping->mapping_uuid,'entity_type'=>$type,'source_app'=>$app,'source_id'=>$id];$hash=$this->revision($fields);
   return $db->transaction(function()use($db,$mapping,$fields,$identity,$hash,$app,$type,$id){
    // A generated counterpart must not start an opposite synchronization loop.
    $opposite=$db->table('integration_party_sync_states')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where('source_app',$app==='finance'?'stock':'finance')->where('target_id',$id)->lockForUpdate()->first();
@@ -56,6 +58,11 @@ final class PartySyncLedger {
    if($row->source_revision!==$hash)$db->table('integration_party_sync_states')->where('id',$row->id)->update(['source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>$row->state_version+1,'attempts'=>0,'next_attempt_at'=>null,'last_error'=>null,'updated_at'=>now()]);
    return $db->table('integration_party_sync_states')->where('id',$row->id)->first();
   });
+ }
+ private function mergedAway(object $mapping,string $app,string $type,int $id):bool {
+  $column=$app==='finance'?'solabooks_record_id':'solastock_record_id';
+  $rows=DB::connection('tenant')->table('integration_master_data_mappings')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where($column,(string)$id)->pluck('status');
+  return $rows->isNotEmpty() && $rows->every(fn($status)=>$status==='merged');
  }
  public function reconcile(object $mapping):void {
   foreach(['finance','stock']as$app)foreach(['supplier','customer']as$type){
