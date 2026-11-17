@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { DocumentStatusBadge } from '../components/document.jsx';
 import LandedCostConnectionPanel from '../components/LandedCostConnectionPanel.jsx';
 import LandedCostAvailabilityNotice from '../components/LandedCostAvailabilityNotice.jsx';
@@ -17,7 +18,8 @@ export default function LandedCostsPage() {
     // refuses everything; after an opt-out, existing documents stay readable.
     const available = meta.landed_costs?.available !== false;
     const entitled = meta.landed_costs?.entitled !== false;
-    const { data, isLoading } = useApiQuery(['landed-costs'], () => api.landedCosts({ per_page: 50 }), { fallback: [], enabled: entitled });
+    const sort = useTableSort();
+    const { data, isLoading } = useApiQuery(['landed-costs', sort.key, sort.dir], () => api.landedCosts({ ...sort.params, per_page: 50 }), { fallback: [], enabled: entitled });
     const connection = useApiQuery(['landed-cost-connection'], api.landedCostConnection, { fallback: null, enabled: available });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
 
@@ -41,8 +43,8 @@ export default function LandedCostsPage() {
             {available && <LandedCostConnectionPanel status={connection.data} />}
             {isLoading ? <Skeleton /> : rows.length === 0 ? <EmptyState title={t('landedCosts.empty')} hint={t('landedCosts.emptyHint')} /> : (
                 <div className="index-table-scroll"><table className="data-table"><thead><tr>
-                    <th>{t('landedCosts.number')}</th><th>{t('landedCosts.date')}</th><th>{t('landedCosts.reference')}</th><th>{t('landedCosts.method')}</th>
-                    <th>{t('status')}</th><th>{t('landedCosts.totalBase')}</th><th>{t('landedCosts.onHand')}</th><th>{t('landedCosts.consumed')}</th></tr></thead>
+                    <SortTh sort={sort} col="number">{t('landedCosts.number')}</SortTh><SortTh sort={sort} col="date">{t('landedCosts.date')}</SortTh><SortTh sort={sort} col="reference">{t('landedCosts.reference')}</SortTh><SortTh sort={sort} col="method">{t('landedCosts.method')}</SortTh>
+                    <SortTh sort={sort} col="status">{t('status')}</SortTh><SortTh sort={sort} col="total">{t('landedCosts.totalBase')}</SortTh><SortTh sort={sort} col="onhand">{t('landedCosts.onHand')}</SortTh><SortTh sort={sort} col="consumed">{t('landedCosts.consumed')}</SortTh></tr></thead>
                 <tbody>{rows.map((r) => (<tr key={r.id}>
                     <td><Link to={`/landed-costs/${r.id}`}>{r.landed_cost_number}</Link></td><td>{r.landed_cost_date}</td>
                     <td>{r.supplier_reference ?? '—'}</td><td>{t(`landedCosts.method.${r.allocation_method}`, r.allocation_method)}</td>

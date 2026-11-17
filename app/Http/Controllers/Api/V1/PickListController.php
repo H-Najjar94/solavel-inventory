@@ -31,6 +31,13 @@ class PickListController extends ApiController
             $query->whereDoesntHave('lines', fn ($lines) => $lines->whereNotNull('warehouse_id')->whereNotIn('warehouse_id', $allowed));
         }
 
+        $this->applyListSort($query, $request, [
+            'number' => 'pick_number',
+            'order' => $this->sortByRelated('sales_orders', 'order_number', 'sales_order_id'),
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'status' => 'status',
+        ]);
+
         $page = $query->paginate($perPage)->withQueryString();
         $this->nameDocuments($page);
 

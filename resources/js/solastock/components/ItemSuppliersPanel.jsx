@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
@@ -6,7 +7,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useToast } from '../stores/toast.jsx';
 import { ConfirmedActionButton } from './ConfirmedActionButton.jsx';
 import { AccessNotice } from './PlanAccess.jsx';
-import { EmptyState, Skeleton, Badge } from './ui.jsx';
+import { EmptyState, Skeleton, Badge, SortTh } from './ui.jsx';
 import ItemSupplierModal from './ItemSupplierModal.jsx';
 import VendorPricelistTransfer from './VendorPricelistTransfer.jsx';
 import {
@@ -17,6 +18,7 @@ import { t } from '../i18n/index.js';
 
 /** Item → Suppliers tab: supplier relationships with tiers, vendor comparison and cost trend. */
 export default function ItemSuppliersPanel({ item }) {
+    const termsSort = useTableSort();
     const access = useSupplierTermsAccess();
     const qc = useQueryClient();
     const toast = useToast();
@@ -66,10 +68,10 @@ export default function ItemSuppliersPanel({ item }) {
                     ) : (
                         <div className="tbl-wrap"><table className="data-table st-table">
                             <thead><tr>
-                                <th>{t('supplierTerms.common.supplier')}</th>
-                                <th>{t('supplierTerms.common.status')}</th>
+                                <SortTh sort={termsSort} col="supplier">{t('supplierTerms.common.supplier')}</SortTh>
+                                <SortTh sort={termsSort} col="status">{t('supplierTerms.common.status')}</SortTh>
                                 <th>{t('supplierTerms.list.supplierProduct')}</th>
-                                <th>{t('supplierTerms.common.currency')}</th>
+                                <SortTh sort={termsSort} col="currency">{t('supplierTerms.common.currency')}</SortTh>
                                 <th className="num">{t('supplierTerms.list.currentPrice')}</th>
                                 <th className="num">{t('supplierTerms.list.tiers')}</th>
                                 <th>{t('supplierTerms.list.moqMultiple')}</th>
@@ -77,7 +79,7 @@ export default function ItemSuppliersPanel({ item }) {
                                 <th className="num">{t('supplierTerms.list.discount')}</th>
                                 {access.manageTerms && <th className="col-action" />}
                             </tr></thead>
-                            <tbody>{rows.map((r) => {
+                            <tbody>{termsSort.apply(rows, { supplier: (r) => r.supplier?.name, status: (r) => r.status, currency: (r) => r.currency_code }).map((r) => {
                                 const tier = currentTier(r);
                                 const unit = unitLabel(r.purchase_unit);
                                 return (
@@ -142,6 +144,8 @@ export default function ItemSuppliersPanel({ item }) {
 }
 
 function VendorComparison({ itemId, access }) {
+    const trendSort = useTableSort();
+    const compareSort = useTableSort();
     const [quantityInput, setQuantityInput] = useState('1');
     const [quantity, setQuantity] = useState('1');
     const [date, setDate] = useState('');
@@ -183,16 +187,16 @@ function VendorComparison({ itemId, access }) {
                     ) : (
                         <div className="tbl-wrap"><table className="data-table st-table">
                             <thead><tr>
-                                <th>{t('supplierTerms.common.supplier')}</th>
-                                <th>{t('supplierTerms.common.status')}</th>
-                                <th className="num">{t('supplierTerms.comparison.vendorPrice')}</th>
+                                <SortTh sort={compareSort} col="supplier">{t('supplierTerms.common.supplier')}</SortTh>
+                                <SortTh sort={compareSort} col="status">{t('supplierTerms.common.status')}</SortTh>
+                                <SortTh sort={compareSort} col="vendorPrice" className="num">{t('supplierTerms.comparison.vendorPrice')}</SortTh>
                                 <th className="num">{t('supplierTerms.comparison.perBaseUnit', undefined, { currency: base ?? '' })}</th>
                                 <th className="num">{t('supplierTerms.comparison.lastPaid', undefined, { currency: base ?? '' })}</th>
                                 <th className="num">{t('supplierTerms.comparison.weightedAverage', undefined, { currency: base ?? '' })}</th>
                                 <th className="num">{t('supplierTerms.comparison.difference')}</th>
                                 <th className="num">{t('supplierTerms.list.leadTime')}</th>
                             </tr></thead>
-                            <tbody>{rows.map((r) => {
+                            <tbody>{compareSort.apply(rows, { supplier: (r) => r.supplier?.name, status: (r) => r.status, vendorPrice: (r) => r.vendor_price }).map((r) => {
                                 const variance = r.vendor_vs_last_paid;
                                 const up = variance !== null && variance !== undefined && Number(variance) > 0;
                                 return (
@@ -238,10 +242,10 @@ function VendorComparison({ itemId, access }) {
                     {query.isLoading ? <Skeleton rows={2} /> : trend.length === 0 ? <EmptyState title={t('supplierTerms.trend.emptyTitle')} hint={t('supplierTerms.trend.emptyHint')} /> : (
                         <div className="tbl-wrap"><table className="data-table">
                             <thead><tr>
-                                <th>{t('supplierTerms.trend.month')}</th><th>{t('supplierTerms.common.supplier')}</th>
+                                <SortTh sort={trendSort} col="month">{t('supplierTerms.trend.month')}</SortTh><SortTh sort={trendSort} col="supplier">{t('supplierTerms.common.supplier')}</SortTh>
                                 <th className="num">{t('supplierTerms.trend.quantity')}</th><th className="num">{t('supplierTerms.trend.averageCost')}</th>
                             </tr></thead>
-                            <tbody>{[...trend].reverse().map((row, i) => <tr key={`${row.month}-${row.supplier_id ?? row.supplier_name}-${i}`}>
+                            <tbody>{trendSort.apply([...trend].reverse(), { month: (r) => r.month, supplier: (r) => r.supplier_name }).map((row, i) => <tr key={`${row.month}-${row.supplier_id ?? row.supplier_name}-${i}`}>
                                 <td><Num>{row.month}</Num></td>
                                 <td>{row.supplier_id ? <Link to={`/suppliers/${row.supplier_id}`}>{row.supplier_name ?? `#${row.supplier_id}`}</Link> : (row.supplier_name ?? '—')}</td>
                                 <td className="num"><Num>{qtyText(row.quantity)}</Num></td>

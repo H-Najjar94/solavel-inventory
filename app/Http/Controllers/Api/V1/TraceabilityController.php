@@ -50,6 +50,13 @@ class TraceabilityController extends ApiController
             $query->whereIn('id', StockBalance::query()->where('warehouse_id', $warehouse)->where('on_hand_qty', '>', 0)->whereNotNull('lot_id')->select('lot_id'));
         }
 
+        $this->applyListSort($query, $request, [
+            'code' => 'lot_code',
+            'item' => $this->sortByRelated('items', 'name', 'item_id'),
+            'expiry' => 'expiry_date',
+            'status' => 'status',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }
 
@@ -105,6 +112,12 @@ class TraceabilityController extends ApiController
             $this->warehouseAccess->assertAllowed($request->integer('warehouse_id'));
             $query->where('warehouse_id', $request->integer('warehouse_id'));
         }
+
+        $this->applyListSort($query, $request, [
+            'serial' => 'serial',
+            'item' => $this->sortByRelated('items', 'name', 'item_id'),
+            'status' => 'status',
+        ]);
 
         return $this->paginated($query->paginate($perPage)->withQueryString());
     }

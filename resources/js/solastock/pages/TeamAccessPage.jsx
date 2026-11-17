@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useToast } from '../stores/toast.jsx';
-import { Badge, Breadcrumbs, Drawer, EmptyState, Field, Skeleton } from '../components/ui.jsx';
+import { Badge, Breadcrumbs, Drawer, EmptyState, Field, Skeleton, SortTh } from '../components/ui.jsx';
 import { t } from '../i18n/index.js';
 
 // Role keys Central can grant for SolaStock, in display order.
@@ -158,11 +159,12 @@ export default function TeamAccessPage() {
         else toast.push(t('teamAccess.memberNotFound'), 'error');
     }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const sort = useTableSort();
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return members;
-        return members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(q));
-    }, [members, query]);
+        const filtered = !q ? members : members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(q));
+        return sort.apply(filtered, { member: (m) => m.name, role: (m) => roleLabel(m), customRole: (m) => (m.full_access ? '' : m.custom_role?.name) });
+    }, [members, query, sort.apply]);
 
     const openMember = members.find((m) => m.id === openId && m.editable) ?? null;
 
@@ -188,10 +190,10 @@ export default function TeamAccessPage() {
                     <div className="team-access-table-wrap">
                         <table className="data-table">
                             <thead><tr>
-                                <th>{t('teamAccess.member')}</th>
-                                <th>{t('teamAccess.role')}</th>
+                                <SortTh sort={sort} col="member">{t('teamAccess.member')}</SortTh>
+                                <SortTh sort={sort} col="role">{t('teamAccess.role')}</SortTh>
                                 <th>{t('teamAccess.warehouses')}</th>
-                                <th>{t('teamAccess.customRole')}</th>
+                                <SortTh sort={sort} col="customRole">{t('teamAccess.customRole')}</SortTh>
                                 <th />
                             </tr></thead>
                             <tbody>

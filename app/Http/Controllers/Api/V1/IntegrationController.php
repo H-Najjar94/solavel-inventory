@@ -572,6 +572,13 @@ class IntegrationController extends ApiController
             ->when($request->filled('to'), fn ($q) => $q->whereDate('occurred_at', '<=', $request->query('to')))
             ->orderByDesc('id');
 
+        $this->applyListSort($query, $request, [
+            'occurred' => 'occurred_at',
+            'event' => 'event_type',
+            'document' => 'aggregate_number',
+            'status' => 'status',
+        ]);
+
         $page = $query->paginate($perPage)->withQueryString();
         $page->setCollection(SourceDocumentPresenter::decorateRows($page->getCollection(), 'aggregate_type', 'aggregate_id'));
 

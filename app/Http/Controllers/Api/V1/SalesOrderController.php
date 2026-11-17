@@ -35,6 +35,15 @@ class SalesOrderController extends ApiController
             $query->whereDoesntHave('lines', fn ($lines) => $lines->whereNotNull('warehouse_id')->whereNotIn('warehouse_id', $allowed));
         }
 
+        $this->applyListSort($query, $request, [
+            'number' => 'order_number',
+            'customer' => 'customer_name',
+            'date' => 'order_date',
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'status' => 'status',
+            'total' => 'total',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (SalesOrder $order) {
             $order->setAttribute('warehouse_name', $order->warehouse?->name);
             $order->setAttribute('warehouse_code', $order->warehouse?->code);

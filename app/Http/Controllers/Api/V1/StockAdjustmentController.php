@@ -42,6 +42,16 @@ class StockAdjustmentController extends ApiController
             ->orderByDesc('id');
         $this->warehouseAccess->scope($query);
 
+        $this->applyListSort($query, $request, [
+            'number' => 'adjustment_number',
+            'date' => 'adjustment_date',
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'reason' => 'reason_code',
+            'status' => 'status',
+            'increase' => 'total_increase_value',
+            'decrease' => 'total_decrease_value',
+        ]);
+
         return $this->paginated($query->paginate($perPage)->withQueryString()->through(function (StockAdjustment $adjustment) {
             app(\App\Services\Presentation\AdjustmentValuation::class)->apply([$adjustment]);
             $adjustment->setAttribute('warehouse_name', $adjustment->warehouse?->name);

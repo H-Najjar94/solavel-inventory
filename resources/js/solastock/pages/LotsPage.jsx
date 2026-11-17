@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
-import { Breadcrumbs, EmptyState, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Skeleton, SortTh } from '../components/ui.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { traceabilityPageText, traceabilityStatusText } from '../i18n/traceabilityPages.js';
 
@@ -11,7 +12,8 @@ export default function LotsPage() {
     const text = (key, params) => traceabilityPageText(locale, key, params);
     const [status, setStatus] = useState('');
     const [q, setQ] = useState('');
-    const { data, isLoading, isError, isMock, refetch } = useApiQuery(['lots', status, q], () => api.lots({ per_page: 50, status: status || undefined, q: q || undefined }), { fallback: [] });
+    const sort = useTableSort();
+    const { data, isLoading, isError, isMock, refetch } = useApiQuery(['lots', status, q, sort.key, sort.dir], () => api.lots({ ...sort.params, per_page: 50, status: status || undefined, q: q || undefined }), { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
     if (isLoading) return <section className="page index-page"><Skeleton /></section>;
     if (isError) return <section className="page index-page">
@@ -31,7 +33,7 @@ export default function LotsPage() {
                 </select>
             </div>
             {rows.length === 0 ? <EmptyState title={text('traceabilityPages.lots.emptyTitle')} hint={text('traceabilityPages.lots.emptyHint')} /> : (
-                <div className="index-table-scroll"><table className="data-table"><thead><tr><th>{text('traceabilityPages.lots.table.code')}</th><th>{text('traceabilityPages.common.item')}</th><th>{text('traceabilityPages.lots.table.expiry')}</th><th>{text('traceabilityPages.common.status')}</th></tr></thead>
+                <div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="code">{text('traceabilityPages.lots.table.code')}</SortTh><SortTh sort={sort} col="item">{text('traceabilityPages.common.item')}</SortTh><SortTh sort={sort} col="expiry">{text('traceabilityPages.lots.table.expiry')}</SortTh><SortTh sort={sort} col="status">{text('traceabilityPages.common.status')}</SortTh></tr></thead>
                 <tbody>{rows.map((l) => (<tr key={l.id}><td><Link to={`/traceability/lots/${l.id}`}><bdi>{l.lot_code}</bdi></Link></td><td><bdi>{l.item ? `${l.item.sku} · ${l.item.name}` : `#${l.item_id}`}</bdi></td><td><bdi>{l.expiry_date ?? '—'}</bdi></td><td><span className="badge badge--muted">{traceabilityStatusText(locale, l.status)}</span></td></tr>))}</tbody></table></div>
             )}
         </section>

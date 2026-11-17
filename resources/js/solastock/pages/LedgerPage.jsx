@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
-import { Breadcrumbs, EmptyState, Field, Skeleton } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Field, Skeleton, SortTh } from '../components/ui.jsx';
 import { WarehousePicker, ItemPicker } from '../components/pickers.jsx';
 import { SourceDocumentLink } from '../components/document.jsx';
 import { t } from '../i18n/index.js';
@@ -26,10 +27,14 @@ export default function LedgerPage() {
         from: filters.from || undefined,
         to: filters.to || undefined,
     };
-    const ledger = useApiQuery(['ledger', params], () => api.ledger(params), { fallback: { data: [] } });
+    const sort = useTableSort();
+    const auditSort = useTableSort();
+    const sortedParams = { ...params, ...sort.params };
+    const sortedAuditParams = { ...auditParams, ...auditSort.params };
+    const ledger = useApiQuery(['ledger', params, sort.key, sort.dir], () => api.ledger(sortedParams), { fallback: { data: [] } });
     // The audit log endpoint requires inventory.manage_settings.
     const canViewAudit = useCan()('inventory.manage_settings');
-    const audit = useApiQuery(['audit-logs', auditParams], () => api.auditLogs(auditParams), { fallback: { data: [] }, enabled: canViewAudit });
+    const audit = useApiQuery(['audit-logs', auditParams, auditSort.key, auditSort.dir], () => api.auditLogs(sortedAuditParams), { fallback: { data: [] }, enabled: canViewAudit });
     const rows = Array.isArray(ledger.data) ? ledger.data : (ledger.data?.data ?? []);
     const auditRows = Array.isArray(audit.data) ? audit.data : (audit.data?.data ?? []);
 
@@ -56,7 +61,7 @@ export default function LedgerPage() {
             </div>
 
             {tab === 'ledger' && <div className="panel">
-                {ledger.isLoading ? <Skeleton rows={6} /> : rows.length === 0 ? <EmptyState title={t('ledger.empty')} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('ledger.date')}</th><th>{t('ledger.item')}</th><th>{t('ledger.warehouse')}</th><th>{t('ledger.direction')}</th><th>{t('ledger.quantity')}</th><th>{t('ledger.unitCost')}</th><th>{t('ledger.total')}</th><th>{t('ledger.runningQuantity')}</th><th>{t('ledger.source')}</th></tr></thead>
+                {ledger.isLoading ? <Skeleton rows={6} /> : rows.length === 0 ? <EmptyState title={t('ledger.empty')} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={sort} col="date">{t('ledger.date')}</SortTh><SortTh sort={sort} col="item">{t('ledger.item')}</SortTh><SortTh sort={sort} col="warehouse">{t('ledger.warehouse')}</SortTh><SortTh sort={sort} col="direction">{t('ledger.direction')}</SortTh><SortTh sort={sort} col="quantity">{t('ledger.quantity')}</SortTh><SortTh sort={sort} col="unitcost">{t('ledger.unitCost')}</SortTh><SortTh sort={sort} col="total">{t('ledger.total')}</SortTh><SortTh sort={sort} col="running">{t('ledger.runningQuantity')}</SortTh><th>{t('ledger.source')}</th></tr></thead>
                     <tbody>{rows.map((r) => (<tr key={r.id}>
                         <td>{r.moved_at}</td>
                         <td>{r.item_name ?? `#${r.item_id}`}{r.item_sku && <span className="muted"> · {r.item_sku}</span>}</td>
@@ -67,7 +72,7 @@ export default function LedgerPage() {
             </div>}
 
             {tab === 'audit' && <div className="panel">
-                {!canViewAudit ? <EmptyState title={t('ledger.auditNoPermission')} hint={t('ledger.auditNoPermissionHint')} /> : audit.isLoading ? <Skeleton rows={6} /> : auditRows.length === 0 ? <EmptyState title={t('ledger.noAudit')} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table"><thead><tr><th>{t('ledger.time')}</th><th>{t('ledger.actor')}</th><th>{t('ledger.action')}</th><th>{t('ledger.entity')}</th><th>{t('ledger.document')}</th><th>{t('ledger.before')}</th><th>{t('ledger.after')}</th></tr></thead>
+                {!canViewAudit ? <EmptyState title={t('ledger.auditNoPermission')} hint={t('ledger.auditNoPermissionHint')} /> : audit.isLoading ? <Skeleton rows={6} /> : auditRows.length === 0 ? <EmptyState title={t('ledger.noAudit')} /> : <div style={{ overflowX: 'auto' }}><div className="index-table-scroll"><table className="data-table"><thead><tr><SortTh sort={auditSort} col="time">{t('ledger.time')}</SortTh><th>{t('ledger.actor')}</th><SortTh sort={auditSort} col="action">{t('ledger.action')}</SortTh><SortTh sort={auditSort} col="entity">{t('ledger.entity')}</SortTh><th>{t('ledger.document')}</th><th>{t('ledger.before')}</th><th>{t('ledger.after')}</th></tr></thead>
                     <tbody>{auditRows.map((r) => <tr key={r.id}><td>{r.created_at}</td><td>{r.actor_user_id ?? t('ledger.system')}</td><td>{r.action}</td><td>{r.entity_type} #{r.entity_id ?? '—'}</td><td>{r.document_ref ?? '—'}</td><td><code>{JSON.stringify(r.before ?? {})}</code></td><td><code>{JSON.stringify(r.after ?? {})}</code></td></tr>)}</tbody></table></div></div>}
             </div>}
         </section>
