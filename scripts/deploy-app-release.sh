@@ -93,6 +93,35 @@ PY
  chmod -R go-w "$release";chmod -R u+rwX,g+rwX "$release/bootstrap/cache"
  for actor in "$app_user" www-data;do runuser -u "$actor" -- test -r "$release/public/index.php";runuser -u "$actor" -- test -w "$release/storage";done
 fi
+# Existing tabs can still request their original lazy chunks after activation.
+python3 - "$old/public/build/assets" "$release/public/build/assets" <<'PYASSETS'
+from pathlib import Path
+import hashlib,shutil,sys
+old,new=map(Path,sys.argv[1:]);retained=0
+if old.exists():
+ assert old.is_dir() and not old.is_symlink()
+ for source in sorted(old.rglob('*')):
+  if source.is_dir(): continue
+  assert source.is_file() and not source.is_symlink(), 'Unsafe previous hashed asset'
+  relative=source.relative_to(old);target=new/relative
+  if target.exists():
+   assert target.is_file() and not target.is_symlink() and hashlib.sha256(target.read_bytes()).digest()==hashlib.sha256(source.read_bytes()).digest(), 'Hashed asset collision'
+  else:
+   target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target);retained+=1
+print('RETAINED_LAZY_ASSETS='+str(retained))
+PYASSETS
+if ((!test_mode));then
+ # Build tools and retained chunks create files after the initial ownership pass.
+ chown -hR "$app_user:$runtime_group" "$release"
+ chmod -R go-w "$release";chmod -R u+rwX,g+rwX "$release/bootstrap/cache"
+ runuser -u www-data -- php -r '
+  $r=$argv[1];require $r."/vendor/autoload.php";
+  $m=json_decode(file_get_contents($r."/public/build/manifest.json"),true,512,JSON_THROW_ON_ERROR);
+  foreach($m as $entry)foreach(array_filter(array_merge([$entry["file"]??null],$entry["css"]??[],$entry["assets"]??[]))as $file)
+   if(!is_readable($r."/public/build/".$file))throw new RuntimeException("Compiled asset unreadable by web user");
+  echo "WEB_ASSET_READABILITY=PASS\n";
+ ' "$release"
+fi
 schema_preflight(){
  if ((test_mode));then [[ ${STOCK_DEPLOY_TEST_FAIL:-} != preflight ]] || fail 'Fixture schema preflight refusal';return;fi
  [[ -d "$finance_candidate" && -f "$descriptor" ]] || fail 'Signed schema descriptor and immutable Finance candidate required.'
