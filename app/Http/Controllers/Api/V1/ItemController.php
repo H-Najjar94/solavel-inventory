@@ -175,6 +175,7 @@ class ItemController extends ApiController
             'supplier_price_lists' => $item->supplierPrices->sortByDesc('is_active')->values(),
             'package_recommendation' => $this->packageRecommendation($item),
             'base_unit_projection_pending' => $pending,
+            'base_unit_conversions' => \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)?$item->getConnection()->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE.' as c')->leftJoin('units as old_unit','old_unit.id','=','c.from_unit_id')->leftJoin('units as new_unit','new_unit.id','=','c.to_unit_id')->where('c.organization_id',$item->organization_id)->where('c.item_id',$item->id)->orderByDesc('c.id')->limit(10)->get(['c.id','c.effective_date','c.factor_numerator','c.factor_denominator','c.state','old_unit.name as old_unit','new_unit.name as new_unit']):[],
             'base_unit_review' => app(\App\Services\Catalog\ItemBaseUnitGuard::class)->preview($item),
         ]);
     }

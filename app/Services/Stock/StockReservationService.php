@@ -536,6 +536,8 @@ class StockReservationService
 
     private function lockBalance(int $orgId, int $itemId, int $warehouseId, ?int $binId, ?int $lotId): StockBalance
     {
+        Item::query()->where('organization_id',$orgId)->whereKey($itemId)->lockForUpdate()->firstOrFail();
+        app(\App\Services\Catalog\StockUnitProjection::class)->assertReady($itemId);
         $lockedFetch = static fn () => StockBalance::query()
             ->where('organization_id', $orgId)->where('item_id', $itemId)->where('warehouse_id', $warehouseId)
             ->when($binId !== null, fn ($q) => $q->where('bin_id', $binId), fn ($q) => $q->whereNull('bin_id'))

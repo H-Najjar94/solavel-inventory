@@ -6,3 +6,6 @@ Object.assign(ar,{'baseUnit.convert':'تحويل وحدة المخزون الأ�
 
 Object.assign(en,{"baseUnit.metadata": "Unit-based catalog settings", "baseUnit.meta.purchase_price": "Purchase price", "baseUnit.meta.sales_price": "Sales price", "baseUnit.meta.weight": "Weight per unit", "baseUnit.meta.reorder_point": "Reorder point", "baseUnit.meta.reorder_qty": "Reorder quantity", "baseUnit.meta.min_stock": "Minimum stock", "baseUnit.meta.max_stock": "Maximum stock", "baseUnit.meta.safety_stock": "Safety stock"});
 Object.assign(ar,{"baseUnit.metadata": "إعدادات الصنف المرتبطة بالوحدة", "baseUnit.meta.purchase_price": "سعر الشراء", "baseUnit.meta.sales_price": "سعر البيع", "baseUnit.meta.weight": "وزن الوحدة", "baseUnit.meta.reorder_point": "حد إعادة الطلب", "baseUnit.meta.reorder_qty": "كمية إعادة الطلب", "baseUnit.meta.min_stock": "الحد الأدنى للمخزون", "baseUnit.meta.max_stock": "الحد الأقصى للمخزون", "baseUnit.meta.safety_stock": "مخزون الأمان"});
+
+Object.assign(en,{'baseUnit.history':'Unit conversion history','baseUnit.ratio':'New / old quantity ratio'});
+Object.assign(ar,{'baseUnit.history':'سجل تحويلات الوحدة','baseUnit.ratio':'نسبة الكمية الجديدة إلى القديمة'});
