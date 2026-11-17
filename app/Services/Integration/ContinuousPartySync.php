@@ -69,6 +69,21 @@ final class ContinuousPartySync {
   }
   return $this->materialize($mapping,'finance',$type,(int)$facts['source_id'],$facts['source_revision']);
  }
+ public function dispatchMerge(array $input,object $organization):array {
+  abort_unless(($input['authority_kind']??null)==='continuous_party_sync' && (int)$input['actor_id']===0 && in_array($input['action'],['purchasing.party.merge','sales.party.merge'],true),403);
+  $central=DB::connection((string)config('tenancy.central_connection','mysql'));
+  foreach([['finance','accounting','construction'],['inventory']]as$slugs)
+   abort_unless($central->table('organization_projects as a')->join('projects','projects.id','=','a.project_id')->where('a.organization_id',$organization->id)->where('a.is_active',true)->where('projects.is_active',true)->whereIn('projects.slug',$slugs)->exists(),403);
+  $tenants=app(TenantManager::class);$tenants->useTenant((int)$organization->id,$tenants->resolveDatabaseName((int)$organization->client_id));
+  $mapping=app(ReceivingRequestService::class)->mapping();
+  abort_unless((int)$mapping->finance_organization_id===(int)$input['finance_organization_id'] && (int)$mapping->central_client_id===(int)$organization->client_id && (int)$mapping->central_organization_id===(int)$organization->id,403);
+  app(ApprovedFinanceIntegrationEntitlement::class)->assertApproved($mapping);
+  $type=str_starts_with($input['action'],'sales.')?'customer':'supplier';
+  $d=validator((array)($input['data']??[]),['mapping_uuid_source'=>'required|string','mapping_uuid_target'=>'required|string','source_id'=>'required|integer|min:1','target_id'=>'required|integer|min:1'])->validate();
+  $expected='party-merge:'.$type.':'.(int)$d['source_id'].':'.(int)$d['target_id'];
+  abort_unless(($input['idempotency_key']??null)===$expected,422,'party_merge_idempotency_mismatch');
+  return app(LinkedPartyMerge::class)->merge((int)$mapping->solastock_organization_id,$type,(int)$d['source_id'],(int)$d['target_id']);
+ }
  public function authorizeInvoiceDependency(object $mapping,array $facts,array $review=[]):array {
   $invoice=DB::connection('tenant')->table('invoices')->where('organization_id',$mapping->finance_organization_id)->where('id',$facts['source_invoice_id'])->first();
   abort_unless($invoice && (int)$invoice->customer_id===(int)$facts['source_id'],403);
