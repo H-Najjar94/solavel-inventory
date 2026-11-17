@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState,useRef} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {api} from '../services/api.js';
 import {Drawer,Field} from './ui.jsx';
@@ -6,9 +6,11 @@ import {useToast} from '../stores/toast.jsx';
 import {useMeta} from '../stores/meta.jsx';
 import {t,getLocale} from '../i18n/index.js';
 
+const METADATA_LABELS={purchase_price:'baseUnit.meta.purchase_price',sales_price:'baseUnit.meta.sales_price',weight:'baseUnit.meta.weight',reorder_point:'baseUnit.meta.reorder_point',reorder_qty:'baseUnit.meta.reorder_qty',min_stock:'baseUnit.meta.min_stock',max_stock:'baseUnit.meta.max_stock',safety_stock:'baseUnit.meta.safety_stock'};
+
 export default function BaseUnitConversion({item,open,onClose,pending=false}) {
     const units=useMeta().options?.units ?? [];
-    const qc=useQueryClient();const toast=useToast();
+    const qc=useQueryClient();const toast=useToast();const fileRef=useRef(null);
     const [form,setForm]=useState({to_unit_id:'',factor_numerator:'1',factor_denominator:'',effective_date:new Date().toISOString().slice(0,10),reason:''});
     const [preview,setPreview]=useState(null),[evidence,setEvidence]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null);
     const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
@@ -29,8 +31,8 @@ export default function BaseUnitConversion({item,open,onClose,pending=false}) {
         <p className="muted">{t('baseUnit.factorHint')}</p>
         <Field label={t('baseUnit.effectiveDate')} required><input className="input" type="date" value={form.effective_date} onChange={e=>change('effective_date',e.target.value)} /></Field>
         <Field label={t('baseUnit.reason')} required><textarea className="input" value={form.reason} onChange={e=>change('reason',e.target.value)} /></Field>
-        <Field label={t('baseUnit.evidence')} required><input className="input" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" disabled={busy} onChange={e=>upload(e.target.files?.[0])} />{evidence&&<span>{evidence.name}</span>}</Field>
-        {preview&&<div className="card"><div className="card-body">{!preview.supported?<ul role="alert">{(preview.blocker_messages??preview.blockers).map((b,i)=><li key={i}>{b}</li>)}</ul>:<><h4>{t('baseUnit.review')}</h4><table className="table"><thead><tr><th>{t('warehouse')}</th><th>{t('baseUnit.before')}</th><th>{t('baseUnit.after')}</th><th>{t('baseUnit.value')}</th></tr></thead><tbody>{preview.balances.map(b=><tr key={b.balance_id}><td>{b.warehouse_name??b.warehouse_id}</td><td>{n(b.old_quantity)}</td><td>{n(b.new_quantity)}</td><td>{n(b.value)}</td></tr>)}</tbody></table><h4>{t('baseUnit.metadata')}</h4><table className="table"><tbody>{Object.entries(preview.metadata??{}).map(([key,value])=><tr key={key}><th>{t('baseUnit.meta.'+key)}</th><td>{n(preview.snapshot?.item?.[key])}</td><td>{n(value)}</td></tr>)}</tbody></table><p className="muted">{t('baseUnit.preserve')}</p></>}</div></div>}
+        <Field label={t('baseUnit.evidence')} required><input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" hidden disabled={busy} onChange={e=>upload(e.target.files?.[0])} /><button type="button" className="btn" disabled={busy} onClick={()=>fileRef.current?.click()}>{busy?t('media.uploading'):t('media.uploadAttachment')}</button>{evidence&&<span>{evidence.name}</span>}</Field>
+        {preview&&<div className="card"><div className="card-body">{!preview.supported?<ul role="alert">{(preview.blocker_messages??preview.blockers).map((b,i)=><li key={i}>{b}</li>)}</ul>:<><h4>{t('baseUnit.review')}</h4><table className="table"><thead><tr><th>{t('warehouse')}</th><th>{t('baseUnit.before')}</th><th>{t('baseUnit.after')}</th><th>{t('baseUnit.value')}</th></tr></thead><tbody>{preview.balances.map(b=><tr key={b.balance_id}><td>{b.warehouse_name??b.warehouse_id}</td><td>{n(b.old_quantity)}</td><td>{n(b.new_quantity)}</td><td>{n(b.value)}</td></tr>)}</tbody></table><h4>{t('baseUnit.metadata')}</h4><table className="table"><tbody>{Object.entries(preview.metadata??{}).map(([key,value])=><tr key={key}><th>{t(METADATA_LABELS[key]??'baseUnit.title')}</th><td>{n(preview.snapshot?.item?.[key])}</td><td>{n(value)}</td></tr>)}</tbody></table><p className="muted">{t('baseUnit.preserve')}</p></>}</div></div>}
         <div className="form-actions"><button type="button" className="btn" disabled={busy||!form.to_unit_id||!form.factor_denominator} onClick={review}>{busy?t('baseUnit.working'):t('baseUnit.preview')}</button>{preview?.supported&&<button type="button" className="btn btn--primary" disabled={busy||!form.reason.trim()||!evidence} onClick={apply}>{t('baseUnit.confirm')}</button>}</div>
         </>}
     </Drawer>;
