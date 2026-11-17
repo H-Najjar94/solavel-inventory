@@ -1,6 +1,7 @@
 <?php
 
 return array (
+  'base_unit' => ['blocked'=>'This item has stock, document or linked catalog history. Keep its base unit; add a purchase-unit conversion instead. A historical base-unit change requires reconciliation.','invalid'=>'Choose an active unit belonging to this organization.','pristine'=>'No stock or document history was found. The base unit can be corrected before use.','add_purchase_unit'=>'Add purchase unit'],
   'landed_cost' =>
   array (
     'not_draft' => 'Only a draft landed cost can be changed or posted.',

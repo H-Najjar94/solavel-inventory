@@ -1,6 +1,6 @@
 import {feedback} from '../../shared/feedback/store';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -196,8 +196,8 @@ export default function ItemFormPage() {
                             <Field label={t('barcode')} error={errors.barcode}>
                                 <input className="input" value={form.barcode ?? ''} onChange={(e) => set('barcode', e.target.value)} placeholder={t('items.optional')} />
                             </Field>
-                            <QuickCreateSelect label={t('unit')} value={form.base_unit_id} onChange={(v) => set('base_unit_id', v)} required={isInventory}
-                                options={lookups.units} onCreate={(n) => quickCreate('unit', n)} error={errors.base_unit_id} />
+                            {isEdit && existing.data?.base_unit_review?.can_change_base_unit === false ? <Field label={t('baseUnit.title')} error={errors.base_unit_id}><input className="input" value={existing.data.item.base_unit?.name ?? existing.data.item.base_unit?.code ?? unitName} readOnly /><p className="muted">{existing.data.base_unit_review.message}</p>{can('inventory.manage_settings') && <Link to={existing.data.base_unit_review.alternate_unit_url}>{t('baseUnit.addPurchaseUnit')}</Link>}</Field> : <QuickCreateSelect label={t('baseUnit.title')} value={form.base_unit_id} onChange={(v) => set('base_unit_id', v)} required={isInventory}
+                                options={lookups.units} onCreate={(n) => quickCreate('unit', n)} error={errors.base_unit_id} />}
                             <QuickCreateSelect label={t('category')} value={form.category_id} onChange={(v) => set('category_id', v)} required
                                 options={lookups.categories} onCreate={(n) => quickCreate('category', n)} error={errors.category_id} />
                             <QuickCreateSelect label={t('brand', 'Brand')} value={form.brand_id} onChange={(v) => set('brand_id', v)}

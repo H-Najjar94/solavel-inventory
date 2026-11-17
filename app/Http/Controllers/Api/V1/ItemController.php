@@ -65,7 +65,7 @@ class ItemController extends ApiController
             'entity_type' => 'item',
             'entity_id' => $item->id,
             'before' => $before,
-            'after' => $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active']),
+            'after' => $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active', 'base_unit_id']),
             'document_ref' => $item->sku,
             'created_at' => now(),
         ]);
@@ -153,6 +153,7 @@ class ItemController extends ApiController
             'attachments' => $item->attachments->values(),
             'supplier_price_lists' => $item->supplierPrices->sortByDesc('is_active')->values(),
             'package_recommendation' => $this->packageRecommendation($item),
+            'base_unit_review' => app(\App\Services\Catalog\ItemBaseUnitGuard::class)->preview($item),
         ]);
     }
 
@@ -633,7 +634,7 @@ class ItemController extends ApiController
 
     public function update(UpdateItemRequest $request, Item $item): JsonResponse
     {
-        $before = $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active']);
+        $before = $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active', 'base_unit_id']);
         $data = $request->validated();
         \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($item, $data) {
             $locked = Item::query()->lockForUpdate()->findOrFail($item->id);

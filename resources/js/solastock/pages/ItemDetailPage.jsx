@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
+import { useCan } from '../stores/meta.jsx';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
@@ -238,6 +239,7 @@ function WarehouseCards({ cards, onValuation }) {
 export default function ItemDetailPage() {
     const { id } = useParams();
     const gate = useCanCreate('inventory.manage_items');
+    const canManageUnits = useCan()('inventory.manage_settings');
     const qc = useQueryClient();
     const toast = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -494,7 +496,7 @@ export default function ItemDetailPage() {
                         <dt>{t('itemDetail.tracking')}</dt><dd>{t(`tracking.${item.tracking_type}`, item.tracking_type)}</dd>
                         <dt>{t('itemDetail.description')}</dt><dd>{item.description || '—'}</dd>
                         <dt>{t('itemDetail.notes')}</dt><dd>{item.notes || '—'}</dd>
-                        <dt>{t('itemDetail.unit')}</dt><dd><bdi>{item.base_unit?.code ?? '—'}</bdi></dd>
+                        <dt>{t('baseUnit.title')}</dt><dd><bdi>{item.base_unit?.name ?? item.base_unit?.code ?? '—'}</bdi>{data?.base_unit_review?.message && <p className="muted">{data.base_unit_review.message}</p>}{canManageUnits && item.base_unit_id && <Link className="btn btn--outline" to={data?.base_unit_review?.alternate_unit_url ?? `/settings?purchase_unit_item=${item.id}&to_unit_id=${item.base_unit_id}#unit-conversion`}>{t('baseUnit.addPurchaseUnit')}</Link>}</dd>
                         <dt>{t('itemDetail.weight')}</dt><dd>{item.weight ? qty(item.weight) : '—'}</dd>
                         <dt>{t('itemDetail.dimensions')}</dt><dd>{[item.length, item.width, item.height].filter(Boolean).length ? `${qty(item.length)} × ${qty(item.width)} × ${qty(item.height)}` : '—'}</dd>
                         <dt>{t('itemDetail.package')}</dt><dd>{data.package_recommendation ? `${data.package_recommendation.label}${data.package_recommendation.max_dimensions ? ` · ${data.package_recommendation.max_dimensions}` : ''}` : '—'}</dd>
