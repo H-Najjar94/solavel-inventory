@@ -84,7 +84,7 @@ Route::prefix('tenancy')->middleware(['sync.signature'])->group(function () {
 // commercial envelope when the plan excludes it. INERT until
 // SOLASTOCK_FEATURE_ENFORCEMENT=true. Runs alongside perm:, never replacing role
 // auth; routes with no mapped feature pass straight through.
-Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(function () {
+Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature', \App\Http\Middleware\RequireReadyUnitProjection::class])->group(function () {
     Route::get('/internal-consumptions/options',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'options'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.options');
     Route::get('/internal-consumptions/report',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'report'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.report');
     Route::get('/internal-consumptions/preview',[\App\Http\Controllers\Api\V1\InternalConsumptionController::class,'preview'])->middleware('perm:inventory.consumption.view')->name('api.v1.consumption.preview');
@@ -132,6 +132,11 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature'])->group(
         ->middleware('perm:inventory.manage_settings')->name('api.v1.dashboard.alerts.acknowledge');
 
     // Items
+    Route::post('/items/{item}/base-unit-conversion/retry',[ItemController::class,'retryBaseUnitConversion'])->middleware(['perm:inventory.manage_items','perm:inventory.manage_settings'])->name('api.v1.items.base-unit-conversion.retry');
+    Route::post('/items/{item}/base-unit-conversion/preview', [ItemController::class, 'previewBaseUnitConversion'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.items.base-unit-conversion.preview');
+    Route::post('/items/{item}/base-unit-conversion/apply', [ItemController::class, 'applyBaseUnitConversion'])
+        ->middleware(['perm:inventory.manage_items', 'perm:inventory.manage_settings'])->name('api.v1.items.base-unit-conversion.apply');
     Route::get('/items', [ItemController::class, 'index'])
         ->middleware('perm:inventory.view_items')->name('api.v1.items.index');
     Route::get('/items/barcode/lookup', [ItemController::class, 'barcodeLookup'])

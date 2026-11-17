@@ -114,6 +114,26 @@ class ItemController extends ApiController
         );
     }
 
+    public function retryBaseUnitConversion(Item $item): \Illuminate\Http\JsonResponse
+    {
+        $db=$item->getConnection();$db->transaction(function()use($item,$db){
+            Item::query()->lockForUpdate()->findOrFail($item->id);
+            $row=$db->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)->where('organization_id',$item->organization_id)->where('item_id',$item->id)->where('state','<>','ready')->orderByDesc('id')->lockForUpdate()->first();
+            if($row && (!$row->lease_expires_at || \Carbon\Carbon::parse($row->lease_expires_at)->isPast()))$db->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)->where('id',$row->id)->update(['state'=>'finance_pending','next_attempt_at'=>null,'lease_uuid'=>null,'lease_expires_at'=>null]);
+        });
+        return $this->success(['queued'=>true]);
+    }
+    public function previewBaseUnitConversion(\Illuminate\Http\Request $request, Item $item): \Illuminate\Http\JsonResponse
+    {
+        $data=$request->validate(['to_unit_id'=>['required','integer'],'factor_numerator'=>['required','integer','min:1','max:999999999'],'factor_denominator'=>['required','integer','min:1','max:999999999'],'effective_date'=>['required','date_format:Y-m-d']]);
+        return $this->success(app(\App\Services\Catalog\ItemBaseUnitConversion::class)->preview($item,(int)$data['to_unit_id'],(string)$data['factor_numerator'],(string)$data['factor_denominator'],$data['effective_date']));
+    }
+    public function applyBaseUnitConversion(\Illuminate\Http\Request $request, Item $item): \Illuminate\Http\JsonResponse
+    {
+        $data=$request->validate(['to_unit_id'=>['required','integer'],'factor_numerator'=>['required','integer','min:1','max:999999999'],'factor_denominator'=>['required','integer','min:1','max:999999999'],'effective_date'=>['required','date_format:Y-m-d'],'revision_sha256'=>['required','string','size:64'],'request_uuid'=>['required','uuid'],'reason'=>['required','string','max:1000'],'evidence'=>['required','array'],'evidence.reference'=>['required','string','max:1000'],'evidence.attachment_id'=>['required','integer'],'evidence.sha256'=>['required','regex:/^[a-f0-9]{64}$/']]);
+        return $this->success(app(\App\Services\Catalog\ItemBaseUnitConversion::class)->apply($item,(int)$data['to_unit_id'],(string)$data['factor_numerator'],(string)$data['factor_denominator'],$data['revision_sha256'],$data['request_uuid'],$data['reason'],$data['effective_date'],$data['evidence']));
+    }
+
     public function show(Item $item): JsonResponse
     {
         $item->load([
@@ -126,6 +146,7 @@ class ItemController extends ApiController
             'supplierPrices.supplier:id,code,name',
         ]);
 
+        $pending=\Illuminate\Support\Facades\Schema::connection('tenant')->hasTable(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)&&\Illuminate\Support\Facades\DB::connection('tenant')->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)->where('organization_id',$item->organization_id)->where('item_id',$item->id)->where('state','<>','ready')->exists();
         // Stock by warehouse from the balances projection (not item fields).
         $balances = $this->warehouseAccess->scope(
             StockBalance::query()->where('item_id', $item->id)
@@ -147,12 +168,13 @@ class ItemController extends ApiController
             'item' => $item,
             'primary_barcode' => $primaryBarcode,
             'barcodes' => $barcodes->map(fn (ItemBarcode $b) => $this->barcodeRow($b))->values(),
-            'stock_by_warehouse' => $balances,
+            'stock_by_warehouse' => $pending?null:$balances,
             'images' => $images,
             'primary_image_url' => $primary['url'] ?? null,
             'attachments' => $item->attachments->values(),
             'supplier_price_lists' => $item->supplierPrices->sortByDesc('is_active')->values(),
             'package_recommendation' => $this->packageRecommendation($item),
+            'base_unit_projection_pending' => $pending,
             'base_unit_review' => app(\App\Services\Catalog\ItemBaseUnitGuard::class)->preview($item),
         ]);
     }

@@ -16,7 +16,7 @@ final class ItemBaseUnitGuard
         'stock_adjustment_lines', 'stock_count_lines', 'stock_transfer_lines', 'shipment_lines',
         'internal_consumption_lines', 'supplier_return_lines', 'sales_return_lines', 'purchase_order_lines',
         'sales_order_lines', 'purchasing_receiving_request_lines', 'pick_list_lines', 'purchase_valuation_holds',
-        'unit_conversions', 'item_suppliers', 'supplier_price_lists',
+        'unit_conversions', 'item_suppliers', 'supplier_price_lists', 'warehouse_reorder_rules', 'item_variants',
     ];
 
     public function blockers(Item $item): array

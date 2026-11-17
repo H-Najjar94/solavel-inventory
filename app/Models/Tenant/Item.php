@@ -43,6 +43,7 @@ class Item extends Model
             $current = $this->exists
                 ? static::withTrashed()->whereKey($this->getKey())->lockForUpdate()->firstOrFail()
                 : null;
+            if ($current && $this->isDirty()) app(\App\Services\Catalog\StockUnitProjection::class)->assertReady((int)$this->id);
             if ($current && $this->isDirty('base_unit_id')) {
                 app(\App\Services\Catalog\ItemBaseUnitGuard::class)->assertChange($current, $this->base_unit_id ? (int)$this->base_unit_id : null);
             }

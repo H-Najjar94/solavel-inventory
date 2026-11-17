@@ -133,7 +133,7 @@ class StockLedgerController extends ApiController
      */
     public static function movementRow(StockLedger $row): array
     {
-        return [
+        return app(\App\Services\Catalog\ItemBaseUnitConversion::class)->movementUnit($row) + [
             'id' => $row->id,
             'moved_at' => optional($row->moved_at)->toDateTimeString(),
             'direction' => $row->direction,

@@ -86,7 +86,7 @@ class DashboardMetricsService
         $today = now()->toDateString();
         $expiryWarningDays = InventorySetting::expiryWarningDays();
         $deadCutoff = now()->subDays(90)->toDateTimeString();
-        $movedItems = $this->scoped('stock_ledger')->where('direction', 'out')->where('moved_at', '>=', $deadCutoff)->distinct()->pluck('item_id');
+        $movedItems = $this->scoped('stock_ledger')->where('direction', 'out')->where('source_type','<>',\App\Services\Catalog\ItemBaseUnitConversion::class)->where('moved_at', '>=', $deadCutoff)->distinct()->pluck('item_id');
 
         return [
             'inventory_value' => Decimal::money($inventoryValue),
@@ -95,7 +95,7 @@ class DashboardMetricsService
             'active_items' => $this->scoped('items')->where('is_active', true)->count(),
             'low_stock' => $low,
             'out_of_stock' => $out,
-            'movements_today' => $this->scoped('stock_ledger')->whereDate('moved_at', $today)->count(),
+            'movements_today' => $this->scoped('stock_ledger')->where('source_type','<>',\App\Services\Catalog\ItemBaseUnitConversion::class)->whereDate('moved_at', $today)->count(),
             'pending_pos' => $this->scoped('inventory_purchase_orders')->whereIn('status', ['draft', 'approved', 'partially_received'])->count(),
             'pending_grns' => $this->scoped('goods_receipts')->where('status', 'draft')->count(),
             'pending_transfers' => $this->scoped('stock_transfers')->where('status', 'draft')->count(),
@@ -124,7 +124,7 @@ class DashboardMetricsService
             'dead_stock' => $this->scoped('stock_balances')->where('on_hand_qty', '>', 0)
                 ->when($movedItems->isNotEmpty(), fn ($q) => $q->whereNotIn('item_id', $movedItems))->count(),
             'top_moving' => $this->scoped('stock_ledger as l')->join('items as i', 'i.id', '=', 'l.item_id')
-                ->where('l.direction', 'out')->where('l.moved_at', '>=', now()->subDays(30)->toDateTimeString())
+                ->where('l.direction', 'out')->where('l.source_type','<>',\App\Services\Catalog\ItemBaseUnitConversion::class)->where('l.moved_at', '>=', now()->subDays(30)->toDateTimeString())
                 ->selectRaw('i.sku, i.name, SUM(l.quantity) qty')->groupBy('i.sku', 'i.name')
                 ->orderByDesc('qty')->limit(5)->get(),
             'recent_movements' => $this->recentMovements(),

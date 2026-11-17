@@ -125,6 +125,11 @@ class ItemAttachmentController extends ApiController
 
     public function destroy(ItemAttachment $attachment): JsonResponse
     {
+        return $attachment->getConnection()->transaction(function()use($attachment){
+            Item::query()->lockForUpdate()->findOrFail($attachment->item_id);
+
+        $db=$attachment->getConnection();
+        if($db->getSchemaBuilder()->hasTable(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)&&$db->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)->where('organization_id',$attachment->organization_id)->where('item_id',$attachment->item_id)->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(evidence,'$.attachment_id')) = ?",[(string)$attachment->id])->exists())throw ValidationException::withMessages(['attachment'=>__('inventory.base_unit.evidence_retained')]);
         $audit = [
             'organization_id' => $attachment->organization_id,
             'actor_user_id' => auth()->id(),
@@ -139,5 +144,6 @@ class ItemAttachmentController extends ApiController
         InventoryAuditLog::create($audit);
 
         return $this->success(['deleted' => true]);
+        });
     }
 }

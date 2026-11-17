@@ -16,9 +16,9 @@ assert os.geteuid() == 0
 # Existing production rollback releases can carry descriptive tags between
 # timestamp and SHA (for example stock-credit-status). Keep the path grammar
 # closed while accepting those established immutable release identities.
-assert re.fullmatch(r'\d{8}T\d{6}Z-(?:[a-z][a-z0-9]*-)*[a-f0-9]{8}', a.release)
+assert re.fullmatch(r'\d{8}T\d{6}Z-(?:(?:[a-z][a-z0-9]*-)*[a-f0-9]{8}|[a-f0-9]{7,8}(?:-[a-z0-9]+)+)', a.release)
 assert re.fullmatch(r'[a-f0-9]{40}', a.sha)
-assert a.release.endswith('-' + a.sha[:8])
+assert a.release.endswith('-' + a.sha[:8]) or a.release.split('-', 1)[1].split('-', 1)[0] in [a.sha[:7], a.sha[:8]]
 assert re.fullmatch(r'_qa32_opcache_[a-f0-9]{24}\.php', a.probe)
 root = Path('/var/www/solavel-stock')
 release = root / 'releases' / a.release

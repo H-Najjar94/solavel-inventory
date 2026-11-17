@@ -370,6 +370,7 @@ class InventoryReversalService
                 ->when($row->bin_id, fn ($q) => $q->where('bin_id', $row->bin_id), fn ($q) => $q->whereNull('bin_id'))
                 ->get();
             foreach ($downstreamOuts as $out) {
+                if(app(\App\Services\Catalog\ItemBaseUnitConversion::class)->isBoundaryRow($out))continue;
                 if ($ignoreOtherReturnWriteOffsOnOtherLayers && $row->cost_layer_id && $this->isOtherReturnsWriteOffOnOtherLayers($out, $ownLayerIds)) {
                     continue;
                 }
@@ -384,7 +385,8 @@ class InventoryReversalService
                 ->when($row->bin_id, fn ($q) => $q->where('bin_id', $row->bin_id), fn ($q) => $q->whereNull('bin_id'))
                 ->lockForUpdate()
                 ->first();
-            if (! $balance || Decimal::lt((string) $balance->on_hand_qty, (string) $row->quantity)) {
+            $normalized=app(\App\Services\Catalog\ItemBaseUnitConversion::class)->normalizeOriginal($row);
+            if (! $balance || Decimal::lt((string) $balance->on_hand_qty, (string) $normalized->quantity)) {
                 throw new RuntimeException(__($messagePrefix.'reversal_unavailable'));
             }
         }
