@@ -80,7 +80,9 @@ if ((!test_mode));then
  runuser -u "$app_user" -- bash -c 'set -e;cd "$1";composer install --no-dev --prefer-dist --no-interaction --no-progress;npm ci --no-audit --no-fund;npm run build' _ "$release"
  for command in config:cache route:cache event:cache view:cache;do runuser -u "$app_user" -- php "$release/artisan" "$command" --no-ansi;done
  runuser -u "$app_user" -- php "$release/artisan" about --only=environment >/dev/null
- bash "$release/scripts/validate-runtime-cache.sh"
+ chown -hR "$app_user:$runtime_group" "$release/bootstrap/cache"
+ chmod -R u+rwX,g+rwX "$release/bootstrap/cache"
+ bash "$release/scripts/validate-runtime-cache.sh" || fail 'Runtime cache permissions/view binding verification failed.'
  [[ -f "$release/public/build/manifest.json" ]] || fail 'Compiled asset manifest missing.'
  python3 - "$release" <<'PY'
 import pathlib,json,sys
