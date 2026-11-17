@@ -4,7 +4,9 @@ namespace App\Services\Catalog;
 
 use App\Models\Tenant\Item;
 use App\Services\Integration\FinanceConnectionClient;
+use App\Services\Integration\SolaStockJournalContract;
 use App\Tenancy\OrganizationContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -15,7 +17,7 @@ final class StockUnitProjection
     public function mapping(Item $item, int $target): ?object
     {
         $db = $item->getConnection();
-        $maps = $db->table('integration_organization_mappings')->where('solastock_organization_id', $item->organization_id)->where('tenant_database_identity', $db->getDatabaseName())->where('status', 'verified')->where('activation_state', 'active')->get();
+        $maps = $db->table('integration_organization_mappings')->where('solastock_organization_id', $item->organization_id)->where('tenant_database_identity', $db->getDatabaseName())->where('status', 'verified')->where('activation_state', 'active')->lockForUpdate()->get();
         if ($maps->isEmpty()) {
             return null;
         }
@@ -24,7 +26,7 @@ final class StockUnitProjection
         }
         $map = $maps->first();
         foreach ([['item', $item->id], ['unit', $item->base_unit_id], ['unit', $target]] as [$type,$id]) {
-            $rows = $db->table('integration_master_data_mappings')->where('organization_mapping_uuid', $map->mapping_uuid)->where('entity_type', $type)->where('solastock_record_id', (string) $id)->where('status', 'verified')->get();
+            $rows = $db->table('integration_master_data_mappings')->where('organization_mapping_uuid', $map->mapping_uuid)->where('entity_type', $type)->where('solastock_record_id', (string) $id)->where('status', 'verified')->lockForUpdate()->get();
             if ($rows->count() !== 1) {
                 throw new \RuntimeException('unit_projection_verified_identity_required');
             }
@@ -35,6 +37,41 @@ final class StockUnitProjection
         }
 
         return $map;
+    }
+
+    /** Read-only Finance eligibility while the verified counterpart row remains locked until Stock commits. */
+    public function preflight(Item $item, int $target, string $numerator, string $denominator): ?array
+    {
+        $map = $this->mapping($item, $target);
+        if (! $map) {
+            return null;
+        }
+        $db = $item->getConnection();
+        if ($db->transactionLevel() < 1 || $map->tenant_database_identity !== $db->getDatabaseName()) {
+            throw ValidationException::withMessages(['base_unit_conversion' => __('inventory.base_unit.finance_check_unavailable')]);
+        }
+        $identity = fn ($type, $id) => $db->table('integration_master_data_mappings')->where('organization_mapping_uuid', $map->mapping_uuid)->where('entity_type', $type)->where('solastock_record_id', (string) $id)->where('status', 'verified')->value('solabooks_record_id');
+        $financeItem = (int) $identity('item', $item->id);
+        $financeUnit = (int) $identity('unit', $target);
+        try {
+            $row = $db->table('inventory_items')->where('organization_id', $map->finance_organization_id)->where('id', $financeItem)->lockForUpdate()->first(['id']);
+        } catch (QueryException $e) {
+            throw ValidationException::withMessages(['base_unit_conversion' => __('inventory.base_unit.finance_check_unavailable')]);
+        }
+        if (! $row) {
+            throw ValidationException::withMessages(['base_unit_conversion' => __('inventory.base_unit.finance_check_unavailable')]);
+        }
+        $data = ['organization_mapping_uuid' => $map->mapping_uuid, 'source_item_id' => $item->id, 'from_unit_id' => (int) $item->base_unit_id, 'to_unit_id' => $target, 'ratio_numerator' => $numerator, 'ratio_denominator' => $denominator];
+        try {
+            $reply = app(FinanceConnectionClient::class)->command(['client_id' => $map->central_client_id, 'organization_id' => $map->central_organization_id, 'finance_organization_id' => $map->finance_organization_id, 'actor_id' => (int) auth()->id(), 'action' => 'catalog.unit_transition.preflight', 'idempotency_key' => 'unit-preflight:'.SolaStockJournalContract::payloadHash($data), 'data' => $data]);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages(['base_unit_conversion' => __('inventory.base_unit.finance_check_unavailable')]);
+        }
+        if (($reply['status'] ?? null) !== 'ready' || (int) ($reply['target_item_id'] ?? 0) !== $financeItem || (int) ($reply['target_unit_id'] ?? 0) !== $financeUnit || ! preg_match('/^[a-f0-9]{64}$/D', (string) ($reply['metadata_hash'] ?? ''))) {
+            throw ValidationException::withMessages(['base_unit_conversion' => __('inventory.base_unit.finance_check_unavailable')]);
+        }
+
+        return ['status' => 'ready', 'target_item_id' => $financeItem, 'target_unit_id' => $financeUnit, 'metadata_hash' => $reply['metadata_hash']];
     }
 
     public function assertReady(int $item): void

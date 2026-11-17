@@ -313,6 +313,7 @@ final class ItemBaseUnitConversion
             if ($plan['organization_mapping_uuid'] && ! (int) auth()->id()) {
                 $this->issue('An authorized connected actor is required.');
             }
+            $financePreflight = app(StockUnitProjection::class)->preflight($item, $target, $numerator, $denominator);
             $sourceBefore = app(CatalogSourceSnapshot::class)->capture('item', $item->id, $item->organization_id);
             $id = $db->table(self::TABLE)->insertGetId(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'request_uuid' => $request, 'from_unit_id' => $item->base_unit_id, 'to_unit_id' => $target, 'factor' => $factor, 'factor_numerator' => $numerator, 'factor_denominator' => $denominator, 'effective_date' => $effectiveDate, 'evidence' => json_encode($evidence, JSON_THROW_ON_ERROR), 'prior_ledger_id' => $plan['snapshot']['last_ledger_id'], 'revision_sha256' => $revision, 'before_snapshot' => json_encode($plan['snapshot'], JSON_THROW_ON_ERROR), 'created_by' => auth()->id(), 'reason' => $reason, 'created_at' => now()]);
             $ids = app(StockLedgerService::class)->reclassifyBaseUnit($item, $plan, $id, $effectiveDate);
@@ -329,7 +330,7 @@ final class ItemBaseUnitConversion
             $changes = ['after_snapshot' => json_encode($result, JSON_THROW_ON_ERROR), 'ledger_ids' => json_encode($ids, JSON_THROW_ON_ERROR)];
             if ($plan['organization_mapping_uuid']) {
                 $sourceAfter = app(CatalogSourceSnapshot::class)->capture('item', $item->id, $item->organization_id);
-                $payload = ['schema_version' => 'stock.base_unit_conversion.v1', 'event_uuid' => $request, 'organization_mapping_uuid' => $plan['organization_mapping_uuid'], 'source_item_id' => $item->id, 'from_unit_id' => $plan['from_unit_id'], 'to_unit_id' => $target, 'ratio_numerator' => $numerator, 'ratio_denominator' => $denominator, 'effective_date' => $effectiveDate, 'revision_before' => CatalogSourceSnapshot::revision($sourceBefore), 'revision_after' => CatalogSourceSnapshot::revision($sourceAfter), 'before' => $sourceBefore, 'after' => $sourceAfter, 'evidence' => $evidence, 'boundary_ledger_ids' => $ids];
+                $payload = ['schema_version' => 'stock.base_unit_conversion.v1', 'event_uuid' => $request, 'organization_mapping_uuid' => $plan['organization_mapping_uuid'], 'source_item_id' => $item->id, 'from_unit_id' => $plan['from_unit_id'], 'to_unit_id' => $target, 'ratio_numerator' => $numerator, 'ratio_denominator' => $denominator, 'effective_date' => $effectiveDate, 'revision_before' => CatalogSourceSnapshot::revision($sourceBefore), 'revision_after' => CatalogSourceSnapshot::revision($sourceAfter), 'before' => $sourceBefore, 'after' => $sourceAfter, 'evidence' => $evidence, 'boundary_ledger_ids' => $ids, 'finance_preflight' => $financePreflight];
                 $payload['snapshot_hash'] = SolaStockJournalContract::payloadHash($payload);
                 $changes += ['organization_mapping_uuid' => $plan['organization_mapping_uuid'], 'state' => 'finance_pending', 'finance_payload' => json_encode($payload, JSON_THROW_ON_ERROR)];
                 // Freeze ordinary catalog delivery until the typed epoch projection is acknowledged.

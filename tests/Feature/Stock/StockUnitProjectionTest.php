@@ -12,9 +12,11 @@ use App\Services\Access\CentralAppAccess;
 use App\Services\Catalog\ItemBaseUnitConversion;
 use App\Services\Catalog\StockUnitProjection;
 use App\Services\Documents\OpeningStockService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\Support\CommittedTenantFixture;
 use Tests\Support\StockTestFactory as F;
@@ -44,28 +46,64 @@ final class StockUnitProjectionTest extends TestCase
             foreach ([['item', $item->id, 44], ['unit', $ea->id, 21], ['unit', $box->id, 22]] as [$type,$source,$target]) {
                 $db->table('integration_master_data_mappings')->insert(['mapping_uuid' => (string) Str::uuid(), 'organization_mapping_uuid' => $map->mapping_uuid, 'central_client_id' => 7, 'central_organization_id' => TenantTestManager::ORG_A, 'finance_organization_id' => 14, 'solastock_organization_id' => TenantTestManager::ORG_A, 'entity_type' => $type, 'solastock_record_id' => (string) $source, 'solabooks_record_id' => (string) $target, 'status' => 'verified', 'created_at' => now(), 'updated_at' => now()]);
             }
+            $db->table('inventory_items')->insert(['id' => 44, 'organization_id' => 14, 'name' => 'Synthetic Finance counterpart', 'unit_id' => 21, 'valuation_method' => 'average', 'qty_on_hand' => 0]);
             $this->mock(CentralAppAccess::class)->shouldReceive('decision')->andReturn(['allowed' => true, 'owner' => true]);
             $this->actingAs((new User)->forceFill(['id' => 777, 'name' => 'Authorized synthetic owner']));
+            $fixture->commit();
+            config(['services.solabooks.api_base_url' => 'https://finance.test', 'finance_workspace.secret' => str_repeat('s', 64), 'database.connections.unit_projection_lock_probe' => config('database.connections.tenant')]);
+            $preflightReady = false;
+            $projectionAttempt = 0;
+            $payload = null;
+            $lockObserved = 0;
+            Http::fake(function ($request) use (&$payload, &$preflightReady, &$projectionAttempt, &$lockObserved, $db) {
+                if ($request['action'] === 'catalog.unit_transition.preflight') {
+                    $probe = DB::connection('unit_projection_lock_probe');
+                    $this->assertSame($db->getDatabaseName(), $probe->getDatabaseName());
+                    $probe->statement('SET SESSION innodb_lock_wait_timeout=1');
+                    try {
+                        $probe->beginTransaction();
+                        $probe->table('inventory_items')->where('organization_id', 14)->where('id', 44)->lockForUpdate()->first();
+                        $this->fail('Finance counterpart must remain locked by Stock during read-only preflight');
+                    } catch (QueryException $e) {
+                        $this->assertStringContainsString('1205', $e->getMessage());
+                        $lockObserved++;
+                    } finally {
+                        while ($probe->transactionLevel() > 0) {
+                            $probe->rollBack();
+                        }DB::purge('unit_projection_lock_probe');
+                    }
+
+                    return $preflightReady ? Http::response(['data' => ['status' => 'ready', 'target_item_id' => 44, 'target_unit_id' => 22, 'metadata_hash' => str_repeat('d', 64)]]) : Http::response(['message' => 'counterpart_pricing_not_eligible'], 422);
+                }
+                $projectionAttempt++;
+
+                return Http::response(['data' => ['event_uuid' => $payload['event_uuid'], 'snapshot_hash' => $projectionAttempt === 1 ? 'wrong' : $payload['snapshot_hash'], 'revision_after' => $payload['revision_after'], 'target_item_id' => 44, 'target_unit_id' => 22, 'status' => 'ready']]);
+            });
             $service = app(ItemBaseUnitConversion::class);
             $date = now()->subDay()->toDateString();
             $p = $service->preview($item, $box->id, '1', '10', $date);
             $this->assertTrue($p['supported'], json_encode($p['blockers']));
+            try {
+                $service->apply($item, $box->id, '1', '10', $p['revision_sha256'], (string) Str::uuid(), 'Rejected eligibility', $date, ['reference' => 'Synthetic evidence', 'sha256' => str_repeat('c', 64)]);
+                $this->fail('Counterpart rejection must happen before Stock mutation');
+            } catch (ValidationException $e) {
+                $this->assertArrayHasKey('base_unit_conversion', $e->errors());
+            }
+            $this->assertSame($ea->id, (int) $item->fresh()->base_unit_id);
+            $this->assertSame(1, StockLedger::where('item_id', $item->id)->count());
+            $this->assertSame(0, $db->table(ItemBaseUnitConversion::TABLE)->count());
+            $preflightReady = true;
             $result = $service->apply($item, $box->id, '1', '10', $p['revision_sha256'], (string) Str::uuid(), 'Verified package conversion', $date, ['reference' => 'Synthetic evidence', 'sha256' => str_repeat('c', 64)]);
             $this->assertSame('finance_pending', $result['state']);
             $row = $db->table(ItemBaseUnitConversion::TABLE)->where('id', $result['event_id'])->first();
             $payload = json_decode($row->finance_payload, true);
             $this->assertSame('stock.base_unit_conversion.v1', $payload['schema_version']);
+            $this->assertSame(str_repeat('d', 64), $payload['finance_preflight']['metadata_hash']);
+            $this->assertSame(2, $lockObserved);
+            $this->assertSame(21, (int) $db->table('inventory_items')->where('id', 44)->value('unit_id'));
             $this->assertSame('1', $payload['ratio_numerator']);
             $this->assertSame('10', $payload['ratio_denominator']);
             $stockCount = StockLedger::where('item_id', $item->id)->count();
-            $fixture->commit();
-            config(['services.solabooks.api_base_url' => 'https://finance.test', 'finance_workspace.secret' => str_repeat('s', 64)]);
-            $attempt = 0;
-            Http::fake(function ($request) use ($payload, &$attempt) {
-                $attempt++;
-
-                return Http::response(['data' => ['event_uuid' => $payload['event_uuid'], 'snapshot_hash' => $attempt === 1 ? 'wrong' : $payload['snapshot_hash'], 'revision_after' => $payload['revision_after'], 'target_item_id' => 44, 'target_unit_id' => 22, 'status' => 'ready']]);
-            });
             $worker = app(StockUnitProjection::class);
             $this->assertSame(1, $worker->process($map));
             $this->assertSame('finance_pending', $db->table(ItemBaseUnitConversion::TABLE)->where('id', $row->id)->value('state'));
