@@ -49,6 +49,7 @@ export default function SupplierFormPage() {
             const res = isEdit ? await api.updateSupplier(id, body) : await api.createSupplierFull(body);
             toast.push(t(isEdit ? 'partners.suppliers.form.updated' : 'partners.suppliers.form.created'), 'success');
             qc.invalidateQueries({ queryKey: ['suppliers'] });
+            qc.invalidateQueries({ queryKey: ['supplier-locations'] }); qc.invalidateQueries({ queryKey: ['supplier'] }); // detail must show the pin just saved
             nav(`/suppliers/${res?.data?.id ?? id}`);
         } catch (err) { setErrors(fieldErrors(err));setFailure(err.status===422 || err.status===402 ? err.message : t('partners.suppliers.form.saveFailed'));if(![422,402].includes(err.status))toast.failure(err,t('partners.suppliers.form.saveFailed')); }
         finally { setSaving(false); }
