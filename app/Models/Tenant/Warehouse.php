@@ -32,6 +32,8 @@ class Warehouse extends Model
         // write and decodes on read.
         'address' => 'array',
         'is_active' => 'boolean',
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 
     public function images(): HasMany

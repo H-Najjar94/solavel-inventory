@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\IntegrationController;
 use App\Http\Controllers\Api\V1\InventoryAuditController;
 use App\Http\Controllers\Api\V1\ItemAttachmentController;
 use App\Http\Controllers\Api\V1\ItemController;
+use App\Http\Controllers\Api\V1\GeoSearchController;
 use App\Http\Controllers\Api\V1\ItemSupplierController;
 use App\Http\Controllers\Api\V1\ItemImageController;
 use App\Http\Controllers\Api\V1\MetaController;
@@ -317,11 +318,16 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature', \App\Htt
     Route::get('/balances', [StockBalanceController::class, 'index'])
         ->middleware('perm:inventory.view_stock')->name('api.v1.balances.index');
 
+    // Location picker search proxy (submit-only; cached + rate limited server-side).
+    Route::get('/geo/search', [GeoSearchController::class, 'search'])->name('api.v1.geo.search');
+
     // ── Suppliers ──
     Route::get('/suppliers', [SupplierController::class, 'index'])
         ->middleware('perm:inventory.view_items')->name('api.v1.suppliers.index');
     Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])
         ->middleware('perm:inventory.view_items')->name('api.v1.suppliers.show');
+    Route::get('/suppliers/{supplier}/locations', [SupplierController::class, 'locations'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.suppliers.locations');
     Route::post('/suppliers', [SupplierController::class, 'store'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.suppliers.store');
     Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])

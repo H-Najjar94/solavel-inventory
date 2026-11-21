@@ -119,6 +119,8 @@ return array (
     'warehouse_code_unique' => 'يجب أن يكون رمز المستودع فريداً داخل المؤسسة.',
     'lot_code_required' => 'رمز الدفعة مطلوب للأصناف المتتبعة بالدفعات.',
     'supplier_code_unique' => 'يجب أن يكون رمز المورد فريداً.',
+    'coordinates_pair' => 'يجب تحديد خط العرض وخط الطول معاً أو تركهما فارغين.',
+    'location_linked_supplier' => 'هذا المورد مرتبط بسولاكاونت. عدّل موقعه من سولاكاونت.',
     'customer_code_unique' => 'يجب أن يكون رمز العميل فريداً.',
     'image_type' => 'يُسمح فقط بصور JPG أو PNG أو WEBP.',
     'attachment_empty' => 'يجب ألا يكون المرفق فارغاً.',
