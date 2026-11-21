@@ -61,6 +61,8 @@ class InventoryReportService
 
     public static function fieldLabel(string $field): string
     {
+        if($field==='unit_notice')return __('inventory.base_unit.mixed_unit_summary_title');
+        if($field==='quantity_unit')return __('inventory.base_unit.title');
         $key = "inventory.reports.fields.{$field}";
         $label = __($key);
 
@@ -139,15 +141,16 @@ class InventoryReportService
             ->when($f->itemId, fn ($x) => $x->where('b.item_id', $f->itemId))
             ->when($f->warehouseId, fn ($x) => $x->where('b.warehouse_id', $f->warehouseId))
             ->when($f->categoryId, fn ($x) => $x->where('i.category_id', $f->categoryId))
-            ->selectRaw('i.sku, i.name item, c.name category, w.name warehouse, lo.lot_code, lo.expiry_date, b.on_hand_qty, b.average_cost, b.total_value,
+            ->selectRaw('i.id item_id, i.sku, i.name item, c.name category, w.name warehouse, lo.lot_code, lo.expiry_date, b.on_hand_qty, b.average_cost, b.total_value,
                 (CASE WHEN (b.on_hand_qty - b.reserved_qty) <= 0 THEN "out" WHEN (b.on_hand_qty - b.reserved_qty) <= 5 THEN "low" ELSE "ok" END) stock_status')
             ->orderByDesc('b.total_value');
         $rows = $q->get();
+        $rows->each(function($row)use($f){$row->quantity_unit=app(\App\Services\Catalog\ItemBaseUnitConversion::class)->unitAtDate((int)$row->item_id,$this->orgId(),$f->asAt??now()->toDateString());});
         $currency = $this->currencyContext($f);
         $rows = $rows->map(fn ($row) => $this->withConvertedValue($row, $currency))->values();
 
         return [
-            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
+            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'quantity_unit', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
             'rows' => $rows,
             'summary' => [
                 'total_value' => Decimal::money($this->sumDecimal($rows, 'total_value')),
@@ -194,22 +197,23 @@ class InventoryReportService
             ->when($f->warehouseId, fn ($x) => $x->where('l.warehouse_id', $f->warehouseId))
             ->when($f->categoryId, fn ($x) => $x->where('i.category_id', $f->categoryId))
             ->where('l.moved_at', '<=', $asAt)
-            ->selectRaw('i.sku, i.name item, c.name category, w.name warehouse, lo.lot_code, lo.expiry_date,
+            ->selectRaw('i.id item_id, i.sku, i.name item, c.name category, w.name warehouse, lo.lot_code, lo.expiry_date,
                 SUM(CASE WHEN l.direction = "in" THEN l.quantity ELSE -l.quantity END) on_hand_qty,
                 CASE WHEN SUM(CASE WHEN l.direction = "in" THEN l.quantity ELSE -l.quantity END) = 0 THEN 0
                     ELSE SUM(CASE WHEN l.direction = "in" THEN l.total_cost ELSE -l.total_cost END) / SUM(CASE WHEN l.direction = "in" THEN l.quantity ELSE -l.quantity END) END average_cost,
                 SUM(CASE WHEN l.direction = "in" THEN l.total_cost ELSE -l.total_cost END) total_value,
                 "as_at" stock_status')
-            ->groupBy('i.sku', 'i.name', 'c.name', 'w.name', 'lo.lot_code', 'lo.expiry_date')
+            ->groupBy('i.id','i.sku', 'i.name', 'c.name', 'w.name', 'lo.lot_code', 'lo.expiry_date')
             ->havingRaw('ABS(on_hand_qty) > 0.00001')
             ->orderByDesc('total_value')
             ->get();
 
+        $rows->each(function($row)use($f){$row->quantity_unit=app(\App\Services\Catalog\ItemBaseUnitConversion::class)->unitAtDate((int)$row->item_id,$this->orgId(),$f->asAt);});
         $currency = $this->currencyContext($f);
         $rows = $rows->map(fn ($row) => $this->withConvertedValue($row, $currency))->values();
 
         return [
-            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
+            'columns' => ['sku', 'item', 'category', 'warehouse', 'lot_code', 'expiry_date', 'quantity_unit', 'on_hand_qty', 'average_cost', 'total_value', 'value_currency', 'converted_total_value', 'stock_status'],
             'rows' => $rows,
             'summary' => [
                 'total_value' => Decimal::money($this->sumDecimal($rows, 'total_value')),
@@ -292,18 +296,20 @@ class InventoryReportService
             ->when($f->warehouseId, fn ($x) => $x->where('l.warehouse_id', $f->warehouseId))
             ->when($f->from, fn ($x) => $x->whereDate('l.moved_at', '>=', $f->from))
             ->when($f->to, fn ($x) => $x->whereDate('l.moved_at', '<=', $f->to))
-            ->selectRaw('l.id, l.moved_at, i.sku, i.name item, w.name warehouse, lo.lot_code, sn.serial, l.expiry_date, l.source_type, l.source_id, l.direction,
+            ->selectRaw('l.id, l.item_id, l.quantity, l.moved_at, i.sku, i.name item, w.name warehouse, lo.lot_code, sn.serial, l.expiry_date, l.source_type, l.source_id, l.direction,
                 (CASE WHEN l.direction="in" THEN l.quantity ELSE 0 END) qty_in,
                 (CASE WHEN l.direction="out" THEN l.quantity ELSE 0 END) qty_out,
                 l.unit_cost, l.total_cost, l.balance_qty_after')
             ->orderBy('l.moved_at')->orderBy('l.id')->limit($f->limit)->get();
         SourceDocumentPresenter::decorateRows($rows);
         $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
+        $rows->each(function($r){$model=new \App\Models\Tenant\StockLedger; $model->setRawAttributes((array)$r+['organization_id'=>$this->orgId()]);$r->quantity_unit=app(\App\Services\Catalog\ItemBaseUnitConversion::class)->movementUnit($model)['quantity_unit_name'];});
 
+        $mixedUnits=$rows->pluck('quantity_unit')->unique()->count()>1;
         return [
-            'columns' => ['moved_at', 'sku', 'item', 'warehouse', 'lot_code', 'serial', 'expiry_date', 'source_document', 'qty_in', 'qty_out', 'unit_cost', 'total_cost', 'balance_qty_after'],
+            'columns' => ['moved_at', 'sku', 'item', 'warehouse', 'lot_code', 'serial', 'expiry_date', 'source_document', 'quantity_unit', 'qty_in', 'qty_out', 'unit_cost', 'total_cost', 'balance_qty_after'],
             'rows' => $rows,
-            'summary' => ['rows' => $rows->count(), 'qty_in' => Decimal::qty($this->sumDecimal($rows, 'qty_in')), 'qty_out' => Decimal::qty($this->sumDecimal($rows, 'qty_out'))],
+            'summary' => ['rows' => $rows->count()]+($mixedUnits?['unit_notice'=>__('inventory.base_unit.mixed_unit_summary')]:['qty_in' => Decimal::qty($this->sumDecimal($rows, 'qty_in')), 'qty_out' => Decimal::qty($this->sumDecimal($rows, 'qty_out'))]),
         ];
     }
 
@@ -318,13 +324,14 @@ class InventoryReportService
             ->leftJoin('warehouse_bins as bin', 'bin.id', '=', 'l.bin_id')
             ->where('l.item_id', $f->itemId)
             ->when($f->warehouseId, fn ($x) => $x->where('l.warehouse_id', $f->warehouseId))
-            ->selectRaw('l.moved_at, w.name warehouse, bin.code bin, l.source_type, l.source_id, l.direction, l.quantity, l.unit_cost, l.balance_qty_after, l.balance_value_after')
+            ->selectRaw('l.id, l.item_id, l.moved_at, w.name warehouse, bin.code bin, l.source_type, l.source_id, l.direction, l.quantity, l.unit_cost, l.balance_qty_after, l.balance_value_after')
             ->orderBy('l.moved_at')->orderBy('l.id')->limit($f->limit)->get();
         SourceDocumentPresenter::decorateRows($rows);
         $rows->each(fn ($r) => $r->source_document = $r->source_display ?? null);
+        $rows->each(function($r){$model=new \App\Models\Tenant\StockLedger; $model->setRawAttributes((array)$r+['organization_id'=>$this->orgId()]);$r->quantity_unit=app(\App\Services\Catalog\ItemBaseUnitConversion::class)->movementUnit($model)['quantity_unit_name'];});
 
         return [
-            'columns' => ['moved_at', 'warehouse', 'bin', 'source_document', 'direction', 'quantity', 'unit_cost', 'balance_qty_after', 'balance_value_after'],
+            'columns' => ['moved_at', 'warehouse', 'bin', 'source_document', 'direction', 'quantity_unit', 'quantity', 'unit_cost', 'balance_qty_after', 'balance_value_after'],
             'rows' => $rows,
             'summary' => ['movements' => $rows->count()],
         ];
@@ -402,7 +409,7 @@ class InventoryReportService
     private function reportDeadStock(ReportFilters $f): array
     {
         $cutoff = now()->subDays($f->days)->toDateTimeString();
-        $moved = $this->scoped('stock_ledger')->where('direction', 'out')->where('moved_at', '>=', $cutoff)->distinct()->pluck('item_id');
+        $moved = $this->scoped('stock_ledger')->where('direction', 'out')->where('source_type','<>',\App\Services\Catalog\ItemBaseUnitConversion::class)->where('moved_at', '>=', $cutoff)->distinct()->pluck('item_id');
         $rows = $this->scoped('stock_balances as b')->join('items as i', 'i.id', '=', 'b.item_id')->where('i.item_type', 'inventory')
             ->leftJoin('warehouses as w', 'w.id', '=', 'b.warehouse_id')
             ->where('b.on_hand_qty', '>', 0)->whereNotIn('b.item_id', $moved)
@@ -416,7 +423,7 @@ class InventoryReportService
     {
         $cutoff = now()->subDays($f->days)->toDateTimeString();
         $rows = $this->scoped('stock_ledger as l')->join('items as i', 'i.id', '=', 'l.item_id')
-            ->where('l.direction', 'out')->where('l.moved_at', '>=', $cutoff)
+            ->where('l.direction', 'out')->where('l.source_type','<>',\App\Services\Catalog\ItemBaseUnitConversion::class)->where('l.moved_at', '>=', $cutoff)
             ->selectRaw('i.sku, i.name item, SUM(l.quantity) qty_out, COUNT(*) movements')
             ->groupBy('i.sku', 'i.name')->orderByDesc('qty_out')->limit(50)->get();
 

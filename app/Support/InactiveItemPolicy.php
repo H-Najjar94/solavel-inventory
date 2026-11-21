@@ -76,6 +76,7 @@ final class InactiveItemPolicy
             return;
         }
         $active = self::lockedIsActive($itemId);
+        if ($active!==null) app(\App\Services\Catalog\StockUnitProjection::class)->assertReady($itemId);
         if ($active !== false) {
             return; // active, or unknown item (the FK / document validation reports it)
         }

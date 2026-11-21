@@ -27,6 +27,10 @@ class SourceDocumentPresenter
 
     public static function describe(?string $sourceType, mixed $sourceId): array
     {
+        if($sourceType===\App\Services\Catalog\ItemBaseUnitConversion::class){
+            $event=\Illuminate\Support\Facades\DB::connection('tenant')->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)->where('organization_id',app(\App\Tenancy\OrganizationContext::class)->idOrFail())->where('id',$sourceId)->first();
+            $label=__('inventory.base_unit.conversion_title');return ['source_label'=>$label,'source_number'=>'UC-'.$sourceId,'source_display'=>$label.' UC-'.$sourceId,'source_route'=>$event?'/items/'.$event->item_id.'?tab=details':null,'source_missing'=>!$event];
+        }
         if (! $sourceType || ! $sourceId) {
             return [
                 'source_label' => null,

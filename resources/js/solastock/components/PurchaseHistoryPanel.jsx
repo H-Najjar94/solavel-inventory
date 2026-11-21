@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { AccessNotice } from './PlanAccess.jsx';
-import { EmptyState, Field, Skeleton, Badge } from './ui.jsx';
+import { EmptyState, Field, Skeleton, Badge, SortTh } from './ui.jsx';
 import { FinanceStateChip, Num, PriceWithCurrency, QueryProblem, costText, moneyText, qtyText, decimalText, useSupplierTermsAccess } from './SupplierTermsShared.jsx';
 import { t } from '../i18n/index.js';
 
@@ -12,6 +13,9 @@ import { t } from '../i18n/index.js';
  * per-supplier statistics, posted goods receipts and, when connected, SolaCount posted bills.
  */
 export default function PurchaseHistoryPanel({ mode = 'item', id }) {
+    const billSort = useTableSort();
+    const receiptSort = useTableSort();
+    const summarySort = useTableSort();
     const access = useSupplierTermsAccess();
     const [range, setRange] = useState({ from: '', to: '' });
     const params = { from: range.from || undefined, to: range.to || undefined };
@@ -54,18 +58,18 @@ export default function PurchaseHistoryPanel({ mode = 'item', id }) {
                             <p className="muted">{t(basis === 'bills' ? 'supplierTerms.history.basisBills' : 'supplierTerms.history.basisReceipts', undefined, { currency: base ?? '' })}</p>
                             <div className="tbl-wrap"><table className="data-table">
                                 <thead><tr>
-                                    <th>{t('supplierTerms.common.supplier')}</th>
-                                    <th className="num">{t('supplierTerms.history.documents')}</th>
-                                    <th>{t('supplierTerms.history.lastDate')}</th>
+                                    <SortTh sort={summarySort} col="supplier">{t('supplierTerms.common.supplier')}</SortTh>
+                                    <SortTh sort={summarySort} col="documents" className="num">{t('supplierTerms.history.documents')}</SortTh>
+                                    <SortTh sort={summarySort} col="lastDate">{t('supplierTerms.history.lastDate')}</SortTh>
                                     <th className="num">{t('supplierTerms.history.lastCost')}</th>
-                                    <th className="num">{t('supplierTerms.history.lowest')}</th>
-                                    <th className="num">{t('supplierTerms.history.highest')}</th>
-                                    <th className="num">{t('supplierTerms.history.weightedAverage')}</th>
-                                    <th className="num">{t('supplierTerms.history.totalQty')}</th>
-                                    <th className="num">{t('supplierTerms.history.totalValue')}</th>
+                                    <SortTh sort={summarySort} col="lowest" className="num">{t('supplierTerms.history.lowest')}</SortTh>
+                                    <SortTh sort={summarySort} col="highest" className="num">{t('supplierTerms.history.highest')}</SortTh>
+                                    <SortTh sort={summarySort} col="average" className="num">{t('supplierTerms.history.weightedAverage')}</SortTh>
+                                    <SortTh sort={summarySort} col="totalQty" className="num">{t('supplierTerms.history.totalQty')}</SortTh>
+                                    <SortTh sort={summarySort} col="totalValue" className="num">{t('supplierTerms.history.totalValue')}</SortTh>
                                     {mode === 'item' && <th className="num">{t('supplierTerms.history.vendorPrice')}</th>}
                                 </tr></thead>
-                                <tbody>{summary.map((row, i) => {
+                                <tbody>{summarySort.apply(summary, { supplier: (r) => r.supplier_name, documents: (r) => r.documents, lastDate: (r) => r.last_date, lowest: (r) => r.lowest_base_unit_cost, highest: (r) => r.highest_base_unit_cost, average: (r) => r.weighted_average_base_unit_cost, totalQty: (r) => r.total_quantity, totalValue: (r) => r.total_base_value }).map((row, i) => {
                                     const vendor = row.supplier_id ? vendorPrices.get(Number(row.supplier_id)) : null;
                                     const tier = vendor ? [...(vendor.tiers ?? [])].filter((x) => x.is_current).sort((a, b) => Number(a.minimum_qty) - Number(b.minimum_qty))[0] : null;
                                     return <tr key={`${row.supplier_id ?? row.supplier_name}-${i}`}>
@@ -92,12 +96,12 @@ export default function PurchaseHistoryPanel({ mode = 'item', id }) {
                 <div className="card-body">{receipts.length === 0 ? <EmptyState title={t('supplierTerms.history.noReceipts')} /> : (
                     <div className="tbl-wrap"><table className="data-table">
                         <thead><tr>
-                            <th>{t('supplierTerms.history.date')}</th><th>{t('supplierTerms.history.receipt')}</th><th>{t('supplierTerms.history.purchaseOrder')}</th>
+                            <SortTh sort={receiptSort} col="date">{t('supplierTerms.history.date')}</SortTh><SortTh sort={receiptSort} col="receipt">{t('supplierTerms.history.receipt')}</SortTh><th>{t('supplierTerms.history.purchaseOrder')}</th>
                             {showItem ? <th>{t('supplierTerms.common.item')}</th> : <th>{t('supplierTerms.common.supplier')}</th>}
                             <th className="num">{t('supplierTerms.history.quantity')}</th><th className="num">{t('supplierTerms.history.unitCost')}</th>
                             <th className="num">{t('supplierTerms.history.baseUnitCost')}</th>
                         </tr></thead>
-                        <tbody>{receipts.map((r) => <tr key={`r-${r.line_id}`}>
+                        <tbody>{receiptSort.apply(receipts, { date: (r) => r.date, receipt: (r) => r.document_number }).map((r) => <tr key={`r-${r.line_id}`}>
                             <td><Num>{r.date}</Num></td>
                             <td>{r.path ? <Link to={r.path}><Num>{r.document_number ?? `#${r.document_id}`}</Num></Link> : <Num>{r.document_number}</Num>}</td>
                             <td><Num>{r.reference ?? '—'}</Num></td>
@@ -117,14 +121,14 @@ export default function PurchaseHistoryPanel({ mode = 'item', id }) {
                 <div className="card-body">{bills.length === 0 ? <EmptyState title={t('supplierTerms.history.noBills')} hint={t('supplierTerms.history.noBillsHint')} /> : (
                     <div className="tbl-wrap"><table className="data-table">
                         <thead><tr>
-                            <th>{t('supplierTerms.history.date')}</th><th>{t('supplierTerms.history.bill')}</th><th>{t('supplierTerms.history.supplierInvoice')}</th>
+                            <SortTh sort={billSort} col="date">{t('supplierTerms.history.date')}</SortTh><SortTh sort={billSort} col="bill">{t('supplierTerms.history.bill')}</SortTh><th>{t('supplierTerms.history.supplierInvoice')}</th>
                             {showItem ? <th>{t('supplierTerms.common.item')}</th> : <th>{t('supplierTerms.common.supplier')}</th>}
                             <th className="num">{t('supplierTerms.history.quantity')}</th><th className="num">{t('supplierTerms.history.unitPrice')}</th>
                             <th className="num">{t('supplierTerms.history.discount')}</th><th className="num">{t('supplierTerms.history.tax')}</th>
                             <th>{t('supplierTerms.common.currency')}</th><th className="num">{t('supplierTerms.history.rate')}</th>
                             <th className="num">{t('supplierTerms.history.netUnitCost')}</th><th className="num">{t('supplierTerms.history.baseUnitCost')}</th><th />
                         </tr></thead>
-                        <tbody>{bills.map((b) => <tr key={`b-${b.line_id}`}>
+                        <tbody>{billSort.apply(bills, { date: (b) => b.date, bill: (b) => b.document_number }).map((b) => <tr key={`b-${b.line_id}`}>
                             <td><Num>{b.date}</Num></td>
                             <td><Num>{b.document_number ?? `#${b.document_id}`}</Num></td>
                             <td><Num>{b.reference || '—'}</Num></td>

@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/context.jsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
-import { Breadcrumbs, EmptyState } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, SortTh } from '../components/ui.jsx';
 import { DocumentStatusBadge, SourceDocumentLink } from '../components/document.jsx';
 import { useSettingsTranslation } from '../i18n/useSettingsTranslation.js';
 
@@ -34,11 +35,12 @@ export default function IntegrationEventsPage() {
     const [filters, setFilters] = useState({ status: '', event_type: '', search: '', from: '', to: '' });
     const [selected, setSelected] = useState(null);
     const [reviewNote, setReviewNote] = useState('');
+    const sort = useTableSort();
     const status = useApiQuery(['integration-status'], api.integrationStatus, { fallback: null });
     const deliveryEnabled = status.data?.delivery_enabled !== false;
 
-    const { data, isMock, isError, error } = useApiQuery(['integration-events', filters],
-        () => api.integrationEvents({ status: filters.status || undefined, event_type: filters.event_type || undefined, search: filters.search || undefined, from: filters.from || undefined, to: filters.to || undefined, per_page: 100 }),
+    const { data, isMock, isError, error } = useApiQuery(['integration-events', filters, sort.key, sort.dir],
+        () => api.integrationEvents({ ...sort.params, status: filters.status || undefined, event_type: filters.event_type || undefined, search: filters.search || undefined, from: filters.from || undefined, to: filters.to || undefined, per_page: 100 }),
         { fallback: [] });
     const rows = Array.isArray(data) ? data : (data?.data ?? []);
 
@@ -69,7 +71,7 @@ export default function IntegrationEventsPage() {
             <div className="panel">
                 {isError ? <EmptyState title={tr('integration.loadFailed')} hint={error?.message || tr('settings.common.errorFallback')} /> : rows.length === 0 ? <EmptyState title={tr('integration.events.none')} hint={tr('integration.events.noneHint')} /> : (
                     <div className="index-table-scroll"><table className="data-table">
-                        <thead><tr><th>{tr('integration.events.occurred')}</th><th>{tr('integration.events.event')}</th><th>{tr('integration.events.document')}</th><th>{tr('integration.events.status')}</th><th>{tr('integration.events.mapping')}</th><th></th></tr></thead>
+                        <thead><tr><SortTh sort={sort} col="occurred">{tr('integration.events.occurred')}</SortTh><SortTh sort={sort} col="event">{tr('integration.events.event')}</SortTh><SortTh sort={sort} col="document">{tr('integration.events.document')}</SortTh><SortTh sort={sort} col="status">{tr('integration.events.status')}</SortTh><th>{tr('integration.events.mapping')}</th><th></th></tr></thead>
                         <tbody>{rows.map((e) => (
                             <tr key={e.id}>
                                 <td>{e.occurred_at}</td><td>{tr(`integration.eventType.${e.event_type}`, {}, e.event_type)}</td>

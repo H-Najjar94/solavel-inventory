@@ -1,6 +1,7 @@
 import {ConfirmedActionButton} from '../components/ConfirmedActionButton';
 import {text as feedbackText} from '../../shared/feedback/messages';
 import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
@@ -14,6 +15,11 @@ import { ConsumptionAccountPicker } from '../components/pickers.jsx';
 
 export default function SettingsPage() {
     const tr = useSettingsTranslation();
+    const [unitParams] = useSearchParams();
+    const purchaseItemId = Number(unitParams.get('purchase_unit_item')) || null;
+    const purchaseItemQuery = useApiQuery(['item', purchaseItemId], () => api.item(purchaseItemId), { enabled: Boolean(purchaseItemId), fallback: null });
+    const purchaseItem = purchaseItemQuery.data?.item;
+    const [savingConversion, setSavingConversion] = useState(false);
     const memberContext = React.useMemo(() => {
         const element = document.getElementById('member-management-context');
         return element ? JSON.parse(element.textContent) : null;
@@ -32,6 +38,10 @@ export default function SettingsPage() {
     const [calculatingSafety, setCalculatingSafety] = useState(false);
     const [safetyResult, setSafetyResult] = useState(null);
     const [conversion, setConversion] = useState({ from_unit_id: '', to_unit_id: '', factor: '' });
+    useEffect(() => {
+        if (purchaseItem?.base_unit_id) setConversion(v => ({ ...v, to_unit_id: String(purchaseItem.base_unit_id) }));
+        if (purchaseItemId && !isLoading) document.getElementById('unit-conversion')?.scrollIntoView({ block: 'center' });
+    }, [purchaseItemId, purchaseItem?.base_unit_id, isLoading]);
     const [category, setCategory] = useState({ name: '', parent_id: '' });
     const canOverrideAccount = useCan()('inventory.consumption.override_account');
     const [unit, setUnit] = useState({ name: '', code: '' });
@@ -119,16 +129,19 @@ export default function SettingsPage() {
 
     async function addConversion(e) {
         e.preventDefault();
+        if (savingConversion || (purchaseItemId && !purchaseItem)) return;
+        setSavingConversion(true);
         try {
             await api.createUnitConversion({
+                ...(purchaseItemId ? { item_id: purchaseItemId } : {}),
                 from_unit_id: Number(conversion.from_unit_id),
                 to_unit_id: Number(conversion.to_unit_id),
                 factor: conversion.factor,
             });
-            setConversion({ from_unit_id: '', to_unit_id: '', factor: '' });
+            setConversion({ from_unit_id: '', to_unit_id: purchaseItemId ? String(purchaseItem.base_unit_id) : '', factor: '' });
             await qc.invalidateQueries({ queryKey: ['settings'] });
             toast.push(tr('settings.master.conversionSaved'), 'success');
-        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); }
+        } catch (err) { toast.failure(err, err.message || tr('settings.common.errorFallback')); } finally { setSavingConversion(false); }
     }
 
     async function addCategory(e) {
@@ -413,15 +426,15 @@ export default function SettingsPage() {
                         <Field label={tr('settings.common.name')}><input className="input" value={brand.name} onChange={(e) => setBrand({ name: e.target.value })} required /></Field>
                         <div className="card-actions"><button className="btn btn--primary">{tr('settings.master.addBrand')}</button></div>
                     </div></form>
-                    <form className="card" onSubmit={addConversion}><div className="card-head"><h3>{tr('settings.master.unitConversion')}</h3></div><div className="card-body">
+                    <form id="unit-conversion" className="card" onSubmit={addConversion}><div className="card-head"><h3>{purchaseItemId ? t('baseUnit.addPurchaseUnit') : tr('settings.master.unitConversion')}</h3></div><div className="card-body">{purchaseItemId && <><strong>{purchaseItem?.name ?? t('itemDetail.unavailable')}</strong><p className="muted">{t('baseUnit.purchaseHint')}</p><Link to={`/items/${purchaseItemId}?tab=details`}>{t('baseUnit.returnItem')}</Link></>}
                         <Field label={tr('settings.master.fromUnit')}><select className="input" value={conversion.from_unit_id} onChange={(e) => setConversion({ ...conversion, from_unit_id: e.target.value })} required>
                             <option value="">{tr('settings.common.select')}</option>{(s.units ?? []).map((u) => <option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
                         </select></Field>
-                        <Field label={tr('settings.master.toUnit')}><select className="input" value={conversion.to_unit_id} onChange={(e) => setConversion({ ...conversion, to_unit_id: e.target.value })} required>
+                        <Field label={tr('settings.master.toUnit')}><select className="input" disabled={Boolean(purchaseItemId)} value={conversion.to_unit_id} onChange={(e) => setConversion({ ...conversion, to_unit_id: e.target.value })} required>
                             <option value="">{tr('settings.common.select')}</option>{(s.units ?? []).map((u) => <option key={u.id} value={u.id}>{u.code} · {u.name}</option>)}
                         </select></Field>
                         <Field label={tr('settings.master.factor')}><input className="input" type="number" step="0.00000001" value={conversion.factor} onChange={(e) => setConversion({ ...conversion, factor: e.target.value })} required /></Field>
-                        <button className="btn btn--primary">{tr('settings.master.saveConversion')}</button>
+                        <button className="btn btn--primary" disabled={savingConversion || (Boolean(purchaseItemId) && !purchaseItem)}>{purchaseItemId ? t('baseUnit.purchaseSave') : tr('settings.master.saveConversion')}</button>
                     </div></form>
                 </div>
                 {(s.categories ?? []).length > 0 && <form onSubmit={saveCategoryEdit}><table className="data-table" style={{ marginTop: 12 }}><thead><tr><th>{tr('settings.master.category')}</th><th>{tr('settings.master.parent')}</th><th>{tr('settings.master.level')}</th><th>{tr('settings.common.status')}</th><th></th></tr></thead><tbody>

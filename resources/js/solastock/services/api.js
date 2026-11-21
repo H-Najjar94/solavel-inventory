@@ -134,6 +134,9 @@ export const api = {
     acknowledgeDashboardAlert: (id) => request(`/dashboard/alerts/${id}/acknowledge`, { method: 'POST' }),
 
     items: (params) => request('/items', { params }),
+    previewBaseUnitConversion: (id,body) => request(`/items/${id}/base-unit-conversion/preview`,{method:'POST',body}),
+    applyBaseUnitConversion: (id,body) => request(`/items/${id}/base-unit-conversion/apply`,{method:'POST',body}),
+    retryBaseUnitConversion: (id) => request(`/items/${id}/base-unit-conversion/retry`,{method:'POST'}),
     item: (id) => request(`/items/${id}`),
     createItem: (body, image) => {
         if (!image) return request('/items', { method: 'POST', body });

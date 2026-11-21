@@ -5,9 +5,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
+import { useCan } from '../stores/meta.jsx';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, Tabs, StatusBadge, EmptyState, Drawer, MetricCard, Badge } from '../components/ui.jsx';
+import BaseUnitConversion from '../components/BaseUnitConversion.jsx';
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import ItemSuppliersPanel from '../components/ItemSuppliersPanel.jsx';
@@ -162,7 +164,7 @@ function MovementDrawer({ movement, open, onClose }) {
             <dl className="mv-kv">
                 <dt>{t('itemDetail.type')}</dt><dd><Badge tone={isOut ? 'warn' : 'ok'}>{t(isOut ? 'itemDetail.stockOut' : 'itemDetail.stockIn')}</Badge></dd>
                 <dt>{t('itemDetail.warehouse')}</dt><dd>{movement.warehouse_name ?? '—'} {movement.warehouse_code && <span className="wh-card-code">{movement.warehouse_code}</span>}</dd>
-                <dt>{t('itemDetail.quantity')}</dt><dd>{qty(movement.quantity)}</dd>
+                <dt>{t('itemDetail.quantity')}</dt><dd>{qty(movement.quantity)} {movement.quantity_unit_name}</dd>
                 <dt>{t('itemDetail.unitCost')}</dt><dd>{movement.unit_cost ? money(movement.unit_cost) : '—'}</dd>
                 <dt>{t('itemDetail.totalCost')}</dt><dd>{movement.total_cost ? money(movement.total_cost) : '—'}</dd>
                 <dt>{t('itemDetail.onHandAfter')}</dt><dd>{movement.balance_qty_after ? qty(movement.balance_qty_after) : '—'}</dd>
@@ -200,7 +202,7 @@ function MovementsTable({ rows, onRow }) {
             <tbody>{rows.map((m) => (
                 <tr key={m.id} className="clickable-row" onClick={() => onRow(m)} title={t('itemDetail.viewMovement')}>
                     <td>{m.moved_at}</td><td><Badge tone={m.direction === 'out' ? 'warn' : 'ok'}>{t(`document.direction.${m.direction}`, m.direction)}</Badge></td>
-                    <td>{qty(m.quantity)}</td><td>{m.unit_cost ? money(m.unit_cost) : '—'}</td>
+                    <td>{qty(m.quantity)} <small className="muted">{m.quantity_unit_name}</small></td><td>{m.unit_cost ? money(m.unit_cost) : '—'}</td>
                     <td>{m.balance_qty_after ? qty(m.balance_qty_after) : '—'}</td><td>{m.warehouse_name ?? `#${m.warehouse_id}`}</td>
                     <td>{m.source_display ?? m.source_label ?? '—'}</td>
                     <td><button className="btn btn--sm" onClick={(e) => { e.stopPropagation(); onRow(m); }}>{t('itemDetail.view')}</button></td>
@@ -238,6 +240,8 @@ function WarehouseCards({ cards, onValuation }) {
 export default function ItemDetailPage() {
     const { id } = useParams();
     const gate = useCanCreate('inventory.manage_items');
+    const canManageUnits = useCan()('inventory.manage_settings');
+    const canConvertUnits = useCan()('inventory.manage_items') && canManageUnits;
     const qc = useQueryClient();
     const toast = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -248,6 +252,7 @@ export default function ItemDetailPage() {
         setTabState(key);
         setSearchParams((current) => { const next = new URLSearchParams(current); if (key === 'overview') next.delete('tab'); else next.set('tab', key); return next; }, { replace: true });
     };
+    const [unitConversionOpen,setUnitConversionOpen]=useState(false);
     const [valuationOpen, setValuationOpen] = useState(false);
     const [activeMovement, setActiveMovement] = useState(null);
     const [newBarcode, setNewBarcode] = useState({ barcode: '', type: 'internal' });
@@ -272,6 +277,7 @@ export default function ItemDetailPage() {
     }), { onHand: 0, available: 0, reserved: 0 }), [cards]);
 
     if (isLoading) return <section className="page"><Skeleton /></section>;
+    if (item && data?.base_unit_projection_pending) return <section className="page"><div className="card"><div className="card-head"><h2>{item.name}</h2></div><div className="card-body"><p role="status">{t('baseUnit.pending')}</p>{canConvertUnits&&<button className="btn btn--primary" onClick={()=>setUnitConversionOpen(true)}>{t('baseUnit.refresh')}</button>}</div></div><BaseUnitConversion key={item.id} item={item} open={unitConversionOpen} onClose={()=>setUnitConversionOpen(false)} pending /></section>;
     if (!item) {
         return (
             <section className="page">
@@ -494,7 +500,7 @@ export default function ItemDetailPage() {
                         <dt>{t('itemDetail.tracking')}</dt><dd>{t(`tracking.${item.tracking_type}`, item.tracking_type)}</dd>
                         <dt>{t('itemDetail.description')}</dt><dd>{item.description || '—'}</dd>
                         <dt>{t('itemDetail.notes')}</dt><dd>{item.notes || '—'}</dd>
-                        <dt>{t('itemDetail.unit')}</dt><dd><bdi>{item.base_unit?.code ?? '—'}</bdi></dd>
+                        <dt>{t('baseUnit.title')}</dt><dd>{canConvertUnits&&<button type="button" className="btn btn--outline" onClick={()=>setUnitConversionOpen(true)}>{t('baseUnit.convert')}</button>}<bdi>{item.base_unit?.name ?? item.base_unit?.code ?? '—'}</bdi>{(data?.base_unit_conversions?.length>0)&&<details><summary>{t('baseUnit.history')}</summary><table className="table"><thead><tr><th>{t('itemDetail.date')}</th><th>{t('baseUnit.current')}</th><th>{t('baseUnit.target')}</th><th>{t('baseUnit.ratio')}</th></tr></thead><tbody>{data.base_unit_conversions.map(c=><tr key={c.id}><td><bdi>UC-{c.id} · {c.effective_date}</bdi></td><td>{c.old_unit}</td><td>{c.new_unit}</td><td><bdi>{c.factor_numerator}/{c.factor_denominator}</bdi></td></tr>)}</tbody></table></details>}{data?.base_unit_review?.message && <p className="muted">{data.base_unit_review.message}</p>}{canManageUnits && item.base_unit_id && <Link className="btn btn--outline" to={data?.base_unit_review?.alternate_unit_url ?? `/settings?purchase_unit_item=${item.id}&to_unit_id=${item.base_unit_id}#unit-conversion`}>{t('baseUnit.addPurchaseUnit')}</Link>}</dd>
                         <dt>{t('itemDetail.weight')}</dt><dd>{item.weight ? qty(item.weight) : '—'}</dd>
                         <dt>{t('itemDetail.dimensions')}</dt><dd>{[item.length, item.width, item.height].filter(Boolean).length ? `${qty(item.length)} × ${qty(item.width)} × ${qty(item.height)}` : '—'}</dd>
                         <dt>{t('itemDetail.package')}</dt><dd>{data.package_recommendation ? `${data.package_recommendation.label}${data.package_recommendation.max_dimensions ? ` · ${data.package_recommendation.max_dimensions}` : ''}` : '—'}</dd>
@@ -540,6 +546,7 @@ export default function ItemDetailPage() {
                 </div>
             )}
 
+            <BaseUnitConversion key={item.id} item={item} open={unitConversionOpen} onClose={()=>setUnitConversionOpen(false)} pending={Boolean(data?.base_unit_projection_pending)} />
             <ValuationDrawer itemId={id} open={valuationOpen} onClose={() => setValuationOpen(false)} />
             <MovementDrawer movement={activeMovement} open={!!activeMovement} onClose={() => setActiveMovement(null)} />
         </section>

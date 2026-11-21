@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\Concerns\ApiResponses;
+use App\Http\Controllers\Api\Concerns\SortsList;
 
 /**
  * Base for all SolaStock JSON API controllers. Controllers stay THIN: they
@@ -13,5 +14,5 @@ use App\Http\Controllers\Api\Concerns\ApiResponses;
  */
 abstract class ApiController extends Controller
 {
-    use ApiResponses;
+    use ApiResponses, SortsList;
 }

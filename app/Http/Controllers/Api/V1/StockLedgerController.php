@@ -37,6 +37,17 @@ class StockLedgerController extends ApiController
             ->orderBy('moved_at')->orderBy('id');
         $this->warehouseAccess->scope($query);
 
+        $this->applyListSort($query, $request, [
+            'date' => 'moved_at',
+            'item' => $this->sortByRelated('items', 'name', 'item_id'),
+            'warehouse' => $this->sortByRelated('warehouses', 'name', 'warehouse_id'),
+            'direction' => 'direction',
+            'quantity' => 'quantity',
+            'unitcost' => 'unit_cost',
+            'total' => 'total_cost',
+            'running' => 'balance_qty_after',
+        ]);
+
         $page = $query->paginate($perPage)->withQueryString();
         $page->setCollection(SourceDocumentPresenter::decorateRows($page->getCollection()));
 
@@ -122,7 +133,7 @@ class StockLedgerController extends ApiController
      */
     public static function movementRow(StockLedger $row): array
     {
-        return [
+        return app(\App\Services\Catalog\ItemBaseUnitConversion::class)->movementUnit($row) + [
             'id' => $row->id,
             'moved_at' => optional($row->moved_at)->toDateTimeString(),
             'direction' => $row->direction,

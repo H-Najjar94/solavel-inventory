@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { useTableSort } from '../hooks/useTableSort.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
-import { Breadcrumbs, EmptyState, Field, Skeleton, Badge } from '../components/ui.jsx';
+import { Breadcrumbs, EmptyState, Field, Skeleton, Badge, SortTh } from '../components/ui.jsx';
 import { SupplierPicker, WarehousePicker } from '../components/pickers.jsx';
 import { Num, PreferredBadge, QueryProblem, moneyText, qtyText, costText, trimDecimal } from '../components/SupplierTermsShared.jsx';
 import { useI18n } from '../i18n/context.jsx';
@@ -16,6 +17,7 @@ const NO_SUPPLIER = 'none';
  * "Create purchase order" opens the normal PO form prefilled for review.
  */
 export default function ReorderSuggestionsPage() {
+    const reorderSort = useTableSort();
     const { t } = useI18n();
     const nav = useNavigate();
     const gate = useCanCreate('inventory.manage_purchase_orders');
@@ -98,17 +100,17 @@ export default function ReorderSuggestionsPage() {
                                     {!group.supplier && <p className="field-hint">{t('supplierTerms.reorder.noSupplierHint')}</p>}
                                     <div className="tbl-wrap"><table className="data-table st-table">
                                         <thead><tr>
-                                            <th>{t('supplierTerms.common.item')}</th>
-                                            <th className="num">{t('supplierTerms.reorder.available')}</th>
-                                            <th className="num">{t('supplierTerms.reorder.incoming')}</th>
-                                            <th className="num">{t('supplierTerms.reorder.reorderPoint')}</th>
-                                            <th className="num">{t('supplierTerms.reorder.needed')}</th>
-                                            <th className="num">{t('supplierTerms.reorder.suggested')}</th>
+                                            <SortTh sort={reorderSort} col="item">{t('supplierTerms.common.item')}</SortTh>
+                                            <SortTh sort={reorderSort} col="available" className="num">{t('supplierTerms.reorder.available')}</SortTh>
+                                            <SortTh sort={reorderSort} col="incoming" className="num">{t('supplierTerms.reorder.incoming')}</SortTh>
+                                            <SortTh sort={reorderSort} col="reorderPoint" className="num">{t('supplierTerms.reorder.reorderPoint')}</SortTh>
+                                            <SortTh sort={reorderSort} col="needed" className="num">{t('supplierTerms.reorder.needed')}</SortTh>
+                                            <SortTh sort={reorderSort} col="suggested" className="num">{t('supplierTerms.reorder.suggested')}</SortTh>
                                             <th className="num">{t('supplierTerms.reorder.unitPrice')}</th>
                                             <th className="num">{t('supplierTerms.reorder.lineTotal')}</th>
                                             <th>{t('supplierTerms.reorder.expected')}</th>
                                         </tr></thead>
-                                        <tbody>{group.rows.map((r) => (
+                                        <tbody>{reorderSort.apply(group.rows, { item: (r) => r.item, available: (r) => r.available_qty, incoming: (r) => r.incoming_qty, reorderPoint: (r) => r.reorder_point, needed: (r) => r.needed_qty, suggested: (r) => r.suggested_qty }).map((r) => (
                                             <tr key={`${r.item_id}-${r.warehouse_id}`}>
                                                 <td>
                                                     <div className="st-cell-stack">

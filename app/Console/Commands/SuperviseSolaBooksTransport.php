@@ -77,6 +77,7 @@ final class SuperviseSolaBooksTransport extends Command
                 try {
                     $limit = min(250, max(1, (int) $this->option('limit')));
                     $processed += (int) $isolation->attempt($target, 'party_sync', fn () => app(\App\Services\Integration\ContinuousPartySync::class)->process($mapping, 2));
+                    $processed += (int) $isolation->attempt($target, 'unit_projection', fn () => app(\App\Services\Catalog\StockUnitProjection::class)->process($mapping, 2));
                     $processed += (int) $isolation->attempt($target, 'catalog_sync', fn () => app(\App\Services\Catalog\DurableCatalogSync::class)->process($mapping, 2));
                     // After party/catalog sync (dependencies) and before claiming: make
                     // post-activation journals recorded while paused/unmapped claimable.

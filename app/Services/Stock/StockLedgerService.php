@@ -90,6 +90,7 @@ class StockLedgerService
 
             app(PurchaseValuationHoldService::class)->lockItems(array_map(fn ($movement) => $movement->itemId, $movements));
 
+            foreach ($movements as $movement) app(\App\Services\Catalog\StockUnitProjection::class)->assertReady($movement->itemId);
             $created = [];
             $index = 0;
             foreach ($movements as $movement) {
@@ -101,6 +102,27 @@ class StockLedgerService
 
             return $created;
         });
+    }
+
+    /** Only the reviewed unit kernel calls this; all projections and append-only rows share its item lock. */
+    public function reclassifyBaseUnit(Item $item,array $plan,int $eventId,string $date): array
+    {
+        $org=$this->context->idOrFail();
+        if((int)$item->organization_id!==$org || DB::connection($this->connection())->transactionLevel()<1)throw new RuntimeException('Unit reclassification requires owner transaction.');
+        $ids=[];
+        foreach($plan['balances'] as $b){
+            Warehouse::query()->findOrFail($b['warehouse_id']);
+            app(PurchaseValuationHoldService::class)->assertMovable($item->id,$b['warehouse_id']);
+            $balance=StockBalance::withoutGlobalScopes()->where('organization_id',$org)->lockForUpdate()->findOrFail($b['balance_id']);
+            foreach(bccomp($b['old_quantity'],'0',6)>0?['out','in']:[] as $direction){
+                $row=new StockLedger(['organization_id'=>$org,'item_id'=>$item->id,'warehouse_id'=>$b['warehouse_id'],'direction'=>$direction,'quantity'=>$direction==='out'?$b['old_quantity']:$b['new_quantity'],'unit_cost'=>$direction==='out'?$balance->average_cost:$b['new_unit_cost'],'total_cost'=>$b['value'],'costing_method'=>$item->effectiveCostingMethod(),'source_type'=>\App\Services\Catalog\ItemBaseUnitConversion::class,'source_id'=>$eventId,'moved_at'=>$date.' 23:59:59','posted_at'=>now(),'idempotency_key'=>'unit-conversion:'.$eventId.':'.$b['balance_id'].'#'.$direction,'balance_qty_after'=>$direction==='out'?'0':$b['new_quantity'],'balance_value_after'=>$direction==='out'?'0':$b['value'],'created_by'=>auth()->id()]);
+                $row->save();$ids[]=$row->id;
+            }
+            $balance->on_hand_qty=$b['new_quantity'];$balance->average_cost=$b['new_unit_cost'];$balance->last_movement_at=$date.' 23:59:59';$balance->save();
+        }
+        foreach($plan['layers'] as $layer) CostLayer::withoutGlobalScopes()->where('organization_id',$org)->where('item_id',$item->id)->whereKey($layer['id'])->update(['original_qty'=>$layer['quantity'],'remaining_qty'=>$layer['quantity'],'unit_cost'=>$layer['unit_cost']]);
+        $this->writeAudit($org,['action'=>'item.base_unit_conversion','entity_type'=>'item','entity_id'=>$item->id],'unit-conversion:'.$eventId,count($ids));
+        return $ids;
     }
 
     /** Read-only estimate using the same costing strategy; posting always costs again under locks. */
@@ -258,6 +280,7 @@ class StockLedgerService
             $covered = $originLayers = $balances = $running = $eventRows = $created = [];
             foreach (array_keys($plan['layers']) as $key) {
                 [$itemId, $warehouseId] = array_map('intval', explode(':', $key));
+                if(Schema::connection($this->connection())->hasTable(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)&&DB::connection($this->connection())->table(\App\Services\Catalog\ItemBaseUnitConversion::TABLE)->where('organization_id',$org)->where('item_id',$itemId)->exists())throw new RuntimeException(__('inventory.base_unit.historical_correction_blocked'));
                 $item = Item::query()->where('organization_id', $org)->findOrFail($itemId);
                 Warehouse::query()->where('organization_id', $org)->findOrFail($warehouseId);
                 if ($item->effectiveCostingMethod() !== 'fifo' || $item->item_type !== 'inventory' || $item->tracksLots() || $item->tracksSerials()) {
@@ -518,6 +541,7 @@ class StockLedgerService
         int $index,
         bool $isReversal = false
     ): StockLedger {
+        if ($m->sourceType !== \App\Services\Catalog\ItemBaseUnitConversion::class) app(\App\Services\Catalog\ItemBaseUnitConversion::class)->assertMovementDate($m->itemId, (string)($m->movedAt ?? now()->toDateTimeString()));
         // ── validate direction & quantity ──
         if (! in_array($m->direction, ['in', 'out'], true)) {
             throw new RuntimeException(__('inventory.errors.invalid_direction', ['direction' => (string) $m->direction]));
@@ -741,6 +765,12 @@ class StockLedgerService
         ?int $returnLineId = null,
         ?string $returnDate = null,
     ): StockLedger {
+        if ($partialQuantity !== null && app(\App\Services\Catalog\ItemBaseUnitConversion::class)->hasLaterConversion($orig)) {
+            throw new RuntimeException("Partial historical reversal needs unit-aware reconciliation.");
+        }
+        app(\App\Services\Catalog\ItemBaseUnitConversion::class)->assertMovementDate((int)$orig->item_id, (string)($returnDate ?? now()->toDateTimeString()));
+        $orig = app(\App\Services\Catalog\ItemBaseUnitConversion::class)->normalizeOriginal($orig);
+        app(\App\Services\Catalog\StockUnitProjection::class)->assertReady((int)$orig->item_id);
         $orgId = $this->context->idOrFail();
         $item = Item::withTrashed()->find((int) $orig->item_id);
         if (! $item || (int) $item->organization_id !== $orgId) {

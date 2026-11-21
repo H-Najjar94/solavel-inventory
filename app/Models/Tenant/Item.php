@@ -43,6 +43,10 @@ class Item extends Model
             $current = $this->exists
                 ? static::withTrashed()->whereKey($this->getKey())->lockForUpdate()->firstOrFail()
                 : null;
+            if ($current && $this->isDirty()) app(\App\Services\Catalog\StockUnitProjection::class)->assertReady((int)$this->id);
+            if ($current && $this->isDirty('base_unit_id')) {
+                app(\App\Services\Catalog\ItemBaseUnitGuard::class)->assertChange($current, $this->base_unit_id ? (int)$this->base_unit_id : null);
+            }
             $type = $current && ! $this->isDirty('item_type') ? $current->item_type : ($this->item_type ?? 'inventory');
             $typeChanged = $current && $type !== $current->item_type;
             if ($typeChanged && (($type === 'inventory') !== ($current->item_type === 'inventory'))
