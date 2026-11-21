@@ -1,5 +1,4 @@
-// Copied from shared location-maps commit 9be03ad. Do not edit here.
-// Shared read-only location map (source: solavel location-maps shared/). Copy into each app; no app imports.
+// Copied from shared location-maps commit 4ab537e. Do not edit here.
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -62,7 +61,7 @@ export default function LocationMap({ pins, radius, labels, height = 280, emptyS
           <li key={i} className="slm-pinrow">
             {p.label && <strong>{p.label}</strong>}
             <span className="slm-coords" dir="ltr">{formatCoords(p)}</span>
-            <a className="slm-link" href={googleMapsUrl(p)} target="_blank" rel="noopener noreferrer">{labels.openInGoogleMaps}</a>
+            <a className="slm-link" href={googleMapsUrl(p)} target="_blank" rel="noopener noreferrer"><bdi>{labels.openInGoogleMaps}</bdi></a>
           </li>
         ))}
       </ul>

@@ -63,15 +63,11 @@ class GeoSearchTest extends TestCase
 
     public function test_upstream_failure_is_graceful_and_not_cached(): void
     {
-        Http::fake(['*' => Http::response('boom', 500)]);
+        // Stubs are matched first-registered-first, so use one sequence (500, then success).
+        Http::fake(['*' => Http::sequence()->push('boom', 500)->push([$this->row])]);
         $out = app(GeocodingService::class)->search('Amman', 'ar');
         $this->assertSame(['results' => [], 'unavailable' => true], $out);
 
-        // Stock/Laravel keeps earlier fakes first: reset the HTTP factory so the second fake applies.
-        app()->forgetInstance(\Illuminate\Http\Client\Factory::class);
-        Http::clearResolvedInstance(\Illuminate\Http\Client\Factory::class);
-        Http::clearResolvedInstances();
-        Http::fake(['*' => Http::response([$this->row])]);
         $this->assertCount(1, app(GeocodingService::class)->search('Amman', 'ar')['results']);
     }
 

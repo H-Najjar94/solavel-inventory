@@ -1,5 +1,4 @@
-// Copied from shared location-maps commit 9be03ad. Do not edit here.
-// Shared SolaCount location picker (source: solavel location-maps shared/). Copy into each app; no app imports.
+// Copied from shared location-maps commit 4ab537e. Do not edit here.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -56,6 +55,8 @@ export default function LocationPicker(props: LocationPickerProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [results, setResults] = useState<GeoResult[]>([]);
   const [picked, setPicked] = useState<GeoResult | null>(null);
+  const [radiusDraft, setRadiusDraft] = useState<string | null>(null);
+  useEffect(() => { setRadiusDraft(null); }, [radius]);
   const [tilesFailed, setTilesFailed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -165,7 +166,7 @@ export default function LocationPicker(props: LocationPickerProps) {
   }
 
   function choose(r: GeoResult) {
-    setPicked(r);
+    setPicked(r); setStatus('idle'); // collapse the list; next search re-shows it
     mapRef.current?.flyTo([r.lat, r.lng], 16, { duration: 0.6 });
     setPin({ lat: r.lat, lng: r.lng });
   }
@@ -225,9 +226,15 @@ export default function LocationPicker(props: LocationPickerProps) {
       {radiusMode && validValue && (
         <label className="slm-radius">
           <span>{labels.radiusLabel}</span>
-          <input type="number" className="slm-input slm-input--num" min={RADIUS_MIN} max={RADIUS_MAX} step={10} value={radius}
-            disabled={disabled} dir="ltr"
-            onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) props.onRadiusChange!(Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, Math.round(n)))); }} />
+          <input type="number" className="slm-input slm-input--num" min={RADIUS_MIN} max={RADIUS_MAX} step={10}
+            value={radiusDraft ?? radius} disabled={disabled} dir="ltr"
+            onChange={(e) => {
+              // Keep what the user is typing; only push values in range (clamping per keystroke turned "250" into "1050").
+              setRadiusDraft(e.target.value);
+              const n = Number(e.target.value);
+              if (e.target.value !== '' && Number.isFinite(n) && n >= RADIUS_MIN && n <= RADIUS_MAX) props.onRadiusChange!(Math.round(n));
+            }}
+            onBlur={() => { if (radiusDraft !== null) { const n = Number(radiusDraft); props.onRadiusChange!(Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, Number.isFinite(n) && radiusDraft !== '' ? Math.round(n) : radius as number))); setRadiusDraft(null); } }} />
           <span className="slm-muted">{labels.radiusUnit}</span>
         </label>
       )}
