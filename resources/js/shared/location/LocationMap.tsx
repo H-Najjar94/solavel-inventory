@@ -1,4 +1,4 @@
-// Copied from shared location-maps (content sha256 524ace44e2bc; shared repo had no commit yet). Do not edit here.
+// Copied from shared location-maps commit 9be03ad. Do not edit here.
 // Shared read-only location map (source: solavel location-maps shared/). Copy into each app; no app imports.
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
@@ -29,7 +29,7 @@ export default function LocationMap({ pins, radius, labels, height = 280, emptyS
   useEffect(() => {
     const el = elRef.current;
     if (!el || valid.length === 0) return;
-    const map = L.map(el, { center: [valid[0].lat, valid[0].lng], zoom: 15, scrollWheelZoom: false });
+    const map = L.map(el, { center: [valid[0].lat, valid[0].lng], zoom: 15, scrollWheelZoom: false, attributionControl: false });
     addTiles(map, () => setTilesFailed(true), () => setTilesFailed(false));
     const group = L.featureGroup();
     valid.forEach((p) => {

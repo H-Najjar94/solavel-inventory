@@ -1,11 +1,11 @@
 <?php
 
-// Adapted from shared location-maps GeocodingService (shared content sha256 524ace44e2bc; shared repo had no commit yet).
-// Stock change: the upstream throttle is a host-wide FILE lock (see UpstreamThrottle below), not a cache lock.
+// Reference implementation. Copy to app/Services/Geo/GeocodingService.php and adjust the namespace.
 // Config (config/services.php):
 //   'geocoding' => ['provider' => env('GEOCODING_PROVIDER', 'nominatim'), // nominatim|locationiq|disabled
 //                   'base_url' => env('GEOCODING_BASE_URL'), 'key' => env('GEOCODING_KEY'),
-//                   'user_agent' => env('GEOCODING_USER_AGENT', 'Solavel/1.0 (+https://solavel.com)')]
+//                   'user_agent' => env('GEOCODING_USER_AGENT', 'Solavel/1.0 (+https://solavel.com)'),
+//                   'lock_dir' => '/var/tmp/solavel-geocode']  // host-wide, shared by all apps
 
 namespace App\Services\Geo;
 
@@ -47,7 +47,7 @@ class GeocodingService
         }
 
         try {
-            $raw = $this->throttled(fn () => $this->fetch($cfg, $provider, $q, $lang, $countries, $viewbox));
+            $raw = $this->throttled(fn () => $this->fetch($cfg, $provider, $q, $lang, $countries, $viewbox), (string) ($cfg['lock_dir'] ?? '/var/tmp/solavel-geocode'));
         } catch (Throwable $e) {
             report($e);
 
@@ -64,44 +64,47 @@ class GeocodingService
         return ['results' => $results, 'unavailable' => false];
     }
 
+    public const MIN_INTERVAL = 1.05; // seconds between upstream requests, host-wide
+    public const LOCK_WAIT = 3.0;     // max seconds to wait for the lock
+
     /**
-     * Host-wide upstream limiter shared by every Solavel app and FPM worker: flock on
-     * <lock_dir>/upstream.lock (3 s max wait), then wait until >= 1.05 s since <lock_dir>/last-request.
-     * Returns null (=> unavailable) when the lock cannot be had in time.
-     *
-     * @return array<int, array<string, mixed>>|null
+     * Host-wide throttle shared by every app and FPM worker (file lock, not the per-app cache).
+     * Returns null (=> unavailable) if the lock cannot be had within LOCK_WAIT seconds.
      */
-    protected function throttled(callable $call): ?array
+    protected function throttled(callable $call, string $dir): mixed
     {
-        $dir = (string) (config('services.geocoding.lock_dir') ?: '/var/tmp/solavel-geocode');
         if (! is_dir($dir)) {
             @mkdir($dir, 0777, true);
             @chmod($dir, 01777);
         }
-        $fh = @fopen($dir.'/upstream.lock', 'c');
+        $lockFile = $dir.'/upstream.lock';
+        $stampFile = $dir.'/last-request';
+        $fh = @fopen($lockFile, 'c');
         if (! $fh) {
             return null;
         }
-        @chmod($dir.'/upstream.lock', 0666);
+        @chmod($lockFile, 0666);
         try {
-            $deadline = microtime(true) + 3.0;
+            $deadline = microtime(true) + self::LOCK_WAIT;
             while (! flock($fh, LOCK_EX | LOCK_NB)) {
                 if (microtime(true) >= $deadline) {
                     return null;
                 }
                 usleep(50_000);
             }
-            $stamp = $dir.'/last-request';
-            $last = is_file($stamp) ? (float) @file_get_contents($stamp) : 0.0;
-            $wait = 1.05 - (microtime(true) - $last);
-            if ($wait > 0) {
-                usleep((int) ($wait * 1_000_000));
-            }
             try {
-                return $call();
+                $last = (float) @file_get_contents($stampFile);
+                $wait = $last + self::MIN_INTERVAL - microtime(true);
+                if ($wait > 0) {
+                    usleep((int) (min($wait, self::MIN_INTERVAL) * 1_000_000));
+                }
+                try {
+                    return $call();
+                } finally {
+                    @file_put_contents($stampFile, sprintf('%.6F', microtime(true)));
+                    @chmod($stampFile, 0666);
+                }
             } finally {
-                @file_put_contents($stamp, sprintf('%.6F', microtime(true)));
-                @chmod($stamp, 0666);
                 flock($fh, LOCK_UN);
             }
         } finally {

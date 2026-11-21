@@ -1,4 +1,4 @@
-/* Copied from shared location-maps (content sha256 524ace44e2bc; shared repo had no commit yet). Do not edit here. */
+/* Copied from shared location-maps commit 9be03ad. Do not edit here. */
 /* Shared location map styles. All classes prefixed slm-. Override the --slm-* variables per app/theme. */
 .slm-picker, .slm-view, .slm-empty {
   --slm-bg: var(--surface, var(--card-bg, #fff));

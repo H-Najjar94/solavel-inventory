@@ -1,4 +1,4 @@
-// Copied from shared location-maps (content sha256 524ace44e2bc; shared repo had no commit yet). Do not edit here.
+// Copied from shared location-maps commit 9be03ad. Do not edit here.
 // Shared helpers for LocationPicker / LocationMap. App-agnostic.
 import L from 'leaflet';
 
@@ -56,6 +56,7 @@ export function addTiles(map: L.Map, onFail: () => void, onOk: () => void): L.Ti
   layer.on('tileerror', () => { if (++errors >= 3) onFail(); });
   layer.on('tileload', () => { errors = 0; onOk(); });
   layer.addTo(map);
+  L.control.attribution({ prefix: '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>' }).addTo(map);
   return layer;
 }
 

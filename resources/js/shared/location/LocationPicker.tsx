@@ -1,4 +1,4 @@
-// Copied from shared location-maps (content sha256 524ace44e2bc; shared repo had no commit yet). Do not edit here.
+// Copied from shared location-maps commit 9be03ad. Do not edit here.
 // Shared SolaCount location picker (source: solavel location-maps shared/). Copy into each app; no app imports.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
@@ -69,7 +69,7 @@ export default function LocationPicker(props: LocationPickerProps) {
     const el = elRef.current;
     if (!el) return;
     const start = isValidLatLng(value) ? value : defaultCenter;
-    const map = L.map(el, { center: [start.lat, start.lng], zoom: isValidLatLng(value) ? 15 : 11, worldCopyJump: true });
+    const map = L.map(el, { center: [start.lat, start.lng], zoom: isValidLatLng(value) ? 15 : 11, worldCopyJump: true, attributionControl: false });
     mapRef.current = map;
     addTiles(map, () => setTilesFailed(true), () => setTilesFailed(false));
     map.on('click', (e: L.LeafletMouseEvent) => {
@@ -98,7 +98,7 @@ export default function LocationPicker(props: LocationPickerProps) {
       const m = L.marker(ll, { icon: pinIcon({ draggable: true }), draggable: !disabled, keyboard: false }).addTo(map);
       m.on('dragend', () => { const p = m.getLatLng(); setPicked(null); setPin({ lat: p.lat, lng: wrapLng(p.lng) }); });
       markerRef.current = m;
-      if (!map.getBounds().contains(ll)) map.setView(ll, Math.max(map.getZoom(), 15));
+      if (radiusMode) map.setView(ll, Math.max(map.getZoom(), 15)); else if (!map.getBounds().contains(ll)) map.setView(ll, Math.max(map.getZoom(), 15));
     } else {
       markerRef.current.setLatLng(ll);
       if (!map.getBounds().contains(ll)) map.panTo(ll);
