@@ -67,6 +67,10 @@ class GeoSearchTest extends TestCase
         $out = app(GeocodingService::class)->search('Amman', 'ar');
         $this->assertSame(['results' => [], 'unavailable' => true], $out);
 
+        // Stock/Laravel keeps earlier fakes first: reset the HTTP factory so the second fake applies.
+        app()->forgetInstance(\Illuminate\Http\Client\Factory::class);
+        Http::clearResolvedInstance(\Illuminate\Http\Client\Factory::class);
+        Http::clearResolvedInstances();
         Http::fake(['*' => Http::response([$this->row])]);
         $this->assertCount(1, app(GeocodingService::class)->search('Amman', 'ar')['results']);
     }
