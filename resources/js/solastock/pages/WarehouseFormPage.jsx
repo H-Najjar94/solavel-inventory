@@ -7,10 +7,11 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, StatusBadge, fieldErrors } from '../components/ui.jsx';
 import { t } from '../i18n/index.js';
+import { LocationField } from '../components/LocationMaps.jsx';
 
 const EMPTY = {
     code: '', name: '', type: 'warehouse', is_active: true,
-    address: { line1: '', city: '', country: '' }, max_capacity_units: '',
+    address: { line1: '', city: '', country: '' }, max_capacity_units: '', latitude: null, longitude: null,
 };
 
 const IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -59,6 +60,13 @@ export default function WarehouseFormPage() {
     function removeImage(n) { setImages((cur) => cur.filter((_, i) => i !== n)); }
 
     function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+    const pin = form.latitude != null && form.longitude != null && form.latitude !== '' && form.longitude !== ''
+        ? { lat: Number(form.latitude), lng: Number(form.longitude) } : null;
+    function setPin(p) { setForm((f) => ({ ...f, latitude: p ? p.lat : null, longitude: p ? p.lng : null })); }
+    // Explicit click only: never auto-overwrite the written address.
+    function useAddress(r) {
+        setForm((f) => ({ ...f, address: { ...f.address, line1: [r.name, r.area].filter(Boolean).join(', ') || r.label, city: r.city || f.address?.city || '', country: r.country || f.address?.country || '' } }));
+    }
     function setAddr(k, v) { setForm((f) => ({ ...f, address: { ...f.address, [k]: v } })); }
 
     const typeLabel = { warehouse: t('warehouse'), retail: t('warehouses.retail'), transit: t('warehouses.transit'), virtual: t('warehouses.virtual') }[form.type] ?? form.type;
@@ -138,6 +146,11 @@ export default function WarehouseFormPage() {
                             <Field label={t('warehouses.city')}><input className="input" value={form.address?.city ?? ''} onChange={(e) => setAddr('city', e.target.value)} /></Field>
                             <Field label={t('warehouses.country')}><input className="input" value={form.address?.country ?? ''} onChange={(e) => setAddr('country', e.target.value)} /></Field>
                         </div>
+                    </Section>
+
+                    <Section title={t('locationMaps.section')} sub={t('locationMaps.sectionHint')}>
+                        <LocationField value={pin} onChange={setPin} onUseAddress={useAddress} disabled={!gate.allowed || saving} />
+                        {(errors.latitude || errors.longitude) && <div role="alert" className="field-error">{errors.latitude || errors.longitude}</div>}
                     </Section>
 
                     <Section title={t('warehouses.operations')} sub={t('warehouses.operationsHint')}>

@@ -8,6 +8,7 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import PartnerCurrencyPicker from '../components/PartnerCurrencyPicker.jsx';
 import { useI18n } from '../i18n/context.jsx';
+import { SupplierLocationSection } from '../components/LocationMaps.jsx';
 
 const EMPTY = { code: '', name: '', email: '', phone: '', address: '', tax_number: '', currency: '', payment_terms: '', is_active: true, notes: '' };
 
@@ -25,6 +26,8 @@ export default function SupplierFormPage() {
     const [saving, setSaving] = useState(false);
 
     const existing = useApiQuery(['supplier', id], () => api.supplier(id), { fallback: null, enabled: isEdit });
+    const locs = useApiQuery(['supplier-locations', id], () => api.supplierLocations(id), { fallback: null, enabled: isEdit });
+    const linked = isEdit && !!locs.data?.linked;
     const gateReason = gate.allowed ? '' : t(gate.reason.includes('tenant') ? 'partners.permissions.selectTenant' : 'partners.permissions.denied');
     useEffect(() => {
         if (isEdit && existing.data) {
@@ -40,7 +43,10 @@ export default function SupplierFormPage() {
         if (!gate.allowed || saving) return;
         setSaving(true); setErrors({});setFailure('');
         try {
-            const res = isEdit ? await api.updateSupplier(id, form) : await api.createSupplierFull(form);
+            const body = { ...form };
+            if (linked || !body.location) delete body.location; // linked pins live in SolaCount; an absent location leaves it untouched
+            if (!linked && isEdit && form.location === null) body.location = null; // cleared in the picker
+            const res = isEdit ? await api.updateSupplier(id, body) : await api.createSupplierFull(body);
             toast.push(t(isEdit ? 'partners.suppliers.form.updated' : 'partners.suppliers.form.created'), 'success');
             qc.invalidateQueries({ queryKey: ['suppliers'] });
             nav(`/suppliers/${res?.data?.id ?? id}`);
@@ -72,6 +78,16 @@ export default function SupplierFormPage() {
                 <Field label={t('partners.common.paymentTerms')} error={errors.payment_terms}><input className="input" dir="auto" value={form.payment_terms ?? ''} onChange={(e) => set('payment_terms', e.target.value)} /></Field>
                 <Field label={t('partners.common.status')} error={errors.is_active}><label className="check-inline"><input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> {t('partners.common.active')}</label></Field>
                 <Field label={t('partners.common.notes')} error={errors.notes}><textarea className="input" dir="auto" rows="2" value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Field>
+                <div className="span-all" style={{ gridColumn: '1 / -1' }}>
+                    <h3>{t('locationMaps.section')}</h3>
+                    {!linked && <p className="field-hint">{t('locationMaps.sectionHint')}</p>}
+                    {(isEdit && locs.isLoading) ? <Skeleton /> : (
+                        <SupplierLocationSection locations={isEdit ? locs.data : null} value={form.location} disabled={!gate.allowed || saving}
+                            onChange={(v) => set('location', v)}
+                            onUseAddress={(r) => { set('address', [r.name, r.area, r.city].filter(Boolean).join(', ') || r.label); }} />
+                    )}
+                    {(errors.location || errors['location.lat'] || errors['location.lng']) && <div role="alert" className="field-error">{errors.location || errors['location.lat'] || errors['location.lng']}</div>}
+                </div>
                 <div className="form-actions">
                     <button type="button" className="btn" onClick={() => nav('/suppliers')}>{t('partners.common.cancel')}</button>
                     <button type="submit" className="btn btn--primary" disabled={!gate.allowed || saving}>{saving ? t('partners.common.saving') : t(isEdit ? 'partners.common.saveChanges' : 'partners.suppliers.form.create')}</button>

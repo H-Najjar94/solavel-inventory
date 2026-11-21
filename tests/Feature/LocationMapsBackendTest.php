@@ -18,7 +18,8 @@ class LocationMapsBackendTest extends TestCase
         $app = require __DIR__.'/../../bootstrap/app.php';
         $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
         config(['database.default' => 'tenant', 'database.connections.tenant' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
-            'cache.default' => 'array', 'services.geocoding.provider' => 'nominatim']);
+            'cache.default' => 'array', 'services.geocoding.provider' => 'nominatim',
+            'services.geocoding.lock_dir' => sys_get_temp_dir().'/lm-geo-'.getmypid()]);
 
         return $app;
     }
@@ -62,14 +63,14 @@ class LocationMapsBackendTest extends TestCase
         Http::fake(['*' => Http::response([['name' => 'Abdali Mall', 'display_name' => 'Abdali Mall, Amman, Jordan', 'lat' => '31.9660000', 'lon' => '35.9070000',
             'address' => ['suburb' => 'Abdali', 'city' => 'Amman', 'country' => 'Jordan', 'country_code' => 'jo']]])]);
         $svc = new GeocodingService;
-        $r = $svc->search('  Abdali   Mall ', 'en', ['jo'], null, null);
+        $r = $svc->search('  Abdali   Mall ', 'en', ['jo'], null);
         $this->assertSame('Abdali', $r['results'][0]['area']);
         $this->assertSame(31.966, $r['results'][0]['lat']);
-        $svc->search('abdali mall', 'en', ['jo'], null, null);
+        $svc->search('abdali mall', 'en', ['jo'], null);
         Http::assertSentCount(1); // second call served from cache
 
         Http::fake(['*' => Http::response('', 500)]);
-        $fail = $svc->search('something else', 'en', [], null, null);
+        $fail = $svc->search('something else', 'en', [], null);
         $this->assertSame(['results' => [], 'unavailable' => true], $fail);
     }
 
@@ -77,7 +78,40 @@ class LocationMapsBackendTest extends TestCase
     {
         config(['services.geocoding.provider' => 'disabled']);
         Http::fake();
-        $this->assertTrue((new GeocodingService)->search('amman', 'ar', [], null, null)['unavailable']);
+        $this->assertTrue((new GeocodingService)->search('amman', 'ar', [], null)['unavailable']);
+        Http::assertNothingSent();
+    }
+
+    public function test_upstream_calls_are_spaced_at_least_one_second_by_host_file_lock(): void
+    {
+        Cache::flush();
+        $times = [];
+        Http::fake(function () use (&$times) {
+            $times[] = microtime(true);
+
+            return Http::response([]);
+        });
+        $svc = new GeocodingService;
+        $svc->search('first query', 'en', [], null);
+        $svc->search('second query', 'en', [], null);
+        $this->assertCount(2, $times);
+        $this->assertGreaterThanOrEqual(1.0, $times[1] - $times[0]);
+    }
+
+    public function test_lock_held_elsewhere_for_over_three_seconds_returns_unavailable(): void
+    {
+        Cache::flush();
+        $dir = config('services.geocoding.lock_dir');
+        @mkdir($dir, 0777, true);
+        $other = fopen($dir.'/upstream.lock', 'c');
+        flock($other, LOCK_EX);
+        Http::fake();
+        $t = microtime(true);
+        $r = (new GeocodingService)->search('blocked query', 'en', [], null);
+        flock($other, LOCK_UN);
+        fclose($other);
+        $this->assertTrue($r['unavailable']);
+        $this->assertGreaterThanOrEqual(2.9, microtime(true) - $t);
         Http::assertNothingSent();
     }
 }

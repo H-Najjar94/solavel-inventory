@@ -50,6 +50,7 @@ return [
         'base_url' => env('GEOCODING_BASE_URL'),
         'key' => env('GEOCODING_KEY'),
         'user_agent' => env('GEOCODING_USER_AGENT', 'Solavel/1.0 (+https://solavel.com)'),
+        'lock_dir' => env('GEOCODING_LOCK_DIR', '/var/tmp/solavel-geocode'),
         'default_countries' => ['jo', 'ae'],
     ],
 

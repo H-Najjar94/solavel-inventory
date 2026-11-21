@@ -1,129 +1,177 @@
 <?php
 
+// Adapted from shared location-maps GeocodingService (shared content sha256 524ace44e2bc; shared repo had no commit yet).
+// Stock change: the upstream throttle is a host-wide FILE lock (see UpstreamThrottle below), not a cache lock.
+// Config (config/services.php):
+//   'geocoding' => ['provider' => env('GEOCODING_PROVIDER', 'nominatim'), // nominatim|locationiq|disabled
+//                   'base_url' => env('GEOCODING_BASE_URL'), 'key' => env('GEOCODING_KEY'),
+//                   'user_agent' => env('GEOCODING_USER_AGENT', 'Solavel/1.0 (+https://solavel.com)')]
+
 namespace App\Services\Geo;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
-/**
- * Server-side geocoding proxy for the location picker (search on submit only).
- * Providers: nominatim (default) | locationiq | disabled. Queries are cached for
- * 30 days and upstream calls are limited to 1/s host-wide via a cache lock.
- */
-final class GeocodingService
+class GeocodingService
 {
-    private const CACHE_TTL_DAYS = 30;
-
-    public function provider(): string
-    {
-        $p = strtolower((string) config('services.geocoding.provider', 'nominatim'));
-
-        return in_array($p, ['nominatim', 'locationiq', 'disabled'], true) ? $p : 'nominatim';
-    }
+    public const CACHE_TTL_DAYS = 30;
 
     /**
-     * @param  array<int,string>  $countries  ISO-3166 alpha-2 codes
-     * @return array{results: array<int,array<string,mixed>>, unavailable?: bool}
+     * @param  string[]  $countries  ISO-2 codes, lowercase
+     * @param  float[]|null  $viewbox  [west, north, east, south]
+     * @return array{results: array<int, array<string, mixed>>, unavailable: bool}
      */
-    public function search(string $query, string $lang, array $countries, ?float $lat, ?float $lng): array
+    public function search(string $q, string $lang = 'en', array $countries = [], ?array $viewbox = null): array
     {
-        $query = trim(preg_replace('/\s+/u', ' ', $query) ?? '');
-        if ($query === '' || mb_strlen($query) > 200 || $this->provider() === 'disabled') {
-            return ['results' => [], 'unavailable' => $this->provider() === 'disabled'];
-        }
-        $lang = $lang === 'ar' ? 'ar' : 'en';
-        $countries = collect($countries)->map(fn ($c) => strtolower(trim((string) $c)))
-            ->filter(fn ($c) => preg_match('/^[a-z]{2}$/', $c))->unique()->sort()->values()->all();
-        $viewbox = $lat !== null && $lng !== null && abs($lat) <= 90 && abs($lng) <= 180
-            ? sprintf('%.4f,%.4f,%.4f,%.4f', $lng - 0.5, $lat + 0.5, $lng + 0.5, $lat - 0.5) : null;
+        $cfg = (array) config('services.geocoding', []);
+        $provider = $cfg['provider'] ?? 'nominatim';
+        $q = trim($q);
 
-        $key = 'geo:v1:'.$this->provider().':'.sha1(mb_strtolower($query).'|'.$lang.'|'.implode(',', $countries).'|'.($viewbox ? round($lat, 1).','.round($lng, 1) : ''));
+        if ($q === '') {
+            return ['results' => [], 'unavailable' => false];
+        }
+        if ($provider === 'disabled' || ! in_array($provider, ['nominatim', 'locationiq'], true)) {
+            return ['results' => [], 'unavailable' => true];
+        }
+
+        $lang = $lang === 'ar' ? 'ar' : 'en';
+        $countries = array_values(array_unique(array_filter(array_map(fn ($c) => strtolower(trim((string) $c)), $countries), fn ($c) => preg_match('/^[a-z]{2}$/', $c))));
+        sort($countries);
+        $vb = $viewbox ? array_map(fn ($n) => round((float) $n, 1), $viewbox) : null; // coarse so nearby views share cache
+
+        $key = 'geo:'.$provider.':'.md5(json_encode([mb_strtolower($q), $lang, $countries, $vb]));
         $cached = Cache::get($key);
         if (is_array($cached)) {
-            return ['results' => $cached];
+            return ['results' => $cached, 'unavailable' => false];
         }
 
         try {
-            $raw = $this->upstream($query, $lang, $countries, $viewbox);
+            $raw = $this->throttled(fn () => $this->fetch($cfg, $provider, $q, $lang, $countries, $viewbox));
         } catch (Throwable $e) {
             report($e);
 
             return ['results' => [], 'unavailable' => true];
         }
-        $results = array_values(array_filter(array_map(fn ($r) => $this->normalize($r), $raw)));
+
+        if ($raw === null) {
+            return ['results' => [], 'unavailable' => true];
+        }
+
+        $results = array_values(array_filter(array_map([$this, 'normalize'], $raw)));
         Cache::put($key, $results, now()->addDays(self::CACHE_TTL_DAYS));
 
-        return ['results' => $results];
+        return ['results' => $results, 'unavailable' => false];
     }
 
-    /** @return array<int,array<string,mixed>> */
-    private function upstream(string $query, string $lang, array $countries, ?string $viewbox): array
+    /**
+     * Host-wide upstream limiter shared by every Solavel app and FPM worker: flock on
+     * <lock_dir>/upstream.lock (3 s max wait), then wait until >= 1.05 s since <lock_dir>/last-request.
+     * Returns null (=> unavailable) when the lock cannot be had in time.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    protected function throttled(callable $call): ?array
     {
-        $provider = $this->provider();
-        $base = rtrim((string) (config('services.geocoding.base_url') ?: ($provider === 'locationiq' ? 'https://us1.locationiq.com/v1' : 'https://nominatim.openstreetmap.org')), '/');
-        $params = [
-            'q' => $query, 'format' => 'jsonv2', 'addressdetails' => 1, 'limit' => 8,
-            'accept-language' => $lang, 'bounded' => 0,
-        ];
-        if ($countries) {
-            $params['countrycodes'] = implode(',', $countries);
+        $dir = (string) (config('services.geocoding.lock_dir') ?: '/var/tmp/solavel-geocode');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+            @chmod($dir, 01777);
         }
-        if ($viewbox) {
-            $params['viewbox'] = $viewbox;
+        $fh = @fopen($dir.'/upstream.lock', 'c');
+        if (! $fh) {
+            return null;
         }
-        if ($provider === 'locationiq') {
-            $params['key'] = (string) config('services.geocoding.key');
-        }
-
-        // Host-wide 1 request/second: serialise through a lock and space calls.
-        $lock = Cache::lock('geo:upstream-lock', 10);
-        if (! $lock->block(5)) {
-            throw new \RuntimeException('geocoding_busy');
-        }
+        @chmod($dir.'/upstream.lock', 0666);
         try {
-            $last = (float) Cache::get('geo:upstream-last', 0);
-            $wait = 1.0 - (microtime(true) - $last);
+            $deadline = microtime(true) + 3.0;
+            while (! flock($fh, LOCK_EX | LOCK_NB)) {
+                if (microtime(true) >= $deadline) {
+                    return null;
+                }
+                usleep(50_000);
+            }
+            $stamp = $dir.'/last-request';
+            $last = is_file($stamp) ? (float) @file_get_contents($stamp) : 0.0;
+            $wait = 1.05 - (microtime(true) - $last);
             if ($wait > 0) {
                 usleep((int) ($wait * 1_000_000));
             }
             try {
-                $response = Http::acceptJson()
-                    ->withUserAgent((string) config('services.geocoding.user_agent', 'Solavel/1.0 (+https://solavel.com)'))
-                    ->connectTimeout(3)->timeout(6)->get($base.'/search', $params);
+                return $call();
             } finally {
-                Cache::put('geo:upstream-last', microtime(true), 60);
+                @file_put_contents($stamp, sprintf('%.6F', microtime(true)));
+                @chmod($stamp, 0666);
+                flock($fh, LOCK_UN);
             }
         } finally {
-            $lock->release();
+            fclose($fh);
         }
-        if (! $response->successful() || ! is_array($response->json())) {
-            throw new \RuntimeException('geocoding_upstream_'.$response->status());
-        }
-
-        return $response->json();
     }
 
-    /** @return array<string,mixed>|null */
-    private function normalize(mixed $r): ?array
+    /** @return array<int, array<string, mixed>>|null null = upstream failure */
+    protected function fetch(array $cfg, string $provider, string $q, string $lang, array $countries, ?array $viewbox): ?array
     {
-        if (! is_array($r) || ! is_numeric($r['lat'] ?? null) || ! is_numeric($r['lon'] ?? null)) {
+        $params = ['q' => $q, 'format' => 'jsonv2', 'addressdetails' => 1, 'limit' => 8, 'accept-language' => $lang];
+        if ($countries) {
+            $params['countrycodes'] = implode(',', $countries);
+        }
+        if ($viewbox && count($viewbox) === 4) {
+            $params['viewbox'] = implode(',', $viewbox); // west,north,east,south
+            $params['bounded'] = 0;
+        }
+        if ($provider === 'locationiq') {
+            $base = $cfg['base_url'] ?? 'https://us1.locationiq.com/v1/search';
+            $params['key'] = $cfg['key'] ?? '';
+            if ($params['key'] === '') {
+                return null;
+            }
+        } else {
+            $base = $cfg['base_url'] ?? 'https://nominatim.openstreetmap.org/search';
+        }
+
+        $response = Http::withHeaders(['User-Agent' => $cfg['user_agent'] ?? 'Solavel/1.0 (+https://solavel.com)', 'Accept' => 'application/json'])
+            ->timeout(6)->get($base, $params);
+
+        if ($response->status() === 404 && $provider === 'locationiq') {
+            return []; // LocationIQ answers 404 for "no match"
+        }
+        if (! $response->successful()) {
+            return null;
+        }
+        $json = $response->json();
+
+        return is_array($json) ? $json : null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function normalize(array $r): ?array
+    {
+        if (! isset($r['lat'], $r['lon']) || ! is_numeric($r['lat']) || ! is_numeric($r['lon'])) {
+            return null;
+        }
+        $lat = (float) $r['lat'];
+        $lng = (float) $r['lon'];
+        if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
             return null;
         }
         $a = (array) ($r['address'] ?? []);
+        $first = fn (array $keys) => (string) (collect($keys)->map(fn ($k) => $a[$k] ?? null)->first(fn ($v) => is_string($v) && $v !== '') ?? '');
+        $label = (string) ($r['display_name'] ?? '');
         $name = (string) ($r['name'] ?? '');
-        $area = (string) ($a['suburb'] ?? $a['neighbourhood'] ?? $a['quarter'] ?? $a['city_district'] ?? $a['district'] ?? $a['county'] ?? '');
-        $city = (string) ($a['city'] ?? $a['town'] ?? $a['village'] ?? $a['municipality'] ?? $a['state'] ?? '');
+        if ($name === '') {
+            $name = trim(explode(',', $label)[0]);
+        }
 
         return [
-            'label' => (string) ($r['display_name'] ?? $name),
-            'name' => $name !== '' ? $name : (string) strtok((string) ($r['display_name'] ?? ''), ','),
-            'area' => $area,
-            'city' => $city,
+            'label' => $label,
+            'name' => $name,
+            'area' => $first(['suburb', 'neighbourhood', 'quarter', 'city_district']),
+            'city' => $first(['city', 'town', 'village', 'county', 'state']),
             'country' => (string) ($a['country'] ?? ''),
             'country_code' => strtolower((string) ($a['country_code'] ?? '')),
-            'lat' => round((float) $r['lat'], 7),
-            'lng' => round((float) $r['lon'], 7),
+            'lat' => round($lat, 7),
+            'lng' => round($lng, 7),
         ];
     }
 }

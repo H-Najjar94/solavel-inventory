@@ -10,6 +10,7 @@ import { Breadcrumbs, Skeleton, Tabs, StatusBadge, EmptyState, SortTh } from '..
 import WarehouseFloorMap from '../components/WarehouseFloorMap.jsx';
 import WarehouseImages from '../components/WarehouseImages.jsx';
 import { getLocale, t } from '../i18n/index.js';
+import { LocationView } from '../components/LocationMaps.jsx';
 
 const BIN_TYPES = ['receiving', 'storage', 'picking', 'packing', 'shipping', 'quarantine', 'damaged'];
 
@@ -110,6 +111,9 @@ export default function WarehouseDetailPage() {
                 <dt>{t('warehouses.capacity')}</dt><dd>{w.max_capacity_units ?? '—'}</dd>
                 <dt>{t('warehouseDetail.lowStockItems')}</dt><dd>{data?.low_stock_count ?? 0}</dd>
             </dl></div>}
+            {tab === 'overview' && <div className="panel"><h2>{t('locationMaps.section')}</h2>
+                <LocationView pins={w.latitude != null && w.longitude != null ? [{ lat: Number(w.latitude), lng: Number(w.longitude), label: w.name }] : []}
+                    canEdit={gate.allowed} setLocationHref={`${window.SOLASTOCK_BASE_PATH ?? '/inventory'}/warehouses/${w.id}/edit`} /></div>}
 
             {tab === 'zones' && <div className="panel">
                 {structureGate.allowed && <form className="inline-form" onSubmit={addZone}>

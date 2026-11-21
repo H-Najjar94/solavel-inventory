@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { api } from '../services/api.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
+import { LocationView, SupplierLocationSection } from '../components/LocationMaps.jsx';
 import { Breadcrumbs, Skeleton, StatusBadge, EmptyState, MetricCard, Tabs, SortTh } from '../components/ui.jsx';
 import { AccessNotice } from '../components/PlanAccess.jsx';
 import PurchaseHistoryPanel from '../components/PurchaseHistoryPanel.jsx';
@@ -27,6 +28,7 @@ export default function SupplierDetailPage() {
     };
     const { data, isLoading } = useApiQuery(['supplier', id], () => api.supplier(id), { fallback: null });
     const s = data;
+    const locs = useApiQuery(['supplier-locations', id], () => api.supplierLocations(id), { fallback: null });
     if (isLoading) return <section className="page"><Skeleton /></section>;
     if (!s) return <section className="page"><Breadcrumbs items={[{ label: t('partners.common.suppliers'), to: '/suppliers' }, { label: t('partners.common.notFound') }]} /><EmptyState title={t('partners.suppliers.detail.unavailableTitle')} hint={t('partners.suppliers.detail.unavailableHint')} /></section>;
     const c = s.contact ?? {};
@@ -62,6 +64,13 @@ export default function SupplierDetailPage() {
                         <MetricCard label={t('partners.suppliers.detail.averageLeadDays')} value={m.average_lead_days ?? '—'} />
                         <MetricCard label={t('partners.suppliers.detail.onTimeRate')} value={m.on_time_rate == null ? '—' : `${m.on_time_rate}%`} tone={m.on_time_rate >= 90 ? 'ok' : (m.on_time_rate == null ? undefined : 'warn')} />
                     </div>
+                </div>
+                <div className="panel">
+                    <h2>{t('locationMaps.section')}</h2>
+                    {locs.data?.linked ? <SupplierLocationSection locations={locs.data} /> : (
+                        <LocationView pins={(locs.data?.locations ?? []).map((l) => ({ lat: l.lat, lng: l.lng, label: s.name }))}
+                            canEdit={gate.allowed} setLocationHref={`${window.SOLASTOCK_BASE_PATH ?? '/inventory'}/suppliers/${s.id}/edit`} />
+                    )}
                 </div>
             </>}
 
