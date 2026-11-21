@@ -44,4 +44,14 @@ return [
         'timeout' => env('SOLABOOKS_API_TIMEOUT', 10),
     ],
 
+    // Location picker search proxy (nominatim | locationiq | disabled).
+    'geocoding' => [
+        'provider' => env('GEOCODING_PROVIDER', 'nominatim'),
+        'base_url' => env('GEOCODING_BASE_URL'),
+        'key' => env('GEOCODING_KEY'),
+        'user_agent' => env('GEOCODING_USER_AGENT', 'Solavel/1.0 (+https://solavel.com)'),
+        'lock_dir' => env('GEOCODING_LOCK_DIR', '/var/tmp/solavel-geocode'),
+        'default_countries' => ['jo', 'ae'],
+    ],
+
 ];

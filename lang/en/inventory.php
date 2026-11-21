@@ -119,6 +119,8 @@ return array (
     'warehouse_code_unique' => 'Warehouse code must be unique within the organization.',
     'lot_code_required' => 'A lot code is required for lot-tracked items.',
     'supplier_code_unique' => 'Supplier code must be unique.',
+    'coordinates_pair' => 'Latitude and longitude must both be set or both be empty.',
+    'location_linked_supplier' => 'This supplier is linked to SolaCount. Edit its location in SolaCount.',
     'customer_code_unique' => 'Customer code must be unique.',
     'image_type' => 'Only JPG, PNG or WEBP images are allowed.',
     'attachment_empty' => 'The attachment must not be empty.',

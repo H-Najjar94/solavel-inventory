@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Http\Requests\Api\Concerns\ValidatesCoordinates;
 use App\Http\Requests\Api\Concerns\ValidatesWarehouse;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -9,6 +10,7 @@ use Illuminate\Validation\Validator;
 
 class StoreWarehouseRequest extends FormRequest
 {
+    use ValidatesCoordinates;
     use ValidatesWarehouse;
 
     public function authorize(): bool
@@ -18,6 +20,7 @@ class StoreWarehouseRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $this->blankCoordinatesToNull();
         // max_capacity_units is a nullable DECIMAL column; a blank string from the
         // form must become null (MySQL rejects '' for a decimal). Robust even if
         // the global ConvertEmptyStringsToNull middleware didn't run.
@@ -28,7 +31,7 @@ class StoreWarehouseRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        return $this->coordinateRules() + [
             'code' => ['required', 'string', 'max:50'],
             'name' => ['required', 'string', 'max:191'],
             'type' => ['required', Rule::in(['warehouse', 'retail', 'transit', 'virtual'])],
@@ -41,5 +44,6 @@ class StoreWarehouseRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $this->applyWarehouseDomainRules($validator);
+        $this->applyCoordinatePairRule($validator);
     }
 }

@@ -259,6 +259,7 @@ export const api = {
     // Suppliers
     suppliers: (params) => request('/suppliers', { params }),
     supplier: (id) => request(`/suppliers/${id}`),
+    supplierLocations: (id) => request(`/suppliers/${id}/locations`),
     createSupplier: (body) => request('/suppliers', { method: 'POST', body }),
     createSupplierFull: (body) => request('/suppliers', { method: 'POST', body }),
     updateSupplier: (id, body) => request(`/suppliers/${id}`, { method: 'PUT', body }),

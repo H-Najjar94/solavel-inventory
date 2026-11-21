@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\ApiController;
 use App\Models\Tenant\Supplier;
+use App\Services\Purchasing\SupplierTerms\SupplierLocations;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,12 @@ class SupplierController extends ApiController
         return $this->success($supplier);
     }
 
+    /** Linked suppliers: SolaCount's pins (read-only). Standalone: the supplier's own location. */
+    public function locations(Supplier $supplier): JsonResponse
+    {
+        return $this->success(app(SupplierLocations::class)->for($supplier));
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $this->validateSupplier($request);
@@ -52,6 +59,7 @@ class SupplierController extends ApiController
     public function update(Request $request, Supplier $supplier): JsonResponse
     {
         $data = $this->validateSupplier($request, partial: true, existing: $supplier);
+        $this->assertLocationAllowed($data, $supplier);
         $supplier->update($this->pack($data, $supplier));
 
         return $this->success($supplier->fresh());
@@ -61,7 +69,7 @@ class SupplierController extends ApiController
     {
         $req = $partial ? 'sometimes' : 'required';
 
-        return $request->validate([
+        $data = $request->validate([
             'code' => [$req, 'string', 'max:50', \Illuminate\Validation\Rule::unique('inventory_suppliers', 'code')->where('organization_id', app(\App\Tenancy\OrganizationContext::class)->idOrFail())->ignore($existing?->id)],
             'name' => [$req, 'string', 'max:191'],
             'email' => ['nullable', 'email', 'max:191'],
@@ -72,7 +80,33 @@ class SupplierController extends ApiController
             'payment_terms' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['boolean'],
+            'location' => ['nullable', 'array'],
+            'location.lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'location.lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'location.address' => ['nullable', 'string', 'max:500'],
         ], ['code.unique' => __('inventory.validation.supplier_code_unique')]);
+
+        // Pair rule: both or neither (0 is valid). A pair-less object clears the location.
+        $loc = $data['location'] ?? null;
+        if (is_array($loc)) {
+            $lat = $loc['lat'] ?? null;
+            $lng = $loc['lng'] ?? null;
+            if (($lat === null) !== ($lng === null)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    $lat === null ? 'location.lat' : 'location.lng' => __('inventory.validation.coordinates_pair'),
+                ]);
+            }
+        }
+
+        return $data;
+    }
+
+    /** Linked suppliers keep their pins in SolaCount; Stock never stores a copy. */
+    private function assertLocationAllowed(array $data, Supplier $supplier): void
+    {
+        if (isset($data['location']['lat']) && app(SupplierLocations::class)->financeId($supplier) !== null) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['location' => __('inventory.validation.location_linked_supplier')]);
+        }
     }
 
     /** Pack flat contact fields into the JSON `contact` column. */
@@ -80,6 +114,19 @@ class SupplierController extends ApiController
     {
         $contactKeys = ['email', 'phone', 'address', 'tax_number', 'currency', 'payment_terms', 'notes'];
         $contact = (array) ($existing?->contact ?? []);
+        if (array_key_exists('location', $data)) {
+            $loc = $data['location'];
+            if (is_array($loc) && isset($loc['lat'], $loc['lng'])) {
+                $contact['location'] = array_filter([
+                    'lat' => round((float) $loc['lat'], 7),
+                    'lng' => round((float) $loc['lng'], 7),
+                    'address' => isset($loc['address']) && $loc['address'] !== '' ? (string) $loc['address'] : null,
+                ], fn ($v) => $v !== null);
+            } else {
+                unset($contact['location']);
+            }
+            unset($data['location']);
+        }
         foreach ($contactKeys as $k) {
             if (array_key_exists($k, $data)) {
                 $contact[$k] = $data[$k];

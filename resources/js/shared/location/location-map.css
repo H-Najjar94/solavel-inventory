@@ -1,0 +1,52 @@
+/* Copied from shared location-maps commit 9be03ad. Do not edit here. */
+/* Shared location map styles. All classes prefixed slm-. Override the --slm-* variables per app/theme. */
+.slm-picker, .slm-view, .slm-empty {
+  --slm-bg: var(--surface, var(--card-bg, #fff));
+  --slm-fg: var(--text, var(--fg, #1f2937));
+  --slm-muted: var(--text-muted, #6b7280);
+  --slm-border: var(--border, #d1d5db);
+  --slm-primary: var(--primary, #2563eb);
+  --slm-primary-fg: var(--primary-contrast, #fff);
+  --slm-warn: var(--warning, #b45309);
+  --slm-hover: var(--surface-hover, rgba(127, 127, 127, .12));
+  color: var(--slm-fg); display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.slm-search { display: flex; gap: 8px; }
+.slm-input { flex: 1; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid var(--slm-border); border-radius: 8px; background: var(--slm-bg); color: var(--slm-fg); font: inherit; }
+.slm-input--num { flex: 0 0 110px; }
+.slm-btn { min-height: 40px; padding: 6px 14px; border: 1px solid var(--slm-border); border-radius: 8px; background: var(--slm-bg); color: var(--slm-fg); font: inherit; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.slm-btn:hover:not(:disabled) { background: var(--slm-hover); }
+.slm-btn:disabled { opacity: .55; cursor: not-allowed; }
+.slm-btn--primary { background: var(--slm-primary); border-color: var(--slm-primary); color: var(--slm-primary-fg); }
+.slm-btn--primary:hover:not(:disabled) { background: var(--slm-primary); filter: brightness(1.08); }
+.slm-btn--ghost { background: transparent; }
+.slm-status { min-height: 0; font-size: .875rem; color: var(--slm-muted); }
+.slm-status:empty { display: none; }
+.slm-warn { color: var(--slm-warn); }
+.slm-muted { color: var(--slm-muted); }
+.slm-note { margin: 0; font-size: .8125rem; }
+.slm-results { list-style: none; margin: 0; padding: 0; border: 1px solid var(--slm-border); border-radius: 8px; max-height: 220px; overflow: auto; background: var(--slm-bg); }
+.slm-results li + li { border-top: 1px solid var(--slm-border); }
+.slm-result { display: flex; flex-direction: column; gap: 2px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.slm-result:hover:not(:disabled), .slm-result:focus-visible { background: var(--slm-hover); }
+.slm-result-name { font-weight: 600; }
+.slm-mapbox { position: relative; width: 100%; border: 1px solid var(--slm-border); border-radius: 10px; overflow: hidden; background: var(--slm-hover); }
+.slm-map { position: absolute; inset: 0; z-index: 0; }
+.slm-picker .leaflet-container, .slm-view .leaflet-container { font: inherit; }
+.slm-pin-wrap { background: none !important; border: 0 !important; }
+.slm-pin { display: flex; align-items: flex-end; justify-content: center; width: 44px; height: 44px; color: var(--slm-primary); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .4)); }
+.slm-pin--drag { cursor: grab; }
+.slm-handle { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; cursor: ew-resize; }
+.slm-handle-dot { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--slm-primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
+path.slm-circle { stroke: var(--slm-primary, #2563eb); fill: var(--slm-primary, #2563eb); fill-opacity: .15; stroke-width: 2; }
+.slm-selected { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: .9375rem; }
+.slm-selected-label { font-weight: 600; }
+.slm-coords { font-variant-numeric: tabular-nums; color: var(--slm-muted); unicode-bidi: isolate; }
+.slm-actions { display: inline-flex; gap: 8px; margin-inline-start: auto; }
+.slm-radius { display: flex; align-items: center; gap: 8px; }
+.slm-pinlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.slm-pinrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.slm-link { color: var(--slm-primary); text-decoration: underline; min-height: 24px; }
+.slm-empty { align-items: flex-start; padding: 16px; border: 1px dashed var(--slm-border); border-radius: 10px; }
+.slm-empty p { margin: 0; color: var(--slm-muted); }
+@media (max-width: 480px) { .slm-search { flex-direction: column; } .slm-actions { margin-inline-start: 0; } }

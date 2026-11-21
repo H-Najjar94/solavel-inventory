@@ -16,7 +16,7 @@ use Throwable;
  * Integrated features (Finance bill history, Finance-normalized FX) require a
  * verified mapping AND Central's connection entitlement; nothing here writes.
  */
-final class FinanceLink
+class FinanceLink
 {
     private ?array $state = null;
 
