@@ -53,8 +53,12 @@ final class PartySyncLedger {
      $db->table('integration_party_sync_states')->where('id',$opposite->id)->update(['field_overrides'=>json_encode($overrides),'state_version'=>$opposite->state_version+1,'status'=>'pending','next_attempt_at'=>null,'updated_at'=>now()]);
     return $opposite;
    }
-   $db->table('integration_party_sync_states')->insertOrIgnore($identity+['organization_id'=>$mapping->finance_organization_id,'central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,'source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>1,'created_at'=>now(),'updated_at'=>now()]);
+   // Reconcile revisits every party each transport cycle; write only when the state row is missing.
    $row=$db->table('integration_party_sync_states')->where($identity)->lockForUpdate()->first();
+   if(!$row){
+    $db->table('integration_party_sync_states')->insertOrIgnore($identity+['organization_id'=>$mapping->finance_organization_id,'central_client_id'=>$mapping->central_client_id,'central_organization_id'=>$mapping->central_organization_id,'source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>1,'created_at'=>now(),'updated_at'=>now()]);
+    $row=$db->table('integration_party_sync_states')->where($identity)->lockForUpdate()->first();
+   }
    if($row->source_revision!==$hash)$db->table('integration_party_sync_states')->where('id',$row->id)->update(['source_revision'=>$hash,'source_fields'=>json_encode($fields),'status'=>'pending','state_version'=>$row->state_version+1,'attempts'=>0,'next_attempt_at'=>null,'last_error'=>null,'updated_at'=>now()]);
    return $db->table('integration_party_sync_states')->where('id',$row->id)->first();
   });

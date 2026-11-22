@@ -106,6 +106,15 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame(101,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
  }
 
+ public function test_repeated_reconcile_of_unchanged_parties_issues_no_state_insert():void {
+  $this->source(901,'Steady supplier');$ledger=app(PartySyncLedger::class);$ledger->reconcile($this->mapping);
+  $this->assertSame(1,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+  $inserts=0;DB::connection('tenant')->listen(function($q)use(&$inserts){if(stripos($q->sql,'insert')===0&&str_contains($q->sql,'integration_party_sync_states'))$inserts++;});
+  $ledger->reconcile($this->mapping);$ledger->reconcile($this->mapping);
+  $this->assertSame(0,$inserts);$this->assertSame(1,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+  $this->source(902,'New supplier');$ledger->reconcile($this->mapping);
+  $this->assertSame(1,$inserts);$this->assertSame(2,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+ }
  private function reviewFacts():array {
   config(['finance_workspace.secret'=>str_repeat('k',48)]);
   return ['source_id'=>901,'source_revision'=>app(PartySyncLedger::class)->revision(app(PartySyncLedger::class)->fields($this->mapping,'finance','supplier',901)),'native_actor_id'=>990001];

@@ -22,6 +22,8 @@ final class SalesNotificationPublisher
             $lines=$rr->lines->map(fn($line)=>[(int)$line->id,(string)$line->requested_qty,(string)$line->fulfilled_qty,(string)($line->cancelled_qty??'0')])->sortBy(0)->values()->all();
             $activeWarehouseExists=DB::connection('tenant')->table('warehouses')->where('organization_id',$org)->where('is_active',true)->exists();
             $fingerprint=hash('sha256',json_encode([$activeWarehouseExists,$rr->request_uuid,$rr->source_revision,$rr->status,$rr->warehouse_id,((bool)$rr->approved_at && hash_equals((string)$rr->source_revision,(string)$rr->approved_revision)),$lines],JSON_THROW_ON_ERROR));
+            // The recovery projection re-queues every request each cycle; an already queued transition needs no write.
+            if (DB::connection('tenant')->table('sales_notification_outbox')->where('organization_id',$org)->where('request_id',$id)->where('transition_fingerprint',$fingerprint)->exists()) return;
             DB::connection('tenant')->table('sales_notification_outbox')->insertOrIgnore(['organization_id'=>$org,'request_id'=>$id,'transition_fingerprint'=>$fingerprint,'state'=>'pending','attempts'=>0,'created_at'=>now(),'updated_at'=>now()]);
     }
 
