@@ -1,6 +1,6 @@
 # SolaStock agent instructions
 
-<!-- solavel-agent-rules v1 (2026-11-22). Canonical source: H-Najjar94/solavel docs/agents/SOLAVEL_AGENT_RULES.md. Keep every copy identical. -->
+<!-- solavel-agent-rules v2 (2026-11-22). Canonical source: H-Najjar94/solavel docs/agents/SOLAVEL_AGENT_RULES.md. Keep every copy identical. -->
 ## Mandatory Solavel agent rules
 
 These rules apply to every agent (Claude, Codex, others) working on the Solavel server or in any Solavel repository.
@@ -27,3 +27,13 @@ These rules apply to every agent (Claude, Codex, others) working on the Solavel 
 - Keep production performance checks lightweight: targeted requests and existing metrics. Production load tests and large scans need separate approval.
 - Successful polls, heartbeats and no-op jobs use existing counters or bounded telemetry. Do not write a database row or event per cycle, and avoid redundant writes. Keep individual audit actions, permission denials, security events and actionable failure details. Keep operational logs bounded with the existing rotation and retention.
 - Treat CPU, latency, database writes and disk use as separate measurements. For a high-frequency worker or logging change, verify the write rate or log growth with real observations. Claim only what the measurements support.
+
+### 4. Server cleanup on request
+
+- When the owner says "clean the server", "clean up server work" or "نظّف السيرفر", search the whole server for Solavel development leftovers: every relevant local filesystem, including `/var/tmp`, home directories, old clone and checkout locations, and build or QA directories. Report any location that could not be inspected.
+- Compare what you find with Git's registered worktrees and with actual service usage (web server, cron, systemd units, running processes, deployer symlinks). Identify abandoned worktrees, disposable clones, temporary builds, test exports, browser artifacts and task-owned caches.
+- Verify each item is inactive and that any unique work is recoverable from its durable destination (pushed branch or merged PR, approved backup, durable docs). Then remove the verified disposable items in the same run. Remove registered worktrees with `git worktree remove` / `git worktree prune` and verify both the path and the registration are gone.
+- Protect active work, canonical repos, deployed releases and rollback versions, databases, backups, credentials and durable documentation. If ownership, active use or recoverability is unclear, keep that item, report the blocker, and continue cleaning verified items elsewhere.
+- For every new task keep temporary work under a unique `/var/tmp/solavel/` directory (rule 2); save anything important in its durable location, then remove the task directory and worktree when the task ends.
+- Report the exact paths removed, remaining blockers, and actual free disk space before and after (`df -B1 /`).
+- When the owner asks to save a rule permanently: update the shared policy (H-Najjar94/solavel `docs/agents/SOLAVEL_AGENT_RULES.md`), the applicable repo `AGENTS.md`/`CLAUDE.md` and the host-level instruction files; commit the changes; and verify rule discovery in fresh Codex and Claude Code sessions.
