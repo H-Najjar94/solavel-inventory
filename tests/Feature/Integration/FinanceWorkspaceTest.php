@@ -761,6 +761,13 @@ final class FinanceWorkspaceTest extends TestCase
 
     public function test_migration_catalog_uses_native_creation_then_durable_explicit_mapping(): void
     {
+        // The journal worker reported a failed receipt. Catalog data can still be saved.
+        $status = $this->createStub(IntegrationStatusService::class);
+        $status->method('status')->willReturn(['readiness' => [
+            'state' => 'CONNECTION_BLOCKED', 'blockers' => ['sync_errors'], 'catalog_ready' => true,
+        ]]);
+        $this->app->instance(IntegrationStatusService::class, $status);
+        $this->send(['action' => 'items.index'])->assertConflict();
         $category = ItemCategory::create(['name' => 'Migration category', 'code' => 'MIG-CAT', 'is_active' => true]);
         $unit = Unit::create(['name' => 'Each', 'code' => 'MIG-EACH', 'kind' => 'count', 'is_active' => true]);
         $org = TenantTestManager::ORG_A;
