@@ -410,7 +410,8 @@ final class FinanceWorkspaceController
                 return response()->json(['success' => true, 'data' => $result]);
             }
             $readiness = app(WorkspaceContext::class)->read($request, (int) $org->id, $mapping !== null, $mapping?->status === 'verified' && $mapping?->activation_state === 'active');
-            abort_unless($readiness['ready'], 409, 'workspace_connection_not_ready');
+            $catalog = in_array($input['action'], FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS, true);
+            abort_unless($catalog ? $readiness['catalog_ready'] : $readiness['ready'], 409, 'workspace_connection_not_ready');
             abort_unless($mapping, 409, 'workspace_mapping_not_ready');
             abort_unless($setting && in_array($setting->mode, ['active', 'paused', 'connected_readonly'], true), 409, 'workspace_connection_not_ready');
 

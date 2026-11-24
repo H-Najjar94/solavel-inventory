@@ -232,10 +232,13 @@ class IntegrationStatusService
             $failed > 0 ? 'sync_errors' : null,
             $activated && ! $workerRunning ? 'sync_worker_unavailable' : null,
         ]));
+        // Catalog commands create master data synchronously and never post a journal.
+        $onboarding['catalog_ready'] = $onboarding['state'] === 'FINANCE_READY'
+            && $deliveryEnabled && $workerRunning && $incompleteMapping === 0;
         if ($onboarding['state'] === 'FINANCE_READY') {
             $onboarding['state'] = match (true) {
                 $realHold => 'MAINTENANCE_HOLD',
-                $deliveryEnabled && $workerRunning && $failed === 0 && $incompleteMapping === 0 => 'CONNECTED_READY',
+                $onboarding['catalog_ready'] && $failed === 0 => 'CONNECTED_READY',
                 $activated => 'CONNECTION_BLOCKED',
                 in_array($wizardRun?->state, ['activation_ready', 'ready_for_approval', 'approved_maintenance_hold'], true) => 'ACTIVATION_REQUIRED',
                 default => 'CONNECTION_SETUP_INCOMPLETE',
