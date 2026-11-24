@@ -56,6 +56,12 @@ class ItemCatalogObserverTest extends TestCase
         $this->assertSame((int) $first->state_version + 1, (int) $renamed->state_version);
         $this->assertSame('Renamed native item', json_decode($renamed->source_snapshot, true)['name']);
         $this->assertSame(1, $this->state()->count());
+        $this->item->update(['description'=>'Updated description','reorder_qty'=>'1.234560']);
+        $details=$this->state()->sole();
+        $this->assertNotSame($renamed->source_revision,$details->source_revision);
+        $snapshot=json_decode($details->source_snapshot,true);
+        $this->assertSame('Updated description',$snapshot['description']);
+        $this->assertSame('1.234560',$snapshot['reorder_qty']);
     }
 
     public function test_native_retry_preserves_live_lease_then_reuses_identity_and_keeps_delivered_state(): void
