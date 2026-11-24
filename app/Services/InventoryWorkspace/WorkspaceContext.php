@@ -17,9 +17,11 @@ final class WorkspaceContext
         $setting = IntegrationSetting::query()->where('organization_id', $organizationId)->where('integration', 'solabooks')->first();
         $status = app(\App\Services\Integration\IntegrationStatusService::class)->status($organizationId);
         $readiness = data_get($status, 'readiness.state', 'PREPARING');
-        $ready = OperationalReadiness::allows($mapped, $activated, $readiness,
-            app(\App\Services\Integration\OrganizationAccountRequirements::class)->missingRoles($organizationId));
-        $writable = $ready && $activated && $setting?->mode === 'active' && app(IntegrationSafetyHold::class)->deliveryEnabledFor($organizationId);
+        $missingRoles = app(\App\Services\Integration\OrganizationAccountRequirements::class)->missingRoles($organizationId);
+        $ready = OperationalReadiness::allows($mapped, $activated, $readiness, $missingRoles);
+        $catalogReady = $ready || ($mapped && $activated && $missingRoles === []
+            && data_get($status, 'readiness.catalog_ready') === true);
+        $writesEnabled = $activated && $setting?->mode === 'active' && app(IntegrationSafetyHold::class)->deliveryEnabledFor($organizationId);
         $actions = [];
         foreach (WorkspaceActions::ALLOWED as $action) {
             $route = app(Router::class)->getRoutes()->getByName('api.v1.'.$action);
@@ -36,13 +38,14 @@ final class WorkspaceContext
             if (! $reason && $feature) { $decision = $commercial->checkFeature($feature); if (! $decision['allowed']) $reason = $decision['reason_code']; }
             $write = ! in_array('GET', $route->methods(), true);
             if (! $reason && ! $mapped) $reason = 'workspace_mapping_not_ready';
-            if (! $reason && ! $ready) $reason = 'workspace_connection_not_ready';
-            if (! $reason && $write && ! $writable) $reason = 'workspace_connection_read_only';
+            $catalog = in_array($action, FinanceDocumentLifecycleAuthority::CATALOG_ACTIONS, true);
+            if (! $reason && ! ($catalog ? $catalogReady : $ready)) $reason = 'workspace_connection_not_ready';
+            if (! $reason && $write && ! $writesEnabled) $reason = 'workspace_connection_read_only';
             $actions[$action] = ['allowed' => $reason === null, 'reason' => $reason];
         }
         return ['organization_id' => $organizationId, 'mapped' => $mapped, 'mode' => $setting?->mode ?? 'disconnected',
-            'ready' => $ready, 'readiness' => $readiness, 'can_open_stock' => $ready && ( $permissions->can($request->user(), 'inventory.view_dashboard') || $permissions->can($request->user(), 'inventory.view_items') || $permissions->can($request->user(), 'inventory.view_stock')),
-            'writable' => $writable, 'actions' => $actions,
+            'ready' => $ready, 'catalog_ready' => $catalogReady, 'readiness' => $readiness, 'can_open_stock' => $ready && ( $permissions->can($request->user(), 'inventory.view_dashboard') || $permissions->can($request->user(), 'inventory.view_items') || $permissions->can($request->user(), 'inventory.view_stock')),
+            'writable' => $ready && $writesEnabled, 'actions' => $actions,
             'can_setup' => $permissions->can($request->user(), 'inventory.integration.setup'),
             'can_review_accounting' => $permissions->can($request->user(), 'inventory.integration.accounting_review'),
             'unsupported' => ['partial_linked_returns', 'automatic_catalog_creation', 'automatic_reorder_purchase_orders']];
