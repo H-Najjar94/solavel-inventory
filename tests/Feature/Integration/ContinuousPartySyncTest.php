@@ -31,7 +31,7 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame('Updated source',Supplier::findOrFail($r['target_id'])->name);
   Supplier::findOrFail($r['target_id'])->update(['name'=>'Warehouse local override']);
   $db->table('suppliers')->where('id',901)->update(['name'=>'Later source']);$last=$this->ensure();
-  $this->assertSame('Warehouse local override',Supplier::findOrFail($r['target_id'])->name);$this->assertTrue($last['field_overrides']['name']);
+  $this->assertSame('Warehouse local override',Supplier::findOrFail($r['target_id'])->name);$this->assertSame('party_name_conflict',$last['reason']);
  }
  public function test_customer_source_name_updates_on_the_same_verified_counterpart():void {
   $customers=DB::connection('tenant')->table('customers');
@@ -43,6 +43,17 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame('synced',$result['status']);
   $this->assertSame($initial['target_id'],$result['target_id']);
   $this->assertSame('عميل تجريبي',DB::connection('tenant')->table('inventory_customers')->where('id',$result['target_id'])->value('name'));
+ }
+ public function test_counterpart_name_can_return_through_the_verified_mapping():void {
+  $this->source();$link=$this->ensure();$db=DB::connection('tenant');
+  $state=$db->table('integration_party_sync_states')->where('source_app','finance')->sole();
+  // A Stock-origin counterpart in Finance has an agreed baseline, independent of the contact owner.
+  $db->table('integration_party_sync_states')->where('id',$state->id)->update(['source_app'=>'stock','source_id'=>$link['target_id'],'target_id'=>901]);
+  $db->table('suppliers')->where('id',901)->update(['name'=>'اسم محدث']);
+  $result=$this->ensure();
+  $this->assertSame('synced',$result['status']);
+  $this->assertSame('اسم محدث',Supplier::findOrFail($link['target_id'])->name);
+  $this->assertSame('اسم محدث',json_decode($db->table('integration_party_sync_states')->where('id',$state->id)->value('field_baselines'),true)['source']['name']);
  }
  public function test_same_name_never_creates_an_implicit_identity():void {
   $this->source();Supplier::create(['code'=>'LOCAL','name'=>'New canonical supplier','is_active'=>true]);

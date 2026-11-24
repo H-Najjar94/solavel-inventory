@@ -126,7 +126,7 @@ final class ContinuousPartySync {
   $model=$type==='supplier'?Supplier::class:Customer::class;
   return app(PartySyncMaterializer::class)->apply($mapping,$sourceApp,$type,$sourceId,
    fn(array $fields,int $id)=>PartySyncLedger::withoutTracking(fn()=>$model::query()->create(['organization_id'=>$mapping->solastock_organization_id,'code'=>($type==='supplier'?'FIN-S-':'FIN-C-').$id,'name'=>$fields['name'],'contact'=>$fields['contact'],'is_active'=>true])->id),
-   fn(int $id,array $fields)=>PartySyncLedger::withoutTracking(fn()=>$model::query()->where('organization_id',$mapping->solastock_organization_id)->findOrFail($id)->update(['name'=>$fields['name'],'contact'=>$fields['contact']])),
+   fn(int $id,array $fields)=>PartySyncLedger::withoutTracking(fn()=>$model::query()->where('organization_id',$mapping->solastock_organization_id)->findOrFail($id)->update(array_intersect_key($fields,['name'=>true,'contact'=>true]))),
    fn(array $fields)=>IntegrationMasterDataMapping::query()->create($fields),$revision);
  }
 }

@@ -17,7 +17,7 @@ final class SyncIncidentFacts
     public const KINDS = ['party', 'item', 'unit', 'category'];
 
     public const REASONS = [
-        'party_identity_review_required', 'party_source_unavailable', 'party_approval_required', 'party_retry_exhausted',
+        'party_name_conflict', 'party_identity_review_required', 'party_source_unavailable', 'party_approval_required', 'party_retry_exhausted',
         'catalog_identity_conflict', 'catalog_field_conflict', 'catalog_shared_reference_change', 'catalog_source_actor_required',
         'catalog_source_changed', 'catalog_source_not_authorized', 'retry_exhausted', 'sync_review_required',
     ];
