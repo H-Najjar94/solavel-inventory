@@ -31,17 +31,19 @@ final class PartySyncMaterializer {
    $masters=$db->table('integration_master_data_mappings')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where($sourceColumn,(string)$sourceId)->lockForUpdate()->get();
    if($masters->count()>1)return $this->finish($state,$this->result('intervention',$sourceId,null,null,'party_identity_review_required'));
    $master=$masters->first();
+   if($master&&$master->status==='merged')return $this->finish($state,$this->result('merged',$sourceId,null,$master->mapping_uuid,null));
    if($master&&($master->status!=='verified'||$master->conflict_code!==null||$master->error_state!==null
     ||(int)$master->central_client_id!==(int)$mapping->central_client_id||(int)$master->central_organization_id!==(int)$mapping->central_organization_id
     ||(int)$master->finance_organization_id!==(int)$mapping->finance_organization_id||(int)$master->solastock_organization_id!==(int)$mapping->solastock_organization_id))
     return $this->finish($state,$this->result('intervention',$sourceId,null,null,'party_identity_review_required'));
    if($master && $state->source_app !== $sourceApp) {
     $db->table('integration_master_data_mappings')->where('id',$master->id)->update([$sourceApp==='finance'?'solabooks_archived':'solastock_archived'=>!$sourceFields['active'],'updated_at'=>now()]);
-    return $this->result($sourceFields['active']?'synced':'held',$sourceId,(int)$master->$targetColumn,$master->mapping_uuid,$sourceFields['active']?null:'party_source_unavailable',json_decode($state->field_overrides??'{}',true));
+    return $this->result($sourceFields['active']?'synced':'intervention',$sourceId,(int)$master->$targetColumn,$master->mapping_uuid,$sourceFields['active']?null:'party_source_unavailable',json_decode($state->field_overrides??'{}',true));
    }
    if(!$sourceFields['active']){
     if($master)$db->table('integration_master_data_mappings')->where('id',$master->id)->update([$sourceApp==='finance'?'solabooks_archived':'solastock_archived'=>true,'updated_at'=>now()]);
-    return $this->finish($state,$this->result('held',$sourceId,$master?(int)$master->$targetColumn:null,$master?->mapping_uuid,'party_source_unavailable'));
+    // Reactivation changes the source revision and requeues it. Retrying an archived source cannot deliver it.
+    return $this->finish($state,$this->result('intervention',$sourceId,$master?(int)$master->$targetColumn:null,$master?->mapping_uuid,'party_source_unavailable'));
    }
    $targetApp=$sourceApp==='finance'?'stock':'finance';$targetTable=($targetApp==='stock'?'inventory_':'').($type==='supplier'?'suppliers':'customers');
    $targetOrg=$targetApp==='stock'?$mapping->solastock_organization_id:$mapping->finance_organization_id;
