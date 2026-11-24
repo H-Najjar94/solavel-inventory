@@ -31,7 +31,29 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame('Updated source',Supplier::findOrFail($r['target_id'])->name);
   Supplier::findOrFail($r['target_id'])->update(['name'=>'Warehouse local override']);
   $db->table('suppliers')->where('id',901)->update(['name'=>'Later source']);$last=$this->ensure();
-  $this->assertSame('Warehouse local override',Supplier::findOrFail($r['target_id'])->name);$this->assertTrue($last['field_overrides']['name']);
+  $this->assertSame('Warehouse local override',Supplier::findOrFail($r['target_id'])->name);$this->assertSame('party_name_conflict',$last['reason']);
+ }
+ public function test_customer_source_name_updates_on_the_same_verified_counterpart():void {
+  $customers=DB::connection('tenant')->table('customers');
+  $customers->insert(['id'=>902,'organization_id'=>14,'name'=>'Customer before edit','is_active'=>true]);
+  $sync=fn()=>app(ContinuousPartySync::class)->materialize($this->mapping,'finance','customer',902);
+  $initial=$sync();
+  $customers->where('id',902)->update(['name'=>'عميل تجريبي']);
+  $result=$sync();
+  $this->assertSame('synced',$result['status']);
+  $this->assertSame($initial['target_id'],$result['target_id']);
+  $this->assertSame('عميل تجريبي',DB::connection('tenant')->table('inventory_customers')->where('id',$result['target_id'])->value('name'));
+ }
+ public function test_counterpart_name_can_return_through_the_verified_mapping():void {
+  $this->source();$link=$this->ensure();$db=DB::connection('tenant');
+  $state=$db->table('integration_party_sync_states')->where('source_app','finance')->sole();
+  // A Stock-origin counterpart in Finance has an agreed baseline, independent of the contact owner.
+  $db->table('integration_party_sync_states')->where('id',$state->id)->update(['source_app'=>'stock','source_id'=>$link['target_id'],'target_id'=>901]);
+  $db->table('suppliers')->where('id',901)->update(['name'=>'اسم محدث']);
+  $result=$this->ensure();
+  $this->assertSame('synced',$result['status']);
+  $this->assertSame('اسم محدث',Supplier::findOrFail($link['target_id'])->name);
+  $this->assertSame('اسم محدث',json_decode($db->table('integration_party_sync_states')->where('id',$state->id)->value('field_baselines'),true)['source']['name']);
  }
  public function test_same_name_never_creates_an_implicit_identity():void {
   $this->source();Supplier::create(['code'=>'LOCAL','name'=>'New canonical supplier','is_active'=>true]);
@@ -47,7 +69,15 @@ final class ContinuousPartySyncTest extends TestCase {
  }
  public function test_inactive_source_archives_existing_mapping_without_deleting_target():void {
   $this->source();$r=$this->ensure();DB::connection('tenant')->table('suppliers')->where('id',901)->update(['is_active'=>false]);
-  $this->assertSame('held',$this->ensure()['status']);$this->assertTrue(IntegrationMasterDataMapping::query()->sole()->solabooks_archived);$this->assertNotNull(Supplier::find($r['target_id']));
+  $blocked=$this->ensure();
+  $this->assertSame('intervention',$blocked['status']);
+  $this->assertSame('party_source_unavailable',$blocked['reason']);
+  $this->assertFalse($blocked['retryable']);
+  $this->assertTrue(IntegrationMasterDataMapping::query()->sole()->solabooks_archived);$this->assertNotNull(Supplier::find($r['target_id']));
+  DB::connection('tenant')->table('suppliers')->where('id',901)->update(['is_active'=>true]);
+  $recovered=$this->ensure();
+  $this->assertSame('synced',$recovered['status']);
+  $this->assertSame($r['target_id'],$recovered['target_id']);
  }
  public function test_reconcile_excludes_historical_unmapped_sources_but_includes_new_imports():void {
   $this->source(901,'Historical excluded','2020-01-01');$this->source(902,'Fresh imported');
@@ -106,6 +136,15 @@ final class ContinuousPartySyncTest extends TestCase {
   $this->assertSame(101,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
  }
 
+ public function test_repeated_reconcile_of_unchanged_parties_issues_no_state_insert():void {
+  $this->source(901,'Steady supplier');$ledger=app(PartySyncLedger::class);$ledger->reconcile($this->mapping);
+  $this->assertSame(1,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+  $inserts=0;DB::connection('tenant')->listen(function($q)use(&$inserts){if(stripos($q->sql,'insert')===0&&str_contains($q->sql,'integration_party_sync_states'))$inserts++;});
+  $ledger->reconcile($this->mapping);$ledger->reconcile($this->mapping);
+  $this->assertSame(0,$inserts);$this->assertSame(1,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+  $this->source(902,'New supplier');$ledger->reconcile($this->mapping);
+  $this->assertSame(1,$inserts);$this->assertSame(2,DB::connection('tenant')->table('integration_party_sync_states')->where('source_app','finance')->count());
+ }
  private function reviewFacts():array {
   config(['finance_workspace.secret'=>str_repeat('k',48)]);
   return ['source_id'=>901,'source_revision'=>app(PartySyncLedger::class)->revision(app(PartySyncLedger::class)->fields($this->mapping,'finance','supplier',901)),'native_actor_id'=>990001];

@@ -13,7 +13,7 @@ final class DocumentIncidentFacts
         $cancelled=!empty($native->reversed_at)||!empty($native->reversal_id)||!empty($native->reversal_sales_return_id)||!empty($native->deleted_at);
         $state=$cancelled?'cancelled':match($outbox->status){'sent'=>'resolved','intervention'=>'intervention',default=>'retrying'};
         $reason=$answer['reason']??$answer['delivery_reason']??($outbox->attempts>=40?'retry_exhausted':'delivery_pending');
-        $allowed=['party_identity_review_required','party_source_unavailable','party_approval_required','party_retry_exhausted','party_connection_pending','commercial_mapping_required','destination_document_missing','retry_exhausted','delivery_pending'];
+        $allowed=['party_name_conflict','party_identity_review_required','party_source_unavailable','party_approval_required','party_retry_exhausted','party_connection_pending','commercial_mapping_required','destination_document_missing','retry_exhausted','delivery_pending'];
         if (!in_array($reason,$allowed,true)) $reason='delivery_pending';
         $missing=array_values(array_filter((array)($answer['missing_information']??[]),static fn($v)=>is_string($v)&&preg_match('/^(supplier_mapping_required|customer_mapping_required|item_mapping_required|unit_mapping_required|item_or_unit_mapping_required|selling_price_required|dated_exchange_rate_required|supplier_invoice_number_required|supplier_invoice_date_required)$/D',$v)));
         sort($missing);

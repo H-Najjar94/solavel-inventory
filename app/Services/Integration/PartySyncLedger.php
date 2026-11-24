@@ -42,9 +42,28 @@ final class PartySyncLedger {
   return $db->transaction(function()use($db,$mapping,$fields,$identity,$hash,$app,$type,$id){
    // A generated counterpart must not start an opposite synchronization loop.
    $opposite=$db->table('integration_party_sync_states')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where('source_app',$app==='finance'?'stock':'finance')->where('target_id',$id)->lockForUpdate()->first();
+   if ($opposite && !$opposite->field_baselines && $db->table('integration_party_sync_states')->where($identity)->whereNotNull('field_baselines')->exists()) {
+    $opposite = null;
+   }
    if($opposite){
     $baselines=json_decode($opposite->field_baselines??'{}',true);$overrides=json_decode($opposite->field_overrides??'{}',true);
     $flat=app(PartySyncMaterializer::class)->flat($fields);foreach($flat as$field=>$value)if(array_key_exists($field,$baselines['target']??[])&&$baselines['target'][$field]!==$value)$overrides[$field]=true;
+    $agreedName = $baselines['source']['name'] ?? null;
+    if ($fields['active'] && $agreedName !== null && $agreedName === ($baselines['target']['name'] ?? null)
+        && $fields['name'] !== $agreedName) {
+     // Deliver this direction through the normal signed party worker. The owning row keeps its contact baselines.
+     $states = $db->table('integration_party_sync_states');
+     $intent = (clone $states)->where($identity)->lockForUpdate()->first();
+     $intentValues = ['source_revision'=>$hash, 'source_fields'=>json_encode($fields, JSON_THROW_ON_ERROR),
+         'status'=>'pending', 'attempts'=>0, 'next_attempt_at'=>null, 'last_error'=>null, 'updated_at'=>now()];
+     if (!$intent) {
+      $states->insertOrIgnore($identity + $intentValues + ['organization_id'=>$mapping->finance_organization_id,
+          'central_client_id'=>$mapping->central_client_id, 'central_organization_id'=>$mapping->central_organization_id,
+          'state_version'=>1, 'created_at'=>now()]);
+     } elseif ($intent->source_revision !== $hash || $intent->status === 'synced') {
+      (clone $states)->where('id',$intent->id)->update($intentValues + ['state_version'=>$intent->state_version+1]);
+     }
+    }
     $sourceColumn=$app==='finance'?'solabooks_record_id':'solastock_record_id';
     $archiveColumn=$app==='finance'?'solabooks_archived':'solastock_archived';
     $archiveChanged=$db->table('integration_master_data_mappings')->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where($sourceColumn,(string)$id)->where($archiveColumn,!$fields['active'])->count()===0;

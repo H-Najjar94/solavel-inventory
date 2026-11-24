@@ -10,7 +10,7 @@ final class FinanceMoneyPrecision
 {
     public static function supported(mixed $scale): bool
     {
-        return in_array($scale, [2, 3, '2', '3'], true);
+        return in_array($scale, [2, 3, 5, '2', '3', '5'], true);
     }
 
     public static function reversalContract(array $current, ?array $original, string $trustedVersion): array
