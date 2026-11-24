@@ -26,11 +26,18 @@ final class CatalogSourceSnapshot {
   usort($rows,fn($a,$b)=>(int)$a['id']<=>(int)$b['id']);$result=[];
   foreach($rows as$r)$result[]=['id'=>(int)$r['id'],'from_unit_id'=>(int)$r['from_unit_id'],'to_unit_id'=>(int)$r['to_unit_id'],'factor'=>(string)$r['factor'],'version'=>(int)($r['version']??1),'active'=>(bool)($r['is_active']??true)];return $result;
  }
- public function capture(string $type,int $id,int $org):?array {
+ public function capture(string $type,int $id,int $org,bool $includeDetails=false):?array {
   $row=DB::connection('tenant')->table(self::TABLES[$type]??throw new \InvalidArgumentException('Unsupported source'))->where('organization_id',$org)->where('id',$id)->first();if(!$row)return null;
   if($type==='item'&&empty($row->costing_method))$row->costing_method=DB::connection('tenant')->table('inventory_settings')->where('organization_id',$org)->value('default_costing_method')?:'average';
   $conversions=$type==='item'?DB::connection('tenant')->table('unit_conversions')->where('organization_id',$org)->where('item_id',$id)->orderBy('id')->get()->map(fn($r)=>(array)$r)->all():[];
-  return self::fields($type,(array)$row,$conversions);
+  $snapshot = self::fields($type,(array)$row,$conversions);
+  if ($includeDetails && $type === 'item') {
+   $snapshot['description'] = $row->description;
+   $snapshot['reorder_point'] = $row->reorder_point;
+   $snapshot['reorder_qty'] = $row->reorder_qty;
+   $snapshot['enable_reorder_alert'] = (bool)$row->enable_reorder_alert;
+  }
+  return $snapshot;
  }
  public static function encode(array $fields):string{return json_encode($fields,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);}
  public static function revision(array $fields):string{return hash('sha256',self::encode($fields));}
