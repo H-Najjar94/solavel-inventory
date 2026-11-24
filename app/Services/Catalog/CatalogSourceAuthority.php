@@ -25,7 +25,8 @@ final class CatalogSourceAuthority {
   $db=DB::connection('tenant');abort_unless($db->transactionLevel()===0,409,'catalog_authority_transaction_invalid');
   $row=$db->table(DurableCatalogSync::TABLE)->where('organization_id',$mapping->solastock_organization_id)->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('source_uuid',$data['source_uuid'])->where('entity_type',$data['entity_type'])->where('source_id',$data['source_id'])->first();
   abort_unless($row&&(int)$row->actor_id===(int)$actor->id&&(int)$row->state_version===(int)$data['state_version']&&hash_equals($row->source_revision,$data['source_revision']),409,'catalog_source_changed');
-  $snapshot=app(CatalogSourceSnapshot::class)->capture($data['entity_type'],(int)$data['source_id'],(int)$mapping->solastock_organization_id);
+  $recorded = json_decode($row->source_snapshot,true,512,JSON_THROW_ON_ERROR);
+  $snapshot=app(CatalogSourceSnapshot::class)->capture($data['entity_type'],(int)$data['source_id'],(int)$mapping->solastock_organization_id,array_key_exists('description',$recorded));
   abort_unless($snapshot&&hash_equals(CatalogSourceSnapshot::revision($snapshot),$row->source_revision),409,'catalog_source_changed');
   $dependencies=[];foreach(CatalogSourceSnapshot::dependencies($snapshot)as[$type,$id]){
    $dependency=$db->table(DurableCatalogSync::TABLE)->where('organization_id',$mapping->solastock_organization_id)->where('organization_mapping_uuid',$mapping->mapping_uuid)->where('entity_type',$type)->where('source_id',$id)->first();

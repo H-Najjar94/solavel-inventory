@@ -11,7 +11,7 @@ final class DurableCatalogSync {
  public function record(string $type,int $sourceId,int $org,?int $actor=null):void {
   if(!Schema::connection('tenant')->hasTable(self::TABLE)){Log::warning('catalog_sync_schema_pending',['organization_id'=>$org,'entity_type'=>$type,'source_id'=>$sourceId]);return;}
   $maps=IntegrationOrganizationMapping::query()->where('solastock_organization_id',$org)->where('tenant_database_identity',DB::connection('tenant')->getDatabaseName())->where('status','verified')->get();
-  if($maps->count()!==1)return;$map=$maps->first();$fields=app(CatalogSourceSnapshot::class)->capture($type,$sourceId,$org);if(!$fields)return;
+  if($maps->count()!==1)return;$map=$maps->first();$fields=app(CatalogSourceSnapshot::class)->capture($type,$sourceId,$org,true);if(!$fields)return;
   $actor=$actor?:((int)Auth::id()?:null);$hash=CatalogSourceSnapshot::revision($fields);$raw=CatalogSourceSnapshot::encode($fields);
   $key=$map->mapping_uuid.'|'.$type.'|'.$sourceId;if(isset($this->recording[$key]))return;$this->recording[$key]=true;
   try{DB::connection('tenant')->transaction(function()use($map,$fields,$type,$sourceId,$org,$actor,$hash,$raw){
