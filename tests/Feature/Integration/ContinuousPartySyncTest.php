@@ -33,6 +33,17 @@ final class ContinuousPartySyncTest extends TestCase {
   $db->table('suppliers')->where('id',901)->update(['name'=>'Later source']);$last=$this->ensure();
   $this->assertSame('Warehouse local override',Supplier::findOrFail($r['target_id'])->name);$this->assertTrue($last['field_overrides']['name']);
  }
+ public function test_customer_source_name_updates_on_the_same_verified_counterpart():void {
+  $customers=DB::connection('tenant')->table('customers');
+  $customers->insert(['id'=>902,'organization_id'=>14,'name'=>'Customer before edit','is_active'=>true]);
+  $sync=fn()=>app(ContinuousPartySync::class)->materialize($this->mapping,'finance','customer',902);
+  $initial=$sync();
+  $customers->where('id',902)->update(['name'=>'عميل تجريبي']);
+  $result=$sync();
+  $this->assertSame('synced',$result['status']);
+  $this->assertSame($initial['target_id'],$result['target_id']);
+  $this->assertSame('عميل تجريبي',DB::connection('tenant')->table('inventory_customers')->where('id',$result['target_id'])->value('name'));
+ }
  public function test_same_name_never_creates_an_implicit_identity():void {
   $this->source();Supplier::create(['code'=>'LOCAL','name'=>'New canonical supplier','is_active'=>true]);
   $r=$this->ensure();$this->assertSame('intervention',$r['status']);$this->assertSame('party_identity_review_required',$r['reason']);$this->assertSame(0,IntegrationMasterDataMapping::query()->count());
@@ -47,7 +58,15 @@ final class ContinuousPartySyncTest extends TestCase {
  }
  public function test_inactive_source_archives_existing_mapping_without_deleting_target():void {
   $this->source();$r=$this->ensure();DB::connection('tenant')->table('suppliers')->where('id',901)->update(['is_active'=>false]);
-  $this->assertSame('held',$this->ensure()['status']);$this->assertTrue(IntegrationMasterDataMapping::query()->sole()->solabooks_archived);$this->assertNotNull(Supplier::find($r['target_id']));
+  $blocked=$this->ensure();
+  $this->assertSame('intervention',$blocked['status']);
+  $this->assertSame('party_source_unavailable',$blocked['reason']);
+  $this->assertFalse($blocked['retryable']);
+  $this->assertTrue(IntegrationMasterDataMapping::query()->sole()->solabooks_archived);$this->assertNotNull(Supplier::find($r['target_id']));
+  DB::connection('tenant')->table('suppliers')->where('id',901)->update(['is_active'=>true]);
+  $recovered=$this->ensure();
+  $this->assertSame('synced',$recovered['status']);
+  $this->assertSame($r['target_id'],$recovered['target_id']);
  }
  public function test_reconcile_excludes_historical_unmapped_sources_but_includes_new_imports():void {
   $this->source(901,'Historical excluded','2020-01-01');$this->source(902,'Fresh imported');
