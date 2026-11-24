@@ -38,6 +38,34 @@ final class PartySyncMaterializer {
     return $this->finish($state,$this->result('intervention',$sourceId,null,null,'party_identity_review_required'));
    if($master && $state->source_app !== $sourceApp) {
     $db->table('integration_master_data_mappings')->where('id',$master->id)->update([$sourceApp==='finance'?'solabooks_archived':'solastock_archived'=>!$sourceFields['active'],'updated_at'=>now()]);
+    $baseline = json_decode($state->field_baselines ?? '{}', true);
+    $lastName = $baseline['source']['name'] ?? null;
+    if ($sourceFields['active'] && $lastName !== null && $lastName === ($baseline['target']['name'] ?? null)
+        && $sourceFields['name'] !== $lastName) {
+     $targetId = (int) $master->$targetColumn;
+     $targetApp = $state->source_app;
+     if ($targetId !== (int)$state->source_id || $targetId < 1) {
+      return $this->result('intervention',$sourceId,null,null,'party_identity_review_required');
+     }
+     $table = ($targetApp === 'stock' ? 'inventory_' : '').($type === 'supplier' ? 'suppliers' : 'customers');
+     $org = $targetApp === 'stock' ? $mapping->solastock_organization_id : $mapping->finance_organization_id;
+     $target = $db->table($table)->where('organization_id',$org)->where('id',$targetId)->lockForUpdate()->first();
+     $targetArchived = $targetApp === 'stock' ? $master->solastock_archived : $master->solabooks_archived;
+     if ($targetArchived || !$target || !$target->is_active || $target->deleted_at) {
+      return $this->result('intervention',$sourceId,$targetId,$master->mapping_uuid,'party_source_unavailable');
+     }
+     $current = $ledger->fields($mapping,$targetApp,$type,$targetId);
+     if ($current['name'] !== $sourceFields['name']) {
+      if ($current['name'] !== $lastName) return $this->result('intervention',$sourceId,$targetId,$master->mapping_uuid,'party_name_conflict');
+      if ($targetApp === 'finance' && $this->approvalEnabled($org,$type,'update')) return $this->result('held',$sourceId,$targetId,$master->mapping_uuid,'party_approval_required');
+      $update($targetId,['name'=>$sourceFields['name']]);
+     }
+     $baseline['source']['name'] = $baseline['target']['name'] = $sourceFields['name'];
+     $overrides = json_decode($state->field_overrides ?? '{}', true);
+     unset($overrides['name']);
+     $db->table('integration_party_sync_states')->where('id',$state->id)->update(['field_baselines'=>json_encode($baseline),
+         'field_overrides'=>json_encode($overrides), 'updated_at'=>now()]);
+    }
     return $this->result($sourceFields['active']?'synced':'intervention',$sourceId,(int)$master->$targetColumn,$master->mapping_uuid,$sourceFields['active']?null:'party_source_unavailable',json_decode($state->field_overrides??'{}',true));
    }
    if(!$sourceFields['active']){
@@ -71,6 +99,15 @@ final class PartySyncMaterializer {
    if($owner&&$owner->id<$state->id)return $this->finish($state,$this->result('synced',$sourceId,$targetId,$master->mapping_uuid,null),['source_fields'=>$sourceFields]);
    $current=$ledger->fields($mapping,$targetApp,$type,$targetId);$baseline=json_decode($state->field_baselines??'{}',true);$overrides=json_decode($state->field_overrides??'{}',true);
    $flat=$this->flat($sourceFields);$targetFlat=$this->flat($current);$desired=$targetFlat;
+   $lastName = $baseline['source']['name'] ?? null;
+   if (!$new && $lastName !== null && $lastName === ($baseline['target']['name'] ?? null)) {
+    if ($targetFlat['name'] !== $lastName && $targetFlat['name'] !== $flat['name']) {
+     if ($flat['name'] !== $lastName) return $this->finish($state,$this->result('intervention',$sourceId,$targetId,$master->mapping_uuid,'party_name_conflict'));
+     // The reverse delivery owns this rename. Keep its last agreed name until it commits.
+     return $this->result('held',$sourceId,$targetId,$master->mapping_uuid,'party_connection_pending');
+    }
+    unset($overrides['name']);
+   }
    foreach($flat as$key=>$value){
     if(!$new&&(!isset($baseline['target'])||array_key_exists($key,$baseline['target'])&&$baseline['target'][$key]!==$targetFlat[$key]))$overrides[$key]=$targetFlat[$key]!==($baseline['source'][$key]??$value);
     if(!($overrides[$key]??false))$desired[$key]=$value;

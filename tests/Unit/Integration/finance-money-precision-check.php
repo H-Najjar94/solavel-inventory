@@ -10,11 +10,16 @@ $check = function (bool $ok, string $label) use (&$checks): void {
     if (!$ok) throw new RuntimeException($label);
     $checks++;
 };
-foreach ([2, 3, '2', '3'] as $scale) $check(Precision::supported($scale), 'Qualified precision rejected');
+foreach ([2, 3, 5, '2', '3', '5'] as $scale) $check(Precision::supported($scale), 'Qualified precision rejected');
 foreach ([null, 0, 1, 4, 6, 2.5, true, '03', '3x'] as $scale) $check(!Precision::supported($scale), 'Unqualified precision accepted');
 // Independently chosen carrying value: debit inventory 10; credit accrual 10.
 // Extra Finance decimal changes representation only, not inventory carrying value.
 $lines = [['base_debit'=>'10.000','base_credit'=>'0.000'], ['base_debit'=>'0.000','base_credit'=>'10.000']];
+Precision::assertBalancedInventory([['base_debit'=>'10.12345','base_credit'=>'0'],['base_debit'=>'0','base_credit'=>'10.12345']],5);
+$rejected=false;
+try { Precision::assertBalancedInventory([['base_debit'=>'10.12345','base_credit'=>'10.12344']],5); }
+catch (RuntimeException $e) { $rejected=true; }
+$check($rejected,'Five-place imbalance accepted');
 $before = $lines;
 Precision::assertBalancedInventory($lines, 3);
 $check($lines === $before, 'Inventory values mutated');
