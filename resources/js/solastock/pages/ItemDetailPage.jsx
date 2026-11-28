@@ -429,6 +429,7 @@ export default function ItemDetailPage() {
                         <MetricCard label={isFifo ? t('itemDetail.fifoValue') : t('itemDetail.avgValue')} value={money(val?.fifo_value_total ?? val?.on_hand_value)} />
                     </div>
 
+                    <ItemPartsSections itemId={item.id} links={data?.item_parts} canManage={gate.allowed} />
                     <div className="overview-grid">
                         <div className="card"><div className="card-head"><h3>{t('itemDetail.stockByWarehouse')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>{t('itemDetail.viewValuation')}</button></div>
                             <div className="card-body">{valuation.isLoading ? <Skeleton rows={2} /> : <WarehouseCards cards={cards} />}</div></div>
@@ -497,7 +498,6 @@ export default function ItemDetailPage() {
             {activeTab === 'details' && (
                 <div className="item-details-columns">
                     <div className="item-details-column">
-                    <ItemPartsSections itemId={item.id} links={data?.item_parts} canManage={gate.allowed} />
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.specifications')}</h3></div><div className="card-body"><dl className="kv">
                         <dt>{t('itemDetail.tracking')}</dt><dd>{t(`tracking.${item.tracking_type}`, item.tracking_type)}</dd>
                         <dt>{t('itemDetail.description')}</dt><dd>{item.description || '—'}</dd>
