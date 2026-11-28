@@ -105,7 +105,11 @@ export default function ItemsPage() {
                                     : <span className="item-thumb item-thumb--ph">📦</span>}
                             </td>
                             <td><Link to={`/items/${it.id}`}><bdi>{visibleSku(it.sku) || t('items.noSkuYet')}</bdi></Link></td>
-                            <td>{it.name}</td>
+                            <td>{it.name}{(it.part_of?.length > 0 || it.parts_count > 0) && <span className="item-partof-secondary">
+                                {it.part_of?.length > 0
+                                    ? <>{t('itemParts.partOf')} <Link to={`/items/${it.part_of[0].id}`}><bdi>{it.part_of[0].name}</bdi></Link>{it.part_of_count > 1 && <bdi> +{it.part_of_count - 1}</bdi>}</>
+                                    : t(it.parts_count === 1 ? 'itemParts.countOne' : 'itemParts.countMany', undefined, { count: it.parts_count })}
+                            </span>}</td>
                             <td>{t(`items.type.${it.item_type}`, it.item_type)}</td>
                             <td>{it.category?.name ?? '—'}</td>
                             <td><bdi>{it.purchase_price ?? '—'}</bdi></td>

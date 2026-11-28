@@ -1,6 +1,6 @@
 import {feedback} from '../../shared/feedback/store';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
@@ -38,6 +38,10 @@ export default function ItemFormPage() {
     const { id } = useParams();
     const isEdit = !!id;
     const nav = useNavigate();
+    const [searchParams] = useSearchParams();
+    const partOfParam = !isEdit ? Number(searchParams.get('part_of')) || null : null;
+    // One creation token per form instance: a retry of the same save never duplicates the item.
+    const creationToken = useRef(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}-form`);
     const toast = useToast();
     const qc = useQueryClient();
     const meta = useMeta();
@@ -64,6 +68,15 @@ export default function ItemFormPage() {
     }
     // null = untouched (part_of_ids is not sent); array = the full desired list ([] removes all).
     const [partOf, setPartOf] = useState(null);
+    useEffect(() => {
+        if (!partOfParam) return undefined;
+        let live = true;
+        api.item(partOfParam).then((res) => {
+            const p = res?.data?.item ?? res?.item;
+            if (live && p) setPartOf((cur) => cur ?? [{ id: p.id, name: p.name, sku: p.sku, is_active: p.is_active !== false }]);
+        }).catch(() => {});
+        return () => { live = false; };
+    }, [partOfParam]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -141,6 +154,7 @@ export default function ItemFormPage() {
         try {
             const payload = { ...form };
             delete payload.part_of_ids;
+            if (!isEdit) payload.creation_token = creationToken.current;
             if (partOf !== null) payload.part_of_ids = partOf.map((p) => p.id);
             delete payload.track_inventory; // Type controls tracking; retain untouched legacy flags.
             // opening-stock fields are not item columns — strip before saving.
@@ -154,7 +168,12 @@ export default function ItemFormPage() {
             toast.push(t(isEdit ? 'items.updatedSuccess' : 'items.createdSuccess'), 'success');
             qc.invalidateQueries({ queryKey: ['items'] });
             qc.invalidateQueries({ queryKey: ['item', String(newId)] });
-            nav(`/items/${newId}`);
+            if (partOfParam) {
+                qc.invalidateQueries({ queryKey: ['item', String(partOfParam)] });
+                qc.invalidateQueries({ queryKey: ['item', partOfParam] });
+                qc.invalidateQueries({ queryKey: ['item-parts-lookup'] });
+                nav(`/items/${partOfParam}`);
+            } else nav(`/items/${newId}`);
         } catch (err) {
             setErrors(fieldErrors(err));
             toast.failure(err, err.message || t('items.saveFailed'));
@@ -193,7 +212,7 @@ export default function ItemFormPage() {
                     <Section title={t('items.basicInfo')} sub={t('items.basicInfoHint')}>
                         <div className="fg2">
                             <Field label={t('items.itemName')} required error={errors.name}>
-                                <input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder={t('items.itemNamePlaceholder')} />
+                                <input className="input" autoFocus={!!partOfParam} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder={t('items.itemNamePlaceholder')} />
                             </Field>
                             <Field label={t('sku')} error={errors.sku}>
                                 <input className="input" value={form.sku} onChange={(e) => set('sku', e.target.value)} placeholder={t('items.skuPlaceholder')} />
@@ -205,16 +224,16 @@ export default function ItemFormPage() {
                                 options={lookups.units} onCreate={(n) => quickCreate('unit', n)} error={errors.base_unit_id} />}
                             <QuickCreateSelect label={t('category')} value={form.category_id} onChange={(v) => set('category_id', v)} required
                                 options={lookups.categories} onCreate={(n) => quickCreate('category', n)} error={errors.category_id} />
+                            <div className="span2">
+                                <Field label={t('itemParts.partOf')} error={errors.part_of_ids}>
+                                    <ItemPartOfSelect value={partOf ?? existing.data?.item_parts?.parents ?? []} excludeId={isEdit ? Number(id) : null} disabled={!gate.allowed || saving} onChange={setPartOf} />
+                                </Field>
+                            </div>
                             <QuickCreateSelect label={t('brand', 'Brand')} value={form.brand_id} onChange={(v) => set('brand_id', v)}
                                 options={lookups.brands} onCreate={(n) => quickCreate('brand', n)} error={errors.brand_id} />
                             <div className="span2">
                                 <Field label={t('description')} error={errors.description}>
                                     <textarea className="input" rows="2" value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} placeholder={t('items.shortDescription')} />
-                                </Field>
-                            </div>
-                            <div className="span2">
-                                <Field label={t('itemParts.partOf')} error={errors.part_of_ids}>
-                                    <ItemPartOfSelect value={partOf ?? existing.data?.item_parts?.parents ?? []} excludeId={isEdit ? Number(id) : null} disabled={!gate.allowed || saving} onChange={setPartOf} />
                                 </Field>
                             </div>
                             <Field label={t('items.status')}>

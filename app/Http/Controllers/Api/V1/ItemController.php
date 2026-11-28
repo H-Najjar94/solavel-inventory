@@ -105,8 +105,15 @@ class ItemController extends ApiController
             $query->whereIn('id', $match);
         }
 
+        $page = $query->paginate($perPage)->withQueryString();
+        $partSummaries = $page->getCollection()->isEmpty() ? [] : app(\App\Services\Catalog\ItemParts\ItemPartService::class)->summaries($page->getCollection()->pluck('id')->all());
+
         return $this->paginated(
-            $query->paginate($perPage)->withQueryString()->through(function ($it) {
+            $page->through(function ($it) use ($partSummaries) {
+                $sum = $partSummaries[$it->id] ?? null;
+                $it->setAttribute('part_of', array_slice($sum['parents'] ?? [], 0, 3));
+                $it->setAttribute('part_of_count', count($sum['parents'] ?? []));
+                $it->setAttribute('parts_count', (int) ($sum['parts_count'] ?? 0));
                 $it->setAttribute('primary_image_url',
                     $it->primaryImage ? "/inventory/api/v1/item-images/{$it->primaryImage->id}" : null);
                 $it->unsetRelation('primaryImage');
@@ -635,6 +642,23 @@ class ItemController extends ApiController
         $this->enforceLimit('stock.max_items', Item::query()->count());
 
         $data = $request->validated();
+        // Retry safety without a schema change: one creation token per form instance; a repeat
+        // of the same token (same org + user) returns the item the first request created.
+        $token = (string) $request->input('creation_token', '');
+        $tokenKey = null;
+        if (preg_match('/^[A-Za-z0-9-]{16,64}$/', $token) === 1) {
+            $tokenKey = 'item-create:'.app(OrganizationContext::class)->id().':'.($request->user()?->id ?? 0).':'.$token;
+            $lock = \Illuminate\Support\Facades\Cache::lock($tokenKey.':lock', 30);
+            if (! $lock->get()) {
+                return $this->error('create_in_progress', __('inventory.item_parts.busy'), 409);
+            }
+            $prior = \Illuminate\Support\Facades\Cache::get($tokenKey);
+            if ($prior && ($existing = Item::query()->find((int) $prior))) {
+                $lock->release();
+
+                return $this->success($existing, 200);
+            }
+        }
         $path = null;
         try {
             $item = \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($request, $data, &$path) {
@@ -656,7 +680,12 @@ class ItemController extends ApiController
             });
         } catch (\Throwable $error) {
             if ($path !== null) \Illuminate\Support\Facades\Storage::disk('local')->delete($path);
+            if (isset($lock)) $lock->release();
             throw $error;
+        }
+        if ($tokenKey !== null) {
+            \Illuminate\Support\Facades\Cache::put($tokenKey, $item->id, now()->addHours(2));
+            $lock->release();
         }
         return $this->success($item->fresh(), 201);
     }

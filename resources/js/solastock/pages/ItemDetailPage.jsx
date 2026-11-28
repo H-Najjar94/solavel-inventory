@@ -13,7 +13,7 @@ import BaseUnitConversion from '../components/BaseUnitConversion.jsx';
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import ItemSuppliersPanel from '../components/ItemSuppliersPanel.jsx';
-import ItemPartsSections from '../components/ItemPartsSections.jsx';
+import ItemPartsSections, { ItemPartOfLinks, LinkExistingPart } from '../components/ItemPartsSections.jsx';
 import PurchaseHistoryPanel from '../components/PurchaseHistoryPanel.jsx';
 import { PreferredSupplierName, useSupplierTermsAccess } from '../components/SupplierTermsShared.jsx';
 import { t, getLocale } from '../i18n/index.js';
@@ -255,6 +255,7 @@ export default function ItemDetailPage() {
     };
     const [unitConversionOpen,setUnitConversionOpen]=useState(false);
     const [valuationOpen, setValuationOpen] = useState(false);
+    const [linkOpen, setLinkOpen] = useState(false);
     const [activeMovement, setActiveMovement] = useState(null);
     const [newBarcode, setNewBarcode] = useState({ barcode: '', type: 'internal' });
     const [scanCode, setScanCode] = useState('');
@@ -392,6 +393,7 @@ export default function ItemDetailPage() {
                         <StatusBadge active={item.is_active} />
                         {lowStock && <Badge tone="warn">{t('items.low')}</Badge>}
                     </div>
+                    <ItemPartOfLinks parents={data?.item_parts?.parents} />
                     <div className="item-hero-meta">
                         <span><b>{t('sku')}</b> <bdi>{item.sku}</bdi></span>
                         <span><b>{t('barcode')}</b> {data.primary_barcode ?? '—'}</span>
@@ -402,6 +404,10 @@ export default function ItemDetailPage() {
                     </div>
                     <div className="item-hero-actions">
                         <Link to={`/items/${item.id}/edit`} className={`btn btn--sm btn--primary ${gate.allowed ? '' : 'is-disabled'}`}>{t('items.edit')}</Link>
+                        {gate.allowed && <>
+                            <Link to={`/items/new?part_of=${item.id}`} className="btn btn--sm">{t('itemParts.create')}</Link>
+                            <button type="button" className="btn btn--sm" aria-expanded={linkOpen} onClick={() => setLinkOpen((v) => !v)}>{t('itemParts.linkExisting')}</button>
+                        </>}
                         <button className="btn btn--sm" onClick={() => setTab('media')}>{t('items.managePhotos')}</button>
                         {/* Only inventory items can hold stock. */}
                         {item.item_type === 'inventory' && <>
@@ -417,6 +423,8 @@ export default function ItemDetailPage() {
             {/* ── Overview ── */}
             {activeTab === 'overview' && (
                 <>
+                    {linkOpen && gate.allowed && <LinkExistingPart itemId={item.id} parts={data?.item_parts?.parts} onClose={() => setLinkOpen(false)} />}
+                    <ItemPartsSections itemId={item.id} links={data?.item_parts} canManage={gate.allowed} />
                     {lowStock && <div className="banner banner--warn">{t('itemDetail.lowStockMessage', undefined, { available: qty(totals.available), reorder: qty(reorder) })}</div>}
                     <div className="metric-cards">
                         <MetricCard label={t('itemDetail.onHand')} value={qty(totals.onHand)} />
@@ -429,7 +437,6 @@ export default function ItemDetailPage() {
                         <MetricCard label={isFifo ? t('itemDetail.fifoValue') : t('itemDetail.avgValue')} value={money(val?.fifo_value_total ?? val?.on_hand_value)} />
                     </div>
 
-                    <ItemPartsSections itemId={item.id} links={data?.item_parts} canManage={gate.allowed} />
                     <div className="overview-grid">
                         <div className="card"><div className="card-head"><h3>{t('itemDetail.stockByWarehouse')}</h3><span className="spacer" /><button className="btn btn--sm" onClick={() => setValuationOpen(true)}>{t('itemDetail.viewValuation')}</button></div>
                             <div className="card-body">{valuation.isLoading ? <Skeleton rows={2} /> : <WarehouseCards cards={cards} />}</div></div>

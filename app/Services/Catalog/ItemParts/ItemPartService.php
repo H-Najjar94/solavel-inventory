@@ -159,13 +159,13 @@ class ItemPartService
         $parents = array_values(array_filter($edges, fn ($e) => $e['part'] === $itemId));
         $parts = array_values(array_filter($edges, fn ($e) => $e['parent'] === $itemId));
         $ids = array_unique(array_merge(array_column($parents, 'parent'), array_column($parts, 'part')));
-        $items = $ids === [] ? collect() : Item::query()->whereIn('id', $ids)->get(['id', 'name', 'sku', 'is_active'])->keyBy('id');
+        $items = $ids === [] ? collect() : Item::query()->with('category:id,name')->whereIn('id', $ids)->get(['id', 'name', 'sku', 'is_active', 'category_id'])->keyBy('id');
         $present = function (array $edges, string $key) use ($items) {
             $rows = [];
             foreach ($edges as $e) {
                 $i = $items->get($e[$key]);
                 if ($i) {
-                    $rows[] = ['id' => (int) $i->id, 'name' => $i->name, 'sku' => $i->sku, 'is_active' => (bool) $i->is_active, 'owner' => $e['owner']];
+                    $rows[] = ['id' => (int) $i->id, 'name' => $i->name, 'sku' => $i->sku, 'is_active' => (bool) $i->is_active, 'category' => $i->category?->name, 'owner' => $e['owner']];
                 }
             }
             usort($rows, fn ($a, $b) => strcasecmp((string) $a['name'], (string) $b['name']));
@@ -174,6 +174,48 @@ class ItemPartService
         };
 
         return ['parents' => $present($parents, 'parent'), 'parts' => $present($parts, 'part')];
+    }
+
+    /**
+     * Batched list summaries for a page of item ids (one query per store + one name lookup).
+     *
+     * @param  int[]  $itemIds
+     * @return array<int, array{parents: list<array{id:int,name:string,sku:?string}>, parts_count: int}> only items with links
+     */
+    public function summaries(array $itemIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $itemIds))));
+        if ($ids === []) {
+            return [];
+        }
+        $edges = $this->edges($ids);
+        $want = array_flip($ids);
+        $parentIds = [];
+        foreach ($edges as $e) {
+            if (isset($want[$e['part']])) {
+                $parentIds[$e['parent']] = true;
+            }
+        }
+        $names = $parentIds === [] ? collect() : Item::query()->whereIn('id', array_keys($parentIds))->get(['id', 'name', 'sku'])->keyBy('id');
+        $out = [];
+        $seenParts = [];
+        foreach ($edges as $e) {
+            if (isset($want[$e['part']]) && ($p = $names->get($e['parent']))) {
+                $out[$e['part']]['parents'][] = ['id' => (int) $p->id, 'name' => (string) $p->name, 'sku' => $p->sku];
+            }
+            if (isset($want[$e['parent']]) && ! isset($seenParts[$e['parent'].':'.$e['part']])) {
+                $seenParts[$e['parent'].':'.$e['part']] = true;
+                $out[$e['parent']]['parts_count'] = ($out[$e['parent']]['parts_count'] ?? 0) + 1;
+            }
+        }
+        foreach ($out as $id => &$row) {
+            $row['parents'] ??= [];
+            $row['parts_count'] ??= 0;
+            usort($row['parents'], fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+        }
+        unset($row);
+
+        return $out;
     }
 
     /** Link is added (or already present). Returns true when a row was created. */
