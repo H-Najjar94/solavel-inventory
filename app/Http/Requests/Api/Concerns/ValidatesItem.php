@@ -192,6 +192,8 @@ trait ValidatesItem
             'notes' => ['nullable', 'string'],
             'available_for_sale'=>['sometimes','nullable','boolean'],'available_for_purchase'=>['sometimes','nullable','boolean'],'track_inventory'=>['sometimes','nullable','boolean'],
             'internal_consumption_account_id'=>['nullable','integer','min:1'],
+            'part_of_ids' => ['sometimes', 'array', 'max:100'],
+            'part_of_ids.*' => ['integer', 'min:1'],
             'item_type' => [$partial ? 'sometimes' : 'required', \Illuminate\Validation\Rule::in(['inventory', 'non_inventory', 'service'])],
             'tracking_type' => ['nullable', \Illuminate\Validation\Rule::in(['none', 'lot', 'serial', 'lot_serial'])],
             'track_lot' => ['boolean'],

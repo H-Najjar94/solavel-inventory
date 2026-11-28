@@ -648,4 +648,12 @@ return array (
     'cannot_reserve' => 'Cannot reserve :requested of item :sku in warehouse ":warehouse": only :available is available. Reduce the quantity or wait for stock to arrive.',
     'invalid_status' => 'Invalid status ":status". Choose a status from the list.',
   ),
+  'item_parts' => 
+  array (
+    'self' => 'An item cannot be a part of itself.',
+    'not_found' => 'Select an item from this organization.',
+    'inactive' => 'Only active items can be linked as parts.',
+    'cycle' => 'This link would make an item a part of its own parts. Choose a different item.',
+    'busy' => 'Another change to item parts is in progress. Try again in a moment.',
+  ),
 );

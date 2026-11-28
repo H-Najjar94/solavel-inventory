@@ -35,7 +35,7 @@ class ItemController extends ApiController
     {
         if (array_key_exists('internal_consumption_account_id',$data)) app(\App\Services\Consumption\ConsumptionAccounts::class)->validateDefault(app(\App\Tenancy\OrganizationContext::class)->idOrFail(),isset($data['internal_consumption_account_id'])?(int)$data['internal_consumption_account_id']:null);
 
-        unset($data['track_lot'], $data['track_serial'], $data['track_expiry'], $data['barcode'], $data['image']);
+        unset($data['track_lot'], $data['track_serial'], $data['track_expiry'], $data['barcode'], $data['image'], $data['part_of_ids']);
 
         return $data;
     }
@@ -84,6 +84,8 @@ class ItemController extends ApiController
                 $q->where(fn ($w) => $w->where('name', 'like', "%{$s}%")
                     ->orWhere('sku', 'like', "%{$s}%"));
             })
+            ->when($request->filled('exclude'), fn ($q) => $q->whereNotIn('id', array_filter(array_map('intval', is_array($request->query('exclude')) ? $request->query('exclude') : explode(',', (string) $request->query('exclude'))))))
+            ->when($request->filled('part_of'), fn ($q) => $q->whereIn('id', app(\App\Services\Catalog\ItemParts\ItemPartService::class)->partIds((int) $request->query('part_of')) ?: [0]))
             ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', (int) $request->query('category_id')))
             ->when($request->filled('brand_id'), fn ($q) => $q->where('brand_id', (int) $request->query('brand_id')))
             ->when($request->filled('item_type'), fn ($q) => $q->where('item_type', $request->query('item_type')))
@@ -166,6 +168,7 @@ class ItemController extends ApiController
 
         return $this->success([
             'item' => $item,
+            'item_parts' => app(\App\Services\Catalog\ItemParts\ItemPartService::class)->links($item->id),
             'primary_barcode' => $primaryBarcode,
             'barcodes' => $barcodes->map(fn (ItemBarcode $b) => $this->barcodeRow($b))->values(),
             'stock_by_warehouse' => $pending?null:$balances,
@@ -645,6 +648,9 @@ class ItemController extends ApiController
                     if ($stored === false) throw new \RuntimeException('Unable to store item image.');
                     \App\Models\Tenant\ItemImage::create(['organization_id' => $item->organization_id, 'item_id' => $item->id, 'path' => $path, 'is_primary' => true, 'sort' => 1]);
                 }
+                if (array_key_exists('part_of_ids', $data)) {
+                    app(\App\Services\Catalog\ItemParts\ItemPartService::class)->syncParents($item->id, (array) $data['part_of_ids'], $request->user()?->id);
+                }
                 $this->audit('item.created', $item);
                 return $item;
             });
@@ -659,7 +665,7 @@ class ItemController extends ApiController
     {
         $before = $item->only(['sku', 'name', 'item_type', 'tracking_type', 'costing_method', 'is_active', 'base_unit_id']);
         $data = $request->validated();
-        \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($item, $data) {
+        \Illuminate\Support\Facades\DB::connection('tenant')->transaction(function () use ($item, $data, $request) {
             $locked = Item::query()->lockForUpdate()->findOrFail($item->id);
             $attributes = $this->itemAttributes($data);
             // Q12.3 / NF-1194-02: deactivation is refused under the item row lock while any balance (positive or negative), reservation or open document remains.
@@ -670,6 +676,9 @@ class ItemController extends ApiController
                 throw \Illuminate\Validation\ValidationException::withMessages(['track_inventory'=>__('inventory.consumption.tracking_history')]);
             }
             $locked->update($attributes);
+            if (array_key_exists('part_of_ids', $data)) {
+                app(\App\Services\Catalog\ItemParts\ItemPartService::class)->syncParents($locked->id, (array) $data['part_of_ids'], $request->user()?->id);
+            }
         });
         if (array_key_exists('barcode', $data)) {
             $this->syncPrimaryBarcode($item, $data['barcode']);

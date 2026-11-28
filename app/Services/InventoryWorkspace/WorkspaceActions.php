@@ -49,6 +49,8 @@ final class WorkspaceActions
         // permission- and plan-gated routes; writes carry idempotency + revision.
         'item-suppliers.index', 'item-suppliers.show', 'item-suppliers.store',
         'item-suppliers.update', 'item-suppliers.destroy',
+        // Item Parts links ride the item permissions (core).
+        'item-parts.index', 'item-parts.store', 'item-parts.destroy',
         'items.movements',
         'items.movements.export',
         'items.valuation',

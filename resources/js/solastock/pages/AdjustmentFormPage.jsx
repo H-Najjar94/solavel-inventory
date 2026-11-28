@@ -13,6 +13,7 @@ import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, BinPicker, QuantityInput, MoneyInput, WarehousePicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, LotSelector, SerialSelector, TraceabilityRequiredBadge, FefoHint } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
+import { ItemPartsPicker } from '../components/ItemPartsPicker.jsx';
 import { t } from '../i18n/index.js';
 
 const emptyLine = () => ({ direction: 'increase', item_id: null, bin_id: null, quantity: '', unit_cost: '', lot_id: null, lot_code: '', expiry_date: '', serials: [], serial_ids: [] });
@@ -49,6 +50,7 @@ export default function AdjustmentFormPage() {
     }, [isEdit, existing.data]);
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
+    const insertParts = (i, parts) => setLines((ls) => [...ls.slice(0, i + 1), ...parts.map((p) => ({ ...emptyLine(), item_id: p.id })), ...ls.slice(i + 1)]);
     const tracking = useItemTracking();
     const reasonCodes = (meta.data?.settings?.adjustment_reason_codes ?? []).filter((code) => code.active !== false);
 
@@ -169,7 +171,7 @@ export default function AdjustmentFormPage() {
 
             <div className="panel">
                 <h2>{t('adjustment.lines')}</h2>
-                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} rowExtra={(l, i, span) => <ItemPartsPicker itemId={l.item_id} colSpan={span} filters={{ item_type: 'inventory' }} disabled={saving} onAdd={(parts) => insertParts(i, parts)} onReplace={(p) => setLine(i, { item_id: p.id, kept: null })} />} onAdd={() => setLines([...lines, emptyLine()])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[
                     { label: t('adjustment.increaseValue'), value: lines.filter((l) => l.direction === 'increase').reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_cost || 0), 0).toFixed(2) },
                 ]} />

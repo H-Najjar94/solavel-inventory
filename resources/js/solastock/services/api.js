@@ -175,6 +175,9 @@ export const api = {
     itemLabelSheet: (itemId) => request(`/items/${itemId}/labels`),
 
     // Supplier-item terms (one relationship per item + supplier, with price tiers).
+    itemParts: (itemId) => request('/item-parts', { params: { item_id: itemId } }),
+    createItemPart: (parentId, partId) => request('/item-parts', { method: 'POST', body: { parent_item_id: parentId, part_item_id: partId } }),
+    deleteItemPart: (parentId, partId) => request('/item-parts', { method: 'DELETE', body: { parent_item_id: parentId, part_item_id: partId } }),
     itemSuppliers: (itemId) => request(`/items/${itemId}/suppliers`),
     itemSupplier: (itemId, relationshipId) => request(`/items/${itemId}/suppliers/${relationshipId}`),
     createItemSupplier: (itemId, body) => request(`/items/${itemId}/suppliers`, { method: 'POST', body }),

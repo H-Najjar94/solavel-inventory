@@ -10,6 +10,7 @@ import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, EmptyState, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLineErrors } from '../components/document.jsx';
+import { ItemPartsPicker } from '../components/ItemPartsPicker.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput } from '../components/pickers.jsx';
 import { LotSelector, SerialSelector, TraceabilityRequiredBadge, FefoHint } from '../components/traceability.jsx';
 import { useItemTracking } from '../hooks/useItemTracking.js';
@@ -55,6 +56,7 @@ export default function TransferFormPage() {
     }, [isEdit, existing.data, id, nav, t, toast]);
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
+    const insertParts = (i, parts) => setLines((ls) => [...ls.slice(0, i + 1), ...parts.map((p) => ({ ...emptyLine(), item_id: p.id })), ...ls.slice(i + 1)]);
     const tracking = useItemTracking();
     const sameWh = header.from_warehouse_id && header.from_warehouse_id === header.to_warehouse_id;
 
@@ -162,6 +164,7 @@ export default function TransferFormPage() {
                     <div className="transfer-lines-list">{lines.map((line,i) => <article className="transfer-line" key={i}>
                         <div className="transfer-line-heading"><span className="transfer-line-number">{i+1}</span><strong>{t('transfers.form.item')}</strong><button type="button" className="btn transfer-remove" disabled={saving} aria-label={`${t('transfers.form.designRemove')} ${i+1}`} onClick={() => setLines(lines.filter((_,idx)=>idx!==i))}>{t('transfers.form.designRemove')}</button></div>
                         <div className="transfer-line-fields">{columns.map(column => <div key={column.key} className={`transfer-line-field transfer-line-field--${column.key}`}><Field label={column.label} error={errors[`lines.${i}.${({item:'item_id',qty:'quantity',fbin:'from_bin_id',tbin:'to_bin_id',trace:'lot_id'})[column.key]}`] || (column.key==='trace'?errors[`lines.${i}.serial_id`]:undefined)}>{column.render(line,i)}</Field></div>)}</div>
+                        <ItemPartsPicker itemId={line.item_id} filters={{ item_type: 'inventory' }} disabled={saving} onAdd={(parts) => insertParts(i, parts)} onReplace={(p) => setLine(i, { item_id: p.id })} />
                     </article>)}</div>
                     <button type="button" className="btn transfer-add" disabled={saving} onClick={() => setLines([...lines,emptyLine()])}>+ {t('transfers.form.addLine')}</button>
                 </div>

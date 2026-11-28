@@ -10,6 +10,7 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, QuickCreateSelect, Skeleton, StatusBadge, fieldErrors } from '../components/ui.jsx';
 import { t } from '../i18n/index.js';
 import { ConsumptionAccountPicker } from '../components/pickers.jsx';
+import { ItemPartOfSelect } from '../components/ItemPartOfSelect.jsx';
 
 const EMPTY = {
     available_for_sale:true, available_for_purchase:true,
@@ -61,6 +62,8 @@ export default function ItemFormPage() {
         }
         setImage(file); setImageError('');
     }
+    // null = untouched (part_of_ids is not sent); array = the full desired list ([] removes all).
+    const [partOf, setPartOf] = useState(null);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -137,6 +140,8 @@ export default function ItemFormPage() {
         setSaving(true); setErrors({});
         try {
             const payload = { ...form };
+            delete payload.part_of_ids;
+            if (partOf !== null) payload.part_of_ids = partOf.map((p) => p.id);
             delete payload.track_inventory; // Type controls tracking; retain untouched legacy flags.
             // opening-stock fields are not item columns — strip before saving.
             delete payload.opening_warehouse_id; delete payload.opening_qty; delete payload.opening_cost;
@@ -205,6 +210,11 @@ export default function ItemFormPage() {
                             <div className="span2">
                                 <Field label={t('description')} error={errors.description}>
                                     <textarea className="input" rows="2" value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} placeholder={t('items.shortDescription')} />
+                                </Field>
+                            </div>
+                            <div className="span2">
+                                <Field label={t('itemParts.partOf')} error={errors.part_of_ids}>
+                                    <ItemPartOfSelect value={partOf ?? existing.data?.item_parts?.parents ?? []} excludeId={isEdit ? Number(id) : null} disabled={!gate.allowed || saving} onChange={setPartOf} />
                                 </Field>
                             </div>
                             <Field label={t('items.status')}>

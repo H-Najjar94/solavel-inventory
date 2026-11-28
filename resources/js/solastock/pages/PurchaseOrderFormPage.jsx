@@ -9,6 +9,7 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable, DocumentTotals } from '../components/document.jsx';
 import { ItemPicker, SupplierPicker, WarehousePicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
+import { ItemPartsPicker } from '../components/ItemPartsPicker.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { DocumentCurrencyPicker } from '../components/DocumentCurrencyPicker.jsx';
 import { PurchaseLineSuggestion, SupplierSkuLookup } from '../components/PurchaseLineSuggestion.jsx';
@@ -82,6 +83,12 @@ export default function PurchaseOrderFormPage() {
         if (empty >= 0) return ls.map((l, idx) => idx === empty ? { ...l, ...patch } : l);
         return [...ls, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '', ...patch }];
     });
+    // Parts offered beneath a row become ordinary independent lines; zero-stock parts are allowed on purchases.
+    const insertParts = (i, parts) => setLines((ls) => {
+        const code = settings.data?.settings?.default_purchase_tax_code ?? '';
+        const added = parts.map((p) => ({ ...emptyLine(), item_id: p.id, tax_code: code }));
+        return [...ls.slice(0, i + 1), ...added, ...ls.slice(i + 1)];
+    });
     const showVendorTerms = termsAccess.purchasing && gate.allowed;
     const totals = lines.reduce((sum, line) => {
         const net = Number(line.ordered_qty || 0) * Number(line.unit_price || 0);
@@ -147,7 +154,7 @@ export default function PurchaseOrderFormPage() {
             <div className="panel">
                 <h2>{t('receiving.common.lines', 'Lines')}</h2>
                 {showVendorTerms && <SupplierSkuLookup supplierId={header.supplier_id} onPick={addLookedUpItem} />}
-                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
+                <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines} rowExtra={(l, i, span) => <ItemPartsPicker itemId={l.item_id} colSpan={span} filters={{ purpose: 'purchase', item_type: 'inventory' }} disabled={saving} onAdd={(parts) => insertParts(i, parts)} onReplace={(p) => setLine(i, { item_id: p.id })} />} onAdd={() => setLines([...lines, { ...emptyLine(), tax_code: settings.data?.settings?.default_purchase_tax_code ?? '' }])} onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} />
                 <DocumentTotals rows={[{ label: t('receiving.common.net', 'Net'), value: totals.net.toFixed(2) }, { label: t('receiving.common.tax', 'Tax'), value: totals.tax.toFixed(2) }, { label: t('receiving.common.total', 'Total'), value: (totals.net + totals.tax).toFixed(2) }]} />
             </div>
 

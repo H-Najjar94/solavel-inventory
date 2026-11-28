@@ -111,7 +111,7 @@ export function DocumentLineErrors({errors={}}) {
     return message?<p ref={ref} tabIndex={-1} className="field-error" role="alert" data-feedback-validation>{message}</p>:null;
 }
 
-export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel, errors = {}, validationErrors = {} }) {
+export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, addLabel, errors = {}, validationErrors = {}, rowExtra }) {
     const canRemove = !readOnly && typeof onRemove === 'function';
     const canAdd = !readOnly && typeof onAdd === 'function';
     return (
@@ -129,10 +129,13 @@ export function DocumentLinesTable({ columns, lines, onAdd, onRemove, readOnly, 
                         <tr><td colSpan={columns.length + (canRemove ? 1 : 0)} className="muted table-empty">{t('document.noLines')}</td></tr>
                     )}
                     {lines.map((line, i) => (
-                        <tr key={i} className={errors[i] ? 'row--error' : ''}>
+                        <React.Fragment key={i}>
+                        <tr className={errors[i] ? 'row--error' : ''}>
                             {columns.map((c) => <td key={c.key} className={c.numeric ? 'num' : undefined}>{c.render(line, i)}</td>)}
                             {canRemove && <td className="col-action"><button type="button" className="btn btn--sm btn--icon btn--danger-ghost" aria-label={t('document.removeLine', 'Remove line')} onClick={() => onRemove(i)}>×</button></td>}
                         </tr>
+                        {rowExtra && !readOnly ? rowExtra(line, i, columns.length + (canRemove ? 1 : 0)) : null}
+                        </React.Fragment>
                     ))}
                 </tbody>
             </table></div>
