@@ -1,6 +1,7 @@
 // Item Parts: "Part of" selector, Parts / Part of sections and the document-line parts picker.
 // Other locales fall back to English through t().
 export const en = {
+    'itemParts.choosePart': 'Choose part',
     'itemParts.create': 'Create part',
     'itemParts.linkExisting': 'Link existing part',
     'itemParts.partsN': 'Parts (:count)',
@@ -36,6 +37,7 @@ export const en = {
     'itemParts.removed': 'Link removed.',
 };
 export const ar = {
+    'itemParts.choosePart': 'اختر القطعة',
     'itemParts.create': 'إنشاء قطعة',
     'itemParts.linkExisting': 'ربط قطعة موجودة',
     'itemParts.partsN': 'القطع (:count)',
