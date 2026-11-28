@@ -9,6 +9,7 @@ import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, CustomerPicker, QuantityInput, MoneyInput, UnitPicker } from '../components/pickers.jsx';
+import { ItemPartsPicker } from '../components/ItemPartsPicker.jsx';
 import { useI18n } from '../i18n/context.jsx';
 import { DocumentCurrencyPicker } from '../components/DocumentCurrencyPicker.jsx';
 
@@ -44,6 +45,13 @@ export default function SalesOrderFormPage() {
     }, [isEdit, existing.data]);
 
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
+    // Parts offered beneath a row become ordinary independent lines (qty left to the user, tax default as for any new line).
+    const insertParts = (i, parts) => setLines((ls) => {
+        const code = settings.data?.settings?.default_sales_tax_code ?? '';
+        const tax = taxOptions.find((row) => row.code === code);
+        const added = parts.map((p) => ({ ...emptyLine(), item_id: p.id, tax_code: code, tax_rate: tax?.treatment === 'standard' ? tax.rate : 0 }));
+        return [...ls.slice(0, i + 1), ...added, ...ls.slice(i + 1)];
+    });
     const money = (v) => Number(v || 0).toFixed(2);
 
     async function save() {
@@ -102,6 +110,7 @@ export default function SalesOrderFormPage() {
             <div className="panel">
                 <h2>{t('salesOrders.common.lines', 'Lines')}</h2>
                 <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
+                    rowExtra={(l, i, span) => <ItemPartsPicker itemId={l.item_id} colSpan={span} filters={{ purpose: 'sale', item_type: 'inventory' }} disabled={saving} onAdd={(parts) => insertParts(i, parts)} onReplace={(p) => setLine(i, { item_id: p.id })} />}
                     onAdd={() => { const code = settings.data?.settings?.default_sales_tax_code ?? ''; const tax = taxOptions.find((row) => row.code === code); setLines([...lines, { ...emptyLine(), tax_code: code, tax_rate: tax?.treatment === 'standard' ? tax.rate : 0 }]); }}
                     onRemove={(i) => setLines(lines.filter((_, idx) => idx !== i))} readOnly={false} />
             </div>

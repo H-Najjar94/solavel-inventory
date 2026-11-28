@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\InventoryAuditController;
 use App\Http\Controllers\Api\V1\ItemAttachmentController;
 use App\Http\Controllers\Api\V1\ItemController;
 use App\Http\Controllers\Api\V1\GeoSearchController;
+use App\Http\Controllers\Api\V1\ItemPartController;
 use App\Http\Controllers\Api\V1\ItemSupplierController;
 use App\Http\Controllers\Api\V1\ItemImageController;
 use App\Http\Controllers\Api\V1\MetaController;
@@ -178,6 +179,14 @@ Route::prefix('v1')->middleware(['inv.access', 'inv.tenant', 'feature', \App\Htt
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.update');
     Route::delete('/items/{item}/supplier-prices/{price}', [ItemController::class, 'destroySupplierPrice'])
         ->middleware('perm:inventory.manage_items')->name('api.v1.items.supplier-prices.destroy');
+
+    // Item Parts: catalog links (parent -> part); metadata only.
+    Route::get('/item-parts', [ItemPartController::class, 'index'])
+        ->middleware('perm:inventory.view_items')->name('api.v1.item-parts.index');
+    Route::post('/item-parts', [ItemPartController::class, 'store'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-parts.store');
+    Route::delete('/item-parts', [ItemPartController::class, 'destroy'])
+        ->middleware('perm:inventory.manage_items')->name('api.v1.item-parts.destroy');
 
     // Supplier-item terms (relationship + price tiers), history, suggestions.
     Route::get('/items/{item}/suppliers', [ItemSupplierController::class, 'index'])

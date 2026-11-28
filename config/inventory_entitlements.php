@@ -187,6 +187,8 @@ return [
         'api.v1.supplier-terms.lookup' => 'stock.purchase_orders',
         'api.v1.supplier-terms.reorder' => 'stock.purchase_orders',
 
+        // Item Parts (api.v1.item-parts.*) ride the item perms = core; deliberately not plan-gated.
+
         // Locations & bins (ride manage_warehouses = core).
         'api.v1.zones.store' => 'stock.locations_bins',
         'api.v1.zones.update' => 'stock.locations_bins',

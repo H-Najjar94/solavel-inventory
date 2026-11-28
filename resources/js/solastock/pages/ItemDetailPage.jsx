@@ -13,6 +13,7 @@ import BaseUnitConversion from '../components/BaseUnitConversion.jsx';
 import ItemImages from '../components/ItemImages.jsx';
 import ItemAttachments from '../components/ItemAttachments.jsx';
 import ItemSuppliersPanel from '../components/ItemSuppliersPanel.jsx';
+import ItemPartsSections from '../components/ItemPartsSections.jsx';
 import PurchaseHistoryPanel from '../components/PurchaseHistoryPanel.jsx';
 import { PreferredSupplierName, useSupplierTermsAccess } from '../components/SupplierTermsShared.jsx';
 import { t, getLocale } from '../i18n/index.js';
@@ -496,6 +497,7 @@ export default function ItemDetailPage() {
             {activeTab === 'details' && (
                 <div className="item-details-columns">
                     <div className="item-details-column">
+                    <ItemPartsSections itemId={item.id} links={data?.item_parts} canManage={gate.allowed} />
                     <div className="card"><div className="card-head"><h3>{t('itemDetail.specifications')}</h3></div><div className="card-body"><dl className="kv">
                         <dt>{t('itemDetail.tracking')}</dt><dd>{t(`tracking.${item.tracking_type}`, item.tracking_type)}</dd>
                         <dt>{t('itemDetail.description')}</dt><dd>{item.description || '—'}</dd>

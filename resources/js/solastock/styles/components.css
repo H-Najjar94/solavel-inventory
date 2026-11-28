@@ -781,3 +781,18 @@ html[dir="rtl"] .drawer { animation-name: c-drawer-rtl; }
 :where(.content) :is(a, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: none; box-shadow: var(--c-focus); border-radius: 6px;
 }
+
+/* Item Parts: document-line picker, "Part of" selector, detail sections (RTL-safe, logical properties). */
+:where(.content) .item-parts-row > td { padding-block: 2px 8px; background: var(--layer-2); }
+:where(.content) .item-parts-box { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+:where(.content) .item-parts-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+:where(.content) .item-parts-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+:where(.content) .item-parts-list li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+:where(.content) .item-parts-list label { display: inline-flex; gap: 6px; align-items: center; flex: 1 1 auto; min-width: 0; }
+:where(.content) .item-parts-sku { color: var(--text-2); }
+:where(.content) .item-parts-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+:where(.content) .item-parts-chip { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--c-line); background: var(--layer-2); }
+:where(.content) .item-parts-chip button { border: 0; background: none; cursor: pointer; padding: 0 2px; color: var(--text-2); }
+:where(.content) .item-parts-results { max-height: 180px; overflow: auto; border: 1px solid var(--c-line); border-radius: var(--c-radius); }
+:where(.content) .item-parts-results button { display: block; width: 100%; text-align: start; padding: 6px 10px; border: 0; background: none; cursor: pointer; }
+:where(.content) .item-parts-results button:hover { background: var(--surface-hover); }

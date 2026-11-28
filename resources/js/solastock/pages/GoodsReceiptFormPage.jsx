@@ -11,6 +11,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useCanCreate } from '../hooks/useCanCreate.js';
 import { useToast } from '../stores/toast.jsx';
 import { Breadcrumbs, Field, Skeleton, fieldErrors } from '../components/ui.jsx';
+import { ItemPartsPicker } from '../components/ItemPartsPicker.jsx';
 import { DocumentLinesTable } from '../components/document.jsx';
 import { ItemPicker, WarehousePicker, BinPicker, QuantityInput, MoneyInput, UnitPicker, SupplierPicker } from '../components/pickers.jsx';
 import { LotCapture, SerialNumberListInput, TraceabilityRequiredBadge } from '../components/traceability.jsx';
@@ -79,6 +80,7 @@ export default function GoodsReceiptFormPage() {
         }
     }, [isEdit, existing.data]);
 
+    const insertParts = (i, parts) => setLines((ls) => [...ls.slice(0, i + 1), ...parts.map((p) => ({ ...emptyLine(), item_id: p.id })), ...ls.slice(i + 1)]);
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
 
     // Item tracking lookup so capture columns appear only for tracked items.
@@ -213,6 +215,7 @@ export default function GoodsReceiptFormPage() {
             <div className="panel">
                 <h2>{t('receiving.common.lines', 'Lines')}</h2>
                 <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
+                    rowExtra={fromPo || fromRequest || isEdit || header.purchase_order_id || header.receiving_request_id ? undefined : (l, i, span) => <ItemPartsPicker itemId={l.item_id} colSpan={span} filters={{ purpose: 'purchase', item_type: 'inventory' }} disabled={saving} onAdd={(parts) => insertParts(i, parts)} onReplace={(p) => setLine(i, { item_id: p.id })} />}
                     onAdd={fromPo ? undefined : () => setLines([...lines, emptyLine()])}
                     onRemove={fromPo ? () => {} : (i) => setLines(lines.filter((_, idx) => idx !== i))}
                     readOnly={false} />
