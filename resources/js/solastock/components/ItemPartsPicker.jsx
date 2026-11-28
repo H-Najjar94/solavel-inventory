@@ -48,7 +48,7 @@ function PartsForItem({ itemId, filters, colSpan, onAdd, onReplace, disabled }) 
         setPicked([]); setOpen(false);
     };
 
-    return wrap(<div className="item-parts-box">
+    return wrap(<div className="item-parts-box item-parts-popover" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}>
         <div className="item-parts-bar">
             <button type="button" className="btn btn--sm" aria-expanded={open} disabled={disabled} onClick={() => setOpen((v) => !v)}>
                 {t('itemParts.addParts', undefined, { count: parts.length })}
@@ -59,11 +59,11 @@ function PartsForItem({ itemId, filters, colSpan, onAdd, onReplace, disabled }) 
                 {parts.map((p) => <li key={p.id}>
                     <label><input type="checkbox" checked={picked.includes(p.id)} disabled={disabled} onChange={() => toggle(p.id)} />
                         <bdi>{p.name}</bdi> <bdi className="item-parts-sku">{p.sku}</bdi></label>
-                    <button type="button" className="btn btn--sm" disabled={disabled} onClick={() => { onReplace?.(p); setOpen(false); }}>{t('itemParts.usePartInstead')}</button>
+                    <button type="button" className="item-parts-linkbtn" disabled={disabled} onClick={() => { onReplace?.(p); setOpen(false); }}>{t('itemParts.usePartInstead')}</button>
                 </li>)}
             </ul>
             <div className="item-parts-bar">
-                <button type="button" className="btn btn--sm btn--primary" disabled={disabled || picked.length === 0} onClick={addSelected}>{t('itemParts.addSelected')}</button>
+                <button type="button" className="btn btn--sm btn--primary" disabled={disabled || picked.length === 0} onClick={addSelected}>{picked.length === 0 ? t('itemParts.addPartsNone') : t(picked.length === 1 ? 'itemParts.addNPart' : 'itemParts.addNParts', undefined, { count: picked.length })}</button>
             </div>
         </>}
     </div>);

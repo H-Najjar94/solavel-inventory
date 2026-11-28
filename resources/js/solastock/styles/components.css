@@ -796,3 +796,12 @@ html[dir="rtl"] .drawer { animation-name: c-drawer-rtl; }
 :where(.content) .item-parts-results { max-height: 180px; overflow: auto; border: 1px solid var(--c-line); border-radius: var(--c-radius); }
 :where(.content) .item-parts-results button { display: block; width: 100%; text-align: start; padding: 6px 10px; border: 0; background: none; cursor: pointer; }
 :where(.content) .item-parts-results button:hover { background: var(--surface-hover); }
+
+:where(.content) .item-parts-linkbtn { border: 0; background: none; padding: 0; cursor: pointer; font-size: 12px; color: var(--text-2); text-decoration: underline; }
+:where(.content) .item-parts-results button.is-active { background: var(--surface-hover); }
+:where(.content) .item-parts-select, :where(.content) .item-parts-select .input { max-width: 100%; }
+:where(.content) .item-partof-line { font-size: 13px; color: var(--text-2); margin-block: 2px 4px; }
+:where(.content) .item-parts-popover { max-width: 520px; padding: 6px 8px; border: 1px solid var(--c-line); border-radius: var(--c-radius); background: var(--layer-1, transparent); }
+:where(.content) .item-parts-card .card-head, :where(.content) .item-parts-card .card-body { padding-block: 8px; }
+:where(.content) .item-partof-secondary { display: block; font-size: 12px; color: var(--text-2); }
+@media (max-width: 640px) { :where(.content) .item-parts-popover { max-width: none; width: 100%; } }

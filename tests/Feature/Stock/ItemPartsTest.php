@@ -191,6 +191,35 @@ class ItemPartsTest extends TestCase
     }
 
     #[Test]
+    public function summaries_are_batched_and_isolated_and_the_index_exposes_them(): void
+    {
+        $this->boot();
+        [$p1, $p2, $c, $loose] = [F::item(['name' => 'Phone']), F::item(['name' => 'Tablet']), F::item(['name' => 'Battery']), F::item(['name' => 'Loose'])];
+        $this->service()->attach($p1->id, $c->id);
+        $this->service()->attach($p2->id, $c->id);
+
+        DB::connection('tenant')->enableQueryLog();
+        $sum = $this->service()->summaries([$p1->id, $p2->id, $c->id, $loose->id]);
+        $queries = count(DB::connection('tenant')->getQueryLog());
+        DB::connection('tenant')->disableQueryLog();
+        $this->assertLessThanOrEqual(8, $queries, 'one batched read per store, not per row');
+
+        $this->assertSame(['Phone', 'Tablet'], array_column($sum[$c->id]['parents'], 'name'));
+        $this->assertSame(0, $sum[$c->id]['parts_count']);
+        $this->assertSame(1, $sum[$p1->id]['parts_count']);
+        $this->assertArrayNotHasKey($loose->id, $sum);
+
+        $rows = collect(json_decode(app(ItemController::class)->index(Request::create('/items', 'GET', ['per_page' => 50]))->getContent(), true)['data'])->keyBy('name');
+        $this->assertSame(2, $rows['Battery']['part_of_count']);
+        $this->assertSame('Phone', $rows['Battery']['part_of'][0]['name']);
+        $this->assertSame(1, $rows['Phone']['parts_count']);
+        $this->assertSame([], $rows['Loose']['part_of']);
+
+        $this->useTenantB();
+        $this->assertSame([], $this->service()->summaries([$p1->id, $c->id]));
+    }
+
+    #[Test]
     public function routes_and_workspace_actions_exist_with_item_permissions(): void
     {
         foreach (['index' => 'inventory.view_items', 'store' => 'inventory.manage_items', 'destroy' => 'inventory.manage_items'] as $action => $perm) {
