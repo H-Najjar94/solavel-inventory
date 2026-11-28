@@ -52,6 +52,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'lines.*.tax_code' => ['nullable', 'string', 'max:50'],
             'lines.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'lines.*.expected_date' => ['nullable', 'date'],
+            'lines.*.notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

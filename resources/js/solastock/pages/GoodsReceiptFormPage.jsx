@@ -80,7 +80,6 @@ export default function GoodsReceiptFormPage() {
         }
     }, [isEdit, existing.data]);
 
-    const insertParts = (i, parts) => setLines((ls) => [...ls.slice(0, i + 1), ...parts.map((p) => ({ ...emptyLine(), item_id: p.id })), ...ls.slice(i + 1)]);
     const setLine = (i, patch) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
 
     // Item tracking lookup so capture columns appear only for tracked items.
@@ -215,7 +214,7 @@ export default function GoodsReceiptFormPage() {
             <div className="panel">
                 <h2>{t('receiving.common.lines', 'Lines')}</h2>
                 <DocumentLinesTable validationErrors={errors} columns={columns} lines={lines}
-                    rowExtra={fromPo || fromRequest || isEdit || header.purchase_order_id || header.receiving_request_id ? undefined : (l, i, span) => <ItemPartsPicker itemId={l.item_id} colSpan={span} filters={{ purpose: 'purchase', item_type: 'inventory' }} disabled={saving} onAdd={(parts) => insertParts(i, parts)} onReplace={(p) => setLine(i, { item_id: p.id })} />}
+                    rowExtra={fromPo || fromRequest || isEdit || header.purchase_order_id || header.receiving_request_id ? undefined : (l, i, span) => <ItemPartsPicker itemId={l.item_id} colSpan={span} filters={{ purpose: 'purchase', item_type: 'inventory' }} disabled={saving} onChoose={(p) => setLine(i, { item_id: p.id })} />}
                     onAdd={fromPo ? undefined : () => setLines([...lines, emptyLine()])}
                     onRemove={fromPo ? () => {} : (i) => setLines(lines.filter((_, idx) => idx !== i))}
                     readOnly={false} />
